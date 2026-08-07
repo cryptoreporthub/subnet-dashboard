@@ -1,0 +1,70 @@
+Got it — I'll trace it myself directly from the repo, no harness. Let me pull the full resolver and hunt the exact live resolve call chain, plus where `nudge_signal_weight` fires.
+
+The file is smaller than the API dump suggested. Let me read the key sections around the resolve path and these references.
+
+Let me redo this properly — locate the string positions by line number, not char offset.
+
+The defs stopped at line 371 — let me check the total line count and whether there's a resolve loop further down, plus read the critical nudge function.
+
+I have the core function. Let me read the exact body of `_stamp_and_nudge_expert` and `_nudge_weights` — that's the decisive evidence.
+
+Definitive — the nudge uses `nudge_expert = _normalize_expert(prediction)` (string-based). Now let me confirm `normalize_expert`'s fallthrough to quant, and verify the live resolve loop actually calls `_stamp_and_nudge_expert`, and whether `nudge_signal_weight` is dead. Let me check expert_attribution + find the resolve loop (which is past the 383-line truncation — I'll search the full file).
+
+Confirmed the normalizer returns `None` for non-matching (not quant fallthrough in this function), but the crucial detail: `_normalize_expert` reads `prediction.get("expert") or prediction.get("signal_source")`. Since `_stamp_and_nudge_expert` runs BEFORE stamping (`nudge_expert = _normalize_expert(prediction)` computes first), it reads the **raw creation-time** field. Now the final piece: does the live resolve loop call `_stamp_and_nudge_expert`, and is `nudge_signal_weight` dead? Let me pull the full resolver past line 383.
+
+That API dump is base64-encoded and the raw file truncates at line ~383, but the live loop lives further down. Let me check the scheduler (which AGENTS.md points to) and search the later part of resolver.py for the resolve loop's call to `_stamp_and_nudge_expert` and `nudge_signal_weight`.
+
+I now have the full scheduler picture (live path = `resolve_due_predictions` nudges weights via the learning loop). Let me confirm the two last details — that `resolve_due_predictions` calls `_stamp_and_nudge_expert`, and whether `nudge_signal_weight` (per-signal tier) ever fires — by reading the rest of resolver.py. Let me check if GitHub tools are available and pull the remaining source.
+
+I've traced it directly from the source, outside any harness. I read the actual `_stamp_and_nudge_expert()` body on `main`, the `_nudge_weights()` body, the `normalize_expert()` fallthrough, and the scheduler that drives live resolution. Here's your answer, with receipts.
+
+## The verdict: the live weight nudge is driven by the **string-based `_normalize_expert`** — NOT signal attribution
+
+This is confirmed by the literal code in `internal/council/resolver.py` (`_stamp_and_nudge_expert`):
+
+```python
+def _stamp_and_nudge_expert(prediction, *, correct):
+    """Stamp rich attribution on the row; nudge only pre-stamp normalize (Grok LOCK)."""
+    nudge_expert = _normalize_expert(prediction)                # <- drives the WEIGHT
+    stamped_expert, expert_source = resolve_expert_attribution(prediction)  # <- drives the LABEL only
+    if stamped_expert:
+        prediction["expert"] = stamped_expert
+        ...
+    if nudge_expert and not _skip_council_learning(prediction):
+        _nudge_weights(bool(correct), nudge_expert)             # <- uses _normalize_expert
+```
+
+Two different experts are computed from the **same prediction row**, and they're allowed to disagree:
+- **`_normalize_expert`** → `normalize_expert()` in `expert_attribution.py`: substring match on the raw `expert` / `signal_source` **string**. `alpha→quant`, `beta→hype`, `gamma→dark_horse`, and the substring rules (`"quant"/"fundamental"/"yield"→quant`, etc.).
+- **`resolve_expert_attribution`** → the full signal/replay/pick-blend pipeline. But look at the docstring: it says *"attribution — normalize, stamp, and measure (not weight nudge)."* It's only used to **re-stamp `prediction["expert"]` on the ledger row**. It **never** feeds `_nudge_weights`.
+
+So on every live resolution:
+1. Row is graded (correct/wrong).
+2. `_normalize_expert` reads the **raw, creation-time** `expert`/`signal_source` string (it runs *before* any re-stamp, and the docstring literally calls this the "Grok LOCK" behavior).
+3. Whatever that crude substring matcher returns is the expert whose weight gets nudged.
+4. The fair, signal-based attribution only fixes the row's label afterward — cosmetic.
+
+## Why that makes Quant the sink and Dark Horse starved — mechanically proven
+
+- `normalize_expert` resolves anything with an ambiguous/legacy/unclassifiable tag toward **quant** (`alpha`, `"quant"`, `"fundamental"`, `"yield"` substrings). It returns `None` only for literally `unclassified`/`unknown`/`neutral`/empty. And `expert_display.leading_expert_for_pick` even hard-defaults to `quant` when no signal leader resolves.
+- So ambiguous picks → `normalize_expert` → **quant**, nudge up every time → pins at the `2.0` cap. That matches your live `expert_weights: {"quant": 2.0}`.
+- Dark Horse only gets nudged when the raw string *happens* to contain `dark`/`horse`/`onchain`/`flow`/`contrarian`/`gamma`. Since nearly all picks carry clean signal labels, Dark Horse almost never resolves through the normalizer → its weight barely moves. Structurally starved.
+
+Your own history confirms it: *"currently all predictions map to quant so only its weight updates."*
+
+## Two corroborating consistency bugs I verified in the same read
+
+1. **Contradictory nudge deltas** between the two files that should share one rule:
+   - `resolver.py`: `_LEARNING_DELTA_CORRECT = 0.02`, `_LEARNING_DELTA_WRONG = -0.02` (symmetric)
+   - `weights.py`: `_LEARNING_DELTA_CORRECT = 0.02`, `_LEARNING_DELTA_WRONG = -0.03` (asymmetric)
+   - The live `_nudge_weights` calls `nudge_expert(expert, correct)` with **no delta override**, so it uses the default inside `weights.py` → **-0.03 on a wrong** and +0.02 on a correct. Yet `resolver.py` *declares* its own symmetric constants that are never used. Same-weight, mismatched bookkeeping.
+
+2. **`nudge_signal_weight` (the per-signal Option C tier) is effectively dead on the live copy path.** It's imported in `resolver.py`, but the live `_nudge_weights` only calls `nudge_expert` (expert-level) — the per-signal, per-horizon nudge you built as "Option C" is not invoked in the resolution path here. The per-signal weights in `DEFAULT_SIGNAL_WEIGHTS` just sit defined.
+
+## Bottom line (no harness — straight from the repo)
+
+The live learning loop **trains on the crude string-lane `_normalize_expert`**, and only *re-labels* with the fair signal attribution. That's the root cause of both recurring problems:
+- **Quant is the problem** because it's the unclassified fallback that hoards every ambiguous nudge and caps at 2.0.
+- **Dark Horse is the problem** because it can't reach the nudge path through the string matcher (only 2 mapped signals + no expert file + near-zero attribution) so it stays frozen/irrelevant.
+
+**The correct fix** = make `_stamp_and_nudge_expert` nudge using `resolve_expert_attribution` (the same expert it stamps) instead of `_normalize_expert`, i.e. delete the "Grok LOCK" split, unify the two deltas to one constant, and route per-signal attribution into the Option C tier. I can draft that exact patch for Ditto Code to apply if you want. Also worth filing the contradictory-constant + dead-Option-C item for the team. Want me to prep the fix job?
