@@ -14,7 +14,7 @@ from internal.sentry_setup import init_sentry
 init_sentry()
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -2042,6 +2042,12 @@ async def pump_desk_page(request: Request):
         "pump_alerts": payload,
     }
     return templates.TemplateResponse("pump.html", context)
+
+
+@app.get("/Pump", include_in_schema=False)
+async def pump_desk_legacy_route():
+    """Keep legacy case-variant links on the canonical pump desk."""
+    return RedirectResponse(url="/pump", status_code=308)
 
 
 async def _fetch_pump_alerts_payload() -> Dict[str, Any]:

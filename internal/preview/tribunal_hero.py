@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import Request
@@ -12,14 +12,44 @@ _VALID_STATES = frozenset({"sealed", "gated", "forming", "cold"})
 _JUDGE_KEYS = ("oracle", "echo", "pulse")
 # ponytail: single cutoff — warm orange ≥70%, icy blue below (Ditto temperature spec)
 _CONVICTION_WARM_PCT = 70.0
+_PICK_MAX_AGE = timedelta(hours=25)
+
+
+def _pick_timestamp(payload: Dict[str, Any]) -> Optional[datetime]:
+    """Return the persisted pick timestamp when it is a valid ISO-8601 value."""
+    raw = synced_at_iso(payload)
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def pick_is_publishable(payload: Dict[str, Any], *, now: Optional[datetime] = None) -> bool:
+    """A LONG can be sealed only with a current, explicit passing audit."""
+    if not isinstance(payload, dict) or not isinstance(payload.get("pick"), dict):
+        return False
+    if bool((payload.get("_meta") or {}).get("stale")):
+        return False
+    audit = payload["pick"].get("audit")
+    if not isinstance(audit, dict) or audit.get("approved") is not True:
+        return False
+    created_at = _pick_timestamp(payload)
+    if created_at is None:
+        return False
+    current = now or datetime.now(timezone.utc)
+    return created_at <= current and current - created_at <= _PICK_MAX_AGE
 
 
 def verdict_kind(payload: Dict[str, Any]) -> str:
     act = str(payload.get("action") or "HOLD").upper()
     if act == "BUY":
         act = "LONG"
-    if payload.get("pick") and act == "LONG":
+    if act == "LONG" and pick_is_publishable(payload):
         return "sealed"
+    if payload.get("pick"):
+        return "gated"
     if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
         return "gated"
     if str(payload.get("status") or "").lower() == "pending":
@@ -389,9 +419,11 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
             "status": "ok",
             "date": today,
             "action": "LONG",
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "pick": {
                 "subnet": {"netuid": 14, "name": "TaoHash", "symbol": "TH"},
                 "final_confidence": 0.71,
+                "audit": {"approved": True},
                 "action": "LONG",
                 "judge_scores_at_creation": {
                     "oracle": {"confidence": 0.72},

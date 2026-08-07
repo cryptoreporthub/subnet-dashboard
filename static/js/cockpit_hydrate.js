@@ -1268,6 +1268,17 @@
     return payload.generated_at || payload.timestamp_utc || meta.generated_at || null;
   }
 
+  function pickIsPublishable(payload) {
+    if (!payload || !payload.pick || typeof payload.pick !== 'object') return false;
+    var meta = payload._meta || {};
+    if (meta.stale === true) return false;
+    var audit = payload.pick.audit;
+    if (!audit || audit.approved !== true) return false;
+    var generatedAt = dailyPickGeneratedAt(payload);
+    var generatedMs = parseIsoMs(generatedAt);
+    return generatedMs > 0 && generatedMs <= Date.now() && Date.now() - generatedMs <= 25 * 60 * 60 * 1000;
+  }
+
   function parseIsoMs(iso) {
     if (!iso) return 0;
     var t = Date.parse(iso);
@@ -4399,7 +4410,8 @@
     if (!payload) return 'cold';
     var act = String(payload.action || 'HOLD').toUpperCase();
     if (act === 'BUY') act = 'LONG';
-    if (payload.pick && act === 'LONG') return 'sealed';
+    if (act === 'LONG' && pickIsPublishable(payload)) return 'sealed';
+    if (payload.pick) return 'gated';
     if (!payload.pick && payload.candidate && act === 'HOLD') return 'gated';
     if (String(payload.status || '').toLowerCase() === 'pending') return 'forming';
     return 'cold';

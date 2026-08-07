@@ -8,8 +8,10 @@ from internal.preview.tribunal_hero import (
     attach_judge_scores_to_daily_pick,
     build_tribunal_view,
     conviction_temp,
+    verdict_kind,
     weighted_verdict_pct,
 )
+from datetime import datetime, timedelta, timezone
 from server import app
 
 client = TestClient(app)
@@ -95,6 +97,40 @@ def test_build_tribunal_view_decision_log_from_judge_scores():
     dl = view["panels"]["decision_log"]
     assert dl["consensus"] == "Low agreement"
     assert dl["dissent"] == "High dissent · 41 pts"
+
+
+def _publishable_pick(*, approved=True, timestamp=None, stale=False):
+    return {
+        "status": "ok",
+        "action": "LONG",
+        "generated_at": timestamp or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "_meta": {"stale": stale},
+        "pick": {
+            "subnet": {"netuid": 29, "name": "Coldint"},
+            "final_confidence": 0.72,
+            "audit": {"approved": approved},
+        },
+    }
+
+
+def test_tribunal_seals_only_current_approved_pick():
+    assert verdict_kind(_publishable_pick()) == "sealed"
+    assert verdict_kind(_publishable_pick(approved=False)) == "gated"
+    stale = datetime.now(timezone.utc) - timedelta(hours=26)
+    assert verdict_kind(_publishable_pick(timestamp=stale.isoformat())) == "gated"
+    assert verdict_kind(_publishable_pick(stale=True)) == "gated"
+    assert verdict_kind({"status": "ok", "action": "LONG", "pick": None}) == "cold"
+
+
+def test_unapproved_or_stale_pick_never_has_sealed_hero_copy():
+    for payload in (
+        _publishable_pick(approved=False),
+        _publishable_pick(timestamp=(datetime.now(timezone.utc) - timedelta(hours=26)).isoformat()),
+    ):
+        view = build_tribunal_view(payload, {})
+        assert view["verdict_kind"] == "gated"
+        assert view["center_label"] == "GATED · HOLD"
+        assert "SEALED" not in view["headline"]
 
 
 def test_build_tribunal_view_gated_hold():
@@ -190,6 +226,7 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "judgeSignalsFromDom" in src
     assert "convictionTemp" in src
     assert "syncCouncilTemp" in src
+    assert "pickIsPublishable" in src
 
 
 def test_home_ssr_contains_tribunal_hero():
@@ -210,3 +247,9 @@ def test_home_ssr_contains_tribunal_hero():
     assert "Council votes" not in html
     assert "Weighed against" not in html
     assert 'data-panel="accuracy-ledger"' in html
+
+
+def test_legacy_pump_route_redirects_to_canonical_path():
+    response = client.get("/Pump", follow_redirects=False)
+    assert response.status_code == 308
+    assert response.headers["location"] == "/pump"
