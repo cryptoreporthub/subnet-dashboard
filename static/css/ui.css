@@ -11,6 +11,27 @@
   --glass-blur-secondary: 8px;
   --glass-border: rgba(255, 255, 255, 0.10);
   --glass-radius: 12px;
+
+  /* Dual Depth Smoke — zone + climate tokens */
+  --zone-dark-bg: linear-gradient(180deg, rgba(12, 14, 20, 0.88) 0%, rgba(16, 19, 26, 0.94) 100%);
+  --zone-dark-card: rgba(240, 244, 252, 0.08);
+  --zone-dark-card-border: rgba(255, 255, 255, 0.14);
+  --zone-dark-text: #f8fafc;
+  --zone-dark-muted: #b8c2d2;
+  --zone-light-bg: rgba(228, 232, 238, 0.06);
+  --zone-light-card: rgba(255, 255, 255, 0.10);
+  --zone-light-card-border: rgba(255, 255, 255, 0.16);
+  --zone-light-text: #eef2f6;
+  --zone-light-muted: #aeb8c6;
+  /* Warm climate accents (living surface) */
+  --warm-ember: #ff9f5f;
+  --warm-gold: #f0c56f;
+  --warm-glow: rgba(255, 170, 100, 0.38);
+  --warm-hairline: rgba(255, 170, 100, 0.40);
+  /* Cool climate accents (record layer) */
+  --cool-ice: #9fd4f5;
+  --cool-ice-bright: #d2ecff;
+  --cool-hairline: rgba(159, 212, 245, 0.28);
 }
 
 /* ---------- Mobile shell: 390px primary, desktop capped column ---------- */
@@ -679,8 +700,8 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--accent-blue);
-  text-shadow: 0 0 10px var(--accent-glow-blue);
+  color: var(--warm-gold);
+  text-shadow: 0 0 12px var(--warm-glow);
   margin: 0 0 14px;
 }
 
@@ -5042,6 +5063,20 @@ footer.status[data-source*="fallback"] .st-dot {
   --stage-wash: #2b2f38;
 }
 
+/* Dual Depth — hero is the dark monumental zone */
+.council-stage.home-job {
+  position: relative;
+  color: var(--zone-dark-text);
+}
+.council-stage__eyebrow,
+.council-stage__brand {
+  color: var(--warm-gold);
+  text-shadow: 0 0 12px var(--warm-glow);
+}
+.council-stage__title {
+  color: var(--zone-dark-text);
+}
+
 .app-shell.council-first {
   min-height: 100vh;
 }
@@ -7311,8 +7346,8 @@ body.wrap {
   --j-oracle: #6fb3e8;
   --j-echo: #b3a1f0;
   --j-pulse: #e8b06f;
-  --verdict-a: #aebccc;
-  --verdict-b: #93a1b3;
+  --verdict-a: var(--warm-gold);
+  --verdict-b: var(--warm-ember);
   position: relative;
   padding: var(--space-3) var(--space-3) var(--space-4);
   color: var(--text-primary);
@@ -7320,9 +7355,9 @@ body.wrap {
 }
 
 .tribunal-hero[data-verdict-kind="sealed"] { --verdict-a: #6fe8a4; --verdict-b: #2fdc85; }
-.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: #a5e4ff; --verdict-b: #5cc8f0; }
-.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: #d0c4fa; --verdict-b: #a896e8; }
-.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: #aebccc; --verdict-b: #93a1b3; }
+.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
+.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: var(--warm-gold); --verdict-b: var(--warm-ember); }
+.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: var(--cool-ice-bright); --verdict-b: var(--cool-ice); }
 
 .council-stage .home-job__call-host .tribunal-hero {
   background: transparent;
@@ -7410,16 +7445,17 @@ body.wrap {
 .tribunal-hero__card {
   position: relative;
   border-radius: var(--glass-radius);
-  border: 1px solid var(--glass-border);
+  border: 1px solid var(--zone-dark-card-border);
   background:
     url("/static/img/simivision-smoke-bg.svg") center / cover no-repeat,
-    linear-gradient(180deg, var(--glass-fill-hero) 0%, var(--glass-fill-hero) 100%);
+    var(--zone-dark-bg);
   background-blend-mode: soft-light, normal;
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
   box-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 20px 48px rgba(0, 0, 0, 0.5),
+    0 0 0 1px var(--warm-hairline),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
   overflow: hidden;
   isolation: isolate;
   animation: tribunal-smoke-drift 36s ease-in-out infinite alternate;
@@ -7441,12 +7477,12 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  background: radial-gradient(ellipse 70% 55% at 28% 18%, rgba(140, 140, 150, 0.10) 0%, transparent 62%);
+  background: radial-gradient(ellipse 70% 55% at 28% 18%, var(--warm-glow) 0%, transparent 62%);
   animation: tribunal-glow-drift 18s ease-in-out infinite alternate;
 }
 
 .tribunal-hero__card::after {
-  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(140, 140, 150, 0.08) 0%, transparent 58%);
+  background: radial-gradient(ellipse 60% 50% at 76% 86%, rgba(180, 182, 190, 0.10) 0%, transparent 58%);
   animation: tribunal-glow-drift 22s ease-in-out infinite alternate-reverse;
 }
 
@@ -7724,8 +7760,8 @@ body.wrap {
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1;
-  color: #ffffff;
-  text-shadow: 0 0 22px var(--verdict-b);
+  color: var(--verdict-a);
+  text-shadow: 0 0 18px var(--verdict-b), 0 0 44px var(--verdict-b);
 }
 
 .tribunal-hero__pct-label {
@@ -8312,6 +8348,53 @@ body.wrap {
   .tribunal-hero__judge--oracle:hover {
     transform: translateX(-50%);
   }
+}
+
+
+
+/* ---------- Dual Depth: light+cool reading zone ---------- */
+.kpi-cell,
+.proof-band,
+.living-focus,
+.trust-banner {
+  background: var(--zone-light-card);
+  border: 1px solid var(--zone-light-card-border);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.kpi-cell .v,
+.proof-band__pct,
+.paper-portfolio__value,
+.story-strip__move {
+  color: var(--zone-light-text);
+}
+
+.kpi-cell .k {
+  color: var(--cool-ice);
+  text-shadow: 0 0 8px rgba(159, 184, 208, 0.22);
+}
+
+.kpi-cell .sub,
+.kpi-cell .kpi-v-sm {
+  color: var(--zone-light-muted);
+}
+
+.kpi-cell:hover {
+  box-shadow: 0 0 18px var(--warm-glow), 0 0 0 1px var(--warm-hairline);
+  transform: translateY(-1px);
+}
+
+/* Warm hairline on record surfaces so light zones stay alive */
+.proof-band,
+.living-focus {
+  box-shadow: 0 0 0 1px var(--warm-hairline), 0 8px 32px rgba(0, 0, 0, 0.22);
+}
+
+/* Cool ice numerals stay cool; warm only via explicit .k3-badge.buy / verdict */
+.proof-band__pct.proof-band__pct--ice {
+  color: #d6e4f2;
+  text-shadow: 0 0 18px rgba(159, 184, 208, 0.32), 0 0 36px rgba(159, 184, 208, 0.16);
 }
 
 
@@ -9650,7 +9733,7 @@ body.wrap {
   color: var(--stage-muted);
   min-width: 1.6rem;
 }
-.message-intel__rank--gold { color: #fbbf24; }
+.message-intel__rank--gold { color: #c7cdd6; }
 .message-intel__rank--silver { color: #cbd5e1; }
 .message-intel__rank--bronze { color: #d97706; }
 .message-intel__trend-main {
@@ -9963,8 +10046,8 @@ body.wrap {
   /* Compat alias — site dropped hot pink; pink token now resolves to violet. */
   --mi-pink: var(--mi-violet);
   --mi-pink-glow: var(--mi-violet-glow);
-  --mi-yellow: #f5d547;
-  --mi-yellow-glow: rgba(245, 213, 71, 0.45);
+  --mi-yellow: #c7cdd6;
+  --mi-yellow-glow: rgba(199, 205, 214, 0.32);
   --mi-line: rgba(255, 255, 255, 0.07);
   --mi-line-soft: rgba(255, 255, 255, 0.045);
   --mi-text: #eef7f1;
