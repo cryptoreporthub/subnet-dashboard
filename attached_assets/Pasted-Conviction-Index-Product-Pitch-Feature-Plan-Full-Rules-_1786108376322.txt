@@ -1,0 +1,172 @@
+Conviction Index — Product Pitch, Feature Plan & Full Rules
+The one-liner
+A crowd-sourced reputation market built from public chatter. Who in the ecosystem has actually been right, on the record, and what does the crowd believe right now.
+
+Why this is the reason to return
+Nobody in the group is trying to be right on purpose — they're hyping in public group chat, unsolicited and on the record. That's a more honest signal than any survey or gated prediction market, because there's no gamification incentive to be conservative or strategic.
+
+And it compounds: every call that resolves, the rep rankings and the consensus number get more trustworthy.
+
+PART A — THE CONVICTION INDEX FORMULA (locked)
+This is the app's single most important number. These constants are approved and must not change (per user directive). Reconstructing the engine is validated against the 11 exact test numbers below — 11/11 must pass.
+
+Constants (DO NOT CHANGE)
+γ (gamma) = 2.5 — conviction curvature exponent
+κ (kappa) = 1.2 — index κ-smoothing
+α = β = 3 — Bayesian credibility prior shape
+half-life = 24h — recency decay
+Direction comes from signed momentum only, NOT reputation
+Primary formula
+CODE
+s(m) = (conviction / 100) ^ 2.5 · sign(direction)
+        sign(direction): +1 bull, −1 bear, 0 neutral
+W(a) = Author credibility = modest reputation multiplier (Bayesian, α=β=3)
+Recency decay: half-life 24h
+κ-smoothing for the index
+ρ = confidence/volume flag — separates one loud caller from real consensus
+Validation numbers (tests must match exactly)
+Scenario	Expected Index	Confidence
+New caller, modest conviction 60	54.0	—
+New caller, mid conviction 75	56.9	—
+New caller, high conviction 95 bull	62.5	—
+New caller, high conviction 95 bear	37.5 (symmetric)	—
+Proven caller, high conviction 95	64.0	—
+Mixed: 1 new high-conv bull + 3 proven modest bulls	63.5	61%
+Hot subnet (strong/recent/proven)	75.5 bullish	65%
+Divergent mix (bull + bear fighting)	51.4 neutral	—
+One loud unproven caller	63.9	29%
+Modest older chatter	56.2	20%
+Data source (already in repo)
+message_intel/ SQLite: messages, message_verdicts, author_reliability, price_snapshots
+internal/message_intel/store.py → get_db()
+Verdict fields: conviction, predicted_direction, predicted_timeframe
+author_reliability: total_messages, correct_predictions, accuracy_score
+API endpoints
+GET /api/conviction-index/health
+routes.py = two endpoints + health (likely /top and /fades)
+Run in threadpool (starlette run_in_threadpool, matching message_intel/routes.py) — SQLite is blocking
+Files to build (exact paths)
+internal/conviction_index/__init__.py (core engine)
+internal/conviction_index/routes.py (FastAPI router)
+tests/test_conviction_index.py (11 behavior tests)
+server.py wiring (guarded-import pattern, matches existing routers)
+PYTHON
+try:
+    from internal.conviction_index.routes import conviction_index_router
+    _CONVICTION_INDEX_ROUTES = True
+except Exception as _conviction_index_exc:
+    logger.warning("Conviction index routes unavailable: %s", _conviction_index_exc)
+    conviction_index_router = None
+    _CONVICTION_INDEX_ROUTES = False
+# with other routers:
+if _CONVICTION_INDEX_ROUTES:
+    app.include_router(conviction_index_router)
+Note: conviction_alerts/ is SEPARATE (Phase O1 threshold alerts) — do not confuse.
+PART B — NLP SCORING RULES (from nlp_engine.py)
+Sentiment (pure keyword counting, fixed word lists)
+Count bullish hits vs bearish hits from locked word lists.
+Confidence = majority count / total sentiment words.
+Ties (equal) → neutral at fixed 0.5.
+Hype score
+CODE
+hype_score = hype_hits × 0.15 + CTA_phrases × 0.25   (capped at 1.0)
+Substance score (starts at base 0.3, cumulative, cap 1.0)
+Signal	Add
+2+ numbers (price targets/amounts)	+0.2
+1 number	+0.1
+any TAO/dTAO mention	+0.15
+2+ protocol names	+0.15
+30+ words	+0.1
+15+ words	+0.05
+any URL	+0.1
+Influence score
+CODE
+influence = sentiment_confidence×0.3 + substance×0.4 + hype×0.3
+PART C — JURY VERDICT RULES (from jury_bridge.py)
+Recommended action
+Bullish + influence ≥ 0.5 → accumulate
+Bearish + influence ≥ 0.5 → reduce
+else → hold
+Consensus score
+CODE
+consensus = substance×0.35 + influence×0.25 + (1 − hype×0.3)×0.2 + 0.2   (clamped 0–1)
+Predicted direction & magnitude
+Sent bullish + influence ≥ 0.4 → up, magnitude influence×0.15
+Sent bearish + influence ≥ 0.4 → down, magnitude influence×0.1
+else → neutral, magnitude 0.0
+Predicted timeframe ladder
+Condition	Timeframe
+substance > 0.6 AND influence > 0.6	1h–4h
+substance > 0.4	4h–24h
+else	24h–7d
+Verdict + conviction
+conviction = base_confidence × 100 (0–100 range)
+predicted_confidence = (base_confidence + influence) / 2
+PART D — PRICE OUTCOME TRACKING (from price_tracker.py)
+What's recorded per message
+Snapshot price at message time — TAO/USD and per-subnet alpha token (for messages mentioning a specific subnet/netuid)
+Data source: same taomarketcap SQLite cache the dashboard uses; per-subnet price fetched once per run batch
+Fields on price_outcomes: pump_pct_max, time_to_pump, pump_duration, resurgence
+Outcome classification
+A call resolves into one of: pump, mild_pump, dump, mild_dump, stable (exact %-change cutoffs for pump vs mild_pump live in check_outcomes — flagged as the one number to confirm from source; do not guess).
+
+Correct-prediction rule (from self_learning.py _is_correct_prediction)
+Verdict / direction	Correct iff
+bullish / up	outcome ∈ {pump, mildpump} OR pumppct_max > 2.0
+bearish / down	outcome ∈ {dump, mild_dump}
+neutral / else	outcome == stable
+Accuracy
+CODE
+accuracy_score = correct / total   (rounded 4dp)
+PART E — SELF-LEARNING / REPUTATION RULES (from self_learning.py)
+Pattern archetypes tracked
+Pattern	Match rule
+highsubstancebullish	substance > 0.6 AND bullish
+highhypepump	hype > 0.5 (predicts pump)
+specificsubnetmention	mentions subnet #
+taoamounttarget	has TAO amount target
+lowsubstancehigh_hype	substance < 0.3 AND hype > 0.6 (noise)
+Pattern confidence
+CODE
+confidence = (success_rate − 0.5) × min(1, total/10)   (clamped 0–1)
+Weight learning (Phase-0 quarantine rules — MUST respect)
+Weight adjustments route through nudge_expert in internal.council.weights.
+NEVER renormalize council weights to sum → 1.0.
+start_background_learning is quarantined off boot — do not call from server.py/background_boot; keep it off the prod hot path.
+On resolve: nudge expert ±0.02/−0.03 per pattern; signal weights nudged per-horizon/per-signal.
+Judges do not select picks; judges are public quality scorers (Oracle/Echo/Pulse) with no weight feedback — separate from the internal council experts (quant/hype/dark_horse/technical).
+Known gaps (from audit — don't rebuild blindly)
+author_reliability is written but not currently read in production; jury runs independently from rollup stats. The Conviction Index is what finally consumes it.
+No get_author_reliability exists yet; nothing SELECTs the table in prod. The /top + /fades endpoints are the consumer.
+Feature plan (each phase = a piece of the pitch)
+Phase 0 — Conviction Index backend (prerequisite, gate = 11/11 tests)
+Build internal/conviction_index/ using the locked formula in Part A. Ends with working /api/conviction-index/{health,top,fades}.
+
+Phase 1 — Surface the receipts (smallest, ships next)
+Feature	Data it taps
+Top 5 Subnets by Conviction Index (page-load hook panel)	conviction index + verdicts — star this panel, it's the "what do I look at now" moment
+Public Caller Leaderboard (7/30/90d)	author_reliability; new /api/caller-leaderboard
+Call Proof in the Live Feed (✓/✗ inline)	price_outcomes + message_verdicts
+Phase 2 — One consensus number (the compounding asset)
+Feature	Data it taps
+Live Market Conviction per subnet, track-record-weighted	conviction index + author_reliability
+Phase 3 — "They said it first" (differentiation)
+Feature	Data it taps
+Divergence panel (early & right / loud & wrong; new→rising→peaking→decaying)	narrative layer on verdict history
+Phase 4 — Close the learning loop (the moat)
+Feature	Data it taps
+Message-to-price learning back into council weights	pattern_correlations → nudge_expert
+Where the code lives (grounded in repo)
+message_intel/telegram_listener.py — Telethon client, session persistence, backfill, auto-reconnect, forwards to ingest API
+message_intel/price_tracker.py — price snapshots + outcome checks
+message_intel/models.py — messages, message_verdicts, price_outcomes, author_reliability, pattern_correlations
+message_intel/nlp_engine.py, self_learning.py, jury_bridge.py
+Current live status
+Ingesting from @OfficialSubnetSummer, 2,142 messages graded at last check
+Dashboard panels: Conviction jury, Recently Trending, Weekly Champions, Reaction Crowns, Live Feed
+Not touched (per direction)
+❌ In-chat bot commands (/summary, /track) — dropped. The listener + intel engine is the product; it lives in the repo (GitHub/Fly), not inside any one Telegram group.
+Open items to confirm before build
+Exact pump vs mild_pump %-cutoffs in price_tracker.check_outcomes — the one rule not fully pinned in memory (don't guess; read from source).
+Caller leaderboard real @usernames — product/privacy call (public rep vs pseudonymized).
+Whether /top and /fades are the only two routes (matches "two endpoints + health").

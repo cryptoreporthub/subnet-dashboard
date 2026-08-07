@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-07-14T00:18:02.021555Z",
+  "updated_at": "2026-08-07T13:30:00.410563Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7063,6 +7063,38 @@
       "timestamp": "2026-07-14T00:18:02.021514Z",
       "active": true,
       "id": "signal_change-2026-07-14T00:18:02.021514Z"
+    },
+    {
+      "alert_type": "social_intel",
+      "message": "Social neutral (66% conv): Subnet 7 is extremely bullish!",
+      "severity": "info",
+      "details": {
+        "message_id": 1,
+        "source": "telegram",
+        "group_id": "-1001",
+        "external_message_id": "9001"
+      },
+      "subnet_id": 7,
+      "dedupe_key": "social:telegram:-1001:9001",
+      "active": true,
+      "timestamp": "2026-08-07T13:29:57.810120Z",
+      "id": "social_intel-2026-08-07T13:29:57.810120Z"
+    },
+    {
+      "alert_type": "social_intel",
+      "message": "Social neutral (66% conv): Subnet 12 partnership looks solid",
+      "severity": "info",
+      "details": {
+        "message_id": 3,
+        "source": "telegram",
+        "group_id": "",
+        "external_message_id": "3"
+      },
+      "subnet_id": 12,
+      "dedupe_key": "social:telegram::3",
+      "active": true,
+      "timestamp": "2026-08-07T13:30:00.410486Z",
+      "id": "social_intel-2026-08-07T13:30:00.410486Z"
     }
   ]
 }

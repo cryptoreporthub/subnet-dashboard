@@ -232,8 +232,12 @@ class Database:
             results = []
             for row in rows:
                 d = dict(row)
+                # Load the full relation set so the live feed can attach resolved
+                # proof pills (verdict + snapshot + outcome) like message detail does.
                 d["verdict"] = self._get_verdict(conn, d["id"])
                 d["analysis"] = self._get_analysis(conn, d["id"])
+                d["price_snapshot"] = self._get_price_snapshot(conn, d["id"])
+                d["price_outcome"] = self._get_price_outcome(conn, d["id"])
                 results.append(d)
             return results
 

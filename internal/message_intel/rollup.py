@@ -10,6 +10,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from internal.message_intel.store import get_db
+from internal.message_intel.proof import (
+    MIN_LEADERBOARD_SAMPLE,
+    classify_call,
+    stable_author_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -603,68 +608,138 @@ def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:
     return topics[:limit]
 
 
-def _outcome_hit(direction: str, outcome: str) -> bool:
-    direction = str(direction or "").lower()
-    outcome = str(outcome or "").lower()
-    if direction in ("up", "bullish", "long", "buy") and outcome in ("pump", "mild_pump"):
-        return True
-    if direction in ("down", "bearish", "short", "sell") and outcome in ("dump", "mild_dump"):
-        return True
-    if direction in ("flat", "sideways", "neutral", "") and outcome == "stable":
-        return True
-    if outcome in ("pump", "mild_pump") and not direction:
-        return True
-    return False
+def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Load bounded public-proof fields only; classification happens in Python."""
+    database = db or get_db()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days) if days else None
+    with database._connect() as conn:
+        rows = conn.execute(
+            """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
+                      m.content, m.timestamp, m.created_at, v.predicted_direction, v.conviction,
+                      ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
+                      po.price_1h, po.price_4h, po.price_24h
+               FROM messages m
+               LEFT JOIN message_verdicts v ON v.message_id = m.id
+               LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN price_outcomes po ON po.message_id = m.id
+               WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
+        ).fetchall()
+    out = []
+    for raw in rows:
+        row = dict(raw)
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if cutoff and (timestamp is None or timestamp < cutoff):
+            continue
+        if author_id is not None and stable_author_id(row) != str(author_id):
+            continue
+        out.append(row)
+    return out
+
+
+def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Compact card-safe proof object; no internal database fields."""
+    proof = classify_call(row)
+    return {
+        "eligible": proof["eligible"],
+        "status": proof["status"],
+        "evaluation": proof["evaluation"],
+        "direction": proof["direction"],
+        "move_pct": proof["move_pct"],
+        "outcome": proof["raw_outcome"],
+        "threshold": proof["threshold"],
+    }
 
 
 def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
-    """SS-TG W3 — graded Telegram call hit-rate for proof strip."""
-    database = db or get_db()
-    graded = 0
-    hits = 0
+    """Backward-compatible aggregate from the shared public-proof contract."""
+    graded = hits = misses = neutral = 0
     recent: List[Dict[str, Any]] = []
     try:
-        with database._connect() as conn:
-            rows = conn.execute(
-                """SELECT m.id, m.author_name, m.timestamp, v.predicted_direction, v.conviction,
-                          po.outcome, po.pump_pct_max, ps.netuid
-                   FROM messages m
-                   JOIN price_outcomes po ON po.message_id = m.id
-                   LEFT JOIN message_verdicts v ON v.message_id = m.id
-                   LEFT JOIN price_snapshots ps ON ps.message_id = m.id
-                   WHERE m.source = 'telegram'
-                   ORDER BY m.id DESC
-                   LIMIT 200"""
-            ).fetchall()
+        rows = _proof_rows(db)
     except Exception:
-        return {"graded": 0, "hits": 0, "hit_rate": None, "ready": False, "recent": []}
+        return {"graded": 0, "hits": 0, "misses": 0, "neutral": 0, "hit_rate": None, "ready": False, "recent": []}
 
     for row in rows:
+        proof = classify_call(row)
+        if not proof["resolved"]:
+            continue
         graded += 1
-        direction = str(row["predicted_direction"] or "")
-        outcome = str(row["outcome"] or "")
-        if _outcome_hit(direction, outcome):
+        if proof["status"] == "hit":
             hits += 1
+        elif proof["status"] == "miss":
+            misses += 1
+        else:
+            neutral += 1
         if len(recent) < 4:
             recent.append(
                 {
-                    "id": int(row["id"]),
-                    "author_name": row["author_name"],
-                    "outcome": outcome,
-                    "pump_pct_max": row["pump_pct_max"],
-                    "netuid": row["netuid"],
-                    "hit": _outcome_hit(direction, outcome),
+                    "id": int(row["id"]), "author_name": row.get("author_name"),
+                    "netuid": row.get("netuid"), "move_pct": proof["move_pct"],
+                    "pump_pct_max": proof["move_pct"], "status": proof["status"],
+                    "hit": proof["status"] == "hit",
                 }
             )
 
-    hit_rate = round((hits / graded) * 100.0, 1) if graded else None
+    scored = hits + misses
+    hit_rate = round((hits / scored) * 100.0, 1) if scored else None
     return {
-        "graded": graded,
-        "hits": hits,
-        "hit_rate": hit_rate,
-        "ready": graded >= 3,
-        "recent": recent,
+        "graded": graded, "hits": hits, "misses": misses, "neutral": neutral,
+        "hit_rate": hit_rate, "ready": scored >= MIN_LEADERBOARD_SAMPLE, "recent": recent,
     }
+
+
+def build_telegram_caller_leaderboard(*, days: int = 30, limit: int = 25, db=None) -> Dict[str, Any]:
+    """Evidence-only caller table for the selected rolling window."""
+    rows = _proof_rows(db, days=days)
+    callers: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        proof = classify_call(row)
+        if not proof["resolved"]:
+            continue
+        aid = stable_author_id(row)
+        entry = callers.setdefault(aid, {
+            "author_id": aid, "author_name": row.get("author_name") or "Unknown",
+            "author_username": row.get("author_username") or "", "hits": 0,
+            "misses": 0, "neutral": 0, "sample_size": 0, "recent": [],
+        })
+        entry["sample_size"] += 1
+        _status_counter = {"hit": "hits", "miss": "misses", "neutral": "neutral"}
+        entry[_status_counter.get(proof["status"], "neutral")] += 1
+        if len(entry["recent"]) < 3:
+            entry["recent"].append(_receipt(row, proof))
+    results = []
+    for item in callers.values():
+        scored = item["hits"] + item["misses"]
+        item["accuracy"] = round(item["hits"] / scored * 100.0, 1) if scored else None
+        item["qualified"] = item["sample_size"] >= MIN_LEADERBOARD_SAMPLE and scored > 0
+        item["minimum_sample"] = MIN_LEADERBOARD_SAMPLE
+        results.append(item)
+    results.sort(key=lambda item: (item["qualified"], item["accuracy"] or -1, item["sample_size"]), reverse=True)
+    return {
+        "days": days, "minimum_sample": MIN_LEADERBOARD_SAMPLE, "count": len(results),
+        "callers": results[:limit], "empty": not results,
+        "disclaimer": "Prediction accuracy is measured from resolved qualifying calls only, not engagement. Not financial advice.",
+    }
+
+
+def _receipt(row: Dict[str, Any], proof: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "message_id": int(row["id"]), "content": str(row.get("content") or "")[:280],
+        "timestamp": row.get("timestamp") or row.get("created_at"), "netuid": row.get("netuid"),
+        "proof": proof_for_message(row),
+    }
+
+
+def list_telegram_caller_receipts(*, author_id: str, days: int = 30, limit: int = 20, offset: int = 0, db=None) -> Dict[str, Any]:
+    """Paginated public receipts, restricted to resolved qualifying evidence."""
+    receipts = []
+    for row in _proof_rows(db, days=days, author_id=author_id):
+        proof = classify_call(row)
+        if proof["resolved"]:
+            receipts.append(_receipt(row, proof))
+    page = receipts[offset: offset + limit]
+    return {"author_id": author_id, "days": days, "count": len(page), "total": len(receipts),
+            "receipts": page, "empty": not receipts, "offset": offset, "limit": limit}
 
 
 _MIN_24H_SUMMARY_MESSAGES = 10

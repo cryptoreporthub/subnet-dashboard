@@ -1,6 +1,6 @@
 {
   "status": "ok",
-  "captured_at": "2026-08-07T13:47:48.537973Z",
+  "captured_at": "2026-08-07T13:04:51.650504Z",
   "alert_level": "ok",
   "alert_reasons": [],
   "resolver_stats": {
@@ -22,20 +22,20 @@
   },
   "watchdog": {
     "warning": false,
-    "pending_count": 10,
-    "oldest_pending_age_hours": 0.79,
-    "oldest_prediction_id": "58991667bd"
+    "pending_count": 4,
+    "oldest_pending_age_hours": 0.72,
+    "oldest_prediction_id": "bfd9cd16a8"
   },
   "loop_health": {
     "status": "ok",
-    "pending": 5,
+    "pending": 0,
     "worker_peer_alive": null
   },
   "expert_weights": {
-    "quant": 1.025,
-    "hype": 0.895,
-    "dark_horse": 1.0,
-    "technical": 0.895
+    "quant": 1.043,
+    "hype": 0.868,
+    "dark_horse": 1.03,
+    "technical": 0.87
   },
   "streak": {
     "council": {
@@ -85,7 +85,7 @@
   },
   "artifact_refs": {
     "pump_desk": {
-      "captured_at": "2026-08-07T13:45:51.668573Z",
+      "captured_at": "2026-08-07T12:56:08.948527Z",
       "alert_level": "alert"
     }
   }

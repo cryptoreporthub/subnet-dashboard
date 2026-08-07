@@ -10104,6 +10104,29 @@ body.wrap {
 }
 .message-intel__proof-hit { color: #34d399; font-weight: 700; }
 .message-intel__proof-miss { color: #fb7185; font-weight: 700; }
+.message-intel__callers {
+  margin: 12px 0 16px; padding: 12px 14px; border: 1px solid rgba(52, 211, 153, .24);
+  border-radius: 8px; background: rgba(0,0,0,.18);
+}
+.message-intel__periods { display: flex; gap: 6px; margin: 8px 0; }
+.message-intel__periods button, .message-intel__receipt-toggle {
+  border: 1px solid rgba(255,255,255,.16); background: transparent; color: inherit; padding: 5px 8px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 11px;
+}
+.message-intel__periods button.is-active { border-color: rgba(52,211,153,.75); color: #a7f3d0; background: rgba(52,211,153,.1); }
+.message-intel__caller-note, .message-intel__caller-disclaimer { margin: 6px 0; color: var(--stage-muted); font-size: 11px; line-height: 1.4; }
+.message-intel__caller-row { display: grid; grid-template-columns: 22px 1fr auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px solid rgba(255,255,255,.07); }
+.message-intel__caller-row.is-provisional { opacity: .74; }
+.message-intel__caller-main { min-width: 0; display: grid; gap: 2px; font-size: 12px; }
+.message-intel__caller-main span, .message-intel__caller-rank { color: var(--stage-muted); font-size: 10px; }
+.message-intel__caller-row > strong { color: #a7f3d0; font-size: 13px; text-align: right; }
+.message-intel__receipt-toggle { grid-column: 2 / -1; justify-self: start; }
+.message-intel__receipts { margin-top: 10px; border-top: 1px solid rgba(255,255,255,.1); padding-top: 8px; }
+.message-intel__receipts h4 { margin: 0 0 8px; font-size: 12px; }
+.message-intel__receipt { display: grid; width: 100%; gap: 4px; text-align: left; padding: 8px 0; border: 0; border-top: 1px solid rgba(255,255,255,.06); background: transparent; color: inherit; cursor: pointer; font: inherit; }
+.message-intel__receipt small { color: var(--stage-muted); }
+.message-intel__outcome { display: inline-flex; width: fit-content; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid currentColor; margin: 6px 0 0; }
+.message-intel__outcome--hit { color: #34d399; }.message-intel__outcome--miss { color: #fb7185; }.message-intel__outcome--neutral { color: #fbbf24; }.message-intel__outcome--pending { color: #a5b4fc; }
+.message-intel__detail-proof { margin: 8px 0; color: var(--stage-muted); font-size: 11px; }
 .message-intel__hc-strip {
   margin: 0 0 16px;
   padding: 10px 12px;

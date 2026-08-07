@@ -1,17 +1,17 @@
 {
-  "run_at": "2026-07-03T18:45:17.506209+00:00",
-  "last_run_at": "2026-07-03T18:45:17.506209+00:00",
+  "run_at": "2026-08-07T13:34:11.208602+00:00",
+  "last_run_at": "2026-08-07T13:34:11.208602+00:00",
   "signals_emitted": 0,
   "subnets_processed": 1,
   "errors": [],
   "phase_errors": [],
   "per_subnet": {
     "1": {
-      "rsi": 57.0654,
-      "macd_histogram": -0.00169,
-      "stochastic_k": 57.746,
+      "rsi": 50.062,
+      "macd_histogram": 0.002488,
+      "stochastic_k": 63.043,
       "active_signals": [],
-      "last_updated": "2026-07-03T18:45:17.506209+00:00"
+      "last_updated": "2026-08-07T13:34:11.208602+00:00"
     }
   }
 }

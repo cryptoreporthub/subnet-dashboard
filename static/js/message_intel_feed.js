@@ -27,6 +27,8 @@
   var summary24hCard = document.getElementById("message-intel-summary-24h");
   var summary24hBody = document.getElementById("message-intel-summary-24h-body");
   var detailPanel = document.getElementById("message-intel-detail");
+  var callersEl = document.getElementById("message-intel-callers");
+  var callersBody = document.getElementById("message-intel-callers-body");
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   var topicFiltersEl = document.getElementById("message-intel-topic-filters");
@@ -39,6 +41,7 @@
   var refreshTimer = null;
   var openDetailId = null;
   var GROUP_URL = "https://t.me/OfficialSubnetSummer";
+  var callerDays = 30;
 
   function loadFilters() {
     try {
@@ -343,7 +346,7 @@
     if (proof.recent && proof.recent.length) {
       html += '<ul class="message-intel__proof-list">';
       proof.recent.forEach(function (r) {
-        var label = r.hit ? "hit" : "miss";
+        var label = r.status || (r.hit ? "hit" : "miss");
         html +=
           "<li><span class=\"message-intel__proof-" +
           label +
@@ -352,7 +355,7 @@
           "</span> " +
           esc(r.author_name || "anon") +
           (r.netuid != null ? " · SN" + esc(r.netuid) : "") +
-          (r.pump_pct_max != null ? " · " + esc(r.pump_pct_max) + "% max" : "") +
+          (r.move_pct != null || r.pump_pct_max != null ? " · " + esc(r.move_pct != null ? r.move_pct : r.pump_pct_max) + "% move" : "") +
           "</li>";
       });
       html += "</ul>";
@@ -360,6 +363,79 @@
       html += '<p class="empty">Graded outcomes appear after price snapshots resolve.</p>';
     }
     proofBody.innerHTML = html;
+  }
+
+  function proofPill(proof) {
+    proof = proof || {};
+    if (!proof.eligible) return "";
+    var status = String(proof.status || "pending").toLowerCase();
+    var label = status === "pending" ? "Awaiting outcome" : status.toUpperCase();
+    var move = proof.move_pct != null ? " · " + Number(proof.move_pct).toFixed(2) + "%" : "";
+    return '<span class="message-intel__outcome message-intel__outcome--' + esc(status) + '">' + esc(label) + esc(move) + "</span>";
+  }
+
+  function renderCallerLeaderboard(payload) {
+    if (!callersBody) return;
+    payload = payload || {};
+    var callers = payload.callers || [];
+    if (!callers.length) {
+      callersBody.innerHTML = '<p class="empty">No resolved qualifying Telegram calls in this window yet. A caller needs explicit direction, 60%+ conviction, and a tracked price snapshot.</p>';
+      return;
+    }
+    var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 3) + ' resolved calls.</p><div class="message-intel__caller-list">';
+    callers.forEach(function (row, index) {
+      var name = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name || "Unknown";
+      var accuracy = row.accuracy != null ? row.accuracy + "%" : "—";
+      html += '<article class="message-intel__caller-row' + (row.qualified ? "" : " is-provisional") + '">' +
+        '<span class="message-intel__caller-rank">' + esc(index + 1) + '</span><div class="message-intel__caller-main"><b>' + esc(name) + '</b>' +
+        '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span></div>' +
+        '<strong>' + esc(accuracy) + '</strong>' +
+        '<button type="button" class="message-intel__receipt-toggle" data-caller-id="' + esc(row.author_id) + '" data-caller-name="' + esc(name) + '">' + (row.qualified ? "Receipts" : "Provisional receipts") + "</button></article>";
+    });
+    html += "</div><p class=\"message-intel__caller-disclaimer\">" + esc(payload.disclaimer || "Not financial advice.") + "</p>";
+    callersBody.innerHTML = html;
+    callersBody.querySelectorAll("[data-caller-id]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        loadCallerReceipts(button.getAttribute("data-caller-id"), button.getAttribute("data-caller-name"));
+      });
+    });
+  }
+
+  async function loadCallerReceipts(authorId, name) {
+    if (!callersBody) return;
+    callersBody.insertAdjacentHTML("beforeend", '<div class="message-intel__receipts" id="message-intel-receipts"><p class="empty">Loading proof receipts for ' + esc(name) + "…</p></div>");
+    var target = document.getElementById("message-intel-receipts");
+    try {
+      var data = await fetchJsonWithRetry("/api/message-intel/callers/" + encodeURIComponent(authorId) + "/receipts?days=" + callerDays + "&limit=20");
+      var receipts = data.receipts || [];
+      if (!receipts.length) {
+        target.innerHTML = '<p class="empty">No resolved qualifying receipts in this window.</p>';
+        return;
+      }
+      target.innerHTML = '<h4>Proof receipts · ' + esc(name) + '</h4>' + receipts.map(function (r) {
+        var proof = r.proof || {};
+        return '<button type="button" class="message-intel__receipt" data-receipt-id="' + esc(r.message_id) + '">' +
+          proofPill(proof) + '<span>' + esc(snippet(r.content, 110)) + '</span><small>' + esc(fmtTime(r.timestamp)) + (r.netuid != null ? " · SN" + esc(r.netuid) : "") + "</small></button>";
+      }).join("");
+      target.querySelectorAll("[data-receipt-id]").forEach(function (button) {
+        button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+      });
+    } catch (e) {
+      target.innerHTML = '<p class="empty">Could not load these proof receipts.</p>';
+    }
+  }
+
+  async function hydrateCallerLeaderboard() {
+    if (!callersBody) return;
+    callersBody.setAttribute("aria-busy", "true");
+    try {
+      var data = await fetchJsonWithRetry("/api/message-intel/callers?days=" + callerDays + "&limit=12");
+      renderCallerLeaderboard(data);
+    } catch (e) {
+      callersBody.innerHTML = '<p class="empty">Caller proof is temporarily unavailable.</p>';
+    } finally {
+      callersBody.setAttribute("aria-busy", "false");
+    }
   }
 
   function renderHighConvictionStrip(rows) {
@@ -423,6 +499,7 @@
     var outcome = detail.price_outcome || {};
     var snap = detail.price_snapshot || {};
     var graded = detail.graded;
+    var proof = detail.proof || message.proof || {};
     var html =
       '<div class="message-intel__detail-card">' +
       '<button type="button" class="message-intel__detail-close" id="message-intel-detail-close">Close</button>' +
@@ -447,9 +524,10 @@
         esc(outcome.outcome) +
         (outcome.pump_pct_max != null ? " · " + esc(outcome.pump_pct_max) + "% max move" : "") +
         "</p>";
-    } else {
+    } else if (proof.eligible) {
       html += '<p class="message-intel__detail-outcome message-intel__detail-outcome--pending">Outcome pending — grading runs every ~5 min.</p>';
     }
+    if (proof.eligible) html += '<p class="message-intel__detail-proof">Proof: ' + proofPill(proof) + ' · resolved qualifying calls only; not financial advice.</p>';
     if (detail.netuid != null) {
       html +=
         '<div class="message-intel__detail-actions">' +
@@ -1037,6 +1115,7 @@
           '<span class="message-intel__sn-inline">SN' + esc(netuids[0]) + "</span>";
       }
       html += "</p>";
+      html += proofPill(row.proof);
       if (why.length) {
         html +=
           '<div class="message-intel__signal-strip"><span class="message-intel__why-label">WHY</span>' +
@@ -1274,6 +1353,7 @@
       renderWeekTopComment((payload.meta && payload.meta.week_top_comment) || null);
       renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
+      hydrateCallerLeaderboard();
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       renderSubnetFilterChips(trending);
       syncFilterChipStates();
@@ -1336,6 +1416,15 @@
   document.addEventListener("home:cockpit-tick", hydrate);
   if (refreshBtn) {
     refreshBtn.addEventListener("click", hydrate);
+  }
+  if (callersEl) {
+    callersEl.querySelectorAll("[data-caller-days]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        callerDays = Number(button.getAttribute("data-caller-days")) || 30;
+        callersEl.querySelectorAll("[data-caller-days]").forEach(function (tab) { tab.classList.toggle("is-active", tab === button); });
+        hydrateCallerLeaderboard();
+      });
+    });
   }
 
   if (document.readyState === "loading") {

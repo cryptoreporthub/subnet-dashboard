@@ -1,0 +1,1 @@
+- [Telegram proof classifier](telegram-proof-classifier.md) — hit/miss/neutral grading lives in message_intel/proof.py; direction resolution mirrors locked self_learning rule (bull OR up, bear OR down); up+stable shown as neutral but hit↔locked-correct parity is preserved and tested.

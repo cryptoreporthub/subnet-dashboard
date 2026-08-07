@@ -214,6 +214,19 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
     content = out.get("content")
     if content and not out.get("topics"):
         out["topics"] = classify_message_topics(str(content))
+    try:
+        from internal.message_intel.rollup import proof_for_message
+        proof_row = dict(out)
+        proof_row.update(out.get("verdict") if isinstance(out.get("verdict"), dict) else {})
+        proof_row.update(out.get("price_snapshot") if isinstance(out.get("price_snapshot"), dict) else {})
+        proof_row.update(out.get("price_outcome") if isinstance(out.get("price_outcome"), dict) else {})
+        out["proof"] = proof_for_message(proof_row)
+    except Exception as exc:
+        # Fail loud: a silent fallback here could present resolved calls as
+        # unqualified in the live feed, hiding real data/classifier breakage.
+        logger.warning("message-intel proof enrichment failed for msg %s: %s",
+                       out.get("id"), exc)
+        out["proof"] = {"eligible": False, "status": "unqualified", "evaluation": "not_eligible"}
     return out
 
 
@@ -364,7 +377,8 @@ def get_message_detail(msg_id: int) -> Dict[str, Any]:
     verdict = enriched.get("verdict") if isinstance(enriched.get("verdict"), dict) else {}
     outcome = enriched.get("price_outcome") if isinstance(enriched.get("price_outcome"), dict) else {}
     snapshot = enriched.get("price_snapshot") if isinstance(enriched.get("price_snapshot"), dict) else {}
-    graded = bool(outcome)
+    proof = enriched.get("proof") if isinstance(enriched.get("proof"), dict) else {}
+    graded = bool(proof.get("evaluation") == "resolved")
     return {
         "status": "success",
         "message": enriched,
@@ -375,6 +389,7 @@ def get_message_detail(msg_id: int) -> Dict[str, Any]:
             "price_snapshot": snapshot,
             "price_outcome": outcome,
             "graded": graded,
+            "proof": proof,
             "netuid": enriched.get("netuid"),
             "subnet_name": enriched.get("subnet_name"),
         },
