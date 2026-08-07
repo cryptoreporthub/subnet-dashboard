@@ -113,6 +113,52 @@ def test_scheduler_disabled(monkeypatch):
     assert out["started"] is False
 
 
+def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
+    """Contended snapshot must skip (not wedge) and never touch the heavy gate."""
+    from internal.heavy_job_gate import heavy_job_slot
+
+    monkeypatch.setattr(snaps, "_scoring_in_progress", lambda: False)
+    ran = {"n": 0}
+
+    def _fail(**kwargs):
+        ran["n"] += 1
+        raise AssertionError("write_full_universe_snapshot must not run when gate busy")
+
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fail)
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    sched = snaps.ScoreSnapshotScheduler()
+    with heavy_job_slot("other_heavy_job"):
+        out = sched._tick(reschedule=False)
+    assert out.get("skipped") == "heavy_job_busy"
+    assert out.get("ok") is True
+    assert ran["n"] == 0
+
+
+def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
+    """Ungated snapshot completes a full cycle and updates scheduler state."""
+    monkeypatch.setattr(snaps, "_scoring_in_progress", lambda: False)
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    def _fake_write(progress_cb=None):
+        if progress_cb:
+            progress_cb(1, 1)
+        return {"ok": True, "count": 3, "written_at": "2026-08-07T00:00:00Z", "path": "data/score_snapshots.json"}
+
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
+    sched = snaps.ScoreSnapshotScheduler()
+    out = sched._tick(reschedule=False)
+    assert out.get("ok") is True
+    assert out.get("count") == 3
+    state = sched.state()
+    assert state["last_run_ok"] is True
+    assert state["last_result"]["count"] == 3
+
+
 def test_persist_cycle_summary_writes_soul_map(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
