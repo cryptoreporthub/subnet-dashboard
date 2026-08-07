@@ -1142,6 +1142,169 @@
         "decision": "scan_complete",
         "prediction": null,
         "judge": null
+      },
+      {
+        "time": "2026-08-07T11:24:10.355721Z",
+        "event_type": "rotation_tokens_update",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "tokens": [
+            {
+              "symbol": "HYPERLIQUID",
+              "name": "Hyperliquid",
+              "price": 56.84,
+              "price_change_24h": 2.43,
+              "conviction": 54,
+              "source": "coingecko"
+            },
+            {
+              "symbol": "VVV",
+              "name": "Vvv",
+              "price": 11.6,
+              "price_change_24h": 1.92,
+              "conviction": 53,
+              "source": "coingecko"
+            },
+            {
+              "symbol": "NEAR",
+              "name": "Near",
+              "price": 1.66,
+              "price_change_24h": -1.69,
+              "conviction": 47,
+              "source": "coingecko"
+            },
+            {
+              "symbol": "RENDER",
+              "name": "Render",
+              "price": 1.33,
+              "price_change_24h": 0.7,
+              "conviction": 51,
+              "source": "coingecko"
+            },
+            {
+              "symbol": "FETCH",
+              "name": "Fetch",
+              "price": 0.134715,
+              "price_change_24h": -1.99,
+              "conviction": 47,
+              "source": "coingecko"
+            }
+          ],
+          "state_changed": true
+        },
+        "signal": "rotation_watchlist",
+        "decision": "conviction_refresh",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:24:13.163366Z",
+        "event_type": "signal_triggered",
+        "subnet": "Zipcode",
+        "netuid": 46,
+        "evidence": {
+          "reasons": [
+            "anticipated -10.6%",
+            "crash-tail -42.9%"
+          ],
+          "solo": true,
+          "line": "Caution \u00b7 Zipcode \u00b7 anticipated -10.6% \u00b7 crash-tail -42.9%"
+        },
+        "signal": "caution_cell",
+        "decision": "down",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:24:13.376141Z",
+        "event_type": "signal_triggered",
+        "subnet": "Quasar",
+        "netuid": 24,
+        "evidence": {
+          "reasons": [
+            "anticipated -6.0%",
+            "crash-tail -72.8%"
+          ],
+          "solo": true,
+          "line": "Caution \u00b7 Quasar \u00b7 anticipated -6.0% \u00b7 crash-tail -72.8%"
+        },
+        "signal": "caution_cell",
+        "decision": "down",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:24:13.543353Z",
+        "event_type": "signal_triggered",
+        "subnet": "Ditto",
+        "netuid": 118,
+        "evidence": {
+          "reasons": [
+            "anticipated -13.9%",
+            "crash-tail -61.4%"
+          ],
+          "solo": true,
+          "line": "Caution \u00b7 Ditto \u00b7 anticipated -13.9% \u00b7 crash-tail -61.4%"
+        },
+        "signal": "caution_cell",
+        "decision": "down",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:24:16.416646Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 0.993,
+          "delta": -0.007,
+          "reason": "council_rebalance",
+          "dial": "quant"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "quant",
+        "correct": null
+      },
+      {
+        "time": "2026-08-07T11:24:16.503198Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 0.958,
+          "delta": -0.042,
+          "reason": "council_rebalance",
+          "dial": "hype"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "hype",
+        "correct": null
+      },
+      {
+        "time": "2026-08-07T11:24:16.631289Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 0.86,
+          "delta": -0.14,
+          "reason": "council_rebalance",
+          "dial": "technical"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "technical",
+        "correct": null
       }
     ],
     "rotation_tokens_snapshot": {
@@ -1149,45 +1312,45 @@
         {
           "symbol": "HYPERLIQUID",
           "name": "Hyperliquid",
-          "price": 63.47,
-          "price_change_24h": -6.61,
-          "conviction": 37,
+          "price": 56.84,
+          "price_change_24h": 2.43,
+          "conviction": 54,
           "source": "coingecko"
         },
         {
           "symbol": "VVV",
           "name": "Vvv",
-          "price": 10.7,
-          "price_change_24h": -0.8,
-          "conviction": 49,
+          "price": 11.6,
+          "price_change_24h": 1.92,
+          "conviction": 53,
           "source": "coingecko"
         },
         {
           "symbol": "NEAR",
           "name": "Near",
-          "price": 1.93,
-          "price_change_24h": 0.09,
-          "conviction": 50,
+          "price": 1.66,
+          "price_change_24h": -1.69,
+          "conviction": 47,
           "source": "coingecko"
         },
         {
           "symbol": "RENDER",
           "name": "Render",
-          "price": 1.48,
-          "price_change_24h": -4.07,
-          "conviction": 42,
+          "price": 1.33,
+          "price_change_24h": 0.7,
+          "conviction": 51,
           "source": "coingecko"
         },
         {
           "symbol": "FETCH",
           "name": "Fetch",
-          "price": 0.158053,
-          "price_change_24h": -1.73,
+          "price": 0.134715,
+          "price_change_24h": -1.99,
           "conviction": 47,
           "source": "coingecko"
         }
       ],
-      "updated_at": "2026-07-14T00:18:01.898558Z"
+      "updated_at": "2026-08-07T11:24:10.293136Z"
     },
     "pump_ladder": {
       "last_batch_at": "2026-07-14T08:28:20.086354Z",
@@ -26096,5 +26259,28 @@
         "weight_after": 1.01
       }
     }
-  ]
+  ],
+  "simivision_convictions": {
+    "46": 53,
+    "97": 53,
+    "66": 53,
+    "114": 53,
+    "71": 52
+  },
+  "simivision_convictions_updated_at": "2026-08-07T11:24:13.021831+00:00",
+  "adversarial_state": {
+    "council_weights": {
+      "quant": 0.993,
+      "hype": 0.958,
+      "dark_horse": 1.0,
+      "technical": 0.86
+    },
+    "last_weight_update": "2026-08-07T11:24:16.325766+00:00"
+  },
+  "expert_weights": {
+    "quant": 0.993,
+    "hype": 0.958,
+    "dark_horse": 1.0,
+    "technical": 0.86
+  }
 }

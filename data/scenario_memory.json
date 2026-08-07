@@ -274,8 +274,16 @@
         "reference_price": 0.03896091,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.015097Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.015097Z",
+      "resolved_at": "2026-08-07T11:24:00.186181Z",
+      "metadata": {
+        "prediction_id": "bfe4c992f0",
+        "actual_pct": 8.39,
+        "predicted_pct": -0.8,
+        "netuid": 40,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518030146",
@@ -289,8 +297,16 @@
         "reference_price": 0.03896091,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.030201Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.030201Z",
+      "resolved_at": "2026-08-07T11:24:00.184554Z",
+      "metadata": {
+        "prediction_id": "b4c29235bd",
+        "actual_pct": 8.39,
+        "predicted_pct": -4.72,
+        "netuid": 40,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518045394",
@@ -304,8 +320,16 @@
         "reference_price": 0.03896091,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.045409Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.045409Z",
+      "resolved_at": "2026-08-07T11:24:00.182968Z",
+      "metadata": {
+        "prediction_id": "9ad8e1ae80",
+        "actual_pct": 8.39,
+        "predicted_pct": 5.27,
+        "netuid": 40,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518060964",
@@ -319,8 +343,16 @@
         "reference_price": 0.03896091,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.060980Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.060980Z",
+      "resolved_at": "2026-08-07T11:24:00.171475Z",
+      "metadata": {
+        "prediction_id": "790ca9dddc",
+        "actual_pct": 22.24,
+        "predicted_pct": -5.29,
+        "netuid": 40,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518078029",
@@ -334,8 +366,16 @@
         "reference_price": 0.04510137,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.078044Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.078044Z",
+      "resolved_at": "2026-08-07T11:24:00.191578Z",
+      "metadata": {
+        "prediction_id": "b0390ab698",
+        "actual_pct": 2.39,
+        "predicted_pct": -0.8,
+        "netuid": 107,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518094185",
@@ -349,8 +389,16 @@
         "reference_price": 0.04510137,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.094201Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.094201Z",
+      "resolved_at": "2026-08-07T11:24:00.189819Z",
+      "metadata": {
+        "prediction_id": "21800a3a29",
+        "actual_pct": 2.39,
+        "predicted_pct": -0.8,
+        "netuid": 107,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518110125",
@@ -364,8 +412,16 @@
         "reference_price": 0.04510137,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.110139Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.110139Z",
+      "resolved_at": "2026-08-07T11:24:00.188193Z",
+      "metadata": {
+        "prediction_id": "20c11c27ea",
+        "actual_pct": 2.39,
+        "predicted_pct": -0.8,
+        "netuid": 107,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518126090",
@@ -379,8 +435,16 @@
         "reference_price": 0.04510137,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.126106Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.126106Z",
+      "resolved_at": "2026-08-07T11:24:00.173111Z",
+      "metadata": {
+        "prediction_id": "eb623e916f",
+        "actual_pct": 4.22,
+        "predicted_pct": -5.75,
+        "netuid": 107,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518144378",
@@ -394,8 +458,16 @@
         "reference_price": 0.02501847,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.144396Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.144396Z",
+      "resolved_at": "2026-08-07T11:24:00.197074Z",
+      "metadata": {
+        "prediction_id": "b0a76669a0",
+        "actual_pct": -4.35,
+        "predicted_pct": 4.06,
+        "netuid": 97,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518161421",
@@ -409,8 +481,16 @@
         "reference_price": 0.02501847,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.161438Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.161438Z",
+      "resolved_at": "2026-08-07T11:24:00.195308Z",
+      "metadata": {
+        "prediction_id": "d3274f1fc6",
+        "actual_pct": -4.35,
+        "predicted_pct": -3.94,
+        "netuid": 97,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518178434",
@@ -424,8 +504,16 @@
         "reference_price": 0.02501847,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.178450Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.178450Z",
+      "resolved_at": "2026-08-07T11:24:00.193604Z",
+      "metadata": {
+        "prediction_id": "f25be83e6c",
+        "actual_pct": -4.35,
+        "predicted_pct": -1.0,
+        "netuid": 97,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518196072",
@@ -439,8 +527,16 @@
         "reference_price": 0.02501847,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.196087Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.196087Z",
+      "resolved_at": "2026-08-07T11:24:00.174775Z",
+      "metadata": {
+        "prediction_id": "6fadb6774e",
+        "actual_pct": -23.85,
+        "predicted_pct": -2.29,
+        "netuid": 97,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518215452",
@@ -454,8 +550,16 @@
         "reference_price": 0.0287698,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.215468Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.215468Z",
+      "resolved_at": "2026-08-07T11:24:00.207960Z",
+      "metadata": {
+        "prediction_id": "6ee0034318",
+        "actual_pct": 5.48,
+        "predicted_pct": 2.68,
+        "netuid": 15,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518233218",
@@ -469,8 +573,16 @@
         "reference_price": 0.0287698,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.233234Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.233234Z",
+      "resolved_at": "2026-08-07T11:24:00.206335Z",
+      "metadata": {
+        "prediction_id": "429340cf80",
+        "actual_pct": 5.48,
+        "predicted_pct": -4.2,
+        "netuid": 15,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518250867",
@@ -484,8 +596,16 @@
         "reference_price": 0.0287698,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.250884Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.250884Z",
+      "resolved_at": "2026-08-07T11:24:00.204695Z",
+      "metadata": {
+        "prediction_id": "53ba1a6c4a",
+        "actual_pct": 5.48,
+        "predicted_pct": -1.0,
+        "netuid": 15,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518268705",
@@ -499,8 +619,16 @@
         "reference_price": 0.0287698,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.268721Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.268721Z",
+      "resolved_at": "2026-08-07T11:24:00.176259Z",
+      "metadata": {
+        "prediction_id": "d25e32613c",
+        "actual_pct": -12.82,
+        "predicted_pct": 1.01,
+        "netuid": 15,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518288194",
@@ -514,8 +642,16 @@
         "reference_price": 0.05482254,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.288210Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.288210Z",
+      "resolved_at": "2026-08-07T11:24:00.202564Z",
+      "metadata": {
+        "prediction_id": "eaf7744f6f",
+        "actual_pct": 2.85,
+        "predicted_pct": -0.8,
+        "netuid": 120,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518306452",
@@ -529,8 +665,16 @@
         "reference_price": 0.05482254,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.306467Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.306467Z",
+      "resolved_at": "2026-08-07T11:24:00.200869Z",
+      "metadata": {
+        "prediction_id": "cccb67cdb2",
+        "actual_pct": 2.85,
+        "predicted_pct": -0.8,
+        "netuid": 120,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518325202",
@@ -544,8 +688,16 @@
         "reference_price": 0.05482254,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.325217Z"
+      "outcome": "wrong",
+      "created_at": "2026-07-03T18:45:18.325217Z",
+      "resolved_at": "2026-08-07T11:24:00.199202Z",
+      "metadata": {
+        "prediction_id": "833645c8d4",
+        "actual_pct": 2.85,
+        "predicted_pct": -1.0,
+        "netuid": 120,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518343960",
@@ -559,8 +711,16 @@
         "reference_price": 0.05482254,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.343975Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.343975Z",
+      "resolved_at": "2026-08-07T11:24:00.178109Z",
+      "metadata": {
+        "prediction_id": "2e47b5ec2b",
+        "actual_pct": -3.52,
+        "predicted_pct": -0.95,
+        "netuid": 120,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518364138",
@@ -574,8 +734,16 @@
         "reference_price": 0.07406842,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.364154Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.364154Z",
+      "resolved_at": "2026-08-07T11:24:00.213402Z",
+      "metadata": {
+        "prediction_id": "375c95af3b",
+        "actual_pct": -1.64,
+        "predicted_pct": -0.8,
+        "netuid": 64,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518383287",
@@ -589,8 +757,16 @@
         "reference_price": 0.07406842,
         "horizon_hours": 2
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.383303Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.383303Z",
+      "resolved_at": "2026-08-07T11:24:00.211767Z",
+      "metadata": {
+        "prediction_id": "5a15e37809",
+        "actual_pct": -1.64,
+        "predicted_pct": -0.8,
+        "netuid": 64,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518402676",
@@ -604,8 +780,16 @@
         "reference_price": 0.07406842,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.402693Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.402693Z",
+      "resolved_at": "2026-08-07T11:24:00.210009Z",
+      "metadata": {
+        "prediction_id": "c06e26c637",
+        "actual_pct": -1.64,
+        "predicted_pct": -1.0,
+        "netuid": 64,
+        "backfilled": true
+      }
     },
     {
       "id": "sc_20260703184518422288",
@@ -619,8 +803,16 @@
         "reference_price": 0.07406842,
         "horizon_hours": 4
       },
-      "outcome": null,
-      "created_at": "2026-07-03T18:45:18.422305Z"
+      "outcome": "correct",
+      "created_at": "2026-07-03T18:45:18.422305Z",
+      "resolved_at": "2026-08-07T11:24:00.179752Z",
+      "metadata": {
+        "prediction_id": "45e9dcead7",
+        "actual_pct": -1.26,
+        "predicted_pct": -6.57,
+        "netuid": 64,
+        "backfilled": true
+      }
     }
   ],
   "regimes": {
@@ -672,6 +864,6 @@
     ]
   },
   "meta": {
-    "last_updated": "2026-07-03T18:45:18.422329Z"
+    "last_updated": "2026-08-07T11:24:00.213423Z"
   }
 }

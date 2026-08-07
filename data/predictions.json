@@ -1269,6 +1269,7 @@
     "duplicate": 8,
     "pending": 0,
     "total": 58,
+    "shadow_graded": 0,
     "accuracy": 0.441
   },
   "watchdog": {

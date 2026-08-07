@@ -1,0 +1,124 @@
+{
+  "calls": [
+    {
+      "id": "0c91e76377",
+      "created_at": "2026-08-07T11:24:13.450791Z",
+      "experimental": true,
+      "focus_netuid": 78,
+      "shown_netuid": 98,
+      "shown": {
+        "netuid": 98,
+        "name": "NeverPlayAlone",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.62,
+        "timing_pts": 86.3,
+        "peer_pts": 93.7,
+        "combined_pts": 88.5,
+        "to_lead_pct": 93,
+        "to_trigger_pct": 86,
+        "price": 0.0
+      },
+      "tracked": [
+        {
+          "netuid": 98,
+          "name": "NeverPlayAlone",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.62,
+          "timing_pts": 86.3,
+          "peer_pts": 93.7,
+          "combined_pts": 88.5,
+          "to_lead_pct": 93,
+          "to_trigger_pct": 86,
+          "price": 0.0
+        },
+        {
+          "netuid": 6,
+          "name": "Numinous",
+          "lane": "Lift",
+          "phase": "PUMPING",
+          "score": 0.62,
+          "timing_pts": 86.2,
+          "peer_pts": 93.5,
+          "combined_pts": 88.4,
+          "to_lead_pct": 93,
+          "to_trigger_pct": 86,
+          "price": 0.0
+        },
+        {
+          "netuid": 49,
+          "name": "Nepher Robotics",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.58,
+          "timing_pts": 80.9,
+          "peer_pts": 88.1,
+          "combined_pts": 83.1,
+          "to_lead_pct": 88,
+          "to_trigger_pct": 81,
+          "price": 0.0
+        },
+        {
+          "netuid": 70,
+          "name": "NexisGen",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.57,
+          "timing_pts": 78.7,
+          "peer_pts": 85.8,
+          "combined_pts": 80.8,
+          "to_lead_pct": 85,
+          "to_trigger_pct": 79,
+          "price": 0.0
+        },
+        {
+          "netuid": 109,
+          "name": "GuardArena",
+          "lane": "Coil",
+          "phase": "ACCUMULATING",
+          "score": 0.53,
+          "timing_pts": 73.5,
+          "peer_pts": 80.4,
+          "combined_pts": 75.6,
+          "to_lead_pct": 80,
+          "to_trigger_pct": 73,
+          "price": 0.0
+        }
+      ],
+      "next_up_top": {
+        "netuid": 98,
+        "name": "NeverPlayAlone",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "score": 0.62,
+        "timing_pts": 86.3,
+        "peer_pts": 93.7,
+        "combined_pts": 88.5,
+        "to_lead_pct": 93,
+        "to_trigger_pct": 86,
+        "price": 0.0
+      },
+      "peer_top": {
+        "netuid": 98,
+        "name": "NeverPlayAlone",
+        "lane": "Coil",
+        "phase": "ACCUMULATING",
+        "distance": 0.116,
+        "shared": [],
+        "score": 0.62,
+        "to_lead_pct": 93
+      },
+      "weights": {
+        "timing": 0.7,
+        "peer": 0.3
+      },
+      "prediction_id": null,
+      "claim_pct": 2.0,
+      "horizon_hours": 1,
+      "outcomes": null
+    }
+  ],
+  "version": 1,
+  "updated_at": "2026-08-07T11:24:13.450791Z"
+}
