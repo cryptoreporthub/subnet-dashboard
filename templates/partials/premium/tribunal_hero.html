@@ -127,6 +127,22 @@
         <span data-accuracy-correct>{{ al.correct }}</span> hit ·
         <span data-accuracy-wrong>{{ al.wrong }}</span> miss
       </p>
+      <div class="tribunal-hero__last5 tribunal-hero__panel-last5" data-council-last5{% if not al.last5 %} hidden{% endif %}>
+        <span class="tribunal-hero__last5-caption">LAST 5</span>
+        <div class="tribunal-hero__last5-ticks" aria-hidden="true">
+          {% if al.last5 %}
+            {% for tick in al.last5 %}
+              {% if tick is sameas true %}
+                <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
+              {% elif tick is sameas false %}
+                <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
+              {% else %}
+                <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
     </div>
     {% set jm = t.panels.jury_move %}
     <div class="tribunal-hero__panel" data-panel="jury-move">

@@ -869,6 +869,7 @@ def _fast_home_hero_context(
                 "trust_banner": tb,
                 "judge_last5": lm.get("judge_last5"),
                 "council_last5": lm.get("council_last5"),
+                "judge_weight_deltas": lm.get("judge_weight_deltas") or {},
             },
         ),
     }

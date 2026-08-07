@@ -3,9 +3,9 @@
 
 :root {
   /* Backgrounds — deep charcoal so baked smoke billows have voids to play against */
-  --bg-base: #12141a;
-  --bg-edge: #0e1016;
-  --bg-midnight: #0a0c11;
+  --bg-base: #15171d;
+  --bg-edge: #111318;
+  --bg-midnight: #0d0f14;
   --bg-surface: rgba(22, 25, 32, 0.82);
   --bg-card: rgba(28, 32, 40, 0.55);
   --bg-elevated: rgba(36, 40, 50, 0.72);
@@ -21,16 +21,16 @@
   /* Rich silver smoke atmosphere — baked SVG + luminous billow washes over charcoal */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(200, 205, 214, 0.28) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(170, 175, 185, 0.22) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(185, 190, 200, 0.24) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(140, 145, 155, 0.20) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(200, 205, 214, 0.30) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(170, 175, 185, 0.24) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(185, 190, 200, 0.26) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(140, 145, 155, 0.21) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
   /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */
-  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(180, 182, 190, 0.22), transparent 70%);
-  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(224, 193, 142, 0.12), transparent 70%);
-  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(180, 182, 190, 0.20), transparent 70%);
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(180, 182, 190, 0.24), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(224, 193, 142, 0.13), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(180, 182, 190, 0.21), transparent 70%);
   --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */

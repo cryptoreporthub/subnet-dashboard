@@ -38,6 +38,8 @@ def test_sealed_label_is_long_not_buy():
     assert "THE TRIBUNAL" not in html
     assert "LAST 5" in html
     assert "data-last5 hidden" not in html
+    assert 'data-council-last5' in html
+    assert 'data-council-last5 hidden' not in html
 
 
 def test_forming_and_cold_have_no_fake_71_percent():

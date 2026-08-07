@@ -56,6 +56,10 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
             trust_banner = data.get("trust_banner") or {}
             ctx["learning_metrics"] = {
                 "expert_weights": data.get("expert_weights", {}),
+                "judge_weights": data.get("judge_weights", {}),
+                "judge_last5": data.get("judge_last5", {}),
+                "council_last5": data.get("council_last5", []),
+                "judge_weight_deltas": data.get("judge_weight_deltas", {}),
                 "total_records": data.get("total_records", 0),
                 "predictions_pending": data.get("pending", 0),
                 "predictions_resolved": data.get("total_records", 0),
@@ -72,6 +76,7 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
             }
         else:
             from internal.learning.routes import _learning_snapshot
+            from internal.learning.weight_deltas import recent_judge_weight_deltas
 
             snap = _learning_snapshot()
             engine_stats = snap["engine_stats"]
@@ -79,6 +84,10 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
             trust_banner = snap["trust_banner"]
             ctx["learning_metrics"] = {
                 "expert_weights": engine_stats.get("expert_weights", {}),
+                "judge_weights": snap.get("judge_weights", {}),
+                "judge_last5": snap.get("judge_last5", {}),
+                "council_last5": snap.get("council_last5", []),
+                "judge_weight_deltas": recent_judge_weight_deltas(),
                 "total_records": resolver_stats.get("total", engine_stats.get("total_records", 0)),
                 "predictions_pending": resolver_stats.get("pending", engine_stats.get("pending", 0)),
                 "predictions_resolved": resolver_stats.get("total", 0),
