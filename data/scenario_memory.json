@@ -276,11 +276,11 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.015097Z",
-      "resolved_at": "2026-08-07T11:24:00.186181Z",
+      "resolved_at": "2026-08-07T11:27:11.449819Z",
       "metadata": {
-        "prediction_id": "bfe4c992f0",
-        "actual_pct": 8.39,
-        "predicted_pct": -0.8,
+        "prediction_id": "0214aff267",
+        "actual_pct": -81.28,
+        "predicted_pct": 0.8,
         "netuid": 40,
         "backfilled": true
       }
@@ -322,11 +322,11 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.045409Z",
-      "resolved_at": "2026-08-07T11:24:00.182968Z",
+      "resolved_at": "2026-08-07T11:27:11.454484Z",
       "metadata": {
-        "prediction_id": "9ad8e1ae80",
-        "actual_pct": 8.39,
-        "predicted_pct": 5.27,
+        "prediction_id": "bc2ce48f3b",
+        "actual_pct": -81.28,
+        "predicted_pct": -3.66,
         "netuid": 40,
         "backfilled": true
       }
@@ -343,13 +343,13 @@
         "reference_price": 0.03896091,
         "horizon_hours": 4
       },
-      "outcome": "wrong",
+      "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.060980Z",
-      "resolved_at": "2026-08-07T11:24:00.171475Z",
+      "resolved_at": "2026-08-07T11:27:11.458292Z",
       "metadata": {
-        "prediction_id": "790ca9dddc",
-        "actual_pct": 22.24,
-        "predicted_pct": -5.29,
+        "prediction_id": "4bbdb8ad4b",
+        "actual_pct": -81.28,
+        "predicted_pct": -0.8,
         "netuid": 40,
         "backfilled": true
       }
@@ -366,13 +366,13 @@
         "reference_price": 0.04510137,
         "horizon_hours": 4
       },
-      "outcome": "wrong",
+      "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.078044Z",
-      "resolved_at": "2026-08-07T11:24:00.191578Z",
+      "resolved_at": "2026-08-07T11:27:11.463449Z",
       "metadata": {
-        "prediction_id": "b0390ab698",
-        "actual_pct": 2.39,
-        "predicted_pct": -0.8,
+        "prediction_id": "c4ab208245",
+        "actual_pct": 36.6357,
+        "predicted_pct": 0.8,
         "netuid": 107,
         "backfilled": true
       }
@@ -414,10 +414,10 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.110139Z",
-      "resolved_at": "2026-08-07T11:24:00.188193Z",
+      "resolved_at": "2026-08-07T11:27:11.464830Z",
       "metadata": {
-        "prediction_id": "20c11c27ea",
-        "actual_pct": 2.39,
+        "prediction_id": "ec7d1107a2",
+        "actual_pct": 36.6357,
         "predicted_pct": -0.8,
         "netuid": 107,
         "backfilled": true
@@ -460,11 +460,11 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.144396Z",
-      "resolved_at": "2026-08-07T11:24:00.197074Z",
+      "resolved_at": "2026-08-07T11:27:11.469235Z",
       "metadata": {
-        "prediction_id": "b0a76669a0",
-        "actual_pct": -4.35,
-        "predicted_pct": 4.06,
+        "prediction_id": "1632a45b26",
+        "actual_pct": 3.1363,
+        "predicted_pct": -1.0,
         "netuid": 97,
         "backfilled": true
       }
@@ -481,13 +481,13 @@
         "reference_price": 0.02501847,
         "horizon_hours": 2
       },
-      "outcome": "correct",
+      "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.161438Z",
-      "resolved_at": "2026-08-07T11:24:00.195308Z",
+      "resolved_at": "2026-08-07T11:27:11.470976Z",
       "metadata": {
-        "prediction_id": "d3274f1fc6",
-        "actual_pct": -4.35,
-        "predicted_pct": -3.94,
+        "prediction_id": "08a9782f2d",
+        "actual_pct": 3.1363,
+        "predicted_pct": -0.8,
         "netuid": 97,
         "backfilled": true
       }
@@ -506,11 +506,11 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.178450Z",
-      "resolved_at": "2026-08-07T11:24:00.193604Z",
+      "resolved_at": "2026-08-07T11:27:11.475811Z",
       "metadata": {
-        "prediction_id": "f25be83e6c",
-        "actual_pct": -4.35,
-        "predicted_pct": -1.0,
+        "prediction_id": "81e1767203",
+        "actual_pct": 3.1363,
+        "predicted_pct": 0.8,
         "netuid": 97,
         "backfilled": true
       }
@@ -552,11 +552,11 @@
       },
       "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.215468Z",
-      "resolved_at": "2026-08-07T11:24:00.207960Z",
+      "resolved_at": "2026-08-07T11:27:11.477112Z",
       "metadata": {
-        "prediction_id": "6ee0034318",
-        "actual_pct": 5.48,
-        "predicted_pct": 2.68,
+        "prediction_id": "b71ec3863b",
+        "actual_pct": -31.1916,
+        "predicted_pct": -1.0,
         "netuid": 15,
         "backfilled": true
       }
@@ -575,11 +575,11 @@
       },
       "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.233234Z",
-      "resolved_at": "2026-08-07T11:24:00.206335Z",
+      "resolved_at": "2026-08-07T11:27:11.479084Z",
       "metadata": {
-        "prediction_id": "429340cf80",
-        "actual_pct": 5.48,
-        "predicted_pct": -4.2,
+        "prediction_id": "7ae77c6bc3",
+        "actual_pct": -31.1916,
+        "predicted_pct": 0.8,
         "netuid": 15,
         "backfilled": true
       }
@@ -596,13 +596,13 @@
         "reference_price": 0.0287698,
         "horizon_hours": 4
       },
-      "outcome": "wrong",
+      "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.250884Z",
-      "resolved_at": "2026-08-07T11:24:00.204695Z",
+      "resolved_at": "2026-08-07T11:27:11.483843Z",
       "metadata": {
-        "prediction_id": "53ba1a6c4a",
-        "actual_pct": 5.48,
-        "predicted_pct": -1.0,
+        "prediction_id": "1ad81f1439",
+        "actual_pct": -31.1916,
+        "predicted_pct": -2.75,
         "netuid": 15,
         "backfilled": true
       }
@@ -619,13 +619,13 @@
         "reference_price": 0.0287698,
         "horizon_hours": 4
       },
-      "outcome": "wrong",
+      "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.268721Z",
-      "resolved_at": "2026-08-07T11:24:00.176259Z",
+      "resolved_at": "2026-08-07T11:27:11.485105Z",
       "metadata": {
-        "prediction_id": "d25e32613c",
-        "actual_pct": -12.82,
-        "predicted_pct": 1.01,
+        "prediction_id": "062e3a9bc3",
+        "actual_pct": -31.1916,
+        "predicted_pct": -0.8,
         "netuid": 15,
         "backfilled": true
       }
@@ -642,13 +642,13 @@
         "reference_price": 0.05482254,
         "horizon_hours": 4
       },
-      "outcome": "wrong",
+      "outcome": "correct",
       "created_at": "2026-07-03T18:45:18.288210Z",
-      "resolved_at": "2026-08-07T11:24:00.202564Z",
+      "resolved_at": "2026-08-07T11:27:11.489548Z",
       "metadata": {
-        "prediction_id": "eaf7744f6f",
-        "actual_pct": 2.85,
-        "predicted_pct": -0.8,
+        "prediction_id": "6cf1372184",
+        "actual_pct": 5.2055,
+        "predicted_pct": 0.8,
         "netuid": 120,
         "backfilled": true
       }
@@ -711,13 +711,13 @@
         "reference_price": 0.05482254,
         "horizon_hours": 4
       },
-      "outcome": "correct",
+      "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.343975Z",
-      "resolved_at": "2026-08-07T11:24:00.178109Z",
+      "resolved_at": "2026-08-07T11:27:11.490870Z",
       "metadata": {
-        "prediction_id": "2e47b5ec2b",
-        "actual_pct": -3.52,
-        "predicted_pct": -0.95,
+        "prediction_id": "7db71108a4",
+        "actual_pct": 5.2055,
+        "predicted_pct": -0.8,
         "netuid": 120,
         "backfilled": true
       }
@@ -734,13 +734,13 @@
         "reference_price": 0.07406842,
         "horizon_hours": 4
       },
-      "outcome": "correct",
+      "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.364154Z",
-      "resolved_at": "2026-08-07T11:24:00.213402Z",
+      "resolved_at": "2026-08-07T11:27:11.495946Z",
       "metadata": {
-        "prediction_id": "375c95af3b",
-        "actual_pct": -1.64,
-        "predicted_pct": -0.8,
+        "prediction_id": "fdbe722242",
+        "actual_pct": 18.3387,
+        "predicted_pct": -1.0,
         "netuid": 64,
         "backfilled": true
       }
@@ -757,12 +757,12 @@
         "reference_price": 0.07406842,
         "horizon_hours": 2
       },
-      "outcome": "correct",
+      "outcome": "wrong",
       "created_at": "2026-07-03T18:45:18.383303Z",
-      "resolved_at": "2026-08-07T11:24:00.211767Z",
+      "resolved_at": "2026-08-07T11:27:11.504516Z",
       "metadata": {
-        "prediction_id": "5a15e37809",
-        "actual_pct": -1.64,
+        "prediction_id": "04fed4b0dd",
+        "actual_pct": 18.3387,
         "predicted_pct": -0.8,
         "netuid": 64,
         "backfilled": true
@@ -813,6 +813,96 @@
         "netuid": 64,
         "backfilled": true
       }
+    },
+    {
+      "id": "sc_20260807112548685389",
+      "name": "Apex",
+      "regime": "neutral",
+      "features": {
+        "regime": "neutral",
+        "rsi": "neutral",
+        "volume": "very_low",
+        "price_direction": "up",
+        "valuation": "deep_value",
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48,
+        "netuid": 1,
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "horizon_type": "day",
+        "expert": "hype",
+        "impact_tier": "small",
+        "impact_strength": 1.0,
+        "relative_flow": 0.0,
+        "pattern_at_prediction": null,
+        "pattern_label": null
+      },
+      "outcome": null,
+      "created_at": "2026-08-07T11:25:48.685418Z"
+    },
+    {
+      "id": "sc_20260807112633726630",
+      "name": "Apex",
+      "regime": "neutral",
+      "features": {
+        "regime": "neutral",
+        "rsi": "neutral",
+        "volume": "very_low",
+        "price_direction": "up",
+        "valuation": "deep_value",
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48,
+        "netuid": 1,
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "horizon_type": "hour",
+        "expert": "hype",
+        "impact_tier": "small",
+        "impact_strength": 1.0,
+        "relative_flow": 0.0,
+        "pattern_at_prediction": null,
+        "pattern_label": null
+      },
+      "outcome": null,
+      "created_at": "2026-08-07T11:26:33.726652Z"
+    },
+    {
+      "id": "sc_20260807112714717075",
+      "name": "Apex",
+      "regime": "neutral",
+      "features": {
+        "regime": "neutral",
+        "rsi": "neutral",
+        "volume": "very_low",
+        "price_direction": "up",
+        "valuation": "deep_value",
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48,
+        "netuid": 1,
+        "direction": "up",
+        "predicted_pct": 1.51,
+        "horizon_type": "day",
+        "expert": "hype",
+        "impact_tier": "small",
+        "impact_strength": 1.0,
+        "relative_flow": 0.0,
+        "pattern_at_prediction": null,
+        "pattern_label": null
+      },
+      "outcome": null,
+      "created_at": "2026-08-07T11:27:14.717101Z"
     }
   ],
   "regimes": {
@@ -849,7 +939,10 @@
       "sc_20260703184518364138",
       "sc_20260703184518383287",
       "sc_20260703184518402676",
-      "sc_20260703184518422288"
+      "sc_20260703184518422288",
+      "sc_20260807112548685389",
+      "sc_20260807112633726630",
+      "sc_20260807112714717075"
     ],
     "bull": [
       "sc_20260703184516716939",
@@ -864,6 +957,6 @@
     ]
   },
   "meta": {
-    "last_updated": "2026-08-07T11:24:00.213423Z"
+    "last_updated": "2026-08-07T11:27:14.717133Z"
   }
 }

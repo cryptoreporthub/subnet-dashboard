@@ -1,0 +1,32 @@
+{
+  "enabled": true,
+  "daily": {
+    "running": true,
+    "last_run_at": "2026-08-07T11:25:48.352470Z",
+    "last_run_ok": true,
+    "last_run_error": null,
+    "last_result": {
+      "action": "HOLD",
+      "date": "2026-08-07"
+    },
+    "slot_utc": "00:15"
+  },
+  "hour": {
+    "running": true,
+    "refresh_minutes": 180,
+    "last_run_at": null,
+    "last_run_ok": null,
+    "last_run_error": null,
+    "last_result": {}
+  },
+  "last_tick": {
+    "ok": true,
+    "run_at": "2026-08-07T11:25:48.352470Z",
+    "error": null,
+    "action": "HOLD",
+    "date": "2026-08-07",
+    "next_delay_seconds": 46150.781545,
+    "today_ready": true
+  },
+  "written_at": "2026-08-07T11:25:49.218730Z"
+}

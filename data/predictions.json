@@ -1,5 +1,516 @@
 {
-  "predictions": [],
+  "predictions": [
+    {
+      "id": "2d7f61b964",
+      "netuid": 1,
+      "name": "Apex",
+      "direction": "up",
+      "predicted_pct": 1.51,
+      "horizon_hours": 1,
+      "reference_price": 0.00830189,
+      "created_at": "2026-08-07T11:26:33.541744+00:00Z",
+      "resolve_at": "2026-08-07T12:26:33.541744+00:00Z",
+      "status": "pending",
+      "signal_source": "social_sentiment",
+      "expert": "hype",
+      "statement": "predicted to move +1.5% within 1 hours",
+      "horizon_type": "hour",
+      "signal_contributions": {
+        "rsi_crossover": {
+          "score": 0.571,
+          "weight": 1.0,
+          "contribution": 0.571
+        },
+        "macd_cross": {
+          "score": 0.7006,
+          "weight": 1.0,
+          "contribution": 0.7006
+        },
+        "stochastic_reversal": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "bollinger_squeeze": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "mfi_flow": {
+          "score": 0.5067,
+          "weight": 1.0,
+          "contribution": 0.5067
+        },
+        "cci_divergence": {
+          "score": 0.6705,
+          "weight": 1.0,
+          "contribution": 0.6705
+        },
+        "williams_r": {
+          "score": 0.5257,
+          "weight": 1.0,
+          "contribution": 0.5257
+        },
+        "keltner_channel": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        }
+      },
+      "active_signals": [
+        "rsi_crossover",
+        "macd_cross",
+        "cci_divergence"
+      ],
+      "pick_source": "council_shadow",
+      "pick_score": 66.65,
+      "pick_confidence": 0.3976,
+      "experts_involved": [
+        "hype",
+        "technical",
+        "quant"
+      ],
+      "magnitude_source": "preattached",
+      "shadow": true,
+      "counterfactual": true,
+      "shadow_reason": "hold_near_call",
+      "subnet_snapshot": {
+        "netuid": 1,
+        "name": "Apex",
+        "price": 0.00830189,
+        "emission": 2.975,
+        "social_mentions": 1985,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48
+      },
+      "phase_at_prediction": "STIRRING",
+      "market_impact": {
+        "tier": "small",
+        "market_cap": 0.0,
+        "relative_flow": 0.0,
+        "sensitivity": 1.0,
+        "strength": 1.0,
+        "scale_factor": 1.0,
+        "ref_tao": 50.0,
+        "ref_impact_pct": 5000.0,
+        "summary": "small-cap: size unknown \u2014 neutral impact"
+      },
+      "impact_tier": "small",
+      "impact_strength": 1.0,
+      "impact_strength_at_creation": 1.0,
+      "scenario_id": "sc_20260807112633726630",
+      "weights_at_creation": {
+        "quant": 0.963,
+        "hype": 0.868,
+        "dark_horse": 1.03,
+        "technical": 0.87
+      },
+      "learning_state_at_creation": {
+        "council_weights": {
+          "quant": 0.963,
+          "hype": 0.868,
+          "dark_horse": 1.03,
+          "technical": 0.87
+        },
+        "impact_strength": 1.0,
+        "impact_tier": "small"
+      },
+      "signal_impact": {
+        "impacts": [
+          {
+            "signal_type": "rsi_crossover",
+            "description": "RSI 57.1 neutral \u2014 no edge",
+            "direction": "neutral",
+            "magnitude_pct": 0.8,
+            "confidence": 50,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.8% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "macd_cross",
+            "description": "MACD histogram +0.00 (bullish)",
+            "direction": "bullish",
+            "magnitude_pct": 0.51,
+            "confidence": 70,
+            "freshness": 0.986,
+            "predicted_move": "predicted to move +0.5% within 48 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "stochastic_reversal",
+            "description": "Stochastic %K 57.7 (neutral)",
+            "direction": "neutral",
+            "magnitude_pct": 0.62,
+            "confidence": 65,
+            "freshness": 0.917,
+            "predicted_move": "predicted to move 0.6% within 8 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "bollinger_squeeze",
+            "description": "Bollinger neutral (width 0.00)",
+            "direction": "neutral",
+            "magnitude_pct": 0.4,
+            "confidence": 60,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.4% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "mfi_divergence",
+            "description": "MFI 50.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.958,
+            "predicted_move": "predicted to move 0.5% within 16 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "cci_extreme",
+            "description": "CCI 0.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "williams_r_reversal",
+            "description": "Williams %R unavailable",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.933,
+            "predicted_move": "predicted to move 0.5% within 10 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "momentum_shift",
+            "description": "24h change +0.0% muted",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "emission_change",
+            "description": "Emission 2.98 TAO/day / APY 0.0%",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.996,
+            "predicted_move": "predicted to move 0.5% within 168 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "social_sentiment",
+            "description": "Social volume 1985 mentions",
+            "direction": "bullish",
+            "magnitude_pct": 1.0,
+            "confidence": 55,
+            "freshness": 0.891,
+            "predicted_move": "predicted to move +1.0% within 6 hours",
+            "learned_weight": 1.0
+          }
+        ],
+        "net_predicted_pct": 1.51,
+        "net_predicted_pct_raw": 1.51,
+        "net_direction": "bullish",
+        "hot_active": false,
+        "sell_active": false,
+        "dominant": null,
+        "market_impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        }
+      },
+      "judge_scores_at_creation": {
+        "oracle": {
+          "score": 0.8213,
+          "confidence": 0.8587
+        },
+        "echo": {
+          "score": 0.6379,
+          "confidence": 0.84
+        },
+        "pulse": {
+          "score": 0.54,
+          "confidence": 0.45
+        }
+      }
+    },
+    {
+      "id": "fd87810abd",
+      "netuid": 1,
+      "name": "Apex",
+      "direction": "up",
+      "predicted_pct": 1.51,
+      "horizon_hours": 24,
+      "reference_price": 0.00830189,
+      "created_at": "2026-08-07T11:27:14.264419+00:00Z",
+      "resolve_at": "2026-08-08T11:27:14.264419+00:00Z",
+      "status": "pending",
+      "signal_source": "social_sentiment",
+      "expert": "hype",
+      "statement": "predicted to move +1.5% within 24 hours",
+      "horizon_type": "day",
+      "signal_contributions": {
+        "rsi_crossover": {
+          "score": 0.571,
+          "weight": 1.0,
+          "contribution": 0.571
+        },
+        "macd_cross": {
+          "score": 0.7006,
+          "weight": 1.0,
+          "contribution": 0.7006
+        },
+        "stochastic_reversal": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "bollinger_squeeze": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "mfi_flow": {
+          "score": 0.5067,
+          "weight": 1.0,
+          "contribution": 0.5067
+        },
+        "cci_divergence": {
+          "score": 0.6705,
+          "weight": 1.0,
+          "contribution": 0.6705
+        },
+        "williams_r": {
+          "score": 0.5257,
+          "weight": 1.0,
+          "contribution": 0.5257
+        },
+        "keltner_channel": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        }
+      },
+      "active_signals": [
+        "rsi_crossover",
+        "macd_cross",
+        "cci_divergence"
+      ],
+      "pick_source": "council_shadow",
+      "pick_score": 74.01,
+      "pick_confidence": 0.4196,
+      "experts_involved": [
+        "hype",
+        "technical",
+        "quant"
+      ],
+      "magnitude_source": "preattached",
+      "shadow": true,
+      "counterfactual": true,
+      "shadow_reason": "hold_near_call",
+      "subnet_snapshot": {
+        "netuid": 1,
+        "name": "Apex",
+        "price": 0.00830189,
+        "emission": 2.975,
+        "social_mentions": 1985,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48
+      },
+      "phase_at_prediction": "STIRRING",
+      "market_impact": {
+        "tier": "small",
+        "market_cap": 0.0,
+        "relative_flow": 0.0,
+        "sensitivity": 1.0,
+        "strength": 1.0,
+        "scale_factor": 1.0,
+        "ref_tao": 50.0,
+        "ref_impact_pct": 5000.0,
+        "summary": "small-cap: size unknown \u2014 neutral impact"
+      },
+      "impact_tier": "small",
+      "impact_strength": 1.0,
+      "impact_strength_at_creation": 1.0,
+      "scenario_id": "sc_20260807112714717075",
+      "weights_at_creation": {
+        "quant": 0.963,
+        "hype": 0.868,
+        "dark_horse": 1.03,
+        "technical": 0.87
+      },
+      "learning_state_at_creation": {
+        "council_weights": {
+          "quant": 0.963,
+          "hype": 0.868,
+          "dark_horse": 1.03,
+          "technical": 0.87
+        },
+        "impact_strength": 1.0,
+        "impact_tier": "small"
+      },
+      "signal_impact": {
+        "impacts": [
+          {
+            "signal_type": "rsi_crossover",
+            "description": "RSI 57.1 neutral \u2014 no edge",
+            "direction": "neutral",
+            "magnitude_pct": 0.8,
+            "confidence": 50,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.8% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "macd_cross",
+            "description": "MACD histogram +0.00 (bullish)",
+            "direction": "bullish",
+            "magnitude_pct": 0.51,
+            "confidence": 70,
+            "freshness": 0.986,
+            "predicted_move": "predicted to move +0.5% within 48 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "stochastic_reversal",
+            "description": "Stochastic %K 57.7 (neutral)",
+            "direction": "neutral",
+            "magnitude_pct": 0.62,
+            "confidence": 65,
+            "freshness": 0.917,
+            "predicted_move": "predicted to move 0.6% within 8 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "bollinger_squeeze",
+            "description": "Bollinger neutral (width 0.00)",
+            "direction": "neutral",
+            "magnitude_pct": 0.4,
+            "confidence": 60,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.4% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "mfi_divergence",
+            "description": "MFI 50.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.958,
+            "predicted_move": "predicted to move 0.5% within 16 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "cci_extreme",
+            "description": "CCI 0.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "williams_r_reversal",
+            "description": "Williams %R unavailable",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.933,
+            "predicted_move": "predicted to move 0.5% within 10 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "momentum_shift",
+            "description": "24h change +0.0% muted",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "emission_change",
+            "description": "Emission 2.98 TAO/day / APY 0.0%",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.996,
+            "predicted_move": "predicted to move 0.5% within 168 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "social_sentiment",
+            "description": "Social volume 1985 mentions",
+            "direction": "bullish",
+            "magnitude_pct": 1.0,
+            "confidence": 55,
+            "freshness": 0.891,
+            "predicted_move": "predicted to move +1.0% within 6 hours",
+            "learned_weight": 1.0
+          }
+        ],
+        "net_predicted_pct": 1.51,
+        "net_predicted_pct_raw": 1.51,
+        "net_direction": "bullish",
+        "hot_active": false,
+        "sell_active": false,
+        "dominant": null,
+        "market_impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        }
+      },
+      "judge_scores_at_creation": {
+        "oracle": {
+          "score": 0.8213,
+          "confidence": 0.8587
+        },
+        "echo": {
+          "score": 0.6379,
+          "confidence": 0.84
+        },
+        "pulse": {
+          "score": 0.54,
+          "confidence": 0.45
+        }
+      }
+    }
+  ],
   "resolved": [
     {
       "id": "790ca9dddc",
@@ -855,7 +1366,7 @@
       "reference_price": 0.03896091,
       "created_at": "2026-07-03T18:45:18.014581Z",
       "resolve_at": "2026-07-03T22:45:18.014581Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "mfi_divergence",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -865,11 +1376,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move +0.8% within 4 hours",
       "scenario_id": "sc_20260703184518015078",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.00729349,
+      "actual_pct": -81.28,
+      "subnet_snapshot": {
+        "netuid": 40,
+        "name": "Chunking",
+        "price": 0.00729349,
+        "emission": 2.0,
+        "social_mentions": 1400,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 19.0,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.37
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 0.98,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T22:45:18.014581Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "bc2ce48f3b",
@@ -881,7 +1409,7 @@
       "reference_price": 0.03896091,
       "created_at": "2026-07-03T18:45:18.044934Z",
       "resolve_at": "2026-07-03T22:45:18.044934Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "stochastic_reversal",
       "expert": "dark_horse",
       "phase_at_prediction": "INACTIVE",
@@ -891,11 +1419,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -3.7% within 4 hours",
       "scenario_id": "sc_20260703184518045394",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.00729349,
+      "actual_pct": -81.28,
+      "subnet_snapshot": {
+        "netuid": 40,
+        "name": "Chunking",
+        "price": 0.00729349,
+        "emission": 2.0,
+        "social_mentions": 1400,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 19.0,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.37
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.0,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.044934Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "4bbdb8ad4b",
@@ -907,7 +1452,7 @@
       "reference_price": 0.03896091,
       "created_at": "2026-07-03T18:45:18.060478Z",
       "resolve_at": "2026-07-03T22:45:18.060478Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "macd_cross",
       "expert": "technical",
       "phase_at_prediction": "INACTIVE",
@@ -917,11 +1462,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 4 hours",
       "scenario_id": "sc_20260703184518060964",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.00729349,
+      "actual_pct": -81.28,
+      "subnet_snapshot": {
+        "netuid": 40,
+        "name": "Chunking",
+        "price": 0.00729349,
+        "emission": 2.0,
+        "social_mentions": 1400,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 19.0,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.37
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.02,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.060478Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "c4ab208245",
@@ -933,7 +1495,7 @@
       "reference_price": 0.04510137,
       "created_at": "2026-07-03T18:45:18.077539Z",
       "resolve_at": "2026-07-03T22:45:18.077539Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "mfi_divergence",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -943,11 +1505,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move +0.8% within 4 hours",
       "scenario_id": "sc_20260703184518078029",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.061624553,
+      "actual_pct": 36.6357,
+      "subnet_snapshot": {
+        "netuid": 107,
+        "name": "Minos",
+        "price": 0.061624553,
+        "emission": 0.325,
+        "social_mentions": 395,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 8.95,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.17
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.04,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.077539Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "ec7d1107a2",
@@ -959,7 +1538,7 @@
       "reference_price": 0.04510137,
       "created_at": "2026-07-03T18:45:18.109608Z",
       "resolve_at": "2026-07-03T22:45:18.109608Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "stochastic_reversal",
       "expert": "dark_horse",
       "phase_at_prediction": "INACTIVE",
@@ -969,11 +1548,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 4 hours",
       "scenario_id": "sc_20260703184518110125",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.061624553,
+      "actual_pct": 36.6357,
+      "subnet_snapshot": {
+        "netuid": 107,
+        "name": "Minos",
+        "price": 0.061624553,
+        "emission": 0.325,
+        "social_mentions": 395,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 8.95,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.17
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.02,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T22:45:18.109608Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "1632a45b26",
@@ -985,7 +1581,7 @@
       "reference_price": 0.02501847,
       "created_at": "2026-07-03T18:45:18.143852Z",
       "resolve_at": "2026-07-03T22:45:18.143852Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "emission_change",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -995,11 +1591,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -1.0% within 4 hours",
       "scenario_id": "sc_20260703184518144378",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.025803114,
+      "actual_pct": 3.1363,
+      "subnet_snapshot": {
+        "netuid": 97,
+        "name": "Albedo",
+        "price": 0.025803114,
+        "emission": 0.575,
+        "social_mentions": 545,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 10.45,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.2
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.0,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T22:45:18.143852Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "08a9782f2d",
@@ -1011,7 +1624,7 @@
       "reference_price": 0.02501847,
       "created_at": "2026-07-03T18:45:18.160759Z",
       "resolve_at": "2026-07-03T20:45:18.160759Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "momentum_shift",
       "expert": "hype",
       "phase_at_prediction": "INACTIVE",
@@ -1021,11 +1634,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 2 hours",
       "scenario_id": "sc_20260703184518161421",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.025803114,
+      "actual_pct": 3.1363,
+      "subnet_snapshot": {
+        "netuid": 97,
+        "name": "Albedo",
+        "price": 0.025803114,
+        "emission": 0.575,
+        "social_mentions": 545,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 10.45,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.2
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 0.98,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T20:45:18.160759Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "81e1767203",
@@ -1037,7 +1667,7 @@
       "reference_price": 0.02501847,
       "created_at": "2026-07-03T18:45:18.177887Z",
       "resolve_at": "2026-07-03T22:45:18.177887Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "stochastic_reversal",
       "expert": "dark_horse",
       "phase_at_prediction": "INACTIVE",
@@ -1047,11 +1677,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move +0.8% within 4 hours",
       "scenario_id": "sc_20260703184518178434",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.025803114,
+      "actual_pct": 3.1363,
+      "subnet_snapshot": {
+        "netuid": 97,
+        "name": "Albedo",
+        "price": 0.025803114,
+        "emission": 0.575,
+        "social_mentions": 545,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 10.45,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.2
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.0,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.177887Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "b71ec3863b",
@@ -1063,7 +1710,7 @@
       "reference_price": 0.0287698,
       "created_at": "2026-07-03T18:45:18.214882Z",
       "resolve_at": "2026-07-03T22:45:18.214882Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "emission_change",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -1073,11 +1720,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -1.0% within 4 hours",
       "scenario_id": "sc_20260703184518215452",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.019796047,
+      "actual_pct": -31.1916,
+      "subnet_snapshot": {
+        "netuid": 15,
+        "name": "ORO",
+        "price": 0.019796047,
+        "emission": 2.625,
+        "social_mentions": 1775,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 22.75,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.44
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.02,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.214882Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "7ae77c6bc3",
@@ -1089,7 +1753,7 @@
       "reference_price": 0.0287698,
       "created_at": "2026-07-03T18:45:18.232633Z",
       "resolve_at": "2026-07-03T20:45:18.232633Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "momentum_shift",
       "expert": "hype",
       "phase_at_prediction": "INACTIVE",
@@ -1099,11 +1763,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move +0.8% within 2 hours",
       "scenario_id": "sc_20260703184518233218",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.019796047,
+      "actual_pct": -31.1916,
+      "subnet_snapshot": {
+        "netuid": 15,
+        "name": "ORO",
+        "price": 0.019796047,
+        "emission": 2.625,
+        "social_mentions": 1775,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 22.75,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.44
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.0,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T20:45:18.232633Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "1ad81f1439",
@@ -1115,7 +1796,7 @@
       "reference_price": 0.0287698,
       "created_at": "2026-07-03T18:45:18.250233Z",
       "resolve_at": "2026-07-03T22:45:18.250233Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "stochastic_reversal",
       "expert": "dark_horse",
       "phase_at_prediction": "INACTIVE",
@@ -1125,11 +1806,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -2.8% within 4 hours",
       "scenario_id": "sc_20260703184518250867",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.019796047,
+      "actual_pct": -31.1916,
+      "subnet_snapshot": {
+        "netuid": 15,
+        "name": "ORO",
+        "price": 0.019796047,
+        "emission": 2.625,
+        "social_mentions": 1775,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 22.75,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.44
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.02,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.250233Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "062e3a9bc3",
@@ -1141,7 +1839,7 @@
       "reference_price": 0.0287698,
       "created_at": "2026-07-03T18:45:18.268113Z",
       "resolve_at": "2026-07-03T22:45:18.268113Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "macd_cross",
       "expert": "technical",
       "phase_at_prediction": "INACTIVE",
@@ -1151,11 +1849,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 4 hours",
       "scenario_id": "sc_20260703184518268705",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.019796047,
+      "actual_pct": -31.1916,
+      "subnet_snapshot": {
+        "netuid": 15,
+        "name": "ORO",
+        "price": 0.019796047,
+        "emission": 2.625,
+        "social_mentions": 1775,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 22.75,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.44
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.04,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.268113Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "6cf1372184",
@@ -1167,7 +1882,7 @@
       "reference_price": 0.05482254,
       "created_at": "2026-07-03T18:45:18.287594Z",
       "resolve_at": "2026-07-03T22:45:18.287594Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "mfi_divergence",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -1177,11 +1892,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move +0.8% within 4 hours",
       "scenario_id": "sc_20260703184518288194",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": true,
+      "resolved_price": 0.057676347,
+      "actual_pct": 5.2055,
+      "subnet_snapshot": {
+        "netuid": 120,
+        "name": "Affine",
+        "price": 0.057676347,
+        "emission": 0.0,
+        "social_mentions": 200,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 7.0,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.13
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.06,
+      "outcome": "hit",
+      "resolved_at": "2026-07-03T22:45:18.287594Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "7db71108a4",
@@ -1193,7 +1925,7 @@
       "reference_price": 0.05482254,
       "created_at": "2026-07-03T18:45:18.343318Z",
       "resolve_at": "2026-07-03T22:45:18.343318Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "macd_cross",
       "expert": "technical",
       "phase_at_prediction": "INACTIVE",
@@ -1203,11 +1935,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 4 hours",
       "scenario_id": "sc_20260703184518343960",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.057676347,
+      "actual_pct": 5.2055,
+      "subnet_snapshot": {
+        "netuid": 120,
+        "name": "Affine",
+        "price": 0.057676347,
+        "emission": 0.0,
+        "social_mentions": 200,
+        "return_driver": "neutral",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 7.0,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.13
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.04,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T22:45:18.343318Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "fdbe722242",
@@ -1219,7 +1968,7 @@
       "reference_price": 0.07406842,
       "created_at": "2026-07-03T18:45:18.363501Z",
       "resolve_at": "2026-07-03T22:45:18.363501Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "emission_change",
       "expert": "quant",
       "phase_at_prediction": "INACTIVE",
@@ -1229,11 +1978,28 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -1.0% within 4 hours",
       "scenario_id": "sc_20260703184518364138",
-      "outcome": "expired",
-      "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
-      "resolved_price": null,
-      "actual_pct": null
+      "correct": false,
+      "resolved_price": 0.08765157,
+      "actual_pct": 18.3387,
+      "subnet_snapshot": {
+        "netuid": 64,
+        "name": "Chutes",
+        "price": 0.08765157,
+        "emission": 1.4,
+        "social_mentions": 1040,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 15.4,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.3
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.02,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T22:45:18.363501Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
     },
     {
       "id": "04fed4b0dd",
@@ -1245,7 +2011,7 @@
       "reference_price": 0.07406842,
       "created_at": "2026-07-03T18:45:18.382603Z",
       "resolve_at": "2026-07-03T20:45:18.382603Z",
-      "status": "expired",
+      "status": "resolved",
       "signal_source": "momentum_shift",
       "expert": "hype",
       "phase_at_prediction": "INACTIVE",
@@ -1255,22 +2021,296 @@
       "re_pump_prob_at_prediction": 0.0,
       "statement": "predicted to move -0.8% within 2 hours",
       "scenario_id": "sc_20260703184518383287",
+      "correct": false,
+      "resolved_price": 0.08765157,
+      "actual_pct": 18.3387,
+      "subnet_snapshot": {
+        "netuid": 64,
+        "name": "Chutes",
+        "price": 0.08765157,
+        "emission": 1.4,
+        "social_mentions": 1040,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 15.4,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.3
+      },
+      "subnet_snapshot_source": "resolve_backfill",
+      "impact_strength_after": 1.0,
+      "outcome": "miss",
+      "resolved_at": "2026-07-03T20:45:18.382603Z",
+      "price_source": "live_oracle",
+      "price_lag_seconds": 300
+    },
+    {
+      "id": "0444b84333",
+      "netuid": 1,
+      "name": "Apex",
+      "direction": "up",
+      "predicted_pct": 1.51,
+      "horizon_hours": 24,
+      "reference_price": 0.00830189,
+      "created_at": "2026-08-07T11:25:48.502355+00:00Z",
+      "resolve_at": "2026-08-08T11:25:48.502355+00:00Z",
+      "status": "expired",
+      "signal_source": "social_sentiment",
+      "expert": "hype",
+      "statement": "predicted to move +1.5% within 24 hours",
+      "horizon_type": "day",
+      "signal_contributions": {
+        "rsi_crossover": {
+          "score": 0.571,
+          "weight": 1.0,
+          "contribution": 0.571
+        },
+        "macd_cross": {
+          "score": 0.7006,
+          "weight": 1.0,
+          "contribution": 0.7006
+        },
+        "stochastic_reversal": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "bollinger_squeeze": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        },
+        "mfi_flow": {
+          "score": 0.5067,
+          "weight": 1.0,
+          "contribution": 0.5067
+        },
+        "cci_divergence": {
+          "score": 0.6705,
+          "weight": 1.0,
+          "contribution": 0.6705
+        },
+        "williams_r": {
+          "score": 0.5257,
+          "weight": 1.0,
+          "contribution": 0.5257
+        },
+        "keltner_channel": {
+          "score": 0.5,
+          "weight": 1.0,
+          "contribution": 0.5
+        }
+      },
+      "active_signals": [
+        "rsi_crossover",
+        "macd_cross",
+        "cci_divergence"
+      ],
+      "pick_source": "council_shadow",
+      "pick_score": 74.96,
+      "pick_confidence": 0.4169,
+      "experts_involved": [
+        "hype",
+        "technical",
+        "quant"
+      ],
+      "magnitude_source": "preattached",
+      "shadow": true,
+      "counterfactual": true,
+      "shadow_reason": "hold_near_call",
+      "subnet_snapshot": {
+        "netuid": 1,
+        "name": "Apex",
+        "price": 0.00830189,
+        "emission": 2.975,
+        "social_mentions": 1985,
+        "return_driver": "yield_support",
+        "yield_trap": false,
+        "price_momentum_7d": "up",
+        "staking_yield_apy": 24.85,
+        "price_change_7d": 0.0,
+        "wallet_impact_7d_estimate_pct": 0.48
+      },
+      "phase_at_prediction": "STIRRING",
+      "market_impact": {
+        "tier": "small",
+        "market_cap": 0.0,
+        "relative_flow": 0.0,
+        "sensitivity": 1.0,
+        "strength": 1.0,
+        "scale_factor": 1.0,
+        "ref_tao": 50.0,
+        "ref_impact_pct": 5000.0,
+        "summary": "small-cap: size unknown \u2014 neutral impact"
+      },
+      "impact_tier": "small",
+      "impact_strength": 1.0,
+      "impact_strength_at_creation": 1.0,
+      "scenario_id": "sc_20260807112548685389",
+      "weights_at_creation": {
+        "quant": 0.993,
+        "hype": 0.958,
+        "dark_horse": 1.0,
+        "technical": 0.86
+      },
+      "learning_state_at_creation": {
+        "council_weights": {
+          "quant": 0.993,
+          "hype": 0.958,
+          "dark_horse": 1.0,
+          "technical": 0.86
+        },
+        "impact_strength": 1.0,
+        "impact_tier": "small"
+      },
+      "signal_impact": {
+        "impacts": [
+          {
+            "signal_type": "rsi_crossover",
+            "description": "RSI 57.1 neutral \u2014 no edge",
+            "direction": "neutral",
+            "magnitude_pct": 0.8,
+            "confidence": 50,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.8% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "macd_cross",
+            "description": "MACD histogram +0.00 (bullish)",
+            "direction": "bullish",
+            "magnitude_pct": 0.51,
+            "confidence": 70,
+            "freshness": 0.986,
+            "predicted_move": "predicted to move +0.5% within 48 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "stochastic_reversal",
+            "description": "Stochastic %K 57.7 (neutral)",
+            "direction": "neutral",
+            "magnitude_pct": 0.62,
+            "confidence": 65,
+            "freshness": 0.917,
+            "predicted_move": "predicted to move 0.6% within 8 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "bollinger_squeeze",
+            "description": "Bollinger neutral (width 0.00)",
+            "direction": "neutral",
+            "magnitude_pct": 0.4,
+            "confidence": 60,
+            "freshness": 0.972,
+            "predicted_move": "predicted to move 0.4% within 24 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "mfi_divergence",
+            "description": "MFI 50.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.958,
+            "predicted_move": "predicted to move 0.5% within 16 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "cci_extreme",
+            "description": "CCI 0.0 neutral",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "williams_r_reversal",
+            "description": "Williams %R unavailable",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.933,
+            "predicted_move": "predicted to move 0.5% within 10 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "momentum_shift",
+            "description": "24h change +0.0% muted",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.944,
+            "predicted_move": "predicted to move 0.5% within 12 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "emission_change",
+            "description": "Emission 2.98 TAO/day / APY 0.0%",
+            "direction": "neutral",
+            "magnitude_pct": 0.5,
+            "confidence": 50,
+            "freshness": 0.996,
+            "predicted_move": "predicted to move 0.5% within 168 hours",
+            "learned_weight": 1.0
+          },
+          {
+            "signal_type": "social_sentiment",
+            "description": "Social volume 1985 mentions",
+            "direction": "bullish",
+            "magnitude_pct": 1.0,
+            "confidence": 55,
+            "freshness": 0.891,
+            "predicted_move": "predicted to move +1.0% within 6 hours",
+            "learned_weight": 1.0
+          }
+        ],
+        "net_predicted_pct": 1.51,
+        "net_predicted_pct_raw": 1.51,
+        "net_direction": "bullish",
+        "hot_active": false,
+        "sell_active": false,
+        "dominant": null,
+        "market_impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        }
+      },
+      "judge_scores_at_creation": {
+        "oracle": {
+          "score": 0.8213,
+          "confidence": 0.8587
+        },
+        "echo": {
+          "score": 0.6439,
+          "confidence": 0.84
+        },
+        "pulse": {
+          "score": 0.54,
+          "confidence": 0.45
+        }
+      },
       "outcome": "expired",
       "correct": null,
-      "resolved_at": "2026-07-14T00:01:27.081761Z",
+      "resolved_at": "2026-08-07T11:26:20.537223Z",
       "resolved_price": null,
       "actual_pct": null
     }
   ],
   "stats": {
-    "correct": 15,
-    "wrong": 19,
-    "expired": 16,
-    "duplicate": 8,
+    "correct": 23,
+    "wrong": 27,
     "pending": 0,
     "total": 58,
-    "shadow_graded": 0,
-    "accuracy": 0.441
+    "accuracy": 0.46
   },
   "watchdog": {
     "warning": false,

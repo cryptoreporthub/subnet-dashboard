@@ -1,0 +1,1279 @@
+{
+  "written_at": "2026-08-07T11:27:23.158713Z",
+  "count": 127,
+  "hour": [
+    {
+      "netuid": 1,
+      "total_score": 74.01,
+      "name": "Apex"
+    },
+    {
+      "netuid": 3,
+      "total_score": 68.57,
+      "name": "Templar"
+    },
+    {
+      "netuid": 4,
+      "total_score": 68.51,
+      "name": "Targon"
+    },
+    {
+      "netuid": 5,
+      "total_score": 68.45,
+      "name": "Hone"
+    },
+    {
+      "netuid": 6,
+      "total_score": 68.44,
+      "name": "Numinous"
+    },
+    {
+      "netuid": 15,
+      "total_score": 68.39,
+      "name": "ORO"
+    },
+    {
+      "netuid": 7,
+      "total_score": 68.33,
+      "name": "Allways"
+    },
+    {
+      "netuid": 11,
+      "total_score": 68.08,
+      "name": "TrajectoryRL"
+    },
+    {
+      "netuid": 12,
+      "total_score": 68.02,
+      "name": "Compute Horde"
+    },
+    {
+      "netuid": 14,
+      "total_score": 67.9,
+      "name": "Cacheon"
+    },
+    {
+      "netuid": 17,
+      "total_score": 67.71,
+      "name": "404\u2014GEN"
+    },
+    {
+      "netuid": 20,
+      "total_score": 67.53,
+      "name": "ChronoSeek"
+    },
+    {
+      "netuid": 22,
+      "total_score": 67.41,
+      "name": "Desearch"
+    },
+    {
+      "netuid": 24,
+      "total_score": 67.29,
+      "name": "Quasar"
+    },
+    {
+      "netuid": 25,
+      "total_score": 67.22,
+      "name": "Mainframe"
+    },
+    {
+      "netuid": 26,
+      "total_score": 67.16,
+      "name": "Perturb"
+    },
+    {
+      "netuid": 29,
+      "total_score": 66.98,
+      "name": "ho\u03c4floa\u03c4"
+    },
+    {
+      "netuid": 30,
+      "total_score": 66.92,
+      "name": "Endure Network"
+    },
+    {
+      "netuid": 2,
+      "total_score": 66.86,
+      "name": "DSperse"
+    },
+    {
+      "netuid": 31,
+      "total_score": 66.85,
+      "name": "rec4ll"
+    },
+    {
+      "netuid": 32,
+      "total_score": 66.79,
+      "name": "ItsAI"
+    },
+    {
+      "netuid": 33,
+      "total_score": 66.73,
+      "name": "ReadyAI"
+    },
+    {
+      "netuid": 34,
+      "total_score": 66.64,
+      "name": "BitMind"
+    },
+    {
+      "netuid": 21,
+      "total_score": 66.62,
+      "name": "AdTAO"
+    },
+    {
+      "netuid": 8,
+      "total_score": 66.59,
+      "name": "Vanta"
+    },
+    {
+      "netuid": 23,
+      "total_score": 66.52,
+      "name": "Trishool"
+    },
+    {
+      "netuid": 35,
+      "total_score": 66.52,
+      "name": "OxMarkets"
+    },
+    {
+      "netuid": 13,
+      "total_score": 66.38,
+      "name": "Data Universe"
+    },
+    {
+      "netuid": 37,
+      "total_score": 66.3,
+      "name": "Aurelius"
+    },
+    {
+      "netuid": 38,
+      "total_score": 66.19,
+      "name": "ChronoLLM"
+    },
+    {
+      "netuid": 18,
+      "total_score": 66.14,
+      "name": "Zeus"
+    },
+    {
+      "netuid": 19,
+      "total_score": 66.08,
+      "name": "blockmachine"
+    },
+    {
+      "netuid": 39,
+      "total_score": 66.07,
+      "name": "EdgeMaxxing"
+    },
+    {
+      "netuid": 16,
+      "total_score": 66.05,
+      "name": "TC"
+    },
+    {
+      "netuid": 49,
+      "total_score": 66.04,
+      "name": "Nepher Robotics"
+    },
+    {
+      "netuid": 40,
+      "total_score": 65.96,
+      "name": "Chunking"
+    },
+    {
+      "netuid": 36,
+      "total_score": 65.67,
+      "name": "Leoma"
+    },
+    {
+      "netuid": 27,
+      "total_score": 65.64,
+      "name": "Orion"
+    },
+    {
+      "netuid": 43,
+      "total_score": 65.62,
+      "name": "Graphite"
+    },
+    {
+      "netuid": 28,
+      "total_score": 65.41,
+      "name": "gm"
+    },
+    {
+      "netuid": 45,
+      "total_score": 65.4,
+      "name": "AlphaRidge.ai"
+    },
+    {
+      "netuid": 48,
+      "total_score": 65.06,
+      "name": "Quantum Compute"
+    },
+    {
+      "netuid": 9,
+      "total_score": 64.92,
+      "name": "iota"
+    },
+    {
+      "netuid": 50,
+      "total_score": 64.84,
+      "name": "Synth"
+    },
+    {
+      "netuid": 52,
+      "total_score": 64.61,
+      "name": "Dojo"
+    },
+    {
+      "netuid": 47,
+      "total_score": 64.56,
+      "name": "wait (reproduce paper)"
+    },
+    {
+      "netuid": 41,
+      "total_score": 64.51,
+      "name": "Almanac"
+    },
+    {
+      "netuid": 10,
+      "total_score": 64.38,
+      "name": "Pareton"
+    },
+    {
+      "netuid": 44,
+      "total_score": 64.31,
+      "name": "Score"
+    },
+    {
+      "netuid": 42,
+      "total_score": 64.2,
+      "name": "Real-Time Data by Masa"
+    },
+    {
+      "netuid": 56,
+      "total_score": 64.16,
+      "name": "Gradients"
+    },
+    {
+      "netuid": 57,
+      "total_score": 64.05,
+      "name": "Gaia"
+    },
+    {
+      "netuid": 46,
+      "total_score": 64.01,
+      "name": "Zipcode"
+    },
+    {
+      "netuid": 58,
+      "total_score": 63.94,
+      "name": "greevils"
+    },
+    {
+      "netuid": 54,
+      "total_score": 63.85,
+      "name": "Yanez MIID"
+    },
+    {
+      "netuid": 51,
+      "total_score": 63.54,
+      "name": "lium.io"
+    },
+    {
+      "netuid": 62,
+      "total_score": 63.49,
+      "name": "Ridges"
+    },
+    {
+      "netuid": 78,
+      "total_score": 63.4,
+      "name": "Vocence"
+    },
+    {
+      "netuid": 63,
+      "total_score": 63.37,
+      "name": "Enigma"
+    },
+    {
+      "netuid": 53,
+      "total_score": 63.3,
+      "name": "engy"
+    },
+    {
+      "netuid": 64,
+      "total_score": 63.26,
+      "name": "Chutes"
+    },
+    {
+      "netuid": 60,
+      "total_score": 63.24,
+      "name": "Bitsec.ai"
+    },
+    {
+      "netuid": 65,
+      "total_score": 63.15,
+      "name": "TAO Private Network"
+    },
+    {
+      "netuid": 55,
+      "total_score": 63.09,
+      "name": "NIOME"
+    },
+    {
+      "netuid": 67,
+      "total_score": 62.92,
+      "name": "Harnyx"
+    },
+    {
+      "netuid": 69,
+      "total_score": 62.7,
+      "name": "Herald"
+    },
+    {
+      "netuid": 59,
+      "total_score": 62.69,
+      "name": "Babelbit"
+    },
+    {
+      "netuid": 70,
+      "total_score": 62.51,
+      "name": "NexisGen"
+    },
+    {
+      "netuid": 61,
+      "total_score": 62.49,
+      "name": "RedTeam"
+    },
+    {
+      "netuid": 68,
+      "total_score": 62.46,
+      "name": "NOVA"
+    },
+    {
+      "netuid": 72,
+      "total_score": 62.36,
+      "name": "StreetVision by NATIX"
+    },
+    {
+      "netuid": 73,
+      "total_score": 62.25,
+      "name": "Parked"
+    },
+    {
+      "netuid": 74,
+      "total_score": 62.14,
+      "name": "Gittensor"
+    },
+    {
+      "netuid": 66,
+      "total_score": 61.99,
+      "name": "conjectures"
+    },
+    {
+      "netuid": 76,
+      "total_score": 61.91,
+      "name": "Phylax"
+    },
+    {
+      "netuid": 77,
+      "total_score": 61.8,
+      "name": "Liquidity"
+    },
+    {
+      "netuid": 81,
+      "total_score": 61.35,
+      "name": "SN81"
+    },
+    {
+      "netuid": 80,
+      "total_score": 61.24,
+      "name": "OpenRoboto"
+    },
+    {
+      "netuid": 82,
+      "total_score": 61.24,
+      "name": "Compelle"
+    },
+    {
+      "netuid": 98,
+      "total_score": 61.21,
+      "name": "NeverPlayAlone"
+    },
+    {
+      "netuid": 83,
+      "total_score": 61.12,
+      "name": "CliqueAI"
+    },
+    {
+      "netuid": 75,
+      "total_score": 61.07,
+      "name": "Hippius"
+    },
+    {
+      "netuid": 84,
+      "total_score": 61.01,
+      "name": "SN84"
+    },
+    {
+      "netuid": 79,
+      "total_score": 60.65,
+      "name": "MVTRX"
+    },
+    {
+      "netuid": 86,
+      "total_score": 60.57,
+      "name": "\u2692"
+    },
+    {
+      "netuid": 88,
+      "total_score": 60.56,
+      "name": "Investing"
+    },
+    {
+      "netuid": 89,
+      "total_score": 60.45,
+      "name": "InfiniteQuant"
+    },
+    {
+      "netuid": 85,
+      "total_score": 60.41,
+      "name": "Vidaio"
+    },
+    {
+      "netuid": 90,
+      "total_score": 60.34,
+      "name": "KubeTEE AI Factory"
+    },
+    {
+      "netuid": 92,
+      "total_score": 60.11,
+      "name": "Enclave"
+    },
+    {
+      "netuid": 93,
+      "total_score": 60.0,
+      "name": "Bitcast"
+    },
+    {
+      "netuid": 71,
+      "total_score": 59.83,
+      "name": "Leadpoet"
+    },
+    {
+      "netuid": 96,
+      "total_score": 59.66,
+      "name": "Verathos"
+    },
+    {
+      "netuid": 97,
+      "total_score": 59.55,
+      "name": "Albedo"
+    },
+    {
+      "netuid": 99,
+      "total_score": 59.32,
+      "name": "Thirty Spokes"
+    },
+    {
+      "netuid": 106,
+      "total_score": 59.28,
+      "name": "Nodexo"
+    },
+    {
+      "netuid": 91,
+      "total_score": 59.18,
+      "name": "cascade"
+    },
+    {
+      "netuid": 94,
+      "total_score": 59.11,
+      "name": "pending..."
+    },
+    {
+      "netuid": 95,
+      "total_score": 59.04,
+      "name": "Actual"
+    },
+    {
+      "netuid": 101,
+      "total_score": 58.95,
+      "name": "Tag101"
+    },
+    {
+      "netuid": 100,
+      "total_score": 58.28,
+      "name": "BASE"
+    },
+    {
+      "netuid": 87,
+      "total_score": 58.11,
+      "name": "Provenonce"
+    },
+    {
+      "netuid": 102,
+      "total_score": 58.06,
+      "name": "ConnitoAI"
+    },
+    {
+      "netuid": 105,
+      "total_score": 57.9,
+      "name": "Beam"
+    },
+    {
+      "netuid": 103,
+      "total_score": 57.83,
+      "name": "Djinn"
+    },
+    {
+      "netuid": 104,
+      "total_score": 57.36,
+      "name": "Masx.ai"
+    },
+    {
+      "netuid": 108,
+      "total_score": 57.3,
+      "name": "TalkHead"
+    },
+    {
+      "netuid": 109,
+      "total_score": 57.22,
+      "name": "Finsight"
+    },
+    {
+      "netuid": 115,
+      "total_score": 56.97,
+      "name": "HashiChain"
+    },
+    {
+      "netuid": 110,
+      "total_score": 56.58,
+      "name": "Green Compute"
+    },
+    {
+      "netuid": 111,
+      "total_score": 56.32,
+      "name": "Claims"
+    },
+    {
+      "netuid": 113,
+      "total_score": 56.08,
+      "name": "TensorUSD"
+    },
+    {
+      "netuid": 112,
+      "total_score": 55.7,
+      "name": "minotaur"
+    },
+    {
+      "netuid": 114,
+      "total_score": 55.53,
+      "name": "SOMA"
+    },
+    {
+      "netuid": 107,
+      "total_score": 55.37,
+      "name": "Minos"
+    },
+    {
+      "netuid": 125,
+      "total_score": 54.8,
+      "name": "8 Ball"
+    },
+    {
+      "netuid": 116,
+      "total_score": 54.72,
+      "name": "Memo"
+    },
+    {
+      "netuid": 117,
+      "total_score": 54.52,
+      "name": "glyph"
+    },
+    {
+      "netuid": 121,
+      "total_score": 54.27,
+      "name": "sundae_bar"
+    },
+    {
+      "netuid": 119,
+      "total_score": 54.22,
+      "name": "Satori"
+    },
+    {
+      "netuid": 122,
+      "total_score": 53.52,
+      "name": "CookingTAO"
+    },
+    {
+      "netuid": 123,
+      "total_score": 53.29,
+      "name": "MANTIS"
+    },
+    {
+      "netuid": 124,
+      "total_score": 53.07,
+      "name": "Swarm"
+    },
+    {
+      "netuid": 126,
+      "total_score": 52.63,
+      "name": "Poker44"
+    },
+    {
+      "netuid": 127,
+      "total_score": 52.41,
+      "name": "Astrid"
+    },
+    {
+      "netuid": 118,
+      "total_score": 52.19,
+      "name": "Ditto"
+    },
+    {
+      "netuid": 120,
+      "total_score": 51.96,
+      "name": "Affine"
+    }
+  ],
+  "day": [
+    {
+      "netuid": 1,
+      "total_score": 74.01,
+      "name": "Apex"
+    },
+    {
+      "netuid": 3,
+      "total_score": 68.57,
+      "name": "Templar"
+    },
+    {
+      "netuid": 4,
+      "total_score": 68.51,
+      "name": "Targon"
+    },
+    {
+      "netuid": 5,
+      "total_score": 68.45,
+      "name": "Hone"
+    },
+    {
+      "netuid": 6,
+      "total_score": 68.44,
+      "name": "Numinous"
+    },
+    {
+      "netuid": 15,
+      "total_score": 68.39,
+      "name": "ORO"
+    },
+    {
+      "netuid": 7,
+      "total_score": 68.33,
+      "name": "Allways"
+    },
+    {
+      "netuid": 11,
+      "total_score": 68.08,
+      "name": "TrajectoryRL"
+    },
+    {
+      "netuid": 12,
+      "total_score": 68.02,
+      "name": "Compute Horde"
+    },
+    {
+      "netuid": 14,
+      "total_score": 67.9,
+      "name": "Cacheon"
+    },
+    {
+      "netuid": 17,
+      "total_score": 67.71,
+      "name": "404\u2014GEN"
+    },
+    {
+      "netuid": 20,
+      "total_score": 67.53,
+      "name": "ChronoSeek"
+    },
+    {
+      "netuid": 22,
+      "total_score": 67.41,
+      "name": "Desearch"
+    },
+    {
+      "netuid": 24,
+      "total_score": 67.29,
+      "name": "Quasar"
+    },
+    {
+      "netuid": 25,
+      "total_score": 67.22,
+      "name": "Mainframe"
+    },
+    {
+      "netuid": 26,
+      "total_score": 67.16,
+      "name": "Perturb"
+    },
+    {
+      "netuid": 29,
+      "total_score": 66.98,
+      "name": "ho\u03c4floa\u03c4"
+    },
+    {
+      "netuid": 30,
+      "total_score": 66.92,
+      "name": "Endure Network"
+    },
+    {
+      "netuid": 2,
+      "total_score": 66.86,
+      "name": "DSperse"
+    },
+    {
+      "netuid": 31,
+      "total_score": 66.85,
+      "name": "rec4ll"
+    },
+    {
+      "netuid": 32,
+      "total_score": 66.79,
+      "name": "ItsAI"
+    },
+    {
+      "netuid": 33,
+      "total_score": 66.73,
+      "name": "ReadyAI"
+    },
+    {
+      "netuid": 34,
+      "total_score": 66.64,
+      "name": "BitMind"
+    },
+    {
+      "netuid": 21,
+      "total_score": 66.62,
+      "name": "AdTAO"
+    },
+    {
+      "netuid": 8,
+      "total_score": 66.59,
+      "name": "Vanta"
+    },
+    {
+      "netuid": 23,
+      "total_score": 66.52,
+      "name": "Trishool"
+    },
+    {
+      "netuid": 35,
+      "total_score": 66.52,
+      "name": "OxMarkets"
+    },
+    {
+      "netuid": 13,
+      "total_score": 66.38,
+      "name": "Data Universe"
+    },
+    {
+      "netuid": 37,
+      "total_score": 66.3,
+      "name": "Aurelius"
+    },
+    {
+      "netuid": 38,
+      "total_score": 66.19,
+      "name": "ChronoLLM"
+    },
+    {
+      "netuid": 18,
+      "total_score": 66.14,
+      "name": "Zeus"
+    },
+    {
+      "netuid": 19,
+      "total_score": 66.08,
+      "name": "blockmachine"
+    },
+    {
+      "netuid": 39,
+      "total_score": 66.07,
+      "name": "EdgeMaxxing"
+    },
+    {
+      "netuid": 16,
+      "total_score": 66.05,
+      "name": "TC"
+    },
+    {
+      "netuid": 49,
+      "total_score": 66.04,
+      "name": "Nepher Robotics"
+    },
+    {
+      "netuid": 40,
+      "total_score": 65.96,
+      "name": "Chunking"
+    },
+    {
+      "netuid": 36,
+      "total_score": 65.67,
+      "name": "Leoma"
+    },
+    {
+      "netuid": 27,
+      "total_score": 65.64,
+      "name": "Orion"
+    },
+    {
+      "netuid": 43,
+      "total_score": 65.62,
+      "name": "Graphite"
+    },
+    {
+      "netuid": 28,
+      "total_score": 65.41,
+      "name": "gm"
+    },
+    {
+      "netuid": 45,
+      "total_score": 65.4,
+      "name": "AlphaRidge.ai"
+    },
+    {
+      "netuid": 48,
+      "total_score": 65.06,
+      "name": "Quantum Compute"
+    },
+    {
+      "netuid": 9,
+      "total_score": 64.92,
+      "name": "iota"
+    },
+    {
+      "netuid": 50,
+      "total_score": 64.84,
+      "name": "Synth"
+    },
+    {
+      "netuid": 52,
+      "total_score": 64.61,
+      "name": "Dojo"
+    },
+    {
+      "netuid": 47,
+      "total_score": 64.56,
+      "name": "wait (reproduce paper)"
+    },
+    {
+      "netuid": 41,
+      "total_score": 64.51,
+      "name": "Almanac"
+    },
+    {
+      "netuid": 10,
+      "total_score": 64.38,
+      "name": "Pareton"
+    },
+    {
+      "netuid": 44,
+      "total_score": 64.31,
+      "name": "Score"
+    },
+    {
+      "netuid": 42,
+      "total_score": 64.2,
+      "name": "Real-Time Data by Masa"
+    },
+    {
+      "netuid": 56,
+      "total_score": 64.16,
+      "name": "Gradients"
+    },
+    {
+      "netuid": 57,
+      "total_score": 64.05,
+      "name": "Gaia"
+    },
+    {
+      "netuid": 46,
+      "total_score": 64.01,
+      "name": "Zipcode"
+    },
+    {
+      "netuid": 58,
+      "total_score": 63.94,
+      "name": "greevils"
+    },
+    {
+      "netuid": 54,
+      "total_score": 63.85,
+      "name": "Yanez MIID"
+    },
+    {
+      "netuid": 51,
+      "total_score": 63.54,
+      "name": "lium.io"
+    },
+    {
+      "netuid": 62,
+      "total_score": 63.49,
+      "name": "Ridges"
+    },
+    {
+      "netuid": 78,
+      "total_score": 63.4,
+      "name": "Vocence"
+    },
+    {
+      "netuid": 63,
+      "total_score": 63.37,
+      "name": "Enigma"
+    },
+    {
+      "netuid": 53,
+      "total_score": 63.3,
+      "name": "engy"
+    },
+    {
+      "netuid": 64,
+      "total_score": 63.26,
+      "name": "Chutes"
+    },
+    {
+      "netuid": 60,
+      "total_score": 63.24,
+      "name": "Bitsec.ai"
+    },
+    {
+      "netuid": 65,
+      "total_score": 63.15,
+      "name": "TAO Private Network"
+    },
+    {
+      "netuid": 55,
+      "total_score": 63.09,
+      "name": "NIOME"
+    },
+    {
+      "netuid": 67,
+      "total_score": 62.92,
+      "name": "Harnyx"
+    },
+    {
+      "netuid": 69,
+      "total_score": 62.7,
+      "name": "Herald"
+    },
+    {
+      "netuid": 59,
+      "total_score": 62.69,
+      "name": "Babelbit"
+    },
+    {
+      "netuid": 70,
+      "total_score": 62.51,
+      "name": "NexisGen"
+    },
+    {
+      "netuid": 61,
+      "total_score": 62.49,
+      "name": "RedTeam"
+    },
+    {
+      "netuid": 68,
+      "total_score": 62.46,
+      "name": "NOVA"
+    },
+    {
+      "netuid": 72,
+      "total_score": 62.36,
+      "name": "StreetVision by NATIX"
+    },
+    {
+      "netuid": 73,
+      "total_score": 62.25,
+      "name": "Parked"
+    },
+    {
+      "netuid": 74,
+      "total_score": 62.14,
+      "name": "Gittensor"
+    },
+    {
+      "netuid": 66,
+      "total_score": 61.99,
+      "name": "conjectures"
+    },
+    {
+      "netuid": 76,
+      "total_score": 61.91,
+      "name": "Phylax"
+    },
+    {
+      "netuid": 77,
+      "total_score": 61.8,
+      "name": "Liquidity"
+    },
+    {
+      "netuid": 81,
+      "total_score": 61.35,
+      "name": "SN81"
+    },
+    {
+      "netuid": 80,
+      "total_score": 61.24,
+      "name": "OpenRoboto"
+    },
+    {
+      "netuid": 82,
+      "total_score": 61.24,
+      "name": "Compelle"
+    },
+    {
+      "netuid": 98,
+      "total_score": 61.21,
+      "name": "NeverPlayAlone"
+    },
+    {
+      "netuid": 83,
+      "total_score": 61.12,
+      "name": "CliqueAI"
+    },
+    {
+      "netuid": 75,
+      "total_score": 61.07,
+      "name": "Hippius"
+    },
+    {
+      "netuid": 84,
+      "total_score": 61.01,
+      "name": "SN84"
+    },
+    {
+      "netuid": 79,
+      "total_score": 60.65,
+      "name": "MVTRX"
+    },
+    {
+      "netuid": 86,
+      "total_score": 60.57,
+      "name": "\u2692"
+    },
+    {
+      "netuid": 88,
+      "total_score": 60.56,
+      "name": "Investing"
+    },
+    {
+      "netuid": 89,
+      "total_score": 60.45,
+      "name": "InfiniteQuant"
+    },
+    {
+      "netuid": 85,
+      "total_score": 60.41,
+      "name": "Vidaio"
+    },
+    {
+      "netuid": 90,
+      "total_score": 60.34,
+      "name": "KubeTEE AI Factory"
+    },
+    {
+      "netuid": 92,
+      "total_score": 60.11,
+      "name": "Enclave"
+    },
+    {
+      "netuid": 93,
+      "total_score": 60.0,
+      "name": "Bitcast"
+    },
+    {
+      "netuid": 71,
+      "total_score": 59.83,
+      "name": "Leadpoet"
+    },
+    {
+      "netuid": 96,
+      "total_score": 59.66,
+      "name": "Verathos"
+    },
+    {
+      "netuid": 97,
+      "total_score": 59.55,
+      "name": "Albedo"
+    },
+    {
+      "netuid": 99,
+      "total_score": 59.32,
+      "name": "Thirty Spokes"
+    },
+    {
+      "netuid": 106,
+      "total_score": 59.28,
+      "name": "Nodexo"
+    },
+    {
+      "netuid": 91,
+      "total_score": 59.18,
+      "name": "cascade"
+    },
+    {
+      "netuid": 94,
+      "total_score": 59.11,
+      "name": "pending..."
+    },
+    {
+      "netuid": 95,
+      "total_score": 59.04,
+      "name": "Actual"
+    },
+    {
+      "netuid": 101,
+      "total_score": 58.95,
+      "name": "Tag101"
+    },
+    {
+      "netuid": 100,
+      "total_score": 58.28,
+      "name": "BASE"
+    },
+    {
+      "netuid": 87,
+      "total_score": 58.11,
+      "name": "Provenonce"
+    },
+    {
+      "netuid": 102,
+      "total_score": 58.06,
+      "name": "ConnitoAI"
+    },
+    {
+      "netuid": 105,
+      "total_score": 57.9,
+      "name": "Beam"
+    },
+    {
+      "netuid": 103,
+      "total_score": 57.83,
+      "name": "Djinn"
+    },
+    {
+      "netuid": 104,
+      "total_score": 57.36,
+      "name": "Masx.ai"
+    },
+    {
+      "netuid": 108,
+      "total_score": 57.3,
+      "name": "TalkHead"
+    },
+    {
+      "netuid": 109,
+      "total_score": 57.22,
+      "name": "Finsight"
+    },
+    {
+      "netuid": 115,
+      "total_score": 56.97,
+      "name": "HashiChain"
+    },
+    {
+      "netuid": 110,
+      "total_score": 56.58,
+      "name": "Green Compute"
+    },
+    {
+      "netuid": 111,
+      "total_score": 56.32,
+      "name": "Claims"
+    },
+    {
+      "netuid": 113,
+      "total_score": 56.08,
+      "name": "TensorUSD"
+    },
+    {
+      "netuid": 112,
+      "total_score": 55.7,
+      "name": "minotaur"
+    },
+    {
+      "netuid": 114,
+      "total_score": 55.53,
+      "name": "SOMA"
+    },
+    {
+      "netuid": 107,
+      "total_score": 55.37,
+      "name": "Minos"
+    },
+    {
+      "netuid": 125,
+      "total_score": 54.8,
+      "name": "8 Ball"
+    },
+    {
+      "netuid": 116,
+      "total_score": 54.72,
+      "name": "Memo"
+    },
+    {
+      "netuid": 117,
+      "total_score": 54.52,
+      "name": "glyph"
+    },
+    {
+      "netuid": 121,
+      "total_score": 54.27,
+      "name": "sundae_bar"
+    },
+    {
+      "netuid": 119,
+      "total_score": 54.22,
+      "name": "Satori"
+    },
+    {
+      "netuid": 122,
+      "total_score": 53.52,
+      "name": "CookingTAO"
+    },
+    {
+      "netuid": 123,
+      "total_score": 53.29,
+      "name": "MANTIS"
+    },
+    {
+      "netuid": 124,
+      "total_score": 53.07,
+      "name": "Swarm"
+    },
+    {
+      "netuid": 126,
+      "total_score": 52.63,
+      "name": "Poker44"
+    },
+    {
+      "netuid": 127,
+      "total_score": 52.41,
+      "name": "Astrid"
+    },
+    {
+      "netuid": 118,
+      "total_score": 52.19,
+      "name": "Ditto"
+    },
+    {
+      "netuid": 120,
+      "total_score": 51.96,
+      "name": "Affine"
+    }
+  ],
+  "source": "registry-fallback"
+}

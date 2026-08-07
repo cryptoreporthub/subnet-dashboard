@@ -1,19 +1,23 @@
 {
   "prediction_resolver_scheduler": {
     "last_cycle": {
-      "run_at": "2026-07-14T08:28:17.997631+00:00",
+      "run_at": "2026-08-07T11:25:53.352969+00:00",
       "ok": true,
       "resolved_now": 0,
-      "expired_now": 0,
+      "expired_now": 1,
       "pending": 0,
       "error": null,
+      "skipped": null,
       "watchdog": {
         "warning": false,
         "pending_count": 0,
         "oldest_pending_age_hours": 0.0,
         "oldest_prediction_id": null
-      }
-    }
+      },
+      "batch_size": 32,
+      "round_robin_cursor": 32
+    },
+    "round_robin_cursor": 32
   },
   "soul_map_state": {
     "last_selector_output": {
@@ -720,156 +724,681 @@
     "updated_at": "2026-06-10T20:00:00Z",
     "learning_trail": [
       {
-        "time": "2026-07-14T00:01:27.083331Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:01:27.119343Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:03:10.968575Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:03:20.785117Z",
-        "event_type": "rotation_tokens_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "tokens": [
-            {
-              "symbol": "HYPERLIQUID",
-              "name": "Hyperliquid",
-              "price": 63.43,
-              "price_change_24h": -5.76,
-              "conviction": 39,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "VVV",
-              "name": "Vvv",
-              "price": 10.64,
-              "price_change_24h": 0.63,
-              "conviction": 51,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "NEAR",
-              "name": "Near",
-              "price": 1.92,
-              "price_change_24h": 1.66,
-              "conviction": 53,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "RENDER",
-              "name": "Render",
-              "price": 1.49,
-              "price_change_24h": -2.57,
-              "conviction": 45,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "FETCH",
-              "name": "Fetch",
-              "price": 0.157682,
-              "price_change_24h": -0.72,
-              "conviction": 49,
-              "source": "coingecko"
-            }
-          ],
-          "state_changed": true
-        },
-        "signal": "rotation_watchlist",
-        "decision": "conviction_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:06:26.003118Z",
+        "time": "2026-08-07T11:25:49.145060Z",
         "event_type": "signal_triggered",
-        "subnet": "Synth",
-        "netuid": 50,
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "pump_phase": "ACCUMULATING",
-          "previous_phase": "STIRRING",
-          "composite_score": 0.4409
+          "prediction_id": "0444b84333",
+          "impact_tier": "small"
         },
-        "signal": "pump_accumulating",
-        "decision": "accumulate",
+        "signal": "council_day_pick",
+        "decision": "up",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:06:26.085145Z",
-        "event_type": "signal_triggered",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "transition_count": 1,
-          "phase_counts": {
-            "DORMANT": 70,
-            "STIRRING": 28,
-            "ACCUMULATING": 20,
-            "PUMPING": 6,
-            "COOLING": 5
-          }
-        },
-        "signal": "pump_ladder_scan",
-        "decision": "scan_complete",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:07:12.487286Z",
+        "time": "2026-08-07T11:25:53.568718Z",
         "event_type": "weight_change",
         "subnet": null,
         "netuid": null,
         "evidence": {
-          "before": 1.01,
+          "before": 0.993,
+          "after": 0.963,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "quant"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "quant",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:53.730806Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 0.98,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "0214aff267"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:53.893942Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.308,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:54.013326Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": -60.96,
+          "won": null,
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:25:54.090435Z",
+        "event_type": "disposition_shift",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "0214aff267",
+            "netuid": 40,
+            "name": "Ralph",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -81.28,
+            "signal_source": "mfi_divergence",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a up position when mfi_divergence is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:25:54.012756Z"
+          },
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:25:54.242430Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.3,
+          "after": 0.258,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:54.320752Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": -24.892,
+          "won": null,
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:25:54.400037Z",
+        "event_type": "disposition_shift",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "0214aff267",
+            "netuid": 40,
+            "name": "Ralph",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -81.28,
+            "signal_source": "mfi_divergence",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a up position when mfi_divergence is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:25:54.320385Z"
+          },
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:25:54.604114Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.308,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:54.679707Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": -99.5883,
+          "won": null,
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:25:54.756621Z",
+        "event_type": "disposition_shift",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "0214aff267",
+            "netuid": 40,
+            "name": "Ralph",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -81.28,
+            "signal_source": "mfi_divergence",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a up position when mfi_divergence is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:25:54.679350Z"
+          },
+          "prediction_id": "0214aff267"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:25:54.837769Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "prediction_id": "0214aff267",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": -81.28,
+          "predicted_pct": 0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 0.98
+        },
+        "signal": "mfi_divergence",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "quant"
+      },
+      {
+        "time": "2026-08-07T11:25:54.918493Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "scenario_id": "sc_20260703184518015078",
+          "features": {
+            "netuid": 40,
+            "expert": "quant",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "reference_price": 0.03896091,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:25:55.176712Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
           "after": 1.02,
-          "delta": 0.01,
-          "reason": "alignment_aligned"
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "dark_horse"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "dark_horse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:55.329696Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.98,
+          "after": 1.0,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "bc2ce48f3b"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:55.528157Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.308,
+          "after": 0.35,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:55.602300Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 60.96,
+          "won": null,
+          "prediction_id": "bc2ce48f3b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:25:55.770171Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.258,
+          "after": 0.3,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:55.863774Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 24.892,
+          "won": null,
+          "prediction_id": "bc2ce48f3b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:25:56.101915Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.308,
+          "after": 0.35,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:56.189605Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 99.5883,
+          "won": null,
+          "prediction_id": "bc2ce48f3b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:25:56.286966Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "prediction_id": "bc2ce48f3b",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": -81.28,
+          "predicted_pct": -3.66,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.0
+        },
+        "signal": "stochastic_reversal",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move -3.7% within 4 hours",
+        "judge": "dark_horse"
+      },
+      {
+        "time": "2026-08-07T11:25:56.375559Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "scenario_id": "sc_20260703184518045394",
+          "features": {
+            "netuid": 40,
+            "expert": "dark_horse",
+            "direction": "down",
+            "predicted_pct": -3.66,
+            "reference_price": 0.03896091,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:25:56.696462Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.86,
+          "after": 0.88,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "technical"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "technical",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:56.876516Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 1.02,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "4bbdb8ad4b"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:57.061360Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:57.147950Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 60.96,
+          "won": null,
+          "prediction_id": "4bbdb8ad4b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:25:57.374934Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.3,
+          "after": 0.342,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:57.462583Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 24.892,
+          "won": null,
+          "prediction_id": "4bbdb8ad4b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:25:57.644157Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -81.28
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:57.732356Z",
+        "event_type": "accuracy_update",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "pnl_pct": 99.5883,
+          "won": null,
+          "prediction_id": "4bbdb8ad4b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:25:57.874506Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "prediction_id": "4bbdb8ad4b",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": -81.28,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.02
+        },
+        "signal": "macd_cross",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "technical"
+      },
+      {
+        "time": "2026-08-07T11:25:57.967543Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Ralph",
+        "netuid": 40,
+        "evidence": {
+          "scenario_id": "sc_20260703184518060964",
+          "features": {
+            "netuid": 40,
+            "expert": "technical",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.03896091,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:25:58.220798Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.963,
+          "after": 0.983,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "quant"
         },
         "signal": "learning_loop",
         "decision": "nudge_up",
@@ -878,100 +1407,3074 @@
         "correct": true
       },
       {
-        "time": "2026-07-14T00:07:12.511782Z",
-        "event_type": "disposition_shift",
+        "time": "2026-08-07T11:25:58.454720Z",
+        "event_type": "weight_change",
         "subnet": null,
         "netuid": null,
         "evidence": {
-          "alignment_score": 0.8333,
-          "expert_nudged": "quant",
-          "from_action": "pre_alignment",
-          "to_action": "aligned"
+          "before": 1.02,
+          "after": 1.04,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "c4ab208245"
         },
-        "signal": "council_selector",
-        "decision": "aligned",
+        "signal": "learning_loop",
+        "decision": "nudge_up",
         "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:58.633841Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.434,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:58.714203Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": 27.4768,
+          "won": null,
+          "prediction_id": "c4ab208245"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:25:58.877973Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.342,
+          "after": 0.384,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:58.997955Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": 11.2197,
+          "won": null,
+          "prediction_id": "c4ab208245"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:25:59.158652Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.434,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:25:59.234128Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": 44.8879,
+          "won": null,
+          "prediction_id": "c4ab208245"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:25:59.327263Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "prediction_id": "c4ab208245",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": 36.6357,
+          "predicted_pct": 0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.04
+        },
+        "signal": "mfi_divergence",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move +0.8% within 4 hours",
         "judge": "quant"
       },
       {
-        "time": "2026-07-14T00:07:12.536597Z",
+        "time": "2026-08-07T11:25:59.410426Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "scenario_id": "sc_20260703184518078029",
+          "features": {
+            "netuid": 107,
+            "expert": "quant",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "reference_price": 0.04510137,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:25:59.726688Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.02,
+          "after": 0.99,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "dark_horse"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "dark_horse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:25:59.918167Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.04,
+          "after": 1.02,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:00.152976Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.392,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:00.238356Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": -27.4768,
+          "won": null,
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:00.324343Z",
         "event_type": "disposition_shift",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "ec7d1107a2",
+            "netuid": 107,
+            "name": "Minos",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 36.6357,
+            "signal_source": "stochastic_reversal",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:00.237163Z"
+          },
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:00.506944Z",
+        "event_type": "weight_change",
         "subnet": null,
         "netuid": null,
         "evidence": {
-          "rotation_decisions": 24,
-          "from_action": null,
-          "to_action": "daily_rotation_complete"
+          "before": 0.384,
+          "after": 0.342,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
         },
-        "signal": "council_selector",
-        "decision": "daily_rotation_complete",
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:00.585372Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": -11.2197,
+          "won": null,
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:00.710333Z",
+        "event_type": "disposition_shift",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "ec7d1107a2",
+            "netuid": 107,
+            "name": "Minos",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 36.6357,
+            "signal_source": "stochastic_reversal",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:00.584547Z"
+          },
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:00.878581Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.392,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 36.6357
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:00.972700Z",
+        "event_type": "accuracy_update",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "pnl_pct": -44.8879,
+          "won": null,
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:01.061596Z",
+        "event_type": "disposition_shift",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "ec7d1107a2",
+            "netuid": 107,
+            "name": "Minos",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 36.6357,
+            "signal_source": "stochastic_reversal",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when stochastic_reversal is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that stochastic_reversal was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:00.972402Z"
+          },
+          "prediction_id": "ec7d1107a2"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:01.160091Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "prediction_id": "ec7d1107a2",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 36.6357,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.02
+        },
+        "signal": "stochastic_reversal",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "dark_horse"
+      },
+      {
+        "time": "2026-08-07T11:26:01.289353Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Minos",
+        "netuid": 107,
+        "evidence": {
+          "scenario_id": "sc_20260703184518110125",
+          "features": {
+            "netuid": 107,
+            "expert": "dark_horse",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.04510137,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:12:17.000553Z",
-        "event_type": "rotation_tokens_update",
+        "time": "2026-08-07T11:26:01.526959Z",
+        "event_type": "weight_change",
         "subnet": null,
         "netuid": null,
         "evidence": {
-          "tokens": [
-            {
-              "symbol": "HYPERLIQUID",
-              "name": "Hyperliquid",
-              "price": 63.31,
-              "price_change_24h": -6.44,
-              "conviction": 38,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "VVV",
-              "name": "Vvv",
-              "price": 10.7,
-              "price_change_24h": 0.04,
-              "conviction": 50,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "NEAR",
-              "name": "Near",
-              "price": 1.92,
-              "price_change_24h": 0.97,
-              "conviction": 51,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "RENDER",
-              "name": "Render",
-              "price": 1.48,
-              "price_change_24h": -4.14,
-              "conviction": 42,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "FETCH",
-              "name": "Fetch",
-              "price": 0.157776,
-              "price_change_24h": -1.8,
-              "conviction": 47,
-              "source": "coingecko"
-            }
-          ],
-          "state_changed": true
+          "before": 0.983,
+          "after": 0.953,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "quant"
         },
-        "signal": "rotation_watchlist",
-        "decision": "conviction_refresh",
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "quant",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:01.749105Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.02,
+          "after": 1.0,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:01.942306Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:02.021916Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -2.3522,
+          "won": null,
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:02.101333Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "1632a45b26",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 3.1363,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:02.021389Z"
+          },
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:02.311476Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.342,
+          "after": 0.3,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:02.386971Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -0.9605,
+          "won": null,
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:02.465183Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "1632a45b26",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 3.1363,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:02.386562Z"
+          },
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:02.623911Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:02.698071Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -3.8428,
+          "won": null,
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:02.811632Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "1632a45b26",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 3.1363,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:02.697631Z"
+          },
+          "prediction_id": "1632a45b26"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:02.892509Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "prediction_id": "1632a45b26",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 3.1363,
+          "predicted_pct": -1.0,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.0
+        },
+        "signal": "emission_change",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "quant"
+      },
+      {
+        "time": "2026-08-07T11:26:02.969044Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "scenario_id": "sc_20260703184518144378",
+          "features": {
+            "netuid": 97,
+            "expert": "quant",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "reference_price": 0.02501847,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:16:27.140991Z",
+        "time": "2026-08-07T11:26:03.189519Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.958,
+          "after": 0.928,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "hype"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "hype",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:03.380822Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 0.98,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:03.539016Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.308,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:03.615378Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -2.3522,
+          "won": null,
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:03.692909Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "08a9782f2d",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 3.1363,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:03.614970Z"
+          },
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:03.925729Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.3,
+          "after": 0.258,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:04.005623Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -0.9605,
+          "won": null,
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:04.086524Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "08a9782f2d",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 3.1363,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:04.005098Z"
+          },
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:04.257095Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.308,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:04.402870Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": -3.8428,
+          "won": null,
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:04.483220Z",
+        "event_type": "disposition_shift",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "08a9782f2d",
+            "netuid": 97,
+            "name": "Albedo",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 3.1363,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:04.402280Z"
+          },
+          "prediction_id": "08a9782f2d"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:04.567311Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "prediction_id": "08a9782f2d",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 3.1363,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 0.98
+        },
+        "signal": "momentum_shift",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "hype"
+      },
+      {
+        "time": "2026-08-07T11:26:04.645987Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "scenario_id": "sc_20260703184518161421",
+          "features": {
+            "netuid": 97,
+            "expert": "hype",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.02501847,
+            "horizon_hours": 2
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:04.928085Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.99,
+          "after": 1.01,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "dark_horse"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "dark_horse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:05.116170Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.98,
+          "after": 1.0,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "81e1767203"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:05.284902Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.308,
+          "after": 0.35,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:05.406565Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": 2.3522,
+          "won": null,
+          "prediction_id": "81e1767203"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:05.612572Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.258,
+          "after": 0.3,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:05.705316Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": 0.9605,
+          "won": null,
+          "prediction_id": "81e1767203"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:05.973743Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.308,
+          "after": 0.35,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 3.1363
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:06.058878Z",
+        "event_type": "accuracy_update",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "pnl_pct": 3.8428,
+          "won": null,
+          "prediction_id": "81e1767203"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:06.211985Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "prediction_id": "81e1767203",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": 3.1363,
+          "predicted_pct": 0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.0
+        },
+        "signal": "stochastic_reversal",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "dark_horse"
+      },
+      {
+        "time": "2026-08-07T11:26:06.298792Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Albedo",
+        "netuid": 97,
+        "evidence": {
+          "scenario_id": "sc_20260703184518178434",
+          "features": {
+            "netuid": 97,
+            "expert": "dark_horse",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "reference_price": 0.02501847,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:06.579971Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.953,
+          "after": 0.973,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "quant"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "quant",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:06.735744Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 1.02,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "b71ec3863b"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:06.941743Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:07.024234Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 23.3937,
+          "won": null,
+          "prediction_id": "b71ec3863b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:07.193733Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.3,
+          "after": 0.342,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:07.273628Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 9.5524,
+          "won": null,
+          "prediction_id": "b71ec3863b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:07.473245Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:07.551817Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 38.2175,
+          "won": null,
+          "prediction_id": "b71ec3863b"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:07.634212Z",
+        "event_type": "prediction_resolved",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "prediction_id": "b71ec3863b",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": -31.1916,
+          "predicted_pct": -1.0,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.02
+        },
+        "signal": "emission_change",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "quant"
+      },
+      {
+        "time": "2026-08-07T11:26:07.730182Z",
+        "event_type": "scenario_tagged",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "scenario_id": "sc_20260703184518215452",
+          "features": {
+            "netuid": 15,
+            "expert": "quant",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "reference_price": 0.0287698,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:08.014567Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.928,
+          "after": 0.898,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "hype"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "hype",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:08.179860Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.02,
+          "after": 1.0,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:08.350629Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:08.468344Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": -23.3937,
+          "won": null,
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:08.549511Z",
+        "event_type": "disposition_shift",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "7ae77c6bc3",
+            "netuid": 15,
+            "name": "ORO",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -31.1916,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a up position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:26:08.468015Z"
+          },
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 2 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:08.729551Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.342,
+          "after": 0.3,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:08.812950Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": -9.5524,
+          "won": null,
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:08.941861Z",
+        "event_type": "disposition_shift",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "7ae77c6bc3",
+            "netuid": 15,
+            "name": "ORO",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -31.1916,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a up position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:26:08.812598Z"
+          },
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 2 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:09.116239Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:09.199455Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": -38.2175,
+          "won": null,
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:09.276955Z",
+        "event_type": "disposition_shift",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "7ae77c6bc3",
+            "netuid": 15,
+            "name": "ORO",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "actual_pct": -31.1916,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted up but price fell.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a up position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that the dip was overdone, support was holding, and risk/reward favoured a down reversal instead."
+            },
+            "created_at": "2026-08-07T11:26:09.199123Z"
+          },
+          "prediction_id": "7ae77c6bc3"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move +0.8% within 2 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:09.364507Z",
+        "event_type": "prediction_resolved",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "prediction_id": "7ae77c6bc3",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": -31.1916,
+          "predicted_pct": 0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.0
+        },
+        "signal": "momentum_shift",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move +0.8% within 2 hours",
+        "judge": "hype"
+      },
+      {
+        "time": "2026-08-07T11:26:09.489273Z",
+        "event_type": "scenario_tagged",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "scenario_id": "sc_20260703184518233218",
+          "features": {
+            "netuid": 15,
+            "expert": "hype",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "reference_price": 0.0287698,
+            "horizon_hours": 2
+          },
+          "regime": "bull",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:09.735308Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.01,
+          "after": 1.03,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "dark_horse"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "dark_horse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:09.987532Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.0,
+          "after": 1.02,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "1ad81f1439"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:10.164470Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:10.250591Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 23.3937,
+          "won": null,
+          "prediction_id": "1ad81f1439"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:10.428926Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.3,
+          "after": 0.342,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:10.555464Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 9.5524,
+          "won": null,
+          "prediction_id": "1ad81f1439"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:10.735478Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.35,
+          "after": 0.392,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:10.823973Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 38.2175,
+          "won": null,
+          "prediction_id": "1ad81f1439"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:11.023182Z",
+        "event_type": "prediction_resolved",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "prediction_id": "1ad81f1439",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": -31.1916,
+          "predicted_pct": -2.75,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.02
+        },
+        "signal": "stochastic_reversal",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move -2.8% within 4 hours",
+        "judge": "dark_horse"
+      },
+      {
+        "time": "2026-08-07T11:26:11.156942Z",
+        "event_type": "scenario_tagged",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "scenario_id": "sc_20260703184518250867",
+          "features": {
+            "netuid": 15,
+            "expert": "dark_horse",
+            "direction": "down",
+            "predicted_pct": -2.75,
+            "reference_price": 0.0287698,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:11.445721Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.88,
+          "after": 0.9,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "technical"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "technical",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:11.648870Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.02,
+          "after": 1.04,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "062e3a9bc3"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:11.883120Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.434,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:11.965979Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 23.3937,
+          "won": null,
+          "prediction_id": "062e3a9bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:12.139134Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.342,
+          "after": 0.384,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:12.258522Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 9.5524,
+          "won": null,
+          "prediction_id": "062e3a9bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:12.452256Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.434,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": -31.1916
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:12.557523Z",
+        "event_type": "accuracy_update",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "pnl_pct": 38.2175,
+          "won": null,
+          "prediction_id": "062e3a9bc3"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:12.973753Z",
+        "event_type": "prediction_resolved",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "prediction_id": "062e3a9bc3",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": -31.1916,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.04
+        },
+        "signal": "macd_cross",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "technical"
+      },
+      {
+        "time": "2026-08-07T11:26:13.073834Z",
+        "event_type": "scenario_tagged",
+        "subnet": "ORO",
+        "netuid": 15,
+        "evidence": {
+          "scenario_id": "sc_20260703184518268705",
+          "features": {
+            "netuid": 15,
+            "expert": "technical",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.0287698,
+            "horizon_hours": 4
+          },
+          "regime": "bull",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:13.361199Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.973,
+          "after": 0.993,
+          "delta": 0.02,
+          "reason": "prediction_resolve",
+          "dial": "quant"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "quant",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:13.543838Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.04,
+          "after": 1.06,
+          "delta": 0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "6cf1372184"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:13.733129Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.476,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:13.858363Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": 3.9041,
+          "won": null,
+          "prediction_id": "6cf1372184"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:14.046457Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.384,
+          "after": 0.426,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "echo",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:14.132365Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": 1.5942,
+          "won": null,
+          "prediction_id": "6cf1372184"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:14.319374Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.476,
+          "delta": 0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_up",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": true
+      },
+      {
+        "time": "2026-08-07T11:26:14.444840Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": 6.378,
+          "won": null,
+          "prediction_id": "6cf1372184"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:14.548286Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "action": "HOLD",
+          "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+          "conviction": 36.6,
+          "horizon_type": "day",
+          "gate": "confidence_below_0.50"
+        },
+        "signal": "council_hold",
+        "decision": "HOLD",
+        "prediction": "Confidence 37% below 50% audit gate \u2014 no long call published",
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:14.664092Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "prediction_id": "6cf1372184",
+          "outcome": "hit",
+          "correct": true,
+          "actual_pct": 5.2055,
+          "predicted_pct": 0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.06
+        },
+        "signal": "mfi_divergence",
+        "decision": "weight_nudge_up",
+        "prediction": "predicted to move +0.8% within 4 hours",
+        "judge": "quant"
+      },
+      {
+        "time": "2026-08-07T11:26:14.827798Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "scenario_id": "sc_20260703184518288194",
+          "features": {
+            "netuid": 120,
+            "expert": "quant",
+            "direction": "up",
+            "predicted_pct": 0.8,
+            "reference_price": 0.05482254,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "correct"
+        },
+        "signal": "scenario_memory",
+        "decision": "correct",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:15.141061Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.9,
+          "after": 0.87,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "technical"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "technical",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:15.314315Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.06,
+          "after": 1.04,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:15.533587Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.476,
+          "after": 0.434,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:15.636597Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": -3.9041,
+          "won": null,
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:15.731982Z",
+        "event_type": "disposition_shift",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "7db71108a4",
+            "netuid": 120,
+            "name": "Affine",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 5.2055,
+            "signal_source": "macd_cross",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Technical indicator gave a false positive in a range-bound regime.",
+              "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:15.636114Z"
+          },
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:15.911399Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.426,
+          "after": 0.384,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:16.064032Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": -1.5942,
+          "won": null,
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:16.148774Z",
+        "event_type": "disposition_shift",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "7db71108a4",
+            "netuid": 120,
+            "name": "Affine",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 5.2055,
+            "signal_source": "macd_cross",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Technical indicator gave a false positive in a range-bound regime.",
+              "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:16.063509Z"
+          },
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:16.335055Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.476,
+          "after": 0.434,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 5.2055
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:16.423770Z",
+        "event_type": "accuracy_update",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "pnl_pct": -6.378,
+          "won": null,
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:16.510277Z",
+        "event_type": "disposition_shift",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "7db71108a4",
+            "netuid": 120,
+            "name": "Affine",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 5.2055,
+            "signal_source": "macd_cross",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Technical indicator gave a false positive in a range-bound regime.",
+              "rule": "Require a confirming second signal before taking a down position when macd_cross is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that macd_cross was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:16.423325Z"
+          },
+          "prediction_id": "7db71108a4"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:16.653590Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "prediction_id": "7db71108a4",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 5.2055,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.04
+        },
+        "signal": "macd_cross",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -0.8% within 4 hours",
+        "judge": "technical"
+      },
+      {
+        "time": "2026-08-07T11:26:16.742009Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Affine",
+        "netuid": 120,
+        "evidence": {
+          "scenario_id": "sc_20260703184518343960",
+          "features": {
+            "netuid": 120,
+            "expert": "technical",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.05482254,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:17.013889Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.993,
+          "after": 0.963,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "quant"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "quant",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:17.290625Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.04,
+          "after": 1.02,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:17.478250Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.392,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:17.564913Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -13.754,
+          "won": null,
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:17.651619Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "fdbe722242",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 18.3387,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:17.564356Z"
+          },
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:17.880287Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.384,
+          "after": 0.342,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:17.969690Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -5.6162,
+          "won": null,
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:18.054540Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "fdbe722242",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 18.3387,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:17.969149Z"
+          },
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:18.271729Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.434,
+          "after": 0.392,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:18.363363Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -22.4695,
+          "won": null,
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:18.449410Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "fdbe722242",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "actual_pct": 18.3387,
+            "signal_source": "emission_change",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Supporting evidence was incomplete or stale relative to actual price action.",
+              "rule": "Require a confirming second signal before taking a down position when emission_change is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that emission_change was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:18.362983Z"
+          },
+          "prediction_id": "fdbe722242"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:18.539865Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "prediction_id": "fdbe722242",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 18.3387,
+          "predicted_pct": -1.0,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.02
+        },
+        "signal": "emission_change",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -1.0% within 4 hours",
+        "judge": "quant"
+      },
+      {
+        "time": "2026-08-07T11:26:18.625555Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "scenario_id": "sc_20260703184518364138",
+          "features": {
+            "netuid": 64,
+            "expert": "quant",
+            "direction": "down",
+            "predicted_pct": -1.0,
+            "reference_price": 0.07406842,
+            "horizon_hours": 4
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:18.909217Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.898,
+          "after": 0.868,
+          "delta": -0.03,
+          "reason": "prediction_resolve",
+          "dial": "hype"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "hype",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:19.086821Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 1.02,
+          "after": 1.0,
+          "delta": -0.02,
+          "reason": "impact_resolve",
+          "dial": "impact_strength",
+          "tier": null,
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "impact_strength",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:19.327301Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "oracle",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "oracle",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:19.413941Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -13.754,
+          "won": null,
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:19.494943Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "oracle",
+            "prediction_id": "04fed4b0dd",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 18.3387,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:19.413236Z"
+          },
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "oracle"
+      },
+      {
+        "time": "2026-08-07T11:26:19.673084Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.342,
+          "after": 0.3,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "echo",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "echo",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:19.757842Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -5.6162,
+          "won": null,
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:19.885765Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "echo",
+            "prediction_id": "04fed4b0dd",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 18.3387,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:19.757373Z"
+          },
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "echo"
+      },
+      {
+        "time": "2026-08-07T11:26:20.060971Z",
+        "event_type": "weight_change",
+        "subnet": null,
+        "netuid": null,
+        "evidence": {
+          "before": 0.392,
+          "after": 0.35,
+          "delta": -0.042,
+          "reason": "judge_pnl",
+          "dial": "pulse",
+          "scale": 2.0986,
+          "actual_pct": 18.3387
+        },
+        "signal": "learning_loop",
+        "decision": "nudge_down",
+        "prediction": null,
+        "judge": "pulse",
+        "correct": false
+      },
+      {
+        "time": "2026-08-07T11:26:20.152729Z",
+        "event_type": "accuracy_update",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "pnl_pct": -22.4695,
+          "won": null,
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_portfolio",
+        "decision": "position_closed",
+        "prediction": null,
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:20.235908Z",
+        "event_type": "disposition_shift",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "postmortem": {
+            "judge": "pulse",
+            "prediction_id": "04fed4b0dd",
+            "netuid": 64,
+            "name": "Chutes",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "actual_pct": 18.3387,
+            "signal_source": "momentum_shift",
+            "questions": {
+              "what": "Direction was wrong: predicted down but price rose.",
+              "why": "Momentum/hype signal chased short-term energy and ignored exhaustion.",
+              "rule": "Require a confirming second signal before taking a down position when momentum_shift is the primary driver.",
+              "devil": "To predict the opposite outcome I would have needed to believe that momentum_shift was already priced in and that buyers were exhausted, favouring a up move instead."
+            },
+            "created_at": "2026-08-07T11:26:20.152260Z"
+          },
+          "prediction_id": "04fed4b0dd"
+        },
+        "signal": "judge_council",
+        "decision": "post_mortem_recorded",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "pulse"
+      },
+      {
+        "time": "2026-08-07T11:26:20.369717Z",
+        "event_type": "prediction_resolved",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "prediction_id": "04fed4b0dd",
+          "outcome": "miss",
+          "correct": false,
+          "actual_pct": 18.3387,
+          "predicted_pct": -0.8,
+          "horizon_type": null,
+          "impact_tier": null,
+          "impact_strength_at_creation": null,
+          "impact_strength_after": 1.0
+        },
+        "signal": "momentum_shift",
+        "decision": "weight_nudge_down",
+        "prediction": "predicted to move -0.8% within 2 hours",
+        "judge": "hype"
+      },
+      {
+        "time": "2026-08-07T11:26:20.453761Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Chutes",
+        "netuid": 64,
+        "evidence": {
+          "scenario_id": "sc_20260703184518383287",
+          "features": {
+            "netuid": 64,
+            "expert": "hype",
+            "direction": "down",
+            "predicted_pct": -0.8,
+            "reference_price": 0.07406842,
+            "horizon_hours": 2
+          },
+          "regime": "neutral",
+          "outcome": "wrong"
+        },
+        "signal": "scenario_memory",
+        "decision": "wrong",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:20.539483Z",
         "event_type": "accuracy_update",
         "subnet": null,
         "netuid": null,
         "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
+          "accuracy": 0.46,
+          "correct": 23,
+          "wrong": 27,
           "pending": 0,
           "resolved_now": 0
         },
@@ -981,170 +4484,112 @@
         "judge": null
       },
       {
-        "time": "2026-07-14T00:16:27.174010Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
+        "time": "2026-08-07T11:26:33.542378Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "action": "HOLD",
+          "reason": "Confidence 35% below 50% audit gate \u2014 no long call published",
+          "conviction": 35.0,
+          "horizon_type": "hour",
+          "gate": "confidence_below_0.50"
+        },
+        "signal": "council_hold",
+        "decision": "HOLD",
+        "prediction": "Confidence 35% below 50% audit gate \u2014 no long call published",
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:26:33.728038Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Apex",
         "netuid": null,
         "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
+          "scenario_id": "sc_20260807112633726630",
+          "features": {
+            "regime": "neutral",
+            "rsi": "neutral",
+            "volume": "very_low",
+            "price_direction": "up",
+            "valuation": "deep_value",
+            "return_driver": "yield_support",
+            "yield_trap": false,
+            "price_momentum_7d": "up",
+            "staking_yield_apy": 24.85,
+            "price_change_7d": 0.0,
+            "wallet_impact_7d_estimate_pct": 0.48,
+            "netuid": 1,
+            "direction": "up",
+            "predicted_pct": 1.51,
+            "horizon_type": "hour",
+            "expert": "hype",
+            "impact_tier": "small",
+            "impact_strength": 1.0,
+            "relative_flow": 0.0,
+            "pattern_at_prediction": null,
+            "pattern_label": null
+          },
+          "regime": "neutral",
+          "outcome": null
         },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
+        "signal": "scenario_memory",
+        "decision": "pending",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:18:01.922446Z",
-        "event_type": "rotation_tokens_update",
-        "subnet": null,
-        "netuid": null,
+        "time": "2026-08-07T11:26:33.541744+00:00Z",
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "tokens": [
-            {
-              "symbol": "HYPERLIQUID",
-              "name": "Hyperliquid",
-              "price": 63.47,
-              "price_change_24h": -6.61,
-              "conviction": 37,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "VVV",
-              "name": "Vvv",
-              "price": 10.7,
-              "price_change_24h": -0.8,
-              "conviction": 49,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "NEAR",
-              "name": "Near",
-              "price": 1.93,
-              "price_change_24h": 0.09,
-              "conviction": 50,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "RENDER",
-              "name": "Render",
-              "price": 1.48,
-              "price_change_24h": -4.07,
-              "conviction": 42,
-              "source": "coingecko"
-            },
-            {
-              "symbol": "FETCH",
-              "name": "Fetch",
-              "price": 0.158053,
-              "price_change_24h": -1.73,
-              "conviction": 47,
-              "source": "coingecko"
-            }
-          ],
-          "state_changed": true
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
         },
-        "signal": "rotation_watchlist",
-        "decision": "conviction_refresh",
+        "signal": "social_sentiment",
+        "decision": "HOLD",
+        "prediction": "predicted to move +1.5% within 1 hours",
+        "judge": "hype",
+        "horizon_type": "hour",
+        "prediction_id": "2d7f61b964"
+      },
+      {
+        "time": "2026-08-07T11:26:34.129011Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "pick_score": 66.65,
+          "expert": "technical",
+          "impact_tier": "small",
+          "impact_strength": 1.0,
+          "conviction": 39.76,
+          "horizon_type": "hour"
+        },
+        "signal": "council_picks",
+        "decision": "pick_conviction",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:18:11.014879Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T00:26:27.519266Z",
+        "time": "2026-08-07T11:26:34.211215Z",
         "event_type": "signal_triggered",
-        "subnet": null,
-        "netuid": null,
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "transition_count": 2,
-          "phase_counts": {
-            "DORMANT": 72,
-            "STIRRING": 28,
-            "ACCUMULATING": 18,
-            "PUMPING": 6,
-            "COOLING": 5
-          }
+          "prediction_id": "2d7f61b964",
+          "impact_tier": "small"
         },
-        "signal": "pump_ladder_scan",
-        "decision": "scan_complete",
+        "signal": "council_hour_pick",
+        "decision": "up",
         "prediction": null,
         "judge": null
       },
       {
-        "time": "2026-07-14T00:31:27.228955Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T08:28:19.318160Z",
-        "event_type": "accuracy_update",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "accuracy": 0.441,
-          "correct": 15,
-          "wrong": 19,
-          "pending": 0,
-          "resolved_now": 0
-        },
-        "signal": "resolver",
-        "decision": "learning_metrics_refresh",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-07-14T08:28:20.110100Z",
-        "event_type": "signal_triggered",
-        "subnet": null,
-        "netuid": null,
-        "evidence": {
-          "transition_count": 23,
-          "phase_counts": {
-            "DORMANT": 69,
-            "STIRRING": 34,
-            "ACCUMULATING": 15,
-            "PUMPING": 6,
-            "COOLING": 5
-          }
-        },
-        "signal": "pump_ladder_scan",
-        "decision": "scan_complete",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-08-07T11:24:10.355721Z",
+        "time": "2026-08-07T11:27:13.922879Z",
         "event_type": "rotation_tokens_update",
         "subnet": null,
         "netuid": null,
@@ -1153,24 +4598,24 @@
             {
               "symbol": "HYPERLIQUID",
               "name": "Hyperliquid",
-              "price": 56.84,
-              "price_change_24h": 2.43,
+              "price": 56.78,
+              "price_change_24h": 2.36,
               "conviction": 54,
               "source": "coingecko"
             },
             {
               "symbol": "VVV",
               "name": "Vvv",
-              "price": 11.6,
-              "price_change_24h": 1.92,
-              "conviction": 53,
+              "price": 11.62,
+              "price_change_24h": 2.17,
+              "conviction": 54,
               "source": "coingecko"
             },
             {
               "symbol": "NEAR",
               "name": "Near",
               "price": 1.66,
-              "price_change_24h": -1.69,
+              "price_change_24h": -1.73,
               "conviction": 47,
               "source": "coingecko"
             },
@@ -1178,15 +4623,15 @@
               "symbol": "RENDER",
               "name": "Render",
               "price": 1.33,
-              "price_change_24h": 0.7,
+              "price_change_24h": 0.77,
               "conviction": 51,
               "source": "coingecko"
             },
             {
               "symbol": "FETCH",
               "name": "Fetch",
-              "price": 0.134715,
-              "price_change_24h": -1.99,
+              "price": 0.135003,
+              "price_change_24h": -1.74,
               "conviction": 47,
               "source": "coingecko"
             }
@@ -1199,112 +4644,143 @@
         "judge": null
       },
       {
-        "time": "2026-08-07T11:24:13.163366Z",
-        "event_type": "signal_triggered",
-        "subnet": "Zipcode",
-        "netuid": 46,
+        "time": "2026-08-07T11:27:14.335932Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "reasons": [
-            "anticipated -10.6%",
-            "crash-tail -42.9%"
-          ],
-          "solo": true,
-          "line": "Caution \u00b7 Zipcode \u00b7 anticipated -10.6% \u00b7 crash-tail -42.9%"
+          "action": "HOLD",
+          "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+          "conviction": 36.9,
+          "horizon_type": "day",
+          "gate": "confidence_below_0.50"
         },
-        "signal": "caution_cell",
-        "decision": "down",
-        "prediction": null,
+        "signal": "council_hold",
+        "decision": "HOLD",
+        "prediction": "Confidence 37% below 50% audit gate \u2014 no long call published",
         "judge": null
       },
       {
-        "time": "2026-08-07T11:24:13.376141Z",
-        "event_type": "signal_triggered",
-        "subnet": "Quasar",
-        "netuid": 24,
-        "evidence": {
-          "reasons": [
-            "anticipated -6.0%",
-            "crash-tail -72.8%"
-          ],
-          "solo": true,
-          "line": "Caution \u00b7 Quasar \u00b7 anticipated -6.0% \u00b7 crash-tail -72.8%"
-        },
-        "signal": "caution_cell",
-        "decision": "down",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-08-07T11:24:13.543353Z",
-        "event_type": "signal_triggered",
-        "subnet": "Ditto",
-        "netuid": 118,
-        "evidence": {
-          "reasons": [
-            "anticipated -13.9%",
-            "crash-tail -61.4%"
-          ],
-          "solo": true,
-          "line": "Caution \u00b7 Ditto \u00b7 anticipated -13.9% \u00b7 crash-tail -61.4%"
-        },
-        "signal": "caution_cell",
-        "decision": "down",
-        "prediction": null,
-        "judge": null
-      },
-      {
-        "time": "2026-08-07T11:24:16.416646Z",
-        "event_type": "weight_change",
-        "subnet": null,
+        "time": "2026-08-07T11:27:14.718554Z",
+        "event_type": "scenario_tagged",
+        "subnet": "Apex",
         "netuid": null,
         "evidence": {
-          "before": 1.0,
-          "after": 0.993,
-          "delta": -0.007,
-          "reason": "council_rebalance",
-          "dial": "quant"
+          "scenario_id": "sc_20260807112714717075",
+          "features": {
+            "regime": "neutral",
+            "rsi": "neutral",
+            "volume": "very_low",
+            "price_direction": "up",
+            "valuation": "deep_value",
+            "return_driver": "yield_support",
+            "yield_trap": false,
+            "price_momentum_7d": "up",
+            "staking_yield_apy": 24.85,
+            "price_change_7d": 0.0,
+            "wallet_impact_7d_estimate_pct": 0.48,
+            "netuid": 1,
+            "direction": "up",
+            "predicted_pct": 1.51,
+            "horizon_type": "day",
+            "expert": "hype",
+            "impact_tier": "small",
+            "impact_strength": 1.0,
+            "relative_flow": 0.0,
+            "pattern_at_prediction": null,
+            "pattern_label": null
+          },
+          "regime": "neutral",
+          "outcome": null
         },
-        "signal": "learning_loop",
-        "decision": "nudge_down",
+        "signal": "scenario_memory",
+        "decision": "pending",
         "prediction": null,
-        "judge": "quant",
-        "correct": null
+        "judge": null
       },
       {
-        "time": "2026-08-07T11:24:16.503198Z",
-        "event_type": "weight_change",
-        "subnet": null,
-        "netuid": null,
+        "time": "2026-08-07T11:27:14.264419+00:00Z",
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "before": 1.0,
-          "after": 0.958,
-          "delta": -0.042,
-          "reason": "council_rebalance",
-          "dial": "hype"
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
         },
-        "signal": "learning_loop",
-        "decision": "nudge_down",
-        "prediction": null,
+        "signal": "social_sentiment",
+        "decision": "long",
+        "prediction": "predicted to move +1.5% within 24 hours",
         "judge": "hype",
-        "correct": null
+        "horizon_type": "day",
+        "prediction_id": "fd87810abd"
       },
       {
-        "time": "2026-08-07T11:24:16.631289Z",
-        "event_type": "weight_change",
-        "subnet": null,
-        "netuid": null,
+        "time": "2026-08-07T11:27:15.582916Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
         "evidence": {
-          "before": 1.0,
-          "after": 0.86,
-          "delta": -0.14,
-          "reason": "council_rebalance",
-          "dial": "technical"
+          "pick_score": 74.01,
+          "expert": "technical",
+          "impact_tier": "small",
+          "impact_strength": 1.0,
+          "conviction": 41.959999999999994,
+          "horizon_type": "day"
         },
-        "signal": "learning_loop",
-        "decision": "nudge_down",
+        "signal": "council_picks",
+        "decision": "pick_conviction",
         "prediction": null,
-        "judge": "technical",
-        "correct": null
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:27:16.132932Z",
+        "event_type": "signal_triggered",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "prediction_id": "fd87810abd",
+          "impact_tier": "small"
+        },
+        "signal": "council_day_pick",
+        "decision": "up",
+        "prediction": null,
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:27:16.829496Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "action": "HOLD",
+          "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+          "conviction": 36.9,
+          "horizon_type": "day",
+          "gate": "confidence_below_0.50"
+        },
+        "signal": "council_hold",
+        "decision": "HOLD",
+        "prediction": "Confidence 37% below 50% audit gate \u2014 no long call published",
+        "judge": null
+      },
+      {
+        "time": "2026-08-07T11:27:18.301893Z",
+        "event_type": "conviction_update",
+        "subnet": "Apex",
+        "netuid": 1,
+        "evidence": {
+          "action": "HOLD",
+          "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+          "conviction": 36.9,
+          "horizon_type": "day",
+          "gate": "confidence_below_0.50"
+        },
+        "signal": "council_hold",
+        "decision": "HOLD",
+        "prediction": "Confidence 37% below 50% audit gate \u2014 no long call published",
+        "judge": null
       }
     ],
     "rotation_tokens_snapshot": {
@@ -1312,24 +4788,24 @@
         {
           "symbol": "HYPERLIQUID",
           "name": "Hyperliquid",
-          "price": 56.84,
-          "price_change_24h": 2.43,
+          "price": 56.78,
+          "price_change_24h": 2.36,
           "conviction": 54,
           "source": "coingecko"
         },
         {
           "symbol": "VVV",
           "name": "Vvv",
-          "price": 11.6,
-          "price_change_24h": 1.92,
-          "conviction": 53,
+          "price": 11.62,
+          "price_change_24h": 2.17,
+          "conviction": 54,
           "source": "coingecko"
         },
         {
           "symbol": "NEAR",
           "name": "Near",
           "price": 1.66,
-          "price_change_24h": -1.69,
+          "price_change_24h": -1.73,
           "conviction": 47,
           "source": "coingecko"
         },
@@ -1337,20 +4813,20 @@
           "symbol": "RENDER",
           "name": "Render",
           "price": 1.33,
-          "price_change_24h": 0.7,
+          "price_change_24h": 0.77,
           "conviction": 51,
           "source": "coingecko"
         },
         {
           "symbol": "FETCH",
           "name": "Fetch",
-          "price": 0.134715,
-          "price_change_24h": -1.99,
+          "price": 0.135003,
+          "price_change_24h": -1.74,
           "conviction": 47,
           "source": "coingecko"
         }
       ],
-      "updated_at": "2026-08-07T11:24:10.293136Z"
+      "updated_at": "2026-08-07T11:27:13.768804Z"
     },
     "pump_ladder": {
       "last_batch_at": "2026-07-14T08:28:20.086354Z",
@@ -1718,7 +5194,1353 @@
         "composite_score": 0.481,
         "time": "2026-07-14T08:28:20.057804Z"
       }
-    ]
+    ],
+    "last_day_pick": {
+      "action": "HOLD",
+      "pick": null,
+      "candidate": {
+        "subnet": {
+          "netuid": 1,
+          "name": "Apex",
+          "symbol": "APEX"
+        },
+        "score": 74.01,
+        "confidence": 0.4196,
+        "expert_contributions": {
+          "quant": 0.7228,
+          "hype": 0.75,
+          "dark_horse": 0.488,
+          "technical": 0.75,
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ],
+          "technical_score": 0.5593
+        },
+        "scenario_tags": {
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
+        },
+        "audit": {
+          "approved": false,
+          "concerns": [
+            "Missing critical field: volume",
+            "Very thin volume: $0 < $100"
+          ],
+          "adjusted_confidence": 0.3692,
+          "confidence_multiplier": 0.88,
+          "max_haircut": 0.12
+        },
+        "final_confidence": 0.3692,
+        "action": "long",
+        "tie_break": null,
+        "prediction": {
+          "id": "96f9c9fcda",
+          "netuid": 1,
+          "name": "Apex",
+          "direction": "up",
+          "predicted_pct": 1.51,
+          "horizon_hours": 24,
+          "reference_price": 0.00830189,
+          "created_at": "2026-08-07T11:27:18.286755+00:00Z",
+          "resolve_at": "2026-08-08T11:27:18.286755+00:00Z",
+          "status": "pending",
+          "signal_source": "social_sentiment",
+          "expert": "hype",
+          "statement": "predicted to move +1.5% within 24 hours",
+          "horizon_type": "day",
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ]
+        },
+        "reasons": [
+          "Social volume 1985 mentions (+1.0% edge)",
+          "MACD histogram +0.00 (bullish) (+0.5% edge)",
+          "MACD bullish crossover"
+        ],
+        "impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "signal_impact": {
+          "impacts": [
+            {
+              "signal_type": "rsi_crossover",
+              "description": "RSI 57.1 neutral \u2014 no edge",
+              "direction": "neutral",
+              "magnitude_pct": 0.8,
+              "confidence": 50,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.8% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "macd_cross",
+              "description": "MACD histogram +0.00 (bullish)",
+              "direction": "bullish",
+              "magnitude_pct": 0.51,
+              "confidence": 70,
+              "freshness": 0.986,
+              "predicted_move": "predicted to move +0.5% within 48 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "stochastic_reversal",
+              "description": "Stochastic %K 57.7 (neutral)",
+              "direction": "neutral",
+              "magnitude_pct": 0.62,
+              "confidence": 65,
+              "freshness": 0.917,
+              "predicted_move": "predicted to move 0.6% within 8 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "bollinger_squeeze",
+              "description": "Bollinger neutral (width 0.00)",
+              "direction": "neutral",
+              "magnitude_pct": 0.4,
+              "confidence": 60,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.4% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "mfi_divergence",
+              "description": "MFI 50.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.958,
+              "predicted_move": "predicted to move 0.5% within 16 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "cci_extreme",
+              "description": "CCI 0.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "williams_r_reversal",
+              "description": "Williams %R unavailable",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.933,
+              "predicted_move": "predicted to move 0.5% within 10 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "momentum_shift",
+              "description": "24h change +0.0% muted",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "emission_change",
+              "description": "Emission 2.98 TAO/day / APY 0.0%",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.996,
+              "predicted_move": "predicted to move 0.5% within 168 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "social_sentiment",
+              "description": "Social volume 1985 mentions",
+              "direction": "bullish",
+              "magnitude_pct": 1.0,
+              "confidence": 55,
+              "freshness": 0.891,
+              "predicted_move": "predicted to move +1.0% within 6 hours",
+              "learned_weight": 1.0
+            }
+          ],
+          "net_predicted_pct": 1.51,
+          "net_predicted_pct_raw": 1.51,
+          "net_direction": "bullish",
+          "hot_active": false,
+          "sell_active": false,
+          "dominant": null,
+          "market_impact": {
+            "tier": "small",
+            "market_cap": 0.0,
+            "relative_flow": 0.0,
+            "sensitivity": 1.0,
+            "strength": 1.0,
+            "scale_factor": 1.0,
+            "ref_tao": 50.0,
+            "ref_impact_pct": 5000.0,
+            "summary": "small-cap: size unknown \u2014 neutral impact"
+          }
+        },
+        "signal_contributions": {
+          "rsi_crossover": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          },
+          "macd_cross": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          },
+          "stochastic_reversal": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "bollinger_squeeze": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "mfi_flow": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          },
+          "cci_divergence": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          },
+          "williams_r": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          },
+          "keltner_channel": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        "active_signals": [
+          "rsi_crossover",
+          "macd_cross",
+          "cci_divergence"
+        ]
+      },
+      "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+      "updated_at": "2026-08-07T11:27:18.301857Z"
+    },
+    "last_day_hold": {
+      "action": "HOLD",
+      "pick": null,
+      "candidate": {
+        "subnet": {
+          "netuid": 1,
+          "name": "Apex",
+          "symbol": "APEX"
+        },
+        "score": 74.01,
+        "confidence": 0.4196,
+        "expert_contributions": {
+          "quant": 0.7228,
+          "hype": 0.75,
+          "dark_horse": 0.488,
+          "technical": 0.75,
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ],
+          "technical_score": 0.5593
+        },
+        "scenario_tags": {
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
+        },
+        "audit": {
+          "approved": false,
+          "concerns": [
+            "Missing critical field: volume",
+            "Very thin volume: $0 < $100"
+          ],
+          "adjusted_confidence": 0.3692,
+          "confidence_multiplier": 0.88,
+          "max_haircut": 0.12
+        },
+        "final_confidence": 0.3692,
+        "action": "long",
+        "tie_break": null,
+        "prediction": {
+          "id": "96f9c9fcda",
+          "netuid": 1,
+          "name": "Apex",
+          "direction": "up",
+          "predicted_pct": 1.51,
+          "horizon_hours": 24,
+          "reference_price": 0.00830189,
+          "created_at": "2026-08-07T11:27:18.286755+00:00Z",
+          "resolve_at": "2026-08-08T11:27:18.286755+00:00Z",
+          "status": "pending",
+          "signal_source": "social_sentiment",
+          "expert": "hype",
+          "statement": "predicted to move +1.5% within 24 hours",
+          "horizon_type": "day",
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ]
+        },
+        "reasons": [
+          "Social volume 1985 mentions (+1.0% edge)",
+          "MACD histogram +0.00 (bullish) (+0.5% edge)",
+          "MACD bullish crossover"
+        ],
+        "impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "signal_impact": {
+          "impacts": [
+            {
+              "signal_type": "rsi_crossover",
+              "description": "RSI 57.1 neutral \u2014 no edge",
+              "direction": "neutral",
+              "magnitude_pct": 0.8,
+              "confidence": 50,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.8% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "macd_cross",
+              "description": "MACD histogram +0.00 (bullish)",
+              "direction": "bullish",
+              "magnitude_pct": 0.51,
+              "confidence": 70,
+              "freshness": 0.986,
+              "predicted_move": "predicted to move +0.5% within 48 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "stochastic_reversal",
+              "description": "Stochastic %K 57.7 (neutral)",
+              "direction": "neutral",
+              "magnitude_pct": 0.62,
+              "confidence": 65,
+              "freshness": 0.917,
+              "predicted_move": "predicted to move 0.6% within 8 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "bollinger_squeeze",
+              "description": "Bollinger neutral (width 0.00)",
+              "direction": "neutral",
+              "magnitude_pct": 0.4,
+              "confidence": 60,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.4% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "mfi_divergence",
+              "description": "MFI 50.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.958,
+              "predicted_move": "predicted to move 0.5% within 16 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "cci_extreme",
+              "description": "CCI 0.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "williams_r_reversal",
+              "description": "Williams %R unavailable",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.933,
+              "predicted_move": "predicted to move 0.5% within 10 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "momentum_shift",
+              "description": "24h change +0.0% muted",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "emission_change",
+              "description": "Emission 2.98 TAO/day / APY 0.0%",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.996,
+              "predicted_move": "predicted to move 0.5% within 168 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "social_sentiment",
+              "description": "Social volume 1985 mentions",
+              "direction": "bullish",
+              "magnitude_pct": 1.0,
+              "confidence": 55,
+              "freshness": 0.891,
+              "predicted_move": "predicted to move +1.0% within 6 hours",
+              "learned_weight": 1.0
+            }
+          ],
+          "net_predicted_pct": 1.51,
+          "net_predicted_pct_raw": 1.51,
+          "net_direction": "bullish",
+          "hot_active": false,
+          "sell_active": false,
+          "dominant": null,
+          "market_impact": {
+            "tier": "small",
+            "market_cap": 0.0,
+            "relative_flow": 0.0,
+            "sensitivity": 1.0,
+            "strength": 1.0,
+            "scale_factor": 1.0,
+            "ref_tao": 50.0,
+            "ref_impact_pct": 5000.0,
+            "summary": "small-cap: size unknown \u2014 neutral impact"
+          }
+        },
+        "signal_contributions": {
+          "rsi_crossover": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          },
+          "macd_cross": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          },
+          "stochastic_reversal": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "bollinger_squeeze": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "mfi_flow": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          },
+          "cci_divergence": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          },
+          "williams_r": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          },
+          "keltner_channel": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        "active_signals": [
+          "rsi_crossover",
+          "macd_cross",
+          "cci_divergence"
+        ]
+      },
+      "reason": "Confidence 37% below 50% audit gate \u2014 no long call published",
+      "updated_at": "2026-08-07T11:27:18.301857Z"
+    },
+    "last_hour_pick": {
+      "pick": {
+        "subnet": {
+          "netuid": 1,
+          "name": "Apex",
+          "symbol": "APEX"
+        },
+        "score": 66.65,
+        "confidence": 0.3976,
+        "expert_contributions": {
+          "quant": 0.7228,
+          "hype": 0.75,
+          "dark_horse": 0.488,
+          "technical": 0.75,
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ],
+          "technical_score": 0.5593
+        },
+        "scenario_tags": {
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
+        },
+        "audit": {
+          "approved": false,
+          "concerns": [
+            "Missing critical field: volume",
+            "Very thin volume: $0 < $100"
+          ],
+          "adjusted_confidence": 0.3499,
+          "confidence_multiplier": 0.88,
+          "max_haircut": 0.12
+        },
+        "final_confidence": 0.3499,
+        "action": "HOLD",
+        "hold_reason": "Confidence 35% below 50% audit gate \u2014 no long call published",
+        "tie_break": null,
+        "impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "reasons": [
+          "Social volume 1985 mentions (+1.0% edge)",
+          "MACD histogram +0.00 (bullish) (+0.5% edge)",
+          "MACD bullish crossover"
+        ],
+        "prediction": {
+          "id": "2d7f61b964",
+          "netuid": 1,
+          "name": "Apex",
+          "direction": "up",
+          "predicted_pct": 1.51,
+          "horizon_hours": 1,
+          "reference_price": 0.00830189,
+          "created_at": "2026-08-07T11:26:33.541744+00:00Z",
+          "resolve_at": "2026-08-07T12:26:33.541744+00:00Z",
+          "status": "pending",
+          "signal_source": "social_sentiment",
+          "expert": "hype",
+          "statement": "predicted to move +1.5% within 1 hours",
+          "horizon_type": "hour",
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ]
+        },
+        "signal_impact": {
+          "impacts": [
+            {
+              "signal_type": "rsi_crossover",
+              "description": "RSI 57.1 neutral \u2014 no edge",
+              "direction": "neutral",
+              "magnitude_pct": 0.8,
+              "confidence": 50,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.8% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "macd_cross",
+              "description": "MACD histogram +0.00 (bullish)",
+              "direction": "bullish",
+              "magnitude_pct": 0.51,
+              "confidence": 70,
+              "freshness": 0.986,
+              "predicted_move": "predicted to move +0.5% within 48 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "stochastic_reversal",
+              "description": "Stochastic %K 57.7 (neutral)",
+              "direction": "neutral",
+              "magnitude_pct": 0.62,
+              "confidence": 65,
+              "freshness": 0.917,
+              "predicted_move": "predicted to move 0.6% within 8 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "bollinger_squeeze",
+              "description": "Bollinger neutral (width 0.00)",
+              "direction": "neutral",
+              "magnitude_pct": 0.4,
+              "confidence": 60,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.4% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "mfi_divergence",
+              "description": "MFI 50.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.958,
+              "predicted_move": "predicted to move 0.5% within 16 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "cci_extreme",
+              "description": "CCI 0.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "williams_r_reversal",
+              "description": "Williams %R unavailable",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.933,
+              "predicted_move": "predicted to move 0.5% within 10 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "momentum_shift",
+              "description": "24h change +0.0% muted",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "emission_change",
+              "description": "Emission 2.98 TAO/day / APY 0.0%",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.996,
+              "predicted_move": "predicted to move 0.5% within 168 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "social_sentiment",
+              "description": "Social volume 1985 mentions",
+              "direction": "bullish",
+              "magnitude_pct": 1.0,
+              "confidence": 55,
+              "freshness": 0.891,
+              "predicted_move": "predicted to move +1.0% within 6 hours",
+              "learned_weight": 1.0
+            }
+          ],
+          "net_predicted_pct": 1.51,
+          "net_predicted_pct_raw": 1.51,
+          "net_direction": "bullish",
+          "hot_active": false,
+          "sell_active": false,
+          "dominant": null,
+          "market_impact": {
+            "tier": "small",
+            "market_cap": 0.0,
+            "relative_flow": 0.0,
+            "sensitivity": 1.0,
+            "strength": 1.0,
+            "scale_factor": 1.0,
+            "ref_tao": 50.0,
+            "ref_impact_pct": 5000.0,
+            "summary": "small-cap: size unknown \u2014 neutral impact"
+          }
+        },
+        "signal_contributions": {
+          "rsi_crossover": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          },
+          "macd_cross": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          },
+          "stochastic_reversal": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "bollinger_squeeze": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "mfi_flow": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          },
+          "cci_divergence": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          },
+          "williams_r": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          },
+          "keltner_channel": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        "active_signals": [
+          "rsi_crossover",
+          "macd_cross",
+          "cci_divergence"
+        ],
+        "generated_at": "2026-08-07T11:26:33.501780Z"
+      },
+      "prediction_id": "2d7f61b964",
+      "updated_at": "2026-08-07T11:26:33.541744+00:00Z"
+    },
+    "last_hour_hold": {
+      "action": "HOLD",
+      "pick": null,
+      "candidate": {
+        "subnet": {
+          "netuid": 1,
+          "name": "Apex",
+          "symbol": "APEX"
+        },
+        "score": 66.65,
+        "confidence": 0.3976,
+        "expert_contributions": {
+          "quant": 0.7228,
+          "hype": 0.75,
+          "dark_horse": 0.488,
+          "technical": 0.75,
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ],
+          "technical_score": 0.5593
+        },
+        "scenario_tags": {
+          "regime": "neutral",
+          "rsi": "neutral",
+          "volume": "very_low",
+          "price_direction": "up",
+          "valuation": "deep_value"
+        },
+        "audit": {
+          "approved": false,
+          "concerns": [
+            "Missing critical field: volume",
+            "Very thin volume: $0 < $100"
+          ],
+          "adjusted_confidence": 0.3499,
+          "confidence_multiplier": 0.88,
+          "max_haircut": 0.12
+        },
+        "final_confidence": 0.3499,
+        "action": "HOLD",
+        "hold_reason": "Confidence 35% below 50% audit gate \u2014 no long call published",
+        "tie_break": null,
+        "impact": {
+          "tier": "small",
+          "market_cap": 0.0,
+          "relative_flow": 0.0,
+          "sensitivity": 1.0,
+          "strength": 1.0,
+          "scale_factor": 1.0,
+          "ref_tao": 50.0,
+          "ref_impact_pct": 5000.0,
+          "summary": "small-cap: size unknown \u2014 neutral impact"
+        },
+        "reasons": [
+          "Social volume 1985 mentions (+1.0% edge)",
+          "MACD histogram +0.00 (bullish) (+0.5% edge)",
+          "MACD bullish crossover"
+        ],
+        "prediction": {
+          "id": "2d7f61b964",
+          "netuid": 1,
+          "name": "Apex",
+          "direction": "up",
+          "predicted_pct": 1.51,
+          "horizon_hours": 1,
+          "reference_price": 0.00830189,
+          "created_at": "2026-08-07T11:26:33.541744+00:00Z",
+          "resolve_at": "2026-08-07T12:26:33.541744+00:00Z",
+          "status": "pending",
+          "signal_source": "social_sentiment",
+          "expert": "hype",
+          "statement": "predicted to move +1.5% within 1 hours",
+          "horizon_type": "hour",
+          "signal_contributions": {
+            "rsi_crossover": {
+              "score": 0.571,
+              "weight": 1.0,
+              "contribution": 0.571
+            },
+            "macd_cross": {
+              "score": 0.7006,
+              "weight": 1.0,
+              "contribution": 0.7006
+            },
+            "stochastic_reversal": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "bollinger_squeeze": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            },
+            "mfi_flow": {
+              "score": 0.5067,
+              "weight": 1.0,
+              "contribution": 0.5067
+            },
+            "cci_divergence": {
+              "score": 0.6705,
+              "weight": 1.0,
+              "contribution": 0.6705
+            },
+            "williams_r": {
+              "score": 0.5257,
+              "weight": 1.0,
+              "contribution": 0.5257
+            },
+            "keltner_channel": {
+              "score": 0.5,
+              "weight": 1.0,
+              "contribution": 0.5
+            }
+          },
+          "active_signals": [
+            "rsi_crossover",
+            "macd_cross",
+            "cci_divergence"
+          ]
+        },
+        "signal_impact": {
+          "impacts": [
+            {
+              "signal_type": "rsi_crossover",
+              "description": "RSI 57.1 neutral \u2014 no edge",
+              "direction": "neutral",
+              "magnitude_pct": 0.8,
+              "confidence": 50,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.8% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "macd_cross",
+              "description": "MACD histogram +0.00 (bullish)",
+              "direction": "bullish",
+              "magnitude_pct": 0.51,
+              "confidence": 70,
+              "freshness": 0.986,
+              "predicted_move": "predicted to move +0.5% within 48 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "stochastic_reversal",
+              "description": "Stochastic %K 57.7 (neutral)",
+              "direction": "neutral",
+              "magnitude_pct": 0.62,
+              "confidence": 65,
+              "freshness": 0.917,
+              "predicted_move": "predicted to move 0.6% within 8 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "bollinger_squeeze",
+              "description": "Bollinger neutral (width 0.00)",
+              "direction": "neutral",
+              "magnitude_pct": 0.4,
+              "confidence": 60,
+              "freshness": 0.972,
+              "predicted_move": "predicted to move 0.4% within 24 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "mfi_divergence",
+              "description": "MFI 50.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.958,
+              "predicted_move": "predicted to move 0.5% within 16 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "cci_extreme",
+              "description": "CCI 0.0 neutral",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "williams_r_reversal",
+              "description": "Williams %R unavailable",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.933,
+              "predicted_move": "predicted to move 0.5% within 10 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "momentum_shift",
+              "description": "24h change +0.0% muted",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.944,
+              "predicted_move": "predicted to move 0.5% within 12 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "emission_change",
+              "description": "Emission 2.98 TAO/day / APY 0.0%",
+              "direction": "neutral",
+              "magnitude_pct": 0.5,
+              "confidence": 50,
+              "freshness": 0.996,
+              "predicted_move": "predicted to move 0.5% within 168 hours",
+              "learned_weight": 1.0
+            },
+            {
+              "signal_type": "social_sentiment",
+              "description": "Social volume 1985 mentions",
+              "direction": "bullish",
+              "magnitude_pct": 1.0,
+              "confidence": 55,
+              "freshness": 0.891,
+              "predicted_move": "predicted to move +1.0% within 6 hours",
+              "learned_weight": 1.0
+            }
+          ],
+          "net_predicted_pct": 1.51,
+          "net_predicted_pct_raw": 1.51,
+          "net_direction": "bullish",
+          "hot_active": false,
+          "sell_active": false,
+          "dominant": null,
+          "market_impact": {
+            "tier": "small",
+            "market_cap": 0.0,
+            "relative_flow": 0.0,
+            "sensitivity": 1.0,
+            "strength": 1.0,
+            "scale_factor": 1.0,
+            "ref_tao": 50.0,
+            "ref_impact_pct": 5000.0,
+            "summary": "small-cap: size unknown \u2014 neutral impact"
+          }
+        },
+        "signal_contributions": {
+          "rsi_crossover": {
+            "score": 0.571,
+            "weight": 1.0,
+            "contribution": 0.571
+          },
+          "macd_cross": {
+            "score": 0.7006,
+            "weight": 1.0,
+            "contribution": 0.7006
+          },
+          "stochastic_reversal": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "bollinger_squeeze": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          },
+          "mfi_flow": {
+            "score": 0.5067,
+            "weight": 1.0,
+            "contribution": 0.5067
+          },
+          "cci_divergence": {
+            "score": 0.6705,
+            "weight": 1.0,
+            "contribution": 0.6705
+          },
+          "williams_r": {
+            "score": 0.5257,
+            "weight": 1.0,
+            "contribution": 0.5257
+          },
+          "keltner_channel": {
+            "score": 0.5,
+            "weight": 1.0,
+            "contribution": 0.5
+          }
+        },
+        "active_signals": [
+          "rsi_crossover",
+          "macd_cross",
+          "cci_divergence"
+        ],
+        "generated_at": "2026-08-07T11:26:33.501780Z"
+      },
+      "reason": "Confidence 35% below 50% audit gate \u2014 no long call published",
+      "updated_at": "2026-08-07T11:26:33.542363Z"
+    }
   },
   "feedback_logs": [
     {
@@ -26265,22 +31087,47 @@
     "97": 53,
     "66": 53,
     "114": 53,
-    "71": 52
+    "71": 52,
+    "3": 40,
+    "4": 40,
+    "5": 40,
+    "6": 40,
+    "15": 40
   },
-  "simivision_convictions_updated_at": "2026-08-07T11:24:13.021831+00:00",
+  "simivision_convictions_updated_at": "2026-08-07T11:27:15.648955+00:00",
   "adversarial_state": {
     "council_weights": {
-      "quant": 0.993,
-      "hype": 0.958,
-      "dark_horse": 1.0,
-      "technical": 0.86
+      "quant": 0.963,
+      "hype": 0.868,
+      "dark_horse": 1.03,
+      "technical": 0.87
     },
-    "last_weight_update": "2026-08-07T11:24:16.325766+00:00"
+    "last_weight_update": "2026-08-07T11:26:18.841754+00:00",
+    "impact_strength": 1.0,
+    "last_impact_strength_update": "2026-08-07T11:26:19.016202+00:00"
   },
   "expert_weights": {
-    "quant": 0.993,
-    "hype": 0.958,
-    "dark_horse": 1.0,
-    "technical": 0.86
+    "quant": 0.963,
+    "hype": 0.868,
+    "dark_horse": 1.03,
+    "technical": 0.87
+  },
+  "judge_weights": {
+    "oracle": 0.35,
+    "echo": 0.3,
+    "pulse": 0.35
+  },
+  "score_snapshot_scheduler": {
+    "last_cycle": {
+      "run_at": "2026-08-07T11:27:23.161424Z",
+      "ok": true,
+      "count": 127,
+      "written_at": "2026-08-07T11:27:23.158713Z",
+      "path": "data/score_snapshots.json",
+      "error": null,
+      "skipped": null,
+      "phase": null,
+      "progress": null
+    }
   }
 }

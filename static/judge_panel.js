@@ -29,20 +29,16 @@
 
     var box = document.createElement('div');
     box.style.cssText = 'background:#1a1a2e;border:1px solid #c99a4b;border-radius:16px;max-width:900px;width:100%;max-height:85vh;overflow-y:auto;padding:24px;font-family:system-ui,sans-serif;color:#e0e0e0;';
-    box.innerHTML = '
-
-' + '
-## \u2696\ufe0f Judge Council
-
-' + '\u00d7
-
-' +
-      '' +
-      '
-
-Loading judge scores...
-
-';
+    box.innerHTML = `
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+  <h2 style="margin:0;font-size:18px;color:#c99a4b;">\u2696\ufe0f Judge Council</h2>
+  <button id="jc-close" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1;">\u00d7</button>
+</div>
+<div id="jc-stats" style="font-size:13px;color:#888;margin-bottom:12px;"></div>
+<div id="jc-content" style="padding:40px;text-align:center;color:#888;">
+  Loading judge scores...
+</div>
+`;
     modal.appendChild(box);
     document.body.appendChild(modal);
 
@@ -64,29 +60,54 @@ Loading judge scores...
 
         var judges = data.judges || [];
         if (!judges.length) {
-          el.innerHTML = '
-No judge data available yet. The background scheduler refreshes every 5 minutes.
-
-';
+          el.innerHTML = `<p style="text-align:center;color:#888;">No judge data available yet. The background scheduler refreshes every 5 minutes.</p>`;
           stats.innerHTML = '0 subnets scored';
           return;
         }
 
         // Update stats
-        stats.innerHTML = '**' + judges.length + '** subnets scored \u00b7 3 judges (Oracle, Echo, Pulse)' +
+        stats.innerHTML = '<strong>' + judges.length + '</strong> subnets scored \u00b7 3 judges (Oracle, Echo, Pulse)' +
           (data.source ? ' \u00b7 source: ' + esc(data.source) : '');
 
         // Build search box
-        var html = '';
+        var html = `<div style="margin-bottom:12px;">
+  <input id="jc-search" type="text" placeholder="Search subnets\u2026"
+    style="width:100%;padding:8px 12px;background:#0d0d1a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-size:14px;box-sizing:border-box;">
+</div>`;
 
         // Build table
-        html += '
-' + '
-| # | Subnet | Oracle | Echo | Pulse | Consensus | Verdict |
-| --- | --- | --- | --- | --- | --- | --- |
-'; judges.forEach(function(j, idx) { var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888'; var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A'; var verdict = j.consensus ? esc(String(j.consensus.verdict)) : 'N/A'; var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A'; var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : ''; var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : ''; var pulseDegr = j.pulse && j.pulse.degraded ? ' \u26a0' : ''; html += '| ' + (idx + 1) + ' | ' + esc(j.name || ('SN' + j.netuid)) + ' SN' + j.netuid + ' | ' + (j.oracle ? j.oracle.score.toFixed(3) : '-') + '' + oracleDegr + ' | ' + (j.echo ? j.echo.score.toFixed(3) : '-') + '' + echoDegr + ' | ' + (j.pulse ? j.pulse.score.toFixed(3) : '-') + '' + pulseDegr + ' | ' + score + ' ' + agreement + ' | ' + verdict + ' |
-'; }); html += '
-';
+        html += `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">
+<thead><tr style="color:#c99a4b;border-bottom:1px solid #333;">
+  <th style="padding:8px 4px;text-align:right;">#</th>
+  <th style="padding:8px 8px;text-align:left;">Subnet</th>
+  <th style="padding:8px 4px;text-align:right;">Oracle</th>
+  <th style="padding:8px 4px;text-align:right;">Echo</th>
+  <th style="padding:8px 4px;text-align:right;">Pulse</th>
+  <th style="padding:8px 4px;text-align:right;">Consensus</th>
+  <th style="padding:8px 8px;text-align:left;">Verdict</th>
+</tr></thead><tbody>`;
+
+        judges.forEach(function(j, idx) {
+          var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888';
+          var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A';
+          var verdict = j.consensus ? esc(String(j.consensus.verdict)) : 'N/A';
+          var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A';
+          var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : '';
+          var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : '';
+          var pulseDegr = j.pulse && j.pulse.degraded ? ' \u26a0' : '';
+          var searchKey = (j.name || '') + ' sn' + j.netuid;
+          html += `<tr class="jc-row" data-search="${searchKey.toLowerCase()}" style="border-bottom:1px solid #1e1e2e;">
+  <td style="padding:8px 4px;text-align:right;color:#666;">${idx + 1}</td>
+  <td style="padding:8px 8px;">${esc(j.name || ('SN' + j.netuid))} <span style="color:#666;font-size:11px;">SN${j.netuid}</span></td>
+  <td style="padding:8px 4px;text-align:right;">${j.oracle ? j.oracle.score.toFixed(3) : '-'}${oracleDegr}</td>
+  <td style="padding:8px 4px;text-align:right;">${j.echo ? j.echo.score.toFixed(3) : '-'}${echoDegr}</td>
+  <td style="padding:8px 4px;text-align:right;">${j.pulse ? j.pulse.score.toFixed(3) : '-'}${pulseDegr}</td>
+  <td style="padding:8px 4px;text-align:right;">${score} <span style="color:#666;font-size:11px;">${agreement}</span></td>
+  <td style="padding:8px 8px;color:${verdictColor};">${verdict}</td>
+</tr>`;
+        });
+        html += '</tbody></table></div>';
+
         el.innerHTML = html;
         el.style.padding = '0';
 
@@ -107,13 +128,8 @@ No judge data available yet. The background scheduler refreshes every 5 minutes.
       })
       .catch(function(err) {
         var el = document.getElementById('jc-content');
-        if (el) el.textContent = 'Failed to load judge data: ' + err.message + '
-
-' +
-          '
-The /api/judges endpoint may still be starting up. Try again in a moment.
-
-';
+        if (el) el.innerHTML = `<p style="color:#f44336;">Failed to load judge data: ${esc(err.message)}</p>
+<p style="color:#888;font-size:13px;">The /api/judges endpoint may still be starting up. Try again in a moment.</p>`;
       });
   }
 })();
