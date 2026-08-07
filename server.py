@@ -18,7 +18,6 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from internal.council.mindmap_bridge import MindmapBridge
 from internal.rate_limit import limit_or_noop, mount_rate_limit, strict_limit
 from internal.whales.routes import whales_router
 from internal.watchlist.routes import watchlist_router
@@ -1423,6 +1422,8 @@ async def index(request: Request):
 @app.get("/api/daily-rotation")
 def daily_rotation():
     """Return the latest daily rotation decisions plus live recommendations."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
     soul_map = load_data("data/soul_map.json")
     last_output = soul_map.get("soul_map_state", {}).get("last_selector_output", {})
     recs = MindmapBridge().get_brain_recommendations()
@@ -1877,6 +1878,8 @@ def get_soul_map():
 @app.get("/api/recommendations")
 def get_recommendations():
     """Registry-heuristic recommendations (not live council output)."""
+    from internal.council.mindmap_bridge import MindmapBridge
+
     bridge = MindmapBridge()
     return {"status": "success", "data": bridge.get_brain_recommendations()}
 
@@ -1912,6 +1915,8 @@ async def post_feedback(request: Request):
     daily_output = payload.get("daily_output") or payload.get("selector_output")
     if isinstance(daily_output, dict) and daily_output.get("decisions"):
         try:
+            from internal.council.mindmap_bridge import MindmapBridge
+
             bridge = MindmapBridge()
             brain = bridge.get_brain_recommendations(payload.get("context"))
             result["alignment"] = bridge.log_feedback(daily_output, brain)
@@ -1922,6 +1927,8 @@ async def post_feedback(request: Request):
     note = payload.get("note") or payload.get("message")
     if note and not (subnet_id and recommendation):
         try:
+            from internal.council.mindmap_bridge import MindmapBridge
+
             bridge = MindmapBridge()
             bridge.append_learning_trail(
                 {

@@ -130,13 +130,16 @@ def backfill_from_trace_json(
 
 
 def backfill_from_soul_map(*, db_path: Optional[str] = None) -> Dict[str, int]:
-    """Read-only Soul-Map import via MindmapBridge — never writes SOUL_MAP_PATH."""
+    """Read-only Soul-Map import — reads soul_map.json directly, never writes it."""
     try:
-        from internal.council.mindmap_bridge import MindmapBridge
         from internal.council.weights import SOUL_MAP_PATH
 
-        bridge = MindmapBridge(persistence_path=SOUL_MAP_PATH)
-        sms = bridge.soul_map_state or {}
+        try:
+            with open(SOUL_MAP_PATH, "r", encoding="utf-8") as _fh:
+                _data = json.load(_fh)
+        except Exception:
+            _data = {}
+        sms = (_data.get("soul_map_state") or {}) if isinstance(_data, dict) else {}
     except Exception as exc:
         logger.warning("Soul-Map mirror read failed: %s", exc)
         return {"dispositions": 0, "lineage": 0}
