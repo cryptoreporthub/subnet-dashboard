@@ -1,15 +1,15 @@
 /* ui.css — mobile-first SimiVision shell (LOCK 2026-08-02) */
 
 :root {
-  /* Tiered neutral grey glass — hero strongest, subtle weakest */
-  --glass-fill-hero: rgba(32, 36, 42, 0.42);
-  --glass-fill-card: rgba(32, 36, 42, 0.38);
-  --glass-fill-section: rgba(32, 36, 42, 0.32);
-  --glass-fill-subtle: rgba(32, 36, 42, 0.22);
+  /* Tiered silver glass — lighter + more translucent so the smoke reads through */
+  --glass-fill-hero: rgba(56, 62, 73, 0.46);
+  --glass-fill-card: rgba(54, 60, 70, 0.36);
+  --glass-fill-section: rgba(50, 55, 65, 0.30);
+  --glass-fill-subtle: rgba(46, 51, 60, 0.22);
   --glass-fill: var(--glass-fill-card);
   --glass-blur: 16px;
   --glass-blur-secondary: 8px;
-  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(255, 255, 255, 0.10);
   --glass-radius: 12px;
 }
 
@@ -227,6 +227,8 @@ nav.top-nav {
   max-width: 720px;
   margin: 0 auto;
   -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scroll-padding: 0 var(--space-4, 16px);
 }
 
 nav.top-nav::-webkit-scrollbar {
@@ -235,6 +237,7 @@ nav.top-nav::-webkit-scrollbar {
 
 nav.top-nav a {
   flex: none;
+  scroll-snap-align: start;
   padding: 8px 14px;
   border-radius: 999px;
   color: var(--text-muted);
@@ -3839,11 +3842,11 @@ header.top {
   --cockpit-green-soft: rgba(126, 200, 227, 0.12);
   --cockpit-green-line: rgba(126, 200, 227, 0.22);
   --cockpit-green-glow: rgba(126, 200, 227, 0.28);
-  --bg-cockpit: #04060e;
-  --bg-cockpit-edge: #020308;
-  --bg-cockpit-card: rgba(10, 14, 24, 0.78);
-  --bg-cockpit-surface: rgba(8, 12, 20, 0.82);
-  --bg-cockpit-elevated: rgba(14, 18, 30, 0.78);
+  --bg-cockpit: #23262e;
+  --bg-cockpit-edge: #1c1f26;
+  --bg-cockpit-card: rgba(46, 51, 61, 0.78);
+  --bg-cockpit-surface: rgba(42, 47, 56, 0.82);
+  --bg-cockpit-elevated: rgba(54, 60, 72, 0.78);
   --txt: var(--text-primary);
   --txt-2: var(--text-secondary);
   --txt-3: #8a9aab;
@@ -5033,10 +5036,10 @@ footer.status[data-source*="fallback"] .st-dot {
 /* Council-first composition — decision stage, then bench, market demoted */
 
 .council-first-theme {
-  --stage-ink: #eef7f1;
-  --stage-muted: #8aa0b8;
+  --stage-ink: #f4f9f4;
+  --stage-muted: #9fb0c2;
   --stage-accent: #1fd47c;
-  --stage-wash: #04060e;
+  --stage-wash: #2b2f38;
 }
 
 .app-shell.council-first {
@@ -7301,25 +7304,25 @@ body.wrap {
 
 /* ---------- Council Hero HUD (charcoal cockpit + glass sections) ---------- */
 .tribunal-hero {
-  --hero-ice: #4aa1e6;
-  --hero-cyan: #57e0ff;
-  --hero-steel: #eef3f8;
+  --hero-ice: #6fb3e8;
+  --hero-cyan: #7dd6f5;
+  --hero-steel: #f6f9fc;
   --hero-smoke: transparent;
-  --j-oracle: #3fc9ff;
-  --j-echo: #9d8cff;
-  --j-pulse: #ff9f3f;
-  --verdict-a: #93a3b8;
-  --verdict-b: #7a8a9c;
+  --j-oracle: #6fb3e8;
+  --j-echo: #b3a1f0;
+  --j-pulse: #e8b06f;
+  --verdict-a: #aebccc;
+  --verdict-b: #93a1b3;
   position: relative;
   padding: var(--space-3) var(--space-3) var(--space-4);
   color: var(--text-primary);
   background: transparent;
 }
 
-.tribunal-hero[data-verdict-kind="sealed"] { --verdict-a: #4aef9a; --verdict-b: #1fd47c; }
-.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: #8fe3ff; --verdict-b: #3fc9ff; }
-.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: #c4b5fd; --verdict-b: #9d8cff; }
-.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: #93a3b8; --verdict-b: #7a8a9c; }
+.tribunal-hero[data-verdict-kind="sealed"] { --verdict-a: #6fe8a4; --verdict-b: #2fdc85; }
+.tribunal-hero[data-verdict-kind="gated"] { --verdict-a: #a5e4ff; --verdict-b: #5cc8f0; }
+.tribunal-hero[data-verdict-kind="forming"] { --verdict-a: #d0c4fa; --verdict-b: #a896e8; }
+.tribunal-hero[data-verdict-kind="cold"] { --verdict-a: #aebccc; --verdict-b: #93a1b3; }
 
 .council-stage .home-job__call-host .tribunal-hero {
   background: transparent;
@@ -7710,7 +7713,7 @@ body.wrap {
   position: absolute;
   inset: -24px -16px;
   border-radius: 50%;
-  background: #111518;
+  background: #1b1f26;
   opacity: 1;
   z-index: -1;
 }

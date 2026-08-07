@@ -2,35 +2,36 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — charcoal smoke (HUD cockpit; cyan only as accent) */
-  --bg-base: #1e2128;
-  --bg-edge: #181b21;
-  --bg-midnight: #1a1d24;
-  --bg-surface: rgba(30, 33, 40, 0.82);
-  --bg-card: rgba(34, 37, 44, 0.78);
-  --bg-elevated: rgba(40, 43, 50, 0.9);
-  --bg-header: rgba(28, 31, 38, 0.72);
+  /* Backgrounds — silver smoke (lighter graphite; accents only on text/HUD) */
+  --bg-base: #2b2f38;
+  --bg-edge: #23262e;
+  --bg-midnight: #262a32;
+  --bg-surface: rgba(46, 51, 61, 0.82);
+  --bg-card: rgba(52, 57, 68, 0.78);
+  --bg-elevated: rgba(60, 66, 78, 0.9);
+  --bg-header: rgba(42, 47, 56, 0.72);
   /* Pewter card smoke — pure grey family, no cyan sheen */
   --card-smoke:
-    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.14) 0%, transparent 50%),
-    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(150, 150, 150, 0.05) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(18, 20, 26, 0.92) 0%, rgba(16, 18, 24, 0.94) 100%);
+    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(190, 198, 210, 0.16) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(170, 170, 178, 0.07) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(34, 38, 46, 0.92) 0%, rgba(30, 34, 42, 0.94) 100%);
   --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
-  /* Monochrome grey smoke atmosphere — pure grey washes only; accents stay on text/HUD */
+  /* Silver smoke atmosphere — lighter grey washes, hints of warm gold for depth */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(160, 160, 168, 0.22) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(140, 140, 148, 0.18) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(150, 150, 158, 0.19) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(130, 130, 138, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(190, 192, 200, 0.30) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(170, 172, 180, 0.24) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(180, 182, 190, 0.25) 0%, transparent 65%),
+    radial-gradient(ellipse 70% 55% at 30% 75%, rgba(224, 193, 142, 0.08) 0%, transparent 70%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(160, 162, 170, 0.24) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
-  /* Aurora glows — page overlay, desaturated to grey-only (token names kept for ui.css) */
-  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(150, 150, 158, 0.16), transparent 70%);
-  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(142, 142, 150, 0.15), transparent 70%);
-  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(150, 150, 158, 0.16), transparent 70%);
+  /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(180, 182, 190, 0.22), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(224, 193, 142, 0.12), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(180, 182, 190, 0.20), transparent 70%);
   --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
@@ -59,10 +60,10 @@
   --signal-watch: var(--accent-orange);
   --signal-amber: var(--accent-orange);
 
-  /* Text — cool neutrals, brighter for contrast on midnight */
-  --text-primary: #f5f7fa;
-  --text-secondary: #b6c3cd;
-  --text-muted: #8797a5;
+  /* Text — warm-bright neutrals for readability on the lighter smoke */
+  --text-primary: #f8fafc;
+  --text-secondary: #c4ccd6;
+  --text-muted: #99a4b2;
 
   /* Borders — hairlines; violet on secondary emphasis */
   --border-subtle: rgba(255, 255, 255, 0.06);
