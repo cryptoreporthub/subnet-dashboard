@@ -11925,6 +11925,290 @@ body.wrap {
   }
 }
 
+/* ── Telegram pulse: flagship command-desk refinement ───────────────────────
+   The data-rich desk is a primary product surface. These final overrides make
+   its decision path obvious: live status → evidence → feed, while retaining
+   every existing template and hydration hook. */
+.message-intel--v2 {
+  background:
+    radial-gradient(900px 430px at 100% -7%, rgba(44, 173, 255, 0.10), transparent 62%),
+    radial-gradient(720px 300px at -6% 18%, rgba(31, 212, 124, 0.08), transparent 68%),
+    linear-gradient(145deg, rgba(10, 16, 20, 0.98), rgba(5, 8, 10, 0.98)) !important;
+  border-color: rgba(255, 184, 0, 0.42) !important;
+  box-shadow:
+    0 24px 70px -36px rgba(0, 0, 0, 0.92),
+    0 0 42px -24px rgba(255, 184, 0, 0.46),
+    0 0 0 1px rgba(255, 184, 0, 0.13) inset !important;
+}
+
+.message-intel--v2 .message-intel__masthead {
+  padding: clamp(6px, 1.5vw, 16px) clamp(2px, 0.8vw, 10px) 16px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.message-intel--v2 .message-intel__topbar {
+  align-items: center;
+  gap: 10px;
+}
+
+.message-intel--v2 .message-intel__brand {
+  color: rgba(213, 228, 234, 0.82);
+  letter-spacing: 0.12em;
+}
+
+.message-intel--v2 .message-intel__page-title {
+  margin-top: 12px;
+  font-size: clamp(2rem, 5.2vw, 3.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.message-intel--v2 .message-intel__page-sub {
+  max-width: 58ch;
+  margin-top: 10px;
+  color: rgba(199, 215, 222, 0.72);
+  font-size: clamp(0.9rem, 1.5vw, 1rem);
+}
+
+.message-intel--v2 .message-intel__flagship-chip {
+  opacity: 1;
+  padding: 5px 8px;
+  border-color: rgba(255, 184, 0, 0.45);
+  color: rgba(255, 210, 93, 0.94);
+  background: linear-gradient(135deg, rgba(255, 184, 0, 0.18), rgba(255, 184, 0, 0.05));
+  box-shadow: 0 0 18px -10px rgba(255, 184, 0, 0.95);
+}
+
+.message-intel--v2 .message-intel__pulse-stage {
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(82, 198, 255, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(115deg, rgba(31, 212, 124, 0.05), transparent 38%),
+    rgba(2, 7, 9, 0.72);
+  box-shadow: 0 18px 40px -31px rgba(28, 177, 255, 0.7);
+}
+
+.message-intel--v2 .message-intel__source-strip {
+  min-height: 48px;
+  padding: 10px 13px;
+  border-color: rgba(31, 212, 124, 0.35);
+  border-radius: 12px;
+  background: linear-gradient(90deg, rgba(31, 212, 124, 0.13), rgba(19, 42, 38, 0.50) 45%, rgba(4, 11, 13, 0.62));
+}
+
+.message-intel--v2 .message-intel__live-tag {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #caffdd;
+  border-color: rgba(70, 244, 147, 0.48);
+  background: rgba(31, 212, 124, 0.13);
+}
+
+.message-intel--v2 .message-intel__summary-24h,
+.message-intel--v2 .message-intel__proof,
+.message-intel--v2 .message-intel__hc-strip,
+.message-intel--v2 .message-intel__callers,
+.message-intel--v2 .message-intel__consensus,
+.message-intel--v2 .message-intel__divergence {
+  border-radius: 14px;
+  border-color: rgba(255, 255, 255, 0.10);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018));
+  box-shadow: 0 14px 30px -28px rgba(0, 0, 0, 0.95);
+}
+
+.message-intel--v2 .message-intel__legend {
+  gap: 7px 12px;
+  padding: 2px 1px 0;
+  opacity: 0.78;
+  scrollbar-width: thin;
+}
+
+.message-intel--v2 .message-intel__legend-item {
+  padding: 3px 0;
+  color: rgba(202, 216, 224, 0.75);
+}
+
+.message-intel--v2 .message-intel__sec-label {
+  align-items: center;
+  padding-bottom: 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.message-intel--v2 .message-intel__sec-bar {
+  width: 4px;
+  height: 18px;
+  border-radius: 999px;
+  box-shadow: 0 0 14px currentColor;
+}
+
+.message-intel--v2 .message-intel__panel-title {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+}
+
+.message-intel--v2 .message-intel__panel-unit {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  color: rgba(197, 215, 222, 0.60);
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.message-intel--v2 .message-intel__panel--feed {
+  margin-top: 18px;
+  padding: clamp(14px, 2vw, 22px);
+  border-color: rgba(63, 201, 255, 0.32);
+  border-radius: 18px;
+  background:
+    radial-gradient(520px 210px at 100% 0%, rgba(63, 201, 255, 0.09), transparent 72%),
+    linear-gradient(145deg, rgba(12, 20, 25, 0.94), rgba(4, 8, 10, 0.96));
+  box-shadow:
+    0 22px 44px -30px rgba(0, 0, 0, 0.94),
+    0 0 36px -27px rgba(63, 201, 255, 0.72);
+}
+
+.message-intel--v2 .message-intel__filter-bar {
+  gap: 12px;
+  margin: 14px 0 16px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
+  background: rgba(1, 5, 7, 0.50);
+}
+
+.message-intel--v2 .message-intel__filter-label {
+  color: rgba(178, 205, 215, 0.66);
+  letter-spacing: 0.1em;
+}
+
+.message-intel--v2 .message-intel__filter-chip {
+  border-radius: 999px;
+  transition: border-color 150ms ease, background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.message-intel--v2 .message-intel__filter-chip:hover,
+.message-intel--v2 .message-intel__filter-chip:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(63, 201, 255, 0.60);
+  box-shadow: 0 0 0 3px rgba(63, 201, 255, 0.12);
+}
+
+.message-intel--v2 .message-intel__feed {
+  position: relative;
+}
+
+.message-intel--v2 .message-intel__feed::before {
+  content: "";
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 16px;
+  width: 1px;
+  background: linear-gradient(to bottom, rgba(31, 212, 124, 0.68), rgba(63, 201, 255, 0.18) 75%, transparent);
+  pointer-events: none;
+}
+
+.message-intel--v2 .message-intel__feed-row {
+  position: relative;
+  margin: 0 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 13px;
+  background: linear-gradient(100deg, rgba(10, 19, 23, 0.92), rgba(8, 12, 15, 0.70));
+  box-shadow: 0 10px 22px -24px rgba(0, 0, 0, 0.92);
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.message-intel--v2 .message-intel__feed-row::after {
+  content: "";
+  position: absolute;
+  top: 15px;
+  left: 12px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid rgba(169, 245, 209, 0.92);
+  border-radius: 50%;
+  background: #07100f;
+  box-shadow: 0 0 0 4px rgba(31, 212, 124, 0.12), 0 0 12px -2px rgba(31, 212, 124, 0.80);
+}
+
+.message-intel--v2 .message-intel__feed-row:hover,
+.message-intel--v2 .message-intel__feed-row:focus-within {
+  z-index: 1;
+  transform: translateX(3px);
+  border-color: rgba(63, 201, 255, 0.35);
+  background: linear-gradient(100deg, rgba(12, 30, 34, 0.96), rgba(8, 14, 17, 0.84));
+  box-shadow: 0 16px 28px -22px rgba(0, 0, 0, 0.92), 0 0 22px -18px rgba(63, 201, 255, 0.78);
+}
+
+.message-intel--v2 .message-intel__feed-row--hot {
+  border-color: rgba(255, 184, 0, 0.34);
+  background: linear-gradient(100deg, rgba(48, 33, 11, 0.76), rgba(11, 18, 19, 0.90));
+  box-shadow: inset 3px 0 0 rgba(255, 184, 0, 0.80), 0 12px 24px -24px rgba(255, 184, 0, 0.74);
+}
+
+.message-intel--v2 .message-intel__feed-row--hot::after {
+  border-color: rgba(255, 223, 139, 0.98);
+  box-shadow: 0 0 0 4px rgba(255, 184, 0, 0.15), 0 0 14px -2px rgba(255, 184, 0, 0.92);
+}
+
+@media (min-width: 740px) {
+  .message-intel--v2 .message-intel__pulse-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .message-intel--v2 .message-intel__proof,
+  .message-intel--v2 .message-intel__callers,
+  .message-intel--v2 .message-intel__consensus,
+  .message-intel--v2 .message-intel__divergence {
+    min-height: 100%;
+  }
+}
+
+@media (max-width: 739px) {
+  .message-intel--v2 .message-intel__masthead {
+    padding: 4px 0 13px;
+  }
+
+  .message-intel--v2 .message-intel__page-title {
+    font-size: clamp(2rem, 12vw, 2.8rem);
+  }
+
+  .message-intel--v2 .message-intel__pulse-stage {
+    padding: 9px;
+    border-radius: 14px;
+  }
+
+  .message-intel--v2 .message-intel__filter-bar {
+    padding: 10px;
+  }
+
+  .message-intel--v2 .message-intel__feed::before {
+    left: 13px;
+  }
+
+  .message-intel--v2 .message-intel__feed-row::after {
+    left: 9px;
+  }
+
+  .message-intel--v2 .message-intel__feed-row:hover,
+  .message-intel--v2 .message-intel__feed-row:focus-within {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-intel--v2 .message-intel__filter-chip,
+  .message-intel--v2 .message-intel__feed-row {
+    transition: none;
+  }
+}
+
 /* Phase 2 SA3 — picks + radar visual enhancements (Grok LOCK) */
 #section-picks .pick-card--reveal .conviction-fill {
   transform: scaleX(0);

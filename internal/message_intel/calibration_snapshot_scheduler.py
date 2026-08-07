@@ -1,0 +1,183 @@
+"""Daily Telegram calibration health snapshot scheduler.
+
+Mirrors the pattern of ``internal/learning/outcome_snapshot_scheduler.py``.
+Runs once per day at the configured UTC slot (not boot-relative) and warns
+when the calibration factor has drifted beyond the configured epsilon compared
+with the previous snapshot.
+
+Scheduling discipline
+---------------------
+* First tick is scheduled at ``_seconds_until_slot()`` — the real wall-clock
+  distance to the configured UTC slot — so it fires close to 05:15 UTC
+  regardless of when the process booted.
+* After each tick completes, the next run is again scheduled via
+  ``_seconds_until_slot()`` so the job always re-anchors to the configured
+  slot rather than drifting by the exact runtime of the previous tick.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import threading
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+
+from internal.job_scheduler import cancel_job, schedule_in_seconds
+
+logger = logging.getLogger(__name__)
+
+JOB_ID = "calibration-snapshot"
+SLOT_HOUR = int(os.environ.get("CALIBRATION_SNAPSHOT_UTC_HOUR", "5"))
+SLOT_MINUTE = int(os.environ.get("CALIBRATION_SNAPSHOT_UTC_MINUTE", "15"))
+
+_lock = threading.Lock()
+_scheduler: Optional["CalibrationSnapshotScheduler"] = None
+
+
+def _enabled() -> bool:
+    return os.environ.get("CALIBRATION_SNAPSHOT_ENABLED", "on").strip().lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+
+
+def _seconds_until_slot(now: Optional[datetime] = None) -> float:
+    """Return seconds until the next occurrence of the configured UTC slot.
+
+    Always returns at least 30 seconds so a just-missed slot schedules for
+    tomorrow rather than firing immediately.
+    """
+    now = now or datetime.now(timezone.utc)
+    target = now.replace(
+        hour=max(0, min(23, SLOT_HOUR)),
+        minute=max(0, min(59, SLOT_MINUTE)),
+        second=0,
+        microsecond=0,
+    )
+    if target <= now:
+        target = target + timedelta(days=1)
+    return max(30.0, (target - now).total_seconds())
+
+
+def _next_slot_dt(now: Optional[datetime] = None) -> datetime:
+    """Return the UTC datetime of the next configured slot."""
+    now = now or datetime.now(timezone.utc)
+    secs = _seconds_until_slot(now)
+    return now + timedelta(seconds=secs)
+
+
+class CalibrationSnapshotScheduler:
+    def __init__(self) -> None:
+        self._running = False
+        self._last_result: Dict[str, Any] = {}
+        self._next_run_at: Optional[str] = None
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        with _lock:
+            if self._running:
+                return {"started": False, "reason": "already running"}
+            self._running = True
+        if immediate:
+            threading.Thread(
+                target=self._tick, daemon=True, name="calibration-snapshot-tick"
+            ).start()
+        else:
+            # Always anchor to the UTC slot, never a boot-relative cap.
+            delay = _seconds_until_slot()
+            next_dt = _next_slot_dt()
+            with _lock:
+                self._next_run_at = next_dt.isoformat().replace("+00:00", "Z")
+            schedule_in_seconds(JOB_ID, self._tick, delay)
+        return {
+            "started": True,
+            "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
+            "next_run_at": self._next_run_at,
+        }
+
+    def stop(self) -> Dict[str, Any]:
+        with _lock:
+            self._running = False
+            self._next_run_at = None
+        cancel_job(JOB_ID)
+        return {"stopped": True}
+
+    def state(self) -> Dict[str, Any]:
+        with _lock:
+            return {
+                "running": self._running,
+                "last_result": dict(self._last_result),
+                "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
+                "next_run_at": self._next_run_at,
+            }
+
+    def run_once(self) -> Dict[str, Any]:
+        return self._tick(reschedule=False)
+
+    def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+        result: Dict[str, Any] = {"ok": False}
+        try:
+            from internal.message_intel.calibration_snapshot import run_calibration_snapshot
+
+            payload = run_calibration_snapshot(save=True)
+            result["ok"] = True
+            result["alert_level"] = payload.get("alert_level")
+            result["drifted"] = (payload.get("drift") or {}).get("drifted")
+            result["factor"] = (payload.get("calibration_health") or {}).get("factor")
+            result["path"] = payload.get("path")
+            if payload.get("alert_level") in ("warn", "alert"):
+                logger.warning(
+                    "calibration snapshot %s: %s",
+                    payload.get("alert_level"),
+                    payload.get("alert_reasons"),
+                )
+        except Exception as exc:
+            result["error"] = str(exc)
+            logger.warning("calibration snapshot tick failed: %s", exc)
+
+        # Re-anchor to the UTC slot so the next run is always near 05:15 UTC.
+        if reschedule and self._running:
+            delay = _seconds_until_slot()
+            next_dt = _next_slot_dt()
+            next_iso = next_dt.isoformat().replace("+00:00", "Z")
+            with _lock:
+                self._next_run_at = next_iso
+                self._last_result = dict(result)
+            result["next_run_at"] = next_iso
+            schedule_in_seconds(JOB_ID, self._tick, delay)
+        else:
+            with _lock:
+                self._last_result = dict(result)
+
+        return result
+
+
+def start_calibration_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
+    if not _enabled():
+        return {"started": False, "reason": "disabled"}
+    global _scheduler
+    with _lock:
+        if _scheduler is None:
+            _scheduler = CalibrationSnapshotScheduler()
+        sched = _scheduler
+    return sched.start(immediate=immediate)
+
+
+def stop_calibration_snapshot_scheduler() -> Dict[str, Any]:
+    global _scheduler
+    with _lock:
+        sched = _scheduler
+        _scheduler = None
+    if sched is None:
+        return {"stopped": False, "reason": "not running"}
+    return sched.stop()
+
+
+def get_calibration_snapshot_scheduler_state() -> Dict[str, Any]:
+    with _lock:
+        return {
+            "enabled": _enabled(),
+            "scheduler": _scheduler.state() if _scheduler else {"running": False},
+        }

@@ -339,6 +339,26 @@ def _start_outcome_snapshot_scheduler() -> None:
     defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 30, 75))
 
 
+def _start_calibration_snapshot_scheduler() -> None:
+    """Daily Telegram calibration health snapshot — warns on factor drift."""
+
+    def _run() -> None:
+        from internal.message_intel.calibration_snapshot_scheduler import (
+            start_calibration_snapshot_scheduler,
+        )
+
+        immediate = os.environ.get("CALIBRATION_SNAPSHOT_BOOT_IMMEDIATE", "off").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        start_calibration_snapshot_scheduler(immediate=immediate)
+        logger.info("calibration snapshot scheduler started (immediate=%s)", immediate)
+
+    defer_boot("calibration-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 35, 80))
+
+
 def _start_dev_radar_github_scheduler() -> None:
     """Dev Pulse v2 — GitHub velocity cache on worker volume."""
 
@@ -400,6 +420,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pick_audit_scheduler()
     _start_pump_desk_snapshot_scheduler()
     _start_outcome_snapshot_scheduler()
+    _start_calibration_snapshot_scheduler()
     _start_dev_radar_github_scheduler()
 
     _maybe_start_message_intel()
@@ -500,6 +521,14 @@ def stop_background_workers() -> None:
         from internal.learning.outcome_snapshot_scheduler import stop_outcome_snapshot_scheduler
 
         stop_outcome_snapshot_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.calibration_snapshot_scheduler import (
+            stop_calibration_snapshot_scheduler,
+        )
+
+        stop_calibration_snapshot_scheduler()
     except Exception:
         pass
     try:
