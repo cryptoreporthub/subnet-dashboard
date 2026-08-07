@@ -97,6 +97,18 @@ def explain_subnet(
             if score_gap > 0:
                 blockers.append(f"Score gap vs candidate: {score_gap:.1f} points")
 
+    # Prefer the calibration that was persisted at pick-creation time when the
+    # explained subnet is the published pick.  This prevents pick-explain from
+    # showing a different (live re-scored) calibration value than daily-pick,
+    # which always returns the stored record.
+    persisted_cal: Optional[Any] = None
+    if verdict == "published" and isinstance(today.get("pick"), dict):
+        persisted_cal = today["pick"].get("telegram_evidence_calibration")
+
+    calibration = persisted_cal if persisted_cal is not None else scored.get(
+        "telegram_evidence_calibration"
+    )
+
     return {
         "status": "ok",
         "netuid": int(netuid),
@@ -110,5 +122,5 @@ def explain_subnet(
         "published_netuid": published_n,
         "candidate_netuid": candidate_n,
         "date": today.get("date"),
-        "telegram_evidence_calibration": scored.get("telegram_evidence_calibration"),
+        "telegram_evidence_calibration": calibration,
     }

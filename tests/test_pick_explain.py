@@ -19,6 +19,15 @@ _SENTINEL_CAL = {
     "method": "unit-test",
 }
 
+# A deliberately different calibration value returned by the live scorer.
+# If pick-explain uses the live score instead of the persisted record the
+# consistency test will catch the mismatch.
+_LIVE_SCORE_CAL = {
+    "factors": [{"name": "live_factor", "weight": 0.5, "raw": 0.9, "adjusted": 0.9}],
+    "aggregate_score": 0.9,
+    "method": "live-rescore",
+}
+
 _TODAY = datetime.now(timezone.utc).date().isoformat()
 
 # Persisted pick record (as returned by _find_today from the JSON store).
@@ -55,6 +64,9 @@ _FIXTURE_PICK_RECORD = {
 }
 
 # Fixture score result from score_subnet_for_day used in pick-explain tests.
+# Uses _LIVE_SCORE_CAL (distinct from _SENTINEL_CAL) so the consistency test
+# can verify pick-explain reads calibration from the persisted record and not
+# from this live re-score.
 _FIXTURE_SCORE = {
     "total_score": 88.5,
     "confidence": 0.82,
@@ -67,7 +79,7 @@ _FIXTURE_SCORE = {
     "signal_contributions": {},
     "active_signals": [],
     "pump_overlay": None,
-    "telegram_evidence_calibration": _SENTINEL_CAL,
+    "telegram_evidence_calibration": _LIVE_SCORE_CAL,
 }
 
 # Fixture audit result used in pick-explain tests.
@@ -77,10 +89,15 @@ _FIXTURE_AUDIT = {"adjusted_confidence": 0.82, "concerns": []}
 _FIXTURE_SUBNET = {"netuid": 42, "name": "MockNet", "symbol": "MOCK", "price": 1.0}
 
 # Fixture get_or_create_today_pick result — SN42 is the published pick.
+# Carries the sentinel calibration on the pick sub-object so the fix can
+# return the persisted value instead of the live re-score (_LIVE_SCORE_CAL).
 _FIXTURE_TODAY_PICK_STATE = {
     "date": _TODAY,
     "action": "long",
-    "pick": {"subnet": {"netuid": 42, "name": "MockNet"}},
+    "pick": {
+        "subnet": {"netuid": 42, "name": "MockNet"},
+        "telegram_evidence_calibration": _SENTINEL_CAL,
+    },
     "candidate": None,
     "reason": None,
 }
@@ -200,9 +217,11 @@ def test_calibration_field_consistent_across_endpoints():
     (top level) must carry telegram_evidence_calibration and agree on its value for
     the same published pick.
 
-    Uses shared fixture data so both endpoints operate on identical calibration
-    inputs, confirming neither the enrichment pipeline nor the explain scorer
-    silently drops or nullifies the field.
+    The live scorer (_FIXTURE_SCORE) deliberately returns _LIVE_SCORE_CAL, which
+    differs from _SENTINEL_CAL stored on the persisted pick record.  The fix
+    requires pick-explain to read calibration from the persisted record for a
+    published subnet so both endpoints agree on _SENTINEL_CAL.  If pick-explain
+    falls back to the live scorer the final equality assertion catches the mismatch.
     """
     with (
         patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
@@ -219,10 +238,17 @@ def test_calibration_field_consistent_across_endpoints():
     assert "telegram_evidence_calibration" in pick_obj, (
         "telegram_evidence_calibration absent from /api/daily-pick pick sub-object"
     )
+    # Confirm daily-pick returns the persisted sentinel, not the live score value.
+    assert pick_obj["telegram_evidence_calibration"] == _SENTINEL_CAL, (
+        f"daily-pick calibration should equal the persisted sentinel; "
+        f"got {pick_obj['telegram_evidence_calibration']!r}"
+    )
 
     with (
         patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
         patch("server._market_context_with_weights", return_value={"weights": {}}),
+        # Live scorer returns _LIVE_SCORE_CAL — pick-explain must NOT use this for
+        # the published subnet; it must prefer the persisted _SENTINEL_CAL instead.
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
@@ -241,9 +267,19 @@ def test_calibration_field_consistent_across_endpoints():
         "telegram_evidence_calibration absent from /api/pick-explain ok response"
     )
 
-    daily_cal = pick_obj["telegram_evidence_calibration"]
     explain_cal = explain["telegram_evidence_calibration"]
-    # Both endpoints used the same sentinel fixture — values must match exactly.
+    # pick-explain must return the persisted sentinel, not the live rescore value.
+    assert explain_cal != _LIVE_SCORE_CAL, (
+        "pick-explain returned the live re-score calibration instead of the "
+        f"persisted record value; got {explain_cal!r}"
+    )
+    assert explain_cal == _SENTINEL_CAL, (
+        f"pick-explain calibration should equal the persisted sentinel; "
+        f"got {explain_cal!r}"
+    )
+
+    daily_cal = pick_obj["telegram_evidence_calibration"]
+    # Both endpoints must now agree on the exact value.
     assert daily_cal == explain_cal, (
         f"Calibration value mismatch across endpoints: "
         f"daily-pick={daily_cal!r}, pick-explain={explain_cal!r}"
