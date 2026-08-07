@@ -462,6 +462,27 @@ def list_subnet_telegram_conviction(*, netuid: Optional[int] = None, limit: int 
     }
 
 
+def list_telegram_divergence_stories(
+    *, netuid: Optional[int] = None, days: int = 7, limit: int = 8
+) -> Dict[str, Any]:
+    """Bounded Telegram-only consensus/outcome comparison with auditable receipts."""
+    from internal.message_intel.rollup import build_telegram_divergence_stories
+
+    result = build_telegram_divergence_stories(
+        netuid=netuid,
+        days=days,
+        limit=limit,
+        db=get_db(),
+        registry_names=_registry_subnet_names(),
+    )
+    stories = result.get("stories") or []
+    return {
+        "status": "success",
+        **result,
+        "story": stories[0] if netuid is not None and stories else None,
+    }
+
+
 def list_topics(*, limit: int = 12) -> Dict[str, Any]:
     from internal.message_intel.rollup import build_topics
 

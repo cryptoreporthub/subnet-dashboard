@@ -69,6 +69,15 @@
       <p class="message-intel__panel-hint">Current directional calls are weighted by jury conviction, 24h freshness decay, and each caller’s smoothed accuracy from at least 5 resolved calls.</p>
       <div id="message-intel-consensus-body" aria-live="polite"><p class="empty">Loading evidence-qualified subnet consensus…</p></div>
     </section>
+    <section class="message-intel__divergence" id="message-intel-divergence" aria-labelledby="message-intel-divergence-title">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title" id="message-intel-divergence-title">Telegram outcome stories</h3>
+        <span class="message-intel__panel-unit">7d · recorded 24h outcomes</span>
+      </div>
+      <p class="message-intel__panel-hint">A bounded comparison of qualifying Telegram calls with each call’s later recorded outcome. It shows alignment or conflict, not causality.</p>
+      <div id="message-intel-divergence-body" aria-live="polite"><p class="empty">Loading Telegram outcome stories…</p></div>
+    </section>
 
     <div class="message-intel__hc-strip" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
       <p class="message-intel__hc-label">High conviction</p>
@@ -194,7 +203,7 @@
         <div class="hydrate-skeleton__line"></div>
         <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
       </div>
-      <p class="sr-only" role="status">Loading Telegram live feed</p>
+      <p class="sr-only" role="status">Loading live feed from Telegram</p>
       {% endif %}
     </div>
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>

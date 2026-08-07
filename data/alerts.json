@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T13:30:00.410563Z",
+  "updated_at": "2026-08-07T14:31:58.648467Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7095,6 +7095,22 @@
       "active": true,
       "timestamp": "2026-08-07T13:30:00.410486Z",
       "id": "social_intel-2026-08-07T13:30:00.410486Z"
+    },
+    {
+      "alert_type": "social_intel",
+      "message": "Social neutral (66% conv): Subnet 7 is extremely bullish with strong emission growth!",
+      "severity": "info",
+      "details": {
+        "message_id": 2,
+        "source": "telegram",
+        "group_id": "",
+        "external_message_id": "2"
+      },
+      "subnet_id": 7,
+      "dedupe_key": "social:telegram::2",
+      "active": true,
+      "timestamp": "2026-08-07T14:31:58.648310Z",
+      "id": "social_intel-2026-08-07T14:31:58.648310Z"
     }
   ]
 }

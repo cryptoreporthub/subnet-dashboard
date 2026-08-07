@@ -271,7 +271,7 @@ class PriceTracker:
 
     def check_outcomes(self) -> None:
         """
-        Background task: check outcomes for unresolved messages.
+        Background task: check outcomes through each receipt's 24-hour observation.
 
         For messages with a recorded ``netuid``, the outcome is measured
         against that subnet's alpha token price (batch-fetched once per
@@ -352,6 +352,7 @@ class PriceTracker:
                 outcome_data["price_4h"] = current_price
             if hours_elapsed >= 24:
                 outcome_data["price_24h"] = current_price
+                outcome_data["price_24h_recorded_at"] = datetime.now(timezone.utc).isoformat()
             if hours_elapsed >= 168:  # 7 days
                 outcome_data["price_7d"] = current_price
 
@@ -375,7 +376,9 @@ class PriceTracker:
                 self.db.save_price_outcome(message_id, outcome_data)
                 try:
                     verdict = msg.get("verdict")
-                    if verdict is not None:
+                    # A later 24h update enriches the same receipt; only the
+                    # first recorded outcome affects historical author scoring.
+                    if verdict is not None and msg.get("outcome_id") is None:
                         from message_intel.self_learning import SelfLearning
                         direction = msg.get("predicted_direction") or "neutral"
                         correct = SelfLearning._is_correct_prediction(

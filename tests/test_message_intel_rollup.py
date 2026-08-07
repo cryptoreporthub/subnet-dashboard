@@ -362,3 +362,116 @@ def test_subnet_telegram_conviction_insufficient_and_stale_calls(monkeypatch):
     assert item["state"] == "insufficient_data"
     assert item["score"] is None
     assert item["call_count"] == 0
+
+
+def test_telegram_divergence_stories_compare_only_resolved_qualified_receipts(monkeypatch):
+    """A story uses timestamped Telegram proof receipts, never chatter or pending rows."""
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+
+    def row(mid, author, direction, outcome, *, conviction=80, hours=26):
+        return {
+            "id": mid, "source": "telegram", "author_id": author, "author_name": author,
+            "timestamp": (now - timedelta(hours=hours)).isoformat(), "content": "SN7 call",
+            "entities_json": json.dumps({"subnets": ["Subnet 7"]}),
+            "verdict": "bullish" if direction == "up" else "bearish",
+            "predicted_direction": direction, "conviction": conviction, "tao_usd_price": 1.0,
+            "outcome": outcome, "pump_pct_max": 4 if outcome == "pump" else -4,
+            "price_24h": 1.04 if outcome == "pump" else .96,
+            "price_24h_recorded_at": (now - timedelta(hours=1)).isoformat(),
+        }
+
+    rows = [
+        row(1, "a", "up", "pump"),
+        row(2, "b", "up", "pump"),
+        row(3, "ignored", "up", "pump", conviction=20),
+        row(4, "pending", "up", None),
+    ]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: rows)
+
+    story = rollup.build_telegram_divergence_stories()["stories"][0]
+    assert story["ready"] is True
+    assert story["state"] == "aligned"
+    assert story["label"] == "consensus-confirmed"
+    assert story["consensus_direction"] == "up"
+    assert story["observed_direction"] == "up"
+    assert story["qualifying_call_count"] == 2
+    assert story["pending_qualifying_call_count"] == 1
+    assert {receipt["message_id"] for receipt in story["receipts"]} == {1, 2}
+    assert all(receipt["proof"]["evaluation"] == "resolved" for receipt in story["receipts"])
+
+
+def test_telegram_divergence_marks_conflict_and_insufficient_data(monkeypatch):
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+
+    def row(mid, author, outcome, netuid):
+        return {
+            "id": mid, "source": "telegram", "author_id": author, "author_name": author,
+            "timestamp": (now - timedelta(hours=26)).isoformat(), "content": f"SN{netuid} call",
+            "entities_json": json.dumps({"subnets": [netuid]}), "verdict": "bullish",
+            "predicted_direction": "up", "conviction": 80, "tao_usd_price": 1.0,
+            "outcome": outcome, "pump_pct_max": -4 if outcome == "dump" else 4,
+            "price_24h": .96 if outcome == "dump" else 1.04,
+            "price_24h_recorded_at": (now - timedelta(hours=1)).isoformat(),
+        }
+
+    rows = [row(1, "a", "dump", 7), row(2, "b", "dump", 7), row(3, "solo", "pump", 8)]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: rows)
+    stories = {story["netuid"]: story for story in rollup.build_telegram_divergence_stories()["stories"]}
+    assert stories[7]["state"] == "diverged"
+    assert stories[7]["label"] == "loud-but-wrong"
+    assert stories[7]["observed_direction"] == "down"
+    assert stories[8]["state"] == "insufficient_data"
+    assert stories[8]["ready"] is False
+    assert "Needs 2 resolved" in stories[8]["insufficient_reason"]
+
+
+def test_telegram_divergence_requires_recorded_24h_price(monkeypatch):
+    """An early resolved outcome cannot be presented as a 24h story."""
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "id": mid, "source": "telegram", "author_id": author, "author_name": author,
+            "timestamp": (now - timedelta(hours=4)).isoformat(), "content": "SN7 call",
+            "entities_json": json.dumps({"subnets": [7]}), "verdict": "bearish",
+            "predicted_direction": "down", "conviction": 80, "tao_usd_price": 1.0,
+            "outcome": "dump", "pump_pct_max": None, "price_24h": None,
+            "price_24h_recorded_at": None,
+        }
+        for mid, author in ((1, "a"), (2, "b"))
+    ]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: rows)
+
+    story = rollup.build_telegram_divergence_stories()["stories"][0]
+    assert story["ready"] is False
+    assert story["state"] == "insufficient_data"
+    assert story["qualifying_call_count"] == 0
+    assert story["pending_qualifying_call_count"] == 2
+    assert story["receipts"] == []
+
+
+def test_telegram_divergence_rejects_unmatured_24h_record(monkeypatch):
+    """A populated price_24h cannot masquerade as mature without its timestamp."""
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        {
+            "id": mid, "source": "telegram", "author_id": author, "author_name": author,
+            "timestamp": (now - timedelta(hours=4)).isoformat(), "content": "SN7 call",
+            "entities_json": json.dumps({"subnets": [7]}), "verdict": "bullish",
+            "predicted_direction": "up", "conviction": 80, "tao_usd_price": 1.0,
+            "outcome": "pump", "pump_pct_max": 4, "price_24h": 1.04,
+            "price_24h_recorded_at": now.isoformat(),
+        }
+        for mid, author in ((1, "a"), (2, "b"))
+    ]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: rows)
+    story = rollup.build_telegram_divergence_stories()["stories"][0]
+    assert story["ready"] is False
+    assert story["pending_qualifying_call_count"] == 2

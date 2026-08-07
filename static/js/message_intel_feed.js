@@ -30,6 +30,7 @@
   var callersEl = document.getElementById("message-intel-callers");
   var callersBody = document.getElementById("message-intel-callers-body");
   var consensusBody = document.getElementById("message-intel-consensus-body");
+  var divergenceBody = document.getElementById("message-intel-divergence-body");
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   var topicFiltersEl = document.getElementById("message-intel-topic-filters");
@@ -479,6 +480,47 @@
       renderConsensus(await fetchJsonWithRetry("/api/message-intel/subnet-conviction?limit=8"));
     } catch (e) {
       consensusBody.innerHTML = '<p class="empty">Evidence-weighted Telegram consensus is temporarily unavailable.</p>';
+    }
+  }
+
+  function renderDivergence(payload) {
+    if (!divergenceBody) return;
+    var stories = (payload && payload.stories) || [];
+    if (!stories.length) {
+      divergenceBody.innerHTML = '<p class="empty">No resolved, evidence-qualified Telegram outcome stories in this window yet. Pending calls stay out until their recorded outcomes resolve.</p>';
+      return;
+    }
+    divergenceBody.innerHTML = '<div class="message-intel__divergence-list">' + stories.map(function (story) {
+      var state = String(story.state || "insufficient_data");
+      var label = story.ready ? String(story.label || "mixed-evidence").replace(/-/g, " ").toUpperCase() : "INSUFFICIENT DATA";
+      var window = story.time_window || {};
+      var move = story.observed_move_pct != null ? (Number(story.observed_move_pct) > 0 ? "+" : "") + Number(story.observed_move_pct).toFixed(2) + "%" : "move unavailable";
+      var receipts = story.receipts || [];
+      var receiptHtml = receipts.map(function (receipt) {
+        var proof = receipt.proof || {};
+        return '<button type="button" class="message-intel__divergence-receipt" data-receipt-id="' + esc(receipt.message_id) + '">' +
+          proofPill(proof) + '<span>' + esc(String(receipt.direction || "—").toUpperCase()) + ' → ' + esc(String(receipt.outcome_direction || "—").toUpperCase()) + ' · ' + esc(snippet(receipt.content, 86)) + '</span></button>';
+      }).join("");
+      var facts = story.ready
+        ? 'Consensus <b>' + esc(String(story.consensus_direction || "mixed").toUpperCase()) + '</b> · observed <b>' + esc(String(story.observed_direction || "unavailable").toUpperCase()) + '</b> · ' + esc(move)
+        : esc(story.insufficient_reason || "More resolved qualifying calls are needed.");
+      return '<article class="message-intel__divergence-row message-intel__divergence-row--' + esc(state) + '">' +
+        '<div class="message-intel__divergence-head"><a href="/subnet/' + esc(story.netuid) + '"><b>' + esc(story.name) + '</b> <span>SN' + esc(story.netuid) + '</span></a><strong>' + esc(label) + '</strong></div>' +
+        '<p>' + facts + '</p><p class="message-intel__divergence-meta">' + esc(story.qualifying_call_count || 0) + ' qualifying calls · ' + esc(story.contributor_count || 0) + ' contributors · 24h outcomes' + (window.start ? ' · window ' + esc(fmtTime(window.start)) + (window.end ? ' to ' + esc(fmtTime(window.end)) : '') : '') + '</p>' +
+        '<details><summary>Inspect ' + esc(receipts.length) + ' Telegram receipts</summary><div class="message-intel__divergence-receipts">' + (receiptHtml || '<span>No resolved receipts available.</span>') + '</div></details>' +
+        '<p class="message-intel__divergence-caveat">' + esc(story.caveat || "Observed outcomes are not causal evidence.") + '</p></article>';
+    }).join("") + '</div>';
+    divergenceBody.querySelectorAll("[data-receipt-id]").forEach(function (button) {
+      button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+    });
+  }
+
+  async function hydrateDivergence() {
+    if (!divergenceBody) return;
+    try {
+      renderDivergence(await fetchJsonWithRetry("/api/message-intel/divergence?days=7&limit=6"));
+    } catch (e) {
+      divergenceBody.innerHTML = '<p class="empty">Telegram outcome stories are temporarily unavailable.</p>';
     }
   }
 
@@ -1399,6 +1441,7 @@
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       hydrateCallerLeaderboard();
       hydrateConsensus();
+      hydrateDivergence();
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       renderSubnetFilterChips(trending);
       syncFilterChipStates();

@@ -240,3 +240,23 @@ async def api_subnet_telegram_conviction(
 async def api_subnet_telegram_conviction_detail(netuid: int):
     """One subnet's consensus plus current calls and resolved proof receipts."""
     return await run_in_threadpool(engine.list_subnet_telegram_conviction, netuid=netuid, limit=1)
+
+
+@message_intel_router.get("/api/message-intel/divergence")
+async def api_telegram_divergence(
+    days: int = Query(default=7, ge=1, le=30),
+    limit: int = Query(default=8, ge=1, le=50),
+):
+    """Telegram-only consensus/outcome stories; SQLite work stays off the event loop."""
+    return await run_in_threadpool(engine.list_telegram_divergence_stories, days=days, limit=limit)
+
+
+@message_intel_router.get("/api/message-intel/divergence/{netuid}")
+async def api_telegram_divergence_detail(
+    netuid: int,
+    days: int = Query(default=7, ge=1, le=30),
+):
+    """One subnet's auditable Telegram consensus/outcome story."""
+    return await run_in_threadpool(
+        engine.list_telegram_divergence_stories, netuid=netuid, days=days, limit=1
+    )

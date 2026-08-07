@@ -10224,8 +10224,8 @@ body.wrap {
   /* Compat alias — site dropped hot pink; pink token now resolves to violet. */
   --mi-pink: var(--mi-violet);
   --mi-pink-glow: var(--mi-violet-glow);
-  --mi-yellow: #c7cdd6;
-  --mi-yellow-glow: rgba(199, 205, 214, 0.32);
+  --mi-yellow: #f5d547;
+  --mi-yellow-glow: rgba(245, 213, 71, 0.32);
   --mi-line: rgba(255, 255, 255, 0.07);
   --mi-line-soft: rgba(255, 255, 255, 0.045);
   --mi-text: #eef7f1;
@@ -14100,9 +14100,57 @@ body.council-first-theme .footer-card__lbl {
   cursor: pointer;
 }
 .message-intel__consensus-receipt:hover { border-color: rgba(126, 200, 227, .4); }
+.message-intel__consensus-receipt:focus-visible,
+.message-intel__divergence-receipt:focus-visible,
+.message-intel__divergence-row summary:focus-visible {
+  outline: 2px solid #bae6fd;
+  outline-offset: 2px;
+}
+
+/* ---------- Telegram consensus/outcome comparison ---------- */
+.message-intel__divergence {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(196, 181, 253, .26);
+  border-radius: 12px;
+  background: rgba(15, 10, 29, .30);
+}
+.message-intel__divergence-list { display: grid; gap: 9px; }
+.message-intel__divergence-row {
+  padding: 11px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-left: 3px solid #94a3b8;
+  border-radius: 9px;
+  background: rgba(255,255,255,.025);
+}
+.message-intel__divergence-row--aligned { border-left-color: #34d399; }
+.message-intel__divergence-row--diverged { border-left-color: #fb7185; }
+.message-intel__divergence-row--neutral_outcome { border-left-color: #fbbf24; }
+.message-intel__divergence-head { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.message-intel__divergence-head a { color: var(--text-primary); text-decoration: none; }
+.message-intel__divergence-head span, .message-intel__divergence-meta, .message-intel__divergence-caveat { color: var(--text-muted); font-size: 11px; }
+.message-intel__divergence-head strong { font: 700 11px var(--font-mono, monospace); color: #cbd5e1; text-align: right; }
+.message-intel__divergence-row--aligned .message-intel__divergence-head strong { color: #6ee7b7; }
+.message-intel__divergence-row--diverged .message-intel__divergence-head strong { color: #fda4af; }
+.message-intel__divergence-row--neutral_outcome .message-intel__divergence-head strong { color: #fde68a; }
+.message-intel__divergence-row > p { margin: 5px 0 0; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.message-intel__divergence-row > p b { color: var(--text-secondary); }
+.message-intel__divergence-row details { margin-top: 9px; color: var(--text-secondary); font-size: 12px; }
+.message-intel__divergence-row summary { cursor: pointer; color: #ddd6fe; }
+.message-intel__divergence-receipts { display: grid; gap: 5px; margin-top: 8px; }
+.message-intel__divergence-receipt {
+  display: grid; gap: 4px; width: 100%; min-height: 40px; padding: 7px;
+  border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
+  background: rgba(0,0,0,.18); color: var(--text-secondary); text-align: left;
+  font-size: 12px; cursor: pointer;
+}
+.message-intel__divergence-receipt:hover { border-color: rgba(196, 181, 253, .5); }
+.message-intel__divergence-caveat { font-style: italic; }
 
 @media (max-width: 420px) {
   .message-intel__consensus-head { align-items: flex-start; flex-direction: column; gap: 3px; }
   .message-intel__consensus-head strong { text-align: left; }
+  .message-intel__divergence-head { align-items: flex-start; flex-direction: column; gap: 3px; }
+  .message-intel__divergence-head strong { text-align: left; }
 }
 

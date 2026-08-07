@@ -32,6 +32,15 @@ CONVICTION_MIN_CONTRIBUTORS = 2
 CONVICTION_MIN_AUTHOR_SAMPLE = MIN_LEADERBOARD_SAMPLE
 CONVICTION_MIN_JURY_SCORE = 60.0
 
+# Divergence stories are deliberately a compact, evidence-only read of
+# timestamped Telegram calls.  They are not a forecast model: every included
+# receipt has its own recorded 24h outcome and the rollup never uses
+# engagement, sentiment, or non-Telegram sources.
+DIVERGENCE_DEFAULT_DAYS = 7
+DIVERGENCE_MAX_DAYS = 30
+DIVERGENCE_MIN_CALLS = 2
+DIVERGENCE_MIN_CONTRIBUTORS = 2
+
 
 def _parse_ts(raw: Optional[str]) -> Optional[datetime]:
     if not raw:
@@ -656,7 +665,7 @@ def _conviction_rows(db=None) -> List[Dict[str, Any]]:
                       m.content, m.timestamp, m.created_at, a.entities_json,
                       v.verdict, v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid AS snap_netuid,
-                      po.outcome, po.pump_pct_max, po.price_24h
+                      po.outcome, po.pump_pct_max, po.price_24h, po.price_24h_recorded_at
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
@@ -811,11 +820,11 @@ def build_subnet_telegram_conviction(
         )
 
     # Include honest empty-state rows for explicitly requested subnets and for
-    # recent subnet mentions that cannot yet meet the evidence threshold.
+    # observed subnet mentions that cannot yet meet the evidence threshold.
     recent_subnets: Set[int] = set()
     for row in rows:
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
-        if timestamp is not None and timestamp >= cutoff:
+        if timestamp is not None:
             recent_subnets.update(_netuids_from_row(row))
     if netuid is not None:
         recent_subnets.add(int(netuid))
@@ -861,6 +870,227 @@ def build_subnet_telegram_conviction(
         "items": items[:max(1, int(limit))],
         "count": len(items),
         "empty": not items,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+        "methodology": methodology,
+    }
+
+
+def _divergence_methodology() -> Dict[str, Any]:
+    return {
+        "horizon": "24h",
+        "default_window_days": DIVERGENCE_DEFAULT_DAYS,
+        "maximum_window_days": DIVERGENCE_MAX_DAYS,
+        "minimum_calls": DIVERGENCE_MIN_CALLS,
+        "minimum_contributors": DIVERGENCE_MIN_CONTRIBUTORS,
+        "minimum_call_conviction": CONVICTION_MIN_JURY_SCORE,
+        "formula": (
+            "Telegram-only calls are grouped by subnet and their message timestamps. "
+            "Only qualifying calls with recorded 24h outcomes count; each call is "
+            "weighted by its jury conviction. Outcomes describe observed movement "
+            "after those calls and do not establish causality."
+        ),
+        "disclaimer": (
+            "This compares recorded Telegram calls with later recorded price outcomes; "
+            "it does not claim Telegram caused or predicted the move. Not financial advice."
+        ),
+    }
+
+
+def _outcome_direction(proof: Dict[str, Any]) -> Optional[str]:
+    outcome = str(proof.get("raw_outcome") or "").lower()
+    if outcome in ("pump", "mild_pump"):
+        return "up"
+    if outcome in ("dump", "mild_dump"):
+        return "down"
+    if outcome == "stable":
+        return "flat"
+    return None
+
+
+def _story_label(consensus_direction: Optional[str], observed_direction: Optional[str]) -> tuple[str, str]:
+    """Return a factual label and state, never a causal or predictive claim."""
+    if observed_direction == "flat":
+        return "outcome-neutral", "neutral_outcome"
+    if consensus_direction == observed_direction and consensus_direction in ("up", "down"):
+        return "consensus-confirmed", "aligned"
+    if consensus_direction in ("up", "down") and observed_direction in ("up", "down"):
+        return "loud-but-wrong", "diverged"
+    return "mixed-evidence", "mixed"
+
+
+def _divergence_receipt(row: Dict[str, Any], proof: Dict[str, Any]) -> Dict[str, Any]:
+    receipt = _receipt(row, proof)
+    receipt.update(
+        {
+            "direction": proof["direction"],
+            "outcome_direction": _outcome_direction(proof),
+            "jury_conviction": round(float(row.get("conviction") or 0.0), 1),
+        }
+    )
+    return receipt
+
+
+def _has_24h_observation(row: Dict[str, Any], message_timestamp: datetime) -> bool:
+    """Require a positive 24h price, a 24h-mature message, and an audit timestamp."""
+    try:
+        recorded_at = _parse_ts(row.get("price_24h_recorded_at"))
+        return (
+            row.get("price_24h") is not None
+            and float(row["price_24h"]) > 0
+            and recorded_at is not None
+            and recorded_at >= message_timestamp + timedelta(hours=24)
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def build_telegram_divergence_stories(
+    *,
+    netuid: Optional[int] = None,
+    days: int = DIVERGENCE_DEFAULT_DAYS,
+    limit: int = 8,
+    db=None,
+    registry_names: Optional[Dict[int, str]] = None,
+) -> Dict[str, Any]:
+    """Build bounded per-subnet Telegram-consensus versus observed-outcome stories.
+
+    A story is eligible only when at least two different Telegram contributors
+    made qualifying calls that have resolved outcomes inside the requested
+    window.  This derives historical evidence from immutable message/snapshot/
+    outcome receipts, avoiding a second mutable interpretation store.
+    """
+    now = datetime.now(timezone.utc)
+    names = registry_names or {}
+    methodology = _divergence_methodology()
+    days = max(1, min(DIVERGENCE_MAX_DAYS, int(days or DIVERGENCE_DEFAULT_DAYS)))
+    cutoff = now - timedelta(days=days)
+    try:
+        rows = _conviction_rows(db)
+    except Exception as exc:
+        logger.warning("Telegram divergence query failed: %s", exc)
+        return {
+            "stories": [], "count": 0, "empty": True, "days": days,
+            "generated_at": now.isoformat().replace("+00:00", "Z"),
+            "methodology": methodology,
+        }
+
+    buckets: Dict[int, Dict[str, Any]] = {}
+    for row in rows:
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if timestamp is None or timestamp < cutoff:
+            continue
+        proof = classify_call(row)
+        if not proof["eligible"]:
+            continue
+        for subnet_id in _netuids_from_row(row):
+            subnet_id = int(subnet_id)
+            if netuid is not None and subnet_id != int(netuid):
+                continue
+            bucket = buckets.setdefault(subnet_id, {"receipts": [], "pending": 0})
+            if proof["resolved"] and _has_24h_observation(row, timestamp):
+                bucket["receipts"].append((row, proof, timestamp))
+            else:
+                bucket["pending"] += 1
+
+    stories: List[Dict[str, Any]] = []
+    for subnet_id, bucket in buckets.items():
+        resolved = bucket["receipts"]
+        contributors = {stable_author_id(row) for row, _proof, _ts in resolved}
+        receipts = [
+            _divergence_receipt(row, proof)
+            for row, proof, _ts in sorted(resolved, key=lambda item: item[2], reverse=True)
+        ]
+        call_count = len(receipts)
+        contributor_count = len(contributors)
+        sufficient = call_count >= DIVERGENCE_MIN_CALLS and contributor_count >= DIVERGENCE_MIN_CONTRIBUTORS
+        base: Dict[str, Any] = {
+            "netuid": subnet_id,
+            "name": names.get(subnet_id) or f"Subnet {subnet_id}",
+            "ready": sufficient,
+            "state": "insufficient_data",
+            "label": None,
+            "headline": None,
+            "time_window": {
+                "start": min((ts for _row, _proof, ts in resolved), default=None),
+                "end": max((ts for _row, _proof, ts in resolved), default=None),
+                "horizon": "24h",
+                "days": days,
+            },
+            "consensus_direction": None,
+            "consensus_score": None,
+            "observed_direction": None,
+            "observed_move_pct": None,
+            "observed_outcome": None,
+            "qualifying_call_count": call_count,
+            "contributor_count": contributor_count,
+            "pending_qualifying_call_count": int(bucket["pending"]),
+            "receipts": receipts[:12],
+            "insufficient_reason": (
+                f"Needs {DIVERGENCE_MIN_CALLS} resolved qualifying calls from "
+                f"{DIVERGENCE_MIN_CONTRIBUTORS} Telegram contributors."
+            ),
+            "caveat": "Outcomes are observed after each receipt's recorded price snapshot; no causal claim is made.",
+        }
+        if not sufficient:
+            stories.append(base)
+            continue
+
+        signed_weight = total_weight = 0.0
+        outcome_weights: Dict[str, float] = {"up": 0.0, "down": 0.0, "flat": 0.0}
+        moves: List[float] = []
+        outcome_names: Dict[str, int] = defaultdict(int)
+        for row, proof, _ts in resolved:
+            weight = max(0.0, float(row.get("conviction") or 0.0))
+            direction = proof["direction"]
+            if direction == "up":
+                signed_weight += weight
+                total_weight += weight
+            elif direction == "down":
+                signed_weight -= weight
+                total_weight += weight
+            observed = _outcome_direction(proof)
+            if observed:
+                outcome_weights[observed] += weight
+            if proof.get("move_pct") is not None:
+                moves.append(float(proof["move_pct"]))
+            if proof.get("raw_outcome"):
+                outcome_names[str(proof["raw_outcome"])] += 1
+
+        score = (signed_weight / total_weight * 100.0) if total_weight else 0.0
+        consensus_direction = "up" if score >= 20 else ("down" if score <= -20 else None)
+        observed_direction = max(outcome_weights, key=outcome_weights.get) if any(outcome_weights.values()) else None
+        label, state = _story_label(consensus_direction, observed_direction)
+        base.update(
+            {
+                "ready": True,
+                "state": state,
+                "label": label,
+                "headline": (
+                    f"Telegram consensus {consensus_direction or 'mixed'}; "
+                    f"recorded 24h outcome {observed_direction or 'unavailable'}."
+                ),
+                "consensus_direction": consensus_direction or "mixed",
+                "consensus_score": round(score, 1),
+                "observed_direction": observed_direction,
+                "observed_move_pct": round(sum(moves) / len(moves), 2) if moves else None,
+                "observed_outcome": max(outcome_names, key=outcome_names.get) if outcome_names else None,
+                "insufficient_reason": None,
+            }
+        )
+        stories.append(base)
+
+    stories.sort(
+        key=lambda item: (
+            item["ready"], item["time_window"]["end"] or datetime.min.replace(tzinfo=timezone.utc),
+            item["qualifying_call_count"],
+        ),
+        reverse=True,
+    )
+    return {
+        "stories": stories[:max(1, min(50, int(limit)))],
+        "count": len(stories),
+        "empty": not stories,
+        "days": days,
         "generated_at": now.isoformat().replace("+00:00", "Z"),
         "methodology": methodology,
     }

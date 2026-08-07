@@ -103,7 +103,8 @@ class Database:
                     time_to_pump REAL,
                     pump_duration REAL,
                     resurgence REAL,
-                    outcome TEXT
+                    outcome TEXT,
+                    price_24h_recorded_at TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS author_reliability (
@@ -144,6 +145,16 @@ class Database:
             if "external_message_id" not in msg_cols:
                 try:
                     conn.execute("ALTER TABLE messages ADD COLUMN external_message_id TEXT")
+                except sqlite3.OperationalError:
+                    pass
+            outcome_cols = {
+                r[1] for r in conn.execute("PRAGMA table_info(price_outcomes)").fetchall()
+            }
+            if "price_24h_recorded_at" not in outcome_cols:
+                try:
+                    conn.execute(
+                        "ALTER TABLE price_outcomes ADD COLUMN price_24h_recorded_at TEXT"
+                    )
                 except sqlite3.OperationalError:
                     pass
             conn.execute(
@@ -292,21 +303,52 @@ class Database:
 
     def save_price_outcome(self, message_id: int, outcome: Dict[str, Any]) -> None:
         with self._connect() as conn:
+            existing = conn.execute(
+                """SELECT id, price_24h_recorded_at FROM price_outcomes
+                   WHERE message_id = ? ORDER BY id LIMIT 1""",
+                (message_id,),
+            ).fetchone()
+            price_24h = outcome.get("price_24h")
+            recorded_at = outcome.get("price_24h_recorded_at") if price_24h is not None else None
+            if existing:
+                conn.execute(
+                    """UPDATE price_outcomes
+                       SET price_1h = ?, price_4h = ?, price_24h = ?, price_7d = ?,
+                           pump_pct_max = ?, time_to_pump = ?, pump_duration = ?,
+                           resurgence = ?, outcome = ?,
+                           price_24h_recorded_at = COALESCE(?, price_24h_recorded_at)
+                       WHERE id = ?""",
+                    (
+                        outcome.get("price_1h"),
+                        outcome.get("price_4h"),
+                        price_24h,
+                        outcome.get("price_7d"),
+                        outcome.get("pump_pct_max"),
+                        outcome.get("time_to_pump"),
+                        outcome.get("pump_duration"),
+                        outcome.get("resurgence"),
+                        outcome.get("outcome"),
+                        recorded_at,
+                        existing["id"],
+                    ),
+                )
+                return
             conn.execute(
                 """INSERT INTO price_outcomes (message_id, price_1h, price_4h, price_24h, price_7d,
-                   pump_pct_max, time_to_pump, pump_duration, resurgence, outcome)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   pump_pct_max, time_to_pump, pump_duration, resurgence, outcome, price_24h_recorded_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     message_id,
                     outcome.get("price_1h"),
                     outcome.get("price_4h"),
-                    outcome.get("price_24h"),
+                    price_24h,
                     outcome.get("price_7d"),
                     outcome.get("pump_pct_max"),
                     outcome.get("time_to_pump"),
                     outcome.get("pump_duration"),
                     outcome.get("resurgence"),
                     outcome.get("outcome"),
+                    recorded_at,
                 ),
             )
 
@@ -432,16 +474,22 @@ class Database:
             return [dict(r) for r in rows]
 
     def get_unresolved_outcomes(self) -> List[Dict[str, Any]]:
-        """Return messages with a price snapshot but no 24h outcome yet."""
+        """Return snapshot receipts that still need their audited 24-hour outcome.
+
+        First-hour outcomes are retained for reliability scoring, but must be
+        revisited until a 24-hour price observation is recorded.  The outcome
+        ID lets the tracker avoid scoring author reliability again on updates.
+        """
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
-                          v.verdict, v.predicted_direction
+                           v.verdict, v.predicted_direction,
+                           po.id AS outcome_id, po.price_24h_recorded_at
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
                    LEFT JOIN price_outcomes po ON po.message_id = m.id
                    LEFT JOIN message_verdicts v ON v.message_id = m.id
-                   WHERE po.id IS NULL
+                    WHERE po.id IS NULL OR po.price_24h_recorded_at IS NULL
                    ORDER BY m.id""",
             ).fetchall()
             return [dict(r) for r in rows]

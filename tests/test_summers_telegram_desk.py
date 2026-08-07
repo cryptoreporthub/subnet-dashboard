@@ -47,6 +47,8 @@ def test_summers_desk_js_renders_conviction():
     assert "message-intel__f-conv--high" in src
     assert "renderWeekTopComment" in src
     assert "week_top_comment" in src
+    assert "renderDivergence" in src
+    assert "/api/message-intel/divergence" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -85,5 +87,15 @@ def test_summers_flagship_composition_hooks():
         "message-intel-proof",
         "message-intel-hc-strip",
         "message-intel-crowns",
+        "message-intel-divergence",
+        "message-intel-divergence-body",
     ):
         assert f'id="{eid}"' in html
+    assert "Telegram outcome stories" in html
+
+
+def test_summers_divergence_mobile_and_keyboard_hooks():
+    css = open("static/css/ui.css", encoding="utf-8").read()
+    assert ".message-intel__divergence" in css
+    assert ".message-intel__divergence-receipt:focus-visible" in css
+    assert ".message-intel__divergence-head" in css
