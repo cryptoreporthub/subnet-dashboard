@@ -152,6 +152,9 @@ def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
     assert "tribunal-puff-1" in css
     assert "tribunal-glow-drift" in css
     assert '.tribunal-hero[data-verdict-kind="forming"]' in css
+    assert '.tribunal-hero[data-temp="cool"]' in css
+    assert '.tribunal-hero[data-temp="warm"] .tribunal-hero__card' in css
+    assert 'body[data-council-temp="warm"]' in css
 
 
 def test_council_stage_atmosphere_cool_grey_smoke_drift():

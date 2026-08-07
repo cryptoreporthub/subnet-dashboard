@@ -5,6 +5,7 @@
   class="tribunal-hero"
   id="tribunal-hero"
   data-verdict-kind="{{ t.verdict_kind }}"
+  data-temp="{{ t.conviction_temp }}"
   data-testid="tribunal-hero"
   data-hero-verdict="{{ t.verdict_kind }}"
   {% if t.gauge_attr is not none %}data-hero-conviction="{{ t.gauge_attr }}"{% endif %}
@@ -142,3 +143,4 @@
 
   <p class="tribunal-hero__sync" id="tribunal-hero-sync" role="status" aria-live="polite"{% if t.synced_at %} data-synced-at="{{ t.synced_at }}"{% else %} hidden{% endif %}></p>
 </section>
+<script>document.body&&document.body.setAttribute('data-council-temp','{{ t.conviction_temp }}');</script>

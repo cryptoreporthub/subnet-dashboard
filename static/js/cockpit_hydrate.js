@@ -4379,6 +4379,19 @@
     return 'cold';
   }
 
+  var CONVICTION_WARM_PCT = 70;
+
+  function convictionTemp(kind, gaugePct) {
+    if (kind === 'cold' || kind === 'forming') return 'cool';
+    if (kind === 'sealed') return 'warm';
+    if (gaugePct == null || isNaN(Number(gaugePct))) return 'cool';
+    return Number(gaugePct) >= CONVICTION_WARM_PCT ? 'warm' : 'cool';
+  }
+
+  function syncCouncilTemp(temp) {
+    if (document.body) document.body.setAttribute('data-council-temp', temp);
+  }
+
   function tribunalCenterLabel(payload, kind) {
     kind = kind || verdictKind(payload);
     var pills = tribunalVerdictPills(payload, kind);
@@ -4652,6 +4665,10 @@
     if (!hero || !dailyPick) return false;
     var kind = verdictKind(dailyPick);
     hero.setAttribute('data-verdict-kind', kind);
+    var pct = kind === 'forming' || kind === 'cold' ? null : tribunalGaugePct(dailyPick, learningStats);
+    var temp = convictionTemp(kind, pct);
+    hero.setAttribute('data-temp', temp);
+    syncCouncilTemp(temp);
     var title = document.getElementById('tribunal-hero-title');
     if (title) title.textContent = tribunalSubnetLabel(dailyPick);
     var badge = document.getElementById('k3-action-badge');
@@ -4667,7 +4684,6 @@
         holdBadge.hidden = true;
       }
     }
-    var pct = kind === 'forming' || kind === 'cold' ? null : tribunalGaugePct(dailyPick, learningStats);
     var orb = document.getElementById('k3-orb-score');
     if (orb) orb.textContent = formatGaugePct(pct);
     patchTribunalRingFill(pct);
