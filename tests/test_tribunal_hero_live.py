@@ -177,7 +177,7 @@ def test_tribunal_hero_template_sync_and_conviction_hooks():
     assert "style=\"--p: 71.0;\"" in html or "style=\"--p: 71;\"" in html
     assert "id=\"tribunal-hero-sync\"" in html
     assert "tribunal-hero__sync" in html
-    assert 'data-panel="decision-log"' in html
+    assert 'data-metric="avg_accuracy"' in html
 
 
 def test_cockpit_hydrate_tribunal_sync_helpers():
@@ -185,7 +185,7 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "patchTribunalSyncStamp" in src
     assert "formatSyncedAge" in src
     assert "weightedVerdictPct" in src
-    assert "patchTribunalPanels" in src
+    assert "patchTribunalMetrics" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
     assert "convictionTemp" in src
@@ -209,4 +209,4 @@ def test_home_ssr_contains_tribunal_hero():
     assert "k3-layer-teaser" in html
     assert "Council votes" not in html
     assert "Weighed against" not in html
-    assert 'data-panel="accuracy-ledger"' in html
+    assert 'data-metric="signal_score"' in html
