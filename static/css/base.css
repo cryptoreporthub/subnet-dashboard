@@ -10,27 +10,27 @@
   --bg-card: rgba(34, 37, 44, 0.78);
   --bg-elevated: rgba(40, 43, 50, 0.9);
   --bg-header: rgba(28, 31, 38, 0.72);
-  /* Pewter card smoke — grey family, faint cyan sheen only at focal points */
+  /* Pewter card smoke — pure grey family, no cyan sheen */
   --card-smoke:
     radial-gradient(ellipse 160% 80% at 50% -40%, rgba(168, 176, 190, 0.14) 0%, transparent 50%),
-    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(63, 201, 255, 0.04) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(150, 150, 150, 0.05) 0%, transparent 55%),
     linear-gradient(180deg, rgba(18, 20, 26, 0.92) 0%, rgba(16, 18, 24, 0.94) 100%);
   --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
-  /* Charcoal smoke atmosphere — cyan/green/violet kept subtle; glass sections carry readability */
+  /* Monochrome grey smoke atmosphere — pure grey washes only; accents stay on text/HUD */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(63, 201, 255, 0.05) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(31, 212, 124, 0.03) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(157, 140, 255, 0.04) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(63, 201, 255, 0.03) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(160, 160, 168, 0.22) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(140, 140, 148, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(150, 150, 158, 0.19) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(130, 130, 138, 0.18) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
-  /* Aurora glows — page overlay (low alpha; glass panels do the heavy lifting) */
-  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(63, 201, 255, 0.05), transparent 70%);
-  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(31, 212, 124, 0.04), transparent 70%);
-  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(157, 140, 255, 0.04), transparent 70%);
+  /* Aurora glows — page overlay, desaturated to grey-only (token names kept for ui.css) */
+  --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(150, 150, 158, 0.16), transparent 70%);
+  --aurora-green: radial-gradient(ellipse 50% 40% at 82% 30%, rgba(142, 142, 150, 0.15), transparent 70%);
+  --aurora-violet: radial-gradient(ellipse 55% 45% at 60% 85%, rgba(150, 150, 158, 0.16), transparent 70%);
   --brand-glow: rgba(63, 201, 255, 0.38);
 
   /* Accents — green primary, cyan secondary, orange tertiary, violet aurora (replaces magenta) */
@@ -146,7 +146,7 @@ body::before {
   opacity: 0.55;
   background-image:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.75 0 0 0 0 0.78 0 0 0 0 0.82 0 0 0 0.10 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='280' height='280'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012' numOctaves='3' stitchTiles='stitch' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.78 0 0 0 0 0.78 0 0 0 0 0.78 0 0 0 0.12 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 180px 180px, 280px 280px;
 }

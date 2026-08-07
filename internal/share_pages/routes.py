@@ -14,11 +14,13 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from internal.share_pages.search import global_search
+from internal.static_version import STATIC_V
 
 logger = logging.getLogger(__name__)
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 templates = Jinja2Templates(directory=os.path.join(_REPO, "templates"))
+templates.env.globals["static_v"] = STATIC_V
 
 share_router = APIRouter(tags=["share"])
 

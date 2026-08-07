@@ -415,8 +415,10 @@ templates.env.filters["safe_list"] = _jinja_safe_list
 templates.env.filters["shorten"] = _jinja_shorten
 
 from internal.council.publish_gate import publish_gate_label
+from internal.static_version import STATIC_V
 
 templates.env.globals["publish_gate_label"] = publish_gate_label
+templates.env.globals["static_v"] = STATIC_V
 
 _static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(_static_dir):
