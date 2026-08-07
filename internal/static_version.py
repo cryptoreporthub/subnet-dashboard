@@ -24,7 +24,7 @@ def _token() -> str:
             continue
     if not parts:
         return "1"
-    return hashlib.md5(":".join(parts).encode()).hexdigest()[:8]
+    return hashlib.md5(":".join(parts).encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 STATIC_V = _token()
