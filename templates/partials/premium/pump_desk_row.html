@@ -7,21 +7,21 @@
 {% set why = row.trigger|default(row.subtitle|default(row.badge)) %}
 {% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
 <a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}">
-  <div class="pd-r__main">
+  <div class="pd-r__top">
     <div class="pd-r__id">
       <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
       <span class="pd-r__name">{{ row.name|default('SN' ~ row.netuid) }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
     </div>
-    {% include "partials/premium/pump_pattern_line.html" %}
-    {% if why %}<p class="pd-r__why">{{ why|truncate(72, True) }}</p>{% endif %}
-    <div class="pd-r__legs" aria-label="Triad">
-      <span class="pd-r__leg{% if triad.inflow_quiet_load %} pd-r__leg--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
-      <span class="pd-r__leg{% if triad.buy_pressure %} pd-r__leg--on{% endif %}">Pr {{ labels.pressure|default('FLAT') }}</span>
-      <span class="pd-r__leg{% if triad.price_coil %} pd-r__leg--on{% endif %}">Coil {{ labels.coil|default('OPEN') }}</span>
+    <div class="pd-r__nums" aria-label="Flow and gap">
+      <span class="pd-r__num"><i>Flow</i> {% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
+      <span class="pd-r__num pd-r__num--gap"><i>Gap</i> {% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
     </div>
   </div>
-  <div class="pd-r__nums" aria-label="Flow and gap">
-    <span class="pd-r__num"><i>Flow</i> {% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
-    <span class="pd-r__num pd-r__num--gap"><i>Gap</i> {% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
+  {% include "partials/premium/pump_pattern_line.html" %}
+  {% if why %}<p class="pd-r__why">{{ why|truncate(72, True) }}</p>{% endif %}
+  <div class="pd-r__legs" aria-label="Triad">
+    <span class="pd-r__leg{% if triad.inflow_quiet_load %} pd-r__leg--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
+    <span class="pd-r__leg{% if triad.buy_pressure %} pd-r__leg--on{% endif %}">Pr {{ labels.pressure|default('FLAT') }}</span>
+    <span class="pd-r__leg{% if triad.price_coil %} pd-r__leg--on{% endif %}">Coil {{ labels.coil|default('OPEN') }}</span>
   </div>
 </a>
