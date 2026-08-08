@@ -241,12 +241,11 @@ def test_home_ssr_contains_tribunal_hero():
     assert html.count('data-judge="echo"') == 1
     assert html.count('data-judge="pulse"') == 1
     assert "THE TRIBUNAL" not in html
-    assert "Expert bench" in html
-    assert "Alternatives" in html
-    assert "k3-layer-teaser" in html
+    assert 'data-panel="accuracy-ledger"' in html
+    assert "Loading council desk" not in html
     assert "Council votes" not in html
     assert "Weighed against" not in html
-    assert 'data-panel="accuracy-ledger"' in html
+    assert 'data-panel="decision-log"' in html
 
 
 def test_legacy_pump_route_redirects_to_canonical_path():

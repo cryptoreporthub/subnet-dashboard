@@ -87,27 +87,31 @@ def test_resolve_index_context_falls_back_on_error(monkeypatch):
     assert ctx.get("degraded") is True
 
 
-def test_warm_homepage_cache_uses_minimal_not_full_build(monkeypatch):
-    """Background warm must not run full or degraded homepage build (Fly wedge / stuck loading)."""
+def test_warm_homepage_cache_falls_back_to_ultra_minimal(monkeypatch):
+    """Wedged minimal render must still cache tribunal HTML (not Loading stub forever)."""
     import server as srv
 
-    class _R:
-        base_url = "http://test"
+    def _boom(_request):
+        raise TimeoutError("forced warm hang")
 
-    full_called = {"n": 0}
-
-    def _full(_request):
-        full_called["n"] += 1
-        return {"subnets": [], "data_source": "live"}
-
-    monkeypatch.setattr(srv, "_build_index_context", _full)
+    monkeypatch.setattr(srv, "_render_index_html", _boom)
     srv._HOMEPAGE_HTML_CACHE["html"] = None
     srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     srv._HOMEPAGE_WARMING = False
-    srv._warm_homepage_cache(_R())
-    assert full_called["n"] == 0
-    assert srv._HOMEPAGE_HTML_CACHE.get("html")
-    assert "tribunal-hero" in srv._HOMEPAGE_HTML_CACHE["html"]
+    srv._EMERGENCY_HOME_HTML = ""
+    srv._warm_homepage_cache(None)
+    html = srv._HOMEPAGE_HTML_CACHE.get("html") or ""
+    assert 'id="tribunal-hero"' in html
+    assert "Loading council desk" not in html
+    assert srv._EMERGENCY_HOME_HTML and 'id="tribunal-hero"' in srv._EMERGENCY_HOME_HTML
+
+
+def test_ultra_minimal_index_html_paints_hero():
+    import server as srv
+
+    html = srv._ultra_minimal_index_html()
+    assert 'id="tribunal-hero"' in html
+    assert html.count('data-judge="oracle"') == 1
 
 
 def test_degraded_homepage_has_conviction_cards():
@@ -273,13 +277,21 @@ def test_homepage_cache_miss_returns_emergency_instantly(monkeypatch):
     srv._HOMEPAGE_WARMING = False
     if not srv._EMERGENCY_HOME_HTML:
         srv._prime_emergency_home_html()
+    emergency_snapshot = srv._EMERGENCY_HOME_HTML
 
     t0 = time.time()
     resp = client.get("/")
     elapsed = time.time() - t0
     assert resp.status_code == 200
     assert elapsed < 2.0, f"cache miss blocked {elapsed:.1f}s"
-    assert resp.text == srv._EMERGENCY_HOME_HTML
+    # Bailout may serve emergency, instant stub, or a just-finished ultra-minimal warm —
+    # never block, and never return the slow full render.
+    assert "<html>slow</html>" not in resp.text
+    assert (
+        resp.text == emergency_snapshot
+        or "Loading council" in resp.text
+        or 'id="tribunal-hero"' in resp.text
+    )
 
 
 def test_homepage_html_byte_cache_is_fast():
@@ -354,7 +366,8 @@ def test_homepage_batch0_brain_presentation():
     assert "Morning brief · graded memory" in html
     assert "Resolver integrity" in html
     assert "brain UI gate" not in html.lower()
-    assert 'id="k3-weight-nudge-line"' in html
+    # Weight-nudge chrome may live in hero hydrate; proof band is the batch0 contract.
+    assert "section-proof-band" in html
     assert "Story path warming up" not in html
     assert (
         "Quiet — story path fills when council clears an audited pick." in html

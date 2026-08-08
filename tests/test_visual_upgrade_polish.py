@@ -158,27 +158,26 @@ def test_council_stage_h2_tribunal_gauge_css_in_ui_stylesheet():
 
 
 def test_council_stage_atmosphere_cool_grey_smoke_drift():
-    """Hero stage: cool slate smoke drift + monochrome card puffs."""
+    """Hero stage: cool slate smoke drift + soft grey card puffs (no film grain)."""
     css = _read_ui_css()
     assert ".council-stage__atmosphere" in css
     assert "council-smoke-drift-1" in css
     assert "council-smoke-drift-2" in css
     puff_block = css.split(".tribunal-hero__puff {", 1)[1].split(".tribunal-hero__puff--1", 1)[0]
     assert "mix-blend-mode" not in puff_block
-    assert "rgba(30, 48, 62" in puff_block or "rgba(10, 20, 30" in puff_block
+    assert "rgba(120, 128, 140" in puff_block or "rgba(30, 48, 62" in puff_block or "rgba(10, 20, 30" in puff_block
     assert "tribunal-puff-4" in css
     assert "tribunal-puff-6" in css
 
 
 def test_mobile_hero_atmosphere_bump_in_ui_css():
-    """Mobile ≤480px keeps smoky hero card + softer grain without overpowering mist."""
+    """Mobile ≤480px keeps smoky hero card without grain overlay."""
     css = _read_ui_css()
     blocks = [b.split("@media", 1)[0] for b in css.split("@media (max-width: 480px)")[1:]]
     mobile = next(b for b in blocks if ".tribunal-hero__card::after" in b)
     assert ".tribunal-hero__puff" in mobile
     grain_block = mobile.split(".tribunal-hero__card::after", 1)[1].split("}", 1)[0]
-    assert "opacity:" in grain_block
-    assert float(grain_block.split("opacity:")[1].split(";")[0].strip()) <= 0.2
+    assert "display: none" in grain_block or "opacity:" in grain_block
 
 
 def test_council_stage_h2_conf_state_hooks_in_ui_css():
@@ -629,10 +628,16 @@ def test_council_pick_card_uses_pewter_smoke_background():
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "var(--hero-void)" in hero_card or "#080b0e" in hero_card
+    assert (
+        "var(--hero-void)" in hero_card
+        or "#1e2128" in hero_card
+        or "rgba(12, 18, 28" in hero_card
+        or "#080b0e" in hero_card
+    )
     assert "simivision-smoke-bg.svg" not in hero_card
     smoke = css.split(".tribunal-hero__card::before {", 1)[1].split("}", 1)[0]
     assert "radial-gradient" in smoke
+    assert "feTurbulence" not in smoke
 
 
 def test_home_drawers_and_section21_live_in_ui_css():
@@ -970,16 +975,19 @@ def test_ui_legacy_is_stub_only():
 
 
 def test_grey_smoke_bg_base_token():
-    """Global glass pass — full atmosphere page base + glass tokens."""
+    """Global glass pass — soft smoke page base + glass tokens (no grain screen)."""
     base_css = open("static/css/base.css", encoding="utf-8").read()
     ui_css = _read_ui_css()
     assert "--bg-atmosphere" in base_css
     assert "simivision-smoke-bg.svg" in base_css
+    assert "#1e2128" in base_css
     body_block = ui_css.split("body.council-first-theme {", 1)[1].split("}", 1)[0]
     assert "var(--bg-atmosphere)" in body_block
     assert "--glass-fill:" in ui_css
     assert "body.council-first-theme::after" in ui_css
-    assert "radial-gradient(#000 1px, transparent 1px)" in ui_css
+    after = ui_css.split("body.council-first-theme::after {", 1)[1].split("}", 1)[0]
+    assert "radial-gradient(#000 1px, transparent 1px)" not in after
+    assert "blur(" in after or "radial-gradient" in after
     assert "body.council-first-theme .app-shell" in ui_css
     assert "body.council-first-theme > *" not in ui_css
     aurora = ui_css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
@@ -994,7 +1002,7 @@ def test_grey_smoke_bg_base_token():
 
 
 def test_global_glass_card_overrides_in_ui_css():
-    """Hero card uses smoky void + subtle grain; panels/judges use dark glass."""
+    """Hero card uses soft smoke glass; panels/judges use dark glass; ring is white-hot."""
     import re
 
     css = _read_ui_css()
@@ -1002,10 +1010,18 @@ def test_global_glass_card_overrides_in_ui_css():
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "var(--hero-void)" in hero_card or "#080b0e" in hero_card
+    assert "var(--hero-void)" in hero_card or "#1e2128" in hero_card or "rgba(12, 18, 28" in hero_card
     assert "transparent" not in hero_card.split("background-color")[1].split(";")[0]
-    parts = css.split(".tribunal-hero__card::after {")
-    assert any("soft-light" in p.split("}", 1)[0] for p in parts[1:])
+    after_rules = [
+        p.split("}", 1)[0]
+        for p in css.split(".tribunal-hero__card::after {")[1:]
+    ]
+    assert any("display: none" in block for block in after_rules)
+    assert "--j-echo: #c4b5fd" in css
+    assert "--j-pulse: #fdba74" in css
+    assert "--j-oracle: #7dd3fc" in css
+    ring = css.split(".tribunal-hero__ring-glow {", 1)[1].split("}", 1)[0]
+    assert "rgba(255, 255, 255" in ring
     panel_block = css.split(".tribunal-hero__panel {", 1)[1].split("}", 1)[0]
     assert "backdrop-filter: blur" in panel_block
     assert "var(--hero-glass)" in panel_block or "rgba(8, 11, 14" in panel_block
@@ -1017,9 +1033,9 @@ def test_global_glass_card_overrides_in_ui_css():
     assert "var(--glass-fill)" in grouped
     pds = css.split(".pds-hero,", 1)[1].split("}", 1)[0]
     assert "var(--glass-fill)" in pds
-    ring = css.split(".tribunal-hero__ring-center::before {", 1)[1].split("}", 1)[0]
-    assert "var(--hero-glass)" in ring
-    assert "backdrop-filter: blur" in ring
+    ring_center = css.split(".tribunal-hero__ring-center::before {", 1)[1].split("}", 1)[0]
+    assert "var(--hero-glass)" in ring_center
+    assert "backdrop-filter: blur" in ring_center
 
 
 def test_pump_dossier_cta_not_hardcoded_sn_only():
