@@ -4,10 +4,12 @@
 <style>
   .tribunal-preview-frame {
     max-width: 390px; margin: 0 auto;
-    border-left: 1px solid #222; border-right: 1px solid #222;
+    min-height: 100vh;
+    background: transparent;
   }
 </style>
 <div class="tribunal-preview-frame app-shell council-first">
+  <div class="council-stage__atmosphere" aria-hidden="true"></div>
   {% include "partials/premium/tribunal_hero.html" %}
 </div>
 {% endblock %}
