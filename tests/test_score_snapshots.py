@@ -117,7 +117,6 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
     """Contended snapshot must skip (not wedge) and never touch the heavy gate."""
     from internal.heavy_job_gate import heavy_job_slot
 
-    monkeypatch.setattr(snaps, "_scoring_in_progress", lambda: False)
     ran = {"n": 0}
 
     def _fail(**kwargs):
@@ -130,6 +129,7 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     sched = snaps.ScoreSnapshotScheduler()
+    sched._scoring_in_progress = lambda: False
     with heavy_job_slot("other_heavy_job"):
         out = sched._tick(reschedule=False)
     assert out.get("skipped") == "heavy_job_busy"
@@ -139,7 +139,6 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
 
 def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
     """Ungated snapshot completes a full cycle and updates scheduler state."""
-    monkeypatch.setattr(snaps, "_scoring_in_progress", lambda: False)
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
@@ -151,6 +150,7 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
 
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
     sched = snaps.ScoreSnapshotScheduler()
+    sched._scoring_in_progress = lambda: False
     out = sched._tick(reschedule=False)
     assert out.get("ok") is True
     assert out.get("count") == 3

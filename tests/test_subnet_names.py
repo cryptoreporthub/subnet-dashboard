@@ -21,16 +21,16 @@ def test_resolve_prefers_tmc_over_stale_remote():
 
 
 def test_sn40_override_beats_stale_tmc_ralph():
-    """SN40 TMC still lists Ralph; curator override until TMC updates."""
+    """SN40 override (ralph) beats TaoMarketCap's stale 'Ralph' label."""
     name = resolve_subnet_name(40, tmc_name="Ralph", use_taostats=False)
-    assert name == "Chunking"
+    assert name == "ralph"
 
 
 def test_sn40_not_ralph():
-    """SN40 must not display TaoMarketCap's stale 'Ralph' label."""
+    """SN40 must not display the naive stored 'Chunking'/TMC label — override wins."""
     name = resolve_subnet_name(40, tmc_name="Ralph", use_taostats=False)
     assert name != "Ralph"
-    assert name == "Chunking"
+    assert name == "ralph"
 
 
 def test_refresh_stored_names():

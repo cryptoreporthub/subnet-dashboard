@@ -4160,10 +4160,18 @@
         window.SimiMarketDrivers.refresh();
       }
 
+      // Guard pre-trail renders so a single panel failure can't abort the whole
+      // deferred chain and leave below-fold panels + the footer Trail metric stuck.
       if (subnets.length) {
-        renderStaking(subnets);
-        renderUndervalued(subnets);
-        renderRadar(subnets);
+        try {
+          renderStaking(subnets);
+        } catch (e) { console.warn('[cockpit_hydrate] renderStaking failed', e); }
+        try {
+          renderUndervalued(subnets);
+        } catch (e) { console.warn('[cockpit_hydrate] renderUndervalued failed', e); }
+        try {
+          renderRadar(subnets);
+        } catch (e) { console.warn('[cockpit_hydrate] renderRadar failed', e); }
       }
 
       // LB-11: trail before top-picks so Living Focus can reuse this fetch
@@ -4173,6 +4181,15 @@
         trail = safePayload(trailPayload).trail || [];
         renderTrail(trail);
         patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
+        // Refresh the footer Trail metric as soon as the trail fetch lands, not
+        // only at the end of the deferred chain (which waits on 30s picks).
+        renderFooterStatus({
+          dataSource: subnetsMeta.source,
+          meta: subnetsMeta,
+          subnets: subnets.length,
+          trail: trail.length,
+          predictions: stats && stats.total_records != null ? stats.total_records : null,
+        });
         if (window.HomeHydrateCache) {
           window.HomeHydrateCache.trail = trail;
           window.HomeHydrateCache.at = Date.now();

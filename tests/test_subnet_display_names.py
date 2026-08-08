@@ -58,13 +58,17 @@ def test_display_name_tmc_sn23_trishool(monkeypatch):
     assert name == "Trishool"
 
 
-def test_display_name_prefers_enriched_row():
+def test_display_name_prefers_enriched_row(monkeypatch):
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
     row = {"netuid": 40, "name": "Chunking", "source": "taomarketcap"}
     name = display_name_for_netuid(40, subnet_row=row, use_taostats_fallback=False)
     assert name == "Chunking"
 
 
-def test_display_name_skips_stale_tmc_ralph():
+def test_display_name_skips_stale_tmc_ralph(monkeypatch):
+    """With no override, a stale row name is skipped, not surfaced."""
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
     name = display_name_for_netuid(
         40,
         subnet_row={"netuid": 40, "name": "Ralph", "source": "registry"},
@@ -73,6 +77,36 @@ def test_display_name_skips_stale_tmc_ralph():
     )
     assert name != "Ralph"
     assert name == "Chunking" or name == "SN40"
+
+
+def test_display_name_override_wins_over_trustworthy_live(monkeypatch):
+    """A deliberate override beats a 'trustworthy' live feed name (Blockmachine/TMC).
+
+    Regression for the live hero label flipping back off the curated name when the
+    source is live rather than degraded/snapshot.
+    """
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {"40": "ralph"},
+    )
+    name = display_name_for_netuid(
+        40,
+        subnet_row={"netuid": 40, "name": "Chunking", "source": "blockmachine"},
+        use_taostats_fallback=False,
+    )
+    assert name == "ralph"
+
+
+def test_canonical_display_override_wins(monkeypatch):
+    """Override also wins via canonical display used by picks/horizon enrichment."""
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {"40": "ralph"},
+    )
+    from internal.subnet_names import canonical_subnet_display
+
+    out = canonical_subnet_display({"netuid": 40, "name": "Chunking"})
+    assert out["name"] == "ralph"
 
 
 def test_load_subnets_for_display_uses_council_feed(monkeypatch):

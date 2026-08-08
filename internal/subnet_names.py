@@ -182,8 +182,14 @@ def resolve_subnet_name(
     remote: Optional[Dict[str, Any]] = None,
     tmc_name: Optional[str] = None,
     use_taostats: bool = False,
+    use_tmc_names: bool = True,
 ) -> str:
-    """Priority: override → TMC → local registry → TaoStats identity → GitHub taostat → SN{n}."""
+    """Priority: override → TMC → local registry → TaoStats identity → GitHub taostat → SN{n}.
+
+    ``use_tmc_names=False`` skips the blocking TaoMarketCap network fetch. The
+    emergency/shell homepage build (8s prime budget) calls this path, so a slow
+    TMC fetch must never keep GET / wedged on the "Loading council desk…" shell.
+    """
     if netuid is None:
         return "SN?"
     try:
@@ -195,7 +201,7 @@ def resolve_subnet_name(
     if override and not _is_bad_name(override):
         return override
 
-    tmc_hit = _tmc_label(n, tmc_name)
+    tmc_hit = _tmc_label(n, tmc_name) if use_tmc_names else None
     if tmc_hit:
         return tmc_hit
 
@@ -254,6 +260,13 @@ def display_name_for_netuid(
     except (TypeError, ValueError):
         return "SN?"
 
+    # A deliberate operator override always wins, even over a "trustworthy"
+    # live feed name (Blockmachine/TMC). Otherwise the override only surfaces
+    # in the degraded path and the live hero label regresses.
+    override = _load_name_overrides().get(str(n))
+    if override and not _is_bad_name(override):
+        return str(override).strip()
+
     row_name = subnet_row.get("name") if isinstance(subnet_row, dict) else None
     canon = resolve_subnet_name(n, tmc_name=None, use_taostats=False)
     if row_name and not is_generic_display_name(row_name, n):
@@ -291,21 +304,41 @@ def enrich_subnet_row(row: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
     return out
 
 
-def enrich_subnet_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def enrich_subnet_rows(
+    rows: List[Dict[str, Any]],
+    *,
+    use_tmc_names: bool = True,
+) -> List[Dict[str, Any]]:
     local = _load_local_registry()
     remote = _remote_registry()
     return [
-        enrich_subnet_row(r, local=local, remote=remote, use_taostats=False)
+        enrich_subnet_row(
+            r,
+            local=local,
+            remote=remote,
+            use_taostats=False,
+            use_tmc_names=use_tmc_names,
+        )
         for r in (rows or [])
     ]
 
 
-def enrich_subnet_rows_live(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def enrich_subnet_rows_live(
+    rows: List[Dict[str, Any]],
+    *,
+    use_tmc_names: bool = True,
+) -> List[Dict[str, Any]]:
     """Like enrich_subnet_rows but may call TaoStats identity (slower)."""
     local = _load_local_registry()
     remote = _remote_registry()
     return [
-        enrich_subnet_row(r, local=local, remote=remote, use_taostats=True)
+        enrich_subnet_row(
+            r,
+            local=local,
+            remote=remote,
+            use_taostats=True,
+            use_tmc_names=use_tmc_names,
+        )
         for r in (rows or [])
     ]
 

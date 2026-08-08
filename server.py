@@ -807,10 +807,18 @@ def _read_shell_daily_pick() -> Dict[str, Any]:
 
 
 def _registry_shell_subnets() -> List[Dict[str, Any]]:
-    """Registry-only rows for fast homepage shell — no live feed."""
+    """Registry-only rows for fast homepage shell — no live feed, no blocking network.
+
+    ``use_tmc_names=False`` keeps the 8s emergency-prime budget from being blown
+    by a slow TaoMarketCap fetch (up to a 25s deadline), which used to wedge GET /
+    on the "Loading council desk…" shell instead of upgrading to the real page.
+    """
     from internal.subnet_names import enrich_subnet_rows
 
-    subnets = enrich_subnet_rows(list(load_data("config/registry.json").values()))
+    subnets = enrich_subnet_rows(
+        list(load_data("config/registry.json").values()),
+        use_tmc_names=False,
+    )
     return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
 
 
