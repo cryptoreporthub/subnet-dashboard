@@ -1,0 +1,13 @@
+/* The ONLY Tailwind root for the "smoke" design system's mockups.
+ *
+ * It imports that design system's full theme from the workspace package
+ * (Tailwind engine + @theme + tokens) exactly once, so this entry's frames
+ * render with smoke's own build. The package's styles.css also registers
+ * its own components with Tailwind, so their utility classes are generated
+ * without a node_modules path here; mockup files under ./mockups are picked up
+ * by Tailwind's normal project scan.
+ *
+ * Do NOT import the sandbox's src/index.css here — that would stack a second
+ * Tailwind build and token set on the frame.
+ */
+@import '@workspace/smoke/styles.css';

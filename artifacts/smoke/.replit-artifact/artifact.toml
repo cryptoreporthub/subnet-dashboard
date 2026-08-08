@@ -1,0 +1,19 @@
+kind = "design-system"
+previewPath = "/"
+title = "Smoke Council"
+description = "A dark glassmorphic design system anchored on a smoked, atmospheric backdrop — frosted glass surfaces floating over soft nebula smoke with cyan and ember-amber accents. Matches the council hero reference exactly."
+version = "1.0.0"
+id = "artifacts/smoke"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22168
+
+[services.development]
+run = "pnpm --filter @workspace/smoke run dev"
+
+[services.env]
+PORT = "22168"
+BASE_PATH = "/"
