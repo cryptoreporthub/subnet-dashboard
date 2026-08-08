@@ -113,23 +113,67 @@ def expert_from_signal_impact(signal_impact: Optional[Dict[str, Any]]) -> str:
 
 
 def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
-    """Re-derive council expert for historical replay (new map, skip pump desk)."""
+    """Re-derive council expert for historical replay (new map, skip pump desk).
+
+    Attribution is derived from richer sources in priority order, so that rows
+    stamped with a stale expert label before the Grok LOCK fix can be correctly
+    re-attributed when better signal data is available:
+
+    1. ``signal_impact`` — strongest scored signal wins.  Overrides the baked-in
+       ``expert`` field even when signal_impact disagrees with the stamp.
+    2. ``signal_source`` — explicit signal label on the row (checked separately
+       from the ``expert`` field to avoid feeding stale stamps back in).
+    3. Pick-blob blend via ``dominant_expert_for_learning`` (expert_contributions /
+       active_signals) — captures dark_horse picks whose signal_impact was not
+       recorded at resolution time.
+    4. ``normalize_expert`` — last resort for legacy aliases (contrarian → dark_horse,
+       alpha → quant, etc.) and rows with no signal data at all.
+    """
     try:
         from internal.council.grading import is_pump_desk_claim
     except Exception:
         is_pump_desk_claim = lambda _r: False  # type: ignore
     if is_pump_desk_claim(row):
         return None
+
+    # 1. signal_impact — richest source; overrides stale expert stamp.
     si = row.get("signal_impact")
     if isinstance(si, dict):
         expert = expert_from_signal_impact(si)
         if expert != "unclassified":
             return expert
-    src = row.get("signal_source") or row.get("expert")
+
+    # 2. signal_source only — checked independently from the expert field so
+    #    that the stale stamp cannot short-circuit pick-blob attribution below.
+    src = row.get("signal_source")
     if src:
         expert = expert_from_signal_source(str(src))
         if expert != "unclassified":
             return expert
+
+    # 3. Pick-blob blend: expert_contributions / active_signals.  Captures
+    #    dark_horse picks whose signal_impact was absent at resolution time.
+    pick_blob: Optional[Dict[str, Any]] = None
+    for key in ("pick", "candidate"):
+        blob = row.get(key)
+        if isinstance(blob, dict):
+            pick_blob = blob
+            break
+    if pick_blob is None and any(k in row for k in ("expert_contributions", "active_signals")):
+        pick_blob = row
+    if pick_blob is not None:
+        try:
+            from internal.council.expert_attribution import CANONICAL_EXPERTS
+            from internal.council.expert_display import dominant_expert_for_learning
+
+            leader = dominant_expert_for_learning(pick_blob)
+            if leader in CANONICAL_EXPERTS:
+                return leader
+        except Exception:
+            pass
+
+    # 4. Last resort: normalize_expert handles legacy aliases (contrarian → dark_horse,
+    #    etc.) and falls back to the canonical expert field for rows with no signal data.
     try:
         from internal.council.expert_attribution import normalize_expert
 
