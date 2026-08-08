@@ -2,29 +2,29 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — deep charcoal so baked smoke billows have voids to play against */
-  --bg-base: #15171d;
-  --bg-edge: #111318;
-  --bg-midnight: #0d0f14;
+  /* Backgrounds — soft charcoal so volumetric smoke billows have voids to play against */
+  --bg-base: #1e2128;
+  --bg-edge: #181b22;
+  --bg-midnight: #161920;
   --bg-surface: rgba(22, 25, 32, 0.82);
   --bg-card: rgba(28, 32, 40, 0.55);
   --bg-elevated: rgba(36, 40, 50, 0.72);
   --bg-header: rgba(18, 21, 28, 0.72);
-  /* Pewter card smoke — pure grey family, no cyan sheen */
+  /* Pewter card smoke — soft billows only (no film grain) */
   --card-smoke:
-    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(190, 198, 210, 0.16) 0%, transparent 50%),
-    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(170, 170, 178, 0.07) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(18, 20, 26, 0.55) 0%, rgba(14, 16, 22, 0.62) 100%);
-  --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(190, 198, 210, 0.14) 0%, transparent 50%),
+    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(170, 170, 178, 0.06) 0%, transparent 55%),
+    linear-gradient(180deg, rgba(18, 20, 26, 0.45) 0%, rgba(14, 16, 22, 0.52) 100%);
+  --card-grain: none;
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
-  /* Rich silver smoke atmosphere — baked SVG + luminous billow washes over charcoal */
+  /* Soft grey smoke atmosphere — SVG billows + luminous washes (no grain overlay) */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(200, 205, 214, 0.30) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(170, 175, 185, 0.24) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(185, 190, 200, 0.26) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(140, 145, 155, 0.21) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(190, 196, 206, 0.22) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(160, 166, 176, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(170, 176, 186, 0.18) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(130, 136, 146, 0.16) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
   /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */
