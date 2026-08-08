@@ -38,13 +38,13 @@
 {% set mi_ns = namespace(chg_sum=0.0, apy_sum=0.0, apy_n=0, gainers=0, losers=0) %}
 {% for sn in sn_list %}
   {% set chg = (sn.price_change_24h|default(0))|float %}
-  {% set _ = mi_ns|set_key('chg_sum', mi_ns.chg_sum + chg) %}
-  {% if chg > 0 %}{% set _ = mi_ns|set_key('gainers', mi_ns.gainers + 1) %}{% elif chg < 0 %}{% set _ = mi_ns|set_key('losers', mi_ns.losers + 1) %}{% endif %}
+  {% set mi_ns.chg_sum = mi_ns.chg_sum + chg %}
+  {% if chg > 0 %}{% set mi_ns.gainers = mi_ns.gainers + 1 %}{% elif chg < 0 %}{% set mi_ns.losers = mi_ns.losers + 1 %}{% endif %}
   {% set apy_raw = sn.apy|default(none) %}
   {% if apy_raw is none and sn.staking_data is mapping %}{% set apy_raw = sn.staking_data.apy %}{% endif %}
   {% if apy_raw is not none %}
-    {% set _ = mi_ns|set_key('apy_sum', mi_ns.apy_sum + (apy_raw|float)) %}
-    {% set _ = mi_ns|set_key('apy_n', mi_ns.apy_n + 1) %}
+    {% set mi_ns.apy_sum = mi_ns.apy_sum + (apy_raw|float) %}
+    {% set mi_ns.apy_n = mi_ns.apy_n + 1 %}
   {% endif %}
 {% endfor %}
 {% set mi_total = sn_list|length %}
@@ -58,8 +58,9 @@
 {% include "partials/premium/council_stage.html" %}
 {# Market pulse + integrations ribbon — below hero (K3-7) #}
 {% include "partials/premium/pulse_strip.html" %}
-{% set pump_compact = true %}
+{% with pump_compact=true %}
 {% include "partials/premium/pump_alert_scan.html" %}
+{% endwith %}
 
 {# SS-TG W0 — Subnet Summers Telegram desk first-class (not buried in More intel) #}
 {% include "partials/premium/message_intel_feed.html" %}

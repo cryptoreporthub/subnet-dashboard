@@ -2,7 +2,7 @@
 {% macro trend_rows(rows, window_label='1h') %}
 {% if rows %}
 <div class="message-intel__trend-rows">
-  {% for row in rows.slice(0, 6) %}
+  {% for row in rows[:6] %}
   {% set rank = loop.index %}
   <div class="message-intel__trend-row">
     <span class="message-intel__rank {% if rank == 1 %}message-intel__rank--gold{% elif rank == 2 %}message-intel__rank--silver{% elif rank == 3 %}message-intel__rank--bronze{% endif %}">{{ '%02d'|format(rank) }}</span>
@@ -23,7 +23,7 @@
 {% macro champion_rows(rows) %}
 {% if rows %}
 <div class="message-intel__champ-rows">
-  {% for row in rows.slice(0, 6) %}
+  {% for row in rows[:6] %}
   {% set rank = loop.index %}
   {% set inf = (row.influence_score|default(0))|float %}
   <div class="message-intel__champ-row">
@@ -45,7 +45,7 @@
 {% macro feed_rows(messages) %}
 {% if messages %}
 <div class="message-intel__feed-rows">
-  {% for row in messages.slice(0, 12) %}
+  {% for row in messages[:12] %}
   {% set verdict = row.verdict if row.verdict is mapping else {} %}
   {% set analysis = row.analysis if row.analysis is mapping else {} %}
   {% set conv = verdict.conviction if verdict.conviction is not none else none %}
@@ -60,7 +60,7 @@
         {% if conv is not none %}<span class="message-intel__f-conv{% if conv|float >= 60 %} message-intel__f-conv--high{% endif %}">{{ '%.0f'|format(conv|float) }}% conv</span>{% endif %}
         {% if row.timestamp %}<span class="message-intel__f-time">{{ row.timestamp }}</span>{% endif %}
       </div>
-      <p class="message-intel__f-text">{{ (row.content|default('')).slice(0, 280) }}{% if (row.content|default(''))|length > 280 %}…{% endif %}</p>
+      <p class="message-intel__f-text">{{ (row.content|default(''))[:280] }}{% if (row.content|default(''))|length > 280 %}…{% endif %}</p>
     </div>
   </article>
   {% endfor %}

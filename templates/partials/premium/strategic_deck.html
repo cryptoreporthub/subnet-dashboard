@@ -17,9 +17,9 @@
         <a class="sr-deck__pane-link" href="#section-pump-alert">Open</a>
       </div>
       <div class="sr-deck__pane-body">
-        {% set pump_compact = true %}
+        {% with pump_compact=true %}
         {% include "partials/premium/pump_alert_scan.html" %}
-        
+        {% endwith %}
       </div>
     </div>
     <div class="sr-deck__pane sr-glow-live">

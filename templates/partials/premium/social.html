@@ -9,7 +9,7 @@
   {% if social_rows %}
   {% set soc_max = social_rows|map(attribute='mentions')|map('int')|list|max if social_rows else 1 %}
   <div class="soc-grid">
-    {% for row in social_rows.slice(0, 6) %}
+    {% for row in social_rows[:6] %}
     {% set label = (row.label|default('neutral'))|string|lower %}
     {% set tier = 'tier-cyan' if label == 'bullish' else ('tier-gold' if label == 'bearish' else 'tier-lime') %}
     {% set mentions = row.mentions|default(0)|int %}

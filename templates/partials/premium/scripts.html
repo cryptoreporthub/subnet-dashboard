@@ -20,12 +20,12 @@
 })(window);
 </script>
 <script type="application/json" id="subnet-group-data">{{ {
-  'roster': sn_list.slice(0, 24) if sn_list else [],
+  'roster': sn_list[:24] if sn_list else [],
   'indicators': ti_rows,
   'hour_picks': hp,
   'day_picks': dyp,
-  'trail': mindmap_trail.slice(0, 20) if mindmap_trail else [],
-  'predictions': predictions.slice(0, 12) if predictions else []
+  'trail': mindmap_trail[:20] if mindmap_trail else [],
+  'predictions': predictions[:12] if predictions else []
 }|tojson|safe }}</script>
 <script src="/static/js/conviction_tiers.js" defer></script>
 <script src="/static/js/empty_state.js" defer></script>

@@ -77,7 +77,7 @@
             </div>
             {% if item.description %}
             <div class="simivision-card-footer">
-              <p>{{ item.description.slice(0, 200) }}{% if item.description|length > 200 %}…{% endif %}</p>
+              <p>{{ item.description[:200] }}{% if item.description|length > 200 %}…{% endif %}</p>
             </div>
             {% endif %}
           </div>

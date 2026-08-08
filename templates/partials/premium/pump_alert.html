@@ -171,7 +171,7 @@
               <a class="pd-angles__more" href="#pump-desk-more">View ladder</a>
             </header>
             <div class="pd-angles__grouped-list">
-              {% for g in lead_replicas.slice(0, 3) %}
+              {% for g in lead_replicas[:3] %}
               <span class="pd-angles__grouped">{{ g.count|default(1) }}× {{ g.label|default(g.name|default('Match')) }} <b>[{{ g.pct|default(g.to_lead_pct|default(0))|int }}%]</b></span>
               {% endfor %}
             </div>
@@ -186,7 +186,7 @@
             </header>
             {% if correlated_peers and correlated_peers|length > 0 %}
             <div class="pd-angles__grouped-list">
-              {% for g in correlated_peers.slice(0, 3) %}
+              {% for g in correlated_peers[:3] %}
               <span class="pd-angles__grouped">{{ g.count|default(1) }}× {{ g.label|default(g.name|default('Peer')) }} <b>[{{ g.pct|default(g.to_lead_pct|default(0))|int }}%]</b></span>
               {% endfor %}
             </div>
@@ -227,7 +227,7 @@
         <section class="pd-board__section">
           <h4 class="pd-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h4>
           <div class="pd-board__rows">
-            {% for row in warm_ns.rows.slice(1) %}
+            {% for row in warm_ns.rows[1:] %}
             {% include "partials/premium/pump_desk_row.html" %}
             {% endfor %}
           </div>

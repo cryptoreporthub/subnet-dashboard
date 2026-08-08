@@ -268,8 +268,8 @@
   >
     <div id="mindmap-integration-status" class="mindmap-integration-status" aria-label="Data source integration status">
     {% if mindmap_graph is defined and mindmap_graph and mindmap_graph.integration_status %}
-      {% for key, label in integration_labels %}
-        {% set st = mindmap_graph.integration_status[key] %}
+      {% for key, label in integration_labels.items() %}
+        {% set st = mindmap_graph.integration_status.get(key) %}
         {% if st %}
       <span class="mindmap-integration-badge mindmap-integration-badge--{{ st }}" data-source="{{ key }}" data-status="{{ st }}"{% if st == 'blocked' %} title="Not yet wired — pending activation"{% elif key in ('dispositions', 'scenario') and st == 'partial' %} title="Capped soft-tilt in pick score — not a hard gate"{% elif st == 'display_only' %} title="Shown for context — not yet actionable"{% elif st == 'read_only' %} title="Read-only feed — no write-back"{% endif %}>
         <span class="mindmap-integration-badge__label">{{ label }}</span>
