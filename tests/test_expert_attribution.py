@@ -90,7 +90,13 @@ def test_resolve_expert_attribution_legacy_gamma():
     assert source == "existing"
 
 
-def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch):
+def test_resolve_stamps_and_nudges_via_attributed_expert(tmp_path, monkeypatch):
+    """After removing the Grok LOCK split, label and nudge both use resolve_expert_attribution.
+
+    Previously the nudge used _normalize_expert (which returned None for replay-only rows)
+    while the label used resolve_expert_attribution.  Now they agree: a replay-attributed
+    row stamps AND nudges the attributed expert.
+    """
     import json
 
     from internal.council import resolver
@@ -119,7 +125,7 @@ def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch
 
     nudged = []
 
-    def _capture(expert, correct):
+    def _capture(correct, expert):  # _nudge_weights(correct, expert)
         nudged.append((expert, correct))
 
     monkeypatch.setattr(resolver, "_nudge_weights", _capture)
@@ -138,7 +144,8 @@ def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch
     resolver.resolve_prediction(prediction, current_price=10.4)
     assert prediction["expert"] == "hype"
     assert prediction.get("expert_attribution_source") == "replay"
-    assert nudged == []
+    # Nudge now fires with the attributed expert — label and nudge agree.
+    assert nudged == [("hype", True)]
 
 
 def test_backfill_expert_attribution_dry_run(tmp_path, monkeypatch):

@@ -56,11 +56,6 @@ except Exception:  # pragma: no cover
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
 
-_LEARNING_DELTA_CORRECT = 0.02
-_LEARNING_DELTA_WRONG = -0.02
-_LEARNING_MIN_WEIGHT = 0.3
-_LEARNING_MAX_WEIGHT = 2.0
-
 _EXPIRY_GRACE_MULTIPLE = 2.0
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
 
@@ -160,18 +155,26 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
 
 
 def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tuple[Optional[str], Optional[str]]:
-    """Stamp rich attribution on the row; nudge only pre-stamp normalize (Grok LOCK)."""
+    """Stamp rich attribution on the row; nudge using the same attribution as the ledger label.
+
+    Previously the weight nudge used the raw _normalize_expert string matcher while the
+    ledger stamp used the richer resolve_expert_attribution pipeline (Grok LOCK split).
+    That caused ambiguous picks (e.g. expert='alpha') to pile every nudge onto quant and
+    starved dark_horse of nudges it deserved.  Both paths now use resolve_expert_attribution
+    so the nudge and the label always agree.
+    """
     from internal.council.expert_attribution import resolve_expert_attribution
 
-    nudge_expert = _normalize_expert(prediction)
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
     if stamped_expert:
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
-    if nudge_expert and not _skip_council_learning(prediction):
-        _nudge_weights(bool(correct), nudge_expert)
-    return stamped_expert, nudge_expert
+    # Nudge uses the attributed expert — same as the ledger label.
+    nudge_expert_val = stamped_expert
+    if nudge_expert_val and not _skip_council_learning(prediction):
+        _nudge_weights(bool(correct), nudge_expert_val)
+    return stamped_expert, nudge_expert_val
 
 
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
