@@ -1,15 +1,41 @@
 {
   "active": {
-    "netuid": 24,
-    "name": "Quasar",
-    "entry_price": 0.00380707,
-    "picked_at": "2026-08-07T23:50:29.605495Z",
-    "prediction_id": "fccd8eb48e",
+    "netuid": 94,
+    "name": "pending...",
+    "entry_price": 0.00373018,
+    "picked_at": "2026-08-08T00:38:07.929314Z",
+    "prediction_id": "a07fef9fe2",
     "direction": "long",
-    "confidence": 0.5502,
+    "confidence": 0.5862,
     "finalized": false
   },
   "history": [
+    {
+      "netuid": 24,
+      "name": "Quasar",
+      "entry_price": 0.00381171,
+      "picked_at": "2026-08-08T00:16:49.415449Z",
+      "prediction_id": "26649d9fc1",
+      "direction": "long",
+      "confidence": 0.5505,
+      "finalized": true,
+      "success": null,
+      "outcome": "replaced",
+      "resolved_at": "2026-08-08T00:38:07.929292Z"
+    },
+    {
+      "netuid": 24,
+      "name": "Quasar",
+      "entry_price": 0.00380707,
+      "picked_at": "2026-08-07T23:50:29.605495Z",
+      "prediction_id": "fccd8eb48e",
+      "direction": "long",
+      "confidence": 0.5502,
+      "finalized": true,
+      "success": null,
+      "outcome": "replaced",
+      "resolved_at": "2026-08-08T00:16:49.415423Z"
+    },
     {
       "netuid": 38,
       "name": "ChronoLLM",
