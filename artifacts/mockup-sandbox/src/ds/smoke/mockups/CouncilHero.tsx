@@ -1,210 +1,436 @@
-import { Scale, Signal, Crosshair, CandlestickChart } from 'lucide-react';
+import { Scale } from 'lucide-react';
 
+import { SignalCard } from '@workspace/smoke/components/signal-card';
 import { SmokeBackdrop } from '@workspace/smoke/components/smoke-backdrop';
 import { VerdictGauge } from '@workspace/smoke/components/verdict-gauge';
 
 /**
- * CouncilHero — the Council centre-of-gravity screen from the Subnet Dashboard,
- * rebuilt on the Smoke Council design system.
+ * CouncilHero — the Council centre-of-gravity screen from the Subnet Dashboard.
  *
- * A smoky glassmorphic backdrop, frosted panels that let the atmosphere show
- * through, a neon verdict gauge, the ORACLE / ECHO / PULSE signal cards, a
- * decision log and the ember-amber bottom nav with a floating scales FAB.
- * Sized mobile-first (~390×844).
+ * Built at the reference capture's own proportions (629x1024, the 1206x1964
+ * screenshot at half scale) rather than a generic phone frame, so every element
+ * lands where the reference puts it. Every coordinate below was measured off
+ * that capture rather than eyeballed, which is why they are odd numbers.
+ *
+ * The composition: a black tab strip, the audit-gate capsule, one bracketed HUD
+ * panel holding ORACLE above the verdict dial with ECHO and PULSE facing each
+ * other along its lower edge, a decision log deliberately clipped by the
+ * navigation, and a black text-only bottom bar with the amber action button
+ * overlapping it.
  */
 
-type Wire = 'ORACLE' | 'ECHO' | 'PULSE';
+const W = 629;
+const H = 1024;
+const HEADER_H = 99;
+const NAV_TOP = 929;
 
-function MiniBars({ value }: { value: number }) {
-  const bars = [0.42, 0.72, 0.55, 0.88, 0.62];
-  return (
-    <div className="flex items-end gap-[3px]">
-      {bars.map((h, i) => (
-        <span
-          key={i}
-          className="w-[4px] rounded-[1px] bg-chart1/90"
-          style={{
-            height: `${h * 14}px`,
-            opacity: i === Math.floor(bars.length * value) - 1 ? 1 : 0.55,
-            boxShadow: i === Math.floor(bars.length * value) - 1
-              ? '0 0 6px rgba(55,182,242,0.7)'
-              : undefined,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
+/** Panel origin — the child coordinates below are relative to this. */
+const PANEL = { left: 43, top: 166, width: 541, height: 683 };
 
-function SignalCard({
-  name,
-  signal,
-  weight,
-  wire,
-}: {
-  name: Wire;
-  signal: string;
-  weight: string;
-  wire: 'cyan' | 'green' | 'amber';
-}) {
-  const accent =
-    wire === 'cyan'
-      ? 'text-chart1 border-chart1/30 bg-chart1/10'
-      : wire === 'green'
-        ? 'text-chart2 border-chart2/30 bg-chart2/10'
-        : 'text-chart3 border-chart3/30 bg-chart3/10';
-  const dot =
-    wire === 'cyan'
-      ? 'bg-chart1 shadow-[0_0_8px_rgba(55,182,242,0.9)]'
-      : wire === 'green'
-        ? 'bg-chart2 shadow-[0_0_8px_rgba(47,211,123,0.9)]'
-        : 'bg-chart3 shadow-[0_0_8px_rgba(245,165,36,0.9)]';
+/** Dial: outer bezel 264px across, 36px of metal around a 192px disc. */
+const GAUGE = 264;
+const RING_RATIO = 36 / (GAUGE / 2);
 
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 backdrop-blur-xl">
-      <div className="flex items-center justify-between">
-        <span className="flex items-center gap-1.5 text-[8px] font-bold tracking-[0.18em] text-muted-foreground">
-          <span className={`h-1 w-1 rounded-full ${dot}`} />
-          {name}
-        </span>
-        <span className={`rounded-full border px-1.5 py-0.5 text-[8px] font-semibold ${accent}`}>
-          SIG {signal}%
-        </span>
-      </div>
-      <div className="mt-2 flex items-end justify-between">
-        <div>
-          <div className="text-[8px] tracking-[0.14em] text-muted-foreground">WEIGHT</div>
-          <div className="font-mono text-[11px] font-semibold text-foreground">
-            {weight}
-            <span className="text-[8px] text-muted-foreground">%</span>
-          </div>
-        </div>
-        <MiniBars value={0.6} />
-      </div>
-    </div>
-  );
-}
-
-const LOG_ROWS = [
-  { t: '14:32', kind: 'ORACLE', text: '+8.1 pts — flow & radar aligned', tone: 'text-chart1' },
-  { t: '14:12', kind: 'PULSE', text: 'weight-drop 4.2 → re-raise', tone: 'text-chart3' },
-  { t: '13:58', kind: 'ECHO', text: 'verdict re-sealed @ 74%', tone: 'text-chart2' },
+const TABS: { label: string; center: number }[] = [
+  { label: 'WEIGHING', center: 220 },
+  { label: 'LEAD', center: 338 },
+  { label: 'FOCUS', center: 440 },
+  { label: 'PROOF', center: 549 },
 ];
+
+function PanelBracket({ corner }: { corner: 'tl' | 'tr' }) {
+  const left = corner === 'tl';
+  return (
+    <span
+      aria-hidden
+      className="absolute"
+      style={{
+        top: 22,
+        [left ? 'left' : 'right']: 15,
+        width: 27,
+        height: 27,
+        borderTop: '2px solid #4fc3f7',
+        [left ? 'borderLeft' : 'borderRight']: '2px solid #4fc3f7',
+        [left ? 'borderTopLeftRadius' : 'borderTopRightRadius']: 4,
+        filter: 'drop-shadow(0 0 5px rgba(79,195,247,0.45))',
+      }}
+    />
+  );
+}
 
 export function CouncilHero() {
   return (
-    <div className="relative h-[844px] w-[390px] overflow-hidden bg-background font-sans text-foreground">
+    <div
+      className="relative overflow-hidden font-mono"
+      style={{ width: W, height: H, background: '#5f646a' }}
+    >
       <SmokeBackdrop />
 
-      <div className="relative z-10 flex h-full flex-col px-4 pb-24 pt-5">
-        {/* top tabs */}
-        <nav className="flex items-center justify-between gap-1">
-          {[
-            { label: 'COUNCIL', active: true },
-            { label: 'WEIGHING', active: false },
-            { label: 'LEAD', active: false },
-            { label: 'FOCUS', active: false },
-            { label: 'PROOF', active: false },
-          ].map((t) => (
-            <span
-              key={t.label}
-              className={
-                t.active
-                  ? 'rounded-full border border-chart2/40 bg-chart2/15 px-2.5 py-1 text-[9px] font-bold tracking-[0.14em] text-chart2 shadow-[0_0_12px_rgba(47,211,123,0.25)]'
-                  : 'px-2 py-1 text-[9px] font-semibold tracking-[0.14em] text-muted-foreground'
-              }
-            >
-              {t.label}
-            </span>
-          ))}
-        </nav>
-
-        {/* audit gate pill */}
-        <div className="mt-3 flex items-center justify-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.06] px-3 py-1 text-[8px] font-bold tracking-[0.2em] text-foreground/85 backdrop-blur-xl">
-            <span className="h-1.5 w-1.5 rounded-full bg-chart2 shadow-[0_0_6px_rgba(47,211,123,0.9)]" />
-            AUDIT GATE&nbsp; <span className="text-chart2">PUBLISH_ALLOWED</span>
+      {/* ── top tab strip ─────────────────────────────────────────── */}
+      <div
+        className="absolute inset-x-0 top-0"
+        style={{ height: HEADER_H, background: '#06070a' }}
+      >
+        <div
+          className="absolute flex items-center justify-center"
+          style={{
+            left: 25,
+            top: 10,
+            width: 122,
+            height: 73,
+            borderRadius: 11,
+            border: '1.5px solid #2f7c8c',
+            background: 'rgba(24,44,50,0.35)',
+          }}
+        >
+          <span
+            style={{
+              fontSize: 17.5,
+              letterSpacing: '0.03em',
+              color: '#4fe08a',
+              paddingLeft: '0.03em',
+            }}
+          >
+            COUNCIL
           </span>
         </div>
 
-        {/* ORACLE card (top) */}
-        <div className="mt-4">
-          <SignalCard name="ORACLE" signal="85.9" weight="36" wire="cyan" />
-        </div>
-
-        {/* central gauge panel */}
-        <div className="relative mt-3 flex flex-1 flex-col items-center justify-center rounded-[28px] border border-white/10 bg-white/[0.05] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_40px_rgba(0,0,0,0.25)] backdrop-blur-2xl">
-          {/* top sheen */}
-          <span className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-
-          <div className="mb-2 flex items-center gap-1.5 text-[8px] font-bold tracking-[0.22em] text-muted-foreground">
-            <Signal className="h-3 w-3 text-chart1" />
-            COUNCIL VERDICT
-          </div>
-
-          <VerdictGauge
-            value={74}
-            label="VERDICT CONFIDENCE"
-            tag="LONG"
-            size={236}
-            center={
-              <button className="inline-flex items-center gap-1.5 rounded-full border border-chart1/40 bg-chart1/15 px-4 py-1.5 text-[9px] font-bold tracking-[0.2em] text-chart1 shadow-[0_0_14px_rgba(55,182,242,0.35)] hover:bg-chart1/25">
-                <span className="h-1 w-1 rounded-full bg-chart1" />
-                SEALED
-              </button>
-            }
-          />
-
-          {/* ECHO / PULSE cards */}
-          <div className="mt-3 grid w-full grid-cols-2 gap-3">
-            <SignalCard name="ECHO" signal="84.0" weight="32" wire="green" />
-            <SignalCard name="PULSE" signal="45.0" weight="32" wire="amber" />
-          </div>
-        </div>
-
-        {/* DECISION LOG */}
-        <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2.5 backdrop-blur-xl">
-          <div className="flex items-center justify-between">
-            <span className="text-[8px] font-bold tracking-[0.22em] text-muted-foreground">
-              DECISION LOG
-            </span>
-            <span className="text-[8px] font-semibold tracking-[0.14em] text-chart1">
-              LIVE
-            </span>
-          </div>
-          <div className="mt-1.5 space-y-1">
-            {LOG_ROWS.map((r) => (
-              <div key={r.t} className="flex items-center gap-2">
-                <span className="w-8 font-mono text-[8px] text-muted-foreground">{r.t}</span>
-                <span className={`w-12 text-[8px] font-bold tracking-[0.1em] ${r.tone}`}>
-                  {r.kind}
-                </span>
-                <span className="truncate text-[8px] text-foreground/75">{r.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {TABS.map((t) => (
+          <span
+            key={t.label}
+            className="absolute whitespace-nowrap"
+            style={{
+              left: t.center,
+              top: 42,
+              transform: 'translate(-50%, -50%)',
+              fontSize: 16.5,
+              letterSpacing: '0.08em',
+              color: '#e4e8ec',
+            }}
+          >
+            {t.label}
+          </span>
+        ))}
       </div>
 
-      {/* bottom nav */}
-      <nav className="absolute inset-x-4 bottom-4 z-20 flex items-center justify-between rounded-3xl border border-white/10 bg-[#0c1118]/80 px-6 py-3 shadow-[0_8px_30px_rgba(0,0,0,0.45)] backdrop-blur-2xl">
-        <div className="flex flex-col items-center gap-1 text-chart3">
-          <Scale className="h-5 w-5 drop-shadow-[0_0_8px_rgba(245,165,36,0.8)]" />
-          <span className="text-[8px] font-bold tracking-[0.18em]">COUNCIL</span>
-        </div>
-        <div className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Crosshair className="h-5 w-5" />
-          <span className="text-[8px] font-semibold tracking-[0.18em]">RADAR</span>
-        </div>
-        <div className="flex flex-col items-center gap-1 text-muted-foreground">
-          <CandlestickChart className="h-5 w-5" />
-          <span className="text-[8px] font-semibold tracking-[0.18em]">MARKET</span>
-        </div>
-      </nav>
+      {/* ── audit gate capsule ────────────────────────────────────── */}
+      <div
+        className="absolute flex items-center"
+        style={{
+          left: 44,
+          top: 112,
+          height: 33,
+          padding: '0 20px',
+          borderRadius: 999,
+          border: '1px solid rgba(238,242,246,0.38)',
+          background: 'rgba(255,255,255,0.06)',
+        }}
+      >
+        <span
+          style={{ fontSize: 14, letterSpacing: '0.10em', color: '#dfe4e9' }}
+        >
+          AUDIT GATE PUBLISH_ALLOWED
+        </span>
+      </div>
 
-      {/* floating scales FAB */}
-      <button className="absolute bottom-20 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-chart3 to-[#d97c0d] text-[#1a1002] shadow-[0_8px_24px_rgba(245,165,36,0.5)]">
-        <Scale className="h-6 w-6" strokeWidth={2.2} />
+      {/* ── HUD panel ─────────────────────────────────────────────── */}
+      <div
+        className="absolute"
+        style={{
+          ...PANEL,
+          borderRadius: 22,
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.20)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.20)',
+        }}
+      >
+        <PanelBracket corner="tl" />
+        <PanelBracket corner="tr" />
+
+        {/* ORACLE — centred at the top of the panel, over the dial */}
+        <SignalCard
+          title="ORACLE"
+          signal="85.9%"
+          weight="36%"
+          titleAlign="center"
+          historyAlign="center"
+          overhang={4}
+          history={[0.45, 0.9, 0.72, 1]}
+          className="z-10"
+          style={{
+            position: 'absolute',
+            left: 184,
+            top: 27,
+            width: 171,
+            height: 143,
+          }}
+        />
+
+        {/* verdict dial */}
+        <div
+          className="absolute"
+          style={{ left: (PANEL.width - GAUGE) / 2, top: 194 }}
+        >
+          <VerdictGauge size={GAUGE} ringRatio={RING_RATIO}>
+            <div className="absolute inset-0">
+              <div
+                className="absolute inset-x-0 text-center"
+                style={{
+                  top: 30,
+                  fontSize: 53,
+                  fontWeight: 700,
+                  lineHeight: 1,
+                  color: '#4fc3f7',
+                  textShadow: '0 0 18px rgba(79,195,247,0.45)',
+                }}
+              >
+                74%
+              </div>
+              <div
+                className="absolute inset-x-0 text-center"
+                style={{
+                  top: 94,
+                  fontSize: 14,
+                  lineHeight: 1,
+                  letterSpacing: '0.18em',
+                  color: '#c8ced5',
+                  paddingLeft: '0.18em',
+                }}
+              >
+                VERDICT
+              </div>
+              <div
+                className="absolute inset-x-0 text-center"
+                style={{
+                  top: 114,
+                  fontSize: 14,
+                  lineHeight: 1,
+                  letterSpacing: '0.18em',
+                  color: '#c8ced5',
+                  paddingLeft: '0.18em',
+                }}
+              >
+                CONFIDENCE
+              </div>
+
+              <div
+                className="absolute flex items-center justify-center"
+                style={{
+                  left: (GAUGE - 112) / 2,
+                  top: 146,
+                  width: 112,
+                  height: 40,
+                  borderRadius: 999,
+                  border: '1.5px solid #4fc3f7',
+                  background: 'rgba(14,32,42,0.55)',
+                  boxShadow:
+                    '0 0 14px rgba(79,195,247,0.28), inset 0 0 10px rgba(79,195,247,0.12)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 17.5,
+                    letterSpacing: '0.18em',
+                    color: '#77d3f8',
+                    paddingLeft: '0.18em',
+                  }}
+                >
+                  SEALED
+                </span>
+              </div>
+
+              <div
+                className="absolute flex items-center justify-center"
+                style={{
+                  left: (GAUGE - 94) / 2,
+                  top: 203,
+                  width: 94,
+                  height: 38,
+                  borderRadius: 999,
+                  background: '#1b1f24',
+                  boxShadow:
+                    '0 1px 4px rgba(6,8,10,0.30), inset 0 1px 0 rgba(255,255,255,0.07)',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 16.5,
+                    letterSpacing: '0.18em',
+                    color: '#d2d8de',
+                    paddingLeft: '0.18em',
+                  }}
+                >
+                  LONG
+                </span>
+              </div>
+            </div>
+          </VerdictGauge>
+        </div>
+
+        {/* ECHO / PULSE — facing each other along the lower edge */}
+        <SignalCard
+          title="ECHO"
+          signal="84.0%"
+          weight="32%"
+          history={[0.4, 0.72, 0.88, 1]}
+          className="z-10"
+          style={{
+            position: 'absolute',
+            left: 15,
+            top: 515,
+            width: 167,
+            height: 142,
+          }}
+        />
+        <SignalCard
+          title="PULSE"
+          signal="45.0%"
+          weight="32%"
+          mirrored
+          history={[0.42, 0.9, 0.64, 1]}
+          className="z-10"
+          style={{
+            position: 'absolute',
+            left: 359,
+            top: 515,
+            width: 168,
+            height: 142,
+          }}
+        />
+      </div>
+
+      {/* ── decision log, clipped by the navigation ───────────────── */}
+      <div
+        className="absolute"
+        style={{
+          left: 63,
+          top: 876,
+          width: 518,
+          height: 150,
+          borderRadius: 22,
+          background: 'rgba(15,18,21,0.96)',
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.08), 0 -6px 22px rgba(6,8,10,0.4)',
+        }}
+      >
+        <span
+          className="absolute"
+          style={{
+            left: 23,
+            top: 27,
+            width: 9,
+            height: 9,
+            background: '#767d85',
+            borderRadius: 1,
+          }}
+        />
+        <span
+          className="absolute whitespace-nowrap"
+          style={{
+            left: 41,
+            top: 22,
+            fontSize: 17,
+            letterSpacing: '0.16em',
+            color: '#e3e7eb',
+          }}
+        >
+          DECISION LOG
+        </span>
+      </div>
+
+      {/* The log's next row bleeds faintly through the navigation plate —
+          present in the reference capture, so reproduced here rather than
+          clipped away. Two lines, both flush at x=325. */}
+      <span
+        className="absolute whitespace-nowrap"
+        style={{
+          left: 325,
+          top: 940,
+          zIndex: 30,
+          fontSize: 14,
+          letterSpacing: '0.13em',
+          color: 'rgba(198,207,216,0.11)',
+        }}
+      >
+        CONFIDENCE
+      </span>
+      <span
+        className="absolute whitespace-nowrap"
+        style={{
+          left: 325,
+          top: 966,
+          zIndex: 30,
+          fontSize: 18,
+          letterSpacing: '0.02em',
+          color: 'rgba(205,213,221,0.13)',
+        }}
+      >
+        74
+      </span>
+
+      {/* ── bottom navigation ─────────────────────────────────────── */}
+      <div
+        className="absolute inset-x-0 font-sans"
+        style={{ top: NAV_TOP, height: H - NAV_TOP, background: '#06070a' }}
+      >
+        <div
+          className="absolute flex items-center justify-center"
+          style={{
+            left: 25,
+            top: 11,
+            width: 130,
+            height: 65,
+            borderRadius: 999,
+            border: '1.5px solid #b8873a',
+          }}
+        >
+          <span style={{ fontSize: 18, color: '#f2f5f8' }}>Council</span>
+        </div>
+        <span
+          className="absolute"
+          style={{
+            left: 239,
+            top: 44,
+            transform: 'translate(-50%, -50%)',
+            fontSize: 18,
+            color: '#dde2e7',
+          }}
+        >
+          Radar
+        </span>
+        <span
+          className="absolute"
+          style={{
+            left: 389,
+            top: 44,
+            transform: 'translate(-50%, -50%)',
+            fontSize: 18,
+            color: '#dde2e7',
+          }}
+        >
+          Market
+        </span>
+      </div>
+
+      {/* ── amber action button, overlapping the navigation ───────── */}
+      <button
+        type="button"
+        aria-label="Weigh the council"
+        className="absolute flex items-center justify-center"
+        style={{
+          left: 510,
+          top: 900,
+          width: 86,
+          height: 86,
+          borderRadius: 999,
+          background:
+            'radial-gradient(120% 120% at 34% 26%, #e2be71 0%, #cfa54e 46%, #b98c35 100%)',
+          boxShadow:
+            '0 10px 26px rgba(6,8,10,0.55), inset 0 1px 0 rgba(255,255,255,0.35)',
+          color: '#3d2f10',
+        }}
+      >
+        <Scale size={38} strokeWidth={1.9} />
       </button>
     </div>
   );

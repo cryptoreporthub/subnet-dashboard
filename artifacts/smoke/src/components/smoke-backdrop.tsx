@@ -1,17 +1,27 @@
 import type { CSSProperties } from 'react';
 
 /**
- * SmokeBackdrop — the signature atmospheric layer of the Smoke Council system.
+ * SmokeBackdrop — the signature surface of the Smoke Council system.
  *
- * A smoky, organic, near-void backdrop rendered entirely in CSS/SVG so it stays
- * crisp at any size (no grainy raster). It layers, bottom to top:
- *   1. base deep-navy-charcoal wash
- *   2. blurred radial nebula blobs (cool steel + cyan, warm ember rising low)
- *   3. an SVG feTurbulence "smoke drift" texture
- *   4. a faint dot grid
- *   5. a soft vignette to focus the centre
+ * A brushed-metal smoke field. Near-black chips float on top of it, so this
+ * layer supplies the light, not the dark. Rendered entirely in CSS/SVG so it
+ * stays crisp at any size (no grainy raster).
  *
- * Glass panels float above it and let it show through the frosted blur.
+ * The tonal structure is deliberate and was matched against the Council
+ * reference capture: a mid-grey metal base that stays fairly even out to the
+ * edges, a heavy dark cloud gathered in the upper centre, a broad lift through
+ * the middle band where the verdict dial sits, and a shadow pooling along the
+ * bottom. There is no strong corner vignette — the metal runs to the edges.
+ *
+ * Layers, bottom to top:
+ *   1. mid-grey metal base
+ *   2. the dark cloud in the upper centre
+ *   3. the mid-band lift, brighter to the left
+ *   4. cloud marbling (light puffs and dark hollows)
+ *   5. fractal-noise turbulence: coarse drift and fine grain
+ *   6. a fine vertical brush grain
+ *   7. a faint cool cast up top and a warm ember undertow low
+ *   8. right-edge shade and the shadow pooling at the bottom
  */
 export function SmokeBackdrop({
   className = '',
@@ -26,51 +36,54 @@ export function SmokeBackdrop({
       className={`pointer-events-none absolute inset-0 overflow-hidden ${className}`}
       style={style}
     >
-      {/* base wash */}
+      {/* metal base */}
+      <div className="absolute inset-0" style={{ background: '#5f646a' }} />
+
+      {/* the dark cloud gathered in the upper centre */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(120% 90% at 50% 8%, #141a26 0%, #0b0e15 42%, #080a10 100%)',
+            'radial-gradient(48% 25% at 50% 14%, rgba(20,23,28,0.70) 0%, rgba(20,23,28,0.30) 54%, rgba(20,23,28,0) 80%)',
         }}
       />
 
-      {/* cold steel / cyan nebula — upper field */}
+      {/* mid-band lift — the metal catches the light where the dial sits */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(52% 40% at 16% 12%, rgba(55,182,242,0.20) 0%, rgba(55,182,242,0.0) 70%),' +
-            'radial-gradient(60% 46% at 86% 6%, rgba(124,148,184,0.16) 0%, rgba(124,148,184,0) 72%),' +
-            'radial-gradient(70% 60% at 50% 30%, rgba(36,42,58,0.55) 0%, rgba(36,42,58,0) 78%)',
-          filter: 'blur(6px)',
+            'radial-gradient(46% 20% at 32% 40%, rgba(224,230,236,0.10) 0%, rgba(224,230,236,0) 78%),' +
+            'radial-gradient(34% 18% at 50% 47%, rgba(214,221,228,0.13) 0%, rgba(214,221,228,0) 78%)',
         }}
       />
 
-      {/* soft grey smoke puffs mid-field */}
+      {/* cloud marbling — light puffs */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(40% 30% at 22% 48%, rgba(180,196,214,0.10) 0%, rgba(180,196,214,0) 70%),' +
-            'radial-gradient(46% 34% at 72% 52%, rgba(140,158,182,0.09) 0%, rgba(140,158,182,0) 72%)',
-          filter: 'blur(22px)',
+            'radial-gradient(30% 15% at 18% 30%, rgba(228,233,238,0.13) 0%, rgba(228,233,238,0) 72%),' +
+            'radial-gradient(26% 13% at 74% 42%, rgba(220,226,231,0.09) 0%, rgba(220,226,231,0) 74%),' +
+            'radial-gradient(32% 15% at 34% 62%, rgba(230,235,239,0.08) 0%, rgba(230,235,239,0) 74%),' +
+            'radial-gradient(22% 11% at 88% 68%, rgba(216,222,228,0.07) 0%, rgba(216,222,228,0) 76%)',
+          filter: 'blur(24px)',
         }}
       />
 
-      {/* ember-amber undertow rising from the bottom edge */}
+      {/* cloud marbling — dark hollows */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(70% 42% at 50% 104%, rgba(245,165,36,0.30) 0%, rgba(245,165,36,0.10) 42%, rgba(245,165,36,0) 72%),' +
-            'radial-gradient(44% 30% at 18% 108%, rgba(245,165,36,0.20) 0%, rgba(245,165,36,0) 70%),' +
-            'radial-gradient(44% 30% at 12% 92%, rgba(230,120,40,0.16) 0%, rgba(230,120,40,0) 72%)',
-          filter: 'blur(2px)',
+            'radial-gradient(24% 13% at 8% 56%, rgba(44,48,54,0.30) 0%, rgba(44,48,54,0) 74%),' +
+            'radial-gradient(22% 12% at 92% 30%, rgba(40,44,50,0.28) 0%, rgba(40,44,50,0) 74%),' +
+            'radial-gradient(28% 14% at 62% 76%, rgba(38,42,48,0.26) 0%, rgba(38,42,48,0) 76%)',
+          filter: 'blur(28px)',
         }}
       />
 
-      {/* organic smoke drift — SVG turbulence, softly blended */}
+      {/* fractal noise — coarse drift + fine grain */}
       <svg
         className="absolute inset-0 h-full w-full"
         xmlns="http://www.w3.org/2000/svg"
@@ -79,54 +92,84 @@ export function SmokeBackdrop({
           <filter id="smoke-drift">
             <feTurbulence
               type="fractalNoise"
-              baseFrequency="0.0065 0.0085"
-              numOctaves="4"
-              seed="12"
+              baseFrequency="0.004 0.006"
+              numOctaves="5"
+              seed="21"
               stitchTiles="stitch"
               result="noise"
             />
-            <feColorMatrix
-              in="noise"
-              type="matrix"
-              values="0 0 0 0 0.62
-                      0 0 0 0 0.68
-                      0 0 0 0 0.78
-                      0 0 0 0.5 0"
-              result="tint"
+            <feColorMatrix in="noise" type="saturate" values="0" />
+            <feComponentTransfer>
+              <feFuncA type="table" tableValues="1 1" />
+            </feComponentTransfer>
+          </filter>
+          <filter id="smoke-grain">
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.75"
+              numOctaves="2"
+              seed="7"
+              stitchTiles="stitch"
+              result="noise"
             />
-            <feGaussianBlur in="tint" stdDeviation="6" />
+            <feColorMatrix in="noise" type="saturate" values="0" />
+            <feComponentTransfer>
+              <feFuncA type="table" tableValues="1 1" />
+            </feComponentTransfer>
           </filter>
         </defs>
         <rect
           width="100%"
           height="100%"
           filter="url(#smoke-drift)"
-          opacity="0.22"
-          style={{ mixBlendMode: 'screen' }}
+          opacity="0.30"
+          style={{ mixBlendMode: 'overlay' }}
+        />
+        <rect
+          width="100%"
+          height="100%"
+          filter="url(#smoke-grain)"
+          opacity="0.12"
+          style={{ mixBlendMode: 'overlay' }}
         />
       </svg>
 
-      {/* faint dot grid */}
+      {/* fine vertical brush grain */}
       <div
         className="absolute inset-0"
         style={{
           backgroundImage:
-            'radial-gradient(rgba(255,255,255,0.08) 1px, transparent 1.4px)',
-          backgroundSize: '22px 22px',
-          maskImage:
-            'radial-gradient(120% 100% at 50% 0%, black 40%, transparent 90%)',
-          WebkitMaskImage:
-            'radial-gradient(120% 100% at 50% 0%, black 40%, transparent 90%)',
+            'repeating-linear-gradient(90deg,' +
+            'rgba(255,255,255,0.05) 0px, rgba(255,255,255,0.05) 1px,' +
+            'rgba(0,0,0,0.04) 1px, rgba(0,0,0,0.04) 2px,' +
+            'rgba(255,255,255,0.02) 2px, rgba(255,255,255,0.02) 4px)',
           opacity: 0.5,
         }}
       />
 
-      {/* vignette */}
+      {/* cool cast up top, ember undertow low */}
       <div
         className="absolute inset-0"
         style={{
           background:
-            'radial-gradient(120% 90% at 50% 45%, rgba(0,0,0,0) 52%, rgba(0,0,0,0.55) 100%)',
+            'radial-gradient(44% 18% at 30% 34%, rgba(116,166,204,0.08) 0%, rgba(116,166,204,0) 76%),' +
+            'radial-gradient(66% 22% at 50% 99%, rgba(198,140,52,0.16) 0%, rgba(198,140,52,0) 74%)',
+        }}
+      />
+
+      {/* right-edge shade and the shadow pooling at the bottom */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            'radial-gradient(40% 22% at 40% 65%, rgba(22,25,30,0.30) 0%, rgba(22,25,30,0) 80%),' +
+            'radial-gradient(20% 26% at 0% 52%, rgba(24,27,32,0.26) 0%, rgba(24,27,32,0) 80%),' +
+            'radial-gradient(36% 30% at 86% 40%, rgba(24,27,32,0.36) 0%, rgba(24,27,32,0) 82%),' +
+            'radial-gradient(28% 48% at 100% 62%, rgba(24,27,32,0.46) 0%, rgba(24,27,32,0) 78%),' +
+            'radial-gradient(36% 20% at 92% 88%, rgba(18,21,26,0.34) 0%, rgba(18,21,26,0) 80%),' +
+            'radial-gradient(64% 17% at 48% 91%, rgba(14,17,21,0.58) 0%, rgba(14,17,21,0) 82%),' +
+            'linear-gradient(0deg, rgba(12,15,18,0.50) 0%, rgba(12,15,18,0) 11%),' +
+            'linear-gradient(270deg, rgba(26,29,34,0.10) 0%, rgba(26,29,34,0) 9%)',
         }}
       />
     </div>

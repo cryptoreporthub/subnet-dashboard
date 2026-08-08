@@ -1,173 +1,158 @@
 import type { CSSProperties, ReactNode } from 'react';
 
 type VerdictGaugeProps = {
-  /** 0–100 confidence shown in the arc and centre. */
-  value?: number;
-  /** Upper label under the number (e.g. VERDICT CONFIDENCE). */
-  label?: string;
-  /** Small top-left classification tag (e.g. LONG). */
-  tag?: string;
-  /** Optional action control rendered beneath the number (e.g. a SEALED pill). */
-  center?: ReactNode;
-  /** Diameter in px. */
+  /** Outer diameter of the bezel, in px. */
   size?: number;
+  /** Bezel thickness as a fraction of the radius. */
+  ringRatio?: number;
+  /** Render the sunburst rays behind the bezel. */
+  rays?: boolean;
+  /** Render the dashed orbit arc behind the bezel. */
+  orbit?: boolean;
+  /** Stacked inside the dark disc — figures, labels, pills, in caller order. */
+  children?: ReactNode;
   className?: string;
   style?: CSSProperties;
 };
 
-function polar(
-  cx: number,
-  cy: number,
-  r: number,
-  deg: number,
-): [number, number] {
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
-}
-
-function arcPath(
-  cx: number,
-  cy: number,
-  r: number,
-  startDeg: number,
-  endDeg: number,
-): string {
-  const [sx, sy] = polar(cx, cy, r, startDeg);
-  const [ex, ey] = polar(cx, cy, r, endDeg);
-  const large = endDeg - startDeg > 180 ? 1 : 0;
-  return `M ${sx.toFixed(2)} ${sy.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${ex.toFixed(2)} ${ey.toFixed(2)}`;
-}
-
 /**
- * VerdictGauge — the circular confidence dial that sits at the heart of the
- * Council. A neon arc sweeps 270° from 7 o'clock, tick marks ring the dial, and
- * the sealed verdict reads in the centre.
+ * VerdictGauge — the dial at the heart of the Council.
+ *
+ * A thick brushed-silver bezel ring around a dark disc, lit from the lower left
+ * so the metal reads as turned rather than painted. Faint rays radiate out
+ * behind it and a dashed orbit arc sweeps the lower right.
+ *
+ * The disc is a stacking context, not a fixed template: the caller supplies the
+ * children and controls their order. Children may extend past the disc — the
+ * LONG pill on the Council screen deliberately crosses the bezel — because
+ * nothing here clips.
  */
 export function VerdictGauge({
-  value = 74,
-  label = 'VERDICT CONFIDENCE',
-  tag = 'LONG',
-  center,
-  size = 250,
+  size = 274,
+  ringRatio = 0.25,
+  rays = true,
+  orbit = true,
+  children,
   className = '',
   style,
 }: VerdictGaugeProps) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 6;
-  const start = 45;
-  const sweep = 270;
-  const trackEnd = start + sweep;
-  const end = start + (sweep * Math.min(100, Math.max(0, value))) / 100;
-  const showArc = end > start;
-  const ticks = Array.from({ length: 41 }, (_, i) => {
-    const deg = start + (sweep * i) / 40;
-    const [x0, y0] = polar(cx, cy, r + 10, deg);
-    const [x1, y1] = polar(cx, cy, r + 15, deg);
-    const major = i % 5 === 0;
-    return { x0, y0, x1, y1, major };
-  });
-  const top = 47;
+  const ring = Math.round((size / 2) * ringRatio);
+  const burst = Math.round(size * 1.62);
+  const c = burst / 2;
+  const rayInner = size * 0.44;
+  const rayOuter = size * 0.57;
 
   return (
     <div
       className={`relative select-none ${className}`}
       style={{ width: size, height: size, ...style }}
     >
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        <defs>
-          <linearGradient id="vg-fill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#3ee6c8" />
-            <stop offset="0.5" stopColor="#2fd37b" />
-            <stop offset="1" stopColor="#37b6f2" />
-          </linearGradient>
-        </defs>
-
-        {/* outer glow */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r + 5}
-          fill="rgba(62,230,200,0.04)"
-        />
-
-        {/* track */}
-        <path
-          d={arcPath(cx, cy, r, start, trackEnd)}
-          fill="none"
-          stroke="rgba(255,255,255,0.07)"
-          strokeWidth={7}
-          strokeLinecap="round"
-        />
-
-        {/* value arc */}
-        {showArc && (
-          <path
-            d={arcPath(cx, cy, r, start, end)}
-            fill="none"
-            stroke="url(#vg-fill)"
-            strokeWidth={7}
-            strokeLinecap="round"
-            style={{ filter: 'drop-shadow(0 0 6px rgba(62,230,200,0.55))' }}
-          />
-        )}
-
-        {/* inner sheen ring */}
-        <circle
-          cx={cx}
-          cy={cy}
-          r={r - 12}
-          fill="none"
-          stroke="rgba(255,255,255,0.05)"
-          strokeWidth={1}
-        />
-
-        {/* tick marks */}
-        {ticks.map((t, i) => (
-          <line
-            key={i}
-            x1={t.x0}
-            y1={t.y0}
-            x2={t.x1}
-            y2={t.y1}
-            stroke={
-              t.major ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.10)'
-            }
-            strokeWidth={t.major ? 2 : 1}
-            strokeLinecap="round"
-          />
-        ))}
-      </svg>
-
-      {/* centre content */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pt-[4%]">
-        {tag && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-chart2/30 bg-chart2/10 px-2.5 py-0.5 text-[10px] font-bold tracking-[0.18em] text-chart2">
-            <span className="h-1 w-1 rounded-full bg-chart2 shadow-[0_0_6px_rgba(47,211,123,0.9)]" />
-            {tag}
-          </span>
-        )}
-        <div
-          className="font-mono text-[13px] font-medium leading-tight tracking-tight text-foreground"
-          style={{ marginTop: 6 }}
+      {/* sunburst rays + dashed orbit, behind the bezel */}
+      {(rays || orbit) && (
+        <svg
+          className="pointer-events-none absolute"
+          width={burst}
+          height={burst}
+          viewBox={`0 0 ${burst} ${burst}`}
+          style={{
+            left: '50%',
+            top: '50%',
+            transform: 'translate(-50%, -50%)',
+          }}
         >
-          {Math.round(value)}
-          <span className="text-[10px] text-muted-foreground">%</span>
-        </div>
-        <div
-          className="max-w-[11rem] px-2 text-center text-[8.5px] font-semibold leading-tight tracking-[0.16em] text-muted-foreground"
-          style={{ marginTop: 4 }}
-        >
-          {label}
-        </div>
-        <div style={{ marginTop: 8 }}>{center}</div>
-      </div>
+          {rays &&
+            Array.from({ length: 72 }, (_, i) => {
+              const deg = (360 / 72) * i;
+              const rad = ((deg - 90) * Math.PI) / 180;
+              // Rays fade out toward the upper right, matching the bezel light.
+              const fade = 0.5 + 0.5 * Math.cos(((deg - 205) * Math.PI) / 180);
+              return (
+                <line
+                  key={i}
+                  x1={c + rayInner * Math.cos(rad)}
+                  y1={c + rayInner * Math.sin(rad)}
+                  x2={c + rayOuter * Math.cos(rad)}
+                  y2={c + rayOuter * Math.sin(rad)}
+                  stroke={`rgba(240,244,248,${(0.02 + fade * 0.05).toFixed(3)})`}
+                  strokeWidth={1}
+                />
+              );
+            })}
+          {orbit && (
+            <>
+              <circle
+                cx={c}
+                cy={c}
+                r={size * 0.6}
+                fill="none"
+                stroke="rgba(158,202,231,0.26)"
+                strokeWidth={1.5}
+                strokeDasharray="7 12"
+                strokeLinecap="round"
+                transform={`rotate(20 ${c} ${c})`}
+                clipPath="url(#vg-orbit-clip)"
+              />
+              <defs>
+                <clipPath id="vg-orbit-clip">
+                  {/* lower-right quadrant only */}
+                  <rect x={c} y={c} width={burst / 2} height={burst / 2} />
+                </clipPath>
+              </defs>
+            </>
+          )}
+        </svg>
+      )}
 
-      {/* ambient top knot */}
-      <span
-        className="pointer-events-none absolute rounded-full bg-chart1/10 blur-md"
-        style={{ top, left: top, width: size * 0.24, height: size * 0.12 }}
+      {/* brushed-silver bezel */}
+      <div
+        className="absolute inset-0 rounded-full"
+        style={{
+          // An even silver ring with a single soft shadowed dip toward the
+          // lower left, where the smoke banks up against it. Sampled off the
+          // Council reference rather than styled freehand — the ring reads as
+          // machined metal, not chrome, so it never outshines the cyan verdict.
+          background:
+            'conic-gradient(from 0deg,' +
+            '#cdd2d6 0deg,' +
+            '#d6dbdf 45deg,' +
+            '#d9dee2 90deg,' +
+            '#dbe0e4 135deg,' +
+            '#dfe4e8 165deg,' +
+            '#d0d5d9 180deg,' +
+            '#a9aeb3 196deg,' +
+            '#9ea3a8 210deg,' +
+            '#9a9fa4 225deg,' +
+            '#9ea3a8 240deg,' +
+            '#adb2b7 255deg,' +
+            '#cbd0d4 272deg,' +
+            '#cdd2d6 300deg,' +
+            '#d0d5d9 330deg,' +
+            '#cdd2d6 360deg)',
+          boxShadow:
+            '0 0 22px rgba(240,246,252,0.26),' +
+            '0 6px 18px rgba(6,8,10,0.28),' +
+            'inset 0 0 0 1px rgba(255,255,255,0.18)',
+        }}
       />
+
+      {/* dark disc */}
+      <div
+        className="absolute rounded-full"
+        style={{
+          inset: ring,
+          background:
+            'radial-gradient(120% 120% at 38% 30%, #2f343a 0%, #23282d 46%, #191d22 100%)',
+          boxShadow:
+            'inset 0 3px 12px rgba(0,0,0,0.75),' +
+            'inset 0 0 0 1px rgba(255,255,255,0.06),' +
+            '0 0 14px rgba(0,0,0,0.55)',
+        }}
+      />
+
+      {/* content — may overflow the disc on purpose */}
+      <div className="absolute inset-0 z-10 flex flex-col items-center">
+        {children}
+      </div>
     </div>
   );
 }
