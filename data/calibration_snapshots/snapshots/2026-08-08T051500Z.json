@@ -1,0 +1,43 @@
+{
+  "status": "ok",
+  "captured_at": "2026-08-08T05:15:00.150621Z",
+  "alert_level": "warn",
+  "alert_reasons": [
+    "disabled_by_environment",
+    "insufficient_verified_samples",
+    "no_fresh_verified_outcomes"
+  ],
+  "drift": {
+    "previous_factor": null,
+    "current_factor": 1.0,
+    "delta": 0.0,
+    "epsilon": 0.01,
+    "drifted": false
+  },
+  "calibration_health": {
+    "version": "telegram-outcomes-v1",
+    "enabled": false,
+    "active": false,
+    "withheld_reasons": [
+      "disabled_by_environment",
+      "insufficient_verified_samples",
+      "no_fresh_verified_outcomes"
+    ],
+    "source": "verified_telegram_24h_outcomes",
+    "source_sample_size": 0,
+    "verified_resolved_count": 0,
+    "hits": 0,
+    "hit_rate": null,
+    "freshness": {
+      "max_age_days": 30,
+      "latest_resolved_at": null,
+      "fresh_sample_size": 0
+    },
+    "thresholds": {
+      "min_samples": 10,
+      "min_hit_rate": 0.55,
+      "max_age_days": 30
+    },
+    "factor": 1.0
+  }
+}

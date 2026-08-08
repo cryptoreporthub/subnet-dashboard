@@ -1,0 +1,66 @@
+{
+  "status": "ok",
+  "captured_at": "2026-08-08T05:42:48.611858Z",
+  "alert_level": "alert",
+  "alert_reasons": [
+    "worker_peer not alive",
+    "actionable badges: SN67 BUILDING, SN17 BUILDING, SN5 BUILDING, SN114 BUILDING, SN62 BUILDING"
+  ],
+  "pump_desk": {
+    "status": "success",
+    "count": 8,
+    "early_count": 5,
+    "confirmed_count": 3,
+    "error": null
+  },
+  "daily_pick": {
+    "date": "2026-08-08",
+    "action": "LONG",
+    "has_pick": true,
+    "pick_netuid": 15,
+    "reason": null
+  },
+  "learning_loop": {
+    "status": "ok",
+    "pending": 0,
+    "worker_peer_alive": null
+  },
+  "actionable_badges": [
+    {
+      "netuid": 67,
+      "name": "Harnyx",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Harnyx (SN67)"
+    },
+    {
+      "netuid": 17,
+      "name": "404\u2014GEN",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 404\u2014GEN (SN17)"
+    },
+    {
+      "netuid": 5,
+      "name": "Hone",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Hone (SN5)"
+    },
+    {
+      "netuid": 114,
+      "name": "SOMA",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 SOMA (SN114)"
+    },
+    {
+      "netuid": 62,
+      "name": "Ridges",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Ridges (SN62)"
+    },
+    {
+      "netuid": 49,
+      "name": "Nepher Robotics",
+      "badge": "JUST STARTED",
+      "move": "LIVE \u00b7 Nepher Robotics (SN49)"
+    }
+  ]
+}
