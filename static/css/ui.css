@@ -7328,9 +7328,9 @@ body.wrap {
     gap: 6px;
     box-sizing: border-box;
     background-color: rgba(18, 22, 30, 0.94);
-    background-image: var(--card-grain), var(--card-smoke);
-    background-size: 160px 160px, cover;
-    background-blend-mode: overlay, normal;
+    background-image: var(--card-smoke);
+    background-size: cover;
+    background-blend-mode: normal;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
@@ -7350,6 +7350,27 @@ body.wrap {
     font-size: 12px;
     border: 1px solid transparent;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+
+  .thumb-dock__fab {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    margin-top: -10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #1a1410;
+    background: linear-gradient(160deg, #e8c48a 0%, #c9a05a 55%, #a67c3d 100%);
+    border: 1px solid rgba(255, 220, 170, 0.45);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 16px rgba(232, 196, 138, 0.28);
+    text-decoration: none;
+  }
+
+  .thumb-dock__fab:hover,
+  .thumb-dock__fab:focus-visible {
+    filter: brightness(1.06);
   }
 
   .thumb-dock__link[aria-current="location"],

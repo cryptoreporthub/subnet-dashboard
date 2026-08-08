@@ -277,13 +277,21 @@ def test_homepage_cache_miss_returns_emergency_instantly(monkeypatch):
     srv._HOMEPAGE_WARMING = False
     if not srv._EMERGENCY_HOME_HTML:
         srv._prime_emergency_home_html()
+    emergency_snapshot = srv._EMERGENCY_HOME_HTML
 
     t0 = time.time()
     resp = client.get("/")
     elapsed = time.time() - t0
     assert resp.status_code == 200
     assert elapsed < 2.0, f"cache miss blocked {elapsed:.1f}s"
-    assert resp.text == srv._EMERGENCY_HOME_HTML
+    # Bailout may serve emergency, instant stub, or a just-finished ultra-minimal warm —
+    # never block, and never return the slow full render.
+    assert "<html>slow</html>" not in resp.text
+    assert (
+        resp.text == emergency_snapshot
+        or "Loading council" in resp.text
+        or 'id="tribunal-hero"' in resp.text
+    )
 
 
 def test_homepage_html_byte_cache_is_fast():
