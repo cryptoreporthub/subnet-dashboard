@@ -35,7 +35,7 @@
     <svg class="flow-svg" viewBox="0 0 360 100" role="img" aria-label="Wallet to top subnet flows">
       <circle cx="28" cy="50" r="14" class="flow-svg__node flow-svg__node--wallet"/>
       <text x="28" y="78" class="flow-svg__label" text-anchor="middle">Wallet</text>
-      {% for row in exposure.slice(0, 3) %}
+      {% for row in exposure[:3] %}
       {% set x = 120 + loop.index0 * 100 %}
       <line x1="42" y1="50" x2="{{ x - 16 }}" y2="50" class="flow-svg__edge"/>
       <circle cx="{{ x }}" cy="50" r="12" class="flow-svg__node"/>
@@ -69,7 +69,7 @@
           <td>{% if row.netuid %}<a href="/subnet/{{ row.netuid }}">SN{{ row.netuid }}</a>{% else %}—{% endif %}</td>
           <td>{{ row.amount_tao|default(row.amount)|default('—') }}</td>
           <td>{{ row.timestamp|default('—') }}</td>
-          <td>{% if row.tx_hash %}<a href="https://taostats.io/hash/{{ row.tx_hash }}" rel="noopener" target="_blank">{{ row.tx_hash.slice(0, 10) }}…</a>{% else %}—{% endif %}</td>
+          <td>{% if row.tx_hash %}<a href="https://taostats.io/hash/{{ row.tx_hash }}" rel="noopener" target="_blank">{{ row.tx_hash[:10] }}…</a>{% else %}—{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>

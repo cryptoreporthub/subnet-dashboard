@@ -36,7 +36,7 @@
     <h2 class="subnet-page__section">Council judges</h2>
     <div class="subnet-page__judge-grid">
       {% for lane in ['oracle', 'echo', 'pulse'] %}
-      {% set j = judges[lane] or {} %}
+      {% set j = judges.get(lane) or {} %}
       <div class="subnet-page__judge">
         <span class="subnet-page__judge-name">{{ lane|title }}</span>
         <span class="subnet-page__judge-score">{{ j.score|default('—') }}</span>
@@ -56,7 +56,7 @@
   <section class="subnet-page__why-not" aria-label="Why not today's pick">
     <h2 class="subnet-page__section">Council gate</h2>
     <ul class="subnet-page__why-list">
-      {% for line in why_not.blockers.slice(0, 4) %}
+      {% for line in why_not.blockers[:4] %}
       <li>{{ line }}</li>
       {% endfor %}
     </ul>

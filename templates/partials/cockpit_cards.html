@@ -16,7 +16,7 @@
 {% set _by_id = namespace(map={}) %}
 {% if cockpit_sections is defined and cockpit_sections and cockpit_sections.sections %}
   {% for row in cockpit_sections.sections %}
-    {% set _ = _by_id.map|set_key(row.id, row) %}
+    {% set _ = _by_id.map.update({row.id: row}) %}
   {% endfor %}
 {% endif %}
 
@@ -30,7 +30,7 @@
 
   <div class="cockpit-grid">
     {% for sid, default_title in _canonical %}
-      {% set card = _by_id.map[sid] %}
+      {% set card = _by_id.map.get(sid) %}
       {% if not card %}
         {% set card = {
           'id': sid,
@@ -96,7 +96,7 @@
 
         {% if card.metrics %}
         <dl class="cockpit-metrics">
-          {% for key, val in card.metrics %}
+          {% for key, val in card.metrics.items() %}
             {% if val is not none and val != '' %}
             <div class="cockpit-metric">
               <dt>{{ key|replace('_', ' ')|title }}</dt>

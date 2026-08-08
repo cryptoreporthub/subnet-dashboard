@@ -5,7 +5,7 @@
   <p class="section-sub">Sparkline momentum and heat-bar signal strength across top subnets.</p>
   {% if ti_rows %}
   <div class="picks">
-    {% for row in ti_rows.slice(0, 6) %}
+    {% for row in ti_rows[:6] %}
     {% set spark_pts = row.spark_closes if row.spark_closes is iterable and row.spark_closes is not string and row.spark_closes|length >= 2 else [] %}
     {% set os = row.oversold if row.oversold is mapping else {} %}
     {% set ob = row.overbought if row.overbought is mapping else {} %}
