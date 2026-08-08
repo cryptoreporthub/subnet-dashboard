@@ -1723,14 +1723,14 @@
     var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
     var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
     return (
-      '<p class="' +
+      '<div class="pump-pattern-rail"><p class="' +
       cls +
       '" title="' +
       title +
       '">' +
       esc(strip) +
       suffix +
-      '</p>'
+      '</p></div>'
     );
   }
 
@@ -1867,7 +1867,6 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternLine +
       '<a class="pds-hero__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -1877,6 +1876,7 @@
       '</b></a>' +
       (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
       '</div>' +
+      patternLine +
       '<div class="pds-hero__headline" aria-label="' +
       trigPct +
       ' percent to trigger"><span class="pds-hero__pct">' +
@@ -2283,7 +2283,6 @@
       '">' +
       esc(shortBadge) +
       '</span>' +
-      pumpPatternLineHtml(row) +
       '<span class="pds-ladder__name">' +
       esc(pumpRowDisplayName(row)) +
       ' <b>SN' +
@@ -2294,6 +2293,7 @@
       '</span><span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>' +
       esc(row.distance != null ? row.distance : '—') +
       '</span></span></div>' +
+      pumpPatternLineHtml(row) +
       (why ? '<p class="pds-ladder__why">' + esc(why) + '</p>' : '') +
       '<div class="pds-ladder__legs">' +
       '<span class="pds-ladder__leg' +
@@ -2426,7 +2426,6 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternLine +
       '<div class="pd-lead__who"><a class="pd-lead__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -2441,6 +2440,7 @@
       ' percent of the way to trigger"><span class="pd-lead__meter-val">' +
       trigPct +
       '<i>%</i></span><span class="pd-lead__meter-lbl">to trigger</span></div></div>' +
+      patternLine +
       '<div class="pd-lead__bar" role="progressbar" aria-valuenow="' +
       trigPct +
       '" aria-valuemin="0" aria-valuemax="100"><span class="pd-lead__bar-fill" style="width:' +
@@ -2553,7 +2553,7 @@
       '" title="' +
       esc(badge) +
       '">' +
-      '<div class="pd-r__main"><div class="pd-r__id">' +
+      '<div class="pd-r__top"><div class="pd-r__id">' +
       '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
       '">' +
@@ -2564,17 +2564,17 @@
       ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
       '</b></span></div>' +
-      pumpPatternLineHtml(row) +
-      (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
-      _pdTriadLegs(row.triad, row.triad_labels, 'pd-r__leg') +
-      '</div>' +
       '<div class="pd-r__nums" aria-label="Flow and gap">' +
       '<span class="pd-r__num"><i>Flow</i> ' +
       (formPct != null ? formPct : '—') +
       '</span>' +
       '<span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
       esc(row.distance != null ? row.distance : '—') +
-      '</span></div></a>'
+      '</span></div></div>' +
+      pumpPatternLineHtml(row) +
+      (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
+      _pdTriadLegs(row.triad, row.triad_labels, 'pd-r__leg') +
+      '</a>'
     );
   }
 

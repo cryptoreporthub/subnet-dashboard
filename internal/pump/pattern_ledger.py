@@ -211,7 +211,7 @@ def _maybe_emit_segment_close(entry: Dict[str, Any], netuid: int, name: Optional
 
 
 # Leg separator — not → (that arrow is reserved for flat / stable price only).
-_STRIP_LEG_SEP = " · "
+_STRIP_LEG_SEP = "·"
 
 
 def _segment_arrow(direction: str) -> str:
@@ -223,15 +223,18 @@ def _segment_arrow(direction: str) -> str:
 
 
 def _format_magnitude_pct(mag: Any) -> str:
+    """Compact unsigned magnitude for strip legs (direction comes from the arrow)."""
     try:
         val = float(mag)
     except (TypeError, ValueError):
         return "—"
-    if abs(val) < 1e-9:
-        return "—"
-    if val > 0:
-        return f"+{val:.1f}%"
-    return f"{val:.1f}%"
+    aval = abs(val)
+    if aval < 1e-9:
+        return "0"
+    rounded = round(aval, 1)
+    if rounded == int(rounded):
+        return str(int(rounded))
+    return f"{rounded:.1f}"
 
 
 def _format_segment_leg(seg: Dict[str, Any], *, live: bool = False) -> str:
@@ -240,7 +243,7 @@ def _format_segment_leg(seg: Dict[str, Any], *, live: bool = False) -> str:
     pct_txt = _format_magnitude_pct(seg.get("magnitude_pct"))
     dur = float(seg.get("duration_min") or 0)
     suffix = "*" if live else ""
-    return f"{arrow} {pct_txt} ({_bucket_duration(dur)}){suffix}"
+    return f"{arrow}{pct_txt}%/{_bucket_duration(dur)}{suffix}"
 
 
 def format_direction_strip(
@@ -249,7 +252,7 @@ def format_direction_strip(
     max_legs: int = 5,
     live_last: bool = False,
 ) -> str:
-    """Directional path: ``↑ +4.0% (2h) · ↓ -2.0% (1h) · → — (30m) · ↑ +2.5% (45m)*``."""
+    """Directional path: ``↑4%/2h·↓2%/1h·→0%/30m·↑2.5%/45m*``."""
     if not segments:
         return ""
     legs: List[str] = []
@@ -263,7 +266,7 @@ def format_direction_strip(
 
 
 def _bucket_duration(minutes: float) -> str:
-    if minutes < 45:
+    if minutes < 60:
         return f"{int(round(minutes))}m"
     hours = minutes / 60.0
     if hours < 2:

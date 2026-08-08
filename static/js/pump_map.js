@@ -71,14 +71,14 @@
     var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
     var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
     return (
-      '<p class="' +
+      '<div class="pump-pattern-rail"><p class="' +
       cls +
       '" title="' +
       title +
       '">' +
       esc(strip) +
       suffix +
-      '</p>'
+      '</p></div>'
     );
   }
 
@@ -102,7 +102,7 @@
       '" title="' +
       esc(badge) +
       '">' +
-      '<div class="pd-r__main"><div class="pd-r__id">' +
+      '<div class="pd-r__top"><div class="pd-r__id">' +
       '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
       '">' +
@@ -113,6 +113,11 @@
       ' <b class="pd-r__sn">' +
       esc(sn) +
       '</b></span></div>' +
+      '<div class="pd-r__nums"><span class="pd-r__num"><i>Flow</i> ' +
+      (pct != null ? pct : '—') +
+      '</span><span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
+      (row.distance != null ? esc(row.distance) : '—') +
+      '</span></div></div>' +
       pumpPatternLineHtml(row) +
       (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
       '<span class="pd-r__legs">' +
@@ -130,12 +135,7 @@
       (triad.price_coil ? ' pd-r__leg--on' : '') +
       '">Coil ' +
       esc(labels.coil || 'OPEN') +
-      '</span></span></div>' +
-      '<div class="pd-r__nums"><span class="pd-r__num"><i>Flow</i> ' +
-      (pct != null ? pct : '—') +
-      '</span><span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
-      (row.distance != null ? esc(row.distance) : '—') +
-      '</span></div></a>'
+      '</span></span></a>'
     );
   }
 
