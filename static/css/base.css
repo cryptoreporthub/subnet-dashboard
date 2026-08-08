@@ -21,10 +21,10 @@
   /* Soft grey smoke atmosphere — SVG billows + luminous washes (no grain overlay) */
   --bg-atmosphere:
     url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(190, 196, 206, 0.22) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(160, 166, 176, 0.18) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(170, 176, 186, 0.18) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(130, 136, 146, 0.16) 0%, transparent 55%),
+    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(210, 216, 226, 0.38) 0%, transparent 58%),
+    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(180, 186, 196, 0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(190, 196, 206, 0.28) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(150, 156, 166, 0.22) 0%, transparent 55%),
     linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
 
   /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */

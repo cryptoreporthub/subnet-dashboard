@@ -81,13 +81,13 @@ body.council-first-theme::after {
   position: fixed;
   inset: -15%;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.85;
   z-index: 0;
   background:
-    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(170, 176, 186, 0.14), transparent 68%),
-    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(140, 146, 156, 0.12), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(110, 116, 126, 0.10), transparent 65%);
-  filter: blur(48px);
+    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(200, 206, 216, 0.28), transparent 68%),
+    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(170, 176, 186, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(140, 146, 156, 0.18), transparent 65%);
+  filter: blur(56px);
 }
 
 body.council-first-theme .app-shell,
@@ -7827,13 +7827,13 @@ body.wrap {
   background: conic-gradient(
     from -90deg,
     #ffffff 0deg,
-    var(--verdict-a) calc(var(--p, 0) * 3.6deg * 0.35),
-    var(--verdict-b) calc(var(--p, 0) * 3.6deg),
+    #ffffff calc(var(--p, 0) * 3.6deg * 0.55),
+    var(--verdict-a) calc(var(--p, 0) * 3.6deg),
     transparent calc(var(--p, 0) * 3.6deg)
   );
   mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.85)) drop-shadow(0 0 18px rgba(159, 216, 245, 0.55));
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 22px rgba(255, 255, 255, 0.45));
   transition: background 0.9s ease-out;
 }
 
@@ -7846,27 +7846,27 @@ body.wrap {
   position: absolute;
   left: 50%;
   top: 208px;
-  width: 158px;
-  height: 158px;
+  width: 168px;
+  height: 168px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
   background: radial-gradient(
     circle,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.28) 38%,
-    rgba(159, 216, 245, 0.12) 58%,
-    transparent 72%
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.45) 32%,
+    rgba(255, 255, 255, 0.14) 52%,
+    transparent 70%
   );
   animation: tribunal-ring-glow-pulse 5s ease-in-out infinite;
-  opacity: calc(0.28 + (var(--p, 0) / 100) * 0.45);
-  filter: blur(16px);
+  opacity: calc(0.4 + (var(--p, 0) / 100) * 0.5);
+  filter: blur(14px);
   z-index: 1;
   pointer-events: none;
 }
 
 @keyframes tribunal-ring-glow-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.45; }
-  50% { transform: translate(-50%, -50%) scale(1.06); opacity: 0.72; }
+  0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.55; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.88; }
 }
 
 .tribunal-hero__ring-center {

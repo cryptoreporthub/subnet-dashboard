@@ -1,66 +1,66 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" preserveAspectRatio="xMidYMid slice">
-  <!-- Soft volumetric grey smoke — billows only, no feTurbulence film grain. -->
+  <!-- Soft volumetric grey smoke — brighter billows so mist reads on #1e2128. No film grain. -->
   <defs>
     <radialGradient id="voidA" cx="50%" cy="48%" r="72%">
-      <stop offset="0%" stop-color="#1a1d24" stop-opacity="0"/>
-      <stop offset="55%" stop-color="#15181f" stop-opacity="0.45"/>
-      <stop offset="100%" stop-color="#12151b" stop-opacity="0.88"/>
+      <stop offset="0%" stop-color="#2a2e36" stop-opacity="0"/>
+      <stop offset="55%" stop-color="#22262e" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#1e2128" stop-opacity="0.7"/>
     </radialGradient>
 
-    <radialGradient id="billowA" cx="18%" cy="12%" r="48%">
-      <stop offset="0%" stop-color="#c8ccd4" stop-opacity="0.55"/>
-      <stop offset="28%" stop-color="#8e949e" stop-opacity="0.32"/>
-      <stop offset="62%" stop-color="#4a4e58" stop-opacity="0.16"/>
+    <radialGradient id="billowA" cx="18%" cy="12%" r="52%">
+      <stop offset="0%" stop-color="#e8eaee" stop-opacity="0.72"/>
+      <stop offset="25%" stop-color="#b0b5be" stop-opacity="0.42"/>
+      <stop offset="55%" stop-color="#6a707a" stop-opacity="0.2"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowB" cx="88%" cy="18%" r="44%">
-      <stop offset="0%" stop-color="#b8bdc6" stop-opacity="0.48"/>
-      <stop offset="35%" stop-color="#7e848e" stop-opacity="0.28"/>
-      <stop offset="70%" stop-color="#3a3e48" stop-opacity="0.14"/>
+    <radialGradient id="billowB" cx="88%" cy="18%" r="48%">
+      <stop offset="0%" stop-color="#dce0e6" stop-opacity="0.65"/>
+      <stop offset="30%" stop-color="#9aa0aa" stop-opacity="0.36"/>
+      <stop offset="65%" stop-color="#525862" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowC" cx="48%" cy="88%" r="52%">
-      <stop offset="0%" stop-color="#a8adb6" stop-opacity="0.44"/>
-      <stop offset="32%" stop-color="#6e7480" stop-opacity="0.26"/>
-      <stop offset="68%" stop-color="#2e323c" stop-opacity="0.14"/>
+    <radialGradient id="billowC" cx="48%" cy="90%" r="55%">
+      <stop offset="0%" stop-color="#cfd3da" stop-opacity="0.58"/>
+      <stop offset="30%" stop-color="#8a909a" stop-opacity="0.32"/>
+      <stop offset="65%" stop-color="#404650" stop-opacity="0.14"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowD" cx="72%" cy="62%" r="38%">
-      <stop offset="0%" stop-color="#d0d4dc" stop-opacity="0.38"/>
-      <stop offset="40%" stop-color="#8a909a" stop-opacity="0.22"/>
+    <radialGradient id="billowD" cx="72%" cy="58%" r="40%">
+      <stop offset="0%" stop-color="#f0f2f5" stop-opacity="0.5"/>
+      <stop offset="40%" stop-color="#a8aeb8" stop-opacity="0.28"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowE" cx="8%" cy="58%" r="36%">
-      <stop offset="0%" stop-color="#9ea4ae" stop-opacity="0.36"/>
-      <stop offset="45%" stop-color="#5e646e" stop-opacity="0.18"/>
+    <radialGradient id="billowE" cx="8%" cy="58%" r="40%">
+      <stop offset="0%" stop-color="#c4c8d0" stop-opacity="0.48"/>
+      <stop offset="45%" stop-color="#6e7480" stop-opacity="0.22"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowF" cx="38%" cy="38%" r="28%">
-      <stop offset="0%" stop-color="#e0e3e8" stop-opacity="0.28"/>
-      <stop offset="50%" stop-color="#727880" stop-opacity="0.14"/>
+    <radialGradient id="billowF" cx="40%" cy="36%" r="32%">
+      <stop offset="0%" stop-color="#f5f6f8" stop-opacity="0.42"/>
+      <stop offset="50%" stop-color="#8e949e" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowG" cx="62%" cy="8%" r="30%">
-      <stop offset="0%" stop-color="#b4b9c2" stop-opacity="0.34"/>
-      <stop offset="55%" stop-color="#525862" stop-opacity="0.14"/>
+    <radialGradient id="billowG" cx="62%" cy="8%" r="34%">
+      <stop offset="0%" stop-color="#d2d6de" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#646a74" stop-opacity="0.18"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="billowH" cx="92%" cy="88%" r="34%">
-      <stop offset="0%" stop-color="#8e949e" stop-opacity="0.32"/>
-      <stop offset="50%" stop-color="#404650" stop-opacity="0.14"/>
+    <radialGradient id="billowH" cx="92%" cy="88%" r="38%">
+      <stop offset="0%" stop-color="#b8bec8" stop-opacity="0.45"/>
+      <stop offset="50%" stop-color="#4a505a" stop-opacity="0.16"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
 
-    <radialGradient id="wispA" cx="30%" cy="70%" r="22%">
-      <stop offset="0%" stop-color="#dce0e6" stop-opacity="0.22"/>
+    <radialGradient id="wispA" cx="30%" cy="70%" r="26%">
+      <stop offset="0%" stop-color="#eceef2" stop-opacity="0.36"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="wispB" cx="70%" cy="30%" r="20%">
-      <stop offset="0%" stop-color="#c4c8d0" stop-opacity="0.2"/>
+    <radialGradient id="wispB" cx="70%" cy="30%" r="24%">
+      <stop offset="0%" stop-color="#d8dce4" stop-opacity="0.32"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="wispC" cx="55%" cy="55%" r="18%">
-      <stop offset="0%" stop-color="#a0a6b0" stop-opacity="0.18"/>
+    <radialGradient id="wispC" cx="55%" cy="55%" r="22%">
+      <stop offset="0%" stop-color="#c0c6d0" stop-opacity="0.28"/>
       <stop offset="100%" stop-color="#1e2128" stop-opacity="0"/>
     </radialGradient>
   </defs>
