@@ -191,3 +191,40 @@ def test_learning_stats_includes_scenario_memory(client, monkeypatch, tmp_path):
     sm = body["data"]["scenario_memory"]
     assert sm["outcomes_resolved"] >= 1
     assert sm["last_outcome"] == "correct"
+
+
+def test_add_scenario_idempotent_by_prediction_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    first = scenario_memory.add_scenario(
+        "Subnet A",
+        {"netuid": 1, "direction": "up"},
+        outcome=None,
+        prediction_id="pred-dedupe-1",
+    )
+    second = scenario_memory.add_scenario(
+        "Subnet A",
+        {"netuid": 1, "direction": "up"},
+        outcome=None,
+        prediction_id="pred-dedupe-1",
+    )
+    assert first["id"] == second["id"]
+    assert len(scenario_memory.get_memory_snapshot()["scenarios"]) == 1
+
+
+def test_record_outcome_collapses_by_prediction_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    pending = scenario_memory.add_scenario(
+        "Subnet B",
+        {"netuid": 2, "direction": "up"},
+        outcome=None,
+        prediction_id="pred-collapse-1",
+    )
+    result = scenario_memory.record_outcome(
+        name="Subnet B",
+        outcome="correct",
+        features={"direction": "up"},
+        metadata={"prediction_id": "pred-collapse-1", "actual_pct": 2.5},
+    )
+    assert result["id"] == pending["id"]
+    assert result["outcome"] == "correct"
+    assert len(scenario_memory.get_memory_snapshot()["scenarios"]) == 1

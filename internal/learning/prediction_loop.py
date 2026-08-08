@@ -416,6 +416,15 @@ def _link_scenario_memory(
         from internal.council import scenario_memory
         from internal.council.state_vector import _scenario_tags, _compute_technical_indicators
 
+        prediction_id = prediction.get("id")
+        if prediction_id:
+            snap = scenario_memory.get_memory_snapshot()
+            existing = scenario_memory._find_scenario_by_prediction_id(
+                snap.get("scenarios", []), str(prediction_id)
+            )
+            if existing is not None:
+                return existing.get("id")
+
         indicators = _compute_technical_indicators(subnet)
         tags = _scenario_tags(subnet, indicators, market_context or {})
         try:
@@ -442,6 +451,7 @@ def _link_scenario_memory(
                 "pattern_label": prediction.get("pattern_label"),
             },
             outcome=None,
+            prediction_id=str(prediction_id) if prediction_id else None,
         )
         try:
             from internal.learning.trail_bus import emit_scenario_tagged

@@ -88,12 +88,25 @@ def classify_regime(features: Optional[Dict[str, Any]]) -> str:
     return "neutral"
 
 
+def _find_scenario_by_prediction_id(
+    scenarios: List[Dict[str, Any]], prediction_id: str
+) -> Optional[Dict[str, Any]]:
+    if not prediction_id:
+        return None
+    for sc in reversed(scenarios or []):
+        if (sc.get("metadata") or {}).get("prediction_id") == prediction_id:
+            return sc
+    return None
+
+
 def add_scenario(
     name: str,
     features: Dict[str, Any],
     outcome: Optional[str] = None,
     regime: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    *,
+    prediction_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Store a scenario in the regime-aware memory."""
     data = _load()
@@ -101,6 +114,13 @@ def add_scenario(
         regime = classify_regime(features)
     else:
         regime = _normalize_regime(regime)
+
+    meta = dict(metadata or {})
+    if prediction_id:
+        meta["prediction_id"] = prediction_id
+    existing = _find_scenario_by_prediction_id(data.get("scenarios", []), str(prediction_id or ""))
+    if existing is not None:
+        return existing
 
     scenario: Dict[str, Any] = {
         "id": f"sc_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",
@@ -110,8 +130,8 @@ def add_scenario(
         "outcome": outcome,
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
-    if metadata:
-        scenario["metadata"] = metadata
+    if meta:
+        scenario["metadata"] = meta
 
     data["scenarios"].append(scenario)
     data["regimes"].setdefault(regime, []).append(scenario["id"])
@@ -177,9 +197,17 @@ def record_outcome(
         if updated is not None:
             return updated
 
+    data = _load()
+    prediction_id = (metadata or {}).get("prediction_id")
+    if prediction_id:
+        existing = _find_scenario_by_prediction_id(data.get("scenarios", []), str(prediction_id))
+        if existing is not None:
+            updated = update_outcome(str(existing["id"]), outcome, metadata)
+            if updated is not None:
+                return updated
+
     # Otherwise look for the most recent pending (outcome-less) scenario for
     # the same name + regime and stamp the outcome onto it.
-    data = _load()
     candidates = [
         s for s in data.get("scenarios", [])
         if s.get("name") == name
@@ -197,6 +225,7 @@ def record_outcome(
         outcome=outcome,
         regime=regime,
         metadata=metadata,
+        prediction_id=str(prediction_id) if prediction_id else None,
     )
 
 

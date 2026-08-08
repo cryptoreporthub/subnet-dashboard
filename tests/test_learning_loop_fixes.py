@@ -149,6 +149,23 @@ def test_resolver_writes_outcome_back_to_linked_scenario():
     assert linked and linked[0]["outcome"] == "correct"
 
 
+def test_resolver_skips_scenario_for_duplicate_outcome():
+    scenario_memory.add_scenario(
+        name="Subnet Dup", features={"direction": "up"}, outcome=None
+    )
+    before = len(scenario_memory.get_memory_snapshot()["scenarios"])
+    prediction = {
+        "outcome": "duplicate",
+        "name": "Subnet Dup",
+        "id": "pred-dup-1",
+    }
+    resolver._record_scenario_outcome(prediction, 0.0, "duplicate", False, "quant")
+    after = len(scenario_memory.get_memory_snapshot()["scenarios"])
+    assert after == before
+    pending = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s.get("outcome") is None]
+    assert len(pending) == 1
+
+
 def test_resolver_scenario_outcome_reaches_trail(monkeypatch):
     """Every resolve grades a scenario, but this used to be invisible to the
     trail/mindmap — the loop was learning silently. Confirm the emit fires

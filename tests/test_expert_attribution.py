@@ -90,7 +90,7 @@ def test_resolve_expert_attribution_legacy_gamma():
     assert source == "existing"
 
 
-def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch):
+def test_resolve_stamps_and_nudges_same_replay_expert(tmp_path, monkeypatch):
     import json
 
     from internal.council import resolver
@@ -119,7 +119,7 @@ def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch
 
     nudged = []
 
-    def _capture(expert, correct):
+    def _capture(correct, expert):
         nudged.append((expert, correct))
 
     monkeypatch.setattr(resolver, "_nudge_weights", _capture)
@@ -138,7 +138,7 @@ def test_resolve_stamps_replay_but_nudge_only_on_normalize(tmp_path, monkeypatch
     resolver.resolve_prediction(prediction, current_price=10.4)
     assert prediction["expert"] == "hype"
     assert prediction.get("expert_attribution_source") == "replay"
-    assert nudged == []
+    assert nudged == [("hype", True)]
 
 
 def test_backfill_expert_attribution_dry_run(tmp_path, monkeypatch):

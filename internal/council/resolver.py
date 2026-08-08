@@ -160,15 +160,19 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
 
 
 def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tuple[Optional[str], Optional[str]]:
-    """Stamp rich attribution on the row; nudge only pre-stamp normalize (Grok LOCK)."""
+    """Stamp rich attribution on the row; nudge the SAME attributed expert so
+    attribution stamping and weight nudging stay in agreement (fixes quant
+    sink / dark_horse starvation where legacy string normalization diverged)."""
     from internal.council.expert_attribution import resolve_expert_attribution
 
-    nudge_expert = _normalize_expert(prediction)
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
     if stamped_expert:
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
+    # Nudge with the same expert used for stamping — NOT the legacy string
+    # normalizer (removes the quant sink / dark_horse starvation).
+    nudge_expert = stamped_expert
     if nudge_expert and not _skip_council_learning(prediction):
         _nudge_weights(bool(correct), nudge_expert)
     return stamped_expert, nudge_expert
@@ -370,6 +374,8 @@ def _record_scenario_outcome(
     correct: bool,
     expert: Optional[str],
 ) -> None:
+    if prediction.get("outcome") in {"duplicate", "expired", "ungradeable"}:
+        return
     try:
         features = {
             "direction": prediction.get("direction"),
@@ -392,11 +398,23 @@ def _record_scenario_outcome(
             "avg_change_24h": actual_pct,
             "volatility": abs(actual_pct),
         })
+        metadata = {
+            k: v
+            for k, v in {
+                "prediction_id": prediction.get("id"),
+                "actual_pct": actual_pct,
+                "predicted_pct": prediction.get("predicted_pct"),
+                "netuid": prediction.get("netuid"),
+                "horizon_type": prediction.get("horizon_type"),
+            }.items()
+            if v is not None
+        }
         scenario = scenario_memory.record_outcome(
             name=prediction.get("name", "unknown"),
             outcome="correct" if correct else "wrong",
             features=features,
             regime=regime,
+            metadata=metadata,
             scenario_id=prediction.get("scenario_id"),
         )
         # This grades a scenario every resolve, but was invisible to the
