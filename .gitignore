@@ -49,6 +49,7 @@ data/whale_intelligence.json
 data/decision_trace.json
 data/judge_portfolios.json
 data/judges_cache.json
+data/pick_history.json
 data/learning_outcomes/combined_angles_effectiveness.json
 data/learning_outcomes/latest.json
 data/learning_outcomes/snapshots/
