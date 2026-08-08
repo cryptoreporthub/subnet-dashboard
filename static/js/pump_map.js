@@ -49,6 +49,39 @@
     return row.name || (row.netuid != null ? 'SN' + row.netuid : '');
   }
 
+  function pumpPatternLineHtml(row, classExtra) {
+    if (!row || row.timing === 'exit') return '';
+    var strip = row.direction_strip || row.pattern_label;
+    if (!strip) return '';
+    if (!row.direction_strip && row.pattern_class === 'insufficient_data') return '';
+    var suffix = '';
+    var prob =
+      row.re_pump_prob != null && !isNaN(Number(row.re_pump_prob))
+        ? Number(row.re_pump_prob)
+        : null;
+    if (prob != null && prob > 0) {
+      suffix = ' · ' + Math.round(prob * 100) + '%';
+    } else if (
+      row.pattern_confidence != null &&
+      !isNaN(Number(row.pattern_confidence)) &&
+      Number(row.pattern_confidence) >= 0.5
+    ) {
+      suffix = ' · ' + Math.round(Number(row.pattern_confidence) * 100) + '%';
+    }
+    var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
+    var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
+    return (
+      '<p class="' +
+      cls +
+      '" title="' +
+      title +
+      '">' +
+      esc(strip) +
+      suffix +
+      '</p>'
+    );
+  }
+
   function deskRow(row, tone) {
     var pct = formationPct(row);
     var sn = row.netuid != null ? 'SN' + row.netuid : '';
@@ -80,13 +113,7 @@
       ' <b class="pd-r__sn">' +
       esc(sn) +
       '</b></span></div>' +
-      (row.direction_strip && row.timing !== 'exit'
-        ? '<span class="pd-r__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
-          esc(row.direction_strip) +
-          '">' +
-          esc(row.direction_strip) +
-          '</span>'
-        : '') +
+      pumpPatternLineHtml(row) +
       (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
       '<span class="pd-r__legs">' +
       '<span class="pd-r__leg' +

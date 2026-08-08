@@ -1,0 +1,8 @@
+{# Last 4–5 directional legs with move % and duration — one cyan line, not pill chips #}
+{% set dstrip = row.direction_strip|default('') %}
+{% if not dstrip and row.pattern_label and row.pattern_class and row.pattern_class != 'insufficient_data' %}
+  {% set dstrip = row.pattern_label %}
+{% endif %}
+{% if dstrip and row.timing != 'exit' %}
+<p class="pump-pattern-line{% if class_extra %} {{ class_extra }}{% endif %}" title="{{ row.pattern_class|default('Direction path') }}">{{ dstrip }}{% if row.re_pump_prob is not none and row.re_pump_prob > 0 %} · {{ (row.re_pump_prob * 100)|round(0)|int }}%{% elif row.pattern_confidence is not none and row.pattern_confidence >= 0.5 %} · {{ (row.pattern_confidence * 100)|round(0)|int }}%{% endif %}</p>
+{% endif %}

@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-08-07T22:03:17.295416Z",
+  "updated_at": "2026-08-08T16:34:41.805216Z",
   "alerts": [
     {
       "alert_type": "subnet_price_flash",
@@ -7171,6 +7171,21 @@
       "timestamp": "2026-08-07T22:03:17.295356Z",
       "active": true,
       "id": "subnet_price_flash-2026-08-07T22:03:17.295356Z"
+    },
+    {
+      "alert_type": "subnet_price_flash",
+      "severity": "info",
+      "message": "SN70 NexisGen moved -26.6% in 24h",
+      "details": {
+        "subnet_id": 70,
+        "name": "NexisGen",
+        "price_change_24h": -26.6497
+      },
+      "dedupe_key": "price_flash_70",
+      "subnet_id": 70,
+      "timestamp": "2026-08-08T16:34:41.805168Z",
+      "active": true,
+      "id": "subnet_price_flash-2026-08-08T16:34:41.805168Z"
     }
   ]
 }

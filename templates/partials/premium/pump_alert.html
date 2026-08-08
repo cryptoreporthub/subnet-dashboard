@@ -84,9 +84,9 @@
         </div>
         <div class="pd-lead__identity">
           <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-          {% if hero_row.pattern_label and hero_row.pattern_class and hero_row.pattern_class != 'insufficient_data' %}
-          <span class="pump-pattern-chip" title="{{ hero_row.pattern_class }}">{{ hero_row.pattern_label }}</span>
-          {% endif %}
+          {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
+          {% include "partials/premium/pump_pattern_line.html" %}
+          {% endwith %}
           <div class="pd-lead__who">
             <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
             {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}

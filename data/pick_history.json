@@ -1,15 +1,28 @@
 {
   "active": {
-    "netuid": 94,
-    "name": "pending...",
-    "entry_price": 0.00373018,
-    "picked_at": "2026-08-08T00:38:07.929314Z",
-    "prediction_id": "a07fef9fe2",
+    "netuid": 107,
+    "name": "Minos",
+    "entry_price": 0.06549742,
+    "picked_at": "2026-08-08T16:34:41.155956Z",
+    "prediction_id": "b313e892c1",
     "direction": "long",
-    "confidence": 0.5862,
+    "confidence": 0.5506,
     "finalized": false
   },
   "history": [
+    {
+      "netuid": 94,
+      "name": "pending...",
+      "entry_price": 0.00373018,
+      "picked_at": "2026-08-08T00:38:07.929314Z",
+      "prediction_id": "a07fef9fe2",
+      "direction": "long",
+      "confidence": 0.5862,
+      "finalized": true,
+      "success": null,
+      "outcome": "replaced",
+      "resolved_at": "2026-08-08T16:34:41.155949Z"
+    },
     {
       "netuid": 24,
       "name": "Quasar",
