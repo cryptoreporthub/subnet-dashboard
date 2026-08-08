@@ -183,8 +183,16 @@ def build_readiness_report() -> Dict[str, Any]:
 
     taostats = bool(taostats_available())
 
+    # "No graded picks yet" is only a hard blocker when the loop is genuinely
+    # stalled (resolver down or health flagged), not a healthy-but-young loop.
+    # A cold-start / just-booted worker with resolver ticking stays ready; the
+    # low count degrades the report instead of gating readiness forever.
+    _loop_status = loop_health.get("status") if isinstance(loop_health, dict) else None
+    loop_stalled = _loop_status == "stalled" or not resolver.get("running")
     if learning.get("graded", 0) <= 0:
         issues.append("learning_loop_has_no_graded_picks")
+        if loop_stalled:
+            issues.append("learning_loop_has_no_graded_picks_blocking")
     if inline_worker and not worker_peer_alive:
         issues.append("inline_worker_not_running")
     if split_v2 and not is_worker_mode() and worker_peer.get("alive") is False:
@@ -211,7 +219,7 @@ def build_readiness_report() -> Dict[str, Any]:
     ready = not any(
         i in issues
         for i in (
-            "learning_loop_has_no_graded_picks",
+            "learning_loop_has_no_graded_picks_blocking",
             "prediction_resolver_not_running",
             "subnet_feed_empty",
         )
@@ -260,6 +268,8 @@ def _next_levers(issues: List[str], taostats: bool) -> List[str]:
         levers.append("check_worker_logs_fly_logs_p_worker")
     if "daily_pick_hold_no_published_long" in issues:
         levers.append("hold_is_honest_when_below_audit_gate_not_a_feed_outage")
+    if "learning_loop_has_no_graded_picks_blocking" in issues:
+        levers.append("check_resolver_and_score_snapshot_loop_is_stalled_not_just_young")
     if "learning_loop_stalled" in issues or "daily_pick_ledger_gap" in issues:
         levers.append("check_GET_/api/learning/health_ledger_gap_phase1_schedulers")
     if not levers:

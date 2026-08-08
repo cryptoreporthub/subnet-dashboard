@@ -232,15 +232,28 @@ class DailyPickScheduler:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
         try:
-            from internal.council.daily_pick_engine import get_or_create_today_pick
+            from internal.council.daily_pick_engine import (
+                _load,
+                _find_today,
+                get_or_create_today_pick,
+            )
 
-            subnets = _load_capped_subnets()
-            ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
+
+            def _score() -> Dict[str, Any]:
+                # Feed + market-context + scoring share ONE budget: subnets and
+                # macro overlay are network-bound (feed ≤25s, macro probes ≤20s),
+                # so running them before the timer let blocked egress consume the
+                # whole tick before scoring started, leaving a permanent hold.
+                sn = _load_capped_subnets()
+                ctx = _market_context(sn)
+                existing = _find_today(_load())
+                return get_or_create_today_pick(sn, ctx, force=bool(existing and existing.get("scheduler_hold")))
+
             pool = ThreadPoolExecutor(max_workers=1)
             payload = None
             try:
-                fut = pool.submit(get_or_create_today_pick, subnets, ctx, False)
+                fut = pool.submit(_score)
                 try:
                     payload = fut.result(timeout=timeout)
                 except FuturesTimeoutError:

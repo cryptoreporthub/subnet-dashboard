@@ -254,6 +254,51 @@ def test_api_learning_health_warm_cache_skips_builder(monkeypatch):
     assert calls["n"] == 1
 
 
+def test_api_learning_health_timeout_uses_degraded_cache(monkeypatch, tmp_path):
+    """A timeout must be cached so a slow build isn't re-run on every request."""
+    import asyncio
+
+    import httpx
+
+    import internal.learning.loop_health as loop_health
+    import internal.learning.routes as learning_routes
+
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
+    monkeypatch.setattr(learning_routes, "LEARNING_HEALTH_TIMEOUT", 0.05)
+    monkeypatch.setattr(learning_routes, "_LEARNING_HEALTH_DEGRADED_CACHE_TTL", 60.0)
+    monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(tmp_path / ".worker_heartbeat"))
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+
+    from internal.worker_heartbeat import touch_heartbeat
+
+    touch_heartbeat()
+    calls = {"n": 0}
+
+    def _slow():
+        calls["n"] += 1
+        time.sleep(2)
+        return {"status": "ok", "pending": 0}
+
+    monkeypatch.setattr(loop_health, "build_learning_loop_health", _slow)
+
+    async def _fetch():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/api/learning/health")
+
+    first = asyncio.run(_fetch())
+    second = asyncio.run(_fetch())
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["meta"]["source"] == "timeout"
+    assert first.json() == second.json()
+    # Builder ran once; the second call served from the degraded cache.
+    assert calls["n"] == 1
+
+
 def test_api_learning_health_timeout_includes_worker_peer(monkeypatch, tmp_path):
     import asyncio
 
@@ -298,9 +343,14 @@ def test_api_learning_health_timeout_includes_worker_peer(monkeypatch, tmp_path)
 
 
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
+    import internal.learning.routes as learning_routes
+
     council_routes._JUDGES_CACHE["payload"] = None
     council_routes._JUDGES_CACHE["at"] = 0.0
     council_routes._BG_REFRESHING.clear()
+    # Isolate from any degraded-health doc cached by earlier timeout tests.
+    learning_routes._LEARNING_HEALTH_CACHE["payload"] = None
+    learning_routes._LEARNING_HEALTH_CACHE["at"] = 0.0
     gate = threading.Event()
 
     def _block():

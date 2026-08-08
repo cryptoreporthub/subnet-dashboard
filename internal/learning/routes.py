@@ -43,6 +43,12 @@ LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS"
 LEARNING_STATS_TIMEOUT = float(os.environ.get("LEARNING_STATS_TIMEOUT_SECONDS", "10"))
 RESOLVER_STATE_TIMEOUT = float(os.environ.get("RESOLVER_STATE_TIMEOUT_SECONDS", "8"))
 _LEARNING_HEALTH_CACHE_TTL = float(os.environ.get("LEARNING_HEALTH_CACHE_SECONDS", "10"))
+# When the health build itself times out, serve a cached degraded doc for this
+# window so the endpoint returns quickly instead of re-running a 15s+ build on
+# every request (it was wedging /api/learning/health repeatedly).
+_LEARNING_HEALTH_DEGRADED_CACHE_TTL = float(
+    os.environ.get("LEARNING_HEALTH_DEGRADED_CACHE_SECONDS", "30")
+)
 _LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
@@ -73,6 +79,16 @@ def _learning_health_cacheable(payload: Any) -> bool:
     if payload.get("error") == "timeout":
         return False
     return True
+
+
+def _set_learning_health_degraded_cache(payload: Dict[str, Any], ttl_s: float) -> None:
+    """Bounded cache for a degraded/timeout health doc so a slow build isn't
+    re-run on every request within the degradation window (it was wedging
+    /api/learning/health into a 15s timeout on each call)."""
+    with _LEARNING_HEALTH_CACHE_LOCK:
+        _LEARNING_HEALTH_CACHE["at"] = time.time()
+        _LEARNING_HEALTH_CACHE["payload"] = dict(payload)
+        _LEARNING_HEALTH_CACHE["ttl"] = max(1.0, ttl_s)
 
 
 def _learning_health_degraded(
@@ -146,7 +162,8 @@ def _get_cached_learning_health() -> Dict[str, Any] | None:
     now = time.time()
     with _LEARNING_HEALTH_CACHE_LOCK:
         cached = _LEARNING_HEALTH_CACHE.get("payload")
-        if isinstance(cached, dict) and now - float(_LEARNING_HEALTH_CACHE.get("at") or 0) < _LEARNING_HEALTH_CACHE_TTL:
+        ttl = float(_LEARNING_HEALTH_CACHE.get("ttl") or _LEARNING_HEALTH_CACHE_TTL)
+        if isinstance(cached, dict) and now - float(_LEARNING_HEALTH_CACHE.get("at") or 0) < ttl:
             return dict(cached)
     return None
 
@@ -883,12 +900,18 @@ async def api_learning_loop_health():
             _set_learning_health_cache(payload)
             return payload
         logger.warning("learning health returned malformed payload")
-        return _learning_health_degraded(source="invalid_payload", error="invalid_payload")
+        degraded = _learning_health_degraded(source="invalid_payload", error="invalid_payload")
+        _set_learning_health_degraded_cache(degraded, _LEARNING_HEALTH_DEGRADED_CACHE_TTL)
+        return degraded
     except asyncio.TimeoutError:
-        return _learning_health_degraded(source="timeout")
+        degraded = _learning_health_degraded(source="timeout")
+        _set_learning_health_degraded_cache(degraded, _LEARNING_HEALTH_DEGRADED_CACHE_TTL)
+        return degraded
     except Exception as exc:
         logger.warning("learning health failed: %s", exc)
-        return _learning_health_degraded(source="error", error="health_probe_failed")
+        degraded = _learning_health_degraded(source="error", error="health_probe_failed")
+        _set_learning_health_degraded_cache(degraded, _LEARNING_HEALTH_DEGRADED_CACHE_TTL)
+        return degraded
 
 
 @learning_router.get("/api/learning/stats")

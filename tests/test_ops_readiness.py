@@ -157,3 +157,72 @@ def test_data_freshness_effective_fields():
     body = resp.json()
     assert "effective_source" in body
     assert "effective_total" in body
+
+
+def test_readiness_soft_grades_no_graded_picks_when_loop_healthy(monkeypatch):
+    """A healthy, still-young loop (0 graded, resolver ticking) must not block ready.
+
+    Regression for the prod wedge where readiness stayed forever false on
+    learning_loop_has_no_graded_picks while the worker was alive.
+    """
+    import internal.ops.readiness as rdy
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "off")
+    monkeypatch.setenv("INLINE_WORKER", "0")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    with patch.object(
+        rdy, "_learning_summary", return_value={"graded": 0, "pending": 0, "accuracy": None}
+    ):
+        with patch.object(
+            rdy, "_learning_loop_health", return_value={"status": "ok"}
+        ):
+            with patch(
+                "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+                return_value={"running": True, "refresh_minutes": 15},
+            ):
+                with patch(
+                    "internal.worker_peer.get_worker_peer",
+                    return_value={"expected": True, "alive": True, "peer": "combined"},
+                ):
+                    from internal.ops.readiness import build_readiness_report
+
+                    report = build_readiness_report()
+
+    assert "learning_loop_has_no_graded_picks" in report["issues"]
+    # Soft now — the loop is healthy, so the low graded count must not hold ready.
+    assert "learning_loop_has_no_graded_picks_blocking" not in report["issues"]
+    assert report["ready"] is True
+
+
+def test_readiness_blocks_no_graded_picks_when_loop_stalled(monkeypatch):
+    """A genuinely stalled loop (resolver down) still hard-blocks readiness."""
+    import internal.ops.readiness as rdy
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "off")
+    monkeypatch.setenv("INLINE_WORKER", "0")
+    monkeypatch.setenv("DATA_DIR", "/nonexistent")
+
+    with patch.object(
+        rdy, "_learning_summary", return_value={"graded": 0, "pending": 0, "accuracy": None}
+    ):
+        # loop_health stalled is the authoritative signal the loop is stuck.
+        with patch.object(
+            rdy, "_learning_loop_health", return_value={"status": "stalled"}
+        ):
+            with patch(
+                "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+                return_value={"running": True, "refresh_minutes": 15},
+            ):
+                with patch(
+                    "internal.worker_peer.get_worker_peer",
+                    return_value={"expected": True, "alive": True, "peer": "combined"},
+                ):
+                    from internal.ops.readiness import build_readiness_report
+
+                    report = build_readiness_report()
+
+    assert "learning_loop_has_no_graded_picks_blocking" in report["issues"]
+    assert report["ready"] is False
