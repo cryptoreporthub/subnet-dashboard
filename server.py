@@ -625,6 +625,53 @@ class _HomepageStubRequest:
         return URL((explicit or "http://localhost") + "/")
 
 
+def _ultra_minimal_index_html() -> str:
+    """Guaranteed-cheap SSR when learning/registry I/O is wedged — still paints tribunal hero."""
+    from internal.learning.dashboard_context import default_learning_dashboard_context
+    from internal.preview.tribunal_hero import build_tribunal_view
+
+    shell = default_learning_dashboard_context()
+    ctx = {
+        "request": _HomepageStubRequest(),
+        "public_base_url": os.environ.get("APP_BASE_URL", "").strip().rstrip("/") or "http://localhost",
+        "subnets": [],
+        "data_source": "snapshot",
+        "degraded": True,
+        "static_v": "1",
+        **shell,
+        "simivision": {"top": [], "meta": {"count": 0, "source": "ultra-minimal"}},
+        "signals": [],
+        "alerts": [],
+        "signal_summary": {
+            "total_subnets": 0,
+            "buy_count": 0,
+            "sell_count": 0,
+            "neutral_count": 0,
+            "buy_sell_ratio": 0.0,
+            "avg_confidence": 0.0,
+        },
+        "daily_pick_stage": {},
+        "tribunal": build_tribunal_view({}, {}),
+        "conviction_band": {"band": None, "reason": "hydrate", "status": "ok"},
+        "enrichment_badge": {"status": "pending"},
+        "story_strip": {"data_available": False, "reason": "hydrate"},
+        "habit_watchlist": {"netuids": []},
+        "habit_alerts": {"enabled": False},
+        **_quiet_brain_letter_stub(),
+        "pump_alerts": {
+            "status": "quiet",
+            "count": 0,
+            "early_count": 0,
+            "confirmed_count": 0,
+            "alerts": [],
+            "desk": True,
+            "empty_message": "Loading pump desk…",
+        },
+        **_message_intel_shell_skeleton(),
+    }
+    return templates.get_template("index.html").render(ctx)
+
+
 def _prime_emergency_home_html() -> str:
     """One-time render of the minimal shell — served instantly on cache miss."""
     global _EMERGENCY_HOME_HTML
@@ -639,8 +686,12 @@ def _prime_emergency_home_html() -> str:
             fut = pool.submit(_build)
             _EMERGENCY_HOME_HTML = fut.result(timeout=8.0)
     except Exception as exc:
-        logger.warning("emergency home prime failed: %s", exc)
-        return _EMERGENCY_HOME_HTML or _INSTANT_HOME_SHELL
+        logger.warning("emergency home prime failed: %s — ultra-minimal fallback", exc)
+        try:
+            _EMERGENCY_HOME_HTML = _ultra_minimal_index_html()
+        except Exception as exc2:
+            logger.warning("ultra-minimal emergency prime failed: %s", exc2)
+            return _EMERGENCY_HOME_HTML or _INSTANT_HOME_SHELL
     return _EMERGENCY_HOME_HTML
 
 
@@ -688,7 +739,7 @@ def _render_index_html(request: Request) -> str:
 
 def _warm_homepage_cache(request: Optional[Request] = None) -> None:
     """Build homepage HTML off the request hot path — minimal shell only (never full/degraded build)."""
-    global _HOMEPAGE_WARMING
+    global _HOMEPAGE_WARMING, _EMERGENCY_HOME_HTML
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -704,11 +755,21 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
     try:
         req: Any = request if request is not None else _HomepageStubRequest()
         warm_timeout = HOMEPAGE_BUILD_TIMEOUT + 5.0
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_render_index_html, req)
-            html = fut.result(timeout=warm_timeout)
-        _HOMEPAGE_HTML_CACHE["html"] = html
-        _HOMEPAGE_HTML_CACHE["at"] = time.time()
+        html = None
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                fut = pool.submit(_render_index_html, req)
+                html = fut.result(timeout=warm_timeout)
+        except Exception as exc:
+            logger.warning("homepage cache warm timed out/failed (%s) — ultra-minimal", exc)
+            html = _ultra_minimal_index_html()
+        if html and "tribunal-hero" in html:
+            _HOMEPAGE_HTML_CACHE["html"] = html
+            _HOMEPAGE_HTML_CACHE["at"] = time.time()
+            if not _EMERGENCY_HOME_HTML:
+                _EMERGENCY_HOME_HTML = html
+        else:
+            logger.warning("homepage cache warm produced no tribunal markup — discarded")
     except Exception as exc:
         logger.warning("homepage cache warm failed: %s", exc)
     finally:

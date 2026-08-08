@@ -47,34 +47,38 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("fast shell weights failed: %s", exc)
     try:
-        from internal.data_volume import needs_worker_volume_proxy
+        import concurrent.futures
 
-        if needs_worker_volume_proxy():
-            from internal.worker_proxy import fetch_learning_stats_sync
+        def _load_learning_metrics() -> Dict[str, Any]:
+            from internal.data_volume import needs_worker_volume_proxy
 
-            data = fetch_learning_stats_sync()
-            trust_banner = data.get("trust_banner") or {}
-            ctx["learning_metrics"] = {
-                "expert_weights": data.get("expert_weights", {}),
-                "judge_weights": data.get("judge_weights", {}),
-                "judge_last5": data.get("judge_last5", {}),
-                "council_last5": data.get("council_last5", []),
-                "judge_weight_deltas": data.get("judge_weight_deltas", {}),
-                "total_records": data.get("total_records", 0),
-                "predictions_pending": data.get("pending", 0),
-                "predictions_resolved": data.get("total_records", 0),
-                "correct": data.get("correct", 0),
-                "wrong": data.get("wrong", 0),
-                "accuracy": data.get("accuracy", 0.0),
-                "expired": data.get("expired", 0),
-                "expired_rate": trust_banner.get("expired_rate"),
-                "graded": trust_banner.get("graded"),
-                "trust_banner": trust_banner,
-                "watchdog": data.get("watchdog"),
-                "brain_ui_ready": trust_banner.get("ready"),
-                "last_updated": data.get("last_updated"),
-            }
-        else:
+            if needs_worker_volume_proxy():
+                from internal.worker_proxy import fetch_learning_stats_sync
+
+                # ponytail: homepage shell must not wait on a wedged worker peer
+                data = fetch_learning_stats_sync(timeout=1.0)
+                trust_banner = data.get("trust_banner") or {}
+                return {
+                    "expert_weights": data.get("expert_weights", {}),
+                    "judge_weights": data.get("judge_weights", {}),
+                    "judge_last5": data.get("judge_last5", {}),
+                    "council_last5": data.get("council_last5", []),
+                    "judge_weight_deltas": data.get("judge_weight_deltas", {}),
+                    "total_records": data.get("total_records", 0),
+                    "predictions_pending": data.get("pending", 0),
+                    "predictions_resolved": data.get("total_records", 0),
+                    "correct": data.get("correct", 0),
+                    "wrong": data.get("wrong", 0),
+                    "accuracy": data.get("accuracy", 0.0),
+                    "expired": data.get("expired", 0),
+                    "expired_rate": trust_banner.get("expired_rate"),
+                    "graded": trust_banner.get("graded"),
+                    "trust_banner": trust_banner,
+                    "watchdog": data.get("watchdog"),
+                    "brain_ui_ready": trust_banner.get("ready"),
+                    "last_updated": data.get("last_updated"),
+                }
+
             from internal.learning.routes import _learning_snapshot
             from internal.learning.weight_deltas import recent_judge_weight_deltas
 
@@ -82,7 +86,7 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
             engine_stats = snap["engine_stats"]
             resolver_stats = snap["resolver_stats"]
             trust_banner = snap["trust_banner"]
-            ctx["learning_metrics"] = {
+            return {
                 "expert_weights": engine_stats.get("expert_weights", {}),
                 "judge_weights": snap.get("judge_weights", {}),
                 "judge_last5": snap.get("judge_last5", {}),
@@ -102,6 +106,10 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
                 "brain_ui_ready": trust_banner.get("ready"),
                 "last_updated": engine_stats.get("last_updated"),
             }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_load_learning_metrics)
+            ctx["learning_metrics"] = fut.result(timeout=2.0)
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
     _FAST_SHELL_CACHE["at"] = now

@@ -4529,7 +4529,19 @@
     if (pct != null && !isNaN(Number(pct))) {
       clamped = Math.max(0, Math.min(100, Number(pct)));
     }
-    hero.style.setProperty('--p', String(clamped));
+    var target = String(clamped);
+    if (!hero.hasAttribute('data-ring-animated')) {
+      hero.style.setProperty('--p', '0');
+      hero.setAttribute('data-ring-animated', '1');
+      // Animate 0 → real% on first paint
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          hero.style.setProperty('--p', target);
+        });
+      });
+      return;
+    }
+    hero.style.setProperty('--p', target);
   }
 
   function formatSyncedAge(iso) {

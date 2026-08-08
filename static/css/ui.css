@@ -75,18 +75,19 @@ body.council-first-theme::before {
   transform-origin: center center;
 }
 
+/* Soft smoke wash — no grain/dot screen (user: smoke effect grey, not grainy) */
 body.council-first-theme::after {
   content: "";
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  inset: -15%;
   pointer-events: none;
-  opacity: 0.06;
+  opacity: 0.85;
   z-index: 0;
-  background-image: radial-gradient(#000 1px, transparent 1px);
-  background-size: 4px 4px;
+  background:
+    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(200, 206, 216, 0.28), transparent 68%),
+    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(170, 176, 186, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(140, 146, 156, 0.18), transparent 65%);
+  filter: blur(56px);
 }
 
 body.council-first-theme .app-shell,
@@ -6141,8 +6142,11 @@ button.home-cta {
 }
 
 .council-first-theme .top-nav a[aria-current="page"] {
-  color: var(--stage-accent, #7ec8e3);
-  background: rgba(140, 140, 150, 0.09);
+  color: var(--hero-cyan, #6bc5f0);
+  background: rgba(107, 197, 240, 0.08);
+  border: 1px solid rgba(107, 197, 240, 0.55);
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(107, 197, 240, 0.35), 0 0 24px rgba(255, 255, 255, 0.08);
 }
 
 /* Hydration skeleton shimmer */
@@ -7326,9 +7330,9 @@ body.wrap {
     gap: 6px;
     box-sizing: border-box;
     background-color: rgba(18, 22, 30, 0.94);
-    background-image: var(--card-grain), var(--card-smoke);
-    background-size: 160px 160px, cover;
-    background-blend-mode: overlay, normal;
+    background-image: var(--card-smoke);
+    background-size: cover;
+    background-blend-mode: normal;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
@@ -7348,6 +7352,27 @@ body.wrap {
     font-size: 12px;
     border: 1px solid transparent;
     transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+
+  .thumb-dock__fab {
+    flex: none;
+    width: 48px;
+    height: 48px;
+    margin-top: -10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #1a1410;
+    background: linear-gradient(160deg, #e8c48a 0%, #c9a05a 55%, #a67c3d 100%);
+    border: 1px solid rgba(255, 220, 170, 0.45);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45), 0 0 16px rgba(232, 196, 138, 0.28);
+    text-decoration: none;
+  }
+
+  .thumb-dock__fab:hover,
+  .thumb-dock__fab:focus-visible {
+    filter: brightness(1.06);
   }
 
   .thumb-dock__link[aria-current="location"],
@@ -7389,20 +7414,19 @@ body.wrap {
 
 /* ---------- Council Hero HUD (smoky control room + glass sections) ---------- */
 .tribunal-hero {
-  --hero-void: #080b0e;
-  --hero-glass: rgba(12, 22, 38, 0.32);
-  --hero-glass-blur: 20px;
-  --hero-cyan: #4bc0e8;
-  --hero-cyan-bright: #6bc5f0;
+  --hero-void: #1e2128;
+  --hero-glass: rgba(12, 18, 28, 0.28);
+  --hero-glass-blur: 16px;
+  --hero-cyan: #6bc5f0;
+  --hero-cyan-bright: #9fd8f5;
   --hero-slate: #64748b;
   --hero-steel: #f1f5f9;
   --hero-muted: #94a3b8;
-  --hero-smoke-a: rgba(18, 28, 38, 0.36);
-  --hero-smoke-b: rgba(20, 32, 44, 0.28);
-  --hero-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.72 0 0 0 0 0.78 0 0 0 0 0.86 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
-  --j-oracle: #6bc5f0;
-  --j-echo: #7a9cc4;
-  --j-pulse: #64748b;
+  --hero-smoke-a: rgba(30, 34, 42, 0.35);
+  --hero-smoke-b: rgba(24, 28, 36, 0.28);
+  --j-oracle: #7dd3fc; /* blue */
+  --j-echo: #c4b5fd;   /* purple — keep */
+  --j-pulse: #fdba74;  /* orange — keep */
   --verdict-a: var(--hero-cyan-bright);
   --verdict-b: var(--hero-cyan);
   position: relative;
@@ -7423,22 +7447,22 @@ body.wrap {
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__card,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__card {
-  border-color: rgba(168, 178, 190, 0.16);
+  border-color: rgba(255, 255, 255, 0.16);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.55),
-    0 0 28px rgba(170, 180, 195, 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 36px rgba(255, 255, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__bracket,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__bracket {
-  border-color: rgba(176, 184, 194, 0.5);
-  box-shadow: 0 0 12px rgba(170, 180, 195, 0.18);
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.22);
 }
 
 .tribunal-hero[data-temp="warm"] .tribunal-hero__gauge-fill,
 .tribunal-hero[data-temp="cool"] .tribunal-hero__gauge-fill {
-  filter: drop-shadow(0 0 14px rgba(170, 180, 195, 0.45)) drop-shadow(0 0 24px rgba(170, 180, 195, 0.22));
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.75)) drop-shadow(0 0 22px rgba(159, 216, 245, 0.45));
 }
 
 .council-stage .home-job__call-host .tribunal-hero {
@@ -7528,19 +7552,17 @@ body.wrap {
   position: relative;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  /* Glassmorphism: translucent dark-glass base with backdrop blur so the
-     smoky dashboard background visibly glows through, plus a specular
-     sheen across the top for the frosted-glass reflection look. */
-  background-color: rgba(12, 22, 38, 0.16);
+  /* Glassmorphism over soft smoke — no film-grain layer */
+  background-color: rgba(12, 18, 28, 0.22);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
-    linear-gradient(180deg, rgba(12, 22, 38, 0.16) 0%, rgba(8, 14, 26, 0.34) 100%);
-  backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12);
-  -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12);
+    linear-gradient(180deg, rgba(12, 18, 28, 0.18) 0%, rgba(10, 14, 22, 0.32) 100%);
+  backdrop-filter: blur(var(--hero-glass-blur, 16px)) saturate(1.4) brightness(1.08);
+  -webkit-backdrop-filter: blur(var(--hero-glass-blur, 16px)) saturate(1.4) brightness(1.08);
   box-shadow:
     0 16px 44px rgba(0, 0, 0, 0.42),
-    0 0 32px rgba(75, 192, 232, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 0 28px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(255, 255, 255, 0.04);
   overflow: hidden;
   isolation: isolate;
@@ -7556,26 +7578,18 @@ body.wrap {
 }
 
 .tribunal-hero__card::before {
-  /* Priority 1: soft glass tint — keep it light so the frosted-glass
-     translucency reads; the smoke no longer dominates the surface. */
+  /* Soft smoke wisps inside the glass — radial only, no grain */
   background:
-    radial-gradient(ellipse 95% 75% at 6% 10%, rgba(107, 197, 240, 0.06) 0%, transparent 68%),
-    radial-gradient(ellipse 90% 70% at 94% 90%, rgba(107, 197, 240, 0.04) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 85% at 50% 48%, rgba(12, 22, 38, 0.14) 0%, transparent 72%),
-    radial-gradient(ellipse 75% 60% at 12% 88%, rgba(10, 18, 28, 0.10) 0%, transparent 62%),
-    radial-gradient(ellipse 70% 55% at 88% 14%, rgba(14, 26, 38, 0.08) 0%, transparent 58%);
+    radial-gradient(ellipse 95% 75% at 6% 10%, rgba(180, 188, 200, 0.08) 0%, transparent 68%),
+    radial-gradient(ellipse 90% 70% at 94% 90%, rgba(140, 148, 160, 0.06) 0%, transparent 65%),
+    radial-gradient(ellipse 110% 85% at 50% 48%, rgba(20, 26, 36, 0.12) 0%, transparent 72%);
   animation: tribunal-glow-drift 24s ease-in-out infinite alternate;
   opacity: 1;
 }
 
 .tribunal-hero__card::after {
-  /* Priority 2: subtle film grain — must not overpower smoke */
-  background-image: var(--hero-grain);
-  background-repeat: repeat;
-  background-size: 180px 180px;
-  background-blend-mode: soft-light;
-  mix-blend-mode: soft-light;
-  opacity: 0.14;
+  /* Keep empty — grain removed; smoke lives in ::before + page atmosphere */
+  display: none;
 }
 
 .tribunal-hero__puffs {
@@ -7589,7 +7603,7 @@ body.wrap {
 .tribunal-hero__puff {
   position: absolute;
   border-radius: 50%;
-  background: radial-gradient(ellipse at center, rgba(52, 68, 82, 0.38) 0%, rgba(22, 34, 46, 0.20) 42%, transparent 72%);
+  background: radial-gradient(ellipse at center, rgba(120, 128, 140, 0.28) 0%, rgba(40, 44, 52, 0.18) 42%, transparent 72%);
   filter: blur(40px);
   opacity: 0.74;
   will-change: transform, opacity;
@@ -7608,7 +7622,7 @@ body.wrap {
   height: 180px;
   top: 38%;
   right: -18%;
-  background: radial-gradient(ellipse at center, rgba(38, 52, 66, 0.34) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(100, 108, 120, 0.26) 0%, transparent 70%);
   animation: tribunal-puff-2 26s ease-in-out infinite;
 }
 
@@ -7617,7 +7631,7 @@ body.wrap {
   height: 240px;
   bottom: -4%;
   left: 22%;
-  background: radial-gradient(ellipse at center, rgba(32, 46, 60, 0.30) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(90, 96, 108, 0.22) 0%, transparent 70%);
   animation: tribunal-puff-3 20s ease-in-out infinite;
 }
 
@@ -7626,7 +7640,7 @@ body.wrap {
   height: 160px;
   top: 18%;
   left: 42%;
-  background: radial-gradient(ellipse at center, rgba(48, 62, 76, 0.26) 0%, transparent 68%);
+  background: radial-gradient(ellipse at center, rgba(110, 118, 130, 0.2) 0%, transparent 68%);
   animation: tribunal-puff-4 28s ease-in-out infinite;
 }
 
@@ -7635,7 +7649,7 @@ body.wrap {
   height: 200px;
   bottom: 18%;
   right: 8%;
-  background: radial-gradient(ellipse at center, rgba(28, 42, 56, 0.30) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(80, 86, 98, 0.22) 0%, transparent 70%);
   animation: tribunal-puff-5 24s ease-in-out infinite;
 }
 
@@ -7644,7 +7658,7 @@ body.wrap {
   height: 200px;
   top: 55%;
   left: -6%;
-  background: radial-gradient(ellipse at center, rgba(42, 56, 70, 0.24) 0%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(95, 102, 114, 0.18) 0%, transparent 70%);
   animation: tribunal-puff-6 30s ease-in-out infinite;
 }
 
@@ -7767,16 +7781,16 @@ body.wrap {
 }
 
 .tribunal-hero__ray--oracle {
-  stroke: rgba(75, 192, 232, 0.55);
+  stroke: rgba(125, 211, 252, 0.55);
 }
 
 .tribunal-hero__ray--echo {
-  stroke: rgba(100, 116, 139, 0.5);
+  stroke: rgba(196, 181, 253, 0.55);
   animation-delay: -4s;
 }
 
 .tribunal-hero__ray--pulse {
-  stroke: rgba(75, 192, 232, 0.4);
+  stroke: rgba(253, 186, 116, 0.55);
   animation-delay: -8s;
 }
 
@@ -7793,7 +7807,10 @@ body.wrap {
   transform: translate(-50%, -50%);
   z-index: 2;
   pointer-events: none;
-  box-shadow: 0 0 20px rgba(170, 180, 195, 0.14);
+  box-shadow:
+    0 0 28px rgba(255, 255, 255, 0.35),
+    0 0 56px rgba(255, 255, 255, 0.18),
+    0 0 80px rgba(159, 216, 245, 0.12);
   border-radius: 50%;
 }
 
@@ -7804,12 +7821,12 @@ body.wrap {
   border-radius: 50%;
   background: repeating-conic-gradient(
     from -90deg,
-    rgba(148, 180, 205, 0.3) 0deg 0.8deg,
+    rgba(255, 255, 255, 0.35) 0deg 0.8deg,
     transparent 0.8deg 15deg
   );
   mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 5px));
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .tribunal-hero__gauge-track,
@@ -7822,8 +7839,8 @@ body.wrap {
 .tribunal-hero__gauge-track {
   background: conic-gradient(
     from -90deg,
-    rgba(120, 134, 152, 0.3) 0deg,
-    rgba(120, 134, 152, 0.3) 360deg
+    rgba(255, 255, 255, 0.18) 0deg,
+    rgba(255, 255, 255, 0.18) 360deg
   );
   mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
@@ -7832,13 +7849,15 @@ body.wrap {
 .tribunal-hero__gauge-fill {
   background: conic-gradient(
     from -90deg,
-    var(--verdict-b) 0deg,
+    #ffffff 0deg,
+    #ffffff calc(var(--p, 0) * 3.6deg * 0.55),
     var(--verdict-a) calc(var(--p, 0) * 3.6deg),
     transparent calc(var(--p, 0) * 3.6deg)
   );
   mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 15px), #000 calc(100% - 14px));
-  filter: drop-shadow(0 0 12px var(--verdict-b));
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 22px rgba(255, 255, 255, 0.45));
+  transition: background 0.9s ease-out;
 }
 
 .tribunal-hero[data-verdict-kind="forming"] .tribunal-hero__gauge-fill,
@@ -7850,21 +7869,27 @@ body.wrap {
   position: absolute;
   left: 50%;
   top: 208px;
-  width: 138px;
-  height: 138px;
+  width: 168px;
+  height: 168px;
   border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: radial-gradient(circle, rgba(178, 188, 200, 0.5) 0%, transparent 68%);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(255, 255, 255, 0.45) 32%,
+    rgba(255, 255, 255, 0.14) 52%,
+    transparent 70%
+  );
   animation: tribunal-ring-glow-pulse 5s ease-in-out infinite;
-  opacity: calc(0.12 + (var(--p, 0) / 100) * 0.3);
-  filter: blur(18px);
+  opacity: calc(0.4 + (var(--p, 0) / 100) * 0.5);
+  filter: blur(14px);
   z-index: 1;
   pointer-events: none;
 }
 
 @keyframes tribunal-ring-glow-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.35; }
-  50% { transform: translate(-50%, -50%) scale(1.04); opacity: 0.55; }
+  0%, 100% { transform: translate(-50%, -50%) scale(0.96); opacity: 0.55; }
+  50% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.88; }
 }
 
 .tribunal-hero__ring-center {
@@ -7901,7 +7926,7 @@ body.wrap {
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--verdict-a);
-  text-shadow: 0 0 18px rgba(190, 200, 212, 0.32), 0 0 36px rgba(190, 200, 212, 0.16);
+  text-shadow: 0 0 18px rgba(159, 216, 245, 0.45), 0 0 36px rgba(255, 255, 255, 0.2);
 }
 
 .tribunal-hero__pct-label {
@@ -7936,14 +7961,16 @@ body.wrap {
 
 .tribunal-hero__verdict-label--gate {
   color: var(--verdict-a);
+  background: transparent;
   border-color: var(--verdict-b);
-  box-shadow: 0 0 14px color-mix(in srgb, var(--verdict-b) 35%, transparent);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--verdict-b) 40%, transparent);
 }
 
 .tribunal-hero__verdict-label--hold {
-  color: var(--text-secondary);
-  border-color: rgba(148, 163, 184, 0.22);
-  box-shadow: none;
+  color: var(--hero-steel);
+  background: rgba(30, 36, 48, 0.92);
+  border-color: rgba(148, 163, 184, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .tribunal-hero__verdict-label--hold[hidden] {
@@ -7963,8 +7990,10 @@ body.wrap {
   border-radius: 12px;
   background: var(--hero-glass) !important;
   background-image: none !important;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border: 1px solid color-mix(in srgb, var(--j) 28%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.35),
+    0 0 18px color-mix(in srgb, var(--j) 18%, transparent);
   backdrop-filter: blur(var(--hero-glass-blur));
   -webkit-backdrop-filter: blur(var(--hero-glass-blur));
   transition: box-shadow 0.3s ease, transform 0.3s ease, border-color 0.3s ease;
@@ -8183,8 +8212,8 @@ body.wrap {
 
 .tribunal-hero__tick--hit {
   height: 9px;
-  background: var(--hero-cyan);
-  box-shadow: 0 0 4px rgba(75, 192, 232, 0.45);
+  background: var(--j, var(--hero-cyan));
+  box-shadow: 0 0 4px color-mix(in srgb, var(--j, var(--hero-cyan)) 50%, transparent);
 }
 
 .tribunal-hero__tick--miss {
@@ -8499,12 +8528,12 @@ body.wrap {
   }
 
   .tribunal-hero__card::after {
-    opacity: 0.12;
+    display: none;
   }
 
   .tribunal-hero__puff {
-    background: radial-gradient(ellipse at center, rgba(48, 64, 78, 0.32) 0%, transparent 70%);
-    opacity: 0.68;
+    background: radial-gradient(ellipse at center, rgba(120, 128, 140, 0.24) 0%, transparent 70%);
+    opacity: 0.65;
   }
 
   .pds-angles__section,
