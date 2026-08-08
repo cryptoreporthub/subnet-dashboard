@@ -86,5 +86,19 @@ def test_format_direction_strip_full_path():
     strip = format_direction_strip(segments, live_last=True)
     assert "↑ +4.0% (2h)" in strip
     assert "↓ -2.0% (1h)" in strip
-    assert "↑ +2.5%" in strip and "*" in strip.split("→")[-1]
-    assert strip.count("→") == 2
+    assert "↑ +2.5%" in strip and "*" in strip.split("·")[-1]
+    assert strip.count("·") == 2
+    assert "→" not in strip
+
+
+def test_format_direction_strip_flat_uses_sideways_arrow_not_separator():
+    segments = [
+        {"direction": "up", "duration_min": 60, "magnitude_pct": 2.0},
+        {"direction": "flat", "duration_min": 30, "magnitude_pct": 0.0},
+        {"direction": "down", "duration_min": 45, "magnitude_pct": -1.5},
+    ]
+    strip = format_direction_strip(segments)
+    assert "→" in strip
+    assert strip.count("→") == 1
+    assert "· →" in strip or strip.startswith("↑")
+    assert "→ ↓" not in strip

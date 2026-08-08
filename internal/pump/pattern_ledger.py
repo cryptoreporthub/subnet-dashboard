@@ -210,6 +210,10 @@ def _maybe_emit_segment_close(entry: Dict[str, Any], netuid: int, name: Optional
         logger.debug("pump segment trail skipped SN%s: %s", netuid, exc)
 
 
+# Leg separator — not → (that arrow is reserved for flat / stable price only).
+_STRIP_LEG_SEP = " · "
+
+
 def _segment_arrow(direction: str) -> str:
     if direction == "up":
         return "↑"
@@ -245,7 +249,7 @@ def format_direction_strip(
     max_legs: int = 5,
     live_last: bool = False,
 ) -> str:
-    """Directional path: ``↑ +4.0% (2h) → ↓ -2.0% (1h) → ↑ +2.5% (45m)*``."""
+    """Directional path: ``↑ +4.0% (2h) · ↓ -2.0% (1h) · → — (30m) · ↑ +2.5% (45m)*``."""
     if not segments:
         return ""
     legs: List[str] = []
@@ -255,7 +259,7 @@ def format_direction_strip(
             continue
         live = live_last and idx == len(window) - 1
         legs.append(_format_segment_leg(seg, live=live))
-    return " → ".join(legs)
+    return _STRIP_LEG_SEP.join(legs)
 
 
 def _bucket_duration(minutes: float) -> str:
@@ -287,7 +291,7 @@ def _waveform_label(entry: Dict[str, Any]) -> str:
         arrow = "↑" if direction == "up" else "↓" if direction == "down" else "→"
         dur = _minutes_between(open_seg.get("start"), datetime.now(timezone.utc))
         parts.append(f"{arrow}{_bucket_duration(dur)}*")
-    return " → ".join(parts) if parts else ""
+    return _STRIP_LEG_SEP.join(parts) if parts else ""
 
 
 def _segment_directions(segments: List[Dict[str, Any]], *, max_legs: int = 5) -> List[str]:
@@ -346,7 +350,7 @@ def classify_waveform(segments: List[Dict[str, Any]]) -> Dict[str, Any]:
         arrow = "↑" if direction == "up" else "↓" if direction == "down" else "→"
         dur = float(seg.get("duration_min") or 0)
         label_parts.append(f"{arrow}{_bucket_duration(dur)}")
-    pattern_label = " → ".join(label_parts)
+    pattern_label = _STRIP_LEG_SEP.join(label_parts)
 
     return {
         "pattern_class": pattern_class,
