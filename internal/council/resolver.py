@@ -174,7 +174,49 @@ def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tup
     nudge_expert_val = stamped_expert
     if nudge_expert_val and not _skip_council_learning(prediction):
         _nudge_weights(bool(correct), nudge_expert_val)
+
+    # Alert when signal data is present but every signal is unmapped — this
+    # indicates a new signal was added without a signal_expert_map entry and
+    # will silently fall through attribution.
+    _warn_if_all_signals_unmapped(prediction)
+
     return stamped_expert, nudge_expert_val
+
+
+def _warn_if_all_signals_unmapped(prediction: Dict[str, Any]) -> None:
+    """Emit a WARNING when a resolved pick carries signal data but every signal
+    maps to 'unclassified'.  This catches new signals that have no entry in the
+    signal_expert_map before weight drift accumulates."""
+    from internal.council.signal_expert import expert_from_signal_source
+
+    active_signals: List[str] = []
+
+    raw_active = prediction.get("active_signals")
+    if isinstance(raw_active, list):
+        active_signals.extend(str(s) for s in raw_active if s)
+
+    if not active_signals:
+        sc = prediction.get("signal_contributions")
+        if isinstance(sc, dict):
+            active_signals.extend(sc.keys())
+
+    if not active_signals:
+        return  # no signal data — nothing to check
+
+    mapped = [
+        sig for sig in active_signals
+        if expert_from_signal_source(sig) != "unclassified"
+    ]
+    if not mapped:
+        pick_id = prediction.get("id") or prediction.get("prediction_id") or "unknown"
+        logger.warning(
+            "SIGNAL_ATTRIBUTION_MISS: resolved pick %s has signal data but all "
+            "signals are unmapped (unclassified). Signals: %s — add entries to "
+            "signal_expert_map.json or internal/council/signal_expert.py to "
+            "prevent weight mis-attribution.",
+            pick_id,
+            active_signals,
+        )
 
 
 def _nudge_weights(correct: bool, expert: Optional[str]) -> None:

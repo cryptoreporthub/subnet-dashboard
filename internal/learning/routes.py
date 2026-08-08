@@ -1318,6 +1318,122 @@ async def api_council_weights():
         }
 
 
+def _build_signal_attribution_summary(limit: int = 50) -> Dict[str, Any]:
+    """Compute signal→expert attribution rows for the most recent resolved picks.
+
+    Returns:
+        picks        – per-pick list with signal→expert breakdown and outcome
+        summary      – aggregate counts per attributed expert
+        unmapped_picks – picks that had signal data but all signals were unclassified
+        signal_map   – snapshot of the current SIGNAL_EXPERT_MAP for reference
+    """
+    from internal.council.signal_expert import SIGNAL_EXPERT_MAP, expert_from_signal_source
+    from internal.learning.predictions_store import load_predictions
+
+    data = load_predictions()
+    resolved: List[Dict[str, Any]] = data.get("resolved", [])
+
+    # Newest first, bounded by limit.
+    recent = resolved[-limit:] if len(resolved) > limit else resolved
+    recent = list(reversed(recent))
+
+    picks_out: List[Dict[str, Any]] = []
+    summary: Dict[str, Dict[str, int]] = {}  # expert → {total, correct, wrong}
+    unmapped_picks: List[Dict[str, Any]] = []
+
+    for row in recent:
+        # Collect candidate signal names from richest source available.
+        active_signals: List[str] = []
+        raw_active = row.get("active_signals")
+        if isinstance(raw_active, list):
+            active_signals.extend(str(s) for s in raw_active if s)
+        if not active_signals:
+            sc = row.get("signal_contributions")
+            if isinstance(sc, dict):
+                active_signals.extend(sc.keys())
+
+        # Map each signal to its expert.
+        signal_rows: List[Dict[str, str]] = []
+        for sig in active_signals:
+            mapped = expert_from_signal_source(sig)
+            signal_rows.append({"signal": sig, "mapped_expert": mapped})
+
+        attributed_expert = row.get("expert") or "unknown"
+        outcome = row.get("outcome") or "unknown"
+        correct = row.get("correct")  # True / False / None
+
+        pick_entry: Dict[str, Any] = {
+            "id": row.get("id") or row.get("prediction_id") or "unknown",
+            "netuid": row.get("netuid"),
+            "subnet_name": row.get("subnet_name") or row.get("name"),
+            "resolved_at": row.get("resolved_at"),
+            "attributed_expert": attributed_expert,
+            "expert_attribution_source": row.get("expert_attribution_source"),
+            "outcome": outcome,
+            "correct": correct,
+            "signals": signal_rows,
+            "has_signal_data": bool(active_signals),
+            "all_unmapped": bool(active_signals) and all(
+                r["mapped_expert"] == "unclassified" for r in signal_rows
+            ),
+        }
+        picks_out.append(pick_entry)
+
+        # Flag picks where all signals were unclassified despite having signal data.
+        if pick_entry["all_unmapped"]:
+            unmapped_picks.append({
+                "id": pick_entry["id"],
+                "netuid": pick_entry["netuid"],
+                "resolved_at": pick_entry["resolved_at"],
+                "signals": [r["signal"] for r in signal_rows],
+            })
+
+        # Aggregate per attributed expert.
+        if attributed_expert not in summary:
+            summary[attributed_expert] = {"total": 0, "correct": 0, "wrong": 0, "pending": 0}
+        summary[attributed_expert]["total"] += 1
+        if correct is True:
+            summary[attributed_expert]["correct"] += 1
+        elif correct is False:
+            summary[attributed_expert]["wrong"] += 1
+        else:
+            summary[attributed_expert]["pending"] += 1
+
+    return {
+        "status": "ok",
+        "picks_scanned": len(recent),
+        "picks": picks_out,
+        "summary": summary,
+        "unmapped_picks": unmapped_picks,
+        "unmapped_count": len(unmapped_picks),
+        "signal_map": SIGNAL_EXPERT_MAP,
+    }
+
+
+@learning_router.get("/api/council/signal-attribution-summary")
+async def api_signal_attribution_summary(limit: int = Query(default=50, ge=1, le=500)):
+    """Signal→expert attribution for recent resolved picks.
+
+    Returns a per-pick breakdown of which signals fired, which expert each
+    maps to, and whether the pick was correct.  Also surfaces an
+    ``unmapped_picks`` list for picks where all signals were unclassified —
+    these indicate new signals that have no entry in the expert map and will
+    silently mis-attribute weights until the map is updated.
+    """
+    try:
+        result = await _to_thread_timeout(
+            lambda: _build_signal_attribution_summary(limit),
+            LEARNING_STATS_TIMEOUT,
+            label="signal-attribution-summary",
+        )
+        return result
+    except asyncio.TimeoutError:
+        return {"status": "error", "error": "timeout", "picks": [], "summary": {}, "unmapped_picks": []}
+    except Exception as exc:
+        logger.warning("signal-attribution-summary failed: %s", exc)
+        return {"status": "error", "error": str(exc), "picks": [], "summary": {}, "unmapped_picks": []}
+
+
 @learning_router.get("/api/formula-lineage")
 async def api_formula_lineage_catalog():
     """Cited formula sources, adaptations, and live learning-loop state per lane."""
