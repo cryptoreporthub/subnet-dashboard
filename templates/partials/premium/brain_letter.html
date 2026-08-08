@@ -50,7 +50,7 @@
       <section class="weekly-letter__block brain-letter__seeds" aria-labelledby="brain-letter-seeds">
         <h3 class="weekly-letter__block-title" id="brain-letter-seeds">New subnets on the desk</h3>
         <ul class="weekly-letter__list">
-          {% for row in seeds[:5] %}
+          {% for row in seeds.slice(0, 5) %}
           <li class="weekly-letter__item">
             <span class="weekly-letter__item-name">{{ row.name|default('SN' ~ row.netuid) }}</span>
             <span class="weekly-letter__item-meta">SN{{ row.netuid }} · {{ row.note|default('verify on desk') }}</span>
@@ -74,7 +74,7 @@
         {% set signals = working.top_price_signals if working.top_price_signals is iterable and working.top_price_signals is not string else [] %}
         {% if signals %}
         <ul class="weekly-letter__list">
-          {% for row in signals[:3] %}
+          {% for row in signals.slice(0, 3) %}
           <li class="weekly-letter__item">
             <span class="weekly-letter__item-name">{{ row.signal|default(row.tag|default('signal')) }}</span>
             <span class="weekly-letter__item-meta">{% if row.hit_rate is not none %}{{ (row.hit_rate * 100)|round(0) }}% hit{% else %}—{% endif %} · n={{ row.n|default(0) }}</span>

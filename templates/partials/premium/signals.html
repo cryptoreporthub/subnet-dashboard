@@ -54,7 +54,7 @@
           <tr><th>Subnet</th><th>Type</th><th>Conf</th><th>Expert</th><th>Evidence</th></tr>
         </thead>
         <tbody>
-          {% for sig in top_signals[:12] %}
+          {% for sig in top_signals.slice(0, 12) %}
           {% set st = (sig.signal_type|default('neutral'))|string|lower %}
           <tr>
             <td class="text-primary">{{ sig.name|default('SN' ~ sig.subnet_id) }} <span class="pick-meta">SN{{ sig.subnet_id }}</span></td>

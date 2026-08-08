@@ -9,13 +9,9 @@
 <a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}">
   <div class="pd-r__main">
     <div class="pd-r__id">
-      <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
+      <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR[row.badge]|default(row.badge) }}</span>
       <span class="pd-r__name">{{ row.name|default('SN' ~ row.netuid) }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
     </div>
-    {% set dstrip = row.direction_strip|default('') %}
-    {% if dstrip and row.timing != 'exit' %}
-    <span class="pd-r__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: {{ dstrip }}">{{ dstrip }}</span>
-    {% endif %}
     {% if row.pattern_label and row.pattern_class and row.pattern_class != 'insufficient_data' %}
     <span class="pump-pattern-chip pump-pattern-chip--row" title="{{ row.pattern_class }}">{{ row.pattern_label|truncate(28, True) }}</span>
     {% endif %}

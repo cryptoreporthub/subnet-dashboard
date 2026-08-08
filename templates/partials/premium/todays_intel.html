@@ -3,7 +3,7 @@
 {% set earliest_lead = namespace(row=none) %}
 {% for row in pa_rows_intel %}
   {% if row.timing == 'lead' and earliest_lead.row is none %}
-    {% set earliest_lead.row = row %}
+    {% set _ = earliest_lead|set_key('row', row) %}
   {% endif %}
 {% endfor %}
 {% set call_thesis = none %}

@@ -7,7 +7,7 @@
   <div class="card">
     <div class="trail-counter">Trail entries: <b>{{ mindmap_trail|length }}</b></div>
     <div class="trail">
-      {% for t in mindmap_trail[:20] %}
+      {% for t in mindmap_trail.slice(0, 20) %}
       <div class="trail-item">
         <div class="trail-time">{{ t.time|default('') }}</div>
         <div class="trail-net">{{ t.subnet|default('—') }}</div>
@@ -28,7 +28,7 @@
   <div class="card">
     <div class="trail-counter">Predictions: <b>{{ predictions|length }}</b></div>
     <div class="trail">
-      {% for pr in predictions[:12] %}
+      {% for pr in predictions.slice(0, 12) %}
       <div class="trail-item">
         <div class="trail-net">{{ pr.name|default('SN' ~ pr.netuid) }}</div>
         <div class="trail-pred">{{ pr.statement|default(pr.direction|default('') ~ ' ' ~ (pr.predicted_pct|default(0))|string) }}</div>

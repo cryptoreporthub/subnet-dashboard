@@ -5,16 +5,16 @@
   <p class="section-sub">Five-axis radar comparing yield, momentum, emission, social, and composite undervalued score. <span class="heuristic-tag">Heuristic · /api/subnets</span></p>
   {% set radar_rows = sn_list|sort(attribute='emission', reverse=true)|list %}
   {% if radar_rows|length >= 3 %}
-  {% set top3 = radar_rows[:3] %}
+  {% set top3 = radar_rows.slice(0, 3) %}
   {% set r_ns = namespace(labels=[], uv=[], mom=[]) %}
   {% for sn in top3 %}
     {% set nu = sn.netuid|default(sn.id) %}
     {% set apy_v = ((sn.apy|default(sn.staking_data.apy|default(0) if sn.staking_data is mapping else 0))|float * 100) %}
     {% set chg_v = (sn.price_change_24h|default(0))|float %}
     {% set uv = [apy_v - chg_v, 100]|min %}
-    {% set r_ns.labels = r_ns.labels + ['SN' ~ nu] %}
-    {% set r_ns.uv = r_ns.uv + [uv|round|int] %}
-    {% set r_ns.mom = r_ns.mom + [[50 + chg_v * 2, 100]|min|int] %}
+    {% set _ = r_ns|set_key('labels', r_ns.labels|push('SN' ~ nu)) %}
+    {% set _ = r_ns|set_key('uv', r_ns.uv|push(uv|round|int)) %}
+    {% set _ = r_ns|set_key('mom', r_ns.mom|push([50 + chg_v * 2, 100]|min|int)) %}
   {% endfor %}
   {% set radar_payload = {
     'labels': r_ns.labels,

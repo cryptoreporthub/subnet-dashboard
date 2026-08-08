@@ -10,7 +10,7 @@
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}
     {% set trend = (cw.trend|default('even'))|string|lower %}
-    {% set orb_color = soul_orb_colors.get(cw.expert, soul_orb_fallback[loop.index0 % soul_orb_fallback|length]) %}
+    {% set orb_color = soul_orb_colors[cw.expert]|default(soul_orb_fallback[loop.index0 % soul_orb_fallback|length]) %}
     {% set orb_px = (58 + ([w, 2.0]|min / 2.0 * 46))|round|int %}
     <div class="expert card-soft card soul-orb-card" style="--soulmap-delay: {{ (loop.index0 * 0.35)|round(2) }}s;">
       <div class="soul-orb-wrap">

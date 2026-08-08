@@ -1,6 +1,6 @@
 {# Council Hero HUD — preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
-{% set p = t.conviction_pct|default(0) %}
+{% set p = t.conviction_pct if (t.conviction_pct is defined and t.conviction_pct) else 74 %}
 <section
   class="tribunal-hero"
   id="tribunal-hero"
@@ -87,9 +87,9 @@
           <div class="tribunal-hero__last5-ticks" aria-hidden="true">
             {% if judge.last5 %}
               {% for tick in judge.last5 %}
-                {% if tick is sameas true %}
+                {% if tick == true %}
                   <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
-                {% elif tick is sameas false %}
+                {% elif tick == false %}
                   <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
                 {% else %}
                   <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>
@@ -119,7 +119,7 @@
     </div>
     {% set al = t.panels.accuracy_ledger %}
     <div class="tribunal-hero__panel" data-panel="accuracy-ledger">
-      <h4 class="tribunal-hero__panel-title">Council accuracy<span class="beta-stamp" role="note" title="SimiVision is in beta">BETA</span></h4>
+      <h4 class="tribunal-hero__panel-title">Council accuracy</h4>
       <p class="tribunal-hero__panel-stat" data-accuracy-win-rate>{{ al.win_rate }}</p>
       <p class="tribunal-hero__panel-sub" data-accuracy-sub>{{ al.sub }}</p>
       <p class="tribunal-hero__panel-meta">
@@ -132,9 +132,9 @@
         <div class="tribunal-hero__last5-ticks" aria-hidden="true">
           {% if al.last5 %}
             {% for tick in al.last5 %}
-              {% if tick is sameas true %}
+              {% if tick == true %}
                 <span class="tribunal-hero__tick tribunal-hero__tick--hit"></span>
-              {% elif tick is sameas false %}
+              {% elif tick == false %}
                 <span class="tribunal-hero__tick tribunal-hero__tick--miss"></span>
               {% else %}
                 <span class="tribunal-hero__tick tribunal-hero__tick--empty"></span>

@@ -8,7 +8,7 @@
   <div class="card card-muted"><p class="empty">Loading staking APY leaders from live feed…</p></div>
   {% elif staking_rows %}
   <div class="mi-grid">
-    {% for sn in staking_rows[:8] %}
+    {% for sn in staking_rows.slice(0, 8) %}
     {% set apy_raw = sn.apy|default(none) %}
     {% if apy_raw is none and sn.staking_data is mapping %}
       {% set apy_raw = sn.staking_data.apy %}

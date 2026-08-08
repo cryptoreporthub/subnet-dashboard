@@ -5,7 +5,7 @@
 <section class="row caution-cells" id="section-caution-cells" aria-label="Caution cells">
   <div class="section-label">Caution</div>
   <ul class="caution-cells__list" id="caution-cells-list">
-    {% for cell in caution[:3] %}
+    {% for cell in caution.slice(0, 3) %}
     <li class="caution-cell" data-netuid="{{ cell.netuid }}">
       <span class="caution-cell__tag">{{ cell.label|default('CAUTION') }}</span>
       <span class="caution-cell__line">{{ cell.line|default(cell.name) }}</span>

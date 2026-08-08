@@ -5,7 +5,7 @@
   <p class="section-sub">Active breaches and signal-change notifications from <code>/api/alerts</code>.</p>
   <div id="alerts-feed-root" class="picks" aria-live="polite">
     {% if alert_list %}
-    {% for alert in alert_list[:12] %}
+    {% for alert in alert_list.slice(0, 12) %}
     {% set sev = (alert.severity|default('info'))|string|lower %}
     {% set badge = 'badge-sell' if sev == 'critical' else ('badge-hot' if sev == 'warning' else 'badge-watch') %}
     <article class="pick-card card">

@@ -1,5 +1,5 @@
 {# Dev Signals Desk — card presentation from real signals pipeline (honest empty) #}
-{% set desk_signals = top_signals[:3] if top_signals else [] %}
+{% set desk_signals = top_signals.slice(0, 3) if top_signals else [] %}
 <section class="sr-dev-desk" id="section-dev-signals-desk" aria-labelledby="dev-signals-desk-title">
   <div class="sr-dev-desk__head">
     <h2 class="sr-dev-desk__title" id="dev-signals-desk-title">Dev Signals Desk</h2>

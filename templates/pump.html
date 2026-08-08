@@ -4,11 +4,11 @@
   <p class="pump-page__back">
     <a href="/">← Home</a> · Flow before price · early vs chase
   </p>
-  {% if pump_alerts is defined and pump_alerts.get('status') in ('timeout', 'unavailable') %}
+  {% if pump_alerts is defined and pump_alerts.status in ('timeout', 'unavailable') %}
   <p class="empty">Pump desk is warming up — retry in a moment or return home.</p>
   {% endif %}
-  {% with pump_compact=true %}
+  {% set pump_compact = true %}
   {% include "partials/premium/pump_alert.html" %}
-  {% endwith %}
+  
 </div>
 {% endblock %}
