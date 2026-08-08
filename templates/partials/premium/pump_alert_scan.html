@@ -93,12 +93,12 @@
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-              {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
-              {% include "partials/premium/pump_pattern_line.html" %}
-              {% endwith %}
               <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b>SN{{ hero_row.netuid }}</b></a>
               {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
             </div>
+            {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
+            {% include "partials/premium/pump_pattern_line.html" %}
+            {% endwith %}
             <div class="pds-hero__headline" aria-label="{{ trig_pct }} percent to trigger">
               <span class="pds-hero__pct">{{ trig_pct }}<i>%</i></span>
               <span class="pds-hero__pct-lbl">to trigger</span>

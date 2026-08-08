@@ -1867,7 +1867,6 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternLine +
       '<a class="pds-hero__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -1877,6 +1876,7 @@
       '</b></a>' +
       (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
       '</div>' +
+      patternLine +
       '<div class="pds-hero__headline" aria-label="' +
       trigPct +
       ' percent to trigger"><span class="pds-hero__pct">' +
@@ -2426,7 +2426,6 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternLine +
       '<div class="pd-lead__who"><a class="pd-lead__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -2441,6 +2440,7 @@
       ' percent of the way to trigger"><span class="pd-lead__meter-val">' +
       trigPct +
       '<i>%</i></span><span class="pd-lead__meter-lbl">to trigger</span></div></div>' +
+      patternLine +
       '<div class="pd-lead__bar" role="progressbar" aria-valuenow="' +
       trigPct +
       '" aria-valuemin="0" aria-valuemax="100"><span class="pd-lead__bar-fill" style="width:' +

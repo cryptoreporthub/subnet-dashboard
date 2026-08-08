@@ -84,9 +84,6 @@
         </div>
         <div class="pd-lead__identity">
           <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-          {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
-          {% include "partials/premium/pump_pattern_line.html" %}
-          {% endwith %}
           <div class="pd-lead__who">
             <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
             {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}
@@ -96,6 +93,9 @@
             <span class="pd-lead__meter-lbl">to trigger</span>
           </div>
         </div>
+        {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
+        {% include "partials/premium/pump_pattern_line.html" %}
+        {% endwith %}
 
         <div class="pd-lead__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Formation progress to trigger">
           <span class="pd-lead__bar-fill" style="width: {{ trig_pct }}%"></span>

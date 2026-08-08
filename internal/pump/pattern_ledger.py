@@ -240,7 +240,7 @@ def _format_segment_leg(seg: Dict[str, Any], *, live: bool = False) -> str:
     pct_txt = _format_magnitude_pct(seg.get("magnitude_pct"))
     dur = float(seg.get("duration_min") or 0)
     suffix = "*" if live else ""
-    return f"{arrow} {pct_txt} ({_bucket_duration(dur)}){suffix}"
+    return f"{arrow}{pct_txt}({_bucket_duration(dur)}){suffix}"
 
 
 def format_direction_strip(
@@ -249,7 +249,7 @@ def format_direction_strip(
     max_legs: int = 5,
     live_last: bool = False,
 ) -> str:
-    """Directional path: ``↑ +4.0% (2h) · ↓ -2.0% (1h) · → — (30m) · ↑ +2.5% (45m)*``."""
+    """Directional path: ``↑+4.0%(2h) · ↓-2.0%(1h) · →—(30m) · ↑+2.5%(45m)*``."""
     if not segments:
         return ""
     legs: List[str] = []

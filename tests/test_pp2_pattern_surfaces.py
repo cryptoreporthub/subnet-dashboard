@@ -84,14 +84,24 @@ def test_format_direction_strip_full_path():
         {"direction": "up", "duration_min": 45, "magnitude_pct": 2.5, "end": "2026-08-06T12:00:00Z"},
     ]
     strip = format_direction_strip(segments, live_last=True)
-    assert "↑ +4.0% (2h)" in strip
-    assert "↓ -2.0% (1h)" in strip
-    assert "↑ +2.5%" in strip and "*" in strip.split("·")[-1]
+    assert "↑+4.0%(2h)" in strip
+    assert "↓-2.0%(1h)" in strip
+    assert "↑+2.5%" in strip and "*" in strip.split("·")[-1]
     assert strip.count("·") == 2
     assert "→" not in strip
 
 
-def test_format_direction_strip_flat_uses_sideways_arrow_not_separator():
+def test_format_direction_strip_five_legs():
+    segments = [
+        {"direction": "up", "duration_min": 60, "magnitude_pct": 1.0},
+        {"direction": "down", "duration_min": 45, "magnitude_pct": -0.8},
+        {"direction": "up", "duration_min": 30, "magnitude_pct": 1.2},
+        {"direction": "flat", "duration_min": 20, "magnitude_pct": 0.0},
+        {"direction": "up", "duration_min": 15, "magnitude_pct": 0.9},
+    ]
+    strip = format_direction_strip(segments)
+    assert strip.count("·") == 4
+    assert "↑" in strip and "↓" in strip and "→" in strip
     segments = [
         {"direction": "up", "duration_min": 60, "magnitude_pct": 2.0},
         {"direction": "flat", "duration_min": 30, "magnitude_pct": 0.0},
