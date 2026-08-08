@@ -1700,6 +1700,40 @@
     return !!document.querySelector('[data-pump-scan="1"]');
   }
 
+  /** One cyan line: last ≤5 legs (↑ +4% (2h) → …) plus optional match %. */
+  function pumpPatternLineHtml(row, classExtra) {
+    if (!row || row.timing === 'exit') return '';
+    var strip = row.direction_strip || row.pattern_label;
+    if (!strip) return '';
+    if (!row.direction_strip && row.pattern_class === 'insufficient_data') return '';
+    var suffix = '';
+    var prob =
+      row.re_pump_prob != null && !isNaN(Number(row.re_pump_prob))
+        ? Number(row.re_pump_prob)
+        : null;
+    if (prob != null && prob > 0) {
+      suffix = ' · ' + Math.round(prob * 100) + '%';
+    } else if (
+      row.pattern_confidence != null &&
+      !isNaN(Number(row.pattern_confidence)) &&
+      Number(row.pattern_confidence) >= 0.5
+    ) {
+      suffix = ' · ' + Math.round(Number(row.pattern_confidence) * 100) + '%';
+    }
+    var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
+    var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
+    return (
+      '<p class="' +
+      cls +
+      '" title="' +
+      title +
+      '">' +
+      esc(strip) +
+      suffix +
+      '</p>'
+    );
+  }
+
   function renderPumpScanMetaWrap(trust, early, live, exitN) {
     var wrap = document.getElementById('pd-meta-wrap');
     if (!wrap) return;
@@ -1815,19 +1849,7 @@
         : '';
     var thesis = row.thesis || '';
     var triggerCopy = row.trigger || row.subtitle || '';
-    var patternChip = '';
-    if (
-      row.pattern_label &&
-      row.pattern_class &&
-      row.pattern_class !== 'insufficient_data'
-    ) {
-      patternChip =
-        '<span class="pump-pattern-chip" title="' +
-        esc(row.pattern_class) +
-        '">' +
-        esc(row.pattern_label) +
-        '</span>';
-    }
+    var patternLine = pumpPatternLineHtml(row, 'pump-pattern-line--hero');
     return (
       '<article class="pds-hero pds-hero--' +
       esc(timing) +
@@ -1845,7 +1867,7 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternChip +
+      patternLine +
       '<a class="pds-hero__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -2261,20 +2283,7 @@
       '">' +
       esc(shortBadge) +
       '</span>' +
-      (row.direction_strip && row.timing !== 'exit'
-        ? '<span class="pds-ladder__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
-          esc(row.direction_strip) +
-          '">' +
-          esc(row.direction_strip) +
-          '</span>'
-        : '') +
-      (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
-        ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
-          esc(row.pattern_class) +
-          '">' +
-          esc(row.pattern_label) +
-          '</span>'
-        : '') +
+      pumpPatternLineHtml(row) +
       '<span class="pds-ladder__name">' +
       esc(pumpRowDisplayName(row)) +
       ' <b>SN' +
@@ -2400,19 +2409,7 @@
     if (row.telegram_chip)
       chipsHtml += '<p class="pd-chip pd-chip--tg">' + esc(row.telegram_chip) + '</p>';
     if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
-    var patternChip = '';
-    if (
-      row.pattern_label &&
-      row.pattern_class &&
-      row.pattern_class !== 'insufficient_data'
-    ) {
-      patternChip =
-        '<span class="pump-pattern-chip" title="' +
-        esc(row.pattern_class) +
-        '">' +
-        esc(row.pattern_label) +
-        '</span>';
-    }
+    var patternLine = pumpPatternLineHtml(row, 'pump-pattern-line--hero');
     var highlightCls = row.pattern_highlight ? ' pd-lead--pattern-highlight' : '';
     return (
       '<article class="pd-lead pd-lead--' +
@@ -2429,7 +2426,7 @@
       '">' +
       esc(row.badge || '') +
       '</span>' +
-      patternChip +
+      patternLine +
       '<div class="pd-lead__who"><a class="pd-lead__name" href="/subnet/' +
       esc(row.netuid) +
       '">' +
@@ -2567,20 +2564,7 @@
       ' <b class="pd-r__sn">SN' +
       esc(row.netuid) +
       '</b></span></div>' +
-      (row.direction_strip && row.timing !== 'exit'
-        ? '<span class="pd-r__dir pump-pattern-chip pump-pattern-chip--row" title="Direction: ' +
-          esc(row.direction_strip) +
-          '">' +
-          esc(row.direction_strip) +
-          '</span>'
-        : '') +
-      (row.pattern_label && row.pattern_class && row.pattern_class !== 'insufficient_data'
-        ? '<span class="pump-pattern-chip pump-pattern-chip--row" title="' +
-          esc(row.pattern_class) +
-          '">' +
-          esc(row.pattern_label) +
-          '</span>'
-        : '') +
+      pumpPatternLineHtml(row) +
       (why ? '<p class="pd-r__why">' + esc(why) + '</p>' : '') +
       _pdTriadLegs(row.triad, row.triad_labels, 'pd-r__leg') +
       '</div>' +

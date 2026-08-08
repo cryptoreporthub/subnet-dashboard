@@ -15,19 +15,23 @@ client = TestClient(app)
 
 def test_pump_desk_template_has_pattern_chip():
     html = Path("templates/partials/premium/pump_alert.html").read_text(encoding="utf-8")
-    assert "pump-pattern-chip" in html
+    assert "pump-pattern-line" in html
     assert "pattern_highlight" in html
 
 
 def test_pump_desk_row_template_has_pattern_chip():
     html = Path("templates/partials/premium/pump_desk_row.html").read_text(encoding="utf-8")
-    assert "pump-pattern-chip" in html
+    assert "pump_pattern_line.html" in html
+    partial = Path("templates/partials/premium/pump_pattern_line.html").read_text(encoding="utf-8")
+    assert "pump-pattern-line" in partial
 
 
 def test_hydrate_js_renders_pattern_chip():
     body = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
-    assert "pump-pattern-chip" in body
+    assert "pumpPatternLineHtml" in body
+    assert "pump-pattern-line" in body
     assert "pattern_highlight" in body
+    assert "pds-ladder__dir pump-pattern-chip" not in body
 
 
 def test_api_pump_patterns_has_class_fields():
@@ -48,6 +52,9 @@ def test_build_desk_row_includes_pattern_keys():
     row = build_desk_row({"netuid": 15, "phase": "STIRRING", "composite_score": 0.5})
     assert "pattern_class" in row
     assert "pattern_label" in row
+    assert "direction_strip" in row
+    assert "pattern_confidence" in row
+    assert "re_pump_prob" in row
 
 
 def test_classify_user_example_waveform():
@@ -79,5 +86,19 @@ def test_format_direction_strip_full_path():
     strip = format_direction_strip(segments, live_last=True)
     assert "↑ +4.0% (2h)" in strip
     assert "↓ -2.0% (1h)" in strip
-    assert "↑ +2.5%" in strip and "*" in strip.split("→")[-1]
-    assert strip.count("→") == 2
+    assert "↑ +2.5%" in strip and "*" in strip.split("·")[-1]
+    assert strip.count("·") == 2
+    assert "→" not in strip
+
+
+def test_format_direction_strip_flat_uses_sideways_arrow_not_separator():
+    segments = [
+        {"direction": "up", "duration_min": 60, "magnitude_pct": 2.0},
+        {"direction": "flat", "duration_min": 30, "magnitude_pct": 0.0},
+        {"direction": "down", "duration_min": 45, "magnitude_pct": -1.5},
+    ]
+    strip = format_direction_strip(segments)
+    assert "→" in strip
+    assert strip.count("→") == 1
+    assert "· →" in strip or strip.startswith("↑")
+    assert "→ ↓" not in strip

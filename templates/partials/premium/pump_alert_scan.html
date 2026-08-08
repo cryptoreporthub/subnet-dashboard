@@ -93,9 +93,9 @@
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-              {% if hero_row.pattern_label and hero_row.pattern_class and hero_row.pattern_class != 'insufficient_data' %}
-              <span class="pump-pattern-chip" title="{{ hero_row.pattern_class }}">{{ hero_row.pattern_label }}</span>
-              {% endif %}
+              {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
+              {% include "partials/premium/pump_pattern_line.html" %}
+              {% endwith %}
               <a class="pds-hero__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b>SN{{ hero_row.netuid }}</b></a>
               {% if hero_row.updated_ago %}<span class="pds-hero__ago">{{ hero_row.updated_ago }}</span>{% endif %}
             </div>
