@@ -121,6 +121,17 @@ def add_scenario(
     existing = _find_scenario_by_prediction_id(data.get("scenarios", []), str(prediction_id or ""))
     if existing is not None:
         return existing
+    # Stop minting near-duplicate PENDING records for the same name+regime
+    # (shared/raced prediction roots produced many identical rows - e.g. 50
+    # Targon scenarios sharing one prediction_id with outcome duplicate).
+    if name:
+        for sc in reversed(data.get("scenarios", []) or []):
+            if (
+                sc.get("name") == name
+                and _normalize_regime(sc.get("regime")) == regime
+                and sc.get("outcome") is None
+            ):
+                return sc
 
     scenario: Dict[str, Any] = {
         "id": f"sc_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}",

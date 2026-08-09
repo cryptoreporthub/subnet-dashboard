@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 _CANONICAL = frozenset({"quant", "hype", "dark_horse", "technical"})
 _JUDGES = frozenset({"oracle", "echo", "pulse"})
@@ -12,7 +12,7 @@ def _normalize_expert(raw: Any) -> str | None:
     name = str(raw or "").lower().strip().replace(" ", "_")
     if name == "darkhorse":
         name = "dark_horse"
-    return name if name in _CANONICAL else None
+    return name if name in _CANONICAL or name == "rogue" else None
 
 
 _SKIP_GRADED_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
@@ -23,6 +23,7 @@ def expert_graded_counts() -> Dict[str, int]:
     counts = {name: 0 for name in _CANONICAL}
     try:
         from internal.learning.predictions_store import load_predictions
+        from internal.council.expert_attribution import attribute_expert_for_row
 
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
@@ -34,9 +35,15 @@ def expert_graded_counts() -> Dict[str, int]:
             expert = _normalize_expert(pred.get("expert"))
             if expert:
                 counts[expert] = counts.get(expert, 0) + 1
+                continue
+            # Rogue bucket: rows that resolve to no canonical expert are counted
+            # so the Rogue track record can earn a later promotion.
+            if attribute_expert_for_row(pred) == "rogue":
+                counts["rogue"] = counts.get("rogue", 0) + 1
     except Exception:
         pass
     return counts
+
 
 
 # collect_trail_events returns oldest-first and truncates at limit, so a small
@@ -122,3 +129,188 @@ def recent_judge_weight_deltas(
         except (TypeError, ValueError):
             continue
     return out
+
+# ============ Rogue bucket tracking (weight-like %, promotion path) ============
+# Promotion is RELATIVE to the incumbent council: an absolute bar (e.g. 55%)
+# can sit above every real expert's observed hit rate and make promotion a
+# de facto impossibility. Rogue earns its seat by beating the leading expert
+# over a meaningful sample instead.
+_ROGUE_PROMOTION_RULE = (
+    "beats ANY council expert's hit rate (min 30 resolved rows)"
+    " -> consider official expert"
+)
+
+
+def _gradeable_resolved_rows():
+    """Yield (pred, ok) for resolution-gradeable rows (skips ungradeable outcomes).
+
+    Single source of truth used by both build_rogue_stats and
+    build_council_benchmark so the two never disagree about what counts.
+    """
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        for pred in load_predictions().get("resolved") or []:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
+                continue
+            if pred.get("correct") is None:
+                continue
+            yield pred, bool(pred.get("correct"))
+    except Exception:
+        return
+
+
+def build_rogue_stats() -> Dict[str, Any]:
+    """Track unresolved-attribution rows as a weight-like percentage.
+
+    Rogue is tracked, never scored: it never enters expert_weights or pick
+    generation, but its hit rate + volume decide whether it earns an official
+    expert slot later (the promotion gate).
+    """
+    stats: Dict[str, Any] = {
+        "count": 0,
+        "share_pct": 0.0,
+        "hit_rate": None,
+        "tracked": True,
+        "promotion_rule": _ROGUE_PROMOTION_RULE,
+    }
+    try:
+        from internal.council.expert_attribution import attribute_expert_for_row
+
+        total = 0
+        hits = 0
+        per_expert: Dict[str, list] = {name: [0, 0] for name in _CANONICAL}  # [graded, hits]
+        for pred, ok in _gradeable_resolved_rows():
+            total += 1
+            expert = _normalize_expert(pred.get("expert"))
+            if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
+                stats["count"] += 1
+                if ok:
+                    hits += 1
+            elif expert in per_expert:
+                per_expert[expert][0] += 1
+                if ok:
+                    per_expert[expert][1] += 1
+        if total:
+            stats["share_pct"] = round(100.0 * stats["count"] / total, 1)
+        if stats["count"]:
+            stats["hit_rate"] = round(100.0 * hits / stats["count"], 1)
+        rates = [
+            100.0 * hit / graded
+            for graded, hit in per_expert.values()
+            if graded > 0
+        ]
+        if rates:
+            best = max(r[1] for r in rates)
+            worst = min(r[1] for r in rates)
+            worst_name = next(r[0] for r in rates if r[1] == worst)
+            stats["council_best_hit_rate"] = round(best, 1)
+            stats["council_avg_hit_rate"] = round(sum(r[1] for r in rates) / len(rates), 1)
+            # Bar = ANY incumbent, not just the leader: Rogue earns promotion
+            # when its hit rate clears at least one sitting expert (the lowest).
+            rogue_rate = stats.get("hit_rate")
+            beats_any = rogue_rate is not None and rogue_rate > worst
+            stats["beats_any"] = beats_any
+            stats["beaten_name"] = worst_name
+            stats["beaten_rate"] = round(worst, 1)
+            if beats_any:
+                stats["promotion_rule"] = (
+                    "PROMOTION READY - hit_rate " + str(round(float(rogue_rate), 1))
+                    + "% beats " + worst_name + " " + str(round(worst, 1)) + "% (lowest incumbent)"
+                    " and count >= 30 -> consider official expert"
+                )
+            else:
+                stats["promotion_rule"] = (
+                    "hit_rate > " + str(round(worst, 1)) + "% (" + worst_name + ", lowest incumbent)"
+                    " and count >= 30 -> consider official expert"
+                )
+    except Exception:
+        pass
+    return stats
+
+
+def build_council_benchmark() -> Dict[str, Any]:
+    """Relative accuracy benchmark for the proof band (mirrors Rogue philosophy).
+
+    Never judge a hit rate against an absolute bar - judge it against the
+    council it must beat. Emits council overall rate, the leading expert,
+    field average, Rogue standing, and whether council beats its leader.
+    Additive key: council_benchmark. Safe to render on an empty ledger.
+    """
+    bench: Dict[str, Any] = {
+        "rates_ready": False,
+        "council_rate": None,
+        "best_name": None,
+        "best_rate": None,
+        "avg_rate": None,
+        "rogue_count": 0,
+        "rogue_rate": None,
+        "beats_best": False,
+        "vs_best_delta": None,
+    }
+    try:
+        from internal.council.expert_attribution import attribute_expert_for_row
+
+        per_expert: Dict[str, list] = {name: [0, 0] for name in _CANONICAL}  # [graded, hits]
+        total = hits = rogue_n = rogue_hits = 0
+        for pred, ok in _gradeable_resolved_rows():
+            total += 1
+            if ok:
+                hits += 1
+            expert = _normalize_expert(pred.get("expert"))
+            if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
+                rogue_n += 1
+                if ok:
+                    rogue_hits += 1
+            elif expert in per_expert:
+                per_expert[expert][0] += 1
+                if ok:
+                    per_expert[expert][1] += 1
+        if total:
+            council_rate = round(100.0 * hits / total, 1)
+            bench["council_rate"] = council_rate
+            rates = [
+                (name, 100.0 * hit / graded)
+                for name, (graded, hit) in per_expert.items()
+                if graded > 0
+            ]
+            if rates:
+                best = max(rates, key=lambda t: t[1])
+                bench["best_name"] = best[0]
+                bench["best_rate"] = round(best[1], 1)
+                bench["avg_rate"] = round(sum(r for _, r in rates) / len(rates), 1)
+                bench["rates_ready"] = True
+                bench["beats_best"] = council_rate >= bench["best_rate"]
+                bench["vs_best_delta"] = round(council_rate - bench["best_rate"], 1)
+        if rogue_n:
+            bench["rogue_count"] = rogue_n
+            bench["rogue_rate"] = round(100.0 * rogue_hits / rogue_n, 1)
+    except Exception:
+        pass
+    return bench
+
+
+def count_rogue_replay_rows(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+) -> Dict[str, int]:
+    """Rows the weight replay now routes to Rogue instead of a real expert.
+
+    Observability for the archive-hygiene fix (fix 3): archive rows whose only
+    attribution is the legacy fallback stamp no longer nudge quant - they are
+    skipped by the replay because Rogue is not a scored expert.
+    """
+    try:
+        from internal.council.weights import merged_replay_rows
+        from internal.council.signal_expert import expert_for_replay_row
+    except Exception:
+        return {"rogue": 0, "replayed": 0}
+    try:
+        rows, meta = merged_replay_rows(predictions_path, include_archive=include_archive)
+        rogue = sum(1 for row in rows if expert_for_replay_row(row) == "rogue")
+        return {"rogue": rogue, "replayed": len(rows), "total_graded": meta.get("total_graded", 0)}
+    except Exception:
+        return {"rogue": 0, "replayed": 0}
