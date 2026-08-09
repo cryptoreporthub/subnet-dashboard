@@ -141,6 +141,26 @@ _ROGUE_PROMOTION_RULE = (
 )
 
 
+def _gradeable_resolved_rows():
+    """Yield (pred, ok) for resolution-gradeable rows (skips ungradeable outcomes).
+
+    Single source of truth used by both build_rogue_stats and
+    build_council_benchmark so the two never disagree about what counts.
+    """
+    try:
+        from internal.learning.predictions_store import load_predictions
+
+        for pred in load_predictions().get("resolved") or []:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
+                continue
+            if pred.get("correct") is None:
+                continue
+            yield pred, bool(pred.get("correct"))
+    except Exception:
+        return
+
 
 def build_rogue_stats() -> Dict[str, Any]:
     """Track unresolved-attribution rows as a weight-like percentage.
@@ -157,21 +177,13 @@ def build_rogue_stats() -> Dict[str, Any]:
         "promotion_rule": _ROGUE_PROMOTION_RULE,
     }
     try:
-        from internal.learning.predictions_store import load_predictions
         from internal.council.expert_attribution import attribute_expert_for_row
 
         total = 0
         hits = 0
         per_expert: Dict[str, list] = {name: [0, 0] for name in _CANONICAL}  # [graded, hits]
-        for pred in load_predictions().get("resolved") or []:
-            if not isinstance(pred, dict):
-                continue
-            if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
-                continue
-            if pred.get("correct") is None:
-                continue
+        for pred, ok in _gradeable_resolved_rows():
             total += 1
-            ok = bool(pred.get("correct"))
             expert = _normalize_expert(pred.get("expert"))
             if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
                 stats["count"] += 1
@@ -203,6 +215,67 @@ def build_rogue_stats() -> Dict[str, Any]:
     except Exception:
         pass
     return stats
+
+
+def build_council_benchmark() -> Dict[str, Any]:
+    """Relative accuracy benchmark for the proof band (mirrors Rogue philosophy).
+
+    Never judge a hit rate against an absolute bar - judge it against the
+    council it must beat. Emits council overall rate, the leading expert,
+    field average, Rogue standing, and whether council beats its leader.
+    Additive key: council_benchmark. Safe to render on an empty ledger.
+    """
+    bench: Dict[str, Any] = {
+        "rates_ready": False,
+        "council_rate": None,
+        "best_name": None,
+        "best_rate": None,
+        "avg_rate": None,
+        "rogue_count": 0,
+        "rogue_rate": None,
+        "beats_best": False,
+        "vs_best_delta": None,
+    }
+    try:
+        from internal.council.expert_attribution import attribute_expert_for_row
+
+        per_expert: Dict[str, list] = {name: [0, 0] for name in _CANONICAL}  # [graded, hits]
+        total = hits = rogue_n = rogue_hits = 0
+        for pred, ok in _gradeable_resolved_rows():
+            total += 1
+            if ok:
+                hits += 1
+            expert = _normalize_expert(pred.get("expert"))
+            if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
+                rogue_n += 1
+                if ok:
+                    rogue_hits += 1
+            elif expert in per_expert:
+                per_expert[expert][0] += 1
+                if ok:
+                    per_expert[expert][1] += 1
+        if total:
+            council_rate = round(100.0 * hits / total, 1)
+            bench["council_rate"] = council_rate
+            rates = [
+                (name, 100.0 * hit / graded)
+                for name, (graded, hit) in per_expert.items()
+                if graded > 0
+            ]
+            if rates:
+                best = max(rates, key=lambda t: t[1])
+                bench["best_name"] = best[0]
+                bench["best_rate"] = round(best[1], 1)
+                bench["avg_rate"] = round(sum(r for _, r in rates) / len(rates), 1)
+                bench["rates_ready"] = True
+                bench["beats_best"] = council_rate >= bench["best_rate"]
+                bench["vs_best_delta"] = round(council_rate - bench["best_rate"], 1)
+        if rogue_n:
+            bench["rogue_count"] = rogue_n
+            bench["rogue_rate"] = round(100.0 * rogue_hits / rogue_n, 1)
+    except Exception:
+        pass
+    return bench
 
 
 def count_rogue_replay_rows(

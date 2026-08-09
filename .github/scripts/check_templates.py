@@ -67,6 +67,7 @@ dummy_context = {
     "audit": {"concerns": []},
     "council_weights": [],
     "rogue_stats": None,
+    "council_benchmark": None,
 }
 
 try:

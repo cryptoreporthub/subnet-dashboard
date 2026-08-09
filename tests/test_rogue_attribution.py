@@ -16,7 +16,11 @@ from internal.council.expert_display import (
 )
 from internal.council.expert_attribution import resolve_expert_attribution
 from internal.council.signal_expert import expert_for_replay_row
-from internal.learning.weight_deltas import _ROGUE_PROMOTION_RULE, build_rogue_stats
+from internal.learning.weight_deltas import (
+    _ROGUE_PROMOTION_RULE,
+    build_council_benchmark,
+    build_rogue_stats,
+)
 
 
 def test_rogue_is_not_a_scored_expert() -> None:
@@ -70,3 +74,13 @@ def test_rebalance_mean_revert(weight: float, expected: float) -> None:
 
     out = mean_revert({"quant": weight})
     assert abs(out["quant"] - expected) < 1e-9
+
+
+def test_council_benchmark_shape() -> None:
+    bench = build_council_benchmark()
+    assert "rates_ready" in bench
+    assert "council_rate" in bench
+    assert "best_name" in bench
+    assert "beats_best" in bench
+    assert "vs_best_delta" in bench
+    assert "rogue_rate" in bench
