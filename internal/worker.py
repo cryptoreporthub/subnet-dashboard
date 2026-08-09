@@ -36,6 +36,14 @@ def main() -> None:
     from internal.run_mode import worker_heavy_feeds_enabled
 
     heavy = worker_heavy_feeds_enabled()
+
+    try:
+        from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
+
+        apply_resolver_semantics_patch()
+    except Exception as exc:
+        logger.warning("resolver semantics patch failed to apply: %s", exc)
+
     start_background_workers(heavy=heavy)
     touch_heartbeat()
 
