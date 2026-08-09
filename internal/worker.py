@@ -37,22 +37,31 @@ def main() -> None:
 
     heavy = worker_heavy_feeds_enabled()
     start_background_workers(heavy=heavy)
-
-    try:
-        from internal.loop_stall_guard import start_loop_stall_guard
-
-        start_loop_stall_guard()
-    except Exception as exc:
-        logger.warning("loop stall guard failed to start: %s", exc)
-
     touch_heartbeat()
 
     def _beat() -> None:
+        # Zombie-loop guard: keep touching the heartbeat ONLY while the shared
+        # background scheduler is actually alive with jobs. If the scheduler is
+        # dead or empty (a one-shot tick died / no re-arm), stop touching so the
+        # inline-worker supervisor (fly_web_entrypoint.sh) sees a stale heartbeat
+        # and restarts this process — instead of serving a "healthy" heartbeat
+        # forever while the learning loop is frozen.
+        import logging as _logging
+
+        _logger = _logging.getLogger("worker")
         while not _shutdown.wait(30):
             try:
+                from internal.job_scheduler import state as _sched_state
+
+                _st = _sched_state()
+                if not _st.get("running") or int(_st.get("job_count", 0) or 0) <= 0:
+                    _logger.warning(
+                        "background scheduler unhealthy (%s); heartbeat paused", _st
+                    )
+                    continue
                 touch_heartbeat()
             except Exception as exc:
-                logger.warning("worker heartbeat failed: %s", exc)
+                _logger.warning("worker heartbeat failed: %s", exc)
 
     threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
     logger.info("background worker running (RUN_MODE=worker, heavy=%s)", heavy)
