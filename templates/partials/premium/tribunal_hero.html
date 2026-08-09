@@ -1,6 +1,39 @@
-{# Council Hero HUD — preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
+{# Council Hero HUD — Glass instrument v2. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
 {% set p = t.conviction_pct if (t.conviction_pct is defined and t.conviction_pct) else 74 %}
+<style>
+  .tribunal-hero { --glass: rgba(16,22,34,.55); --glass-border: rgba(148,178,255,.16); position: relative; }
+  .tribunal-hero__radial { width: 210px; height: 210px; margin: 6px auto 2px; display: block; filter: drop-shadow(0 6px 22px rgba(0,0,0,.45)); }
+  .tribunal-hero__arc { fill: none; stroke-width: 11; stroke-linecap: round; opacity: .55; transition: stroke-dasharray .9s ease, opacity .5s ease; }
+  .tribunal-hero__arc--oracle { stroke: url(#cgOracle); }
+  .tribunal-hero__arc--echo { stroke: url(#cgEcho); }
+  .tribunal-hero__arc--pulse { stroke: url(#cgPulse); }
+  .tribunal-hero__conviction-arc { fill: none; stroke: url(#cgConviction); stroke-width: 4; stroke-linecap: round; }
+  .tribunal-hero__comet { fill: rgba(210,240,255,.9); filter: drop-shadow(0 0 5px cyan); }
+  .tribunal-hero__rim { fill: rgba(255,255,255,.9); }
+  .tribunal-hero.tribunal-hero--consensus .tribunal-hero__arc { opacity: .22; }
+  .tribunal-hero.tribunal-hero--consensus .tribunal-hero__conviction-arc { opacity: 1; }
+  .tribunal-hero__consensus-chip { display: none; }
+  .tribunal-hero--consensus .tribunal-hero__consensus-chip { display: inline-flex; }
+  .tribunal-hero__judge--oracle { --jglow: rgba(74,158,255,.85); }
+  .tribunal-hero__judge--echo { --jglow: rgba(66,232,150,.85); }
+  .tribunal-hero__judge--pulse { --jglow: rgba(190,110,255,.85); }
+  .tribunal-hero__judge { box-shadow: 0 0 12px -2px var(--jglow, transparent), 0 0 2px var(--jglow, transparent); }
+  .tribunal-hero__dissent { display: inline-flex; align-items: center; gap: 3px; border: 1px dashed rgba(255,255,255,.34); border-radius: 9px; padding: 1px 6px; font-size: 9px; letter-spacing: .08em; color: rgba(255,255,255,.72); }
+  .tribunal-hero__instrument { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .tribunal-hero__cell { background: var(--glass); border: 1px solid var(--glass-border); border-radius: 10px; padding: 6px 8px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .tribunal-hero__cell-label { display: block; font-size: 8px; letter-spacing: .14em; color: rgba(255,255,255,.5); text-transform: uppercase; }
+  .tribunal-hero__cell-value { display: flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: #eaf2ff; }
+  .tribunal-hero__cell-value[data-arrow="up"]::after { content: "▲"; color: #4ae898; font-size: 8px; }
+  .tribunal-hero__cell-value[data-arrow="down"]::after { content: "▼"; color: #ff6b7a; font-size: 8px; }
+  .tribunal-hero__feed { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 3px; height: 26px; margin-top: 8px; padding: 0 4px; }
+  .tribunal-hero__feed-tick { flex: 1; border-radius: 2px 2px 0 0; background: linear-gradient(180deg, rgba(120,160,255,.85), rgba(56,84,160,.35)); height: 40%; opacity: .55; }
+  .tribunal-hero__feed-tick--hot { height: 100%; opacity: 1; box-shadow: 0 0 8px cyan; animation: cgPulse 1.6s ease-in-out infinite; }
+  .tribunal-hero__feed-label { display: block; flex-basis: 100%; font-size: 8px; letter-spacing: .14em; color: rgba(255,255,255,.5); text-transform: uppercase; margin-top: 2px; }
+  @keyframes cgPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+  .tribunal-hero__ring-glow { background: radial-gradient(circle, rgba(124,170,255,.28) 0%, transparent 68%); }
+  @media (max-width: 420px) { .tribunal-hero__radial { width: 178px; height: 178px; } .tribunal-hero__cell { padding: 5px 6px; } .tribunal-hero__cell-value { font-size: 12px; } }
+</style>
 <section
   class="tribunal-hero"
   id="tribunal-hero"
@@ -52,15 +85,36 @@
         <path class="tribunal-hero__ray tribunal-hero__ray--pulse" d="M236 346 C246 324 252 297 256 273" />
       </svg>
 
-      <div class="tribunal-hero__gauge" aria-hidden="true">
-        <div class="tribunal-hero__gauge-track"></div>
-        <div class="tribunal-hero__gauge-fill tribunal-hero__ring-fill"></div>
-      </div>
+      <svg class="tribunal-hero__radial" viewBox="0 0 200 200" aria-hidden="true" data-glass-ring>
+        <defs>
+          <linearGradient id="cgOracle" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#3f8cff"/><stop offset="100%" stop-color="#7ec3ff"/>
+          </linearGradient>
+          <linearGradient id="cgEcho" x1="0" y1="1" x2="1" y2="0">
+            <stop offset="0%" stop-color="#27d88f"/><stop offset="100%" stop-color="#8dffce"/>
+          </linearGradient>
+          <linearGradient id="cgPulse" x1="1" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#a55bff"/><stop offset="100%" stop-color="#e6b3ff"/>
+          </linearGradient>
+          <linearGradient id="cgConviction" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#2ee6e4"/><stop offset="100%" stop-color="#ffc36b"/>
+          </linearGradient>
+        </defs>
+        <circle class="tribunal-hero__arc tribunal-hero__arc--oracle" data-judge-arc="oracle" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
+        <circle class="tribunal-hero__arc tribunal-hero__arc--echo" data-judge-arc="echo" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
+        <circle class="tribunal-hero__arc tribunal-hero__arc--pulse" data-judge-arc="pulse" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
+        <circle class="tribunal-hero__conviction-arc" data-conviction-arc cx="100" cy="100" r="68" transform="rotate(-90 100 100)" stroke-dasharray="213.6 213.6"/>
+        <circle class="tribunal-hero__comet" data-comet cx="100" cy="18" r="2.6"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="oracle" cx="100" cy="18" r="3.4"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="echo" cx="100" cy="18" r="3.4"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="pulse" cx="100" cy="18" r="3.4"/>
+      </svg>
       <div class="tribunal-hero__ring-glow" aria-hidden="true"></div>
 
       <div class="tribunal-hero__ring-center">
         <span id="k3-orb-score" class="tribunal-hero__pct" data-gauge-value>{{ t.gauge_display }}</span>
         <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
+        <span class="tribunal-hero__consensus-chip">· CONSENSUS</span>
         <div class="tribunal-hero__verdict-pills">
           <span id="k3-action-badge" class="tribunal-hero__verdict-label tribunal-hero__verdict-label--gate">{{ t.gate_label }}</span>
           {% if t.action_label %}
@@ -82,6 +136,7 @@
           <span class="tribunal-hero__judge-weight" data-judge-weight>{{ judge.weight_pct }}</span>
         </div>
         <h3 class="tribunal-hero__judge-name">{{ judge.label }}</h3>
+        <span class="tribunal-hero__dissent" data-dissent hidden aria-hidden="true">∆ dissent</span>
         <div class="tribunal-hero__last5" data-last5{% if not judge.last5 %} hidden{% endif %}>
           <span class="tribunal-hero__last5-caption">LAST 5</span>
           <div class="tribunal-hero__last5-ticks" aria-hidden="true">
@@ -170,6 +225,19 @@
 
   <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
 
+  <div class="tribunal-hero__instrument" data-instrument aria-label="Instrument readout">
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">AVG ACC</span><span class="tribunal-hero__cell-value" data-metric="avg-acc">--</span></div>
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">WIN RATE</span><span class="tribunal-hero__cell-value" data-metric="win-rate">--</span></div>
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal">--</span></div>
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi">--</span></div>
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch">--</span></div>
+    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7">--</span></div>
+  </div>
+  <div class="tribunal-hero__feed" data-feed aria-hidden="true">
+    <span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick tribunal-hero__feed-tick--hot"></span>
+    <span class="tribunal-hero__feed-label">SIGNAL FEED · LATEST</span>
+  </div>
+
   <footer class="tribunal-hero__panels">
     {% set dl = t.panels.decision_log %}
     <div class="tribunal-hero__panel" data-panel="decision-log">
@@ -227,4 +295,82 @@
 
   <p class="tribunal-hero__sync" id="tribunal-hero-sync" role="status" aria-live="polite"{% if t.synced_at %} data-synced-at="{{ t.synced_at }}"{% else %} hidden{% endif %}></p>
 </section>
-<script>document.body&&document.body.setAttribute('data-council-temp','{{ t.conviction_temp }}');</script>
+<script>
+(function () {
+  var hero = document.getElementById('tribunal-hero');
+  if (!hero) return;
+  var TAU = 2 * Math.PI;
+  var arcs = { oracle: 257.6, echo: 257.6, pulse: 257.6 };
+  function place(el, cx, cy, r, frac) {
+    if (!el) return;
+    var a = frac * TAU - Math.PI / 2;
+    el.setAttribute('cx', (cx + r * Math.cos(a)).toFixed(2));
+    el.setAttribute('cy', (cy + r * Math.sin(a)).toFixed(2));
+  }
+  function hydateRing(weights) {
+    var present = weights && [weights.oracle, weights.echo, weights.pulse].every(function (x) { return typeof x === 'number' && isFinite(x); });
+    if (!present) { hero.classList.add('tribunal-hero--consensus'); place(hero.querySelector('[data-comet]'), 100, 100, 68, 0.25); return; }
+    var total = weights.oracle + weights.echo + weights.pulse;
+    var fracs = ['oracle', 'echo', 'pulse'].map(function (k) { return weights[k] / total; });
+    var maxF = Math.max.apply(null, fracs);
+    if (maxF - Math.min.apply(null, fracs) < 0.02) {
+      hero.classList.add('tribunal-hero--consensus');
+      place(hero.querySelector('[data-comet]'), 100, 100, 68, 0.25);
+      return;
+    }
+    hero.classList.remove('tribunal-hero--consensus');
+    var started = 0;
+    ['oracle', 'echo', 'pulse'].forEach(function (k, i) {
+      var el = hero.querySelector('[data-judge-arc="' + k + '"]');
+      if (!el) return;
+      var f = fracs[i];
+      var len = arcs[k] * f;
+      el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (arcs[k] - len).toFixed(1));
+      place(hero.querySelector('[data-rim-marker="' + k + '"]'), 100, 100, 82, started + f / 2);
+      started += f;
+      var badge = hero.querySelector('[data-judge="' + k + '"] [data-dissent]');
+      if (badge) badge.hidden = Math.abs(f - maxF) < 0.001;
+    });
+    hero.setAttribute('data-consensus-delta', ((maxF - 1/3) * 100).toFixed(1) + '%');
+  }
+  function hydateMetrics(stats) {
+    if (!stats) return;
+    function setM(k, v, arrow) {
+      var el = hero.querySelector('[data-metric="' + k + '"]');
+      if (el && v !== null && v !== undefined && v !== '') {
+        el.textContent = v;
+        if (arrow) el.setAttribute('data-arrow', arrow);
+      }
+    }
+    var graded = stats.graded || 0, correct = stats.correct || 0, wrong = stats.wrong || 0;
+    if (graded > 0 && correct + wrong > 0) setM('win-rate', Math.round(correct / (correct + wrong) * 1000) / 10 + '%', correct >= wrong ? 'up' : 'down');
+    var dw = stats.judge_weight_deltas;
+    if (dw) {
+      var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, k) { return s + (typeof dw[k] === 'number' ? dw[k] : 0); }, 0);
+      setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
+    }
+    var acc = stats.accuracy;
+    if (typeof acc === 'number') setM('avg-acc', (acc * 100).toFixed(0) + '%', acc >= 0.5 ? 'up' : 'down');
+    var r = stats.rsi, st = stats.stoch, d7 = stats.last7;
+    if (typeof r === 'number') setM('rsi', Math.round(r).toFixed(0), r >= 50 ? 'up' : 'down');
+    if (typeof st === 'number') setM('stoch', Math.round(st).toFixed(0), st >= 50 ? 'up' : 'down');
+    if (typeof d7 === 'number') setM('d7', (d7 >= 0 ? '+' : '') + d7.toFixed(1) + '%', d7 >= 0 ? 'up' : 'down');
+  }
+  function boot() {
+    hydateRing(null);
+    try {
+      fetch('/api/learning/stats', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          var s = d.data || d;
+          hydateRing(s.judge_weights);
+          hydateMetrics(s);
+        })
+        .catch(function () {});
+    } catch (e) {}
+  }
+  boot();
+})();
+document.body && document.body.setAttribute('data-council-temp','{{ t.conviction_temp }}');
+</script>
