@@ -33,7 +33,12 @@ def build_trust_banner(
     if total <= 0:
         total = graded + expired + duplicate + pending
 
-    expired_rate = round(expired / total, 3) if total > 0 else 0.0
+    # Expired-rate is about the RESOLVED flow, not the raw total: pending rows
+    # are still in flight and duplicates are a labeling artifact. Keep a legacy
+    # total-based rate for back-compat, but gate on the honest resolved rate.
+    resolved_total = graded + expired + duplicate
+    expired_rate = round(expired / resolved_total, 3) if resolved_total > 0 else 0.0
+    expired_total_rate = round(expired / total, 3) if total > 0 else 0.0
     accuracy = round(correct / graded, 3) if graded > 0 else None
 
     integrity_ok = graded >= min_graded and expired_rate < max_expired_rate
@@ -48,6 +53,11 @@ def build_trust_banner(
             )
         else:
             message = f"Not enough graded picks yet ({graded}/{min_graded})"
+            if expired > 0:
+                message += (
+                    f" \u00b7 backlog {expired} expired ({round(expired_rate * 100)}% of resolved) "
+                    f"- price data missing at resolve, not graded outcomes"
+                )
         headline = None
     elif expired_rate >= max_expired_rate:
         message = (
@@ -116,6 +126,11 @@ def build_trust_banner(
         "accuracy": accuracy,
         "expired": expired,
         "expired_rate": expired_rate,
+        "expired_total_rate": expired_total_rate,
+        "expired_note": (
+            f"{expired} rows expired at resolve - price data unavailable, not graded outcomes. "
+            f"expired/(graded+expired+duplicate) = {expired_rate}; gate activates at {min_graded} graded."
+        ) if expired else None,
         "duplicate": duplicate,
         "pending": pending,
         "total": total,
@@ -123,7 +138,7 @@ def build_trust_banner(
         "max_expired_rate": max_expired_rate,
         "integrity_gate": {
             "graded_ok": graded >= min_graded,
-            "expired_ok": expired_rate < max_expired_rate,
+            "expired_ok": (expired_rate < max_expired_rate) if graded >= min_graded else None,
             "watchdog_ok": not watchdog_warn,
         },
         "watchdog": watchdog,
