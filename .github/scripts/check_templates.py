@@ -65,6 +65,8 @@ dummy_context = {
     "high": [],
     "pump_subnets": [],
     "audit": {"concerns": []},
+    "council_weights": [],
+    "rogue_stats": None,
 }
 
 try:

@@ -113,7 +113,14 @@ def expert_from_signal_impact(signal_impact: Optional[Dict[str, Any]]) -> str:
 
 
 def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
-    """Re-derive council expert for historical replay (new map, skip pump desk)."""
+    """Re-derive council expert for historical replay (new map, skip pump desk).
+
+    ROGUE GUARD (attribution fix): a stored expert stamp with NO signal
+    evidence (no signal_impact/signal_source/active_signals/expert_contributions)
+    is the legacy fallback misattribution - it silently credited unresolved rows
+    to quant and inflated its weight to the 2.0 cap. Such rows are now tracked
+    as rogue instead and never feed a real expert weight.
+    """
     try:
         from internal.council.grading import is_pump_desk_claim
     except Exception:
@@ -125,9 +132,30 @@ def expert_for_replay_row(row: Dict[str, Any]) -> Optional[str]:
         expert = expert_from_signal_impact(si)
         if expert != "unclassified":
             return expert
-    src = row.get("signal_source") or row.get("expert")
+
+    # Legacy-stamp detection: bare expert field, no attributable evidence.
+    pick_blob = None
+    for key in ("pick", "candidate"):
+        blob = row.get(key)
+        if isinstance(blob, dict):
+            pick_blob = blob
+            break
+    evidence = bool(
+        row.get("signal_source")
+        or row.get("signal_impact")
+        or (pick_blob and (pick_blob.get("active_signals") or pick_blob.get("expert_contributions")))
+    )
+    stored = row.get("expert")
+    if isinstance(stored, str) and not evidence:
+        return "rogue"
+
+    src = row.get("signal_source")
     if src:
         expert = expert_from_signal_source(str(src))
+        if expert != "unclassified":
+            return expert
+    if stored:
+        expert = expert_from_signal_source(str(stored))
         if expert != "unclassified":
             return expert
     try:

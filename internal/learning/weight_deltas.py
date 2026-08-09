@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 _CANONICAL = frozenset({"quant", "hype", "dark_horse", "technical"})
 _JUDGES = frozenset({"oracle", "echo", "pulse"})
@@ -12,7 +12,7 @@ def _normalize_expert(raw: Any) -> str | None:
     name = str(raw or "").lower().strip().replace(" ", "_")
     if name == "darkhorse":
         name = "dark_horse"
-    return name if name in _CANONICAL else None
+    return name if name in _CANONICAL or name == "rogue" else None
 
 
 _SKIP_GRADED_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
@@ -23,6 +23,7 @@ def expert_graded_counts() -> Dict[str, int]:
     counts = {name: 0 for name in _CANONICAL}
     try:
         from internal.learning.predictions_store import load_predictions
+        from internal.council.expert_attribution import attribute_expert_for_row
 
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
@@ -34,9 +35,15 @@ def expert_graded_counts() -> Dict[str, int]:
             expert = _normalize_expert(pred.get("expert"))
             if expert:
                 counts[expert] = counts.get(expert, 0) + 1
+                continue
+            # Rogue bucket: rows that resolve to no canonical expert are counted
+            # so the Rogue track record can earn a later promotion.
+            if attribute_expert_for_row(pred) == "rogue":
+                counts["rogue"] = counts.get("rogue", 0) + 1
     except Exception:
         pass
     return counts
+
 
 
 # collect_trail_events returns oldest-first and truncates at limit, so a small
@@ -122,3 +129,72 @@ def recent_judge_weight_deltas(
         except (TypeError, ValueError):
             continue
     return out
+
+# ============ Rogue bucket tracking (weight-like %, promotion path) ============
+_ROGUE_PROMOTION_RULE = "hit_rate >= 0.55 and count >= 30 -> consider official expert"
+
+
+def build_rogue_stats() -> Dict[str, Any]:
+    """Track unresolved-attribution rows as a weight-like percentage.
+
+    Rogue is tracked, never scored: it never enters expert_weights or pick
+    generation, but its hit rate + volume decide whether it earns an official
+    expert slot later (the promotion gate).
+    """
+    stats: Dict[str, Any] = {
+        "count": 0,
+        "share_pct": 0.0,
+        "hit_rate": None,
+        "tracked": True,
+        "promotion_rule": _ROGUE_PROMOTION_RULE,
+    }
+    try:
+        from internal.learning.predictions_store import load_predictions
+        from internal.council.expert_attribution import attribute_expert_for_row
+
+        total = 0
+        hits = 0
+        for pred in load_predictions().get("resolved") or []:
+            if not isinstance(pred, dict):
+                continue
+            if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
+                continue
+            if pred.get("correct") is None:
+                continue
+            total += 1
+            expert = _normalize_expert(pred.get("expert"))
+            if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
+                stats["count"] += 1
+                if pred.get("correct"):
+                    hits += 1
+        if total:
+            stats["share_pct"] = round(100.0 * stats["count"] / total, 1)
+        if stats["count"]:
+            stats["hit_rate"] = round(100.0 * hits / stats["count"], 1)
+    except Exception:
+        pass
+    return stats
+
+
+def count_rogue_replay_rows(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+) -> Dict[str, int]:
+    """Rows the weight replay now routes to Rogue instead of a real expert.
+
+    Observability for the archive-hygiene fix (fix 3): archive rows whose only
+    attribution is the legacy fallback stamp no longer nudge quant - they are
+    skipped by the replay because Rogue is not a scored expert.
+    """
+    try:
+        from internal.council.weights import merged_replay_rows
+        from internal.council.signal_expert import expert_for_replay_row
+    except Exception:
+        return {"rogue": 0, "replayed": 0}
+    try:
+        rows, meta = merged_replay_rows(predictions_path, include_archive=include_archive)
+        rogue = sum(1 for row in rows if expert_for_replay_row(row) == "rogue")
+        return {"rogue": rogue, "replayed": len(rows), "total_graded": meta.get("total_graded", 0)}
+    except Exception:
+        return {"rogue": 0, "replayed": 0}
