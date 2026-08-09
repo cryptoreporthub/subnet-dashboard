@@ -55,7 +55,7 @@ def test_replay_keeps_real_signal_evidence() -> None:
 def test_rogue_promotion_rule_is_relative_to_incumbents() -> None:
     # An absolute 55% bar can sit above every real expert's observed hit rate;
     # the rule must be relative to the leading expert instead.
-    assert "leading" in _ROGUE_PROMOTION_RULE
+    assert "ANY" in _ROGUE_PROMOTION_RULE
     assert "0.55" not in _ROGUE_PROMOTION_RULE
 
 
@@ -84,3 +84,10 @@ def test_council_benchmark_shape() -> None:
     assert "beats_best" in bench
     assert "vs_best_delta" in bench
     assert "rogue_rate" in bench
+
+
+def test_rogue_stats_has_any_incumbent_fields() -> None:
+    stats = build_rogue_stats()
+    assert "beats_any" in stats
+    assert "beaten_name" in stats
+    assert "beaten_rate" in stats

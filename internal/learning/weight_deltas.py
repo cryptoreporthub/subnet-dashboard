@@ -136,7 +136,7 @@ def recent_judge_weight_deltas(
 # de facto impossibility. Rogue earns its seat by beating the leading expert
 # over a meaningful sample instead.
 _ROGUE_PROMOTION_RULE = (
-    "beats the leading council expert's hit rate (min 30 resolved rows)"
+    "beats ANY council expert's hit rate (min 30 resolved rows)"
     " -> consider official expert"
 )
 
@@ -203,15 +203,32 @@ def build_rogue_stats() -> Dict[str, Any]:
             if graded > 0
         ]
         if rates:
-            best = max(rates)
+            best = max(r[1] for r in rates)
+            worst = min(r[1] for r in rates)
+            worst_name = next(r[0] for r in rates if r[1] == worst)
             stats["council_best_hit_rate"] = round(best, 1)
-            stats["council_avg_hit_rate"] = round(sum(rates) / len(rates), 1)
-            # Relative bar: Rogue must beat the leading incumbent (not an
-            # absolute 55% that may sit above every real expert's hit rate).
-            stats["promotion_rule"] = (
-                "hit_rate >= " + str(round(best, 1)) + "% (leading expert) and count >= 30"
-                " -> consider official expert"
-            )
+            stats["council_avg_hit_rate"] = round(sum(r[1] for r in rates) / len(rates), 1)
+            # Bar = ANY incumbent, not just the leader: Rogue earns promotion
+            # when its hit rate clears at least one sitting expert (the lowest).
+            rogue_rate = stats.get("hit_rate")
+            beats_any = rogue_rate is not None and rogue_rate > worst
+            stats["beats_any"] = beats_any
+            stats["beaten_name"] = worst_name
+            stats["beaten_rate"] = round(worst, 1)
+            if beats_any:
+                stats["promotion_rule"] = (
+                    "PROMOTION READY - hit_rate " + str(round(float(rogue_rate), 1))
+                    + "% beats " + worst_name + " " + str(round(worst, 1)) + "% (lowest incumbent)"
+                    " and count >= 30 -> consider official expert"
+                )
+            else:
+                stats["promotion_rule"] = (
+                    "hit_rate > " + str(round(worst, 1)) + "% (" + worst_name + ", lowest incumbent)"
+                    " and count >= 30 -> consider official expert"
+                )
+    except Exception:
+        pass
+    return stats
     except Exception:
         pass
     return stats
