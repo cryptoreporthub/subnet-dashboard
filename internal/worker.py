@@ -37,6 +37,14 @@ def main() -> None:
 
     heavy = worker_heavy_feeds_enabled()
     start_background_workers(heavy=heavy)
+
+    try:
+        from internal.loop_stall_guard import start_loop_stall_guard
+
+        start_loop_stall_guard()
+    except Exception as exc:
+        logger.warning("loop stall guard failed to start: %s", exc)
+
     touch_heartbeat()
 
     def _beat() -> None:
