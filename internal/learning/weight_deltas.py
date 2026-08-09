@@ -229,9 +229,6 @@ def build_rogue_stats() -> Dict[str, Any]:
     except Exception:
         pass
     return stats
-    except Exception:
-        pass
-    return stats
 
 
 def build_council_benchmark() -> Dict[str, Any]:
