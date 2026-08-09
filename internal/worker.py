@@ -37,6 +37,8 @@ def main() -> None:
 
     heavy = worker_heavy_feeds_enabled()
 
+    # Resolver missing-price retry semantics (Ditto, #885): rows with
+    # unavailable price data stay pending until the retry cap before expiring.
     try:
         from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
 
@@ -45,6 +47,18 @@ def main() -> None:
         logger.warning("resolver semantics patch failed to apply: %s", exc)
 
     start_background_workers(heavy=heavy)
+
+    # Loop stall guard (loop-stall-guard commit d03a3789): watch the pump desk
+    # snapshot age; if it stays stale across consecutive checks, revive in place
+    # then exit so the supervisor restarts the worker fresh. Must stay wired in
+    # alongside the scheduler self-heal below.
+    try:
+        from internal.loop_stall_guard import start_loop_stall_guard
+
+        start_loop_stall_guard()
+    except Exception as exc:
+        logger.warning("loop stall guard failed to start: %s", exc)
+
     touch_heartbeat()
 
     def _beat() -> None:
