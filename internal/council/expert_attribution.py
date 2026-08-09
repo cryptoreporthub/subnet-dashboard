@@ -6,6 +6,10 @@ from typing import Any, Dict, Optional, Tuple
 
 CANONICAL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
 
+# Rogue bucket: rows that fail every attribution path land here (tracked,
+# never scored, promotable to a real expert later).
+ROGUE_EXPERT = "rogue"
+
 
 def normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     """Legacy lane normalizer for weight nudges — skips unclassified/unknown/neutral."""
@@ -81,7 +85,7 @@ def resolve_expert_attribution(row: Dict[str, Any]) -> Tuple[Optional[str], str]
     if normalized:
         return normalized, "normalize"
 
-    return None, "unresolved"
+    return ROGUE_EXPERT, "unresolved"
 
 
 def attribute_expert_for_row(row: Dict[str, Any]) -> Optional[str]:

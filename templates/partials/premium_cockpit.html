@@ -132,6 +132,21 @@
   <div class="accuracy-lift-panel" id="accuracy-lift-panel" aria-labelledby="accuracy-lift-title">
     <h3 class="accuracy-lift-panel__title" id="accuracy-lift-title">Measurement ledger (30d)</h3>
     <p class="accuracy-lift-panel__summary desk-empty" id="accuracy-lift-summary">Building graded history</p>
+    {% if council_benchmark is defined and council_benchmark and council_benchmark.rates_ready %}
+    <style>
+      .accuracy-lift-panel__relative { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 6px 0 0; font-size: 10px; color: rgba(255,255,255,.55); }
+      .accuracy-lift-panel__relative b { color: #eaf2ff; font-weight: 700; }
+      .accuracy-lift-panel__delta { font-weight: 700; font-variant-numeric: tabular-nums; }
+      .accuracy-lift-panel__delta.pos { color: #7dffb0; }
+      .accuracy-lift-panel__delta.neg { color: #ff9a7a; }
+    </style>
+    <p class="accuracy-lift-panel__relative" data-testid="council-relative" aria-live="polite">
+      Council <b>{{ council_benchmark.council_rate }}%</b> vs leading expert <b>{{ council_benchmark.best_name|replace('_', ' ')|title }} {{ council_benchmark.best_rate }}%</b>
+      (field avg {{ council_benchmark.avg_rate }}%){% if council_benchmark.rogue_rate is not none %} · Rogue {{ council_benchmark.rogue_rate }}%{% endif %}
+      <span class="accuracy-lift-panel__delta {{ 'pos' if council_benchmark.beats_best else 'neg' }}">{% if council_benchmark.beats_best %}▲ beats leader{% else %}▼ {{ council_benchmark.vs_best_delta }}% vs leader{% endif %}</span>
+    </p>
+    {% endif %}
+
     <ul class="accuracy-lift-panel__experts" id="accuracy-lift-experts" hidden></ul>
     <p class="accuracy-lift-panel__note" id="accuracy-lift-note">Full resolved ledger; trust gate uses published LONG picks only.</p>
   </div>
@@ -204,23 +219,6 @@
 <details class="market-drawer wrap-pad" id="market-drawer">
   <summary class="market-drawer__summary">
     <span>Market &amp; tools</span>
-    <span class="market-drawer__hint">Scanner · signals · staking · analytics</span>
-  </summary>
-  <div class="market-drawer__body">
-    {% include "partials/premium/hero.html" %}
-    {% include "partials/premium/scanner.html" %}
-    {% include "partials/premium/investigation.html" %}
-    {% include "partials/premium/signals.html" %}
-    {% include "partials/premium/alerts.html" %}
-    {% include "partials/premium/staking.html" %}
-    {% include "partials/premium/indicators.html" %}
-    {% include "partials/premium/undervalued.html" %}
-    {% include "partials/premium/radar.html" %}
-    {% include "partials/premium/subnet_groups.html" %}
-    {% include "partials/premium/social.html" %}
-    {% include "partials/premium/chat.html" %}
-  </div>
-</details>
+    <span class="market
 
-{% include "partials/premium/footer.html" %}
-{% include "partials/premium/scripts.html" %}
+[read_links truncated 832 chars from this runtime tool output. The full content is stored with the tool result.]

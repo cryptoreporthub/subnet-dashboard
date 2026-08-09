@@ -1,27 +1,79 @@
 <!-- 6. Council -->
 {% set soul_orb_colors = {'quant': '#3fc9ff', 'hype': '#ff5fa8', 'dark_horse': '#a78bfa', 'technical': '#ffb74a'} %}
 {% set soul_orb_fallback = ['#3fc9ff', '#a78bfa', '#ffb74a', '#ff5fa8', '#34d399', '#60a5fa'] %}
-<section class="row" id="section-council" aria-labelledby="council-title">
-  <div class="section-label">Bench</div>
-  <h2 class="section-title" id="council-title">Expert weights</h2>
-  <p class="section-sub">Council weights (soul map) — quant, hype, dark horse, technical move when predictions resolve.</p>
+<style>
+  .council-bench-section { margin-top: 4px; }
+  .council-bench-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .council-bench-head .section-sub { margin: 4px 0 0; }
+  .council-grid.council-bench { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .council-arc-card { --arc-accent: #3fc9ff; display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 16px; border: 1px solid rgba(148,178,255,.16); background: transparent; backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+  .council-arc { position: relative; width: 56px; height: 56px; flex: none; }
+  .council-arc svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .council-arc__track { fill: none; stroke: rgba(255,255,255,.1); stroke-width: 3.5; }
+  .council-arc__fill { fill: none; stroke: var(--arc-accent); stroke-width: 3.5; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--arc-accent)); transition: stroke-dasharray 1s cubic-bezier(.4,0,.2,1); }
+  .council-arc__value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+  .council-arc-card__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .council-arc-card__name { font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #fff; margin: 0; }
+  .council-arc-card__bias { align-self: flex-start; font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid; background: transparent; }
+  .council-arc-card__bias--up { color: #7dffb0; border-color: rgba(74,232,152,.4); }
+  .council-arc-card__bias--down { color: #ff9a7a; border-color: rgba(255,107,122,.4); }
+  .council-arc-card__bias--even { color: rgba(255,255,255,.62); border-color: rgba(148,178,255,.32); }
+  .council-arc-card__bias--prior { color: #ffd58a; border-color: rgba(255,183,74,.42); }
+  .council-arc-card__graded { font-size: 8px; letter-spacing: .12em; text-transform: uppercase; color: rgba(255,255,255,.42); }
+  .council-arc-card__graded b { color: rgba(255,255,255,.72); font-variant-numeric: tabular-nums; }
+  .council-rogue { display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 10px 14px; border-radius: 14px; border: 1px dashed rgba(255,183,74,.45); background: transparent; }
+  .council-rogue__arc { position: relative; width: 44px; height: 44px; flex: none; }
+  .council-rogue__arc svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .council-rogue__fill { stroke: #ffb74a; }
+  .council-rogue__value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #ffd58a; font-variant-numeric: tabular-nums; }
+  .council-rogue__body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .council-rogue__name { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #ffd58a; margin: 0; }
+  .council-rogue__tag { font-size: 7.5px; font-weight: 800; letter-spacing: .14em; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(255,183,74,.4); color: rgba(255,217,138,.85); text-transform: uppercase; }
+  .council-rogue__meta { margin: 0; font-size: 10px; color: rgba(255,255,255,.55); line-height: 1.5; }
+  .council-rogue__meta b { color: #ffd58a; }
+  .council-cap-note { margin: 8px 0 0; font-size: 9.5px; color: rgba(255,255,255,.45); line-height: 1.5; }
+  @media (max-width: 720px) { .council-grid.council-bench { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 420px) { .council-grid.council-bench { grid-template-columns: 1fr; } }
+  @media (prefers-reduced-motion: reduce) { .council-arc__fill { transition: none; } }
+  @keyframes cgRogueFlash { 0% { color: #ffd58a; text-shadow: 0 0 10px rgba(255,183,74,.55); } 100% { color: inherit; text-shadow: none; } }
+  .council-arc__value.flash, .council-rogue__value.flash { animation: cgRogueFlash .8s ease-out; }
+</style>
+<section class="row council-bench-section" id="section-council" aria-labelledby="council-title">
+  <div class="council-bench-head">
+    <div>
+      <div class="section-label">Bench</div>
+      <h2 class="section-title" id="council-title">Expert weights</h2>
+      <p class="section-sub">Council weights (soul map) — quant, hype, dark horse, technical move when predictions resolve.</p>
+    </div>
+    {% set maxw = namespace(v=0.0) %}
+    {% for cw in council_weights %}
+      {% set wv = (cw.weight|default(0))|float %}
+      {% if wv > maxw.v %}{% set maxw.v = wv %}{% endif %}
+    {% endfor %}
+    {% if maxw.v >= 1.999 %}
+    <p class="council-cap-note">ⓘ An expert is at the learned cap (≤2.0) — legacy fallback misattribution credited unresolved rows; corrected via the Rogue bucket + one soft reblend (see PR).</p>
+    {% endif %}
+  </div>
   {% if council_weights %}
-  <div class="council-grid soulmap-constellation" aria-live="polite">
+  <div class="council-grid council-bench" data-testid="council-bench" aria-live="polite">
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}
     {% set trend = (cw.trend|default('even'))|string|lower %}
-    {% set orb_color = soul_orb_colors.get(cw.expert, soul_orb_fallback[loop.index0 % soul_orb_fallback|length]) %}
-    {% set orb_px = (58 + ([w, 2.0]|min / 2.0 * 46))|round|int %}
-    <div class="expert card-soft card soul-orb-card" style="--soulmap-delay: {{ (loop.index0 * 0.35)|round(2) }}s;">
-      <div class="soul-orb-wrap">
-        <div class="soul-orb soul-orb--{{ trend }}" style="--orb-accent: {{ orb_color }}; --orb-px: {{ orb_px }}px;">
-          <span class="soul-orb-core"></span>
-          <span class="soul-orb-value">{{ "%.2f"|format(w) }}</span>
-        </div>
+    {% set arc_color = soul_orb_colors.get(cw.expert, soul_orb_fallback[loop.index0 % soul_orb_fallback|length]) %}
+    {% set frac = ([w, 0.0]|max / 2.0) %}
+    {% set dash = (113.1 * frac)|round(1) %}
+    {% set graded_n = cw.graded|default(cw.graded_n|default(0)) %}
+    <article class="council-arc-card" style="--arc-accent: {{ arc_color }}">
+      <span class="council-arc" role="img" aria-label="{{ cw.expert|default('expert') }} weight {{ "%.2f"|format(w) }}">
+        <svg viewBox="0 0 48 48"><circle class="council-arc__track" cx="24" cy="24" r="19"/><circle class="council-arc__fill" cx="24" cy="24" r="19" stroke-dasharray="{{ dash }} {{ (113.1 - dash)|round(1) }}"/></svg>
+        <span class="council-arc__value" data-expert-weight="{{ "%.2f"|format(w) }}">{{ "%.2f"|format(w) }}</span>
+      </span>
+      <div class="council-arc-card__body">
+        <h3 class="council-arc-card__name">{{ cw.expert|default('expert')|replace('_', ' ')|title }}</h3>
+        <span class="council-arc-card__bias council-arc-card__bias--{{ 'up' if trend == 'up' else ('down' if trend == 'down' else ('prior' if trend == 'prior' else 'even')) }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% elif trend == 'prior' %}PRIOR{% else %}EVEN{% endif %}</span>
+        <span class="council-arc-card__graded">Graded <b>{{ graded_n }}</b></span>
       </div>
-      <div class="name">{{ cw.expert|default('expert')|replace('_', ' ')|title }}</div>
-      <span class="bias trend-{{ trend }}">{% if trend == 'up' %}▲ LEARNED UP{% elif trend == 'down' %}▼ LEARNED DOWN{% elif trend == 'prior' %}PRIOR{% else %}EVEN{% endif %}</span>
-    </div>
+    </article>
     {% endfor %}
   </div>
   {% else %}
@@ -32,6 +84,23 @@
       <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
     </div>
     <p class="sr-only" role="status">Loading council weights</p>
+  </div>
+  {% endif %}
+
+  {# Rogue bucket — unresolved attribution tracked as a weight-like % (promotable) #}
+  {% if rogue_stats is defined and rogue_stats and rogue_stats.count %}
+  {% set rs = rogue_stats %}
+  {% set rfrac = ([rs.share_pct|default(0)|float / 100.0, 0.0]|max / 1.0) %}
+  {% set rdash = (113.1 * rfrac)|round(1) %}
+  <div class="council-rogue" data-testid="council-rogue">
+    <span class="council-rogue__arc" role="img" aria-label="Rogue share {{ rs.share_pct|default(0) }}% — tracked">
+      <svg viewBox="0 0 48 48"><circle class="council-arc__track" cx="24" cy="24" r="19"/><circle class="council-arc__fill council-rogue__fill" cx="24" cy="24" r="19" stroke-dasharray="{{ rdash }} {{ (113.1 - rdash)|round(1) }}"/></svg>
+      <span class="council-rogue__value">{{ rs.share_pct|default(0) }}%</span>
+    </span>
+    <div class="council-rogue__body">
+      <h3 class="council-rogue__name">Rogue <span class="council-rogue__tag">untracked</span></h3>
+      <p class="council-rogue__meta">Unresolved attribution · tracked as weight-like % · <b>hit rate {{ rs.hit_rate|default('—') }}%</b> · {{ rs.promotion_rule|default('promotable if it tracks well') }}</p>
+    </div>
   </div>
   {% endif %}
 </section>

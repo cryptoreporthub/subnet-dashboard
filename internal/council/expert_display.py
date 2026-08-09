@@ -8,11 +8,17 @@ from internal.council.signal_expert import expert_from_signal_source
 
 CANONICAL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
 
+# Rogue = tracked-but-untracked: unresolved attribution gets its own bucket so it
+# can never silently credit a real expert (legacy fallback bug) and can be
+# promoted to an official expert later if it tracks well.
+ROGUE_EXPERT = "rogue"
+
 _EXPERT_LABELS = {
     "quant": "Quant",
     "hype": "Hype",
     "dark_horse": "Dark Horse",
     "technical": "Technical",
+    "rogue": "Rogue",
 }
 
 
@@ -106,7 +112,7 @@ def leading_expert_for_pick(
     leader, blended = weighted_expert_blend(pick.get("expert_contributions"), market_context)
     if leader:
         return leader, expert_label(leader), blended.get(leader, scores.get(leader, 0.0))
-    return "quant", expert_label("quant"), scores.get("quant", 0.0)
+    return ROGUE_EXPERT, expert_label(ROGUE_EXPERT), scores.get(ROGUE_EXPERT, 0.0)
 
 
 def dominant_expert_for_learning(pick: Dict[str, Any]) -> str:
