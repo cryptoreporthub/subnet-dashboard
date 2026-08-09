@@ -131,7 +131,15 @@ def recent_judge_weight_deltas(
     return out
 
 # ============ Rogue bucket tracking (weight-like %, promotion path) ============
-_ROGUE_PROMOTION_RULE = "hit_rate >= 0.55 and count >= 30 -> consider official expert"
+# Promotion is RELATIVE to the incumbent council: an absolute bar (e.g. 55%)
+# can sit above every real expert's observed hit rate and make promotion a
+# de facto impossibility. Rogue earns its seat by beating the leading expert
+# over a meaningful sample instead.
+_ROGUE_PROMOTION_RULE = (
+    "beats the leading council expert's hit rate (min 30 resolved rows)"
+    " -> consider official expert"
+)
+
 
 
 def build_rogue_stats() -> Dict[str, Any]:
@@ -154,6 +162,7 @@ def build_rogue_stats() -> Dict[str, Any]:
 
         total = 0
         hits = 0
+        per_expert: Dict[str, list] = {name: [0, 0] for name in _CANONICAL}  # [graded, hits]
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
                 continue
@@ -162,15 +171,35 @@ def build_rogue_stats() -> Dict[str, Any]:
             if pred.get("correct") is None:
                 continue
             total += 1
+            ok = bool(pred.get("correct"))
             expert = _normalize_expert(pred.get("expert"))
             if expert == "rogue" or (not expert and attribute_expert_for_row(pred) == "rogue"):
                 stats["count"] += 1
-                if pred.get("correct"):
+                if ok:
                     hits += 1
+            elif expert in per_expert:
+                per_expert[expert][0] += 1
+                if ok:
+                    per_expert[expert][1] += 1
         if total:
             stats["share_pct"] = round(100.0 * stats["count"] / total, 1)
         if stats["count"]:
             stats["hit_rate"] = round(100.0 * hits / stats["count"], 1)
+        rates = [
+            100.0 * hit / graded
+            for graded, hit in per_expert.values()
+            if graded > 0
+        ]
+        if rates:
+            best = max(rates)
+            stats["council_best_hit_rate"] = round(best, 1)
+            stats["council_avg_hit_rate"] = round(sum(rates) / len(rates), 1)
+            # Relative bar: Rogue must beat the leading incumbent (not an
+            # absolute 55% that may sit above every real expert's hit rate).
+            stats["promotion_rule"] = (
+                "hit_rate >= " + str(round(best, 1)) + "% (leading expert) and count >= 30"
+                " -> consider official expert"
+            )
     except Exception:
         pass
     return stats
