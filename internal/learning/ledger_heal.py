@@ -179,10 +179,29 @@ def archive_predictions_epoch(
     except Exception as exc:
         return {"ok": False, "reason": "archive_failed", "error": str(exc)}
 
+    # Preserve in-flight pending rows across the epoch reset: mid-flight picks
+    # must never vanish into "expired" just because the graded ledger rolled
+    # (root cause of the 69% expired_rate). Toggle off with
+    # PREDICTIONS_ARCHIVE_PRESERVE_PENDING=0 for a true hard reset.
+    preserve_pending = os.environ.get("PREDICTIONS_ARCHIVE_PRESERVE_PENDING", "1") != "0"
+    pending_kept: List[Dict[str, Any]] = []
+    try:
+        old = load_predictions()
+        pending_kept = [
+            p for p in (old.get("predictions") or [])
+            if isinstance(p, dict) and p.get("status", "pending") in (None, "pending")
+        ]
+    except Exception as exc:
+        logger.warning("epoch archive: could not preserve pending rows: %s", exc)
     empty = {
-        "predictions": [],
+        "predictions": pending_kept if preserve_pending else [],
         "resolved": [],
-        "stats": {"correct": 0, "wrong": 0, "pending": 0, "total": 0, "accuracy": 0.0},
+        "stats": {
+            "correct": 0, "wrong": 0,
+            "pending": len(pending_kept) if preserve_pending else 0,
+            "total": len(pending_kept) if preserve_pending else 0,
+            "accuracy": 0.0,
+        },
         "epoch_reset_at": _utcnow().isoformat().replace("+00:00", "Z"),
     }
     save_predictions(empty)
