@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ page_title or "SimiVision — Telegram Listener" }}</title>
+<meta name="description" content="{{ page_description or "" }}">
+<link rel="canonical" href="{{ page_url or "" }}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page_title or "SimiVision — Telegram Listener" }}">
+<meta property="og:description" content="{{ page_description or "" }}">
+<meta property="og:url" content="{{ page_url or "" }}">
+<meta property="og:image" content="{{ og_image_url or "" }}">
+<meta name="theme-color" content="#05070f">
+<link rel="stylesheet" href="/static/css/listener.css?v={{ static_v }}">
+</head>
+<body class="lsn-body">
+  <div class="lsn-page">
+
+    <!-- TRUST STRIP — static at top (never sticky) -->
+    <div class="lsn-trust" id="lsnTrust" data-mode="{{ display_mode or "warming" }}">
+      <svg class="ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
+        <path id="lsnEkg" d="M0,13 L20,13 L24,9 L28,17 L32,13 L55,13 L59,9 L63,17 L67,13 L90,13 L94,9 L98,17 L102,13 L120,13"></path>
+      </svg>
+      <span class="lsn-mode" id="lsnModeBtn" title="Listener display state — click to cycle"><span class="dot"></span><span id="lsnModeLabel">{{ (display_mode or "warming")|upper }}</span></span>
+      <span class="lsn-last">{{ last_msg_label or "—" }}</span>
+      <span class="lsn-sep"></span>
+      <span class="lsn-cal" id="lsnCal" title="Calibration drift surfaces HERE — not just Fly logs"><span id="lsnCalLabel">cal ✓</span></span>
+    </div>
+
+    <!-- HEADER -->
+    <div class="lsn-hdr">
+      <div class="lsn-logo">S</div>
+      <div class="t">
+        <div class="app">SIMI <em>·</em> LISTENER</div>
+        <div class="grp">@{{ monitored_group or "officialsubnetsummer" }}</div>
+        <div class="lsn-graded"><b>{{ graded_count or 0 }}</b> messages graded{% if high_conviction %} · <b>{{ high_conviction }}</b> high conviction{% endif %}</div>
+      </div>
+      <div class="lsn-hdr-actions">
+        <button class="lsn-quietbtn" id="lsnQuietBtn">quiet?</button>
+        <span class="lsn-live"><span class="dot"></span>{% if live %}LIVE{% else %}{{ (display_mode or "warming")|upper }}{% endif %}</span>
+        <div class="lsn-sharewrap">
+          <button class="lsn-sharebtn" id="lsnShareBtn" aria-expanded="false">🔗 Share</button>
+          <div class="lsn-glass lsn-pop" id="lsnSharePop">
+            <div class="pt">What Telegram unfurls when you share</div>
+            <div class="prev">
+              <div class="banner"></div>
+              <div class="cap">
+                <div class="pt2">SimiVision — @{{ monitored_group or "Subnet Summers" }}</div>
+                <div class="pd">{{ graded_count or 0 }} graded · {% if trending %}top sn {{ trending[0]["name"] }}{% else %}listener warming up{% endif %}</div>
+              </div>
+            </div>
+            <div class="copy"><span class="url">{{ page_url or "" }}</span><button class="lsn-copylink" id="lsnCopyBtn">Copy</button></div>
+            <div class="note">Preview = static server-rendered card for crawlers — no JS, canonical from the live host.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMANDS — top strip (locked subset) -->
+    <div class="lsn-glass lsn-cmds">
+      <span class="clabel">Quick commands</span>
+      <span class="lsn-cmd live">/summary</span>
+      <span class="lsn-cmd">/trending</span>
+      <span class="lsn-cmd">/hot take</span>
+      <span class="lsn-cmd">/champions</span>
+      <span class="lsn-cmd">/track</span>
+      <span class="lsn-cmd">/alerts</span>
+    </div>
+
+    <!-- YESTERDAY IN SUMMARY -->
+    <div class="lsn-glass lsn-summary">
+      <div class="lsn-sect"><span class="bar"></span><b>Yesterday in summary</b><span>24h lens</span></div>
+      {% if summary_text %}
+      <p class="lsn-recap">{{ summary_text }}</p>
+      {% else %}
+      <p class="lsn-recap"><b>{{ graded_count or 0 }}</b> graded messages so far. The 24h recap fills in as the listener logs a full day — nothing faked, just accumulating.</p>
+      {% endif %}
+      <div class="lsn-chips">
+        <div class="lsn-schip"><div class="v">{{ graded_count or 0 }}</div><div class="l">graded</div></div>
+        <div class="lsn-schip"><div class="v">{{ high_conviction or 0 }}</div><div class="l">high conv</div></div>
+        <div class="lsn-schip"><div class="v">{% if trending %}{{ trending|length }}{% else %}—{% endif %}</div><div class="l">hot subnets</div></div>
+        <div class="lsn-schip"><div class="v">{% if callers and callers[0] and callers[0]["acc"] is not none %}{{ callers[0]["acc"] }}{% else %}—{% endif %}</div><div class="l">top acc</div></div>
+        <div class="lsn-schip"><div class="v">{% if topics %}{{ topics|length }}{% else %}—{% endif %}</div><div class="l">topics</div></div>
+        <div class="lsn-schip"><div class="v">{% if feed %}{{ feed|length }}{% else %}—{% endif %}</div><div class="l">recent msgs</div></div>
+      </div>
+      <div class="lsn-hourly">
+        <div class="lsn-hlbl"><span>Message volume by hour</span>{% if hourly_peak is defined and hourly_peak is not none %}<span>peak {{ hourly_peak }}:00</span>{% endif %}</div>
+        {% if hourly %}
+        <div class="lsn-bars">
+          {% for h in hourly %}
+          <i{% if h["pct"] >= 100 %} class="hot"{% endif %} title="{{ h["hour"] }}:00" style="height:{{ h["pct"] }}%"></i>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="lsn-hourly-empty">Hourly volume bars render once timestamps accumulate — waiting on live ingest.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- MOST TALKED ABOUT -->
+    <div class="lsn-glass lsn-ytalk">
+      <div class="lsn-sect"><span class="bar"></span><b>Most talked about</b><span>recent lens</span></div>
+      {% set top_talk = trending[0] if trending else none %}
+      {% if top_talk %}
+      <div class="lsn-ylead" data-sn="{{ top_talk["netuid"] or "" }}" data-name="{{ top_talk["name"] or "" }}">
+        <div class="crown">👑</div>
+        <div class="mid">
+          <div class="t">{{ top_talk["name"] or "—" }}<small>top chatter right now</small></div>
+          <div class="share">{% if top_talk["mentions"] is not none %}{{ top_talk["mentions"] }} mentions{% else %}conviction-weighted{% endif %} · {{ top_talk["conviction"] if top_talk["conviction"] is not none else "—" }}%</div>
+        </div>
+        <div class="stat"><div class="n">{{ top_talk["conviction"] if top_talk["conviction"] is not none else "—" }}</div><div class="l">conv</div></div>
+      </div>
+      {% for t in trending[1:4] %}
+      <div class="lsn-yrow" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}">
+        <span class="rk">{{ loop.index + 1 }}</span><span class="nm">{{ t["name"] or "—" }}</span>
+        <div class="track"><div style="width:{{ 100 - loop.index * 18 }}%"></div></div><span class="cnt">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="lsn-champ-empty">No subnet chatter ranked yet — the ladder fills from live graded messages.</p>
+      {% endif %}
+    </div>
+
+    <!-- NET FLOW GAUGE -->
+    <div class="lsn-glass lsn-gauge">
+      <div class="row1">
+        <div class="lsn-anchor-wrap">
+          <button class="lsn-anchor" id="lsnAnchorBtn" aria-haspopup="true" aria-expanded="false">
+            <span class="dot"></span><span id="lsnAnchorLabel">{% if trending %}SN{{ trending[0]["netuid"] or "" }}{% else %}—{% endif %}</span><span class="caret">▾</span>
+          </button>
+          <span class="lsn-anchor-note">anchor follows picks &amp; rows</span>
+        </div>
+        <span class="dir" id="lsnDir">WARMING</span>
+      </div>
+      <div class="val" id="lsnGval">— <small>· net flow</small></div>
+      <div class="lsn-bar"><div id="lsnGbar"></div></div>
+      <div class="lsn-sub">
+        <span id="lsnGsub"><b>—</b> · awaiting pool snapshots</span>
+        <span class="lsn-pool-chip" id="lsnGpool">—</span>
+      </div>
+      <div class="qempty">No active subnet — awaiting the first poll delta. Nothing faked, just quiet.</div>
+      <div class="lsn-picker" id="lsnPicker">
+        <div class="phead">Switch subnet — gauge re-anchors &amp; tracks 60s deltas</div>
+        {% for t in trending %}
+        <div class="lsn-prow{% if loop.first %} active{% endif %}" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}"><span class="nm">{{ t["name"] or "—" }}<small>SN{{ t["netuid"] or "?" }}</small></span><span class="f">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span><span class="chk"></span></div>
+        {% endfor %}
+        {% if not trending %}<p class="lsn-champ-empty">No tracked subnets yet — the picker fills as chatter ranks.</p>{% endif %}
+      </div>
+    </div>
+
+    <!-- CURRENTLY TRENDING -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Currently trending</b><span>60s refresh</span></div>
+      {% if trending %}
+      {% for t in trending[:5] %}
+      <div class="lsn-trow" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}">
+        <span class="rank">{{ loop.index }}</span>
+        <div><div class="rn">{{ t["name"] or "—" }}<small>SN{{ t["netuid"] or "?" }}</small></div></div>
+        <svg class="spark" viewBox="0 0 60 22" preserveAspectRatio="none"><polyline points="0,14 10,12 20,13 30,8 40,10 50,5 60,6" fill="none" stroke="{{ "#3bffb8" if t["sent"] == "bull" else ("#ff5d7a" if t["sent"] == "bear" else "#6ee7ff") }}" stroke-width="1.8" stroke-linecap="round"></polyline></svg>
+        <span class="lsn-sent {{ t["sent"] or "mix" }}">{{ (t["sent"] or "mix")|upper }}</span><span class="conv">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="lsn-qstate" style="display:block"><b>No subnet chatter in the last hour yet.</b><div class="tiny">The panel stays honest instead of showing stale numbers.</div></div>
+      {% endif %}
+    </div>
+
+    <!-- SUBNET CHATTER POWER -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Subnet chatter power</b><span>velocity × conviction × quality</span></div>
+      {% if trending %}
+      {% for t in trending[:4] %}
+      <div class="lsn-crow2" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}">
+        <span class="rank">{{ loop.index }}</span>
+        <div class="body">
+          <div class="top"><span class="nm">{{ t["name"] or "—" }}</span><span class="score">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span></div>
+          <div class="why"><b>{% if t["sent"] == "bull" %}Bullish lean{% elif t["sent"] == "bear" %}Bearish lean{% else %}Mixed signals{% endif %}</b>{% if t["mentions"] is not none %} — {{ t["mentions"] }} mentions{% endif %}.</div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="lsn-cboard-empty">No ladder yet — chatter power needs graded messages to rank.</p>
+      {% endif %}
+    </div>
+
+    <!-- CONSENSUS + DIVERGENCE -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Consensus &amp; divergence</b><span>calls vs. price</span></div>
+      {% if trending %}
+      <div class="lsn-cons">
+        {% for t in trending[:4] %}
+        {% set cnum = t["conviction"] if t["conviction"] is not none else 50 %}
+        {% set pos_w = cnum %}
+        {% set neg_w = 100 - cnum %}
+        <div class="lsn-crowd">
+          <span class="nm">{{ t["name"] or "—" }}</span>
+          <div class="bars"><div class="neg" style="width:{{ neg_w }}%"></div><div class="zero"></div><div class="pos" style="width:{{ pos_w }}%"></div></div>
+          <span class="val {{ "pos" if cnum >= 55 else ("neg" if cnum <= 45 else "") }}">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="lsn-champ-empty">No consensus bars yet — they need live graded calls per subnet.</p>
+      {% endif %}
+      {% if divergence %}
+      {% for d in divergence[:2] %}
+      <div class="lsn-dstory{% if d["warn"] %} warn{% endif %}">
+        <div class="ic">{% if d["warn"] %}🌪️{% else %}⚡{% endif %}</div>
+        <div class="tx"><div class="t">{{ d["title"] or "Signal divergence" }}</div><div class="d">{{ d["detail"] or "" }}</div></div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="lsn-dstory-empty">No divergence stories yet — chatter and price are in agreement. Stories land here the moment the listener spots a split.</p>
+      {% endif %}
+    </div>
+
+    <!-- CONVICTION JURY (recent graded calls) -->
+    {% set ns = namespace(bull=0, bear=0, neutral=0, s=0, n=0) %}
+    {% for m in feed %}
+      {% set v = (m["verdict"] or "")|lower %}
+      {% if "bull" in v %}{% set ns.bull = ns.bull + 1 %}
+      {% elif "bear" in v %}{% set ns.bear = ns.bear + 1 %}
+      {% else %}{% set ns.neutral = ns.neutral + 1 %}{% endif %}
+      {% if m["conviction"] is not none %}{% set ns.s = ns.s + m["conviction"] %}{% set ns.n = ns.n + 1 %}{% endif %}
+    {% endfor %}
+    {% set jury_total = ns.bull + ns.bear + ns.neutral %}
+    {% set jury_score = (ns.s / ns.n)|round|int if ns.n > 0 else none %}
+    <div class="lsn-glass lsn-jury">
+      <div class="lsn-sect"><span class="bar"></span><b>Conviction jury</b><span>recent graded calls</span></div>
+      <div class="top">
+        <div class="score">{% if jury_score is not none %}{{ jury_score }} <small>/100</small>{% else %}—{% endif %}</div>
+        <span class="badge{% if jury_score is none or jury_score < 60 %} low{% endif %}">{% if jury_score is not none and jury_score >= 60 %}HIGH{% elif jury_score is not none %}MID{% else %}WARMING{% endif %}</span>
+      </div>
+      <div class="lsn-bar"><div{% if jury_score is not none %} style="width:{{ jury_score }}%"{% endif %}></div></div>
+      <div class="split">
+        <div class="lsn-jsplit bull"><div class="lbl">Bullish</div><div class="val">{{ ns.bull }} <span class="m">· {% if jury_total %}{{ ((ns.bull / jury_total) * 100)|round|int }}%{% else %}—{% endif %}</span></div></div>
+        <div class="lsn-jsplit mid"><div class="lbl">Neutral</div><div class="val">{{ ns.neutral }} <span class="m">· {% if jury_total %}{{ ((ns.neutral / jury_total) * 100)|round|int }}%{% else %}—{% endif %}</span></div></div>
+        <div class="lsn-jsplit bear"><div class="lbl">Bearish</div><div class="val">{{ ns.bear }} <span class="m">· {% if jury_total %}{{ ((ns.bear / jury_total) * 100)|round|int }}%{% else %}—{% endif %}</span></div></div>
+      </div>
+    </div>
+
+    <!-- TELEGRAM PULSE -->
+    <div class="lsn-glass lsn-pulse">
+      <div class="lsn-sect"><span class="bar"></span><b>Telegram pulse</b><span>hype ↔ price corr</span></div>
+      <div class="cols">
+        <div class="lsn-pcol"><div class="lbl">+1h</div><div class="v lo">—</div></div>
+        <div class="lsn-pcol"><div class="lbl">+4h</div><div class="v lo">—</div></div>
+        <div class="lsn-pcol"><div class="lbl">+24h</div><div class="v lo">—</div></div>
+      </div>
+      <div class="note">Correlation surfaces once price outcomes resolve against chatter windows. Until then, honest dashes — the resolver feeds this panel.</div>
+    </div>
+
+    <!-- CALLER LEADERBOARD (skin in the game) -->
+    <div class="lsn-glass lsn-cboard">
+      <div class="lsn-sect"><span class="bar"></span><b>Caller leaderboard</b><span>accuracy · resolved only</span></div>
+      {% if callers %}
+      {% for c in callers %}
+      <div class="lsn-crow3">
+        <span class="rank">{{ loop.index }}</span>
+        <div class="av">{{ (c["author"] or "?")[1:2] or "?" }}</div>
+        <div class="body">
+          <div class="top"><span class="h">{{ c["author"] or "—" }}</span>
+            {% if c["staked"] %}<span class="tier staked">STAKED · verified</span>
+            {% elif c["ape"] %}<span class="tier ape">APE · aligned</span>
+            {% else %}<span class="tier casual">—</span>{% endif %}
+          </div>
+          <div class="met">{% if c["total"] is not none and c["correct"] is not none %}{{ c["correct"] }} / {{ c["total"] }} · <span class="sample">{{ c["acc"] if c["acc"] is not none else "—" }}</span>{% if c["live"] %} · {{ c["live"] }} live{% endif %}{% else %}building sample{% endif %}</div>
+        </div>
+        <div class="stat"><div class="acc{% if not c["sample_ok"] %} thin{% endif %}">{{ c["acc"] if c["acc"] is not none else "—" }}</div><div class="lbl">acc</div></div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="lsn-cboard-empty">No resolved qualifying calls yet — the leaderboard only ranks settled calls, never engagement.</p>
+      {% endif %}
+      <div class="lsn-skinline">🏦 <b>Skin is proof of belief, never proof of edge.</b> STAKED = verified on-chain position · APE = aligned · — = words only, shown honestly, never penalized.</div>
+    </div>
+
+    <!-- WEEKLY CHAMPIONS -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Weekly champions</b><span>7d influence</span></div>
+      {% set champ_sub = trending[0] if trending else none %}
+      {% if champ_sub %}
+      <div class="lsn-ylead" style="margin-bottom:8px" data-sn="{{ champ_sub["netuid"] or "" }}" data-name="{{ champ_sub["name"] or "" }}">
+        <div class="crown">👑</div>
+        <div class="mid">
+          <div class="t">{{ champ_sub["name"] or "—" }}<small>Champion subnet · most discussed</small></div>
+          <div class="share">{% if champ_sub["mentions"] is not none %}{{ champ_sub["mentions"] }} mentions{% else %}top conviction{% endif %} · {{ champ_sub["conviction"] if champ_sub["conviction"] is not none else "—" }}%</div>
+        </div>
+        <div class="stat"><div class="n">{{ champ_sub["conviction"] if champ_sub["conviction"] is not none else "—" }}</div><div class="l">conv</div></div>
+      </div>
+      {% else %}
+      <p class="lsn-champ-empty">Champion subnet crowns the most-mentioned subnet once chatter ranks — honest placeholder until then.</p>
+      {% endif %}
+      {% if authors %}
+      {% for a in authors[:2] %}
+      <div class="lsn-champ">
+        <div class="av">{{ (a["author"] or "?")[1:2] or "?" }}</div>
+        <div class="nm">
+          <div class="h">{{ a["author"] or "—" }}{% if loop.first %} <span class="crown">👑</span>{% endif %}</div>
+          <div class="m">{% if a["messages"] is not none %}{{ a["messages"] }} msgs{% endif %}{% if a["accuracy"] is not none %} · {{ a["accuracy"] }}% hit-rate{% endif %}</div>
+          <div class="lsn-hmeter"><div style="width:{{ 96 if loop.first else 71 }}%"></div></div>
+        </div>
+        <div class="stats"><div class="inf">{{ a["influence"] if a["influence"] is not none else "—" }}</div><div class="lbl">influence</div></div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <p class="lsn-champ-empty">Weekly champions fill from the 7d author board once graded calls resolve.</p>
+      {% endif %}
+      <div class="lsn-daily">
+        <div class="lsn-drow">{% if trending %}<span class="ic">🔥</span><span class="lbl">Hottest now</span><span class="nm">{{ trending[0]["name"] or "—" }}</span><span class="mm">{{ trending[0]["conviction"] if trending[0]["conviction"] is not none else "—" }}%</span>{% else %}<span class="ic">🔥</span><span class="lbl">Hottest now</span><span class="nm" style="color:var(--lsn-muted)">—</span><span class="mm">awaiting chatter</span>{% endif %}</div>
+      </div>
+    </div>
+
+    <!-- REACTION CROWNS -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Reaction crowns</b><span>weekly emoji leaders</span></div>
+      <div class="lsn-crowns">
+        {% for em in [["🔥","—"],["💎","—"],["🚀","—"],["🧠","—"],["✅","—"],["👑","—"]] %}
+        <div class="lsn-crow"><div class="emoji">{{ em[0] }}</div><div class="who">{{ em[1] }}</div><div class="cnt">—</div></div>
+        {% endfor %}
+      </div>
+      <p class="lsn-crowns-empty">Reaction leaders surface once the listener grades emoji counts — nothing faked.</p>
+    </div>
+
+    <!-- HOT TOPICS -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Hot topics</b><span>recent tags</span></div>
+      {% if topics %}
+      <div class="lsn-topics">
+        {% for t in topics[:6] %}
+        <span class="lsn-topic{% if loop.index <= 2 %} hot{% endif %}">{{ t["topic"] or "—" }}{% if t["count"] is not none %} <span class="n">{{ t["count"] }}</span>{% endif %}</span>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="lsn-topics-empty">Topic tags accumulate as messages get graded — the cloud stays honest while it's quiet.</p>
+      {% endif %}
+    </div>
+
+    <!-- MY WATCHLIST -->
+    <div class="lsn-glass lsn-watch">
+      <div class="lsn-sect"><span class="bar"></span><b>My watchlist</b><span>site ↔ bot sync</span></div>
+      <div class="chips">
+        {% for t in trending[:2] %}
+        <span class="lsn-wchip" data-sn="{{ t["netuid"] or "" }}">{{ t["name"] or "—" }} <span class="x">✕</span></span>
+        {% endfor %}
+        <span class="lsn-wchip add">+ add subnet</span>
+      </div>
+      <div class="note">Alerts fire in-bot when a watched subnet's flow flips or a call resolves. Shared with My Desk — chips below reflect your bot watchlist when connected.</div>
+    </div>
+
+    <!-- LIVE FEED -->
+    <div class="lsn-glass lsn-feed">
+      <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span>newest first · drives gauge ↑</span></div>
+      {% if feed %}
+      {% for m in feed[:6] %}
+      <div class="lsn-msg{% if loop.first %} focused{% endif %}" data-sn="{{ m["netuid"] or "" }}" data-name="{{ m["name"] or "" }}">
+        <div class="av">{{ (m["author"] or "?")[1:2] or "?" }}</div>
+        <div class="body">
+          <div class="meta"><span class="h">{{ m["author"] or "—" }}</span>{% if m["netuid"] %}<span class="subchip">SN{{ m["netuid"] }}</span>{% endif %}{% if m["verdict"] %}<span class="dirchip {{ "long" if "bull" in (m["verdict"]|lower) else ("short" if "bear" in (m["verdict"]|lower) else "neutral") }}">{{ "▲ LONG" if "bull" in (m["verdict"]|lower) else ("▼ SHORT" if "bear" in (m["verdict"]|lower) else "NEUTRAL") }}</span>{% endif %}{% if m["topic"] %}<span class="topic">{{ m["topic"] }}</span>{% endif %}</div>
+          <div class="quote"><div class="txt">“{{ m["text"] or "" }}”</div></div>
+          <div class="ftr">
+            <div class="lsn-conv-meter"><div style="width:{{ m["conviction"] if m["conviction"] is not none else 0 }}%"></div></div>
+            <div class="lsn-conv-lbl">{{ m["conviction"] if m["conviction"] is not none else "—" }}</div>
+            {% if m["base"] is not none %}<span class="lsn-base">base {{ m["base"] }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="lsn-qstate" style="display:block"><b>Quiet — the listener is warming up.</b><div class="tiny">New graded messages appear here the moment the listener scores them.</div></div>
+      {% endif %}
+    </div>
+
+    <!-- TELEGRAM PROOF -->
+    <div class="lsn-glass lsn-proof">
+      <div class="lsn-sect"><span class="bar"></span><b>Telegram proof</b><span>graded calls only</span></div>
+      {% if feed %}
+      {% set p = feed[0] %}
+      <div class="lead">
+        <div class="av">{{ (p["author"] or "?")[1:2] or "?" }}</div>
+        <div class="body">
+          <div class="meta">{{ p["author"] or "—" }}{% if p["netuid"] %} · SN{{ p["netuid"] }}{% endif %} <span class="verdict">GRADED ✓</span></div>
+          <div class="quote"><div class="call">“{{ p["text"] or "" }}”</div></div>
+          <div class="row">{% if p["base"] is not none %}<span>baseline <span class="lsn-base">{{ p["base"] }}</span></span>{% else %}<span>baseline —</span>{% endif %}<b>{{ p["conviction"] if p["conviction"] is not none else "—" }}% conv</b></div>
+        </div>
+      </div>
+      <div class="lsn-hourglass">⏳ <span><b>Price outcomes land here as the resolver settles them.</b> No silent 200-OK — every call gets a receipt the moment it resolves.</span></div>
+      {% else %}
+      <p class="lsn-proof-empty">No graded calls yet — receipts appear here the moment the listener scores its first messages.</p>
+      {% endif %}
+    </div>
+
+    <!-- WALLET — coming soon (locked) -->
+    <div class="lsn-glass lsn-wallet">
+      <div class="top">
+        <span class="lock">🔒</span>
+        <span class="ttl">Coming soon — wallet-backed calls</span>
+        <span class="tag">skin in the game</span>
+      </div>
+      <div class="desc">Prove it on-chain. Link your wallet and back your calls with real receipts — STAKED callers rank on belief, not just history.</div>
+      <div class="tiers">
+        <span class="lsn-tier staked">STAKED · verified</span>
+        <span class="lsn-tier ape">APE · aligned</span>
+        <span class="lsn-tier casual">— · words only</span>
+      </div>
+      <span class="wl">Join waitlist <span class="soon">· enabled when the group uses it</span></span>
+    </div>
+
+    <!-- COMMANDS — full locked set -->
+    <div class="lsn-glass lsn-cmds-bottom">
+      <div class="lsn-sect"><span class="bar"></span><b>In-chat commands</b><span>the full group kit</span></div>
+      <div class="lsn-cgroup">
+        <div class="glabel">📊 Pulse check</div>
+        <span class="lsn-cbtn live">/summary <span class="d">default</span></span>
+        <span class="lsn-cbtn">/summary 4h</span>
+        <span class="lsn-cbtn">/summary day</span>
+        <span class="lsn-cbtn">/trending</span>
+        <span class="lsn-cbtn">/hot take <span class="d">&lt;subnet&gt;</span></span>
+      </div>
+      <div class="lsn-cgroup">
+        <div class="glabel">🏆 Who's driving</div>
+        <span class="lsn-cbtn">/champions</span>
+        <span class="lsn-cbtn">/crowns</span>
+        <span class="lsn-cbtn">/leaders</span>
+      </div>
+      <div class="lsn-cgroup">
+        <div class="glabel">🎯 Calls &amp; tracking</div>
+        <span class="lsn-cbtn">/track <span class="d">SN42</span></span>
+        <span class="lsn-cbtn">/calls</span>
+        <span class="lsn-cbtn">/call <span class="d">SN42</span></span>
+        <span class="lsn-cbtn">/grade</span>
+      </div>
+      <div class="lsn-cgroup">
+        <div class="glabel">🧠 Subnet intelligence</div>
+        <span class="lsn-cbtn">/sn <span class="d">&lt;netuid&gt;</span></span>
+        <span class="lsn-cbtn">/alpha <span class="d">&lt;query&gt;</span></span>
+        <span class="lsn-cbtn">/compare <span class="d">SN3 SN42</span></span>
+      </div>
+      <div class="lsn-cgroup">
+        <div class="glabel">🛠️ Settings</div>
+        <span class="lsn-cbtn">/conviction <span class="d">&lt;60&gt;</span></span>
+        <span class="lsn-cbtn">/alerts <span class="d">on|off</span></span>
+        <span class="lsn-cbtn">/help</span>
+      </div>
+      <div class="foot">One shared watchlist between bot and site · /track returns to chat when the call resolves · conviction ranks quality, not recency.</div>
+    </div>
+
+    <div class="lsn-disc">Conviction is <b>auto-scored</b>, not financial advice. Leaderboard measured from resolved qualifying calls — not engagement. Skin is belief, never edge.</div>
+  </div>
+
+<script src="/static/js/listener.js?v={{ static_v }}"></script>
+</body>
+</html>
