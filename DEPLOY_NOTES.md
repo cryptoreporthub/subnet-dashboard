@@ -77,3 +77,12 @@ All four were verified locally against `uvicorn server:app` before pushing.
 Retrigger marker for the /listener page deploy (cosmic glass SimiVision Listener,
 §28-3). CI green on eb8bff3; this no-op re-runs Fly Deploy for a fresh health
 window after the machine health gate timed out on the previous attempt.
+
+## Retrigger marker #2 (2026-08-10, after #1304)
+
+Health gate timed out again on #1304 (Ensure machine is healthy, ~9 min, /health
+never reached 200). Code unchanged — this marker re-runs fly.yml for a new
+health window. fly.yml deploys with `--no-cache --yes`; machine is restarted
+and /health probed for up to ~3 min. Known blocker: /health returns 422 (not
+200) while the app is in its degraded shared-gating state, so the gate cannot
+pass until that lane clears (separate health-check recovery work).
