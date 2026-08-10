@@ -1,0 +1,100 @@
+You are helping two agents — Ditto (ops/orchestration) and yourself — stop
+working at cross-purposes on https://github.com/cryptoreporthub/subnet-dashboard.
+Both agents keep hitting the same coordination failures. Your job: codify the
+fix into the repo so both agents follow one protocol.
+
+CONTEXT — recurring failures, all confirmed with dates:
+1. FALSE "not deployed / site down" CLAIMS FROM A SINGLE PROBE.
+   - 08-06: Ditto claimed the v5 tribunal hero "was never deployed"; a direct
+     curl of https://subnet-dashboard.fly.dev proved it WAS live (PR #864
+     carried it). Claim was stale; wrong assertion cost a round-trip.
+   - 08-10: Fly deploy #1304 pushed the image successfully, but the
+     "Ensure machine is healthy" step timed out after ~9 min and marked the
+     RUN "failed". Agents then debated whether the site was up. It was — the
+     run failure ≠ not deployed.
+2. 422/403 GATE NOISE MISTAKEN FOR REGRESSIONS. The deploy
+   workflow's health gate 422s/403s every non-bypass path for up to ~10 min
+   after each deploy (single worker + load-shed). Both agents have repeatedly
+   filed redundant fixes/reverts based on probes taken during that window.
+   NOTE: as of 08-10 3:55PM there is ALSO an active investigation into
+   widespread 422s (request-layer middleware / deployed-image mismatch) — do
+   not open a competing fix lane; coordinate on that investigation instead.
+3. MAIN MOVES UNDER EACH OTHER. Agents land commits while the other is
+   mid-task (d03a3789 landed under PR #884's flight; listener commits
+   b9a7f5b/eb8bff3 landed while Ditto was verifying). Branches go stale; live
+   behavior changes mid-verification; deploys retrigger out of order.
+4. DUPLICATE WORK + STALE CARDS. #884/#885/#886 (resolver retry-cap, zombie
+   watchdog, loop_stall_guard) and the /listener page were merged
+   out-of-harness while matching task cards stayed open. Effort was wasted
+   re-confirming already-merged work.
+5. DEPLOY CONFIG FOOT-GUNS (08-10). Duplicate MAX_IN_FLIGHT_REQUESTS in
+   fly.toml broke a deploy (fixed 28525e7); deploy ade027e7 failed after
+   retries while the old release stayed live; missing APP_BASE_URL produced
+   wrong canonical URLs.
+6. 12KB READ CAP. resolver.py is ~35KB; the accepted route is a runtime
+   monkey-patch (see internal/council/resolver_semantics_patch.py) + focused
+   mocked tests — never attempt a full-file rewrite through capped readers.
+7. STATIC_V IS NOT A COMMIT SHA. internal/static_version.py's STATIC_V is an
+   8-hex md5 of CSS file mtimes (cache-bust token). Two deploys without CSS
+   changes yield the SAME token. It cannot identify the deployed commit — a
+   real DEPLOY_SHA must come from CI, or the whole verification feature is
+   meaningless.
+
+DO THIS:
+1. Create docs/agent-protocol.md codifying these as hard rules for BOTH
+   agents, and reference it from AGENTS.md:
+   RULE 1 — Deployed-state truth, in this order: (a) the GitHub Actions
+   "Fly Deploy" run conclusion for the current main HEAD; (b) the "Deploy
+   app" job result (image pushed) — a timed-out/failed "Ensure machine is
+   healthy" step does NOT mean the code wasn't deployed; (c) bypass paths
+   that render under gate stress (/pump, /static/*); (d) only then API/route
+   status. NEVER conclude "not deployed" or "broken" from a single fetch.
+   RULE 2 — 422/403/timeout on non-bypass paths within ~10-15 min of a
+   deploy = gate noise. Do not fix, revert, or duplicate anything until the
+   Actions run concludes AND a re-probe after conclusion still fails. Log the
+   exact probe (timestamp, URL, code, body) for correlation.
+   RULE 3 — Re-fetch main before starting work and again before opening or
+   merging a PR. If main advanced, sync (no force-push), re-run smoke, and
+   announce on the coordination board before merging anything the other agent
+   might touch.
+   RULE 4 — Before starting, check merged PRs (is:pr is:merged, 48-72h), the
+   coordination board (subnet-dashboard-action-list.md), and open task cards.
+   If the work is already merged, say so and cancel the stale card — do not
+   duplicate.
+   RULE 5 — Files > ~12KB: runtime-patch route (resolver_semantics_patch.py
+   pattern) + mocked tests. No full-file rewrites through capped readers.
+   RULE 6 — Every "live"/"not live" claim must cite the deployed commit SHA
+   AND the Actions run that carried it. If you cannot retrieve those, state
+   that you cannot verify and give the exact manual checks (Actions → Fly
+   Deploy → run; curl https://subnet-dashboard.fly.dev/health). CURL BEFORE
+   ASSERTING — the 08-06 v5 incident happened because one agent asserted from
+   memory instead of the endpoint.
+2. Add deployed-state exposure (make it trustworthy):
+   a. .github/workflows/fly.yml — MANDATORY, same PR: before the Deploy step
+      export real identity:
+         echo "DEPLOY_SHA=${GITHUB_SHA}" >> $GITHUB_ENV
+         echo "DEPLOY_ACTIONS_RUN_URL=https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_ENV
+      Without this, STATIC_V fallback misleads (see #7).
+   b. server.py /health handler — add X-Deployed-SHA (and X-Deploy-Run if
+      env present) headers. Read DEPLOY_SHA env first, fall back to STATIC_V
+      only if env is empty. Keep body "OK" and 200; optional header only.
+   c. internal/health/routes.py — add GET /api/deploy-state returning
+      {"sha": "...", "actions_run_url": "..."} (same env-first logic). Cheap,
+      non-blocking, does not replace RULE 1's ordering.
+3. Coordination channel: do NOT invent or reference Ditto memory IDs — the
+   agent cannot write Ditto memory from here. The shared channels are the PR
+   description itself and one line on the coordination board
+   (subnet-dashboard-action-list.md). Do not add a reviewer request — the
+   repo pattern is OWNER self-merge.
+4. Tests: run pytest tests/test_endpoint_contract.py (with
+   DISABLE_BACKGROUND_SCANS=1, matching CI) plus any health/server tests.
+   RECOMMENDED: add one small test asserting /api/deploy-state returns the
+   "sha" JSON and that /health sets X-Deployed-SHA when DEPLOY_SHA is set —
+   it's cheap and prevents the feature rotting.
+5. Open PR "docs: shared agent protocol — deployed-state truth rules"
+   (branch agent-protocol/deployed-state-rules). In the body: what was
+   added, the six rules in brief, the CI wiring, verification run + output.
+6. Do NOT touch the council hero templates (templates/partials/premium/*) or
+   the message-intel listener code — those lanes are owned this round.
+7. Work one sequential step at a time; verify before moving on; report back
+   after each (branch → files → tests → PR).
