@@ -1,3 +1,4 @@
+
 # fly.toml app configuration file generated for subnet-dashboard
 # Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
 
@@ -97,6 +98,14 @@ primary_region = "sjc"
   WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
   # O4: allow fly.dev + cryptoreporthub hostnames when DNS is pointed (see DEPLOY.md)
   ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
+  # Fix 2026-08-10: concurrency + OG/canonical origin (out-of-harness)
+  APP_BASE_URL = "https://subnet-dashboard.fly.dev"
+  AIO_WORKER_POOL_SIZE = "24"
+  MAX_IN_FLIGHT_REQUESTS = "48"
+  LEARNING_HEALTH_TIMEOUT_SECONDS = "20"
+  LEARNING_STATS_TIMEOUT_SECONDS = "15"
+  RESOLVER_STATE_TIMEOUT_SECONDS = "15"
+  LEARNING_SNAPSHOT_PREWARM_SECONDS = "10"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
 # SQLite caches under /app/data). The machine already has this volume attached;

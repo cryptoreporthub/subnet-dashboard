@@ -1,3 +1,4 @@
+
 #!/bin/sh
 # Fly web machine — HTTP (uvicorn) + optional inline worker on same VM/volume.
 # ponytail: one Fly process group (web=1) avoids volume split-brain; worker is a
@@ -59,4 +60,4 @@ _supervise_inline_worker() {
 
 _start_inline_worker
 _supervise_inline_worker
-exec uvicorn server:app --host 0.0.0.0 --port 8080
+exec python scripts/run_web_with_guard.py
