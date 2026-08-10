@@ -1,0 +1,50 @@
+/* tribunal-hero-layout.css — Council hero HUD ring layout (2026-08-10). */
+.tribunal-hero__stage { position: relative; width: 100%; max-width: 430px; margin: 0 auto; min-height: 480px; padding-top: 64px; }
+.tribunal-hero__hud-frame { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.tribunal-hero__bracket { position: absolute; width: 14px; height: 14px; border: 0 solid rgba(148,178,255,.5); }
+.tribunal-hero__bracket--tl { top: 0; left: 0; border-top-width: 1px; border-left-width: 1px; }
+.tribunal-hero__bracket--tr { top: 0; right: 0; border-top-width: 1px; border-right-width: 1px; }
+.tribunal-hero__bracket--bl { bottom: 0; left: 0; border-bottom-width: 1px; border-left-width: 1px; }
+.tribunal-hero__bracket--br { bottom: 0; right: 0; border-bottom-width: 1px; border-right-width: 1px; }
+.tribunal-hero__rays { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; opacity: .55; }
+.tribunal-hero__ring-glow { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.tribunal-hero__radial { position: relative; z-index: 2; margin: 6px auto 2px; display: block; }
+.tribunal-hero__ring-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; pointer-events: none; width: 160px; }
+.tribunal-hero__pct { font-size: 46px; font-weight: 900; letter-spacing: .02em; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
+.tribunal-hero__pct-label { font-size: 8px; letter-spacing: .16em; color: rgba(255,255,255,.55); text-transform: uppercase; }
+.tribunal-hero__verdict-pills { display: flex; gap: 6px; margin-top: 6px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.tribunal-hero__verdict-label { font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; }
+.tribunal-hero__verdict-label--gate { color: #7fe8e6; border: 1px solid rgba(127,232,230,.45); background: rgba(16,22,34,.6); }
+.tribunal-hero__verdict-label--hold { color: #ffd58a; border: 1px solid rgba(255,183,74,.45); background: rgba(16,22,34,.6); }
+.tribunal-hero__judge { position: absolute; z-index: 4; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 118px; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--glass-border, rgba(148,178,255,.16)); background: rgba(16,22,34,.66); backdrop-filter: blur(10px) saturate(140%); -webkit-backdrop-filter: blur(10px) saturate(140%); }
+.tribunal-hero__judge--oracle { top: 2px; left: 50%; transform: translateX(-50%); }
+.tribunal-hero__judge--echo { bottom: 4px; left: 0; }
+.tribunal-hero__judge--pulse { bottom: 4px; right: 0; }
+.tribunal-hero__judge-head { display: flex; align-items: center; gap: 6px; }
+.tribunal-hero__judge-name { margin: 0; font-size: 10px; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; color: #eaf2ff; }
+.tribunal-hero__judge-signal-caption { font-size: 7px; letter-spacing: .14em; color: rgba(255,255,255,.45); display: block; text-align: center; }
+.tribunal-hero__judge-signal { font-size: 13px; font-weight: 800; color: #eaf2ff; font-variant-numeric: tabular-nums; }
+.tribunal-hero__judge-weight { font-size: 10px; font-weight: 700; color: rgba(255,255,255,.65); font-variant-numeric: tabular-nums; }
+.tribunal-hero__last5 { display: flex; flex-direction: column; align-items: center; margin-top: 4px; }
+.tribunal-hero__last5-caption { font-size: 7px; letter-spacing: .14em; color: rgba(255,255,255,.4); }
+.tribunal-hero__last5-ticks { display: flex; gap: 3px; margin-top: 2px; }
+.tribunal-hero__tick { width: 7px; height: 7px; border-radius: 50%; display: block; }
+.tribunal-hero__tick--hit { background: #4ae898; box-shadow: 0 0 5px rgba(74,232,152,.8); }
+.tribunal-hero__tick--miss { background: #ff6b7a; box-shadow: 0 0 5px rgba(255,107,122,.8); }
+.tribunal-hero__tick--empty { background: rgba(255,255,255,.18); }
+.tribunal-hero__puffs { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.tribunal-hero__puff { position: absolute; border-radius: 50%; background: radial-gradient(circle, rgba(124,170,255,.22), transparent 68%); width: 90px; height: 90px; }
+.tribunal-hero__puff--1 { top: 8%; left: 10%; }
+.tribunal-hero__puff--2 { top: 16%; right: 12%; }
+.tribunal-hero__puff--3 { bottom: 18%; left: 6%; }
+.tribunal-hero__puff--4 { bottom: 12%; right: 8%; }
+.tribunal-hero__puff--5 { top: 42%; left: 2%; }
+.tribunal-hero__puff--6 { top: 46%; right: 2%; }
+@media (max-width: 420px) {
+  .tribunal-hero__stage { min-height: 440px; padding-top: 56px; }
+  .tribunal-hero__judge { min-width: 100px; padding: 5px 8px; }
+  .tribunal-hero__pct { font-size: 38px; }
+  .tribunal-hero__judge--oracle { top: 0; }
+  .tribunal-hero__judge--echo { bottom: 0; }
+  .tribunal-hero__judge--pulse { bottom: 0; }
+}
