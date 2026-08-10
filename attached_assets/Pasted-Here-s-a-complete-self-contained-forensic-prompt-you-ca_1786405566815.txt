@@ -1,0 +1,79 @@
+Here's a complete, self-contained forensic prompt you can hand to Cursor/Replit. It's the full diagnostic — real `curl` with raw bodies/headers, full file reads, a repo-wide grep for the 422 source, and DNS/CDN fingerprinting — with a clear deliverable.
+
+---
+
+```
+FORENSIC INVESTIGATION — subnet-dashboard 422 incident (READ-ONLY, do not deploy/edit files)
+
+Repo: cryptoreporthub/subnet-dashboard (clone fresh). Live app: https://subnet-dashboard.fly.dev
+Also test custom domain: https://dashboard.cryptoreporthub.com
+
+CONTEXT
+The FastAPI app returns HTTP 422 on nearly every path but HTTP 200 on `/` and `/pump` (full SSR).
+The GitHub Actions "Fly Deploy" health gate keeps FAILING because it curls /health, gets 422, and
+"Ensure machine is healthy" times out after ~9 min. The "Deploy to Fly" step SUCCEEDS (image IS
+deployed). The endpoint-contract CI test passes (all 300+ routes <500 locally), so the 422 is
+suspected to come from OUTSIDE normal route code.
+
+CONFIRMED SYMPTOMS:
+- /health -> 422    (a plain async PlainTextResponse("OK") in server.py — cannot 422 from app code)
+- /api/health -> 422 (hardcoded {"status":"ok"})
+- /robots.txt -> 422  (simple/static route)
+- /static/css/listener.css -> 422  (static file, served outside route code)
+- /definitely-not-a-route-xyz (UNREGISTERED) -> 422, NOT 404  ← SMOKING GUN: FastAPI always 404s
+  unknown routes; a 422 means the request never reached the app router OR a proxy in front is gating.
+- / and /pump -> 200 with full content
+- /listener -> 422 (new route, so the new image IS live)
+
+A hardcoded route + a static file + an unknown path ALL 422-ing (while / and /pump 200) is NOT
+application-layer validation. Root cause is one of: (a) Fly edge / machine proxy, (b) a reverse
+proxy / WAF / CDN in front (Cloudflare/nginx/caddy), (c) gunicorn/WSGI config, (d) the deployed
+image differs from main.
+
+MISSION — get GROUND TRUTH with a real terminal:
+1. Raw HTTP via `curl -i -sS` on each path below; print FULL status line, ALL headers (server:,
+   content-type:, via:, x-*, cf-ray, alt-svc) and the RAW BODY UNTRUNCATED. Try a couple of
+   User-Agent/Accept combos and both GET and HEAD:
+     /health  /api/health  /robots.txt  /definitely-not-a-route-xyz  /  /pump
+     /api/message-intel/status  /listener  /api/ops/live  /metrics  /favicon.ico
+   and on the custom domain: /health and /health/ .
+   The BODY is the single most important datum — it reveals whether it's FastAPI JSON (a "detail"
+   field), a Fly.io proxy message, an nginx/caddy/WAF page, or a gunicorn error.
+2. Also curl -v one URL to capture TLS/cert details, and http:// vs https:// difference.
+3. Read the FULL files (cat entirely — I only saw partials):
+     server.py            (111KB; read MIDDLE and TAIL sections — add_middleware, @app.middleware,
+                           add_exception_handler, app.mount, router includes, anything gating requests)
+     internal/worker_proxy.py  (read tail: proxy_get_to_worker / proxy_post_to_worker /
+                           fetch_worker_json_sync — what do they return when the worker hop fails?
+                           422? 503? 200-degraded?)
+     internal/load_shed.py
+     Procfile, Dockerfile, scripts/fly_web_entrypoint.sh, scripts/fly_worker_entrypoint.sh,
+     gunicorn.conf.py / any wsgi/asgi config
+     fly.toml  (full: [http_service] checks block, internal_port, force_https, processes)
+4. grep -rn the WHOLE repo for: "422", status_code=422, HTTPStatus.UNPROCESSABLE,
+   RequestValidationError, and any middleware that allowlists a set of paths and rejects the rest.
+   Report file:line for every hit.
+5. Determine deployed-vs-main: does the live behavior match current main (HEAD
+   d33907429000e7df9f4585f8145f7769737056e6) or an older commit? What is the most recent
+   "Fly Deploy" Actions run status for that SHA?
+6. Fingerprint the front: `dig +short subnet-dashboard.fly.dev`, `dig +short dashboard.cryptoreporthub.com`,
+   `curl -si https://dashboard.cryptoreporthub.com/health` — note server:/via:/cf-ray:/cloudflare headers.
+
+DO NOT modify files or deploy. READ-ONLY forensics only.
+
+DELIVERABLE (quote real output, do not speculate where you can verify):
+- The ACTUAL 422 status line + headers + body verbatim.
+- Conclusive statement: does the 422 come from (a) FastAPI app, (b) Fly/edge/proxy, (c) reverse
+  proxy/CDN in front, or (d) gunicorn/WSGI — with the exact evidence (headers/body/code).
+- file:line if it IS in code.
+- Concrete minimal fix + the flyctl/curl/secrets commands to confirm before fixing.
+```
+
+---
+
+A couple of quick notes so you know what you're getting:
+
+- **The body is the payoff.** Ask Replit to paste the raw 422 body verbatim — that one string tells us the layer (FastAPI `detail`, a Fly proxy page, or an nginx/WAF page) faster than any code reading.
+- **The `X-Deployed-SHA` protocol we discussed would ride on this too** — once a 200 is reachable, `/health` should carry it, which will also finally answer the "is it live" question ground-truth.
+
+Since you're routing Replit at it, I'll stand the Ditto Code forensic job down rather than have two agents duplicate the work (that's exactly the loop the Protocol is meant to kill). Want me to cancel that queued job so only Replit runs it?

@@ -1,0 +1,222 @@
+{
+  "status": "ok",
+  "verdict": "MISS",
+  "category": "tie_break",
+  "primary_policy": "scheduler_cap_24",
+  "audited_at": "2026-08-10T23:45:10.000794Z",
+  "pick_date": "2026-08-10",
+  "pick_timestamp_utc": "2026-08-10T23:32:09.114532Z",
+  "action": "long",
+  "reason": null,
+  "published_slot": "pick",
+  "published": {
+    "netuid": 15,
+    "name": "ORO",
+    "total_score": 87.24,
+    "raw_confidence": 0.5159,
+    "final_confidence": 0.5107,
+    "audit_concerns": [
+      "Thin volume: $2,015 < $5k"
+    ],
+    "tie_break": null
+  },
+  "published_netuid": 15,
+  "oracles": {
+    "scheduler_cap_24": {
+      "policy": "scheduler_cap_24",
+      "universe_size": 24,
+      "universe_netuids": [
+        40,
+        67,
+        57,
+        59,
+        70,
+        15,
+        94,
+        92,
+        96,
+        47,
+        31,
+        27,
+        26,
+        90,
+        82,
+        16,
+        91,
+        78,
+        36,
+        38,
+        58,
+        112,
+        99,
+        103
+      ],
+      "pick": {
+        "netuid": 94,
+        "name": "pending...",
+        "total_score": 92.53,
+        "raw_confidence": 0.5399,
+        "final_confidence": 0.4751,
+        "audit_concerns": [
+          "Low liquidity: volume $263 < $500",
+          "Risk flags present: ['pruning-risk']",
+          "Non-active status: at-risk",
+          "Unstable rank: score pick but emission rank #14"
+        ],
+        "tie_break": {
+          "winner_changed": true,
+          "reasons": [
+            "Leader has higher quant+technical (1.358 vs 1.321)",
+            "Leader has lower 24h volatility (3.55% vs 4.35%)",
+            "Runner-up has higher relative flow (vol/mcap 0.048 vs 0.033)"
+          ],
+          "leader": {
+            "netuid": 40,
+            "name": "ralph"
+          },
+          "runner_up": {
+            "netuid": 94,
+            "name": "pending..."
+          }
+        }
+      }
+    },
+    "snapshot_cap_40": {
+      "policy": "snapshot_cap_40",
+      "universe_size": 40,
+      "universe_netuids": [
+        40,
+        67,
+        57,
+        59,
+        70,
+        15,
+        94,
+        92,
+        96,
+        47,
+        31,
+        27,
+        26,
+        90,
+        82,
+        16,
+        91,
+        78,
+        36,
+        38,
+        58,
+        112,
+        99,
+        103,
+        87,
+        116,
+        76,
+        49,
+        105,
+        30
+      ],
+      "pick": {
+        "netuid": 94,
+        "name": "pending...",
+        "total_score": 92.53,
+        "raw_confidence": 0.5399,
+        "final_confidence": 0.4751,
+        "audit_concerns": [
+          "Low liquidity: volume $263 < $500",
+          "Risk flags present: ['pruning-risk']",
+          "Non-active status: at-risk",
+          "Unstable rank: score pick but emission rank #22"
+        ],
+        "tie_break": {
+          "winner_changed": true,
+          "reasons": [
+            "Leader has higher quant+technical (1.358 vs 1.321)",
+            "Leader has lower 24h volatility (3.55% vs 4.35%)",
+            "Runner-up has higher relative flow (vol/mcap 0.048 vs 0.033)"
+          ],
+          "leader": {
+            "netuid": 40,
+            "name": "ralph"
+          },
+          "runner_up": {
+            "netuid": 94,
+            "name": "pending..."
+          }
+        }
+      }
+    },
+    "full_universe": {
+      "policy": "full_universe",
+      "universe_size": 128,
+      "universe_netuids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "pick": {
+        "netuid": 94,
+        "name": "pending...",
+        "total_score": 92.53,
+        "raw_confidence": 0.5399,
+        "final_confidence": 0.4751,
+        "audit_concerns": [
+          "Low liquidity: volume $263 < $500",
+          "Risk flags present: ['pruning-risk']",
+          "Non-active status: at-risk",
+          "Unstable rank: score pick but emission rank #113"
+        ],
+        "tie_break": {
+          "winner_changed": true,
+          "reasons": [
+            "Leader has higher quant+technical (1.358 vs 1.321)",
+            "Leader has lower 24h volatility (3.55% vs 4.35%)",
+            "Runner-up has higher relative flow (vol/mcap 0.048 vs 0.033)"
+          ],
+          "leader": {
+            "netuid": 40,
+            "name": "ralph"
+          },
+          "runner_up": {
+            "netuid": 94,
+            "name": "pending..."
+          }
+        }
+      }
+    }
+  },
+  "questions": {
+    "what": "Tie-break changed winner to SN94; published was SN15.",
+    "why": "Leader has higher quant+technical (1.358 vs 1.321); Leader has lower 24h volatility (3.55% vs 4.35%); Runner-up has higher relative flow (vol/mcap 0.048 vs 0.033)",
+    "rule": "Log tie_break on every daily row; audit tie-break rules vs human intent.",
+    "devil": "Leader raw score may have been higher before tie-break swap."
+  },
+  "publish_gate": 0.5
+}
