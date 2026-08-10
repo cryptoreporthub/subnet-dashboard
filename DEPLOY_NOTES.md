@@ -71,3 +71,9 @@ curl https://subnet-dashboard.fly.dev/api/pick-history  # -> JSON
 curl https://subnet-dashboard.fly.dev/                  # -> 200 homepage
 ```
 All four were verified locally against `uvicorn server:app` before pushing.
+
+## Listener page deploy marker (2026-08-10)
+
+Retrigger marker for the /listener page deploy (cosmic glass SimiVision Listener,
+§28-3). CI green on eb8bff3; this no-op re-runs Fly Deploy for a fresh health
+window after the machine health gate timed out on the previous attempt.
