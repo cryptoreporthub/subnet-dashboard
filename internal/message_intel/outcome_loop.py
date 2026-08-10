@@ -128,6 +128,7 @@ def _stop_outcome_watchdog() -> None:
 
 def _restart_outcome_loop(*, interval: int = 300) -> None:
     """Stop and start the outcome loop without clearing local running state mid-flight."""
+    global _tracker
     old = _tracker
     _stop_heartbeat_loop()
     if old is not None:
@@ -142,7 +143,6 @@ def _restart_outcome_loop(*, interval: int = 300) -> None:
 
         tracker = PriceTracker(db=get_db())
         tracker.start_background_checks(interval=interval)
-        global _tracker
         _tracker = tracker
         _touch_outcome_heartbeat()
         _start_heartbeat_loop()
