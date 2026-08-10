@@ -296,3 +296,330 @@ async def wallet_share_page(request: Request, wallet: str):
             "public_base_url": base,
         },
     )
+
+
+# ── §28-3 Telegram Listener page (/listener) ──────────────────────────────
+# SSR from message-intel engine calls with honest empty fallbacks. The live
+# deploy has shown degraded /api/message-intel GETs (422 shared-gating class),
+# so every block is individually guarded — the page must never 5xx.
+
+
+async def _listener_call(fn, default, timeout: float = 6.0):
+    """Run a blocking message-intel engine call off-thread with a hard timeout."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout)
+    except Exception as exc:
+        logger.debug("listener page call %s failed: %s", getattr(fn, "__name__", "?"), exc)
+        return default
+
+
+def _as_list(v, default=None):
+    return v if isinstance(v, list) else (default or [])
+
+
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+async def _listener_page_context() -> Dict[str, Any]:
+    from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.outcome_loop import outcome_loop_status
+    from internal.message_intel.store import live_stats
+
+    ctx: Dict[str, Any] = {
+        "listener": await _listener_call(listener_status, {}),
+        "outcomes": await _listener_call(outcome_loop_status, {"running": False, "live": False}),
+        "store": await _listener_call(live_stats, {"ok": False, "total_messages": 0}),
+        "messages": [],
+        "trending": [],
+        "callers": [],
+        "authors": [],
+        "topics": [],
+        "divergence": [],
+        "subnet_conviction": [],
+        "conviction_top": [],
+        "summary_text": "",
+        "hourly": [],
+        "recap": {},
+    }
+
+    store = ctx["store"] if isinstance(ctx["store"], dict) else {}
+    ctx["graded_count"] = int(store.get("total_messages") or 0)
+    ctx["high_conviction"] = int(store.get("high_conviction_count") or 0)
+
+    listener = ctx["listener"] if isinstance(ctx["listener"], dict) else {}
+    ctx["monitored_group"] = listener.get("monitored_group") or "officialsubnetsummer"
+    ctx["group_connected"] = bool(listener.get("group_connected"))
+    ctx["display_mode"] = listener.get("display_mode") or "warming"
+    ctx["live"] = bool(listener.get("live"))
+    age = listener.get("last_message_age_seconds")
+    ctx["last_msg_label"] = "—"
+    if age is not None:
+        try:
+            a = float(age)
+            if a < 90:
+                ctx["last_msg_label"] = f"last msg {int(max(a, 0))}s ago"
+            else:
+                ctx["last_msg_label"] = f"last msg {int(a // 60)}m ago"
+        except (TypeError, ValueError):
+            pass
+
+    # messages (live feed) — safe_list/coerce discipline
+    msgs_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_messages(limit=24),
+        None,
+        timeout=6,
+    )
+    msgs = []
+    if isinstance(msgs_payload, dict):
+        msgs = _as_list(msgs_payload.get("messages"))
+    elif isinstance(msgs_payload, list):
+        msgs = msgs_payload
+    feed_rows = []
+    for m in msgs[:20]:
+        if not isinstance(m, dict):
+            continue
+        netuid = _safe_int(m.get("netuid") or m.get("subnet_id"))
+        feed_rows.append(
+            {
+                "author": m.get("author_name") or m.get("author") or m.get("author_id") or "—",
+                "text": m.get("text") or m.get("message") or m.get("content") or "",
+                "conviction": m.get("conviction"),
+                "verdict": m.get("verdict"),
+                "netuid": netuid,
+                "name": m.get("name") or (f"SN{netuid}" if netuid else ""),
+                "topic": m.get("topic") or m.get("tags"),
+                "ts": m.get("timestamp") or m.get("created_at") or m.get("last_message_at"),
+                "base": m.get("base_price") or m.get("baseline") or m.get("reference_price"),
+                "msgs": m,
+            }
+        )
+    ctx["feed"] = feed_rows
+
+    # trending — subnet telegram conviction (1h lens)
+    conv_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_subnet_telegram_conviction(limit=8),
+        None,
+        timeout=6,
+    )
+    conv_rows = []
+    if isinstance(conv_payload, dict):
+        conv_rows = _as_list(conv_payload.get("rows") or conv_payload.get("subnets") or conv_payload.get("conviction"))
+    elif isinstance(conv_payload, list):
+        conv_rows = conv_payload
+    trending = []
+    for r in conv_rows[:8]:
+        if not isinstance(r, dict):
+            continue
+        netuid = _safe_int(r.get("netuid"))
+        sent = str(r.get("sentiment") or r.get("verdict") or "mixed").lower()
+        sent_tag = "bull" if "bull" in sent else ("bear" if "bear" in sent else "mix")
+        conv = r.get("conviction") or r.get("index") or r.get("score")
+        trending.append(
+            {
+                "netuid": netuid,
+                "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                "conviction": conv,
+                "sent": sent_tag,
+                "mentions": r.get("mentions") or r.get("count") or r.get("messages"),
+            }
+        )
+    ctx["trending"] = trending
+    ctx["subnet_conviction"] = conv_rows
+
+    # conviction index top5
+    ci_payload = await _listener_call(
+        lambda: __import__("internal.conviction_index", fromlist=["get_conviction_snapshot"]).get_conviction_snapshot(refresh=False),
+        None,
+        timeout=6,
+    )
+    ci_top = []
+    if isinstance(ci_payload, dict):
+        ci_top = _as_list(ci_payload.get("top5"))
+    ctx["conviction_top"] = ci_top
+    if not trending and ci_top:
+        for r in ci_top[:4]:
+            if not isinstance(r, dict):
+                continue
+            netuid = _safe_int(r.get("netuid"))
+            ctx["trending"].append(
+                {
+                    "netuid": netuid,
+                    "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                    "conviction": r.get("index") or r.get("conviction"),
+                    "sent": "mix",
+                    "mentions": r.get("mentions"),
+                }
+            )
+
+    # callers — resolved qualifying accuracy only
+    callers_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.rollup", fromlist=["build_telegram_caller_leaderboard"]).build_telegram_caller_leaderboard(days=30, limit=8),
+        None,
+        timeout=6,
+    )
+    caller_rows = []
+    if isinstance(callers_payload, dict):
+        caller_rows = _as_list(callers_payload.get("callers") or callers_payload.get("authors"))
+    elif isinstance(callers_payload, list):
+        caller_rows = callers_payload
+    callers = []
+    for c in caller_rows[:6]:
+        if not isinstance(c, dict):
+            continue
+        total = _safe_int(c.get("total") or c.get("calls") or c.get("resolved"))
+        correct = _safe_int(c.get("correct") or c.get("hits"))
+        acc = c.get("accuracy") or c.get("hit_rate") or c.get("acc")
+        sample_ok = bool(total and total >= 5)
+        callers.append(
+            {
+                "author": c.get("author_name") or c.get("author") or c.get("author_id") or "—",
+                "acc": acc,
+                "total": total,
+                "correct": correct,
+                "live": _safe_int(c.get("live") or c.get("pending")),
+                "sample_ok": sample_ok,
+                "staked": bool(c.get("staked") or c.get("skin") in ("staked", "STAKED")),
+                "ape": bool(c.get("ape") or c.get("skin") in ("ape", "APE")),
+                "raw": c,
+            }
+        )
+    ctx["callers"] = callers
+
+    # authors — weekly champions
+    authors_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_authors(days=7, limit=5),
+        None,
+        timeout=6,
+    )
+    author_rows = []
+    if isinstance(authors_payload, dict):
+        author_rows = _as_list(authors_payload.get("authors") or authors_payload.get("rows"))
+    elif isinstance(authors_payload, list):
+        author_rows = authors_payload
+    authors = []
+    for a in author_rows[:4]:
+        if not isinstance(a, dict):
+            continue
+        authors.append(
+            {
+                "author": a.get("author_name") or a.get("author") or a.get("author_id") or "—",
+                "messages": a.get("messages") or a.get("total_messages") or a.get("count"),
+                "accuracy": a.get("accuracy") or a.get("hit_rate") or a.get("accuracy_score"),
+                "influence": a.get("influence") or a.get("influence_score"),
+            }
+        )
+    ctx["authors"] = authors
+
+    # hot topics
+    topics_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_topics(limit=8),
+        None,
+        timeout=5,
+    )
+    topics = []
+    if isinstance(topics_payload, dict):
+        t_rows = _as_list(topics_payload.get("topics") or topics_payload.get("rows"))
+    elif isinstance(topics_payload, list):
+        t_rows = topics_payload
+    else:
+        t_rows = []
+    for t in t_rows[:8]:
+        if isinstance(t, str):
+            topics.append({"topic": t, "count": None})
+        elif isinstance(t, dict):
+            topics.append(
+                {
+                    "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
+                    "count": t.get("count") or t.get("mentions"),
+                }
+            )
+    ctx["topics"] = topics
+
+    # divergence stories
+    div_payload = await _listener_call(
+        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_telegram_divergence_stories(days=7, limit=3),
+        None,
+        timeout=6,
+    )
+    div_rows = []
+    if isinstance(div_payload, dict):
+        div_rows = _as_list(div_payload.get("stories") or div_payload.get("rows") or div_payload.get("divergence"))
+    elif isinstance(div_payload, list):
+        div_rows = div_payload
+    divergence = []
+    for d in div_rows[:2]:
+        if not isinstance(d, dict):
+            continue
+        divergence.append(
+            {
+                "title": d.get("title") or d.get("headline") or "Signal divergence",
+                "detail": d.get("summary") or d.get("text") or d.get("detail") or "",
+                "netuid": _safe_int(d.get("netuid")),
+                "warn": bool(d.get("warn") or d.get("kind") == "warn"),
+            }
+        )
+    ctx["divergence"] = divergence
+
+    # summary text (plain-language recap)
+    try:
+        from internal.message_intel.summary import summarize_message_intel
+
+        summ = await _listener_call(summarize_message_intel, None, timeout=5)
+        if isinstance(summ, dict):
+            ctx["summary_text"] = summ.get("text") or ""
+    except Exception as exc:
+        logger.debug("listener summary failed: %s", exc)
+
+    # hourly volume from recent messages timestamps (honest; empty until data)
+    hourly = {}
+    for m in msgs[:200]:
+        if not isinstance(m, dict):
+            continue
+        ts = m.get("timestamp") or m.get("created_at") or m.get("last_message_at")
+        if not ts:
+            continue
+        try:
+            hour = int(str(ts)[11:13]) if len(str(ts)) >= 13 else None
+        except (TypeError, ValueError):
+            hour = None
+        if hour is not None:
+            hourly[hour] = hourly.get(hour, 0) + 1
+    if hourly:
+        peak = max(hourly.values())
+        ctx["hourly"] = [
+            {"hour": h, "pct": round(100 * c / peak) if peak else 0}
+            for h, c in sorted(hourly.items())
+        ]
+        ctx["hourly_peak"] = max(hourly.items(), key=lambda kv: kv[1])[0]
+
+    return ctx
+
+
+@share_router.get("/listener")
+async def listener_page(request: Request):
+    """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
+    ctx = await _listener_page_context()
+    base = _public_base(request)
+    page_url = f"{base}/listener"
+    title = "SimiVision — Telegram Listener"
+    desc = (
+        ctx.get("summary_text")
+        or f"Live-graded Telegram signal for {ctx.get('graded_count') or 0} messages across the Bittensor subnet group."
+    )[:200]
+    og_image = f"{base}/static/og-share.png"
+    # §28 canonical/OG: derived from APP_BASE_URL or request.base_url — never localhost.
+    ctx.update(
+        {
+            "page_title": title,
+            "page_description": desc,
+            "page_url": page_url,
+            "og_image_url": og_image,
+            "public_base_url": base,
+            "request": request,
+        }
+    )
+    return templates.TemplateResponse(request, "listener.html", ctx)

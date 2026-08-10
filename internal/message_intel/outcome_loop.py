@@ -123,3 +123,59 @@ def stop_price_outcome_loop() -> None:
 def outcome_loop_status() -> dict:
     running = _outcome_running_local() or _outcome_alive_cross_process()
     return {"running": running, "live": running}
+
+
+# ── Watchdog (audit infra item 3) ────────────────────────────────────────
+# Copy the listener's mature heartbeat/watchdog-restart pattern: if the
+# outcome loop reports running but its heartbeat goes stale (wedged thread),
+# stop and restart it so a hung resolve pass heals itself.
+
+_watchdog_stop: Optional[Any] = None
+_WATCHDOG_CHECK_SECONDS = 60
+_WATCHDOG_STALE_SECONDS = int(os.environ.get("OUTCOME_LOOP_WATCHDOG_STALE_SECONDS", "420"))
+
+
+def _start_outcome_watchdog(*, interval: int = 300) -> None:
+    global _watchdog_stop
+    if _watchdog_stop is not None:
+        return
+    stop = threading.Event()
+    _watchdog_stop = stop
+
+    def _watch() -> None:
+        while not stop.wait(_WATCHDOG_CHECK_SECONDS):
+            try:
+                if not _outcome_running_local():
+                    continue
+                # Stale heartbeat while locally "running" == wedged tick loop.
+                if _outcome_alive_cross_process(max_age_seconds=_WATCHDOG_STALE_SECONDS):
+                    continue
+                logger.warning(
+                    "outcome watchdog: heartbeat stale >%ss — restarting loop",
+                    _WATCHDOG_STALE_SECONDS,
+                )
+                stop_price_outcome_loop()
+                start_price_outcome_loop(interval=interval)
+            except Exception as exc:
+                logger.debug("outcome watchdog tick failed: %s", exc)
+
+    threading.Thread(target=_watch, daemon=True, name="mi-outcome-watchdog").start()
+
+
+def _stop_outcome_watchdog() -> None:
+    global _watchdog_stop
+    if _watchdog_stop is not None:
+        _watchdog_stop.set()
+        _watchdog_stop = None
+
+
+def _patched_start_loop(*, interval: int = 300) -> bool:
+    ok = start_price_outcome_loop(interval=interval)
+    if ok:
+        _start_outcome_watchdog(interval=interval)
+    return ok
+
+
+def _patched_stop_loop() -> None:
+    _stop_outcome_watchdog()
+    stop_price_outcome_loop()
