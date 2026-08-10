@@ -324,6 +324,25 @@ def _safe_int(v):
         return None
 
 
+def _listener_engine():
+    """Lazily import the message-intel engine (module-level import would risk boot)."""
+    from internal.message_intel import engine
+
+    return engine
+
+
+def _listener_conviction():
+    from internal.conviction_index import get_conviction_snapshot
+
+    return get_conviction_snapshot
+
+
+def _listener_caller_board():
+    from internal.message_intel.rollup import build_telegram_caller_leaderboard
+
+    return build_telegram_caller_leaderboard
+
+
 async def _listener_page_context() -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.outcome_loop import outcome_loop_status
@@ -368,11 +387,13 @@ async def _listener_page_context() -> Dict[str, Any]:
             pass
 
     # messages (live feed) — safe_list/coerce discipline
-    msgs_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_messages(limit=24),
-        None,
-        timeout=6,
-    )
+    try:
+        engine = _listener_engine()
+        msgs_payload = await _listener_call(
+            lambda: engine.list_messages(limit=24), None, timeout=6
+        )
+    except Exception:
+        msgs_payload = None
     msgs = []
     if isinstance(msgs_payload, dict):
         msgs = _as_list(msgs_payload.get("messages"))
@@ -394,20 +415,24 @@ async def _listener_page_context() -> Dict[str, Any]:
                 "topic": m.get("topic") or m.get("tags"),
                 "ts": m.get("timestamp") or m.get("created_at") or m.get("last_message_at"),
                 "base": m.get("base_price") or m.get("baseline") or m.get("reference_price"),
-                "msgs": m,
             }
         )
     ctx["feed"] = feed_rows
 
     # trending — subnet telegram conviction (1h lens)
-    conv_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_subnet_telegram_conviction(limit=8),
-        None,
-        timeout=6,
-    )
+    conv_payload = None
+    try:
+        engine = _listener_engine()
+        conv_payload = await _listener_call(
+            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+        )
+    except Exception:
+        pass
     conv_rows = []
     if isinstance(conv_payload, dict):
-        conv_rows = _as_list(conv_payload.get("rows") or conv_payload.get("subnets") or conv_payload.get("conviction"))
+        conv_rows = _as_list(
+            conv_payload.get("rows") or conv_payload.get("subnets") or conv_payload.get("conviction")
+        )
     elif isinstance(conv_payload, list):
         conv_rows = conv_payload
     trending = []
@@ -431,11 +456,14 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["subnet_conviction"] = conv_rows
 
     # conviction index top5
-    ci_payload = await _listener_call(
-        lambda: __import__("internal.conviction_index", fromlist=["get_conviction_snapshot"]).get_conviction_snapshot(refresh=False),
-        None,
-        timeout=6,
-    )
+    ci_payload = None
+    try:
+        get_conviction_snapshot = _listener_conviction()
+        ci_payload = await _listener_call(
+            lambda: get_conviction_snapshot(refresh=False), None, timeout=6
+        )
+    except Exception:
+        pass
     ci_top = []
     if isinstance(ci_payload, dict):
         ci_top = _as_list(ci_payload.get("top5"))
@@ -456,11 +484,14 @@ async def _listener_page_context() -> Dict[str, Any]:
             )
 
     # callers — resolved qualifying accuracy only
-    callers_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.rollup", fromlist=["build_telegram_caller_leaderboard"]).build_telegram_caller_leaderboard(days=30, limit=8),
-        None,
-        timeout=6,
-    )
+    callers_payload = None
+    try:
+        build_board = _listener_caller_board()
+        callers_payload = await _listener_call(
+            lambda: build_board(days=30, limit=8), None, timeout=6
+        )
+    except Exception:
+        pass
     caller_rows = []
     if isinstance(callers_payload, dict):
         caller_rows = _as_list(callers_payload.get("callers") or callers_payload.get("authors"))
@@ -474,6 +505,7 @@ async def _listener_page_context() -> Dict[str, Any]:
         correct = _safe_int(c.get("correct") or c.get("hits"))
         acc = c.get("accuracy") or c.get("hit_rate") or c.get("acc")
         sample_ok = bool(total and total >= 5)
+        skin = str(c.get("skin") or "").lower()
         callers.append(
             {
                 "author": c.get("author_name") or c.get("author") or c.get("author_id") or "—",
@@ -482,19 +514,21 @@ async def _listener_page_context() -> Dict[str, Any]:
                 "correct": correct,
                 "live": _safe_int(c.get("live") or c.get("pending")),
                 "sample_ok": sample_ok,
-                "staked": bool(c.get("staked") or c.get("skin") in ("staked", "STAKED")),
-                "ape": bool(c.get("ape") or c.get("skin") in ("ape", "APE")),
-                "raw": c,
+                "staked": bool(c.get("staked")) or skin == "staked",
+                "ape": bool(c.get("ape")) or skin == "ape",
             }
         )
     ctx["callers"] = callers
 
     # authors — weekly champions
-    authors_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_authors(days=7, limit=5),
-        None,
-        timeout=6,
-    )
+    authors_payload = None
+    try:
+        engine = _listener_engine()
+        authors_payload = await _listener_call(
+            lambda: engine.list_authors(days=7, limit=5), None, timeout=6
+        )
+    except Exception:
+        pass
     author_rows = []
     if isinstance(authors_payload, dict):
         author_rows = _as_list(authors_payload.get("authors") or authors_payload.get("rows"))
@@ -515,11 +549,14 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["authors"] = authors
 
     # hot topics
-    topics_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_topics(limit=8),
-        None,
-        timeout=5,
-    )
+    topics_payload = None
+    try:
+        engine = _listener_engine()
+        topics_payload = await _listener_call(
+            lambda: engine.list_topics(limit=8), None, timeout=5
+        )
+    except Exception:
+        pass
     topics = []
     if isinstance(topics_payload, dict):
         t_rows = _as_list(topics_payload.get("topics") or topics_payload.get("rows"))
@@ -540,14 +577,19 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["topics"] = topics
 
     # divergence stories
-    div_payload = await _listener_call(
-        lambda: __import__("internal.message_intel.engine", fromlist=["engine"]).engine.list_telegram_divergence_stories(days=7, limit=3),
-        None,
-        timeout=6,
-    )
+    div_payload = None
+    try:
+        engine = _listener_engine()
+        div_payload = await _listener_call(
+            lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
+        )
+    except Exception:
+        pass
     div_rows = []
     if isinstance(div_payload, dict):
-        div_rows = _as_list(div_payload.get("stories") or div_payload.get("rows") or div_payload.get("divergence"))
+        div_rows = _as_list(
+            div_payload.get("stories") or div_payload.get("rows") or div_payload.get("divergence")
+        )
     elif isinstance(div_payload, list):
         div_rows = div_payload
     divergence = []

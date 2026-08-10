@@ -13,7 +13,10 @@ logger = logging.getLogger(__name__)
 
 _tracker: Any = None
 _heartbeat_stop: Optional[Any] = None
+_watchdog_stop: Optional[Any] = None
 _DEFAULT_HEARTBEAT = "data/.message_intel_outcome_loop"
+_WATCHDOG_CHECK_SECONDS = 60
+_WATCHDOG_STALE_SECONDS = int(os.environ.get("OUTCOME_LOOP_WATCHDOG_STALE_SECONDS", "420"))
 
 
 def _heartbeat_path() -> str:
@@ -84,55 +87,10 @@ def _stop_heartbeat_loop() -> None:
         _heartbeat_stop = None
 
 
-def start_price_outcome_loop(*, interval: int = 300) -> bool:
-    """Start periodic outcome checks against message price snapshots."""
-    global _tracker
-    if _outcome_running_local():
-        return True
-    try:
-        from internal.message_intel.store import get_db
-        from message_intel.price_tracker import PriceTracker
-
-        tracker = PriceTracker(db=get_db())
-        tracker.start_background_checks(interval=interval)
-        _tracker = tracker
-        _touch_outcome_heartbeat()
-        _start_heartbeat_loop()
-        logger.info("Message-intel price outcome loop started (interval=%ds)", interval)
-        return True
-    except Exception as exc:
-        logger.warning("Price outcome loop failed to start: %s", exc)
-        _tracker = None
-        return False
-
-
-def stop_price_outcome_loop() -> None:
-    global _tracker
-    _stop_heartbeat_loop()
-    if _tracker is None:
-        _clear_outcome_heartbeat()
-        return
-    try:
-        _tracker._running = False
-    except Exception:
-        pass
-    _tracker = None
-    _clear_outcome_heartbeat()
-
-
-def outcome_loop_status() -> dict:
-    running = _outcome_running_local() or _outcome_alive_cross_process()
-    return {"running": running, "live": running}
-
-
 # ── Watchdog (audit infra item 3) ────────────────────────────────────────
 # Copy the listener's mature heartbeat/watchdog-restart pattern: if the
 # outcome loop reports running but its heartbeat goes stale (wedged thread),
 # stop and restart it so a hung resolve pass heals itself.
-
-_watchdog_stop: Optional[Any] = None
-_WATCHDOG_CHECK_SECONDS = 60
-_WATCHDOG_STALE_SECONDS = int(os.environ.get("OUTCOME_LOOP_WATCHDOG_STALE_SECONDS", "420"))
 
 
 def _start_outcome_watchdog(*, interval: int = 300) -> None:
@@ -151,11 +109,10 @@ def _start_outcome_watchdog(*, interval: int = 300) -> None:
                 if _outcome_alive_cross_process(max_age_seconds=_WATCHDOG_STALE_SECONDS):
                     continue
                 logger.warning(
-                    "outcome watchdog: heartbeat stale >%ss — restarting loop",
+                    "outcome watchdog: heartbeat stale >%ds — restarting loop",
                     _WATCHDOG_STALE_SECONDS,
                 )
-                stop_price_outcome_loop()
-                start_price_outcome_loop(interval=interval)
+                _restart_outcome_loop(interval=interval)
             except Exception as exc:
                 logger.debug("outcome watchdog tick failed: %s", exc)
 
@@ -169,13 +126,70 @@ def _stop_outcome_watchdog() -> None:
         _watchdog_stop = None
 
 
-def _patched_start_loop(*, interval: int = 300) -> bool:
-    ok = start_price_outcome_loop(interval=interval)
-    if ok:
+def _restart_outcome_loop(*, interval: int = 300) -> None:
+    """Stop and start the outcome loop without clearing local running state mid-flight."""
+    old = _tracker
+    _stop_heartbeat_loop()
+    if old is not None:
+        try:
+            old._running = False
+        except Exception:
+            pass
+    _clear_outcome_heartbeat()
+    try:
+        from internal.message_intel.store import get_db
+        from message_intel.price_tracker import PriceTracker
+
+        tracker = PriceTracker(db=get_db())
+        tracker.start_background_checks(interval=interval)
+        global _tracker
+        _tracker = tracker
+        _touch_outcome_heartbeat()
+        _start_heartbeat_loop()
+        logger.info("outcome watchdog: loop restarted (interval=%ds)", interval)
+    except Exception as exc:
+        logger.warning("outcome watchdog restart failed: %s", exc)
+        _tracker = old
+
+
+def start_price_outcome_loop(*, interval: int = 300) -> bool:
+    """Start periodic outcome checks against message price snapshots."""
+    global _tracker
+    if _outcome_running_local():
+        return True
+    try:
+        from internal.message_intel.store import get_db
+        from message_intel.price_tracker import PriceTracker
+
+        tracker = PriceTracker(db=get_db())
+        tracker.start_background_checks(interval=interval)
+        _tracker = tracker
+        _touch_outcome_heartbeat()
+        _start_heartbeat_loop()
         _start_outcome_watchdog(interval=interval)
-    return ok
+        logger.info("Message-intel price outcome loop started (interval=%ds)", interval)
+        return True
+    except Exception as exc:
+        logger.warning("Price outcome loop failed to start: %s", exc)
+        _tracker = None
+        return False
 
 
-def _patched_stop_loop() -> None:
+def stop_price_outcome_loop() -> None:
+    global _tracker
     _stop_outcome_watchdog()
-    stop_price_outcome_loop()
+    _stop_heartbeat_loop()
+    if _tracker is None:
+        _clear_outcome_heartbeat()
+        return
+    try:
+        _tracker._running = False
+    except Exception:
+        pass
+    _tracker = None
+    _clear_outcome_heartbeat()
+
+
+def outcome_loop_status() -> dict:
+    running = _outcome_running_local() or _outcome_alive_cross_process()
+    return {"running": running, "live": running}
