@@ -197,13 +197,46 @@ def _hydrate_on_miss_enabled() -> bool:
 
 
 def _hydrate_once(netuid: Any, cache_path: str) -> bool:
-    """Fetch fresh OHLCV for a netuid at most once per interval (per process)."""
+    """Force a fresh OHLCV fetch for a netuid at most once per interval.
+
+    Busts the cached_at TTL on disk first (canonical pattern from
+    pump_lead_recover.hydrate_candles_for_resolve): fetch_ohlcv with
+    use_cache=True serves a fresh-but-window-missing cache entry straight
+    back within CACHE_TTL, which would make hydrate-on-miss a silent no-op
+    for the common case where the indicator scheduler just wrote the cache.
+    """
+    import tempfile
+
     key = f"{str(netuid)}|{cache_path}"
     now = time.time()
     if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
         return False
     _hydrate_memo[key] = now
     try:
+        # Bust TTL for this netuid only (mirror pump_lead_recover).
+        disk: Dict[str, Any] = {}
+        try:
+            with open(cache_path, "r", encoding="utf-8") as fh:
+                loaded = json.load(fh)
+            if isinstance(loaded, dict):
+                disk = loaded
+        except Exception:
+            pass
+        block = disk.get(key)
+        if isinstance(block, dict):
+            block = dict(block)
+            block["cached_at"] = 0.0
+            disk[key] = block
+            os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
+            fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(cache_path) or ".", suffix=".tmp")
+            try:
+                with os.fdopen(fd, "w") as fh:
+                    json.dump(disk, fh)
+                os.replace(tmp_path, cache_path)
+            finally:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+
         from internal.indicators.price_fetcher import fetch_ohlcv
         fetch_ohlcv(
             str(netuid),
