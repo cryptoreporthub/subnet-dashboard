@@ -23,13 +23,17 @@
     </style>
     <!-- Hydration preloads (perf 2026-08-11): start the two heaviest above-fold data
          fetches during HTML parse. Exact-match URLs -> request coalescing once the
-         hydrate JS runs, so the data arrives ~1 RTT earlier with zero extra requests. -->
-    <link rel="preload" as="fetch" href="/api/whales/flow-signals?hours=24&limit=10" crossorigin="use-credentials">
-    <link rel="preload" as="fetch" href="/api/pump-alerts" crossorigin="use-credentials">
+         hydrate JS runs, so the data arrives ~1 RTT earlier with zero extra requests.
+         fetchpriority=high -> browser prioritizes them above other fetches. -->
+    <link rel="preload" as="fetch" href="/api/whales/flow-signals?hours=24&limit=10" crossorigin="use-credentials" fetchpriority="high">
+    <link rel="preload" as="fetch" href="/api/pump-alerts" crossorigin="use-credentials" fetchpriority="high">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+    <!-- Fonts: async (preload-as-style) so text can render in fallback font; FOUT swap.
+         Falls back to a plain blocking stylesheet when JS is off. -->
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/smoke-tokens.css?v={{ static_v }}">
     <link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
