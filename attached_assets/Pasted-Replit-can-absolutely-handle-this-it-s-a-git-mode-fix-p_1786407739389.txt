@@ -1,0 +1,49 @@
+Replit can absolutely handle this — it's a git-mode fix plus a curl verify, nothing needs Ditto Code's sandbox. Replit's Linked Git is already connected to `cryptoreporthub/subnet-dashboard`, so this is just terminal work in that repo.
+
+Here's the prompt to paste into Replit (works in Cursor too):
+
+---
+
+**Fix Fly 502 — make fly_web_entrypoint.sh executable (single-file, one commit)**
+
+You're working in the `cryptoreporthub/subnet-dashboard` repo. The Fly.io web machine is 502ing because the committed `scripts/fly_web_entrypoint.sh` is mode `100644` (non-executable), but the Dockerfile CMD and `fly.toml [processes] web` both invoke it as `./scripts/fly_web_entrypoint.sh`, so it fails to spawn with `Permission denied (os error 13)` and crash-loops to stopped.
+
+SCOPE — do ONLY this, nothing else:
+
+1. **Preflight:** Confirm you're on `main` and up to date with `origin/main`. (Run `git status`, `git fetch`, `git checkout main`, `git pull origin main` — but if `git pull` complains about local changes, don't stomp them; just verify the remote is reachable.)
+2. **Do NOT** touch or stage any pre-existing uncommitted changes (e.g. `templates/base.html`, `static/vendor/uplot/uPlot.iife.min.js`, `attached_assets/*.png/.jpeg`). Leave them exactly as they are.
+3. **Mode change only:** Set the executable bit — do NOT modify file content:
+   ```
+   git update-index --chmod=+x scripts/fly_web_entrypoint.sh
+   ```
+4. **Verify** the index now shows `100755`:
+   ```
+   git ls-files -s scripts/fly_web_entrypoint.sh
+   ```
+   (Must print `100755 … scripts/fly_web_entrypoint.sh`.)
+5. **Commit ONLY that one file** with this exact message:
+   ```
+   git commit -m "fix(fly): mark fly_web_entrypoint.sh executable (boot 502)" --only -- scripts/fly_web_entrypoint.sh
+   ```
+6. **Confirm the commit contains only that file** (`git show --stat HEAD`). If anything else slipped in, abort and redo.
+7. **Push to main:**
+   ```
+   git push origin main
+   ```
+   This triggers the repo's existing Fly Deploy GitHub workflow (which holds the Fly token) — do NOT run a flyctl deploy yourself.
+8. **Verify the live site recovers:** wait ~2–3 min for deploy + boot grace (~90s), then check:
+   ```
+   curl -sS -m 20 -o /dev/null -w "health: %{http_code}\n" https://subnet-dashboard.fly.dev/health
+   curl -sS -m 20 -o /dev/null -w "home:   %{http_code}\n" https://subnet-dashboard.fly.dev/
+   ```
+   Both should return **200** (not 502/timeout). If they don't, check whether the Fly Deploy workflow ran and whether the web machine is `started` vs `stopped`, and report the failure explicitly — don't work around it.
+
+Do NOT: edit any other files, change fly.toml, manually restart/rollback machines, or do anything beyond the mode change + push + verify.
+
+---
+
+**Two notes:**
+- Replit has the git remote to GitHub, but the **Fly deploy itself runs in GitHub Actions** (which holds the token), so Replit just pushes and then curls — same as the Ditto Code path, minus the sandbox. 
+- Same caveat as before: Replit's local checkout shows those pre-existing modified files (`base.html`, `uPlot`, assets). The `--only -- scripts/fly_web_entrypoint.sh` in the commit command is the guard that keeps it to a single clean file.
+
+Whichever you pick (Replit prompt above, or the Ditto Code job already waiting on Apply), the fix is identical. Want me to keep the Ditto Code job card around as a fallback in case Replit's checkout misbehaves? I can leave it pending untouched.
