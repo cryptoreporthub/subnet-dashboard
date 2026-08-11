@@ -55,11 +55,11 @@
   padding: 0 var(--space-4, 16px);
 }
 
-/* No situation_room grid overlay — full atmosphere stack (smoke SVG + accent radials) */
+/* Cosmic glass: body is just a dark fallback; .cosmic-sky fixed element is the substrate */
 body.council-first-theme {
-  background-color: var(--bg-base);
-  background-image: var(--bg-atmosphere);
-  background-size: cover;
+  background-color: var(--ds-void, #080911);
+  background-image: none;
+  background-size: auto;
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-position: center;
@@ -95,7 +95,10 @@ body.council-first-theme::after {
 }
 
 body.council-first-theme .app-shell,
-body.council-first-theme main {
+body.council-first-theme main,
+body.council-first-theme .site-nfa,
+body.council-first-theme.wrap,
+body.council-first-theme > .dashboard {
   position: relative;
   z-index: 1;
   background: transparent;
@@ -340,17 +343,17 @@ nav.top-nav a[aria-current="page"] {
   min-width: 44px;
 }
 
-/* ---------- Pewter smoke cards ---------- */
+/* ---------- Glass cards (formerly pewter smoke) ----------
+   card-grain/card-smoke opaque fills replaced; cosmic sky shows through */
 .smoke,
 .card,
 .sr-panel,
 .proof-band__subpanel,
 .pd-r,
 .pd-evidence__cell {
-  background-image: var(--card-grain), var(--card-smoke);
-  background-size: 160px 160px, cover;
-  background-blend-mode: overlay, normal;
-  border: 1px solid var(--line-hi);
+  background: var(--glass-fill-subtle);
+  background-image: none;
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md, 14px);
 }
 
@@ -1571,13 +1574,13 @@ header.top {
 }
 
 .card-glass {
-  background: rgba(8, 10, 18, 0.72);
+  background: var(--glass-fill-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .card-elevated {
-  background: var(--bg-elevated);
+  background: var(--glass-fill-section);
 }
 
 .card-head {
@@ -3923,11 +3926,11 @@ header.top {
 }
 
 body {
-  background-color: var(--bg-cockpit);
-  background-image: var(--bg-atmosphere);
+  background-color: var(--ds-void, #080911);
+  background-image: none;
   background-attachment: fixed;
   background-repeat: no-repeat;
-  background-size: cover, auto, auto, auto, auto, auto, auto, auto;
+  background-size: auto;
   background-position: center;
   color: var(--txt);
 }
@@ -4037,8 +4040,7 @@ header.top {
   background-image: var(--card-panel-shine), var(--card-panel-fill), var(--board-border-gradient);
   background-origin: border-box;
   background-clip: padding-box, padding-box, border-box;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Blur is desktop-only (see media gate near end of file) — mobile stays zero-cost */
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card), 0 0 24px rgba(126, 200, 227, 0.06);
   position: relative;
@@ -4109,8 +4111,7 @@ header.top {
     var(--board-border-gradient);
   background-origin: border-box;
   background-clip: padding-box, padding-box, border-box;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* Blur is desktop-only (see media gate near end of file) — mobile stays zero-cost */
   border-radius: var(--radius-md);
   padding: 14px 16px;
   overflow: hidden;
@@ -5076,7 +5077,8 @@ footer.status[data-source*="fallback"] .st-dot {
   border-radius: var(--radius-lg);
   border: var(--border-width-important) solid transparent;
   background-image:
-    linear-gradient(rgba(8, 10, 16, 0.9), rgba(8, 10, 16, 0.9)) padding-box,
+    linear-gradient(color-mix(in srgb, var(--ds-void) 34%, transparent),
+                    color-mix(in srgb, var(--ds-void) 34%, transparent)) padding-box,
     var(--important-border-gradient) border-box;
   background-origin: border-box;
   background-clip: padding-box, border-box;
@@ -7229,12 +7231,14 @@ button.home-cta {
 /* ---------- Share pages (mobile-first) ---------- */
 .share-page {
   min-height: 100vh;
-  background-color: var(--bg-base);
-  background-image: var(--bg-atmosphere);
+  background-color: var(--ds-void);
+  background-image: none;
   color: var(--text-primary);
 }
 
 .share-page__header {
+  position: relative;
+  z-index: 1;
   padding: 12px var(--space-4, 16px);
   border-bottom: 1px solid var(--line);
   backdrop-filter: blur(12px);
@@ -7250,6 +7254,8 @@ button.home-cta {
 }
 
 .share-page__main {
+  position: relative;
+  z-index: 1;
   max-width: 720px;
   margin: 0 auto;
   padding: 20px var(--space-4, 16px) 48px;
@@ -7328,10 +7334,9 @@ body.wrap {
     padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
     gap: 6px;
     box-sizing: border-box;
-    background-color: rgba(18, 22, 30, 0.94);
-    background-image: var(--card-grain), var(--card-smoke);
-    background-size: 160px 160px, cover;
-    background-blend-mode: overlay, normal;
+    background-color: color-mix(in srgb, var(--ds-void) 30%, transparent);
+    background-image: var(--card-smoke);
+    background-size: cover;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
@@ -14483,41 +14488,93 @@ body.council-first-theme .footer-card__lbl {
 
 /* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============ */
 
-/* -- Cosmic substrate: nebula + translucent base (keeps smoke atmosphere ghosting through) -- */
+/* -- Cosmic substrate: deep-space nebula matching reference image palette --
+   Near-black void centre; cyan cluster top-left; violet/purple top-right;
+   pink-magenta bloom bottom-left; amber/gold warmth bottom-right.
+   Base is fully opaque so the body's dark fallback doesn't bleed through. */
 .cosmic-sky {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    background:
-        radial-gradient(380px 280px at 8% 12%, rgba(110, 231, 255, 0.15), transparent 70%),
-        radial-gradient(440px 340px at 92% 16%, rgba(157, 140, 255, 0.18), transparent 70%),
-        radial-gradient(400px 320px at 80% 84%, rgba(255, 207, 110, 0.12), transparent 70%),
-        radial-gradient(320px 260px at 16% 76%, rgba(255, 93, 122, 0.10), transparent 70%),
-        radial-gradient(520px 420px at 55% 45%, rgba(31, 212, 124, 0.06), transparent 70%),
-        rgba(22, 25, 32, 0.88); /* TRANSLUCENT, NOT opaque */
+    /* Opaque deep-space void base (DS bridge token) */
+    background-color: var(--ds-void);
+    background-image:
+        /* cyan star cluster — top-left (DS signal cyan) */
+        radial-gradient(520px 420px at 6% 10%, color-mix(in srgb, var(--ds-signal-cyan) 30%, transparent), transparent 65%),
+        radial-gradient(260px 200px at 3% 6%,  color-mix(in srgb, var(--ds-signal-cyan) 24%, transparent), transparent 55%),
+        /* violet/purple bloom — top-right (DS cosmic violet) */
+        radial-gradient(540px 440px at 94% 12%, color-mix(in srgb, var(--ds-nebula) 34%, transparent), transparent 65%),
+        radial-gradient(280px 220px at 97% 5%,  color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 50%),
+        /* pink-magenta streak — bottom-left (DS rose) */
+        radial-gradient(480px 380px at 8% 82%,  color-mix(in srgb, var(--ds-rose) 30%, transparent), transparent 65%),
+        radial-gradient(220px 180px at 2% 92%,  color-mix(in srgb, var(--ds-rose) 24%, transparent), transparent 50%),
+        /* amber/gold warmth — bottom-right (DS ember amber) */
+        radial-gradient(420px 340px at 92% 88%, color-mix(in srgb, var(--ds-amber) 30%, transparent), transparent 65%),
+        radial-gradient(200px 160px at 98% 96%, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 50%),
+        /* deep-space void gradient — keeps the centre near-black */
+        radial-gradient(ellipse 80% 70% at 50% 50%, color-mix(in srgb, var(--ds-void) 92%, transparent), transparent 80%);
 }
 
-/* CSS-only starfield (no canvas) */
+/* CSS-only starfield (no canvas) — dense multi-layer pattern tiles to cover the viewport */
 .cosmic-sky::after {
     content: '';
     position: absolute;
     inset: 0;
+    /* Two tiling layers at different scales give depth without GPU cost */
     background-image:
-        radial-gradient(1.6px 1.6px at 7% 5%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 15% 13%, var(--accent-blue) 50%, transparent 51%),
-        radial-gradient(2px 2px at 22% 9%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 31% 18%, var(--accent-blue) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 38% 6%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 47% 15%, var(--accent-blue) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 56% 8%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 64% 20%, var(--accent-blue) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 72% 5%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 81% 16%, var(--accent-blue) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 89% 10%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px 1px at 95% 22%, var(--accent-blue) 50%, transparent 51%);
-    background-size: 200px 200px;
-    opacity: 0.7;
+        /* Layer A — fine distant stars (white + cyan) */
+        radial-gradient(1.2px 1.2px at 4%  3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 9%  8%,  color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 14% 2%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 19% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 24% 5%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 29% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 34% 3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 39% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 44% 6%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 49% 13%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 54% 4%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 59% 10%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 64% 2%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 69% 12%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 74% 5%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 79% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 84% 3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 89% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 94% 6%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 98% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        /* Layer B — slightly larger mid-field stars, offset phase */
+        radial-gradient(1.4px 1.4px at 7%  17%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 12% 22%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 17% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 22% 25%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 27% 19%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 32% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 37% 16%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 42% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 47% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 52% 24%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 57% 17%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 62% 22%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 67% 19%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 72% 25%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 77% 16%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 82% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 87% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 92% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 96% 20%, #ffffff 50%, transparent 51%);
+    /* Two tile sizes: fine layer at 180px, mid layer at 280px */
+    background-size:
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px;
+    opacity: 0.85;
 }
 
 /* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
@@ -14542,17 +14599,74 @@ body.council-first-theme .footer-card__lbl {
     /* NO backdrop-filter here — mobile default */
 }
 
-/* The ONE focal card: whisper blur on phones only (6px) */
-.glass-card--hero {
-    backdrop-filter: blur(var(--glass-blur-secondary));
-    -webkit-backdrop-filter: blur(var(--glass-blur-secondary));
+/* ── Cosmic-glass blur gate (authoritative, global) ──────────────────────
+   MOBILE-FIRST zero GPU cost: kill ALL backdrop-filter (every element and
+   pseudo-element, including rules nested in mobile media queries) at the base
+   layer. `!important` guarantees this wins over any ungated blur declared
+   earlier in the file. Blur is then re-enabled ONLY inside the desktop /
+   fine-pointer gate below, and stays off under reduced-transparency. */
+*,
+*::before,
+*::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
 }
 
-/* Mouse / big screens: full glass upgrade (12px) */
+/* Mouse / big screens: restore glass blur for the glass/panel surfaces. Not
+   under reduced-transparency (that keeps the base `none` above). */
 @media (hover: hover) and (pointer: fine), (min-width: 1024px) {
-    .glass-card {
-        backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
-        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+    @media not (prefers-reduced-transparency: reduce) {
+        .glass-card,
+        .glass-card--hero,
+        .card,
+        .card-glass,
+        .k3-dossier,
+        .tribunal-hero__judge,
+        .tribunal-hero__panel,
+        .trust-banner,
+        .living-focus,
+        .brain-letter,
+        .proof-band,
+        .proof-band__subpanel,
+        .pump-alert__card,
+        .pump-hero__card,
+        #pump-desk-hero,
+        .pds-angles__section,
+        .pd-angles__section,
+        .pds-ladder,
+        .pds--polish .pds-ladder,
+        .pd-lead,
+        .pds-hero,
+        .pd-metrics-bar,
+        .pds-metrics-bar,
+        .kpi-cell,
+        .council-stage .k3-signal,
+        .council-stage .k3-judge,
+        .council-stage .k3-weighed-row,
+        .sr-pulse__breadth-wrap .sr-pulse__oneline-part,
+        .sr-panel,
+        .kpi,
+        .cockpit-card,
+        .cockpit-card.card,
+        header.top,
+        header.top.sr-hud,
+        footer.status,
+        .top-nav,
+        .share-page__header,
+        .driver-popover {
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+        }
+        /* Pseudo-element blur restored on desktop */
+        .tribunal-hero__ring-center::before {
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+        }
+        /* Focal tribunal hero keeps its stronger signature blur on desktop */
+        .tribunal-hero__card {
+            backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+            -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+        }
     }
 }
 
@@ -14631,13 +14745,17 @@ section.desk-zone,
     border-color: var(--glass-border);
 }
 
-/* Desktop / mouse: full glass upgrade for the focal glass-fill panels (matches .glass-card gate) */
+/* Desktop / mouse: full glass upgrade for all glass-fill panels (matches .glass-card gate) */
 @media (hover: hover) and (pointer: fine), (min-width: 1024px) {
     .message-intel--v2 .message-intel__hero,
     .message-intel--v2 .message-intel__week-top,
     .message-intel--v2 .message-intel__crowns-drawer,
     .cockpit-card,
-    .cockpit-card.card {
+    .cockpit-card.card,
+    .proof-band__subpanel,
+    .card,
+    .kpi,
+    .sr-panel {
         backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
         -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
     }
@@ -14652,5 +14770,9 @@ section.desk-zone,
     .message-intel--v2 .message-intel__week-top,
     .message-intel--v2 .message-intel__crowns-drawer,
     .cockpit-card,
-    .cockpit-card.card { backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .cockpit-card.card,
+    .proof-band__subpanel,
+    .card,
+    .kpi,
+    .sr-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
