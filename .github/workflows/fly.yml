@@ -1,8 +1,3 @@
-Title: 
-
-URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/.github/workflows/fly.yml
-
-Markdown Content:
 name: Fly Deploy
 on:
   push:
@@ -204,7 +199,7 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "=== Recent logs (best effort) ==="
             flyctl logs -a subnet-dashboard --no-tail || true
-            echo "GUARD FAIL: public /health did not return 200 within ~3m"
+            echo "GUARD FAIL: server not healthy (health 200 or render /pump 200) within ~3m"
             exit 1
           fi
         env:
