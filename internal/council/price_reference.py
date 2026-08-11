@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -107,8 +108,28 @@ def price_at_resolve_at(
     cache: Optional[Dict[str, Any]] = None,
     cache_path: str = PRICE_CACHE_PATH,
 ) -> Tuple[str, float, Dict[str, Any]]:
-    """Return (status, price, meta). status: ok | ungradeable."""
+    """Return (status, price, meta). status: ok | ungradeable. Hydrates cold cache on miss (#888)."""
     cache = cache if cache is not None else _load_cache(cache_path)
+    status, price, meta = _resolve_at_inner(netuid, resolve_at, cache)
+
+    if status == "ok" and price > 0:
+        return status, price, meta
+
+    if _hydrate_on_miss_enabled() and _hydrate_once(netuid, cache_path):
+        refreshed = _load_cache(cache_path)
+        status, price, meta = _resolve_at_inner(netuid, resolve_at, refreshed)
+        if status == "ok" and price > 0:
+            return status, price, meta
+
+    return "ungradeable", 0.0, meta
+
+
+def _resolve_at_inner(
+    netuid: Any,
+    resolve_at: datetime,
+    cache: Dict[str, Any],
+) -> Tuple[str, float, Dict[str, Any]]:
+    """Original lookup body (unchanged). status: ok | ungradeable."""
     candles = _candles_for_netuid(cache, netuid)
     window = _window_candles(candles, resolve_at)
     meta: Dict[str, Any] = {
@@ -156,3 +177,40 @@ def price_at_resolve_at(
             meta["price_lag_seconds"] = int(abs(ts.timestamp() - resolve_at.timestamp()))
 
     return "ok", float(price), meta
+
+
+# ----------------------------------------------------------------
+# Hydrate-on-miss (issue #888): when grading finds no candle window at
+# resolve_at, force a fresh OHLCV fetch for that netuid (once per interval)
+# and retry before retiring the prediction as ungradeable/expired.
+# Env-gated so production behavior is unchanged until explicitly enabled in
+# fly.toml (CALIBRATION_HYDRATE_ON_MISS=true).
+# ----------------------------------------------------------------
+_hydrate_memo: Dict[str, float] = {}
+_hydrate_min_interval = int(os.environ.get("CALIBRATION_HYDRATE_MIN_INTERVAL", "900"))
+
+
+def _hydrate_on_miss_enabled() -> bool:
+    return os.environ.get("CALIBRATION_HYDRATE_ON_MISS", "").strip().lower() in (
+        "1", "true", "yes", "on",
+    )
+
+
+def _hydrate_once(netuid: Any, cache_path: str) -> bool:
+    """Fetch fresh OHLCV for a netuid at most once per interval (per process)."""
+    key = f"{str(netuid)}|{cache_path}"
+    now = time.time()
+    if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
+        return False
+    _hydrate_memo[key] = now
+    try:
+        from internal.indicators.price_fetcher import fetch_ohlcv
+        fetch_ohlcv(
+            str(netuid),
+            use_cache=True,
+            allow_synthetic=False,
+            cache_path=cache_path,
+        )
+        return True
+    except Exception:
+        return False
