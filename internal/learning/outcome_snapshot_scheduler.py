@@ -87,6 +87,15 @@ class OutcomeSnapshotScheduler:
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False}
         try:
+            # Expired-recovery sweep first so the snapshot reflects recovered
+            # grades (2026-08-11: 90.5% expired from rows retired on missing
+            # price data; hydrate-on-miss now lets them re-grade).
+            from internal.learning.expired_recovery import recover_expired_predictions
+
+            recovery = recover_expired_predictions()
+            result["recovered"] = recovery.get("recovered", 0)
+            result["recovery_skipped"] = recovery.get("skipped", 0)
+
             from internal.learning.outcome_snapshot import run_snapshot
 
             payload = run_snapshot(save=True)
