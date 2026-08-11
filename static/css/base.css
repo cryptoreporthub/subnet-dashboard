@@ -2,30 +2,43 @@
 /* Fonts loaded via <link> in templates (§31-2 O4) — no blocking @import here */
 
 :root {
-  /* Backgrounds — soft charcoal so volumetric smoke billows have voids to play against */
-  --bg-base: #1e2128;
-  --bg-edge: #181b22;
-  --bg-midnight: #161920;
-  --bg-surface: rgba(22, 25, 32, 0.82);
-  --bg-card: rgba(28, 32, 40, 0.55);
-  --bg-elevated: rgba(36, 40, 50, 0.72);
+  /* Backgrounds — deep charcoal so baked smoke billows have voids to play against */
+  --bg-base: #15171d;
+  --bg-edge: #111318;
+  --bg-midnight: #0d0f14;
+  --bg-surface: rgba(255, 255, 255, 0.03);
+  --bg-card: transparent;
+  --bg-elevated: rgba(255, 255, 255, 0.04);
   --bg-header: rgba(18, 21, 28, 0.72);
-  /* Pewter card smoke — soft billows only (no film grain) */
-  --card-smoke:
-    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(190, 198, 210, 0.14) 0%, transparent 50%),
-    radial-gradient(ellipse 120% 65% at 50% -30%, rgba(170, 170, 178, 0.06) 0%, transparent 55%),
-    linear-gradient(180deg, rgba(18, 20, 26, 0.45) 0%, rgba(14, 16, 22, 0.52) 100%);
-  --card-grain: none;
+  /* Card smoke — fully transparent glass veil: no tint at all, so only the
+     backdrop blur + hairline border define the surface. */
+  --card-smoke: transparent;
+  --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
-  /* Soft grey smoke atmosphere — SVG billows + luminous washes (no grain overlay) */
-  --bg-atmosphere:
-    url("/static/img/simivision-smoke-bg.svg"),
-    radial-gradient(ellipse 120% 90% at 50% -10%, rgba(210, 216, 226, 0.38) 0%, transparent 58%),
-    radial-gradient(ellipse 90% 70% at 12% 42%, rgba(180, 186, 196, 0.28) 0%, transparent 65%),
-    radial-gradient(ellipse 90% 70% at 88% 58%, rgba(190, 196, 206, 0.28) 0%, transparent 65%),
-    radial-gradient(ellipse 110% 80% at 50% 108%, rgba(150, 156, 166, 0.22) 0%, transparent 55%),
-    linear-gradient(180deg, var(--bg-midnight) 0%, var(--bg-base) 100%);
+  /* Cosmic glass — atmosphere is the .cosmic-sky fixed element; body paints only a safe fallback */
+  --bg-atmosphere: none;
+
+  /* ── Smoke Council design-system tokens ───────────────────────────────
+     Consumed from the DS theme, served as /static/css/smoke-tokens.css
+     (generated from artifacts/smoke — the token source of truth). We alias the
+     DS color tokens to local names for readability; the values themselves are
+     never copied here (see artifacts/smoke/docs/consuming-web.md). */
+  --ds-signal-cyan: var(--color-chart-1);  /* signal cyan */
+  --ds-nebula: var(--color-nebula);        /* cosmic violet */
+  --ds-rose: var(--color-chart-5);         /* rose/magenta */
+  --ds-amber: var(--color-accent);         /* ember amber */
+  --ds-seafoam: var(--color-primary);      /* council seafoam */
+  /* Deep-space base under the CosmicSky substrate — a near-black derived from
+     the DS card token (a consistently dark surface) so the void stays on-palette. */
+  --ds-void: color-mix(in srgb, hsl(var(--card)) 55%, #000);
+
+  /* Glass fills replacing the old opaque pewter/card-panel surfaces so the
+     cosmic sky reads through every section and subsection. */
+  /* Fully transparent — no tint, clear glassmorphism. Sections keep only the
+     blur + hairline border; `--card-panel-shine` (a faint top sheen) is layered
+     after this in `background-image`, so it may still show a whisper of light. */
+  --card-panel-fill: transparent;
 
   /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */
   --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(180, 182, 190, 0.24), transparent 70%);
@@ -75,8 +88,8 @@
   --border-width-important: 3px;
   --board-border-gradient: linear-gradient(135deg, #3fc9ff 0%, #1fd47c 55%, #ff9f3f 100%);
   --important-border-gradient: linear-gradient(135deg, #1fd47c 0%, #3fc9ff 55%, #9d8cff 100%);
-  --card-panel-fill: linear-gradient(rgba(10, 14, 24, 0.96), rgba(10, 14, 24, 0.96));
-  --card-panel-shine: linear-gradient(180deg, rgba(148, 163, 184, 0.06) 0%, rgba(100, 116, 139, 0.04) 38%, transparent 72%);
+  /* --card-panel-fill defined above in the DS bridge as translucent glass */
+  --card-panel-shine: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 38%, transparent 72%);
 
   /* Radius */
   --radius-sm: 8px;

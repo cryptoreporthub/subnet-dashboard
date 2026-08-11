@@ -1,11 +1,12 @@
 /* ui.css — mobile-first SimiVision shell (LOCK 2026-08-02) */
 
 :root {
-  /* Tiered silver glass — near-transparent so volumetric smoke reads through */
-  --glass-fill-hero: rgba(255, 255, 255, 0.045);
-  --glass-fill-card: rgba(255, 255, 255, 0.04);
-  --glass-fill-section: rgba(255, 255, 255, 0.035);
-  --glass-fill-subtle: rgba(255, 255, 255, 0.025);
+  /* Tiered clear glass — fully transparent fills; the cosmic sky shows through
+     untouched and only the desktop backdrop blur + hairline border remain. */
+  --glass-fill-hero: transparent;
+  --glass-fill-card: transparent;
+  --glass-fill-section: transparent;
+  --glass-fill-subtle: transparent;
   --glass-fill: var(--glass-fill-card);
   --glass-blur: 12px;
   --glass-blur-secondary: 6px;
@@ -13,12 +14,12 @@
   --glass-radius: 12px;
 
   /* Dual Depth Smoke — zone + climate tokens (wash stays translucent) */
-  --zone-dark-bg: linear-gradient(180deg, rgba(10, 12, 17, 0.22) 0%, rgba(12, 14, 20, 0.38) 100%);
+  --zone-dark-bg: transparent; /* clear glass — sky reads through zones */
   --zone-dark-card: rgba(255, 255, 255, 0.04);
   --zone-dark-card-border: rgba(255, 255, 255, 0.16);
   --zone-dark-text: #f8fafc;
   --zone-dark-muted: #b8c2d2;
-  --zone-light-bg: rgba(228, 232, 238, 0.04);
+  --zone-light-bg: transparent;
   --zone-light-card: rgba(255, 255, 255, 0.05);
   --zone-light-card-border: rgba(255, 255, 255, 0.14);
   --zone-light-text: #eef2f6;
@@ -33,6 +34,11 @@
   --cool-ice-bright: #d2ecff;
   --cool-hairline: rgba(159, 212, 245, 0.28);
   --cool-glow: rgba(159, 212, 245, 0.42);
+  /* Cosmetic port signal temperature (NOT bearish sentiment) */
+  --cos-rose: #ff5d7a;
+  --cos-rose-glow: rgba(255, 93, 122, 0.32);
+  --cos-chip: rgba(255, 255, 255, 0.08);
+  --cos-chip-ink: #f8fafc;
 }
 
 /* ---------- Mobile shell: 390px primary, desktop capped column ---------- */
@@ -50,11 +56,11 @@
   padding: 0 var(--space-4, 16px);
 }
 
-/* No situation_room grid overlay — full atmosphere stack (smoke SVG + accent radials) */
+/* Cosmic glass: body is just a dark fallback; .cosmic-sky fixed element is the substrate */
 body.council-first-theme {
-  background-color: var(--bg-base);
-  background-image: var(--bg-atmosphere);
-  background-size: cover;
+  background-color: var(--ds-void, #080911);
+  background-image: none;
+  background-size: auto;
   background-repeat: no-repeat;
   background-attachment: fixed;
   background-position: center;
@@ -91,7 +97,10 @@ body.council-first-theme::after {
 }
 
 body.council-first-theme .app-shell,
-body.council-first-theme main {
+body.council-first-theme main,
+body.council-first-theme .site-nfa,
+body.council-first-theme.wrap,
+body.council-first-theme > .dashboard {
   position: relative;
   z-index: 1;
   background: transparent;
@@ -177,7 +186,7 @@ header.top.sr-hud {
   z-index: 100;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  background: rgba(8, 10, 16, 0.65);
+  background: var(--glass-fill-subtle);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow: none;
 }
@@ -336,17 +345,17 @@ nav.top-nav a[aria-current="page"] {
   min-width: 44px;
 }
 
-/* ---------- Pewter smoke cards ---------- */
+/* ---------- Glass cards (formerly pewter smoke) ----------
+   card-grain/card-smoke opaque fills replaced; cosmic sky shows through */
 .smoke,
 .card,
 .sr-panel,
 .proof-band__subpanel,
 .pd-r,
 .pd-evidence__cell {
-  background-image: var(--card-grain), var(--card-smoke);
-  background-size: 160px 160px, cover;
-  background-blend-mode: overlay, normal;
-  border: 1px solid var(--line-hi);
+  background: var(--glass-fill-subtle);
+  background-image: none;
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-md, 14px);
 }
 
@@ -411,7 +420,7 @@ button.home-cta {
   gap: 10px;
   padding: 12px 14px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.22);
+  background: transparent;
   border: 1px dashed rgba(255, 255, 255, 0.12);
   color: var(--text-muted);
   font-size: 13px;
@@ -425,7 +434,7 @@ button.home-cta {
   gap: 12px;
   padding: 14px 16px;
   border-radius: 12px;
-  background: rgba(8, 12, 20, 0.55);
+  background: var(--glass-fill-subtle);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-muted);
   font-size: 13px;
@@ -703,26 +712,19 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   pointer-events: none;
 }
 
-/* Layer 1 — slow drifting cool-grey smoke blobs (lifted ~5%, mixed depth) */
+/* Layer 1 — cleared: the fixed .cosmic-sky is the only atmosphere now, so the
+   stage paints no smoke of its own (fully clear glass morphism). */
 .council-stage__atmosphere::before {
   z-index: 0;
-  background:
-    radial-gradient(ellipse 58% 48% at 18% 24%, rgba(188, 188, 198, 0.26), transparent 58%),
-    radial-gradient(ellipse 52% 62% at 82% 18%, rgba(148, 148, 158, 0.23), transparent 64%),
-    radial-gradient(ellipse 68% 52% at 48% 82%, rgba(98, 98, 108, 0.32), transparent 58%),
-    radial-gradient(ellipse 42% 42% at 92% 88%, rgba(128, 128, 138, 0.19), transparent 58%),
-    radial-gradient(ellipse 75% 55% at 6% 68%, rgba(72, 76, 84, 0.22), transparent 62%);
-  filter: blur(40px);
+  background: none;
+  filter: none;
 }
 
-/* Layer 2 — soft counter-drift + light foreground mist */
+/* Layer 2 — cleared (see above) */
 .council-stage__atmosphere::after {
   z-index: 1;
-  background:
-    radial-gradient(ellipse 48% 42% at 62% 52%, rgba(198, 198, 208, 0.13), transparent 54%),
-    radial-gradient(ellipse 58% 38% at 12% 72%, rgba(118, 122, 132, 0.11), transparent 58%),
-    radial-gradient(ellipse 40% 35% at 78% 38%, rgba(168, 174, 184, 0.09), transparent 55%);
-  filter: blur(60px);
+  background: none;
+  filter: none;
 }
 
 @keyframes council-smoke-drift-1 {
@@ -820,7 +822,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   padding: 12px 14px;
   border: 1px solid var(--line-hi);
   border-radius: var(--radius-md, 14px);
-  background: rgba(8, 14, 18, 0.55);
+  background: var(--glass-fill-subtle);
 }
 .accuracy-lift-panel__title {
   margin: 0 0 6px;
@@ -876,7 +878,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   border-right: none;
   border-top: none;
   border-bottom: none;
-  background: rgba(8, 16, 12, 0.35);
+  background: var(--glass-fill-subtle);
   box-shadow: none;
 }
 .council-stage__trust-whisper {
@@ -988,7 +990,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 #section-simivision-picks.weighing-room .wr-row,
 #section-simivision-picks .wr-row {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(8, 10, 16, 0.92);
+  background: var(--glass-fill-card);
   box-shadow: none;
   background-image: none;
 }
@@ -1078,7 +1080,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   padding: 8px 12px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(10, 14, 22, 0.9);
+  background: var(--glass-fill-card);
   color: #94a3b8;
   font-family: var(--font-mono, monospace);
   font-size: 10px;
@@ -1569,13 +1571,13 @@ header.top {
 }
 
 .card-glass {
-  background: rgba(8, 10, 18, 0.72);
+  background: var(--glass-fill-card);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 .card-elevated {
-  background: var(--bg-elevated);
+  background: var(--glass-fill-section);
 }
 
 .card-head {
@@ -2425,7 +2427,7 @@ footer.status {
   left: 0;
   right: 0;
   z-index: 40;
-  background: rgba(2, 8, 4, 0.92);
+  background: var(--glass-fill-subtle);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--border-default);
@@ -3244,12 +3246,12 @@ footer.status {
 .subnet-page__headline { font-size: 1.1rem; margin: 0 0 8px; }
 .subnet-page__why { font-size: 13px; color: #b8c4bc; margin: 4px 0; }
 .subnet-page__judge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
-.subnet-page__judge { padding: 12px; border: 1px solid rgba(126,200,227,0.15); border-radius: 8px; text-align: center; }
+.subnet-page__judge { padding: 12px; border: 1px solid rgba(126,200,227,0.18); border-radius: 8px; text-align: center; background: var(--glass-fill-section); backdrop-filter: blur(var(--glass-blur-secondary)); -webkit-backdrop-filter: blur(var(--glass-blur-secondary)); }
 .subnet-page__judge-name { display: block; font-size: 11px; color: var(--stage-muted, #9fb0a3); text-transform: uppercase; }
 .subnet-page__judge-score { font-size: 1.25rem; font-weight: 600; }
 .subnet-page__consensus { font-size: 13px; margin-top: 8px; }
 .subnet-page__why-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--stage-muted, #9fb0a3); }
-.subnet-page__why-not { margin: 20px 0; padding: 12px 14px; border: 1px solid rgba(255,179,71,0.35); border-radius: 8px; }
+.subnet-page__why-not { margin: 20px 0; padding: 12px 14px; border: 1px solid rgba(255,179,71,0.35); border-radius: 8px; background: var(--glass-fill-subtle); }
 .subnet-page__body { font-size: 14px; line-height: 1.5; }
 .subnet-page__h2 { font-size: 1.1rem; margin: 16px 0 8px; }
 .subnet-page__h3 { font-size: 1rem; margin: 12px 0 6px; color: #b8c4bc; }
@@ -3321,7 +3323,7 @@ footer.status {
   align-items: center;
   justify-content: space-between;
   padding: 8px 16px;
-  background: rgba(8, 12, 20, 0.95);
+  background: var(--glass-fill-subtle);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--border-default, rgba(255,255,255,0.08));
@@ -3906,9 +3908,9 @@ header.top {
   --cockpit-green-glow: rgba(126, 200, 227, 0.28);
   --bg-cockpit: #12141a;
   --bg-cockpit-edge: #1c1f26;
-  --bg-cockpit-card: rgba(46, 51, 61, 0.78);
-  --bg-cockpit-surface: rgba(42, 47, 56, 0.82);
-  --bg-cockpit-elevated: rgba(54, 60, 72, 0.78);
+  --bg-cockpit-card: transparent;
+  --bg-cockpit-surface: transparent;
+  --bg-cockpit-elevated: rgba(255, 255, 255, 0.03);
   --txt: var(--text-primary);
   --txt-2: var(--text-secondary);
   --txt-3: #8a9aab;
@@ -3921,11 +3923,11 @@ header.top {
 }
 
 body {
-  background-color: var(--bg-cockpit);
-  background-image: var(--bg-atmosphere);
+  background-color: var(--ds-void, #080911);
+  background-image: none;
   background-attachment: fixed;
   background-repeat: no-repeat;
-  background-size: cover, auto, auto, auto, auto, auto, auto, auto;
+  background-size: auto;
   background-position: center;
   color: var(--txt);
 }
@@ -3939,7 +3941,7 @@ body {
 .top-spacer { flex: 1 1 auto; }
 
 header.top {
-  background: linear-gradient(180deg, rgba(4, 6, 14, 0.94) 0%, rgba(6, 10, 18, 0.82) 100%);
+  background: var(--glass-fill-subtle);
   border-bottom: 1px solid var(--border-default);
   box-shadow: 0 4px 32px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(148, 163, 184, 0.08) inset;
 }
@@ -4035,8 +4037,7 @@ header.top {
   background-image: var(--card-panel-shine), var(--card-panel-fill), var(--board-border-gradient);
   background-origin: border-box;
   background-clip: padding-box, padding-box, border-box;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  /* Blur is desktop-only (see media gate near end of file) — mobile stays zero-cost */
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card), 0 0 24px rgba(126, 200, 227, 0.06);
   position: relative;
@@ -4107,8 +4108,7 @@ header.top {
     var(--board-border-gradient);
   background-origin: border-box;
   background-clip: padding-box, padding-box, border-box;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  /* Blur is desktop-only (see media gate near end of file) — mobile stays zero-cost */
   border-radius: var(--radius-md);
   padding: 14px 16px;
   overflow: hidden;
@@ -4675,7 +4675,7 @@ table.tbl td.mono { font-family: var(--font-mono); }
 
 /* ---------- Footer status strip ---------- */
 footer.status {
-  background: linear-gradient(180deg, rgba(2, 8, 4, 0.85) 0%, rgba(10, 26, 10, 0.95) 100%);
+  background: var(--glass-fill-subtle);
   border-top: 1px solid var(--cockpit-green-line);
   box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5);
   padding: 12px var(--space-4, 16px) 16px;
@@ -4697,7 +4697,7 @@ footer.status {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(126, 200, 227, 0.12);
-  background: rgba(0, 0, 0, 0.35);
+  background: var(--glass-fill-subtle);
   min-height: 56px;
 }
 .footer-card--source .footer-card__val {
@@ -5074,7 +5074,8 @@ footer.status[data-source*="fallback"] .st-dot {
   border-radius: var(--radius-lg);
   border: var(--border-width-important) solid transparent;
   background-image:
-    linear-gradient(rgba(8, 10, 16, 0.9), rgba(8, 10, 16, 0.9)) padding-box,
+    linear-gradient(color-mix(in srgb, var(--ds-void) 34%, transparent),
+                    color-mix(in srgb, var(--ds-void) 34%, transparent)) padding-box,
     var(--important-border-gradient) border-box;
   background-origin: border-box;
   background-clip: padding-box, border-box;
@@ -5421,7 +5422,7 @@ footer.status[data-source*="fallback"] .st-dot {
 .home-cta--ghost {
   color: var(--stage-ink);
   border-color: rgba(138, 154, 142, 0.45);
-  background: rgba(0, 0, 0, 0.25);
+  background: transparent;
 }
 
 .home-cta:focus-visible {
@@ -5511,7 +5512,7 @@ button.home-cta {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid rgba(138, 154, 142, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
 }
 
 .story-strip__item--correct {
@@ -5609,7 +5610,7 @@ button.home-cta {
   padding: 12px 14px;
   border-radius: 8px;
   border: 1px solid rgba(126, 200, 227, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
   display: grid;
   gap: 6px;
 }
@@ -5669,7 +5670,7 @@ button.home-cta {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid rgba(138, 154, 142, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
 }
 
 .paper-portfolio__item--win { border-color: rgba(126, 200, 227, 0.35); }
@@ -5788,7 +5789,7 @@ button.home-cta {
   padding: 14px 16px;
   border-radius: 8px;
   border: 1px solid rgba(138, 154, 142, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
 }
 
 .weekly-letter__block-title {
@@ -5831,7 +5832,7 @@ button.home-cta {
   padding: 8px 10px;
   border-radius: 6px;
   border: 1px solid rgba(138, 154, 142, 0.22);
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
 }
 
 .weekly-letter__item-name {
@@ -6085,7 +6086,7 @@ button.home-cta {
 
 /* Header: quieter under council-first */
 .council-first-theme header.top {
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--glass-fill-subtle);
   border-bottom-color: rgba(126, 200, 227, 0.12);
 }
 
@@ -6255,7 +6256,7 @@ button.home-cta {
   padding: 14px 16px;
   border-radius: 10px;
   border: 1px solid rgba(126, 200, 227, 0.2);
-  background: rgba(0, 20, 10, 0.55);
+  background: var(--glass-fill-subtle);
 }
 
 .driver-card__headline {
@@ -6422,7 +6423,7 @@ button.home-cta {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
 }
 
 .story-path__step--pending {
@@ -6605,7 +6606,7 @@ button.home-cta {
   padding: 16px;
   border-radius: 12px;
   border: 1px solid rgba(126, 200, 227, 0.35);
-  background: linear-gradient(145deg, rgba(0, 40, 20, 0.9), rgba(10, 10, 10, 0.95));
+  background: var(--glass-fill-card);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
 }
 
@@ -6849,7 +6850,7 @@ button.home-cta {
   padding: 8px 16px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(14, 18, 30, 0.55);
+  background: var(--glass-fill-subtle);
   color: var(--stage-muted);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
@@ -6878,7 +6879,7 @@ button.home-cta {
   padding: 12px 12px 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(14, 18, 30, 0.45);
+  background: var(--glass-fill-subtle);
   overflow: hidden;
 }
 .proof-band__subpanel-bar {
@@ -6931,7 +6932,7 @@ button.home-cta {
   border-radius: 8px;
   background: rgba(125, 211, 252, 0.06);
 }
-.hour-watch-now--quiet { color: #94a3b8; border-color: #1a1d24; background: #0d1016; }
+.hour-watch-now--quiet { color: #94a3b8; border-color: #1a1d24; background: var(--glass-fill-subtle); }
 .hour-watch-now--building { color: var(--text-muted); }
 .hour-watch-shift {
   font-family: 'JetBrains Mono', monospace;
@@ -7112,7 +7113,7 @@ button.home-cta {
 .heuristic-tag { display: inline-block; margin-left: 6px; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(138,154,142,0.35); color: var(--stage-muted); }
 
 .investigation-signals { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.investigation-signal-card { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(126,200,227,0.18); background: rgba(0,20,10,0.35); }
+.investigation-signal-card { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(126,200,227,0.18); background: var(--glass-fill-subtle); }
 .investigation-signal-card__title { margin: 0 0 8px; font-size: 13px; }
 .investigation-signal-card__body { font-size: 12px; color: var(--stage-muted); }
 .investigation-signal-card__body p { margin: 0 0 6px; }
@@ -7152,7 +7153,7 @@ button.home-cta {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid rgba(138, 154, 142, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
 }
 
 .story-strip__list,
@@ -7178,7 +7179,7 @@ button.home-cta {
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid rgba(138, 154, 142, 0.28);
-  background: rgba(0, 0, 0, 0.28);
+  background: transparent;
 }
 
 /* §27-3b — investigation tables */
@@ -7230,15 +7231,19 @@ button.home-cta {
 /* ---------- Share pages (mobile-first) ---------- */
 .share-page {
   min-height: 100vh;
-  background-color: var(--bg-base);
-  background-image: var(--bg-atmosphere);
+  background-color: var(--ds-void);
+  background-image: none;
   color: var(--text-primary);
 }
 
 .share-page__header {
+  position: relative;
+  z-index: 1;
   padding: 12px var(--space-4, 16px);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-fill-subtle);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .share-page__home {
@@ -7251,6 +7256,8 @@ button.home-cta {
 }
 
 .share-page__main {
+  position: relative;
+  z-index: 1;
   max-width: 720px;
   margin: 0 auto;
   padding: 20px var(--space-4, 16px) 48px;
@@ -7329,10 +7336,9 @@ body.wrap {
     padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
     gap: 6px;
     box-sizing: border-box;
-    background-color: rgba(18, 22, 30, 0.94);
+    background-color: color-mix(in srgb, var(--ds-void) 30%, transparent);
     background-image: var(--card-smoke);
     background-size: cover;
-    background-blend-mode: normal;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
@@ -7955,7 +7961,7 @@ body.wrap {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   border-radius: 999px;
-  background: rgba(8, 11, 14, 0.55);
+  background: var(--glass-fill-subtle);
   border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
@@ -8624,7 +8630,7 @@ body.wrap {
 /* ---- K3 dossier tokens + call-lead utilities (migrated from ui-legacy) ---- */
 :root {
   --k3-bg: transparent;
-  --k3-surface: rgba(14, 18, 30, 0.62);
+  --k3-surface: var(--glass-fill-subtle, transparent);
   --k3-line: rgba(148, 163, 184, 0.14);
   --k3-accent: var(--accent-primary, #1fd47c);
   --k3-green: var(--accent-primary, #1fd47c);
@@ -8918,7 +8924,7 @@ body.wrap {
 }
 
 .k3-dossier .k3-horizon-chip {
-  background: rgba(14, 18, 30, 0.48);
+  background: var(--glass-fill-subtle);
   border-color: rgba(148, 163, 184, 0.14);
 }
 
@@ -9148,7 +9154,7 @@ body.wrap {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  background: rgba(12, 14, 18, 0.55);
+  background: var(--glass-fill-subtle);
   border: none;
   border-left: 3px solid transparent;
   color: var(--k3-text, #e8eaed);
@@ -9233,7 +9239,7 @@ body.wrap {
 .council-stage .k3-judge,
 .council-stage .k3-weighed-row {
   border: 1px solid rgba(255, 184, 0, 0.14);
-  background: rgba(8, 10, 14, 0.72);
+  background: var(--glass-fill-card);
   border-radius: 8px;
   backdrop-filter: blur(6px);
 }
@@ -9330,7 +9336,7 @@ body.wrap {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  background: rgba(8, 10, 14, 0.72);
+  background: var(--glass-fill-card);
   border: 1px solid rgba(255, 184, 0, 0.14);
   border-radius: 8px;
   margin-bottom: 12px;
@@ -9565,7 +9571,7 @@ body.wrap {
 
 .council-stage .k3-considered-card {
   min-width: 120px;
-  background: rgba(8, 10, 14, 0.72);
+  background: var(--glass-fill-card);
   border-radius: 8px;
   padding: 10px 12px;
   flex-shrink: 0;
@@ -9576,7 +9582,7 @@ body.wrap {
 }
 
 .council-stage .k3-considered-card:active {
-  background: rgba(14, 18, 30, 0.85);
+  background: var(--glass-fill-card);
 }
 
 .council-stage .k3-considered-avatar {
@@ -9654,7 +9660,7 @@ body.wrap {
 .council-stage .k3-lifecycle-step {
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(8, 10, 14, 0.72);
+  background: var(--glass-fill-card);
   border: 1px solid rgba(255, 184, 0, 0.14);
 }
 
@@ -9700,7 +9706,7 @@ body.wrap {
   margin-top: 12px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: rgba(8, 10, 14, 0.72);
+  background: var(--glass-fill-card);
   border: 1px solid rgba(255, 184, 0, 0.14);
 }
 
@@ -9766,12 +9772,12 @@ body.wrap {
 .council-stage .k3-dossier .k3-lifecycle-step,
 .council-stage .k3-dossier .k3-track-window,
 .council-stage .k3-dossier .k3-outcome-status {
-  background: rgba(14, 18, 30, 0.48);
+  background: var(--glass-fill-subtle);
   border-color: rgba(148, 163, 184, 0.14);
 }
 
 .council-stage .k3-dossier .k3-considered-card:active {
-  background: rgba(20, 26, 42, 0.62);
+  background: var(--glass-fill-card);
 }
 
 .council-stage[data-shell-warming="1"] .k3-empty {
@@ -9917,7 +9923,7 @@ body.wrap {
 }
 .message-intel__refresh {
   border: 1px solid rgba(126, 200, 227, 0.25);
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
   color: var(--stage-muted);
   border-radius: 2px;
   padding: 2px 8px;
@@ -10149,7 +10155,7 @@ body.wrap {
   padding: 12px 14px;
   border: 1px solid rgba(52, 211, 153, 0.22);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
 }
 .message-intel__proof-label,
 .message-intel__hc-label {
@@ -10229,7 +10235,7 @@ body.wrap {
   padding: 4px 8px;
   border-radius: 2px;
   border: 1px solid rgba(126, 200, 227, 0.35);
-  background: rgba(0, 0, 0, 0.25);
+  background: transparent;
   color: #e8f5e9;
   text-decoration: none;
   cursor: pointer;
@@ -10242,7 +10248,7 @@ body.wrap {
   padding: 12px;
   border: 1px solid rgba(96, 165, 250, 0.25);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.25);
+  background: transparent;
 }
 .message-intel__detail-close {
   float: right;
@@ -10299,7 +10305,7 @@ body.wrap {
   --mi-text: #eef7f1;
   --mi-text-dim: #a3b5aa;
   --mi-text-faint: #7a9186;
-  --mi-bg-card: #090d0b;
+  --mi-bg-card: transparent;
   /* Flagship board — yellow frame separates Summers from green site chrome */
   border: 2px solid rgba(245, 213, 71, 0.9) !important;
   border-radius: 18px;
@@ -11555,7 +11561,7 @@ body.wrap {
 .message-intel--v2 .message-intel__pulse-stage .message-intel__proof,
 .message-intel--v2 .message-intel__pulse-stage .message-intel__hc-strip {
   border-color: rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.22);
+  background: transparent;
 }
 .message-intel--v2 .message-intel__pulse-stage .message-intel__legend {
   padding: 2px 2px 0;
@@ -11799,7 +11805,7 @@ body.wrap {
   font-size: 12px;
   color: var(--mi-text-dim);
   border-color: rgba(255, 184, 0, 0.12);
-  background: rgba(8, 10, 12, 0.55);
+  background: var(--glass-fill-subtle);
 }
 
 .message-intel--v2 .message-intel__source-strip b {
@@ -12110,7 +12116,7 @@ body.wrap {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 12px;
-  background: rgba(1, 5, 7, 0.50);
+  background: var(--glass-fill-subtle);
 }
 
 .message-intel--v2 .message-intel__filter-label {
@@ -12434,7 +12440,7 @@ body.wrap {
   padding: 2px 10px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(10, 14, 24, 0.55);
+  background: var(--glass-fill-subtle);
   backdrop-filter: blur(6px);
 }
 
@@ -12570,7 +12576,7 @@ body.wrap {
   padding: 4px 8px;
   border-radius: var(--radius-pill, 9999px);
   border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(10, 14, 24, 0.65);
+  background: var(--glass-fill-subtle);
   animation: ops-readiness-pulse 3s ease-in-out infinite;
 }
 
@@ -12836,7 +12842,7 @@ body.wrap {
     padding: 5px 9px;
     border-radius: 8px;
     border: 1px solid var(--pd-line);
-    background: rgba(10, 14, 24, 0.65);
+    background: var(--glass-fill-subtle);
     color: var(--pd-sub);
 }
 .pd-census__chip b { color: var(--pd-ink); font-weight: 700; }
@@ -13073,7 +13079,7 @@ body.wrap {
     margin-top: 12px;
     height: 28px;
     border-radius: 8px;
-    background: rgba(20, 24, 31, 0.85);
+    background: var(--glass-fill-card);
     border: 1px solid var(--pd-line);
     overflow: hidden;
 }
@@ -13113,7 +13119,7 @@ body.wrap {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--pd-dim);
-    background: rgba(10, 14, 24, 0.5);
+    background: var(--glass-fill-subtle);
     border-right: 1px solid var(--pd-line);
 }
 .pd-phase__step:last-child { border-right: none; }
@@ -13171,7 +13177,7 @@ body.wrap {
 .pd-evidence__cell {
     padding: 10px 8px;
     border-radius: 10px;
-    background: rgba(10, 14, 24, 0.7);
+    background: var(--glass-fill-card);
     border: 1px solid var(--pd-line);
 }
 .pd-evidence__k {
@@ -13205,14 +13211,14 @@ body.wrap {
     margin-top: 12px;
     padding: 8px 10px;
     border-radius: 8px;
-    background: rgba(40, 45, 53, 0.55);
+    background: var(--glass-fill-card);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid var(--pd-line);
 }
 .pds-metrics-bar {
     border-color: var(--pds-line);
-    background: rgba(40, 45, 53, 0.55);
+    background: var(--glass-fill-card);
 }
 .pd-metrics-bar__line,
 .pds-metrics-bar__line {
@@ -13263,7 +13269,7 @@ body.wrap {
     padding: 9px 8px;
     border-radius: 10px;
     border: 1px solid #1e293b;
-    background: rgba(2, 6, 23, 0.55);
+    background: var(--glass-fill-subtle);
     color: var(--pd-dim);
 }
 .pd-triad__leg--on {
@@ -13382,7 +13388,7 @@ body.wrap {
     min-width: 0;
     padding: 8px 10px;
     border: 1px solid rgba(148, 163, 184, 0.22);
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--glass-fill-subtle);
     color: #e2e8f0;
     text-decoration: none;
     font-size: 12px;
@@ -13602,7 +13608,7 @@ body.wrap {
     color: var(--pd-sub);
     border: 1px dashed var(--pd-line);
     border-radius: 12px;
-    background: rgba(10, 14, 24, 0.5);
+    background: var(--glass-fill-subtle);
 }
 
 /* Legacy non-compact card lane */
@@ -13616,7 +13622,7 @@ body.wrap {
 .pump-alert__triad-leg--on { color: #34d399; border-color: rgba(52,211,153,0.4); }
 .pump-alert__thesis { font-size: 13px; line-height: 1.45; color: #cbd5e1; margin: 0 0 6px; }
 .pump-alert__trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-dim); margin: 0; }
-.pump-alert__meter { height: 3px; background: #1e293b; border-radius: 999px; margin-bottom: 8px; overflow: hidden; }
+.pump-alert__meter { height: 3px; background: rgba(255, 255, 255, 0.08); border-radius: 999px; margin-bottom: 8px; overflow: hidden; }
 .pump-alert__meter-fill { display: block; height: 100%; background: #fbbf24; }
 .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-sub); margin: 0 0 4px; }
 
@@ -13806,7 +13812,7 @@ body.wrap {
     padding: 4px 8px;
     border-radius: 7px;
     border: 1px solid var(--pds-line);
-    background: rgba(10, 14, 24, 0.65);
+    background: var(--glass-fill-subtle);
     color: var(--pds-sub);
   }
   .pds-census__chip b { color: var(--pds-ink); font-weight: 700; }
@@ -13944,7 +13950,7 @@ body.wrap {
     margin-top: 10px;
     height: 22px;
     border-radius: 6px;
-    background: rgba(20, 24, 31, 0.85);
+    background: var(--glass-fill-card);
     border: 1px solid var(--pds-line);
     overflow: hidden;
   }
@@ -13979,7 +13985,7 @@ body.wrap {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--pds-dim);
-    background: rgba(10, 14, 24, 0.5);
+    background: var(--glass-fill-subtle);
     border-right: 1px solid var(--pds-line);
   }
   .pds-phase__step:last-child { border-right: none; }
@@ -14015,7 +14021,7 @@ body.wrap {
     margin-top: 10px;
     padding: 10px;
     border-radius: 8px;
-    background: rgba(2, 6, 23, 0.55);
+    background: var(--glass-fill-subtle);
     border: 1px solid var(--pds-line);
   }
   .pds-strip__metrics {
@@ -14043,7 +14049,7 @@ body.wrap {
     border-radius: 5px;
     color: var(--pds-dim);
     border: 1px solid #1e293b;
-    background: rgba(15, 23, 42, 0.6);
+    background: var(--glass-fill-subtle);
   }
   .pds-strip__pill--on {
     color: #6ee7b7;
@@ -14071,7 +14077,7 @@ body.wrap {
     color: var(--pds-sub);
     padding: 6px 8px;
     border-radius: 6px;
-    background: rgba(40, 45, 53, 0.5);
+    background: var(--glass-fill-subtle);
     border: 1px solid rgba(148, 163, 184, 0.12);
   }
   .pd-angles__grouped { color: var(--pd-sub); }
@@ -14155,7 +14161,7 @@ body.wrap {
     min-width: 0;
     padding: 8px 10px;
     border: 1px solid rgba(148, 163, 184, 0.22);
-    background: rgba(15, 23, 42, 0.55);
+    background: var(--glass-fill-subtle);
     color: #e2e8f0;
     text-decoration: none;
     font-size: 12px;
@@ -14335,7 +14341,7 @@ body.wrap {
   }
   .pds-empty.desk-empty,
   .pds-empty {
-    background: rgba(10, 14, 24, 0.35);
+    background: var(--glass-fill-subtle);
   }
 
 
@@ -14441,7 +14447,7 @@ body.council-first-theme .footer-card__lbl {
   padding: 14px;
   border: 1px solid rgba(126, 200, 227, 0.22);
   border-radius: 12px;
-  background: rgba(7, 15, 25, 0.42);
+  background: var(--glass-fill-subtle);
 }
 
 .message-intel__panel-hint {
@@ -14512,7 +14518,7 @@ body.council-first-theme .footer-card__lbl {
   padding: 14px;
   border: 1px solid rgba(196, 181, 253, .26);
   border-radius: 12px;
-  background: rgba(15, 10, 29, .30);
+  background: var(--glass-fill-subtle);
 }
 .message-intel__divergence-list { display: grid; gap: 9px; }
 .message-intel__divergence-row {
@@ -14553,3 +14559,294 @@ body.council-first-theme .footer-card__lbl {
   .message-intel__divergence-head strong { text-align: left; }
 }
 
+
+/* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============ */
+
+/* -- Cosmic substrate: deep-space nebula matching reference image palette --
+   Near-black void centre; cyan cluster top-left; violet/purple top-right;
+   pink-magenta bloom bottom-left; amber/gold warmth bottom-right.
+   Base is fully opaque so the body's dark fallback doesn't bleed through. */
+.cosmic-sky {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    /* Opaque deep-space void base (DS bridge token) */
+    background-color: var(--ds-void);
+    background-image:
+        /* cyan star cluster — top-left (DS signal cyan) */
+        radial-gradient(520px 420px at 6% 10%, color-mix(in srgb, var(--ds-signal-cyan) 30%, transparent), transparent 65%),
+        radial-gradient(260px 200px at 3% 6%,  color-mix(in srgb, var(--ds-signal-cyan) 24%, transparent), transparent 55%),
+        /* violet/purple bloom — top-right (DS cosmic violet) */
+        radial-gradient(540px 440px at 94% 12%, color-mix(in srgb, var(--ds-nebula) 34%, transparent), transparent 65%),
+        radial-gradient(280px 220px at 97% 5%,  color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 50%),
+        /* pink-magenta streak — bottom-left (DS rose) */
+        radial-gradient(480px 380px at 8% 82%,  color-mix(in srgb, var(--ds-rose) 30%, transparent), transparent 65%),
+        radial-gradient(220px 180px at 2% 92%,  color-mix(in srgb, var(--ds-rose) 24%, transparent), transparent 50%),
+        /* amber/gold warmth — bottom-right (DS ember amber) */
+        radial-gradient(420px 340px at 92% 88%, color-mix(in srgb, var(--ds-amber) 30%, transparent), transparent 65%),
+        radial-gradient(200px 160px at 98% 96%, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 50%),
+        /* deep-space void gradient — keeps the centre near-black */
+        radial-gradient(ellipse 80% 70% at 50% 50%, color-mix(in srgb, var(--ds-void) 92%, transparent), transparent 80%);
+}
+
+/* CSS-only starfield (no canvas) — dense multi-layer pattern tiles to cover the viewport */
+.cosmic-sky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    /* Two tiling layers at different scales give depth without GPU cost */
+    background-image:
+        /* Layer A — fine distant stars (white + cyan) */
+        radial-gradient(1.2px 1.2px at 4%  3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 9%  8%,  color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 14% 2%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 19% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 24% 5%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 29% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 34% 3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 39% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 44% 6%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 49% 13%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 54% 4%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 59% 10%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 64% 2%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 69% 12%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 74% 5%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 79% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 84% 3%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 89% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 94% 6%,  #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 98% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
+        /* Layer B — slightly larger mid-field stars, offset phase */
+        radial-gradient(1.4px 1.4px at 7%  17%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 12% 22%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 17% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 22% 25%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 27% 19%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 32% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 37% 16%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 42% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 47% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 52% 24%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.4px 1.4px at 57% 17%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 62% 22%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
+        radial-gradient(1.8px 1.8px at 67% 19%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 72% 25%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 77% 16%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 82% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 87% 18%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px   1px   at 92% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
+        radial-gradient(2px   2px   at 96% 20%, #ffffff 50%, transparent 51%);
+    /* Two tile sizes: fine layer at 180px, mid layer at 280px */
+    background-size:
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
+        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px;
+    opacity: 0.85;
+}
+
+/* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
+.glass-shell {
+    background: var(--glass-fill-section);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.glass-card {
+    background: var(--glass-fill-card);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08), var(--shadow-card);
+    position: relative;
+    z-index: 2;
+    -webkit-tap-highlight-color: transparent;
+    /* NO backdrop-filter here — mobile default */
+}
+
+/* ── Cosmic-glass blur gate (authoritative, global) ──────────────────────
+   MOBILE-FIRST zero GPU cost: kill ALL backdrop-filter (every element and
+   pseudo-element, including rules nested in mobile media queries) at the base
+   layer. `!important` guarantees this wins over any ungated blur declared
+   earlier in the file. Blur is then re-enabled ONLY inside the desktop /
+   fine-pointer gate below, and stays off under reduced-transparency. */
+*,
+*::before,
+*::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+/* Mouse / big screens: restore glass blur for the glass/panel surfaces. Not
+   under reduced-transparency (that keeps the base `none` above). */
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+    @media not (prefers-reduced-transparency: reduce) {
+        .glass-card,
+        .glass-card--hero,
+        .card,
+        .card-glass,
+        .k3-dossier,
+        .tribunal-hero__judge,
+        .tribunal-hero__panel,
+        .trust-banner,
+        .living-focus,
+        .brain-letter,
+        .proof-band,
+        .proof-band__subpanel,
+        .pump-alert__card,
+        .pump-hero__card,
+        #pump-desk-hero,
+        .pds-angles__section,
+        .pd-angles__section,
+        .pds-ladder,
+        .pds--polish .pds-ladder,
+        .pd-lead,
+        .pds-hero,
+        .pd-metrics-bar,
+        .pds-metrics-bar,
+        .kpi-cell,
+        .council-stage .k3-signal,
+        .council-stage .k3-judge,
+        .council-stage .k3-weighed-row,
+        .sr-pulse__breadth-wrap .sr-pulse__oneline-part,
+        .sr-panel,
+        .kpi,
+        .cockpit-card,
+        .cockpit-card.card,
+        header.top,
+        header.top.sr-hud,
+        footer.status,
+        .top-nav,
+        .share-page__header,
+        .driver-popover {
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+        }
+        /* Pseudo-element blur restored on desktop */
+        .tribunal-hero__ring-center::before {
+            backdrop-filter: blur(12px) !important;
+            -webkit-backdrop-filter: blur(12px) !important;
+        }
+        /* Focal tribunal hero keeps its stronger signature blur on desktop */
+        .tribunal-hero__card {
+            backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+            -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+        }
+    }
+}
+
+.glass-flat {
+    background: var(--glass-fill-subtle);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Crisp data chip (stays flat/opaque so numbers stay sharp).
+   The champ-num selector is included directly so client-hydrated champions
+   markup (regenerated without the chip-flat class) gets the same treatment. */
+.chip-flat,
+.message-intel--v2 .message-intel__champ-num {
+    background: var(--cos-chip);
+    color: var(--cos-chip-ink);
+    font-family: var(--font-mono);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    display: inline-block;
+    flex: none;
+    backdrop-filter: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Off-screen culling: below-fold sections aren't painted (60s-refresh battery win) */
+section.desk-zone,
+.message-intel__panel {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+}
+
+/* -- Remaining solid panels → glass tiers (MOBILE-FIRST: no backdrop-filter by default) --
+   These BEM-nested panels carry opaque fills (var(--mi-bg-card) #090d0b, rgba(...,~1) blacks)
+   from higher-specificity `.message-intel--v2 ...` rules, so a bare `.glass-flat` class can't win.
+   We match that specificity here and swap only the fill to the shared glass tokens. Applies to
+   both SSR markup and client-hydrated markup (rules target the panel wrapper, not a class the
+   hydrator drops). Blur stays behind the desktop media gate below — phones gain zero filter cost. */
+
+/* Secondary list / evidence panels → glass-flat fill */
+.message-intel--v2 .message-intel__callers,
+.message-intel--v2 .message-intel__consensus,
+.message-intel--v2 .message-intel__divergence,
+.message-intel--v2 .message-intel__proof,
+.message-intel--v2 .message-intel__hc-strip,
+.message-intel--v2 .message-intel__summary-24h {
+    background: var(--glass-fill-subtle);
+    background-image: none;
+    border-color: var(--glass-border);
+}
+
+/* Focal drawer + spotlight panels keep their accent glow but sit on glass, not opaque black */
+.message-intel--v2 .message-intel__hero,
+.message-intel--v2 .message-intel__week-top,
+.message-intel--v2 .message-intel__crowns-drawer {
+    background: var(--glass-fill-card);
+    border-color: var(--glass-border);
+}
+
+/* Proof-band footer subpanels (Source / Subnets / Trail / Integrations / Predictions) */
+.proof-band__subpanel {
+    background: var(--glass-fill-subtle);
+    background-image: none;
+    border-color: var(--glass-border);
+}
+
+/* Cockpit cards → glass-card fill (base .card paints an opaque smoke gradient; defer to glass) */
+.cockpit-card,
+.cockpit-card.card {
+    background: var(--glass-fill-card);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    border-color: var(--glass-border);
+}
+
+/* Desktop / mouse: full glass upgrade for all glass-fill panels (matches .glass-card gate) */
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+    .message-intel--v2 .message-intel__hero,
+    .message-intel--v2 .message-intel__week-top,
+    .message-intel--v2 .message-intel__crowns-drawer,
+    .cockpit-card,
+    .cockpit-card.card,
+    .proof-band__subpanel,
+    .card,
+    .kpi,
+    .sr-panel {
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+    }
+}
+
+/* System hooks */
+@media (prefers-reduced-transparency: reduce) {
+    .cosmic-sky { opacity: 0.55; }
+    .glass-card,
+    .glass-card--hero,
+    .message-intel--v2 .message-intel__hero,
+    .message-intel--v2 .message-intel__week-top,
+    .message-intel--v2 .message-intel__crowns-drawer,
+    .cockpit-card,
+    .cockpit-card.card,
+    .proof-band__subpanel,
+    .card,
+    .kpi,
+    .sr-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

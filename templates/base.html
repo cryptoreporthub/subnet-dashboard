@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SimiVision — Council</title>
     <meta name="description" content="Bittensor subnet council dashboard — picks, paper portfolio, and SimiVision intelligence.">
     {% if public_base_url is defined and public_base_url %}
@@ -19,12 +19,13 @@
     <meta name="theme-color" content="#2d323a">
     <style>
       /* Critical paint — visible before /static CSS on cold Fly mobile loads */
-      html, body { margin: 0; min-height: 100%; background: #1e2128; color: #f5f7fa; } /* smoke base */
+      html, body { margin: 0; min-height: 100%; background: #080911; color: #f5f7fa; }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="/static/css/smoke-tokens.css?v={{ static_v }}">
     <link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
     <link rel="stylesheet" href="/static/css/ui.css?v={{ static_v }}">
     <link rel="stylesheet" href="/static/css/tribunal-hero-layout.css?v={{ static_v }}">
@@ -33,6 +34,7 @@
     <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
 </head>
 <body class="council-first-theme">
+    <div class="cosmic-sky"></div>
     {% block content %}{% endblock %}
     <p class="site-nfa" style="margin:12px auto 0;max-width:960px;padding:0 16px 8px;font-size:11px;line-height:1.4;color:#7a9186;text-align:center;">
       SimiVision calls are scored council output, not financial advice. Do your own research.

@@ -37,7 +37,7 @@
   padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba(148, 163, 184, 0.15);
-  background: rgba(10, 12, 18, 0.6);
+  background: var(--glass-fill-subtle, rgba(255,255,255,0.02));
 }
 .sr-dev-pulse__card.sr-glow-live:hover {
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.12);

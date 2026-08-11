@@ -1,0 +1,152 @@
+/* GENERATED FROM artifacts/smoke/src/index.css (built from tokens.json).
+    * DO NOT EDIT — regenerate from the Smoke Council design system.
+    * Theme-only extract: ships the DS token custom properties for this static
+    * Flask consumer, per artifacts/smoke/docs/consuming-web.md ("use the tokens
+    * as the source of truth ... without copying token values"). No Tailwind. */
+    
+:root {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+
+  /* Automatic computation of border around primary / danger buttons */
+  --opaque-button-border-intensity: -8; /* In terms of percentages */
+
+  /* Backgrounds applied on top of other backgrounds when hovered/active */
+  --elevate-1: rgba(0,0,0, .03);
+  --elevate-2: rgba(0,0,0, .08);
+
+  --background: 207 5.6% 61.4%;
+  --foreground: 210 30% 96.1%;
+  --border: 207 8.1% 73.5%;
+  --card: 210 16.7% 9.4%;
+  --card-foreground: 210 30.8% 94.9%;
+  --sidebar: 214 18.9% 7.3%;
+  --sidebar-foreground: 213 24.4% 91.2%;
+  --sidebar-border: 213 12.6% 17.1%;
+  --sidebar-primary: 145 65.5% 54.5%;
+  --sidebar-primary-foreground: 146 66.7% 4.7%;
+  --sidebar-accent: 213 16.4% 13.1%;
+  --sidebar-accent-foreground: 210 30.8% 94.9%;
+  --sidebar-ring: 199 91.3% 63.9%;
+  --popover: 210 16.7% 9.4%;
+  --popover-foreground: 210 30.8% 94.9%;
+  --primary: 145 65.5% 54.5%;
+  --primary-foreground: 146 66.7% 4.7%;
+  --secondary: 213 11.6% 18.6%;
+  --secondary-foreground: 213 24.4% 91.2%;
+  --muted: 210 5.2% 54.9%;
+  --muted-foreground: 210 14.3% 86.3%;
+  --accent: 40 57.3% 55.9%;
+  --accent-foreground: 40 71.4% 8.2%;
+  --destructive: 0 69% 60.8%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 207 8.1% 73.5%;
+  --ring: 199 91.3% 63.9%;
+  --chart-1: 199 91.3% 63.9%;
+  --chart-2: 145 65.5% 54.5%;
+  --chart-3: 40 57.3% 55.9%;
+  --chart-4: 212 10.4% 64.1%;
+  --chart-5: 348 68.8% 63.5%;
+  --nebula: 249 100% 77.5%;
+
+  --app-font-sans: Inter, system-ui, sans-serif;
+  --app-font-serif: Lora, Georgia, serif;
+  --app-font-mono: JetBrains Mono, ui-monospace, monospace;
+  --radius: 0.75rem;
+  --spacing: 0.25rem;
+
+  /* Computed contrast borders (fallback then modern color-mix syntax). */
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --card-border: hsl(var(--card));
+  --popover-border: hsl(var(--popover));
+}
+
+.dark {
+  --button-outline: rgba(255,255,255, .10);
+  --badge-outline: rgba(255,255,255, .05);
+
+  --opaque-button-border-intensity: 9;  /* In terms of percentages */
+
+  --elevate-1: rgba(255,255,255, .04);
+  --elevate-2: rgba(255,255,255, .09);
+
+  --background: 210 21.4% 5.5%;
+  --foreground: 210 30.8% 94.9%;
+  --border: 217 15.7% 16.3%;
+  --card: 210 16.7% 9.4%;
+  --card-foreground: 210 30.8% 94.9%;
+  --sidebar: 214 21.2% 6.5%;
+  --sidebar-foreground: 212 26.3% 88.8%;
+  --sidebar-border: 217 15.7% 16.3%;
+  --sidebar-primary: 145 65.5% 54.5%;
+  --sidebar-primary-foreground: 146 66.7% 4.7%;
+  --sidebar-accent: 215 18.2% 12.9%;
+  --sidebar-accent-foreground: 210 30.8% 94.9%;
+  --sidebar-ring: 199 91.3% 63.9%;
+  --popover: 210 16.7% 9.4%;
+  --popover-foreground: 210 30.8% 94.9%;
+  --primary: 145 65.5% 54.5%;
+  --primary-foreground: 146 66.7% 4.7%;
+  --secondary: 215 18.2% 12.9%;
+  --secondary-foreground: 212 26.3% 88.8%;
+  --muted: 213 19.3% 11.2%;
+  --muted-foreground: 212 10.2% 63.3%;
+  --accent: 40 57.3% 55.9%;
+  --accent-foreground: 40 71.4% 8.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 100%;
+  --input: 214 15.6% 17.6%;
+  --ring: 199 91.3% 63.9%;
+  --chart-1: 199 91.3% 63.9%;
+  --chart-2: 145 65.5% 54.5%;
+  --chart-3: 40 57.3% 55.9%;
+  --chart-4: 212 10.4% 64.1%;
+  --chart-5: 348 68.8% 63.5%;
+  --nebula: 249 100% 77.5%;
+
+  --sidebar-primary-border: hsl(var(--sidebar-primary));
+  --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --sidebar-accent-border: hsl(var(--sidebar-accent));
+  --sidebar-accent-border: hsl(from hsl(var(--sidebar-accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --primary-border: hsl(var(--primary));
+  --primary-border: hsl(from hsl(var(--primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --secondary-border: hsl(var(--secondary));
+  --secondary-border: hsl(from hsl(var(--secondary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --muted-border: hsl(var(--muted));
+  --muted-border: hsl(from hsl(var(--muted)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --accent-border: hsl(var(--accent));
+  --accent-border: hsl(from hsl(var(--accent)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+  --destructive-border: hsl(var(--destructive));
+  --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
+
+  --card-border: hsl(var(--card));
+  --popover-border: hsl(var(--popover));
+}
+
+    /* DS color tokens resolved to usable values (mirrors DS @theme inline). */
+    :root {
+    --color-chart-1: hsl(var(--chart-1));
+    --color-chart-2: hsl(var(--chart-2));
+    --color-chart-3: hsl(var(--chart-3));
+    --color-chart-4: hsl(var(--chart-4));
+    --color-chart-5: hsl(var(--chart-5));
+    --color-nebula: hsl(var(--nebula));
+    --color-primary: hsl(var(--primary));
+    --color-accent: hsl(var(--accent));
+    --color-background: hsl(var(--background));
+    }
+    
