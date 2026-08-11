@@ -1,0 +1,251 @@
+# REPLIT EXECUTION BRIEF — LOCKED (2026-08-11)
+
+> Owner: Replit. Ditto Code hold released (job cancelled). This is THE spec — cosmetic-only, mobile-first.
+> Constraint: do NOT touch the hero section's structure, any JS, any other CSS files, tests, or IDs. 4 files only.
+
+## File 1 — templates/base.html (2 edits)
+
+**Edit A — viewport meta** (inside <head>):
+<!-- OLD -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- NEW -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+**Edit B — cosmic sky mount** (FIRST child inside <body>, before {% block content %}):
+<body class="council-first-theme">
+    <div class="markdown-html-block"></div>
+    <!-- existing block: {% block content %}{% endblock %} -->
+
+## File 2 — static/css/ui.css (append; do NOT rewrite the file)
+
+**Edit A — tokens** (add inside the existing :root block, after the glass tokens):
+    /* Cosmetic port signal temperature (NOT bearish sentiment) */
+    --cos-rose: #ff5d7a;
+    --cos-rose-glow: rgba(255, 93, 122, 0.32);
+    --cos-chip: rgba(255, 255, 255, 0.08);
+    --cos-chip-ink: #f8fafc;
+
+**Edit B — append this block** (end of file):
+/* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============ */
+
+/* -- Cosmic substrate: nebula + translucent base (keeps smoke atmosphere ghosting through) -- */
+.cosmic-sky {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(380px 280px at 8% 12%, rgba(110, 231, 255, 0.15), transparent 70%),
+        radial-gradient(440px 340px at 92% 16%, rgba(157, 140, 255, 0.18), transparent 70%),
+        radial-gradient(400px 320px at 80% 84%, rgba(255, 207, 110, 0.12), transparent 70%),
+        radial-gradient(320px 260px at 16% 76%, rgba(255, 93, 122, 0.10), transparent 70%),
+        radial-gradient(520px 420px at 55% 45%, rgba(31, 212, 124, 0.06), transparent 70%),
+        rgba(22, 25, 32, 0.88); /* TRANSLUCENT, NOT opaque */
+}
+
+/* CSS-only starfield (no canvas) */
+.cosmic-sky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(1.6px 1.6px at 7% 5%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 15% 13%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(2px 2px at 22% 9%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 31% 18%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 38% 6%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 47% 15%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 56% 8%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 64% 20%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 72% 5%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 81% 16%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 89% 10%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 95% 22%, var(--accent-blue) 50%, transparent 51%);
+    background-size: 200px 200px;
+    opacity: 0.7;
+}
+
+/* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
+.glass-shell {
+    background: var(--glass-fill-section);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.glass-card {
+    background: var(--glass-fill-card);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08), var(--shadow-card);
+    position: relative;
+    z-index: 2;
+    -webkit-tap-highlight-color: transparent;
+    /* NO backdrop-filter here — mobile default */
+}
+
+/* The ONE focal card: whisper blur on phones only (6px) */
+.glass-card--hero {
+    backdrop-filter: blur(var(--glass-blur-secondary));
+    -webkit-backdrop-filter: blur(var(--glass-blur-secondary));
+}
+
+/* Mouse / big screens: full glass upgrade (12px) */
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+    .glass-card {
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+    }
+}
+
+.glass-flat {
+    background: var(--glass-fill-subtle);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Crisp data chip (stays flat/opaque so numbers stay sharp) */
+.chip-flat {
+    background: var(--cos-chip);
+    color: var(--cos-chip-ink);
+    font-family: var(--font-mono);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    display: inline-block;
+    flex: none;
+    backdrop-filter: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Off-screen culling: below-fold sections aren't painted (60s-refresh battery win) */
+section.desk-zone,
+.message-intel__panel {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+}
+
+/* System hooks */
+@media (prefers-reduced-transparency: reduce) {
+    .cosmic-sky { opacity: 0.55; }
+    .glass-card, .glass-card--hero { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}
+
+## File 3 — templates/partials/premium/message_intel_feed.html (2 class additions, nothing else)
+
+<!-- OLD wrapper -->
+<div class="markdown-html-block">
+
+<div class="markdown-html-block">
+
+
+<div class="markdown-html-block">
+
+<div class="markdown-html-block">
+
+## File 4 — templates/partials/premium/message_intel_ssr_macros.html (1 class addition, in champion_rows only)
+
+
+<div class="markdown-html-block">{{ '%.1f'|format(inf) }}</div></div></div></div></div>
+<!-- NEW -->
+<div class="markdown-html-block">{{ '%.1f'|format(inf) }}</div>
+
+## Verify before committing
+
+pytest tests/test_summers_telegram_desk.py tests/test_message_intel_rollup.py   # must pass
+# quick Jinja compile check (any fast method the repo already has), then:
+git diff --stat   # expect exactly 4 files
+git diff          # eyeball: no hero/layout/JS changes
+
+## Git & deploy
+
+git checkout -b cosmic-glass-mobile-first
+git add templates/base.html static/css/ui.css templates/partials/premium/message_intel_feed.html templates/partials/premium/message_intel_ssr_macros.html
+git commit -m "feat(ui): cosmic glass background + mobile-first glass tiers (cosmetic only)"
+git push origin cosmic-glass-mobile-first
+
+Then open a draft PR to main (or push to main directly — either works; the GitHub Actions Fly Deploy workflow deploys on main push/merge automatically). No manual Fly steps; no harness.
+
+## Checklist (all must be true in the diff)
+- [ ] Only 4 files changed
+- [ ] .cosmic-sky div is first child of <body> (before content block)
+- [ ] Viewport meta has viewport-fit=cover
+- [ ] No message-intel__masthead / message-intel__panel IDs removed or renamed
+- [ ] No JS files touched
+- [ ] No hero markup/structure touched
+- [ ] --cos-* tokens added; no new hardcoded hex scattered in components
+
+---
+
+# PRE-FLIGHT VERIFICATION — VERIFIED AGAINST LIVE MAIN (2026-08-11 ~09:30 PT)
+
+> Replit: run the checks below BEFORE editing. Every old-string in this brief was re-fetched from main at the timestamp above and matches snippet-for-snippet. If any grep comes back different, STOP and adapt minimally (the file drifted); do not force the edit.
+> Provenance: re-fetch if in doubt:
+> - https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/templates/base.html
+> - https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/static/css/ui.css
+> - https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/templates/partials/premium/message_intel_feed.html
+> - https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/templates/partials/premium/message_intel_ssr_macros.html
+
+## Verbatim current state (fetch result, 2026-08-11)
+
+base.html — viewport (current):
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+base.html — body open (current):
+<body class="council-first-theme">
+    {% block content %}{% endblock %}
+(Known: a site-nfa <p> also sits inside body after content; you only insert the sky div as the FIRST child of body, before {% block content %}.)
+
+ui.css — token state (current): --glass-blur-secondary, --glass-border, --glass-radius, --cool-glow PRESENT; --cos-* MISSING (to add). Append point = very end of file (last rules are in the .desk-empty-state namespace).
+
+message_intel_feed.html — wrapper (current):
+    <div class="markdown-html-block">
+
+message_intel_feed.html — rows container (current):
+      <div class="markdown-html-block">
+
+message_intel_ssr_macros.html — champ-num (current):
+      <div class="markdown-html-block">{{ '%.1f'|format(inf) }}</div></div></div>
+
+## Hazard scan (class-name collision check, all CSS files)
+
+.glass-card, .glass-shell, .glass-flat, .chip-flat, .glass-card--hero, .cosmic-sky → 0 occurrences across ui.css, ui-legacy.css, council_first.css, listener.css, base.css. Safe to define fresh. Do NOT redefine them in any other file.
+
+## Replit pre-flight (run once, read-only, before editing)
+
+cd subnet-dashboard
+git fetch origin && git checkout main && git status --porcelain   # clean tree expected
+
+grep -n 'name="viewport"' templates/base.html
+grep -n '<body' templates/base.html
+grep -n 'message-intel-champions-card' templates/partials/premium/message_intel_feed.html
+grep -n 'aria-live="polite"' templates/partials/premium/message_intel_feed.html
+grep -n 'champ-num' templates/partials/premium/message_intel_ssr_macros.html
+grep -n -- '--glass-blur-secondary' static/css/ui.css
+grep -n -- '--cos-rose' static/css/ui.css || echo "OK: --cos-rose not yet defined"
+tail -n 3 static/css/ui.css
+
+Expected: all old-strings present verbatim; --cos-rose absent; tail shows the desk-empty-state rules (append point).
+
+## After-edit self-check (before commit)
+
+grep -c 'cosmic-sky' templates/base.html                 # expect div present
+grep -n 'viewport-fit=cover' templates/base.html         # expect 1
+grep -c 'glass-card' templates/partials/premium/message_intel_feed.html      # expect 1 (class add)
+grep -c 'glass-flat' templates/partials/premium/message_intel_feed.html      # expect 1
+grep -c 'chip-flat' templates/partials/premium/message_intel_ssr_macros.html # expect 1
+grep -c 'cosmic-sky' static/css/ui.css                   # expect >=2 (.cosmic-sky + ::after)
+pytest tests/test_summers_telegram_desk.py tests/test_message_intel_rollup.py -q
+git diff --stat                                          # expect exactly 4 files
+
+## If a file has drifted (unexpected)
+
+- Do NOT reformat or refactor the file. Make the MINIMUM edit that lands the intent: keep old hooks findable (they're asserted by tests), apply the same class additions to equivalent elements.
+- If --glass-* tokens are missing in ui.css :root (they were present at verification), keep going — the fallback tokens from base.css (--border-default, rgba(255,255,255,0.14)) cover the same values; prefer tokens when available.
+- Re-run git diff --stat and the 2 test files after adapting; report drift in the PR body.
