@@ -3245,12 +3245,12 @@ footer.status {
 .subnet-page__headline { font-size: 1.1rem; margin: 0 0 8px; }
 .subnet-page__why { font-size: 13px; color: #b8c4bc; margin: 4px 0; }
 .subnet-page__judge-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0; }
-.subnet-page__judge { padding: 12px; border: 1px solid rgba(126,200,227,0.15); border-radius: 8px; text-align: center; }
+.subnet-page__judge { padding: 12px; border: 1px solid rgba(126,200,227,0.18); border-radius: 8px; text-align: center; background: var(--glass-fill-section); backdrop-filter: blur(var(--glass-blur-secondary)); -webkit-backdrop-filter: blur(var(--glass-blur-secondary)); }
 .subnet-page__judge-name { display: block; font-size: 11px; color: var(--stage-muted, #9fb0a3); text-transform: uppercase; }
 .subnet-page__judge-score { font-size: 1.25rem; font-weight: 600; }
 .subnet-page__consensus { font-size: 13px; margin-top: 8px; }
 .subnet-page__why-list { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--stage-muted, #9fb0a3); }
-.subnet-page__why-not { margin: 20px 0; padding: 12px 14px; border: 1px solid rgba(255,179,71,0.35); border-radius: 8px; }
+.subnet-page__why-not { margin: 20px 0; padding: 12px 14px; border: 1px solid rgba(255,179,71,0.35); border-radius: 8px; background: var(--glass-fill-subtle); }
 .subnet-page__body { font-size: 14px; line-height: 1.5; }
 .subnet-page__h2 { font-size: 1.1rem; margin: 16px 0 8px; }
 .subnet-page__h3 { font-size: 1rem; margin: 12px 0 6px; color: #b8c4bc; }
@@ -7236,8 +7236,10 @@ button.home-cta {
   position: relative;
   z-index: 1;
   padding: 12px var(--space-4, 16px);
-  border-bottom: 1px solid var(--line);
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--glass-fill-subtle);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
 }
 
 .share-page__home {
