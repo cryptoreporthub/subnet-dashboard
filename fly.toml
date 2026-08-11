@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/fly.toml
+
+Markdown Content:
 # fly.toml app configuration file generated for subnet-dashboard
 # Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
 
@@ -67,7 +72,9 @@ primary_region = "sjc"
   # Enforce CSP (same policy as prior report-only default).
   CONTENT_SECURITY_POLICY_ENFORCE = "1"
   # Web process: keep CPU for GET / + hydrate; resolver/retrain belongs on worker.
-  CALIBRATION_AUTO_RETRAIN = "off"
+  # Issue #888: hydrate cold price cache on resolve miss so predictions stop expiring ungraded
+CALIBRATION_AUTO_RETRAIN = "off"
+CALIBRATION_HYDRATE_ON_MISS = "true"
   SCORE_SNAPSHOT_MAX_SUBNETS = "40"
   SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
   SCORING_CAP_MEGA_CEILING_RANK = "10"
