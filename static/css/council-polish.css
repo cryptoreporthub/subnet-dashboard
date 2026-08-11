@@ -1,0 +1,145 @@
+/* ============================================================
+   Council final-polish (2026-08-11) — NET FLOW hero slot,
+   shimmer skeleton, live pulse. Pairs with:
+   templates/partials/premium/hero.html
+   All classes scoped cpol-* — no collisions with ui.css/base.css.
+   ============================================================ */
+
+.cpol-netflow {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0 18px;
+  padding: 16px 18px;
+  border-radius: var(--glass-radius, 18px);
+  border: 1px solid var(--glass-border, rgba(255,255,255,0.12));
+  background:
+    radial-gradient(520px 200px at 88% -20%, rgba(94,234,212,0.10), transparent 62%),
+    linear-gradient(160deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+  box-shadow: 0 14px 44px -18px rgba(0,0,0,0.6);
+  overflow: hidden;
+}
+.cpol-netflow::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(1.4px 1.4px at 12% 18%, rgba(255,255,255,0.8) 50%, transparent 51%),
+    radial-gradient(1px 1px at 62% 8%, rgba(94,234,212,0.9) 50%, transparent 51%),
+    radial-gradient(1.2px 1.2px at 84% 26%, rgba(255,255,255,0.7) 50%, transparent 51%),
+    radial-gradient(1px 1px at 38% 34%, rgba(255,255,255,0.6) 50%, transparent 51%);
+  background-size: 180px 180px;
+  opacity: 0.55;
+}
+
+.cpol-nf-kicker {
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint, #5d6480);
+  font-weight: 650;
+}
+
+.cpol-nf-main {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cpol-nf-value {
+  font-family: var(--mono-stack, ui-monospace, "JetBrains Mono", Menlo, monospace);
+  font-weight: 800;
+  font-size: clamp(28px, 5vw, 40px);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.cpol-nf-value.up   { color: #34d399; text-shadow: 0 0 24px rgba(52,211,153,0.45), 0 0 56px rgba(52,211,153,0.18); }
+.cpol-nf-value.dn   { color: #fb7185; text-shadow: 0 0 24px rgba(251,113,133,0.45), 0 0 56px rgba(251,113,133,0.18); }
+.cpol-nf-value.flat { color: #eef2ff; }
+.cpol-nf-trend {
+  font-size: 15px;
+  animation: cpol-drift 2.4s ease-in-out infinite;
+}
+.cpol-nf-value.up ~ .cpol-nf-trend  { color: #34d399; }
+.cpol-nf-value.dn ~ .cpol-nf-trend  { color: #fb7185; }
+@keyframes cpol-drift { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+
+.cpol-nf-meta {
+  font-family: var(--mono-stack, ui-monospace, "JetBrains Mono", Menlo, monospace);
+  font-size: 11.5px;
+  color: var(--text-muted, #8b93b0);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.cpol-nf-meta b { color: var(--text-primary, #eef2ff); font-weight: 650; }
+
+.cpol-nf-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.cpol-chip {
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted, #8b93b0);
+  white-space: nowrap;
+}
+.cpol-chip b { color: var(--text-primary, #eef2ff); font-weight: 650; }
+.cpol-chip.good { color: #34d399; border-color: rgba(52,211,153,0.32); background: rgba(52,211,153,0.08); }
+.cpol-chip.warn { color: #fbbf24; border-color: rgba(251,191,36,0.32); background: rgba(251,191,36,0.08); }
+.cpol-chip.bad  { color: #fb7185; border-color: rgba(251,113,133,0.32); background: rgba(251,113,133,0.08); }
+.cpol-chip.mono { font-family: var(--mono-stack, ui-monospace, "JetBrains Mono", Menlo, monospace); }
+
+/* Honest warm-up / empty state */
+.cpol-empty {
+  font-size: 12px;
+  color: var(--text-faint, #5d6480);
+  line-height: 1.6;
+  padding: 2px 0;
+}
+.cpol-empty b { color: var(--text-muted, #8b93b0); font-weight: 600; }
+
+/* Shimmer skeleton (replaces dead dashboards while data warms) */
+.cpol-skel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+.cpol-skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(148,163,255,0.14) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: cpol-shim 1.5s ease-in-out infinite;
+}
+@keyframes cpol-shim { 0% { background-position: 130% 0; } 100% { background-position: -90% 0; } }
+
+/* Live pulse dot */
+.cpol-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 0 0 rgba(52,211,153,0.7);
+  animation: cpol-ping 2.2s ease-out infinite;
+  display: inline-block;
+  margin-right: 6px;
+}
+@keyframes cpol-ping {
+  0%   { box-shadow: 0 0 0 0 rgba(52,211,153,0.55); }
+  70%  { box-shadow: 0 0 0 8px rgba(52,211,153,0); }
+  100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cpol-netflow::before, .cpol-skel::after, .cpol-pulse, .cpol-nf-trend { animation: none !important; }
+}
