@@ -49,6 +49,7 @@ async def _send_response(
     status: int,
     body: bytes,
     content_type: str,
+    cache_control: bytes = b"no-store, max-age=0",
     extra_headers: Optional[list[tuple[bytes, bytes]]] = None,
 ) -> None:
     from internal.security_headers import security_header_items
@@ -56,7 +57,7 @@ async def _send_response(
     headers: list[tuple[bytes, bytes]] = [
         (b"content-type", content_type.encode("ascii")),
         (b"content-length", str(len(body)).encode("ascii")),
-        (b"cache-control", b"no-store, max-age=0"),
+        (b"cache-control", cache_control),
     ]
     for name, value in security_header_items():
         headers.append((name.lower().encode("ascii"), value.encode("utf-8")))
@@ -75,10 +76,12 @@ class InstantBailoutASGI:
         *,
         get_homepage_html: Callable[[], Optional[str]],
         schedule_warm: Callable[[], None],
+        homepage_cache_control: bytes = b"no-store, max-age=0",
     ) -> None:
         self.app = app
         self._get_homepage_html = get_homepage_html
         self._schedule_warm = schedule_warm
+        self._homepage_cache_control = homepage_cache_control
 
     def __getattr__(self, name: str):
         return getattr(self.app, name)
@@ -115,6 +118,7 @@ class InstantBailoutASGI:
                     status=200,
                     body=html.encode("utf-8"),
                     content_type="text/html; charset=utf-8",
+                    cache_control=self._homepage_cache_control,
                 )
                 return
             self._schedule_warm()
@@ -123,15 +127,23 @@ class InstantBailoutASGI:
                 status=200,
                 body=HARDCODED_EMERGENCY_HTML,
                 content_type="text/html; charset=utf-8",
+                cache_control=self._homepage_cache_control,
             )
             return
 
         await self.app(scope, receive, send)
 
 
-def wrap_instant_bailout(app, *, get_homepage_html, schedule_warm):
+def wrap_instant_bailout(
+    app,
+    *,
+    get_homepage_html,
+    schedule_warm,
+    homepage_cache_control: bytes = b"no-store, max-age=0",
+):
     return InstantBailoutASGI(
         app,
         get_homepage_html=get_homepage_html,
         schedule_warm=schedule_warm,
+        homepage_cache_control=homepage_cache_control,
     )

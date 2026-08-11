@@ -441,6 +441,7 @@ if os.path.isdir(_static_dir):
 
 # Paths that get a short public cache to keep the dashboard snappy on Fly.io.
 _CACHE_PATHS = {
+    "/": int(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "60")),
     "/api/registry": 30,
     "/api/summary": 30,
     "/api/stats": 30,
@@ -2971,6 +2972,8 @@ app = wrap_instant_bailout(
     app,
     get_homepage_html=_bailout_homepage_html,
     schedule_warm=lambda: _schedule_homepage_warm(None),
+    # Edge-cache the shell so concurrent bursts hit CDN/Fly cache, not the app.
+    homepage_cache_control=f"public, max-age={_CACHE_PATHS['/']}".encode("ascii"),
 )
 
 
