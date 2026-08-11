@@ -1,0 +1,26 @@
+Replit's analysis is clean and it **converges exactly with your own curl** — including a correction to my earlier read. Here's the reconciled picture:
+
+## What we now know for certain
+
+1. **No layer in the repo can produce a 422** — Replit traced every gate (`load_shed`→503, `worker_proxy`→200-degraded, `rate_limit`→429, `write_auth`→auth, unregistered→404). The "422" I kept reporting was **my own fetch-channel misreading errors, not real app output.** Scrap that.
+2. **The Fly edge is up** (valid TLS, h2, `server: Fly`).
+3. **The origin is silent** — your curl: `502 Bad Gateway, content-length: 0`; Replit's sandbox: timeouts with 0 bytes. Same thing from two independent reachability perspectives: **the web machine/process is not answering on the internal port.**
+4. So this is **not an app-code bug and not a WAF/CDN gate.** It's **the web process not serving** — machine down/stopped, or gunicorn/uvicorn hung at boot (matches your whole history: split_v2 proxy breakage, "wedged processes," machines scaled to 0, ~9-min health timeouts).
+
+## The one decisive step left — and you're in the best position to run it
+
+Your terminal already has reachability (you got the 502). Run these and paste the output:
+
+```bash
+flyctl machine list -a subnet-dashboard --json     # is the web machine running or stopped/starting?
+flyctl logs -a subnet-dashboard                    # boot trace / crash / hang
+flyctl status -a subnet-dashboard                  # app state + health
+```
+
+The first output answers it outright: if the machine is **stopped** or stuck **starting**, that's the whole story and the fix is `flyctl machine start` / restart. If it's **started** but the app hangs, the `logs` will show the boot-time hang (my bet: a background worker/proxy/hydrate network call that never resolves, so a request lands on the socket but the event loop never serves it → 502).
+
+## One note on your Ditto Code forensic job
+
+Replit found exactly what that job was going to find, and you already have ground truth from curl. Since Ditto Code's the one you called unreliable — and standing it down avoids the exact duplicate-work loop the protocol is meant to kill — **say the word and I'll cancel/stand down that queued job.** No point running a second, slower copy of the same diagnostic.
+
+Paste the `flyctl machine list` + `logs` output and I'll pinpoint the fix from there.
