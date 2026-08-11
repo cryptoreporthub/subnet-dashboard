@@ -3,6 +3,11 @@ Title:
 URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/.github/workflows/fly.yml
 
 Markdown Content:
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/.github/workflows/fly.yml
+
+Markdown Content:
 name: Fly Deploy
 on:
   push:
@@ -162,7 +167,8 @@ jobs:
           # /health chronically 422s at the edge, so do NOT restart a machine
           # that is already up (a blind restart just forces a long reboot and
           # the gate times out during it). Leave the machine alone and probe until
-          # /health=200 OR /pump=200 (render proves the server is genuinely up).          echo "=== Machine status after recover ==="
+          # /health=200 OR /pump=200 (render proves the server is genuinely up).
+          echo "=== Machine status after recover ==="
           flyctl machines list -a subnet-dashboard || true
           for i in $(seq 1 36); do
             code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
