@@ -12,6 +12,10 @@ RUN echo "VERSION: 3.8.3" > VERSION.txt
 
 COPY . .
 
+# Robust boot: chmod entrypoints at build time AND invoke via shell so
+# exec-bit/shebang quirks in the image can never block machine startup.
+RUN chmod +x scripts/fly_web_entrypoint.sh scripts/fly_worker_entrypoint.sh
+
 EXPOSE 8080
 
-CMD ["./scripts/fly_web_entrypoint.sh"]
+CMD ["sh", "./scripts/fly_web_entrypoint.sh"]

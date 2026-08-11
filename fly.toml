@@ -1,5 +1,3 @@
-
-
 # fly.toml app configuration file generated for subnet-dashboard
 # Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
 
@@ -10,7 +8,7 @@ primary_region = "sjc"
   dockerfile = "Dockerfile"
 
 [processes]
-  web = "./scripts/fly_web_entrypoint.sh"
+  web = "sh ./scripts/fly_web_entrypoint.sh"
   # v2 (opt-in): dedicated worker machine — requires WORKER_SPLIT_V2=on + volume on worker only.
   # Default prod stays v1 inline worker (one machine, one volume).
   worker = "./scripts/fly_worker_entrypoint.sh"
