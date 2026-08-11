@@ -250,3 +250,5 @@ jobs:
           APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/check_learning_loop.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+# redeploy-marker-20260811
