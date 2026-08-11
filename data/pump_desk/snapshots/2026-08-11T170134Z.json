@@ -1,0 +1,72 @@
+{
+  "status": "ok",
+  "captured_at": "2026-08-11T17:01:34.650889Z",
+  "alert_level": "alert",
+  "alert_reasons": [
+    "learning_loop status=stalled",
+    "actionable badges: SN79 BUILDING, SN111 BUILDING, SN30 BUILDING, SN87 BUILDING, SN7 BUILDING"
+  ],
+  "pump_desk": {
+    "status": "success",
+    "count": 8,
+    "early_count": 5,
+    "confirmed_count": 3,
+    "error": null
+  },
+  "daily_pick": {
+    "date": "2026-08-11",
+    "action": "HOLD",
+    "has_pick": false,
+    "pick_netuid": null,
+    "reason": "Confidence 48% below 50% audit gate \u2014 no long call published"
+  },
+  "learning_loop": {
+    "status": "stalled",
+    "pending": 13,
+    "worker_peer_alive": null
+  },
+  "actionable_badges": [
+    {
+      "netuid": 79,
+      "name": "MVTRX",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 MVTRX (SN79)"
+    },
+    {
+      "netuid": 111,
+      "name": "Claims",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Claims (SN111)"
+    },
+    {
+      "netuid": 30,
+      "name": "Endure Network",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Endure Network (SN30)"
+    },
+    {
+      "netuid": 87,
+      "name": "Provenonce",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Provenonce (SN87)"
+    },
+    {
+      "netuid": 7,
+      "name": "Allways",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Allways (SN7)"
+    },
+    {
+      "netuid": 15,
+      "name": "ORO",
+      "badge": "JUST STARTED",
+      "move": "LIVE \u00b7 ORO (SN15)"
+    },
+    {
+      "netuid": 33,
+      "name": "ReadyAI",
+      "badge": "JUST STARTED",
+      "move": "LIVE \u00b7 ReadyAI (SN33)"
+    }
+  ]
+}

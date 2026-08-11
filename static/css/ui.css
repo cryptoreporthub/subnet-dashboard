@@ -14589,8 +14589,68 @@ section.desk-zone,
     contain-intrinsic-size: auto 420px;
 }
 
+/* -- Remaining solid panels → glass tiers (MOBILE-FIRST: no backdrop-filter by default) --
+   These BEM-nested panels carry opaque fills (var(--mi-bg-card) #090d0b, rgba(...,~1) blacks)
+   from higher-specificity `.message-intel--v2 ...` rules, so a bare `.glass-flat` class can't win.
+   We match that specificity here and swap only the fill to the shared glass tokens. Applies to
+   both SSR markup and client-hydrated markup (rules target the panel wrapper, not a class the
+   hydrator drops). Blur stays behind the desktop media gate below — phones gain zero filter cost. */
+
+/* Secondary list / evidence panels → glass-flat fill */
+.message-intel--v2 .message-intel__callers,
+.message-intel--v2 .message-intel__consensus,
+.message-intel--v2 .message-intel__divergence,
+.message-intel--v2 .message-intel__proof,
+.message-intel--v2 .message-intel__hc-strip,
+.message-intel--v2 .message-intel__summary-24h {
+    background: var(--glass-fill-subtle);
+    background-image: none;
+    border-color: var(--glass-border);
+}
+
+/* Focal drawer + spotlight panels keep their accent glow but sit on glass, not opaque black */
+.message-intel--v2 .message-intel__hero,
+.message-intel--v2 .message-intel__week-top,
+.message-intel--v2 .message-intel__crowns-drawer {
+    background: var(--glass-fill-card);
+    border-color: var(--glass-border);
+}
+
+/* Proof-band footer subpanels (Source / Subnets / Trail / Integrations / Predictions) */
+.proof-band__subpanel {
+    background: var(--glass-fill-subtle);
+    background-image: none;
+    border-color: var(--glass-border);
+}
+
+/* Cockpit cards → glass-card fill (base .card paints an opaque smoke gradient; defer to glass) */
+.cockpit-card,
+.cockpit-card.card {
+    background: var(--glass-fill-card);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    border-color: var(--glass-border);
+}
+
+/* Desktop / mouse: full glass upgrade for the focal glass-fill panels (matches .glass-card gate) */
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+    .message-intel--v2 .message-intel__hero,
+    .message-intel--v2 .message-intel__week-top,
+    .message-intel--v2 .message-intel__crowns-drawer,
+    .cockpit-card,
+    .cockpit-card.card {
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+    }
+}
+
 /* System hooks */
 @media (prefers-reduced-transparency: reduce) {
     .cosmic-sky { opacity: 0.55; }
-    .glass-card, .glass-card--hero { backdrop-filter: none; -webkit-backdrop-filter: none; }
+    .glass-card,
+    .glass-card--hero,
+    .message-intel--v2 .message-intel__hero,
+    .message-intel--v2 .message-intel__week-top,
+    .message-intel--v2 .message-intel__crowns-drawer,
+    .cockpit-card,
+    .cockpit-card.card { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
