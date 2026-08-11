@@ -33,6 +33,11 @@
   --cool-ice-bright: #d2ecff;
   --cool-hairline: rgba(159, 212, 245, 0.28);
   --cool-glow: rgba(159, 212, 245, 0.42);
+  /* Cosmetic port signal temperature (NOT bearish sentiment) */
+  --cos-rose: #ff5d7a;
+  --cos-rose-glow: rgba(255, 93, 122, 0.32);
+  --cos-chip: rgba(255, 255, 255, 0.08);
+  --cos-chip-ink: #f8fafc;
 }
 
 /* ---------- Mobile shell: 390px primary, desktop capped column ---------- */
@@ -14475,3 +14480,114 @@ body.council-first-theme .footer-card__lbl {
   .message-intel__divergence-head strong { text-align: left; }
 }
 
+
+/* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============ */
+
+/* -- Cosmic substrate: nebula + translucent base (keeps smoke atmosphere ghosting through) -- */
+.cosmic-sky {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(380px 280px at 8% 12%, rgba(110, 231, 255, 0.15), transparent 70%),
+        radial-gradient(440px 340px at 92% 16%, rgba(157, 140, 255, 0.18), transparent 70%),
+        radial-gradient(400px 320px at 80% 84%, rgba(255, 207, 110, 0.12), transparent 70%),
+        radial-gradient(320px 260px at 16% 76%, rgba(255, 93, 122, 0.10), transparent 70%),
+        radial-gradient(520px 420px at 55% 45%, rgba(31, 212, 124, 0.06), transparent 70%),
+        rgba(22, 25, 32, 0.88); /* TRANSLUCENT, NOT opaque */
+}
+
+/* CSS-only starfield (no canvas) */
+.cosmic-sky::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+        radial-gradient(1.6px 1.6px at 7% 5%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 15% 13%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(2px 2px at 22% 9%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 31% 18%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 38% 6%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 47% 15%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 56% 8%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 64% 20%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.6px 1.6px at 72% 5%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 81% 16%, var(--accent-blue) 50%, transparent 51%),
+        radial-gradient(1.2px 1.2px at 89% 10%, #ffffff 50%, transparent 51%),
+        radial-gradient(1px 1px at 95% 22%, var(--accent-blue) 50%, transparent 51%);
+    background-size: 200px 200px;
+    opacity: 0.7;
+}
+
+/* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
+.glass-shell {
+    background: var(--glass-fill-section);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.glass-card {
+    background: var(--glass-fill-card);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.08), var(--shadow-card);
+    position: relative;
+    z-index: 2;
+    -webkit-tap-highlight-color: transparent;
+    /* NO backdrop-filter here — mobile default */
+}
+
+/* The ONE focal card: whisper blur on phones only (6px) */
+.glass-card--hero {
+    backdrop-filter: blur(var(--glass-blur-secondary));
+    -webkit-backdrop-filter: blur(var(--glass-blur-secondary));
+}
+
+/* Mouse / big screens: full glass upgrade (12px) */
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+    .glass-card {
+        backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+        -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2);
+    }
+}
+
+.glass-flat {
+    background: var(--glass-fill-subtle);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--glass-radius);
+    position: relative;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Crisp data chip (stays flat/opaque so numbers stay sharp) */
+.chip-flat {
+    background: var(--cos-chip);
+    color: var(--cos-chip-ink);
+    font-family: var(--font-mono);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+    display: inline-block;
+    flex: none;
+    backdrop-filter: none !important;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* Off-screen culling: below-fold sections aren't painted (60s-refresh battery win) */
+section.desk-zone,
+.message-intel__panel {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 420px;
+}
+
+/* System hooks */
+@media (prefers-reduced-transparency: reduce) {
+    .cosmic-sky { opacity: 0.55; }
+    .glass-card, .glass-card--hero { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

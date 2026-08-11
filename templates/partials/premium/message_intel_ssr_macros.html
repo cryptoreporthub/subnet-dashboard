@@ -34,7 +34,7 @@
       <div class="message-intel__champ-basis">{{ row.message_count|default(0) }} msgs · {{ row.subnet_count|default(0) }} subnets</div>
     </div>
     <div class="message-intel__champ-score">
-      <div class="message-intel__champ-num">{{ '%.1f'|format(inf) }}</div>
+      <div class="message-intel__champ-num chip-flat">{{ '%.1f'|format(inf) }}</div>
     </div>
   </div>
   {% endfor %}

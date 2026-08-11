@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>SimiVision — Council</title>
     <meta name="description" content="Bittensor subnet council dashboard — picks, paper portfolio, and SimiVision intelligence.">
     {% if public_base_url is defined and public_base_url %}
@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="/static/vendor/uplot/uPlot.min.css">
 </head>
 <body class="council-first-theme">
+    <div class="cosmic-sky"></div>
     {% block content %}{% endblock %}
     <p class="site-nfa" style="margin:12px auto 0;max-width:960px;padding:0 16px 8px;font-size:12px;line-height:1.4;color:#a9bdae;text-align:center;">
       SimiVision calls are scored council output, not financial advice. Do your own research.
