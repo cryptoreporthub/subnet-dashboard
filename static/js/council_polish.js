@@ -1,10 +1,23 @@
 /* Council final-polish (2026-08-11) — NET FLOW hero hydration.
    Reads /api/whales/flow-signals and renders into #cpol-netflow.
-   Honest states: skeleton -> live -> warming-up empty. No inline scripts (CSP). */
+   Honest states: skeleton -> live -> warming-up empty. No inline scripts (CSP).
+   Perf: __COUNCIL_PERF marks (measurement only) to verify preload/coalescing win. */
 (function () {
   "use strict";
   var slot = document.getElementById("cpol-netflow");
   if (!slot) return;
+
+  function mark(name) {
+    try {
+      var t = (window.performance && performance.now) ? Math.round(performance.now()) : Date.now();
+      window.__COUNCIL_PERF = window.__COUNCIL_PERF || {};
+      window.__COUNCIL_PERF[name] = t;
+      if (window.__COUNCIL_PERF.t0) {
+        window.__COUNCIL_PERF.deltaMs = Math.round(t - window.__COUNCIL_PERF.t0);
+      }
+    } catch (e) { /* measurement only */ }
+  }
+  mark("t0");
 
   function maybe(p) { return typeof p !== "undefined" && p !== null && p !== "" ? p : 0; }
 
@@ -17,6 +30,7 @@
   }
 
   function render(payload) {
+    mark("t1_data");
     var available = payload && payload.status === "success";
     var sum = (payload && payload.summary) || {};
     var total = available ? (Number(sum.total_net_flow_tao) || 0) : null;
@@ -49,6 +63,7 @@
   }
 
   function fail() {
+    mark("t1_fail");
     slot.innerHTML = '' +
       '<div class="cpol-nf-kicker">NET FLOW · 24h — whale money in vs out</div>' +
       '<div class="cpol-empty"><b>Signal unavailable right now.</b> Flow feed hit a snag — this clears on the next refresh cycle.</div>';
