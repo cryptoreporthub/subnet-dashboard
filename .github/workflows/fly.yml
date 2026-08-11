@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/.github/workflows/fly.yml
+
+Markdown Content:
 name: Fly Deploy
 on:
   push:
@@ -153,27 +158,11 @@ jobs:
           echo "=== Machine status before recover ==="
           flyctl status -a subnet-dashboard || true
           flyctl machines list -a subnet-dashboard || true
-          # Prefer leave a healthy machine alone — blind restart after secrets
-          # churn was wedging v1 right after learning-loop green.
-          code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
-          body=$(cat /tmp/health_body 2>/dev/null || true)
-          echo "precheck health: HTTP $code body=$body"
-          if [ "$code" != "200" ]; then
-            for id in $(flyctl machines list -a subnet-dashboard --json | python3 -c "
-          import json,sys
-          for m in json.load(sys.stdin):
-              pg = (m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
-                  print(m.get('id'))
-          "); do
-              [ -n "$id" ] || continue
-              echo "Machine $id unhealthy — restarting"
-              flyctl machines restart "$id" -a subnet-dashboard || flyctl machines start "$id" -a subnet-dashboard || true
-            done
-          else
-            echo "Public health already OK — skip restart"
-          fi
-          echo "=== Machine status after recover ==="
+          # Wait-and-probe ONLY: the app is confirmed serving /pump 200.
+          # /health chronically 422s at the edge, so do NOT restart a machine
+          # that is already up (a blind restart just forces a long reboot and
+          # the gate times out during it). Leave the machine alone and probe until
+          # /health=200 OR /pump=200 (render proves the server is genuinely up).          echo "=== Machine status after recover ==="
           flyctl machines list -a subnet-dashboard || true
           for i in $(seq 1 36); do
             code=$(curl -sS -m 10 -o /tmp/health_body -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
