@@ -1,8 +1,3 @@
-Title: 
-
-URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/internal/council/price_reference.py
-
-Markdown Content:
 """Horizon-end price lookup from price_cache candles (Phase J1)."""
 
 from __future__ import annotations
