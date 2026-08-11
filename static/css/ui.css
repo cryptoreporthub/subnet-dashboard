@@ -14565,8 +14565,11 @@ body.council-first-theme .footer-card__lbl {
     -webkit-tap-highlight-color: transparent;
 }
 
-/* Crisp data chip (stays flat/opaque so numbers stay sharp) */
-.chip-flat {
+/* Crisp data chip (stays flat/opaque so numbers stay sharp).
+   The champ-num selector is included directly so client-hydrated champions
+   markup (regenerated without the chip-flat class) gets the same treatment. */
+.chip-flat,
+.message-intel--v2 .message-intel__champ-num {
     background: var(--cos-chip);
     color: var(--cos-chip-ink);
     font-family: var(--font-mono);
