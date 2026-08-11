@@ -1,0 +1,1 @@
+import{r as o,t as u,D as s}from"./index-Cngel-kZ.js";var n=Object.defineProperty,f=(e,r)=>n(e,"name",{value:r,configurable:!0}),c=s[" useId ".trim().toString()]||(()=>{}),d=0;function i(e){const[r,t]=o.useState(c());return u(()=>{e||t(a=>a??String(d++))},[e]),e||(r?`radix-${r}`:"")}f(i,"useId");export{i as u};

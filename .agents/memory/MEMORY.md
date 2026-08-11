@@ -3,3 +3,4 @@
 - [Pick-tick budget & readiness soft-grading](pick-tick-and-readiness-wedges.md) — feed+context must share the daily-pick tick's one timer; learning-health timeouts cached (not re-run per request); no-graded-picks hard-blocks only when the loop is truly stalled.
 - [Artifact pnpm workspace setup](artifact-workspace-setup.md) — cross-artifact `workspace:*` deps (mockup-sandbox → @workspace/smoke) need a root `pnpm-workspace.yaml` (`artifacts/*`) or install fails with workspace-pkg-not-found.
 - [Artifact build validation](artifact-build-validation.md) — `typecheck` can never run (no tsc installed); validate with `vite build`, which needs PORT (both) and BASE_PATH (mockup-sandbox) or it throws at config load.
+- [Smoke DS consumption rules](smoke-ds-consumption.md) — code review rejects hardcoded visuals in consumers; add tokens (tokens.json + theme-template.css placeholders, 3 spots) and DS components, then import.

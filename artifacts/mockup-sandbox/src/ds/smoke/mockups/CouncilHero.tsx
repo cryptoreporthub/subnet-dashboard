@@ -1,5 +1,7 @@
 import { Scale } from 'lucide-react';
 
+import { CosmicSky } from '@workspace/smoke/components/cosmic-sky';
+import { GlassPanel } from '@workspace/smoke/components/glass-panel';
 import { SignalCard } from '@workspace/smoke/components/signal-card';
 import { SmokeBackdrop } from '@workspace/smoke/components/smoke-backdrop';
 import { VerdictGauge } from '@workspace/smoke/components/verdict-gauge';
@@ -65,11 +67,14 @@ export function CouncilHero() {
       style={{ width: W, height: H, background: '#5f646a' }}
     >
       <SmokeBackdrop />
+      <CosmicSky />
 
       {/* ── top tab strip ─────────────────────────────────────────── */}
-      <div
+      <GlassPanel
+        tier="bar"
+        edge="bottom"
         className="absolute inset-x-0 top-0"
-        style={{ height: HEADER_H, background: '#06070a' }}
+        style={{ height: HEADER_H }}
       >
         <div
           className="absolute flex items-center justify-center"
@@ -111,7 +116,7 @@ export function CouncilHero() {
             {t.label}
           </span>
         ))}
-      </div>
+      </GlassPanel>
 
       {/* ── audit gate capsule ────────────────────────────────────── */}
       <div
@@ -134,15 +139,10 @@ export function CouncilHero() {
       </div>
 
       {/* ── HUD panel ─────────────────────────────────────────────── */}
-      <div
+      <GlassPanel
+        tier="card"
         className="absolute"
-        style={{
-          ...PANEL,
-          borderRadius: 22,
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.20)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.20)',
-        }}
+        style={{ ...PANEL, borderRadius: 22 }}
       >
         <PanelBracket corner="tl" />
         <PanelBracket corner="tr" />
@@ -297,10 +297,11 @@ export function CouncilHero() {
             height: 142,
           }}
         />
-      </div>
+      </GlassPanel>
 
       {/* ── decision log, clipped by the navigation ───────────────── */}
-      <div
+      <GlassPanel
+        tier="flat"
         className="absolute"
         style={{
           left: 63,
@@ -308,9 +309,6 @@ export function CouncilHero() {
           width: 518,
           height: 150,
           borderRadius: 22,
-          background: 'rgba(15,18,21,0.96)',
-          boxShadow:
-            'inset 0 1px 0 rgba(255,255,255,0.08), 0 -6px 22px rgba(6,8,10,0.4)',
         }}
       >
         <span
@@ -336,7 +334,7 @@ export function CouncilHero() {
         >
           DECISION LOG
         </span>
-      </div>
+      </GlassPanel>
 
       {/* The log's next row bleeds faintly through the navigation plate —
           present in the reference capture, so reproduced here rather than
@@ -369,9 +367,11 @@ export function CouncilHero() {
       </span>
 
       {/* ── bottom navigation ─────────────────────────────────────── */}
-      <div
+      <GlassPanel
+        tier="bar"
+        edge="top"
         className="absolute inset-x-0 font-sans"
-        style={{ top: NAV_TOP, height: H - NAV_TOP, background: '#06070a' }}
+        style={{ top: NAV_TOP, height: H - NAV_TOP }}
       >
         <div
           className="absolute flex items-center justify-center"
@@ -410,7 +410,7 @@ export function CouncilHero() {
         >
           Market
         </span>
-      </div>
+      </GlassPanel>
 
       {/* ── amber action button, overlapping the navigation ───────── */}
       <button

@@ -53,6 +53,7 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+  --color-nebula: hsl(var(--nebula));
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
@@ -146,6 +147,7 @@
   --chart-3: 40 57.3% 55.9%;
   --chart-4: 212 10.4% 64.1%;
   --chart-5: 348 68.8% 63.5%;
+  --nebula: 249 100% 77.5%;
 
   --app-font-sans: Inter, system-ui, sans-serif;
   --app-font-serif: Lora, Georgia, serif;
@@ -214,6 +216,7 @@
   --chart-3: 40 57.3% 55.9%;
   --chart-4: 212 10.4% 64.1%;
   --chart-5: 348 68.8% 63.5%;
+  --nebula: 249 100% 77.5%;
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);

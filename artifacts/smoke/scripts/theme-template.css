@@ -53,6 +53,7 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+  --color-nebula: hsl(var(--nebula));
 
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
@@ -146,6 +147,7 @@
   --chart-3: __DS_LIGHT_CHART3__;
   --chart-4: __DS_LIGHT_CHART4__;
   --chart-5: __DS_LIGHT_CHART5__;
+  --nebula: __DS_LIGHT_NEBULA__;
 
   --app-font-sans: __DS_FONT_SANS__;
   --app-font-serif: __DS_FONT_SERIF__;
@@ -214,6 +216,7 @@
   --chart-3: __DS_DARK_CHART3__;
   --chart-4: __DS_DARK_CHART4__;
   --chart-5: __DS_DARK_CHART5__;
+  --nebula: __DS_DARK_NEBULA__;
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);

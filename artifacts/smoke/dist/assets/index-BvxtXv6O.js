@@ -1,1 +1,0 @@
-import{r as o,t as u,A as f,j as l,P}from"./index-pN7dg-z4.js";var p=Object.defineProperty,m=(r,t)=>p(r,"name",{value:t,configurable:!0}),x=o.forwardRef(m(function(t,a){const{container:n,...s}=t,[c,i]=o.useState(!1);u(()=>i(!0),[]);const e=n||c&&globalThis?.document?.body;return e?f.createPortal(l.jsx(P.div,{...s,ref:a}),e):null},"Portal"));export{x as P};
