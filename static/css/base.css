@@ -6,16 +6,13 @@
   --bg-base: #15171d;
   --bg-edge: #111318;
   --bg-midnight: #0d0f14;
-  --bg-surface: rgba(22, 25, 32, 0.82);
-  --bg-card: rgba(28, 32, 40, 0.55);
-  --bg-elevated: rgba(36, 40, 50, 0.72);
+  --bg-surface: rgba(255, 255, 255, 0.03);
+  --bg-card: transparent;
+  --bg-elevated: rgba(255, 255, 255, 0.04);
   --bg-header: rgba(18, 21, 28, 0.72);
-  /* Card smoke — translucent glass veil (was opaque pewter) so the cosmic
-     sky reads through. Uses the DS void tint plus a faint top sheen. */
-  --card-smoke:
-    radial-gradient(ellipse 160% 80% at 50% -40%, rgba(255, 255, 255, 0.05) 0%, transparent 50%),
-    linear-gradient(180deg, color-mix(in srgb, var(--ds-void) 30%, transparent) 0%,
-                            color-mix(in srgb, var(--ds-void) 36%, transparent) 100%);
+  /* Card smoke — fully transparent glass veil: no tint at all, so only the
+     backdrop blur + hairline border define the surface. */
+  --card-smoke: transparent;
   --card-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.78 0 0 0 0 0.80 0 0 0 0 0.84 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   --line: rgba(255, 255, 255, 0.1);
   --line-hi: rgba(255, 255, 255, 0.18);
@@ -38,9 +35,10 @@
 
   /* Glass fills replacing the old opaque pewter/card-panel surfaces so the
      cosmic sky reads through every section and subsection. */
-  --card-panel-fill:
-    linear-gradient(color-mix(in srgb, var(--ds-void) 34%, transparent),
-                    color-mix(in srgb, var(--ds-void) 34%, transparent));
+  /* Fully transparent — no tint, clear glassmorphism. Sections keep only the
+     blur + hairline border; `--card-panel-shine` (a faint top sheen) is layered
+     after this in `background-image`, so it may still show a whisper of light. */
+  --card-panel-fill: transparent;
 
   /* Aurora glows — silver overlay with one warm breath (keeps monochrome from going flat) */
   --aurora-cyan: radial-gradient(ellipse 55% 45% at 18% 22%, rgba(180, 182, 190, 0.24), transparent 70%);
