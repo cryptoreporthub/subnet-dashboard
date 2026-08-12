@@ -43,37 +43,10 @@ jobs:
             exit 0
           fi
           echo "probe machine=$TARGET_ID"
-          flyctl machine exec "$TARGET_ID" "cd /app && python3 -c \"
-          import json, os, time, threading
-          from internal.live_subnets import _cache_path, live_data_freshness, _sync_once
-          from internal.run_mode import background_on_web, is_worker_mode, inline_worker_expected
-          print('RUN_MODE=', os.environ.get('RUN_MODE'))
-          print('FETCH_MODE=', os.environ.get('LIVE_SUBNETS_FETCH_MODE'))
-          print('INLINE_WORKER=', os.environ.get('INLINE_WORKER'))
-          print('inline_worker_expected=', inline_worker_expected())
-          print('background_on_web=', background_on_web())
-          print('is_worker_mode=', is_worker_mode())
-          threads = [(t.name, t.daemon, t.is_alive()) for t in threading.enumerate()]
-          print('threads=', json.dumps(threads, default=str))
-          print('cache_path=', _cache_path())
-          print('exists=', os.path.isfile(_cache_path()))
-          fresh = live_data_freshness()
-          print('freshness=', json.dumps({k: fresh.get(k) for k in ('subnet_count','last_sync','stale','boot_status','rpc_healthy','effective_source')}, default=str))
-          try:
-              from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
-              print('resolver_scheduler=', json.dumps(get_prediction_resolver_scheduler_state(), default=str))
-          except Exception as e:
-              print('resolver_scheduler_error=', repr(e))
-          try:
-              from internal.worker_heartbeat import is_alive, read_heartbeat
-              print('heartbeat_alive=', is_alive(max_age_seconds=120))
-              print('heartbeat=', json.dumps(read_heartbeat(), default=str))
-          except Exception as e:
-              print('heartbeat_error=', repr(e))
-          t0=time.time()
-          ok = _sync_once()
-          print('sync_once=', ok, 'sec=', round(time.time()-t0, 1))
-          \"""" --app subnet-dashboard --timeout 600
+          # probe script, base64-encoded (chars are [A-Za-z0-9+/=], no quoting needed).
+          # decode on the remote and run as a file -- immune to bash quote escaping.
+          PROBE_B64="aW1wb3J0IGpzb24sIG9zLCB0aW1lLCB0aHJlYWRpbmcKZnJvbSBpbnRlcm5hbC5saXZlX3N1Ym5ldHMgaW1wb3J0IF9jYWNoZV9wYXRoLCBsaXZlX2RhdGFfZnJlc2huZXNzLCBfc3luY19vbmNlCmZyb20gaW50ZXJuYWwucnVuX21vZGUgaW1wb3J0IGJhY2tncm91bmRfb25fd2ViLCBpc193b3JrZXJfbW9kZSwgaW5saW5lX3dvcmtlcl9leHBlY3RlZApwcmludCgnUlVOX01PREU9Jywgb3MuZW52aXJvbi5nZXQoJ1JVTl9NT0RFJykpCnByaW50KCdGRVRDSF9NT0RFPScsIG9zLmVudmlyb24uZ2V0KCdMSVZFX1NVQk5FVFNfRkVUQ0hfTU9ERScpKQpwcmludCgnSU5MSU5FX1dPUktFUj0nLCBvcy5lbnZpcm9uLmdldCgnSU5MSU5FX1dPUktFUicpKQpwcmludCgnaW5saW5lX3dvcmtlcl9leHBlY3RlZD0nLCBpbmxpbmVfd29ya2VyX2V4cGVjdGVkKCkpCnByaW50KCdiYWNrZ3JvdW5kX29uX3dlYj0nLCBiYWNrZ3JvdW5kX29uX3dlYigpKQpwcmludCgnaXNfd29ya2VyX21vZGU9JywgaXNfd29ya2VyX21vZGUoKSkKdGhyZWFkcyA9IFsodC5uYW1lLCB0LmRhZW1vbiwgdC5pc19hbGl2ZSgpKSBmb3IgdCBpbiB0aHJlYWRpbmcuZW51bWVyYXRlKCldCnByaW50KCd0aHJlYWRzPScsIGpzb24uZHVtcHModGhyZWFkcywgZGVmYXVsdD1zdHIpKQpwcmludCgnY2FjaGVfcGF0aD0nLCBfY2FjaGVfcGF0aCgpKQpwcmludCgnZXhpc3RzPScsIG9zLnBhdGguaXNmaWxlKF9jYWNoZV9wYXRoKCkpKQpmcmVzaCA9IGxpdmVfZGF0YV9mcmVzaG5lc3MoKQpwcmludCgnZnJlc2huZXNzPScsIGpzb24uZHVtcHMoe2s6IGZyZXNoLmdldChrKSBmb3IgayBpbiAoJ3N1Ym5ldF9jb3VudCcsJ2xhc3Rfc3luYycsJ3N0YWxlJywnYm9vdF9zdGF0dXMnLCdycGNfaGVhbHRoeScsJ2VmZmVjdGl2ZV9zb3VyY2UnKX0sIGRlZmF1bHQ9c3RyKSkKdHJ5OgogICAgZnJvbSBpbnRlcm5hbC5jb3VuY2lsLnJlc29sdmVyX3NjaGVkdWxlciBpbXBvcnQgZ2V0X3ByZWRpY3Rpb25fcmVzb2x2ZXJfc2NoZWR1bGVyX3N0YXRlCiAgICBwcmludCgncmVzb2x2ZXJfc2NoZWR1bGVyPScsIGpzb24uZHVtcHMoZ2V0X3ByZWRpY3Rpb25fcmVzb2x2ZXJfc2NoZWR1bGVyX3N0YXRlKCksIGRlZmF1bHQ9c3RyKSkKZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgcHJpbnQoJ3Jlc29sdmVyX3NjaGVkdWxlcl9lcnJvcj0nLCByZXByKGUpKQp0cnk6CiAgICBmcm9tIGludGVybmFsLndvcmtlcl9oZWFydGJlYXQgaW1wb3J0IGlzX2FsaXZlLCByZWFkX2hlYXJ0YmVhdAogICAgcHJpbnQoJ2hlYXJ0YmVhdF9hbGl2ZT0nLCBpc19hbGl2ZShtYXhfYWdlX3NlY29uZHM9MTIwKSkKICAgIHByaW50KCdoZWFydGJlYXQ9JywganNvbi5kdW1wcyhyZWFkX2hlYXJ0YmVhdCgpLCBkZWZhdWx0PXN0cikpCmV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgIHByaW50KCdoZWFydGJlYXRfZXJyb3I9JywgcmVwcihlKSkKdDA9dGltZS50aW1lKCkKb2sgPSBfc3luY19vbmNlKCkKcHJpbnQoJ3N5bmNfb25jZT0nLCBvaywgJ3NlYz0nLCByb3VuZCh0aW1lLnRpbWUoKS10MCwgMSkp"
+          flyctl machine exec "$TARGET_ID" "cd /app && echo \"$PROBE_B64\" | base64 -d > /tmp/probe.py && python3 /tmp/probe.py" --app subnet-dashboard --timeout 600
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Exec Telegram entity probe (web machine)
