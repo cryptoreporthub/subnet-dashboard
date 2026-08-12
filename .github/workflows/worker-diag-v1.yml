@@ -28,20 +28,8 @@ jobs:
       - name: "Exec inline-worker probe (v1: on the web machine)"
         run: |
           set -e
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
-          import json, sys
-          machines = json.load(sys.stdin)
-          for m in machines:
-              meta = (m.get('config') or {}).get('metadata') or {}
-              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
-                  print(m['id'])
-                  break
-          ')"
-          if [ -z "$TARGET_ID" ]; then
-            echo "no web machine found"
-            exit 0
-          fi
+          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r '.process_group // .config.process_group // "web"' 2>/dev/null >/dev/null; flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r '[.[] | select((.process_group // .config.process_group // "web") == "web")][0].id // empty' 2>/dev/null)"
+          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then TARGET_ID="$(flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r .[0].id)"; fi
           echo "probe machine=$TARGET_ID"
           # probe script, base64-encoded (chars are [A-Za-z0-9+/=], no quoting needed).
           # decode on the remote and run as a file -- immune to bash quote escaping.
@@ -52,20 +40,8 @@ jobs:
       - name: Exec Telegram entity probe (web machine)
         run: |
           set -e
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
-          import json, sys
-          machines = json.load(sys.stdin)
-          for m in machines:
-              meta = (m.get('config') or {}).get('metadata') or {}
-              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
-                  print(m['id'])
-                  break
-          ')"
-          if [ -z "$TARGET_ID" ]; then
-            echo "no web machine found"
-            exit 0
-          fi
+          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r '.process_group // .config.process_group // "web"' 2>/dev/null >/dev/null; flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r '[.[] | select((.process_group // .config.process_group // "web") == "web")][0].id // empty' 2>/dev/null)"
+          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then TARGET_ID="$(flyctl machines list -a subnet-dashboard --json 2>/dev/null | jq -r .[0].id)"; fi
           flyctl machine exec "$TARGET_ID" "cd /app && python3 scripts/probe_telegram_entity.py" --app subnet-dashboard --timeout 120 || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
