@@ -1,0 +1,100 @@
+name: Worker Diag v1
+
+on:
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  diag:
+    name: Worker logs + live_subnets probe (v1 inline worker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Machine status
+        run: |
+          flyctl status -a subnet-dashboard || true
+          flyctl machines list -a subnet-dashboard || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Recent worker logs (live_subnets + telegram + boot)
+        run: |
+          flyctl logs -a subnet-dashboard --no-tail 2>&1 \
+            | grep -E -i "live_subnets|telegram|Monitoring group|Could not find group|get_entity|ResolveUsername|entity_resolve|Connected to Telegram|background_boot|resolver_scheduler|start_prediction_resolver|bootstrap_live_subnets|boot_status|worker_heartbeat|chain_client|sync_start|sync_done" \
+            | tail -200 || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Exec inline-worker probe (v1: on the web machine)
+        run: |
+          set -e
+          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
+          import json, sys
+          machines = json.load(sys.stdin)
+          for m in machines:
+              meta = (m.get('config') or {}).get('metadata') or {}
+              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
+              if pg == 'web' and m.get('id'):
+                  print(m['id'])
+                  break
+          ')"
+          if [ -z "$TARGET_ID" ]; then
+            echo "no web machine found"
+            exit 0
+          fi
+          echo "probe machine=$TARGET_ID"
+          flyctl machine exec "$TARGET_ID" "cd /app && python3 -c \"
+import json, os, time, threading
+from internal.live_subnets import _cache_path, live_data_freshness, _sync_once
+from internal.run_mode import background_on_web, is_worker_mode, inline_worker_expected
+print('RUN_MODE=', os.environ.get('RUN_MODE'))
+print('FETCH_MODE=', os.environ.get('LIVE_SUBNETS_FETCH_MODE'))
+print('INLINE_WORKER=', os.environ.get('INLINE_WORKER'))
+print('inline_worker_expected=', inline_worker_expected())
+print('background_on_web=', background_on_web())
+print('is_worker_mode=', is_worker_mode())
+threads = [(t.name, t.daemon, t.is_alive()) for t in threading.enumerate()]
+print('threads=', json.dumps(threads, default=str))
+print('cache_path=', _cache_path())
+print('exists=', os.path.isfile(_cache_path()))
+fresh = live_data_freshness()
+print('freshness=', json.dumps({k: fresh.get(k) for k in ('subnet_count','last_sync','stale','boot_status','rpc_healthy','effective_source')}, default=str))
+try:
+    from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
+    print('resolver_scheduler=', json.dumps(get_prediction_resolver_scheduler_state(), default=str))
+except Exception as e:
+    print('resolver_scheduler_error=', repr(e))
+try:
+    from internal.worker_heartbeat import is_alive, read_heartbeat
+    print('heartbeat_alive=', is_alive(max_age_seconds=120))
+    print('heartbeat=', json.dumps(read_heartbeat(), default=str))
+except Exception as e:
+    print('heartbeat_error=', repr(e))
+t0=time.time()
+ok = _sync_once()
+print('sync_once=', ok, 'sec=', round(time.time()-t0, 1))
+\"""" --app subnet-dashboard --timeout 600
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Exec Telegram entity probe (web machine)
+        run: |
+          set -e
+          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
+          import json, sys
+          machines = json.load(sys.stdin)
+          for m in machines:
+              meta = (m.get('config') or {}).get('metadata') or {}
+              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
+              if pg == 'web' and m.get('id'):
+                  print(m['id'])
+                  break
+          ')"
+          if [ -z "$TARGET_ID" ]; then
+            echo "no web machine found"
+            exit 0
+          fi
+          flyctl machine exec "$TARGET_ID" "cd /app && python3 scripts/probe_telegram_entity.py" --app subnet-dashboard --timeout 120 || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Public data-freshness
+        run: curl -fsS https://subnet-dashboard.fly.dev/api/data-freshness | python3 -m json.tool
