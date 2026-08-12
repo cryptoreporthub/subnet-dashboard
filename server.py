@@ -17,6 +17,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.gzip import GZipMiddleware
 
 from internal.rate_limit import limit_or_noop, mount_rate_limit, strict_limit
 from internal.whales.routes import whales_router
@@ -535,10 +536,9 @@ async def add_cors_headers(request: Request, call_next):
     if cache_ttl is not None:
         response.headers["Cache-Control"] = f"public, max-age={cache_ttl}"
     elif path.startswith("/static/"):
-        if path.endswith((".js", ".css")):
-            response.headers["Cache-Control"] = "public, max-age=300, must-revalidate"
-        else:
-            response.headers["Cache-Control"] = "public, max-age=3600"
+        # Every static URL is cache-busted via ?v={{ static_v }}, so a long
+        # immutable cache is safe and keeps repeat visits off the origin.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     try:
         from internal.security_headers import apply_security_headers
 
@@ -2975,6 +2975,19 @@ app = wrap_instant_bailout(
     # Edge-cache the shell so concurrent bursts hit CDN/Fly cache, not the app.
     homepage_cache_control=f"public, max-age={_CACHE_PATHS['/']}".encode("ascii"),
 )
+
+# Compress text responses (CSS/JS/HTML) when the client sends Accept-Encoding: gzip.
+# Wrapped outermost so the instant-bailout homepage shell is gzipped too.
+# Starlette's GZipMiddleware excludes text/event-stream by default, so SSE
+# (chat_stream / cockpit.picks) stays uncompressed and streams through untouched.
+class _GZipApp(GZipMiddleware):
+    """GZipMiddleware that still exposes the inner FastAPI app's attributes (routes, etc.)."""
+
+    def __getattr__(self, name):
+        return getattr(self.app, name)
+
+
+app = _GZipApp(app, minimum_size=500)
 
 
 if __name__ == "__main__":
