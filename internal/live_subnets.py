@@ -65,6 +65,15 @@ _lock = threading.Lock()
 _sync_lock = threading.Lock()
 _sync_loop_running = False
 
+# Thread-alive guard for the timed-out fetch worker. live_subnets wraps the chain
+# fetch in a daemon thread + join(timeout); when the join times out the daemon
+# worker KEEPS RUNNING in the background. Without tracking that worker, a new sync
+# stacks behind the _sync_lock once the old one releases it, fighting the previous
+# thread and pinning the boot phase at sync_start. We hold a reference to the last
+# fetch worker and refuse to start a new one while it is still alive.
+_fetch_thread: Optional[threading.Thread] = None
+_fetch_thread_lock = threading.Lock()
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -162,6 +171,7 @@ def _registry_netuids() -> List[int]:
 
 
 def _fetch_chain_data():
+    global _fetch_thread
     result = {}
     err = {}
 
@@ -178,8 +188,21 @@ def _fetch_chain_data():
         except Exception as exc:
             err["exc"] = exc
 
-    worker = threading.Thread(target=_run, daemon=True, name="live-subnets-fetch")
-    worker.start()
+    # Thread-alive guard: never start a new fetch while a previous timed-out
+    # worker is still running in the background. Re-entrant syncs competing for
+    # _sync_lock are what pin boot at sync_start; skipping here breaks the wedge.
+    with _fetch_thread_lock:
+        prev = _fetch_thread
+        if prev is not None and prev.is_alive():
+            logger.warning(
+                "live_subnets sync skipped — previous fetch thread still alive "
+                "(wedge guard); waiting for it to drain"
+            )
+            return None
+        worker = threading.Thread(target=_run, daemon=True, name="live-subnets-fetch")
+        worker.start()
+        _fetch_thread = worker
+
     timeout = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
     worker.join(timeout=timeout)
     if worker.is_alive():

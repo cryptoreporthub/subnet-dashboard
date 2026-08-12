@@ -494,17 +494,37 @@ class ChainClient:
             workers = 8
         workers = max(1, min(workers, 16, len(netuids) or 1))
 
-        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
+
+        # Bounded overall batch budget: when RPC degrades, as_completed would
+        # otherwise wait on ALL futures with no wall-clock cap, holding the whole
+        # pool for many seconds past live_subnets' join() ceiling and wedging the
+        # sync at sync_start. Break out once the budget elapses and return the
+        # rows that already completed (still netuid-sorted, same shape).
+        batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+        deadline = time.time() + batch_budget
 
         rows = []
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = [pool.submit(_one, n) for n in netuids]
-            for fut in as_completed(futures):
-                row = fut.result()
-                if row:
-                    rows.append(row)
+            remaining = set(futures)
+            while remaining and time.time() < deadline:
+                try:
+                    for fut in as_completed(remaining, timeout=max(0.0, deadline - time.time())):
+                        remaining.discard(fut)
+                        row = fut.result()
+                        if row:
+                            rows.append(row)
+                except _FutureTimeout:
+                    # Budget exhausted — stop awaiting; keep whatever completed.
+                    break
         rows.sort(key=lambda r: r["netuid"])
-        logger.info("get_subnet_price_rows: %d subnets (workers=%d)", len(rows), workers)
+        logger.info(
+            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
+            len(rows),
+            workers,
+            batch_budget,
+        )
         return rows
 
 
