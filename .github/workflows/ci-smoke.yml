@@ -59,6 +59,11 @@ jobs:
             tests/test_phase_f_sqlite_store.py \
             tests/test_council_side_effect_honesty.py -q
 
+      - name: Homepage hydration smoke
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: python -m pytest tests/test_homepage_hydration_smoke.py -q
+
       - name: Security scan (bandit high)
         run: bandit -q -r server.py internal tests --severity-level high
 
