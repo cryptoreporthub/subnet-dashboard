@@ -1,0 +1,10 @@
+name: Diag Smoke Test
+
+on:
+  push:
+
+jobs:
+  echojob:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo hello-from-diag-smoke
