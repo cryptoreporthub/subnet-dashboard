@@ -48,3 +48,10 @@
   .tribunal-hero__judge--echo { bottom: 0; }
   .tribunal-hero__judge--pulse { bottom: 0; }
 }
+
+/* Eye-ring shape only: preserve the existing SVG palette, gradients, glow, data hooks, and center content. */
+.tribunal-hero__radial { transform: scaleY(.62); transform-origin: 50% 50%; }
+.tribunal-hero__ring-glow { transform: scaleY(.62); transform-origin: 50% 50%; }
+@media (max-width: 420px) {
+  .tribunal-hero__radial, .tribunal-hero__ring-glow { transform: scaleY(.62); }
+}
