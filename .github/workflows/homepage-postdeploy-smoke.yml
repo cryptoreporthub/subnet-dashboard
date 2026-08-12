@@ -1,0 +1,45 @@
+name: Homepage Post-Deploy Smoke
+
+on:
+  workflow_run:
+    workflows: ["Fly Deploy"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: homepage-postdeploy-smoke
+  cancel-in-progress: true
+
+jobs:
+  homepage:
+    name: homepage hydration smoke
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Probe deployed homepage
+        id: probe
+        run: |
+          set -euo pipefail
+          code=$(curl -sS --fail-with-body --max-time 20 -o /tmp/home.html -w "%{http_code}" https://subnet-dashboard.fly.dev/)
+          test "$code" = "200"
+          test -s /tmp/home.html
+          grep -q "dataset.hydrate" /tmp/home.html
+          grep -q "cockpit_hydrate.js" /tmp/home.html
+          grep -q 'id="tribunal-hero"' /tmp/home.html
+          grep -q 'id="message-intel-feed"' /tmp/home.html
+          bytes=$(wc -c < /tmp/home.html)
+          echo "homepage_http=$code bytes=$bytes hydration=present"
+
+      - name: Publish failure signal
+        if: failure()
+        run: |
+          echo "::error::Homepage post-deploy hydration smoke failed"
+          echo "The deployed homepage did not return the expected fast shell/hydration markers."
+          echo "Inspect the Fly Deploy run and the homepage response before promoting further changes."
+          exit 1
