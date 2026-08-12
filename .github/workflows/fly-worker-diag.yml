@@ -4,3 +4,77 @@ on:
   workflow_dispatch:  # re-register manual trigger
 
 jobs:
+  diag:
+    name: Worker logs + live_subnets probe
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Machine status
+        run: |
+          flyctl status -a subnet-dashboard || true
+          flyctl machines list -a subnet-dashboard || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Recent worker logs (live_subnets + telegram)
+        run: |
+          flyctl logs -a subnet-dashboard --no-tail 2>&1 \
+            | rg -i "live_subnets|telegram|Monitoring group|Could not find group|get_entity|ResolveUsername|entity_resolve|Connected to Telegram" \
+            | tail -120 || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Exec sync probe on worker machine
+        run: |
+          set -e
+          WORKER_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c "
+          import json, sys
+          for m in json.load(sys.stdin):
+              meta = (m.get('config') or {}).get('metadata') or {}
+              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
+              if pg == 'worker' and m.get('id'):
+                  print(m['id'])
+                  break
+          ")"
+          if [ -z "$WORKER_ID" ]; then
+            echo "no worker machine found"
+            exit 0
+          fi
+          echo "worker machine=$WORKER_ID"
+          flyctl machine exec "$WORKER_ID" "cd /app && python3 -c \"
+import json, os, time
+from internal.live_subnets import _cache_path, live_data_freshness, _sync_once
+print('RUN_MODE=', os.environ.get('RUN_MODE'))
+print('FETCH_MODE=', os.environ.get('LIVE_SUBNETS_FETCH_MODE'))
+print('cache_path=', _cache_path())
+print('exists=', os.path.isfile(_cache_path()))
+fresh = live_data_freshness()
+print('freshness=', json.dumps({k: fresh.get(k) for k in ('subnet_count','last_sync','stale','boot_status','rpc_healthy')}))
+t0=time.time()
+ok = _sync_once()
+print('sync_once=', ok, 'sec=', round(time.time()-t0, 1))
+\""" --app subnet-dashboard --timeout 600
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Exec Telegram entity probe on worker
+        run: |
+          set -e
+          WORKER_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c "
+          import json, sys
+          for m in json.load(sys.stdin):
+              meta = (m.get('config') or {}).get('metadata') or {}
+              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
+              if pg == 'worker' and m.get('id'):
+                  print(m['id'])
+                  break
+          ")"
+          if [ -z "$WORKER_ID" ]; then
+            echo "no worker machine found"
+            exit 0
+          fi
+          flyctl machine exec "$WORKER_ID" "cd /app && python3 scripts/probe_telegram_entity.py" --app subnet-dashboard --timeout 120 || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Public data-freshness
+        run: curl -fsS https://subnet-dashboard.fly.dev/api/data-freshness | python3 -m json.tool
