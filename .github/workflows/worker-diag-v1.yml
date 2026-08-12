@@ -18,59 +18,13 @@ jobs:
           flyctl machines list -a subnet-dashboard || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Recent worker logs (live_subnets + telegram + boot)
+      - name: Recent worker logs
         run: |
-          flyctl logs -a subnet-dashboard --no-tail 2>&1 \
-            | grep -E -i "live_subnets|telegram|Monitoring group|Could not find group|get_entity|ResolveUsername|entity_resolve|Connected to Telegram|background_boot|resolver_scheduler|start_prediction_resolver|bootstrap_live_subnets|boot_status|worker_heartbeat|chain_client|sync_start|sync_done" \
-            | tail -200 || true
+          flyctl logs -a subnet-dashboard --no-tail 2>&1 | grep -E -i "live_subnets|telegram|bootstrap_live_subnets|boot_status|worker_heartbeat|sync_start|sync_done" | tail -200 || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: "Exec inline-worker probe (v1: on the web machine)"
-        run: |
-          set -e
-          # list states of all web machines (diagnostic)
-          flyctl machines list -a subnet-dashboard --json | jq -r '.[] | "(.id) state=(.state) pg=(.process_group // .config.process_group // "web")"' || true
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '[.[] | select(((.process_group // .config.process_group // "web") == "web") and .state == "running")][0].id // empty')"
-          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then
-            TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '[.[] | select((.process_group // .config.process_group // "web") == "web")][0].id // empty')"
-          fi
-          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then
-            TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '.[0].id')"
-          fi
-          echo "probe machine=$TARGET_ID"
-          STATE="$(flyctl machine status "$TARGET_ID" -a subnet-dashboard --json 2>/dev/null | jq -r '.state // empty')"
-          echo "machine state=$STATE"
-          if [ "$STATE" != "running" ] && [ "$STATE" != "started" ] && [ -n "$STATE" ]; then
-            echo "machine not running (state=$STATE); starting..."
-            flyctl machine start "$TARGET_ID" --app subnet-dashboard || true
-            sleep 20
-          fi
-          PROBE_B64="aW1wb3J0IGpzb24sIG9zLCB0aW1lLCB0aHJlYWRpbmcKZnJvbSBpbnRlcm5hbC5saXZlX3N1Ym5ldHMgaW1wb3J0IF9jYWNoZV9wYXRoLCBsaXZlX2RhdGFfZnJlc2huZXNzLCBfc3luY19vbmNlCmZyb20gaW50ZXJuYWwucnVuX21vZGUgaW1wb3J0IGJhY2tncm91bmRfb25fd2ViLCBpc193b3JrZXJfbW9kZSwgaW5saW5lX3dvcmtlcl9leHBlY3RlZApwcmludCgnUlVOX01PREU9Jywgb3MuZW52aXJvbi5nZXQoJ1JVTl9NT0RFJykpCnByaW50KCdGRVRDSF9NT0RFPScsIG9zLmVudmlyb24uZ2V0KCdMSVZFX1NVQk5FVFNfRkVUQ0hfTU9ERScpKQpwcmludCgnSU5MSU5FX1dPUktFUj0nLCBvcy5lbnZpcm9uLmdldCgnSU5MSU5FX1dPUktFUicpKQpwcmludCgnaW5saW5lX3dvcmtlcl9leHBlY3RlZD0nLCBpbmxpbmVfd29ya2VyX2V4cGVjdGVkKCkpCnByaW50KCdiYWNrZ3JvdW5kX29uX3dlYj0nLCBiYWNrZ3JvdW5kX29uX3dlYigpKQpwcmludCgnaXNfd29ya2VyX21vZGU9JywgaXNfd29ya2VyX21vZGUoKSkKdGhyZWFkcyA9IFsodC5uYW1lLCB0LmRhZW1vbiwgdC5pc19hbGl2ZSgpKSBmb3IgdCBpbiB0aHJlYWRpbmcuZW51bWVyYXRlKCldCnByaW50KCd0aHJlYWRzPScsIGpzb24uZHVtcHModGhyZWFkcywgZGVmYXVsdD1zdHIpKQpwcmludCgnY2FjaGVfcGF0aD0nLCBfY2FjaGVfcGF0aCgpKQpwcmludCgnZXhpc3RzPScsIG9zLnBhdGguaXNmaWxlKF9jYWNoZV9wYXRoKCkpKQpmcmVzaCA9IGxpdmVfZGF0YV9mcmVzaG5lc3MoKQpwcmludCgnZnJlc2huZXNzPScsIGpzb24uZHVtcHMoe2s6IGZyZXNoLmdldChrKSBmb3IgayBpbiAoJ3N1Ym5ldF9jb3VudCcsJ2xhc3Rfc3luYycsJ3N0YWxlJywnYm9vdF9zdGF0dXMnLCdycGNfaGVhbHRoeScsJ2VmZmVjdGl2ZV9zb3VyY2UnKX0sIGRlZmF1bHQ9c3RyKSkKdHJ5OgogICAgZnJvbSBpbnRlcm5hbC5jb3VuY2lsLnJlc29sdmVyX3NjaGVkdWxlciBpbXBvcnQgZ2V0X3ByZWRpY3Rpb25fcmVzb2x2ZXJfc2NoZWR1bGVyX3N0YXRlCiAgICBwcmludCgncmVzb2x2ZXJfc2NoZWR1bGVyPScsIGpzb24uZHVtcHMoZ2V0X3ByZWRpY3Rpb25fcmVzb2x2ZXJfc2NoZWR1bGVyX3N0YXRlKCksIGRlZmF1bHQ9c3RyKSkKZXhjZXB0IEV4Y2VwdGlvbiBhcyBlOgogICAgcHJpbnQoJ3Jlc29sdmVyX3NjaGVkdWxlcl9lcnJvcj0nLCByZXByKGUpKQp0cnk6CiAgICBmcm9tIGludGVybmFsLndvcmtlcl9oZWFydGJlYXQgaW1wb3J0IGlzX2FsaXZlLCByZWFkX2hlYXJ0YmVhdAogICAgcHJpbnQoJ2hlYXJ0YmVhdF9hbGl2ZT0nLCBpc19hbGl2ZShtYXhfYWdlX3NlY29uZHM9MTIwKSkKICAgIHByaW50KCdoZWFydGJlYXQ9JywganNvbi5kdW1wcyhyZWFkX2hlYXJ0YmVhdCgpLCBkZWZhdWx0PXN0cikpCmV4Y2VwdCBFeGNlcHRpb24gYXMgZToKICAgIHByaW50KCdoZWFydGJlYXRfZXJyb3I9JywgcmVwcihlKSkKdDA9dGltZS50aW1lKCkKb2sgPSBfc3luY19vbmNlKCkKcHJpbnQoJ3N5bmNfb25jZT0nLCBvaywgJ3NlYz0nLCByb3VuZCh0aW1lLnRpbWUoKS10MCwgMSkp"
-          echo "started=$STARTED"
-          flyctl machine exec "$TARGET_ID" "cd /app && echo \"$PROBE_B64\" | base64 -d > /tmp/probe.py && python3 /tmp/probe.py" --app subnet-dashboard --timeout 600
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Exec Telegram entity probe (web machine)
-        run: |
-          set -e
-          # list states of all web machines (diagnostic)
-          flyctl machines list -a subnet-dashboard --json | jq -r '.[] | "(.id) state=(.state) pg=(.process_group // .config.process_group // "web")"' || true
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '[.[] | select(((.process_group // .config.process_group // "web") == "web") and .state == "running")][0].id // empty')"
-          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then
-            TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '[.[] | select((.process_group // .config.process_group // "web") == "web")][0].id // empty')"
-          fi
-          if [ -z "$TARGET_ID" ] || [ "$TARGET_ID" = "null" ]; then
-            TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | jq -r '.[0].id')"
-          fi
-          echo "probe machine=$TARGET_ID"
-          STATE="$(flyctl machine status "$TARGET_ID" -a subnet-dashboard --json 2>/dev/null | jq -r '.state // empty')"
-          echo "machine state=$STATE"
-          if [ "$STATE" != "running" ] && [ "$STATE" != "started" ] && [ -n "$STATE" ]; then
-            echo "machine not running (state=$STATE); starting..."
-            flyctl machine start "$TARGET_ID" --app subnet-dashboard || true
-            sleep 20
-          fi
-          flyctl machine exec "$TARGET_ID" "cd /app && python3 scripts/probe_telegram_entity.py" --app subnet-dashboard --timeout 120 || true
+      - name: Worker probe (machine select + exec)
+        run: bash scripts/worker-diag.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Public data-freshness
