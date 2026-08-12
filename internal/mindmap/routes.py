@@ -10,7 +10,6 @@ import time
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from starlette.concurrency import run_in_threadpool
 
 from internal.mindmap.graph import get_mindmap_graph
 
@@ -100,8 +99,11 @@ def _graph_timeout_payload(focus: Optional[int]) -> Dict[str, Any]:
 @mindmap_graph_router.get("/api/mindmap/graph")
 async def api_mindmap_graph(focus: int | None = Query(default=None, ge=1)):
     try:
+        from internal.request_executor import REQUEST_EXECUTOR
+
+        loop = asyncio.get_running_loop()
         return await asyncio.wait_for(
-            run_in_threadpool(_cached_or_build, focus),
+            loop.run_in_executor(REQUEST_EXECUTOR, _cached_or_build, focus),
             timeout=MINDMAP_GRAPH_HANDLER_TIMEOUT,
         )
     except asyncio.TimeoutError:
