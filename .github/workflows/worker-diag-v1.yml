@@ -25,7 +25,7 @@ jobs:
             | tail -200 || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Exec inline-worker probe (v1: on the web machine)
+      - name: "Exec inline-worker probe (v1: on the web machine)"
         run: |
           set -e
           TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
