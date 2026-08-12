@@ -58,7 +58,13 @@ _STORY_PATH_CACHE_TTL = float(os.environ.get("MINDMAP_STORY_PATH_CACHE_SECONDS",
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
     try:
-        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+        from internal.request_executor import REQUEST_EXECUTOR
+
+        loop = asyncio.get_running_loop()
+        return await asyncio.wait_for(
+            loop.run_in_executor(REQUEST_EXECUTOR, fn),
+            timeout=timeout_s,
+        )
     except asyncio.TimeoutError:
         logger.warning("%s timed out after %.1fs", label, timeout_s)
         raise
