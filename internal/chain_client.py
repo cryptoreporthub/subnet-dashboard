@@ -505,19 +505,38 @@ class ChainClient:
         deadline = time.time() + batch_budget
 
         rows = []
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        completed = set()
+        pending = set()
+        try:
             futures = [pool.submit(_one, n) for n in netuids]
-            remaining = set(futures)
-            while remaining and time.time() < deadline:
-                try:
-                    for fut in as_completed(remaining, timeout=max(0.0, deadline - time.time())):
-                        remaining.discard(fut)
+            pending = set(futures)
+            try:
+                for fut in as_completed(futures, timeout=max(0.0, deadline - time.time())):
+                    pending.discard(fut)
+                    completed.add(fut)
+                    row = fut.result()
+                    if row:
+                        rows.append(row)
+            except _FutureTimeout:
+                # Capture futures which finished at the deadline even if
+                # as_completed had not yielded them yet.
+                for fut in pending.copy():
+                    if fut.done():
+                        pending.discard(fut)
+                        completed.add(fut)
                         row = fut.result()
                         if row:
                             rows.append(row)
-                except _FutureTimeout:
-                    # Budget exhausted — stop awaiting; keep whatever completed.
-                    break
+                logger.warning(
+                    "get_subnet_price_rows batch deadline: completed=%d pending=%d",
+                    len(completed),
+                    len(pending),
+                )
+        finally:
+            # Do not wait for timed-out RPC calls; live_subnets owns the
+            # outer timeout and its thread-alive guard prevents overlap.
+            pool.shutdown(wait=False, cancel_futures=True)
         rows.sort(key=lambda r: r["netuid"])
         logger.info(
             "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
