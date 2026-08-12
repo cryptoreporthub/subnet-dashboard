@@ -49,6 +49,10 @@ primary_region = "sjc"
   BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
   SUBNETS_LOAD_TIMEOUT_SECONDS = "6"
   HYDRATE_SUBNETS_TIMEOUT_SECONDS = "4"
+  BLOCKMACHINE_RPC_TIMEOUT_SECONDS = "4"
+  BLOCKMACHINE_RPC_RETRIES = "1"
+  LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS = "120"
+  LIVE_SUBNETS_BATCH_DEADLINE_SECONDS = "85"
   # Fix live-subnet wedge 2026-08-12: fail fast per RPC so the 75-subnet price batch
   # finishes inside the sync budget instead of each stuck subnet burning ~47s and
   # piling up overlapping AUTO-sync daemon threads that hammer Blockmachine.

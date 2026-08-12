@@ -259,8 +259,9 @@ def _sync_once() -> bool:
             _record_boot_status(phase="sync_done", ok=False, reason="timeout")
             return False
         if not raw:
-            logger.warning("live_subnets sync: chain fetch returned 0 subnets (RPC degraded?)")
-            _record_boot_status(phase="sync_done", ok=False, reason="empty", rows=0)
+            empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
+            logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
+            _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
             return False
         merged = _merge_into_registry(raw)
         payload = {

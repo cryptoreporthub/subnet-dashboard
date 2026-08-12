@@ -85,6 +85,31 @@ def test_sync_writes_under_data_dir(monkeypatch, tmp_path):
     assert data.get("count", 0) >= 1
 
 
+def test_sync_empty_registry_has_distinct_boot_reason(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from internal import live_subnets
+
+    with patch.object(live_subnets, "_registry_netuids", return_value=[]):
+        with patch.object(live_subnets, "_fetch_chain_data", return_value=[]):
+            assert live_subnets._sync_once() is False
+
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
+    assert status["reason"] == "empty_netuids"
+    assert status["ok"] is False
+
+
+def test_sync_normal_path_records_boot_ok(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from internal import live_subnets
+
+    with patch.object(live_subnets, "_fetch_chain_data", return_value=[{"netuid": 1, "price": 1.0}]):
+        assert live_subnets._sync_once() is True
+
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
+    assert status["ok"] is True
+    assert status["rows"] > 0
+
+
 def test_registry_netuids_from_committed_registry():
     from internal import live_subnets
 
