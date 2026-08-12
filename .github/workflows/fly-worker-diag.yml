@@ -1,6 +1,7 @@
 name: Fly worker diag
 
 on:
+  push:
   workflow_dispatch:  # re-register manual trigger
 
 jobs:
