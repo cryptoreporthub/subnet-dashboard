@@ -677,7 +677,7 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
         "_run_refresh_cycle_with_timeout",
         lambda: {
             "ok": True,
-            "run_at": _now_iso(),
+            "run_at": resolver_scheduler._now_iso(),
             "resolved_now": 0,
             "expired_now": 0,
             "pending": 0,
