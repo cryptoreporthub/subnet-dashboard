@@ -184,16 +184,19 @@ def generate_signals(persist: bool = True) -> Dict[str, Any]:
     signals = [build_signal(sn, ctx) for sn in subnets]
     changed: List[Dict[str, Any]] = []
     appended = 0
+    refreshed_at = None
     if persist:
-        changed = SignalStore().append_many(signals)
+        store = SignalStore()
+        changed = store.append_many(signals)
         appended = len(changed)
+        refreshed_at = store.mark_refreshed()
     return {
         "status": "success",
         "meta": {
             "count": len(signals),
             "appended": appended,
             "changed": appended,
-            "generated_at": _utcnow_z(),
+            "generated_at": refreshed_at or _utcnow_z(),
         },
         "signals": signals,
         "changed_signals": changed,
