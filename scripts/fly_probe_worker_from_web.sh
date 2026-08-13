@@ -17,11 +17,13 @@ for m in json.load(sys.stdin):
 
 if [ -z "$WEB_ID" ]; then
   echo "fly_probe_worker_from_web: no web machine"
-  exit 0
+  exit 1
 fi
 
 echo "fly_probe_worker_from_web: web=$WEB_ID port=$PORT"
 # flyctl machine exec accepts: machine-id + single command string (no -- argv split).
 # Image WORKDIR may be /, so use absolute /app path.
-flyctl machine exec -a "$APP" "$WEB_ID" "python /app/scripts/probe_worker_peer_once.py" \
-  || echo "WARN: exec probe failed"
+if ! flyctl machine exec -a "$APP" "$WEB_ID" "python /app/scripts/probe_worker_peer_once.py"; then
+  echo "fly_probe_worker_from_web: probe failed (web could not reach worker :${PORT})"
+  exit 1
+fi

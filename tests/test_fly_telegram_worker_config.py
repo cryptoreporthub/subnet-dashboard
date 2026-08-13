@@ -61,6 +61,26 @@ def test_fly_yml_verifies_process_topology():
     assert "counts['web'] < 1 or counts['worker'] < 1" in yml
 
 
+def test_fly_yml_waits_for_worker_peer_alive():
+    yml = _fly_yml()
+    assert "Wait for worker peer" in yml
+    assert "fly_wait_worker_peer_alive.sh" in yml
+
+
+def test_fly_wait_worker_peer_alive_script():
+    script = Path("scripts/fly_wait_worker_peer_alive.sh").read_text(encoding="utf-8")
+    assert "fly_probe_worker_from_web.sh" in script
+    assert "/api/ops/readiness" in script
+    assert "worker_peer.alive" in script or "worker_peer" in script
+    assert "GUARD FAIL" in script
+
+
+def test_fly_probe_worker_from_web_fails_without_web():
+    script = Path("scripts/fly_probe_worker_from_web.sh").read_text(encoding="utf-8")
+    assert "no web machine" in script
+    assert "exit 1" in script
+
+
 def test_fly_worker_split_v2_guard_reads_fly_toml():
     guard = Path("scripts/fly_worker_split_v2_guard.sh").read_text(encoding="utf-8")
     assert "fly.toml" in guard
