@@ -400,9 +400,11 @@ def _learning_stats_payload(
     status: str = "success",
     meta: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    stats = snap["engine_stats"]
-    resolver_stats = snap["resolver_stats"]
-    watchdog = snap["watchdog"]
+    if not isinstance(snap, dict):
+        raise ValueError("learning snapshot is not an object")
+    stats = snap.get("engine_stats") or {}
+    resolver_stats = snap.get("resolver_stats") or {}
+    watchdog = snap.get("watchdog") or {}
     trust_banner = snap["trust_banner"]
     predictions_data = snap.get("predictions_data")
     unclassified = count_unclassified(predictions_data)

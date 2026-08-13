@@ -137,7 +137,13 @@ def _start_resolver() -> None:
 
         threading.Thread(target=_recover, daemon=True, name="pump-lead-recover").start()
 
-    defer_boot("prediction-resolver", _run, delay=max(BOOT_DEFER_SECONDS + 10, 15))
+    # The scheduler start itself is cheap and must publish running state early
+    # on the dedicated worker. ``immediate`` only controls the first resolver
+    # tick; deferring the whole scheduler leaves readiness false during boot.
+    from internal.run_mode import is_worker_mode
+
+    delay = 0 if is_worker_mode() else max(BOOT_DEFER_SECONDS + 10, 15)
+    defer_boot("prediction-resolver", _run, delay=delay)
 
 
 def _start_whale_warm_scheduler() -> None:

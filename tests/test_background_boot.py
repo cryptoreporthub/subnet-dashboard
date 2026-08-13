@@ -184,6 +184,37 @@ def test_start_background_workers_starts_resolver(monkeypatch):
     whale.assert_called_once()
 
 
+def test_resolver_scheduler_boots_immediately_on_worker(monkeypatch):
+    scheduled = {}
+    monkeypatch.setenv("RUN_MODE", "worker")
+
+    def _defer(name, fn, delay=0):
+        scheduled[name] = delay
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    from internal.background_boot import _start_resolver
+
+    _start_resolver()
+
+    assert scheduled["prediction-resolver"] == 0
+
+
+def test_resolver_scheduler_stays_deferred_on_web(monkeypatch):
+    scheduled = {}
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setattr("internal.background_boot.BOOT_DEFER_SECONDS", 90)
+
+    def _defer(name, fn, delay=0):
+        scheduled[name] = delay
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    from internal.background_boot import _start_resolver
+
+    _start_resolver()
+
+    assert scheduled["prediction-resolver"] >= 100
+
+
 def test_worker_mode_label_split(monkeypatch):
     from internal.run_mode import worker_mode_label
 
