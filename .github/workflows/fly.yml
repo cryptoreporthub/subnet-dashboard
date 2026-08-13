@@ -196,6 +196,13 @@ jobs:
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Wait for worker peer (split v2 private HTTP)
+        run: |
+          chmod +x scripts/fly_wait_worker_peer_alive.sh scripts/fly_probe_worker_from_web.sh
+          FLY_APP=subnet-dashboard APP_BASE_URL=https://subnet-dashboard.fly.dev \
+            ./scripts/fly_wait_worker_peer_alive.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Warm production caches
         run: |
           chmod +x scripts/warm_prod.sh
