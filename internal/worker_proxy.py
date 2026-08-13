@@ -64,6 +64,23 @@ def _mindmap_path(path: str) -> bool:
     return path.startswith("/api/mindmap")
 
 
+def _learning_path(path: str) -> bool:
+    return path in {
+        "/api/learning/health",
+        "/api/learning/stats",
+        "/api/learning-metrics",
+    }
+
+
+def _learning_proxy_timeout() -> httpx.Timeout:
+    try:
+        read = float(os.environ.get("WORKER_PROXY_LEARNING_TIMEOUT_SECONDS", "25"))
+    except ValueError:
+        read = 25.0
+    connect = min(3.0, read)
+    return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
+
+
 def _mindmap_proxy_timeout() -> httpx.Timeout:
     try:
         read = float(os.environ.get("WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS", "4"))
@@ -630,7 +647,12 @@ async def proxy_get_to_worker(request: Request) -> Response:
     degraded = _proxy_degraded_response(path)
     if _circuit_open() and degraded is not None:
         return degraded
-    timeout = _mindmap_proxy_timeout() if fast else _proxy_timeout()
+    if fast:
+        timeout = _mindmap_proxy_timeout()
+    elif _learning_path(path):
+        timeout = _learning_proxy_timeout()
+    else:
+        timeout = _proxy_timeout()
     try:
         resp = await _fetch_worker_http(path, query=query, timeout=timeout, fast_path=True)
         media_type = resp.headers.get("content-type") or "application/json"

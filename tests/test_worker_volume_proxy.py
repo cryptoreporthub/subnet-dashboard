@@ -367,6 +367,49 @@ def test_mindmap_proxy_timeout_shorter_than_default(monkeypatch):
     assert float(t.connect) <= 2.0
 
 
+def test_learning_proxy_timeout_exceeds_fast_proxy_defaults(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.delenv("WORKER_PROXY_LEARNING_TIMEOUT_SECONDS", raising=False)
+    learning = wp._learning_proxy_timeout()
+    generic = wp._proxy_timeout()
+    assert float(learning.read) == 25.0
+    assert float(generic.read) == 4.0
+    assert float(wp._mindmap_proxy_timeout().read) == 4.0
+
+
+def test_learning_proxy_route_uses_learning_timeout(monkeypatch):
+    import asyncio
+    import httpx
+    from starlette.requests import Request
+    import internal.worker_proxy as wp
+
+    seen = []
+
+    async def _fetch(*_args, **kwargs):
+        seen.append(kwargs["timeout"])
+        return httpx.Response(200, json={"status": "success"})
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/learning/stats",
+        "query_string": b"",
+        "headers": [],
+        "scheme": "http",
+        "server": ("test", 80),
+        "client": ("test", 123),
+        "root_path": "",
+    }
+    monkeypatch.setattr(wp, "_fetch_worker_http", _fetch)
+    monkeypatch.setattr(wp, "_LAST_FAIL_MONO", 0.0)
+    response = asyncio.run(wp.proxy_get_to_worker(Request(scope)))
+
+    assert response.status_code == 200
+    assert len(seen) == 1
+    assert float(seen[0].read) == 25.0
+
+
 def test_proxy_learning_health_degraded_on_failure(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")

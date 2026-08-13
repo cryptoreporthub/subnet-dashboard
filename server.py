@@ -230,6 +230,12 @@ async def _lifespan(app: FastAPI):
 
     if is_worker_mode():
         if background_boot_allowed():
+            try:
+                from internal.snapshot_guard import install as install_snapshot_guard
+
+                install_snapshot_guard()
+            except Exception as exc:
+                logger.warning("worker snapshot guard install skipped: %s", exc)
             from internal.background_boot import start_background_workers, stop_background_workers
             from internal.worker_heartbeat import touch_heartbeat
 
