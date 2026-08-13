@@ -257,7 +257,7 @@ def listener_status() -> Dict[str, Any]:
         total_messages = 0
     desk_ready = total_messages > 5
 
-    from internal.message_intel.session import telegram_session_mode
+    from internal.message_intel.session import string_session_parse_error, telegram_session_mode
 
     out = {
         "enabled": enabled,
@@ -273,6 +273,14 @@ def listener_status() -> Dict[str, Any]:
         "group_connected": group_connected,
         "session_mode": telegram_session_mode(),
     }
+    session_err = string_session_parse_error()
+    if session_err:
+        out["session_string_error"] = session_err
+        if _has_session_file() and reason == "idle_not_started":
+            out["ops_hint"] = (
+                "Stale TELEGRAM_SESSION_STRING Fly secret — unset it to use volume .session "
+                "or paste a fresh string from bootstrap_telegram_session.py"
+            )
     if _listener is not None:
         title = getattr(_listener, "group_title", None)
         if title:
@@ -416,8 +424,11 @@ def _start_listener_watchdog() -> None:
             if not _has_telegram_creds() or not _has_session_file():
                 continue
             logger.info("message-intel listener watchdog: restarting listener")
-            _reset_listener_if_dead()
-            start_message_intel_listeners()
+            try:
+                _reset_listener_if_dead()
+                start_message_intel_listeners()
+            except Exception as exc:
+                logger.warning("message-intel listener watchdog: restart failed: %s", exc)
 
     threading.Thread(target=_loop, daemon=True, name="mi-listener-watchdog").start()
 
@@ -445,10 +456,16 @@ def start_message_intel_listeners() -> bool:
 
     from internal.message_intel.session import telegram_session_arg
 
+    try:
+        session = telegram_session_arg()
+    except Exception as exc:
+        logger.warning("Telegram listener skipped — session init failed: %s", exc)
+        return False
+
     _listener = TelegramListener(
         on_message=_on_telegram_message,
         forward_to_ingest=False,
-        session=telegram_session_arg(),
+        session=session,
     )
     started = _listener.start()
     if started:
