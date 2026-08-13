@@ -111,3 +111,13 @@ def test_api_learning_stats_error_returns_degraded(monkeypatch):
     assert body.get("status") == "degraded"
     assert body.get("meta", {}).get("source") == "error"
     assert body["data"]["trust_banner"]["ready"] is False
+
+
+def test_learning_stats_payload_tolerates_partial_cached_snapshot():
+    payload = learning_routes._learning_stats_payload(
+        {"engine_stats": {}, "trust_banner": {}, "watchdog": {}}
+    )
+
+    assert payload["status"] == "success"
+    assert payload["data"]["total_records"] == 0
+    assert payload["data"]["pending"] == 0
