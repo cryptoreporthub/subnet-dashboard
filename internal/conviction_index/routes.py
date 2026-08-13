@@ -24,7 +24,9 @@ conviction_index_router = APIRouter(tags=["conviction-index"])
 async def api_conviction_index(refresh: bool = Query(default=False)) -> Dict[str, Any]:
     """Top-5 subnets by conviction index plus full per-subnet scores."""
     try:
-        state = await run_in_threadpool(get_conviction_snapshot, refresh=refresh)
+        if refresh:
+            await run_in_threadpool(populate_author_reliability)
+        state = await run_in_threadpool(get_conviction_snapshot, refresh=False)
         return {
             "status": "ok",
             "top5": state.get("top5") or [],
