@@ -1,2 +1,3 @@
 - [Telegram proof classifier](telegram-proof-classifier.md) — hit/miss/neutral grading lives in message_intel/proof.py; direction resolution mirrors locked self_learning rule (bull OR up, bear OR down); up+stable shown as neutral but hit↔locked-correct parity is preserved and tested.
 - [Resolver & learning availability](resolver-and-learning-availability.md) — web never starts resolver, read cross-process truth via loop_health._last_resolver_tick; weight-delta trail scan is slow and must be computed in the cached learning snapshot, not on the request path.
+- [Signals store freshness](signals-store-freshness.md) — refresh the homepage signal cache on stale reads with single-flight protection; watchdog restarts must not overlap checkers or recreate cleared heartbeats.
