@@ -12,7 +12,7 @@ import logging
 import math
 import os
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 logger = logging.getLogger(__name__)
@@ -312,21 +312,24 @@ def populate_author_reliability(*, lookback_days: int = 90) -> Dict[str, Any]:
     """Best-effort join of message_intel SQLite into conviction index state."""
     try:
         from internal.message_intel.store import get_db
+        from internal.message_intel.proof import classify_call, stable_author_id
     except Exception as exc:
         logger.debug("populate_author_reliability skipped: %s", exc)
         return {"ok": False, "error": str(exc)}
 
     now = datetime.now(timezone.utc)
+    lookback_start = now - timedelta(days=max(1, int(lookback_days)))
     db = get_db()
     try:
         with db._connect() as conn:
             rows = conn.execute(
                 """
-                SELECT m.id AS message_id, m.author_id, m.author_name, m.timestamp,
-                       v.conviction, v.predicted_direction, v.predicted_timeframe,
-                       ps.netuid,
+                SELECT m.id AS message_id, m.source, m.author_id, m.author_name, m.author_username,
+                       m.content, m.timestamp, m.created_at,
+                       v.verdict, v.predicted_direction, v.conviction, v.predicted_timeframe,
+                       ps.netuid, ps.tao_usd_price,
                        ar.total_messages, ar.correct_predictions, ar.accuracy_score,
-                       po.outcome
+                       po.outcome, po.pump_pct_max, po.price_24h
                 FROM messages m
                 JOIN message_verdicts v ON v.message_id = m.id
                 LEFT JOIN price_snapshots ps ON ps.message_id = m.id
@@ -346,6 +349,9 @@ def populate_author_reliability(*, lookback_days: int = 90) -> Dict[str, Any]:
 
     for row in rows:
         d = dict(row)
+        timestamp = _parse_ts(d.get("timestamp")) or _parse_ts(d.get("created_at"))
+        if timestamp is None or timestamp < lookback_start:
+            continue
         netuid = d.get("netuid")
         if netuid is None:
             continue
@@ -353,9 +359,10 @@ def populate_author_reliability(*, lookback_days: int = 90) -> Dict[str, Any]:
         norm = _normalize_message_row(d, now=now)
         by_subnet.setdefault(nu, []).append(norm)
 
-        aid = str(d.get("author_id") or "")
-        if not aid:
+        proof = classify_call(d)
+        if not proof.get("eligible") or proof.get("status") not in {"hit", "miss"}:
             continue
+        aid = stable_author_id(d)
         bucket = authors.setdefault(
             aid,
             {
@@ -369,9 +376,8 @@ def populate_author_reliability(*, lookback_days: int = 90) -> Dict[str, Any]:
                 "contra_fade_total": 0,
             },
         )
-        sign = momentum_sign(d.get("predicted_direction"))
-        outcome = str(d.get("outcome") or "").lower()
-        hit = outcome == "hit"
+        sign = momentum_sign(proof.get("direction"))
+        hit = proof.get("status") == "hit"
         if sign > 0:
             bucket["long_total"] += 1
             bucket["long_hits"] += int(hit)
@@ -408,7 +414,7 @@ def get_conviction_snapshot(*, refresh: bool = False) -> Dict[str, Any]:
     if refresh:
         populate_author_reliability()
     state = _load_index_state()
-    if not state.get("subnets"):
+    if not state.get("subnets") and not state.get("leaderboard"):
         populate_author_reliability()
         state = _load_index_state()
     return state
@@ -437,7 +443,7 @@ def build_leaderboard(*, days: int = 30) -> Dict[str, Any]:
             "fade_total": fade_total,
             "total_calls": total_calls,
             "new_voice": new_voice,
-            "low_confidence": new_voice,
+            "low_confidence": total_calls < 5,
             "note": (
                 "new voice — counts, weight grows as calls resolve"
                 if new_voice
