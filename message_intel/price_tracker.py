@@ -216,16 +216,18 @@ class PriceTracker:
         self._progress_callback = progress_callback
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._stop_event: Optional[threading.Event] = None
         self._baseline_running = False
         self._baseline_thread: Optional[threading.Thread] = None
 
     def _report_progress(self) -> None:
         callback = self._progress_callback
-        if callback is not None:
-            try:
-                callback()
-            except Exception:
-                logger.debug("Outcome progress callback failed", exc_info=True)
+        if callback is None:
+            return
+        try:
+            callback()
+        except Exception:
+            logger.debug("Outcome progress heartbeat failed", exc_info=True)
 
     def set_db(self, db) -> None:
         """Set the database instance after initialization."""
@@ -289,10 +291,9 @@ class PriceTracker:
         """
         if self.db is None:
             return
-        self._report_progress()
 
-        unresolved = self.db.get_unresolved_outcomes()
         self._report_progress()
+        unresolved = self.db.get_unresolved_outcomes()
         if not unresolved:
             return
 
@@ -416,7 +417,7 @@ class PriceTracker:
                     outcome_data["outcome"],
                     pct_change,
                 )
-        self._report_progress()
+            self._report_progress()
 
     def start_background_checks(self, interval: int = 300) -> None:
         """
@@ -428,20 +429,32 @@ class PriceTracker:
         if self._running:
             return
         self._running = True
+        self._stop_event = threading.Event()
 
         def _loop():
-            while self._running:
+            while self._running and not self._stop_event.is_set():
                 try:
                     self.check_outcomes()
                 except Exception as e:
                     logger.error("Outcome check error: %s", e)
-                time.sleep(interval)
+                self._stop_event.wait(interval)
 
         self._thread = threading.Thread(target=_loop, daemon=True)
         self._thread.start()
         logger.info(
             "Price outcome checker started (interval=%ds)", interval
         )
+
+    def stop_background_checks(self, *, join_timeout: float = 15.0) -> bool:
+        """Stop the checker and wait briefly so restarts cannot overlap it."""
+        self._running = False
+        self._progress_callback = None
+        if self._stop_event is not None:
+            self._stop_event.set()
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=join_timeout)
+        return thread is None or not thread.is_alive()
 
     # ── Baseline price recording ─────────────────────────────────────
 
