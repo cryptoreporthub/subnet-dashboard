@@ -35,7 +35,7 @@ def test_empty_signal_cache_regenerates(monkeypatch):
     monkeypatch.setattr(signal_routes, "_to_thread_timeout", lambda fn, timeout_s, label: _run(fn))
 
     async def run():
-        return await signal_routes.api_signals(refresh=False)
+        return await signal_routes.api_signals(refresh=False, subnet_id=None)
 
     async def _run(fn):
         return fn()
@@ -73,8 +73,8 @@ def test_signal_regeneration_is_single_flight(monkeypatch):
 
     async def run():
         return await asyncio.gather(
-            signal_routes.api_signals(refresh=False),
-            signal_routes.api_signals(refresh=False),
+            signal_routes.api_signals(refresh=False, subnet_id=None),
+            signal_routes.api_signals(refresh=False, subnet_id=None),
         )
 
     results = asyncio.run(run())
