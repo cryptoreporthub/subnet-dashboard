@@ -169,7 +169,7 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
     monkeypatch.setattr(learning_routes, "LEARNING_HEALTH_TIMEOUT", 0.05)
 
     def _slow():
-        time.sleep(2)
+        time.sleep(0.2)
         return {"status": "ok", "pending": 0}
 
     monkeypatch.setattr(loop_health, "build_learning_loop_health", _slow)
@@ -189,6 +189,7 @@ def test_api_learning_health_timeout_returns_degraded(monkeypatch):
     assert body.get("meta", {}).get("source") == "timeout"
     assert body.get("error") == "timeout"
     assert elapsed < 1.0
+    time.sleep(0.25)
 
 
 def test_api_learning_health_malformed_payload_returns_degraded(monkeypatch):
@@ -275,7 +276,7 @@ def test_api_learning_health_timeout_includes_worker_peer(monkeypatch, tmp_path)
     touch_heartbeat()
 
     def _slow():
-        time.sleep(2)
+        time.sleep(0.2)
         return {"status": "ok", "pending": 0}
 
     monkeypatch.setattr(loop_health, "build_learning_loop_health", _slow)
@@ -295,6 +296,7 @@ def test_api_learning_health_timeout_includes_worker_peer(monkeypatch, tmp_path)
     assert peer.get("alive") is True
     assert peer.get("source") == "file"
     assert peer.get("peer") == "inline_worker"
+    time.sleep(0.25)
 
 
 def test_learning_health_ok_while_judges_blocked(monkeypatch):
