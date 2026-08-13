@@ -45,7 +45,7 @@ jobs:
           echo "=== Enforcing endpoint contract (every route must return non-5xx / 200) ==="
           pip install -r requirements.txt
           pip install pytest httpx
-          python -m pytest tests/test_endpoint_contract.py -q
+          python -m pytest tests/test_endpoint_contract.py tests/test_fly_telegram_worker_config.py -q
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
@@ -76,29 +76,12 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      # Canon = v1 (fly.toml): one web machine, data_volume + inline worker.
-      # split_v2 left hero/Telegram/mindmap/learning stuck behind a broken
-      # web→worker private hop — do not force v2 from CI anymore.
-      - name: Rollback split_v2 → v1 when detected
-        run: |
-          set -e
-          chmod +x scripts/fly_disable_worker_v2.sh scripts/fly_worker_split_v2_guard.sh
-          if ./scripts/fly_worker_split_v2_guard.sh; then
-            echo "split v2 detected (secret and/or worker machine) — rolling back to v1"
-            # Prepare only: unset secrets + free volume; deploy step uses fly.toml.
-            FLY_DISABLE_SKIP_DEPLOY=1 FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc \
-              ./scripts/fly_disable_worker_v2.sh
-          else
-            echo "v1 mode — skip rollback"
-          fi
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          FLY_PRIMARY_REGION: sjc
-      - name: Deploy to Fly (v1 fly.toml, region sjc)
+      # Canon = split v2 (fly.toml): web HTTP :8080 + dedicated worker :8081 (volume on worker).
+      - name: Deploy to Fly (split v2 fly.toml, region sjc)
         run: |
           set -e
           FLY_CONFIG=fly.toml
-          echo "deploying $FLY_CONFIG (inline worker + volume on web)"
+          echo "deploying $FLY_CONFIG (web + dedicated worker, volume on worker)"
           deploy_once() {
             flyctl deploy --config "$FLY_CONFIG" --remote-only --no-cache --yes --regions sjc --ha=false
           }
@@ -126,19 +109,43 @@ jobs:
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale web=1 (no dedicated worker)
+      - name: Scale web=1 worker=1
         run: |
-          flyctl scale count web=1 --app subnet-dashboard --yes
-          flyctl scale count worker=0 --app subnet-dashboard --yes || true
+          flyctl scale count web=1 worker=1 --app subnet-dashboard --yes
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Reconcile process groups (destroy orphan workers)
+      - name: Reconcile process groups (web + worker)
         run: |
           chmod +x scripts/fly_web_recover.sh scripts/fly_worker_split_v2_guard.sh
           FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Clear leftover v2 proxy URL secret
+      - name: Verify Fly process topology (web=1 worker=1)
+        run: |
+          set -e
+          flyctl machines list -a subnet-dashboard --json | python3 -c "
+          import json, sys
+
+          machines = json.load(sys.stdin)
+          counts = {'web': 0, 'worker': 0}
+          for m in machines:
+              meta = (m.get('config') or {}).get('metadata') or {}
+              pg = (
+                  meta.get('fly_process_group')
+                  or meta.get('process_group')
+                  or m.get('process_group')
+                  or 'web'
+              ).lower()
+              if pg in counts:
+                  counts[pg] += 1
+          print('process_groups:', counts)
+          if counts['web'] < 1 or counts['worker'] < 1:
+              print('GUARD FAIL: expected web>=1 and worker>=1 after scale')
+              sys.exit(1)
+          "
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Pin worker internal URL (split v2 proxy)
         run: |
           chmod +x scripts/fly_set_worker_internal_url.sh scripts/fly_worker_split_v2_guard.sh
           FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh

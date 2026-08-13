@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# Redeploy trigger — 2026-07-26: pump scan O(n²) fix + inline worker restored
+# 2026-08-13: web + dedicated worker (Telegram listener on worker; volume on worker only).
 
 app = "subnet-dashboard"
 primary_region = "sjc"
@@ -9,8 +9,6 @@ primary_region = "sjc"
 
 [processes]
   web = "sh ./scripts/fly_web_entrypoint.sh"
-  # v2 (opt-in): dedicated worker machine — requires WORKER_SPLIT_V2=on + volume on worker only.
-  # Default prod stays v1 inline worker (one machine, one volume).
   worker = "./scripts/fly_worker_entrypoint.sh"
 
 [http_service]
@@ -31,16 +29,15 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  # Web serves HTTP only; schedulers run in inline worker subprocess (same machine/volume).
+  # Web serves HTTP only; background jobs + Telegram listener run on dedicated worker.
   BACKGROUND_ON_WEB = "off"
-  INLINE_WORKER = "1"
-  ENABLE_INLINE_WORKER = "1"
-  # v2 split: off in prod until volume attach on worker machine is confirmed (see DEPLOY.md).
-  WORKER_SPLIT_V2 = "off"
+  INLINE_WORKER = "0"
+  ENABLE_INLINE_WORKER = "0"
+  WORKER_SPLIT_V2 = "on"
   # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
   WORKER_HEAVY = "essential"
-  # Keep prod boot light; Telegram needs a live session on the volume.
-  MESSAGE_INTEL_LISTENER = "off"
+  # auto: start Telethon listener when session exists on worker volume (see DEPLOY.md).
+  MESSAGE_INTEL_LISTENER = "auto"
   # SS-TG W6: Bot API /summary in group — separate from Telethon user-session listener.
   TELEGRAM_SUMMARY_BOT = "off"
   RESOLVER_REFRESH_MINUTES = "15"
@@ -113,16 +110,47 @@ primary_region = "sjc"
   LEARNING_STATS_TIMEOUT_SECONDS = "15"
   RESOLVER_STATE_TIMEOUT_SECONDS = "15"
   LEARNING_SNAPSHOT_PREWARM_SECONDS = "10"
+  WORKER_HTTP_PORT = "8081"
+  # Web probes worker on :8081 (worker-only Fly service — avoids 8080 collision with web).
+  WORKER_PROXY_TIMEOUT_SECONDS = "4"
+  WORKER_PROXY_CONNECT_SECONDS = "3"
+  WORKER_PEER_TIMEOUT_SECONDS = "4"
+  WORKER_PROXY_CIRCUIT_OPEN_SECONDS = "30"
+  WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS = "4"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
-# SQLite caches under /app/data). The machine already has this volume attached;
-# declaring it here makes the config match reality so deploys don't prompt.
+# SQLite caches under /app/data). Worker-only mount — web proxies volume APIs.
 [mounts]
   source = "data_volume"
   destination = "/app/data"
+  processes = ["worker"]
 
-# 256MB OOMs; 1GB wedges with inline worker + pump scan. 2GB is the stable floor
-# for web (HTTP) + essential worker (pump/resolver/whale) on one machine.
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  processes = ["web"]
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "2gb"
+  processes = ["worker"]
+
+# Worker internal HTTP on 8081 — web uses 8080; flycast :8081 routes to worker only.
+[[services]]
+  protocol = "tcp"
+  internal_port = 8081
+  processes = ["worker"]
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8081
+    handlers = ["http"]
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"

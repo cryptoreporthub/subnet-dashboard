@@ -5,7 +5,7 @@ on:
 
 jobs:
   diag:
-    name: Worker logs + live_subnets probe (v1 inline worker)
+    name: Worker logs + live_subnets probe (split v2 worker, v1 web fallback)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,76 +25,8 @@ jobs:
             | tail -200 || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Exec inline-worker probe (v1: on the web machine)
-        run: |
-          set -e
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
-          import json, sys
-          machines = json.load(sys.stdin)
-          for m in machines:
-              meta = (m.get('config') or {}).get('metadata') or {}
-              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
-                  print(m['id'])
-                  break
-          ')"
-          if [ -z "$TARGET_ID" ]; then
-            echo "no web machine found"
-            exit 0
-          fi
-          echo "probe machine=$TARGET_ID"
-          flyctl machine exec "$TARGET_ID" "cd /app && python3 -c \"
-import json, os, time, threading
-from internal.live_subnets import _cache_path, live_data_freshness, _sync_once
-from internal.run_mode import background_on_web, is_worker_mode, inline_worker_expected
-print('RUN_MODE=', os.environ.get('RUN_MODE'))
-print('FETCH_MODE=', os.environ.get('LIVE_SUBNETS_FETCH_MODE'))
-print('INLINE_WORKER=', os.environ.get('INLINE_WORKER'))
-print('inline_worker_expected=', inline_worker_expected())
-print('background_on_web=', background_on_web())
-print('is_worker_mode=', is_worker_mode())
-# show daemon helper threads to detect a wedged/timeouted sync thread
-threads = [(t.name, t.daemon, t.is_alive()) for t in threading.enumerate()]
-print('threads=', json.dumps(threads, default=str))
-print('cache_path=', _cache_path())
-print('exists=', os.path.isfile(_cache_path()))
-fresh = live_data_freshness()
-print('freshness=', json.dumps({k: fresh.get(k) for k in ('subnet_count','last_sync','stale','boot_status','rpc_healthy','effective_source')}, default=str))
-try:
-    from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
-    print('resolver_scheduler=', json.dumps(get_prediction_resolver_scheduler_state(), default=str))
-except Exception as e:
-    print('resolver_scheduler_error=', repr(e))
-try:
-    from internal.worker_heartbeat import is_alive, read_heartbeat
-    print('heartbeat_alive=', is_alive(max_age_seconds=120))
-    print('heartbeat=', json.dumps(read_heartbeat(), default=str))
-except Exception as e:
-    print('heartbeat_error=', repr(e))
-t0=time.time()
-ok = _sync_once()
-print('sync_once=', ok, 'sec=', round(time.time()-t0, 1))
-\"""" --app subnet-dashboard --timeout 600
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Exec Telegram entity probe (web machine)
-        run: |
-          set -e
-          TARGET_ID="$(flyctl machines list -a subnet-dashboard --json | python3 -c '
-          import json, sys
-          machines = json.load(sys.stdin)
-          for m in machines:
-              meta = (m.get('config') or {}).get('metadata') or {}
-              pg = (meta.get('fly_process_group') or m.get('process_group') or 'web').lower()
-              if pg == 'web' and m.get('id'):
-                  print(m['id'])
-                  break
-          ')"
-          if [ -z "$TARGET_ID" ]; then
-            echo "no web machine found"
-            exit 0
-          fi
-          flyctl machine exec "$TARGET_ID" "cd /app && python3 scripts/probe_telegram_entity.py" --app subnet-dashboard --timeout 120 || true
+      - name: Exec worker probe (split v2: worker machine; v1: web machine)
+        run: bash scripts/worker-diag.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Public data-freshness
