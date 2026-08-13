@@ -9,8 +9,8 @@ timeout/degraded fallbacks and the page never hydrated.
 This module wraps the snapshot with single-flight semantics: exactly one build
 runs at a time; every other caller returns the last-good snapshot instantly
 (stale-while-rebuilding). A daemon prewarm thread keeps the snapshot warm so
-request paths only read cache. Installed by scripts/run_web_with_guard.py
-before uvicorn imports server:app.
+request paths only read cache. Installed by scripts/run_web_with_guard.py before
+uvicorn imports server:app, and by the dedicated worker lifespan.
 """
 
 from __future__ import annotations
@@ -74,14 +74,21 @@ def _patched():
         _LOCK.release()
 
 
+def _prewarm_once() -> None:
+    try:
+        _patched()
+    except Exception as exc:
+        logger.debug("learning snapshot prewarm skipped: %s", exc)
+
+
 def _prewarm_loop():
-    interval = float(os.environ.get("LEARNING_SNAPSHOT_PREWARM_SECONDS", "10"))
+    try:
+        interval = max(float(os.environ.get("LEARNING_SNAPSHOT_PREWARM_SECONDS", "10")), 0.1)
+    except ValueError:
+        interval = 10.0
     while True:
+        _prewarm_once()
         time.sleep(interval)
-        try:
-            _patched()
-        except Exception as exc:
-            logger.debug("learning snapshot prewarm skipped: %s", exc)
 
 
 def install():

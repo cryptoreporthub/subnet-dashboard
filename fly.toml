@@ -117,6 +117,7 @@ primary_region = "sjc"
   WORKER_PEER_TIMEOUT_SECONDS = "4"
   WORKER_PROXY_CIRCUIT_OPEN_SECONDS = "30"
   WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS = "4"
+  WORKER_PROXY_LEARNING_TIMEOUT_SECONDS = "25"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
 # SQLite caches under /app/data). Worker-only mount — web proxies volume APIs.
