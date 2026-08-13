@@ -41,6 +41,14 @@ def test_fly_toml_split_v2_worker_topology():
     assert "internal_port = 8081" in fly
 
 
+def test_fly_toml_worker_uses_dedicated_cpu_and_preserves_memory():
+    fly = _fly_toml()
+    assert re.search(
+        r'\[\[vm\]\]\s+#.*\n\s*size = "performance-1x"\s+memory = "2gb"\s+processes = \["worker"\]',
+        fly,
+    )
+
+
 def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
     script = Path("scripts/fly_worker_entrypoint.sh").read_text(encoding="utf-8")
     assert "RUN_MODE=worker" in script
