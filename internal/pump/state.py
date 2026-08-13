@@ -198,13 +198,10 @@ def transition_subnet(
         except Exception as exc:
             logger.debug("pump_lead ledger skipped SN%s: %s", netuid, exc)
 
-    raw_name = signals.get("name") or entry.get("name")
-    try:
-        from internal.subnet_names import resolve_subnet_name
-
-        entry["name"] = resolve_subnet_name(int(netuid), tmc_name=raw_name, use_taostats=False)
-    except Exception:
-        entry["name"] = raw_name
+    # Worker scans must never perform network name resolution for every row.
+    # The feed already carries the display name; unresolved rows keep a local
+    # fallback and can be refreshed by a separate, time-bounded read path.
+    entry["name"] = signals.get("name") or entry.get("name") or f"SN{netuid}"
     entry["composite_score"] = score
     entry["accum_score"] = accum
     entry["confirm_score"] = confirm
