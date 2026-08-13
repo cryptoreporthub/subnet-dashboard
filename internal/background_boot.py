@@ -415,19 +415,22 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_resolver()
     _start_whale_warm_scheduler()
     _start_pick_schedulers()
-    _warm_judges_cache()
-    _start_score_snapshot_scheduler()
-    _start_pick_audit_scheduler()
-    _start_pump_desk_snapshot_scheduler()
-    _start_outcome_snapshot_scheduler()
-    _start_calibration_snapshot_scheduler()
-    _start_dev_radar_github_scheduler()
-
     _maybe_start_message_intel()
     _maybe_start_summary_bot()
 
-    # Dedicated worker always owns live_subnets on the volume — not gated on WORKER_HEAVY.
-    run_live_subnets = is_worker_mode() or heavy
+    # Optional full-universe jobs stay off the essential worker. They can hold
+    # the GIL for long periods and compete with the worker's HTTP health port.
+    if heavy:
+        _warm_judges_cache()
+        _start_score_snapshot_scheduler()
+        _start_pick_audit_scheduler()
+        _start_pump_desk_snapshot_scheduler()
+        _start_outcome_snapshot_scheduler()
+        _start_calibration_snapshot_scheduler()
+        _start_dev_radar_github_scheduler()
+
+    # WORKER_HEAVY=essential must not start live_subnets.
+    run_live_subnets = heavy
     if not run_live_subnets and not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
         return

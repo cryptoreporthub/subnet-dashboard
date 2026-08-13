@@ -101,6 +101,46 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
     bootstrap.assert_not_called()
 
 
+def test_worker_essential_does_not_start_optional_jobs_or_live_subnets(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    scheduled = []
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", lambda name, fn, delay=0: scheduled.append(name))
+    monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
+    for name in (
+        "_start_pump_ladder",
+        "_start_resolver",
+        "_start_whale_warm_scheduler",
+        "_start_pick_schedulers",
+        "_maybe_start_message_intel",
+        "_maybe_start_summary_bot",
+        "_warm_judges_cache",
+        "_start_score_snapshot_scheduler",
+        "_start_pick_audit_scheduler",
+        "_start_pump_desk_snapshot_scheduler",
+        "_start_outcome_snapshot_scheduler",
+        "_start_calibration_snapshot_scheduler",
+        "_start_dev_radar_github_scheduler",
+    ):
+        monkeypatch.setattr(f"internal.background_boot.{name}", MagicMock())
+
+    from internal.background_boot import start_background_workers
+
+    start_background_workers()
+    assert "live-subnets-boot" not in scheduled
+    for name in (
+        "_warm_judges_cache",
+        "_start_score_snapshot_scheduler",
+        "_start_pick_audit_scheduler",
+        "_start_pump_desk_snapshot_scheduler",
+        "_start_outcome_snapshot_scheduler",
+        "_start_calibration_snapshot_scheduler",
+        "_start_dev_radar_github_scheduler",
+    ):
+        getattr(__import__("internal.background_boot", fromlist=[name]), name).assert_not_called()
+
+
 def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
     live = MagicMock()
     bootstrap = MagicMock(return_value=True)
