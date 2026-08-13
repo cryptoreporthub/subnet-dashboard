@@ -5,16 +5,22 @@ APP="subnet-dashboard"
 echo "== machine states =="
 flyctl machines list -a "$APP" --json | jq -r '.[] | "\(.id) state=\(.state) pg=\(.process_group // .config.process_group // \"web\")"' || true
 
-echo "== resolving web machine =="
-# prefer a running web machine
-TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // \"web\") == \"web\") and .state == \"running\")][0].id // empty')"
-# fallback: any web machine
-if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
-  TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select((.process_group // .config.process_group // \"web\") == \"web\")][0].id // empty')"
-fi
-# last resort: first machine
-if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
-  TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '.[0].id')"
+echo "== resolving probe machine (worker when split v2, else web) =="
+# split v2: background jobs + Telegram listener run on the worker process group.
+WORKER_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // \"\") | ascii_downcase) == \"worker\") and (.state == \"running\" or .state == \"started\")][0].id // empty')"
+if [ -n "${WORKER_ID:-}" ] && [ "$WORKER_ID" != "null" ]; then
+  TARGET_ID="$WORKER_ID"
+  echo "split v2 — probing worker machine"
+else
+  # v1 fallback: inline worker on web machine
+  TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // \"web\") == \"web\") and .state == \"running\")][0].id // empty')"
+  if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
+    TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select((.process_group // .config.process_group // \"web\") == \"web\")][0].id // empty')"
+  fi
+  if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
+    TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '.[0].id')"
+  fi
+  echo "v1 inline — probing web machine"
 fi
 echo "probe machine=$TARGET_ID"
 
@@ -30,7 +36,7 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROBE_B64="$(base64 -w0 "$SCRIPT_DIR/worker_probe.py")"
 
-echo "== inline-worker probe =="
+echo "== worker probe =="
 flyctl machine exec "$TARGET_ID" "cd /app && echo \"$PROBE_B64\" | base64 -d > /tmp/probe.py && python3 /tmp/probe.py" --app "$APP" --timeout 600 || true
 
 echo "== telegram entity probe =="

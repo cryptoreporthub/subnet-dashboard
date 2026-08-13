@@ -1,8 +1,12 @@
 #!/bin/sh
-# True when app runs split v2 (secret, CI force flag, or worker process group exists).
+# True when app runs split v2 (fly.toml, secret, CI force flag, or worker process group exists).
 set -eu
 APP="${FLY_APP:-subnet-dashboard}"
 if [ "${FORCE_WORKER_SPLIT_V2:-}" = "1" ]; then
+  exit 0
+fi
+# fly.toml [env] is canon when WORKER_SPLIT_V2=on (no secret required).
+if [ -f fly.toml ] && grep -qE 'WORKER_SPLIT_V2[[:space:]]*=[[:space:]]*"on"' fly.toml; then
   exit 0
 fi
 flyctl secrets list -a "$APP" --json 2>/dev/null | python3 -c "

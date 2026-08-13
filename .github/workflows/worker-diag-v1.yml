@@ -5,7 +5,7 @@ on:
 
 jobs:
   diag:
-    name: Worker logs + live_subnets probe (v1 inline worker)
+    name: Worker logs + live_subnets probe (split v2 worker, v1 web fallback)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
