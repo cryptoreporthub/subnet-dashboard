@@ -44,7 +44,7 @@ def test_fly_toml_split_v2_worker_topology():
 def test_fly_toml_worker_uses_dedicated_cpu_and_preserves_memory():
     fly = _fly_toml()
     assert re.search(
-        r'\[\[vm\]\]\s+size = "performance-1x"\s+(?:#.*\n\s*)?memory = "2gb"\s+processes = \["worker"\]',
+        r'\[\[vm\]\]\s+#.*\n\s*size = "performance-1x"\s+memory = "2gb"\s+processes = \["worker"\]',
         fly,
     )
 
