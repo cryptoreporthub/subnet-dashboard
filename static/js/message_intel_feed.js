@@ -13,6 +13,8 @@
   var weekTopEl = document.getElementById("message-intel-week-top");
   var refreshBtn = document.getElementById("message-intel-trending-refresh");
   var feedHint = document.getElementById("message-intel-feed-hint");
+  var trendingTitle = document.getElementById("message-intel-trending-title");
+  var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
   var yesterdayCard = document.getElementById("message-intel-yesterday");
   var yesterdayLink = document.getElementById("message-intel-yesterday-link");
   var yesterdayStats = document.getElementById("message-intel-yesterday-stats");
@@ -37,7 +39,10 @@
   if (!feed) return;
 
   var FILTER_KEY = "message-intel-filters";
+  var WATCHLIST_KEY = "message-intel-watchlist";
   var filters = loadFilters();
+  var watchlistState = loadWatchlistState();
+  var latestTrendingRows = [];
 
   var lastStatus = null;
   var refreshTimer = null;
@@ -68,6 +73,67 @@
     } catch (e) {
       /* ignore */
     }
+  }
+
+  function loadWatchlistState() {
+    try {
+      var raw = localStorage.getItem(WATCHLIST_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        return {
+          netuids: Array.isArray(parsed.netuids) ? parsed.netuids.map(function (n) { return Number(n); }).filter(function (n) { return !isNaN(n) && n > 0; }) : [],
+          thresholds: parsed.thresholds && typeof parsed.thresholds === "object" ? parsed.thresholds : {},
+          hydrated: true,
+          loading: false,
+          upgrade: false,
+        };
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return { netuids: [], thresholds: {}, hydrated: false, loading: true, upgrade: false };
+  }
+
+  function saveWatchlistState() {
+    try {
+      localStorage.setItem(WATCHLIST_KEY, JSON.stringify({
+        netuids: watchlistState.netuids || [],
+        thresholds: watchlistState.thresholds || {},
+      }));
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  async function hydrateWatchlist() {
+    try {
+      var data = await fetchJsonWithRetry("/api/watchlist");
+      if (data && data.status === "upgrade_required") {
+        watchlistState.upgrade = true;
+        watchlistState.loading = false;
+        renderWatchlistPanel(latestTrendingRows);
+        renderMyPulse(latestTrendingRows);
+        bindWatchlistInteractions();
+        return;
+      }
+      watchlistState.upgrade = false;
+      watchlistState.netuids = (data.netuids || []).map(function (n) { return Number(n); }).filter(function (n) { return !isNaN(n) && n > 0; });
+      watchlistState.hydrated = true;
+      watchlistState.loading = false;
+      saveWatchlistState();
+    } catch (e) {
+      watchlistState.loading = false;
+    }
+    try {
+      var thresholds = await fetchJsonWithRetry("/api/watchlist/thresholds");
+      watchlistState.thresholds = thresholds.thresholds || {};
+      saveWatchlistState();
+    } catch (e2) {
+      /* keep local */
+    }
+    renderWatchlistPanel(latestTrendingRows);
+    renderMyPulse(latestTrendingRows);
+    bindWatchlistInteractions();
   }
 
   function buildListUrl(limit) {
@@ -133,6 +199,96 @@
     });
     subnetFiltersEl.innerHTML = html;
     bindFilterClicks();
+  }
+
+  function isWatchlisted(netuid) {
+    return watchlistState.netuids.indexOf(Number(netuid)) !== -1;
+  }
+
+  function watchlistThreshold(netuid) {
+    var t = watchlistState.thresholds || {};
+    var raw = t[String(netuid)];
+    return raw != null ? Number(raw) : null;
+  }
+
+  function watchlistToggleButton(netuid) {
+    var on = isWatchlisted(netuid);
+    return '<button type="button" class="message-intel__watch-toggle' + (on ? " is-on" : "") + '" data-watch-netuid="' + esc(netuid) + '">' + (on ? "Watching" : "Watch") + "</button>";
+  }
+
+  async function syncWatchlist() {
+    try {
+      await fetch("/api/watchlist", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ netuids: watchlistState.netuids || [] }),
+      });
+    } catch (e) {
+      /* Browser-local state remains usable when the beta endpoint is unavailable. */
+    }
+  }
+
+  async function saveWatchlistThreshold(netuid, rawValue) {
+    var value = rawValue === "" ? null : Math.max(0, Math.min(100, Number(rawValue)));
+    if (value !== null && isNaN(value)) return;
+    watchlistState.thresholds[String(netuid)] = value;
+    if (value === null) delete watchlistState.thresholds[String(netuid)];
+    saveWatchlistState();
+    try {
+      await fetch("/api/watchlist/thresholds", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ netuid: Number(netuid), threshold: value }),
+      });
+    } catch (e) {
+      /* Keep the local threshold until the backend is reachable. */
+    }
+    renderWatchlistPanel(latestTrendingRows);
+    renderMyPulse(latestTrendingRows);
+    bindWatchlistInteractions();
+  }
+
+  function bindWatchlistInteractions() {
+    document.querySelectorAll("[data-watch-netuid]").forEach(function (button) {
+      if (button.getAttribute("data-watch-bound") === "1") return;
+      button.setAttribute("data-watch-bound", "1");
+      button.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        var netuid = Number(button.getAttribute("data-watch-netuid"));
+        var idx = watchlistState.netuids.indexOf(netuid);
+        if (idx === -1) watchlistState.netuids.push(netuid);
+        else watchlistState.netuids.splice(idx, 1);
+        watchlistState.netuids.sort(function (a, b) { return a - b; });
+        saveWatchlistState();
+        syncWatchlist();
+        renderTrendingV2(latestTrendingRows, trendingUnit ? trendingUnit.textContent : "1h");
+        renderWatchlistPanel(latestTrendingRows);
+        renderMyPulse(latestTrendingRows);
+        bindWatchlistInteractions();
+      });
+    });
+    document.querySelectorAll("[data-watch-threshold]").forEach(function (input) {
+      if (input.getAttribute("data-watch-threshold-bound") === "1") return;
+      input.setAttribute("data-watch-threshold-bound", "1");
+      input.addEventListener("change", function () {
+        saveWatchlistThreshold(input.getAttribute("data-watch-threshold"), input.value);
+      });
+    });
+    document.querySelectorAll("[data-watch-link]").forEach(function (button) {
+      if (button.getAttribute("data-watch-link-bound") === "1") return;
+      button.setAttribute("data-watch-link-bound", "1");
+      button.addEventListener("click", async function () {
+        var target = document.getElementById("message-intel-watch-link-code");
+        if (target) target.textContent = "Generating…";
+        try {
+          var response = await fetchJsonWithRetry("/api/watchlist/link-code");
+          if (target) target.textContent = "Send /link " + response.code + " to the Telegram bot.";
+        } catch (e) {
+          if (target) target.textContent = "Telegram linking is unavailable right now.";
+        }
+      });
+    });
   }
 
   function bindFilterClicks() {
@@ -379,6 +535,10 @@
   function renderCallerLeaderboard(payload) {
     if (!callersBody) return;
     payload = payload || {};
+    if (payload.status === "upgrade_required") {
+      callersBody.innerHTML = '<p class="empty">' + esc((payload.upgrade_prompt && payload.upgrade_prompt.body) || "Upgrade required.") + '</p>';
+      return;
+    }
     var callers = payload.callers || [];
     if (!callers.length) {
       callersBody.innerHTML = '<p class="empty">No resolved qualifying Telegram calls in this window yet. A caller needs explicit direction, 60%+ conviction, and a tracked price snapshot.</p>';
@@ -442,6 +602,10 @@
 
   function renderConsensus(payload) {
     if (!consensusBody) return;
+    if (payload && payload.status === "upgrade_required") {
+      consensusBody.innerHTML = '<p class="empty">' + esc((payload.upgrade_prompt && payload.upgrade_prompt.body) || "Upgrade required.") + '</p>';
+      return;
+    }
     var items = (payload && payload.items) || [];
     if (!items.length) {
       consensusBody.innerHTML = '<p class="empty">No evidence-qualified current Telegram calls yet. This stays empty until callers have resolved history and fresh directional calls.</p>';
@@ -485,6 +649,10 @@
 
   function renderDivergence(payload) {
     if (!divergenceBody) return;
+    if (payload && payload.status === "upgrade_required") {
+      divergenceBody.innerHTML = '<p class="empty">' + esc((payload.upgrade_prompt && payload.upgrade_prompt.body) || "Upgrade required.") + '</p>';
+      return;
+    }
     var stories = (payload && payload.stories) || [];
     if (!stories.length) {
       divergenceBody.innerHTML = '<p class="empty">No resolved, evidence-qualified Telegram outcome stories in this window yet. Pending calls stay out until their recorded outcomes resolve.</p>';
@@ -949,6 +1117,85 @@
     return html;
   }
 
+  function renderTrendingV2(rows, windowLabel) {
+    if (!trendingEl) return;
+    if (!rows || !rows.length) {
+      trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet.</p>';
+      return;
+    }
+    if (trendingTitle) trendingTitle.textContent = "Currently trending";
+    if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
+    trendingEl.innerHTML =
+      '<div class="message-intel__trend-rows">' +
+       rows.slice(0, 6).map(function (row, idx) {
+        var score = row.chatter_power != null ? Number(row.chatter_power) : Number(row.heat) || 0;
+        var delta = row.delta != null ? Number(row.delta) : 0;
+        return '<div class="message-intel__trend-row">' +
+          '<span class="message-intel__rank">' + esc((idx + 1 < 10 ? "0" : "") + (idx + 1)) + '</span>' +
+          '<span class="message-intel__t-icon" aria-hidden="true">' + esc(initialLetter(row.name)) + '</span>' +
+          '<div class="message-intel__t-body">' +
+          '<a class="message-intel__t-name" href="/subnet/' + esc(row.netuid) + '">' + esc(row.name) + '<span class="message-intel__t-sn">SN' + esc(row.netuid) + '</span></a>' +
+          '<div class="message-intel__t-count">' + esc(row.mentions || 0) + ' mentions · ' + esc(score.toFixed(3)) + '</div>' +
+          (row.why ? '<div class="message-intel__trend-why">' + esc(row.why) + '</div>' : '') +
+          '</div>' +
+          '<div class="message-intel__t-right">' +
+          '<span class="message-intel__tag message-intel__tag--' + esc(String(row.sentiment || "cautious").toLowerCase()) + '">' + esc(String(row.sentiment || "cautious").toUpperCase()) + '</span>' +
+           '<div class="message-intel__trend-delta">' + esc((delta > 0 ? "+" : "") + delta.toFixed(3)) + '</div>' +
+           watchlistToggleButton(row.netuid) +
+          '</div></div>';
+      }).join("") +
+      '</div>';
+  }
+
+  function renderWatchlistPanel(trending) {
+    var root = document.getElementById("message-intel-watchlist-panel");
+    if (!root) return;
+    if (watchlistState.upgrade) {
+      root.innerHTML = '<div class="message-intel__upgrade"><b>Upgrade to PRO</b><p>My Desk watchlists and alert thresholds are part of PRO.</p></div>';
+      return;
+    }
+    if (watchlistState.loading) {
+      root.innerHTML = '<p class="empty">Loading your watchlist…</p>';
+      return;
+    }
+    var rows = (trending || []).filter(function (row) { return isWatchlisted(row.netuid); });
+    if (!rows.length) {
+      root.innerHTML = '<p class="empty">No pinned subnets yet. Add one from trending cards or subnet rows.</p>';
+      return;
+    }
+    var link = '<div class="message-intel__watch-link"><button type="button" class="message-intel__watch-toggle" data-watch-link>Link Telegram bot</button><span id="message-intel-watch-link-code"></span></div>';
+    root.innerHTML = link + (rows.length ? rows.map(function (row) {
+      return '<div class="message-intel__watch-row" data-netuid="' + esc(row.netuid) + '">' +
+        '<a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name || "SN" + row.netuid) + '</b> <span>SN' + esc(row.netuid) + '</span></a>' +
+        '<label class="message-intel__watch-meta">Alert ≥ ' +
+        '<input class="message-intel__watch-threshold" type="number" min="0" max="100" step="1" data-watch-threshold="' + esc(row.netuid) + '" value="' + esc(watchlistThreshold(row.netuid) != null ? watchlistThreshold(row.netuid) : 60) + '" aria-label="Alert threshold for SN' + esc(row.netuid) + '">%</label>' +
+        watchlistToggleButton(row.netuid) +
+        '</div>';
+    }).join("") : '<p class="empty">No pinned subnets yet. Add one from trending cards or subnet rows.</p>');
+    bindWatchlistInteractions();
+  }
+
+  function renderMyPulse(trending) {
+    var root = document.getElementById("message-intel-my-pulse");
+    if (!root) return;
+    if (watchlistState.upgrade) {
+      root.innerHTML = '<div class="message-intel__upgrade"><b>Upgrade to PRO</b><p>My Pulse is available with My Desk.</p></div>';
+      return;
+    }
+    var rows = (trending || []).filter(function (row) { return isWatchlisted(row.netuid); });
+    if (!rows.length) {
+      root.innerHTML = '<p class="empty">Pin a subnet to see its ChatterPower pulse here.</p>';
+      return;
+    }
+    root.innerHTML = rows.map(function (row) {
+      var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || 0;
+      var delta = Number(row.delta) || 0;
+      return '<div class="message-intel__pulse-row"><a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name || "SN" + row.netuid) + '</b></a>' +
+        '<span>Power ' + esc(power.toFixed(3)) + '</span><span class="message-intel__trend-delta">' + esc((delta > 0 ? "+" : "") + delta.toFixed(3)) + '</span></div>';
+    }).join("");
+    bindWatchlistInteractions();
+  }
+
   function renderChampions(rows, authorsUnavailable) {
     if (authorsUnavailable) {
       return '<p class="empty">Weekly champions API unavailable — redeploy to pick up the latest build.</p>';
@@ -1197,8 +1444,8 @@
         '<p class="message-intel__f-text">' +
         esc(snippet(row.content, 280));
       if (netuids.length) {
-        html +=
-          '<span class="message-intel__sn-inline">SN' + esc(netuids[0]) + "</span>";
+        html += '<span class="message-intel__sn-inline">SN' + esc(netuids[0]) + '</span>';
+        html += watchlistToggleButton(netuids[0]);
       }
       html += "</p>";
       html += proofPill(row.proof);
@@ -1432,7 +1679,14 @@
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
+       try {
+         var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
+         if (trendingV2 && Array.isArray(trendingV2.items)) trending = trendingV2.items;
+       } catch (trendingErr) {
+         /* Keep the server-rendered compatibility rollup. */
+       }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
+       latestTrendingRows = trending;
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
@@ -1444,10 +1698,11 @@
       hydrateDivergence();
       renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
       renderSubnetFilterChips(trending);
+      renderWatchlistPanel(trending);
+       renderMyPulse(trending);
       syncFilterChipStates();
-      if (trendingEl) {
-        trendingEl.innerHTML = renderTrending(trending, listener, trendingWindow);
-      }
+      renderTrendingV2(trending, trendingWindow);
+       bindWatchlistInteractions();
 
       var authorsUnavailable = false;
       var authors = [];
@@ -1519,12 +1774,14 @@
     document.addEventListener("DOMContentLoaded", function () {
       bindFilterClicks();
       syncFilterChipStates();
+       hydrateWatchlist();
       hydrate();
       refreshTimer = window.setInterval(hydrate, 60000);
     });
   } else {
     bindFilterClicks();
     syncFilterChipStates();
+    hydrateWatchlist();
     hydrate();
     refreshTimer = window.setInterval(hydrate, 60000);
   }
