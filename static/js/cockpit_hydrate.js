@@ -369,6 +369,16 @@
     replaceEmptyIn(sectionId, html);
   }
 
+  function ratePercent(value) {
+    if (value == null || value === '') return null;
+    var n = Number(value);
+    if (!isFinite(n)) return null;
+    // Telegram proof historically returned percentage points (for example
+    // 73.2), while learning stats use a 0..1 fraction. Accept both forms.
+    if (Math.abs(n) <= 1) n *= 100;
+    return Math.max(0, Math.min(100, Math.round(n * 10) / 10));
+  }
+
   function pickName(pick) {
     var sn = pick.subnet || {};
     return resolveSubnetDisplayName(sn, pick.netuid != null ? pick.netuid : sn.netuid);
@@ -873,9 +883,9 @@
 
     var tgProof = extras.telegram_proof || {};
     var tgGraded = Number(tgProof.graded || 0);
-    var tgRate = tgProof.hit_rate;
-    if (tgProof.ready && tgRate != null && tgGraded > 0) {
-      if (tgVal) tgVal.textContent = Math.round(Number(tgRate) * 100) + '%';
+    var tgRatePct = ratePercent(tgProof.hit_rate);
+    if (tgProof.ready && tgRatePct != null && tgGraded > 0) {
+      if (tgVal) tgVal.textContent = tgRatePct + '%';
       if (tgMeta) {
         tgMeta.textContent = tgGraded + ' graded calls';
         tgMeta.classList.remove('desk-empty');
@@ -3147,7 +3157,13 @@
   }
 
   function renderTrail(trail) {
-    if (!trail || !trail.length) return;
+    if (!trail || !trail.length) {
+      replaceEmptyIn(
+        'section-trail',
+        '<div class="card card-muted"><p class="empty empty--quiet">No trace events yet — the trail will fill as Council decisions are recorded.</p></div>'
+      );
+      return;
+    }
     var items = trail.slice(0, 20).map(function (t) {
       return (
         '<div class="trail-item">' +
@@ -3975,6 +3991,28 @@
     }
   }
 
+  function startTrailHydration() {
+    return fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1)
+      .then(function (payload) {
+        var next = safePayload(payload).trail || [];
+        renderTrail(next);
+        patchK3LifecycleFromTrail(next, lastDailyPickPayload);
+        window.__homeTrailHydratePending = false;
+        window.HomeHydrateCache = window.HomeHydrateCache || {};
+        window.HomeHydrateCache.trail = next;
+        window.HomeHydrateCache.at = Date.now();
+        document.dispatchEvent(new CustomEvent('home:trail-hydrated', {
+          detail: { trail: next },
+        }));
+        return next;
+      })
+      .catch(function (err) {
+        window.__homeTrailHydratePending = false;
+        console.warn('[cockpit_hydrate] trail fetch failed', err);
+        return [];
+      });
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
@@ -3987,6 +4025,10 @@
     var hourPicks = [];
     var dayPicks = [];
     var trail = [];
+    // Start independently of the tier-1 burst. A slow daily/council request
+    // must not leave a real trail hidden behind its SSR placeholder.
+    window.__homeTrailHydratePending = true;
+    var trailPromise = startTrailHydration();
 
     try {
       // Tier 1a — daily call first (hero path wins under load)
@@ -4059,8 +4101,6 @@
           } else {
             patchTribunalJudges(stats, {});
             patchTribunalPanels({}, stats);
-            patchTribunalInstrument(stats, {});
-            patchTribunalEyeArcs(stats.judge_weights);
           }
         }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
@@ -4112,12 +4152,10 @@
         predictions: stats && stats.total_records != null ? stats.total_records : null,
       });
 
-      // LB-11: hydrate owns the sole /api/mindmap/trail fetch on home cold load.
-      window.__homeTrailHydratePending = true;
       window.HomeHydrateCache = {
         dailyPick: lastDailyPickPayload,
         simivision: lastSimivisionTop ? { top: lastSimivisionTop, meta: lastSimivisionMeta } : null,
-        trail: null,
+        trail: (window.HomeHydrateCache && window.HomeHydrateCache.trail) || null,
         subnets: subnets,
         subnetsMeta: subnetsMeta,
         at: Date.now(),
@@ -4132,15 +4170,15 @@
 
       // Tier 3 — warehouse panels (deferred so tier 1 wins CPU on Fly)
       scheduleDeferred(function () {
-        runDeferredPanels(stats, subnets, subnetsMeta, hourPicks, dayPicks, trail);
-      }, 1800);
+        runDeferredPanels(stats, subnets, subnetsMeta, hourPicks, dayPicks, trail, trailPromise);
+      }, 450);
     } catch (e) {
       console.error('[cockpit_hydrate] fatal', e);
       clearHydrateFlag();
     }
   }
 
-  async function runDeferredPanels(stats, subnets, subnetsMeta, hourPicks, dayPicks, trail) {
+  async function runDeferredPanels(stats, subnets, subnetsMeta, hourPicks, dayPicks, trail, trailPromise) {
     try {
       if (window.SimiMarketDrivers && window.SimiMarketDrivers.refresh) {
         window.SimiMarketDrivers.refresh();
@@ -4160,12 +4198,10 @@
         } catch (e) { console.warn('[cockpit_hydrate] renderRadar failed', e); }
       }
 
-      // LB-11: trail before top-picks so Living Focus can reuse this fetch
-      // instead of racing a second /api/mindmap/trail behind a 30s picks call.
+      // Reuse the request started during tier 1; never issue a second trail
+      // request just because the warehouse pass began later.
       try {
-        var trailPayload = await fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1);
-        trail = safePayload(trailPayload).trail || [];
-        renderTrail(trail);
+        trail = trailPromise ? await trailPromise : await startTrailHydration();
         patchK3LifecycleFromTrail(trail, lastDailyPickPayload);
         // Refresh the footer Trail metric as soon as the trail fetch lands, not
         // only at the end of the deferred chain (which waits on 30s picks).
@@ -4183,9 +4219,7 @@
         document.dispatchEvent(new CustomEvent('home:hydrate-trail', { detail: { trail: trail } }));
       } catch (e) {
         console.warn('[cockpit_hydrate] trail fetch failed', e);
-      } finally {
-        window.__homeTrailHydratePending = false;
-      }
+      } finally { window.__homeTrailHydratePending = false; }
 
       try {
         var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
@@ -4524,146 +4558,6 @@
     return { consensus: consensus, dissent: dissent };
   }
 
-  function patchTribunalEyeArcs(weights) {
-    var hero = document.getElementById('tribunal-hero');
-    if (!hero) return;
-    var outer = hero.querySelector('[data-eye-path]');
-    var inner = hero.querySelector('[data-conviction-arc]');
-    function placeOnPath(el, path, frac) {
-      if (!el) return;
-      if (path && path.getTotalLength) {
-        var len = path.getTotalLength();
-        if (len) {
-          var t = ((frac % 1) + 1) % 1;
-          var pt = path.getPointAtLength(t * len);
-          el.setAttribute('cx', pt.x.toFixed(2));
-          el.setAttribute('cy', pt.y.toFixed(2));
-          return;
-        }
-      }
-      var a = frac * Math.PI * 2 - Math.PI / 2;
-      el.setAttribute('cx', (120 + 77.23 * Math.cos(a)).toFixed(2));
-      el.setAttribute('cy', (70 + 42 * Math.sin(a)).toFixed(2));
-    }
-    function setArc(el, start, frac) {
-      if (!el) return;
-      var len = Math.max(0, Math.min(100, frac * 100));
-      el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (100 - len).toFixed(1));
-      el.setAttribute('stroke-dashoffset', (-start * 100).toFixed(1));
-    }
-    var p = parseFloat(hero.getAttribute('data-hero-conviction'));
-    if (inner && isFinite(p)) {
-      var c = Math.max(0, Math.min(100, p));
-      inner.setAttribute('stroke-dasharray', c.toFixed(1) + ' ' + (100 - c).toFixed(1));
-    }
-    var present = weights && [weights.oracle, weights.echo, weights.pulse].every(function (x) {
-      return typeof x === 'number' && isFinite(x);
-    });
-    if (!present) {
-      hero.classList.add('tribunal-hero--consensus');
-      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
-      return;
-    }
-    var total = weights.oracle + weights.echo + weights.pulse;
-    var fracs = ['oracle', 'echo', 'pulse'].map(function (k) { return weights[k] / total; });
-    var maxF = Math.max.apply(null, fracs);
-    if (maxF - Math.min.apply(null, fracs) < 0.02) {
-      hero.classList.add('tribunal-hero--consensus');
-      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
-      return;
-    }
-    hero.classList.remove('tribunal-hero--consensus');
-    var started = 0;
-    ['oracle', 'echo', 'pulse'].forEach(function (k, i) {
-      var f = fracs[i];
-      setArc(hero.querySelector('[data-judge-arc="' + k + '"]'), started, f);
-      placeOnPath(hero.querySelector('[data-rim-marker="' + k + '"]'), outer, started + f / 2);
-      started += f;
-    });
-    placeOnPath(hero.querySelector('[data-comet]'), inner || outer, Math.min(0.99, (isFinite(p) ? p : 0) / 100));
-  }
-
-  function patchTribunalInstrument(stats, dailyPick) {
-    var hero = document.getElementById('tribunal-hero');
-    if (!hero || !stats) return;
-    function setM(k, v, arrow) {
-      var el = hero.querySelector('[data-metric="' + k + '"]');
-      if (!el || v == null || v === '') return;
-      el.textContent = v;
-      if (arrow) el.setAttribute('data-arrow', arrow);
-      else el.removeAttribute('data-arrow');
-    }
-    function setMeter(k, pct) {
-      var el = hero.querySelector('[data-metric="' + k + '"]');
-      var bar = el && el.parentNode && el.parentNode.querySelector('.tribunal-hero__cell-meter i');
-      if (bar && typeof pct === 'number' && isFinite(pct)) {
-        bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-      }
-    }
-    var tb = stats.trust_banner || {};
-    var graded = Number(tb.graded != null ? tb.graded : stats.graded) || 0;
-    var correct = Number(tb.correct != null ? tb.correct : stats.correct) || 0;
-    var wrong = Number(tb.wrong != null ? tb.wrong : stats.wrong) || 0;
-    var acc = null;
-    if (tb.ready && tb.accuracy != null && !isNaN(Number(tb.accuracy))) acc = Number(tb.accuracy) * 100;
-    else if (graded > 0 && correct + wrong > 0) acc = (correct / (correct + wrong)) * 100;
-    if (acc != null) {
-      var accTxt = formatGaugePct(acc);
-      var accArrow = acc >= 50 ? 'up' : 'down';
-      setM('avg-acc', accTxt, accArrow);
-      setM('win-rate', accTxt, accArrow);
-      setMeter('avg-acc', acc);
-      setMeter('win-rate', acc);
-    } else {
-      setM('avg-acc', '—');
-      setM('win-rate', '—');
-      setMeter('avg-acc', 0);
-      setMeter('win-rate', 0);
-    }
-    var dw = stats.judge_weight_deltas || {};
-    var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, k) {
-      return s + (typeof dw[k] === 'number' ? dw[k] : 0);
-    }, 0);
-    if (Math.abs(signed) >= 0.0005) {
-      setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
-    } else {
-      setM('signal', '·');
-    }
-    var active = (dailyPick && (dailyPick.pick || dailyPick.candidate)) || {};
-    var tags = active.scenario_tags || {};
-    var sn = active.subnet || {};
-    var rsiN = sn.rsi != null ? Number(sn.rsi) : NaN;
-    if (!isNaN(rsiN)) setM('rsi', String(Math.round(rsiN)), rsiN >= 50 ? 'up' : 'down');
-    else if (tags.rsi) setM('rsi', String(tags.rsi).replace(/_/g, ' ').toUpperCase());
-    var stochC = active.signal_contributions && active.signal_contributions.stochastic_reversal;
-    var stochN = sn.stochastic_k != null ? Number(sn.stochastic_k) : NaN;
-    if (isNaN(stochN) && stochC && stochC.score != null) {
-      stochN = Number(stochC.score);
-      if (stochN <= 1) stochN *= 100;
-    }
-    if (!isNaN(stochN)) setM('stoch', String(Math.round(stochN)), stochN >= 50 ? 'up' : 'down');
-    var hv = dailyPick && dailyPick.horizon_views && dailyPick.horizon_views.views
-      ? dailyPick.horizon_views.views['7d']
-      : null;
-    var d7 = sn.price_change_7d != null ? Number(sn.price_change_7d)
-      : sn.change_7d != null ? Number(sn.change_7d)
-      : active.price_change_7d != null ? Number(active.price_change_7d)
-      : hv && hv.pct_7d != null ? Number(hv.pct_7d)
-      : NaN;
-    if (!isNaN(d7)) setM('d7', (d7 >= 0 ? '+' : '') + d7.toFixed(1) + '%', d7 >= 0 ? 'up' : 'down');
-    var signals = judgeSignalsFromPick(dailyPick || {});
-    var vals = ['oracle', 'echo', 'pulse'].map(function (k) { return signals[k]; }).filter(function (v) {
-      return v != null && !isNaN(Number(v));
-    }).map(Number);
-    var varEl = hero.querySelector('.tribunal-hero__variance-value');
-    var varFill = hero.querySelector('.tribunal-hero__variance-fill');
-    if (vals.length >= 2) {
-      var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
-      if (varEl) varEl.textContent = Math.round(spread) + ' pt';
-      if (varFill) varFill.style.width = Math.max(0, Math.min(100, 100 - spread)) + '%';
-    }
-  }
-
   function patchTribunalRingFill(pct) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero) return;
@@ -4672,13 +4566,10 @@
       clamped = Math.max(0, Math.min(100, Number(pct)));
     }
     var target = String(clamped);
-    var inner = hero.querySelector('[data-conviction-arc]');
-    if (inner) {
-      inner.setAttribute('stroke-dasharray', clamped.toFixed(1) + ' ' + (100 - clamped).toFixed(1));
-    }
     if (!hero.hasAttribute('data-ring-animated')) {
       hero.style.setProperty('--p', '0');
       hero.setAttribute('data-ring-animated', '1');
+      // Animate 0 → real% on first paint
       requestAnimationFrame(function () {
         requestAnimationFrame(function () {
           hero.style.setProperty('--p', target);
@@ -4910,8 +4801,6 @@
     if (learningStats) {
       patchTribunalJudges(learningStats, dailyPick);
       patchTribunalPanels(dailyPick, learningStats);
-      patchTribunalInstrument(learningStats, dailyPick);
-      patchTribunalEyeArcs(learningStats.judge_weights);
     }
     return true;
   }
