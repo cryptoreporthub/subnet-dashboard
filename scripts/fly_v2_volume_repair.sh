@@ -55,8 +55,26 @@ if [ -z "$vol_id" ]; then
   exit 0
 fi
 
+# Volume on web is the v1→v2 blocker even when worker does not exist yet.
 if [ -z "$web_id" ]; then
-  echo "fly_v2_volume_repair: no web machine — skip"
+  orphan_web_vol=$(flyctl machines list -a "$APP" --json | python3 -c "
+import json, sys
+machines = json.load(sys.stdin)
+for m in machines:
+    mounts = (m.get('config') or {}).get('mounts') or []
+    if any(mount.get('volume') for mount in mounts):
+        print(m.get('id') or '')
+        break
+" 2>/dev/null || true)
+  if [ -n "$orphan_web_vol" ]; then
+    echo "fly_v2_volume_repair: machine $orphan_web_vol has volume mount — destroy"
+    flyctl machine destroy "$orphan_web_vol" -a "$APP" --force
+    echo "waiting 25s for volume detach..."
+    sleep 25
+    flyctl volumes list -a "$APP" || true
+  else
+    echo "fly_v2_volume_repair: no web machine — skip"
+  fi
   exit 0
 fi
 

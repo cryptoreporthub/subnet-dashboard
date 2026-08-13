@@ -58,6 +58,18 @@ def test_volume_unattached():
     assert not volume_on_web("vol1", "", "webmachine", "workermachine")
 
 
+def test_web_machine_has_volume_mount():
+    m = {
+        "id": "w1",
+        "config": {
+            "metadata": {"fly_process_group": "web"},
+            "mounts": [{"volume": "vol_abc", "path": "/app/data"}],
+        },
+    }
+    mounts = (m.get("config") or {}).get("mounts") or []
+    assert any(mount.get("volume") for mount in mounts)
+
+
 def test_pick_worker_internal_url():
     machines = [
         {"id": "web1", "config": {"metadata": {"fly_process_group": "web"}}},

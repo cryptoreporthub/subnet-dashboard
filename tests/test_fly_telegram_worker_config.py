@@ -67,6 +67,20 @@ def test_fly_yml_waits_for_worker_peer_alive():
     assert "fly_wait_worker_peer_alive.sh" in yml
 
 
+def test_fly_yml_prep_split_v2_before_deploy():
+    yml = _fly_yml()
+    assert "Prep split v2 deploy" in yml
+    assert "fly_split_v2_deploy_prep.sh" in yml
+    assert "prep_retry" in yml
+
+
+def test_fly_split_v2_deploy_prep_script():
+    script = Path("scripts/fly_split_v2_deploy_prep.sh").read_text(encoding="utf-8")
+    assert "fly_v2_volume_repair.sh" in script
+    assert "has_volume_mount" in script or "volume mount" in script
+    assert "created" in script and "starting" in script
+
+
 def test_fly_wait_worker_peer_alive_script():
     script = Path("scripts/fly_wait_worker_peer_alive.sh").read_text(encoding="utf-8")
     assert "fly_probe_worker_from_web.sh" in script

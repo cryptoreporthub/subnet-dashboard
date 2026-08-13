@@ -77,6 +77,12 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
       # Canon = split v2 (fly.toml): web HTTP :8080 + dedicated worker :8081 (volume on worker).
+      - name: Prep split v2 deploy (release web volume, clear stale machines)
+        run: |
+          chmod +x scripts/fly_split_v2_deploy_prep.sh scripts/fly_v2_volume_repair.sh
+          FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc ./scripts/fly_split_v2_deploy_prep.sh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Deploy to Fly (split v2 fly.toml, region sjc)
         run: |
           set -e
@@ -85,24 +91,32 @@ jobs:
           deploy_once() {
             flyctl deploy --config "$FLY_CONFIG" --remote-only --no-cache --yes --regions sjc --ha=false
           }
-          # ponytail: never destroy healthy machines up front — a failed recreate
-          # leaves zero candidates and the edge shows a TLS error in browsers.
+          prep_retry() {
+            chmod +x scripts/fly_split_v2_deploy_prep.sh
+            FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc FLY_PREP_WAIT_SECONDS=45 \
+              ./scripts/fly_split_v2_deploy_prep.sh || true
+          }
+          # ponytail: never destroy healthy machines up front — prep only removes
+          # web+volume misconfig and stale/failed machines that block flyctl leases.
           for attempt in 1 2 3 4 5; do
             echo "=== flyctl deploy attempt $attempt/5 (regions=sjc) ==="
             if deploy_once; then
               exit 0
             fi
-            echo "deploy attempt $attempt failed — waiting 60s before retry"
+            echo "deploy attempt $attempt failed — prep stale machines then wait 60s"
+            prep_retry
             sleep 60
           done
           echo "=== deploy still failing — run volume recover then retry ==="
           ./scripts/fly_volume_recover.sh
+          prep_retry
           for attempt in 1 3; do
             echo "=== post-recover deploy attempt $attempt/3 ==="
             if deploy_once; then
               exit 0
             fi
-            echo "post-recover attempt $attempt failed — waiting 90s"
+            echo "post-recover attempt $attempt failed — prep stale machines then wait 90s"
+            prep_retry
             sleep 90
           done
           echo "GUARD FAIL: flyctl deploy failed after volume recover"
