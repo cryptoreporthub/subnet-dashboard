@@ -211,12 +211,21 @@ class PriceTracker:
     checks outcomes at future intervals.
     """
 
-    def __init__(self, db=None):
+    def __init__(self, db=None, progress_callback=None):
         self.db = db
+        self._progress_callback = progress_callback
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._baseline_running = False
         self._baseline_thread: Optional[threading.Thread] = None
+
+    def _report_progress(self) -> None:
+        callback = self._progress_callback
+        if callback is not None:
+            try:
+                callback()
+            except Exception:
+                logger.debug("Outcome progress callback failed", exc_info=True)
 
     def set_db(self, db) -> None:
         """Set the database instance after initialization."""
@@ -280,8 +289,10 @@ class PriceTracker:
         """
         if self.db is None:
             return
+        self._report_progress()
 
         unresolved = self.db.get_unresolved_outcomes()
+        self._report_progress()
         if not unresolved:
             return
 
@@ -294,10 +305,12 @@ class PriceTracker:
             for netuid in netuids:
                 price_data = all_prices.get(netuid) or fetch_subnet_price(netuid)
                 subnet_prices[netuid] = price_data.get("price") if price_data else None
+            self._report_progress()
 
         tao_price: Optional[float] = None
 
         for msg in unresolved:
+            self._report_progress()
             message_id = msg["id"]
             snapshot_price = msg.get("tao_usd_price")
             snapshot_ts = msg.get("snapshot_timestamp")
@@ -403,6 +416,7 @@ class PriceTracker:
                     outcome_data["outcome"],
                     pct_change,
                 )
+        self._report_progress()
 
     def start_background_checks(self, interval: int = 300) -> None:
         """

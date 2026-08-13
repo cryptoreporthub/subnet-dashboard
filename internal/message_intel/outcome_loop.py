@@ -12,6 +12,7 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 _tracker: Any = None
+_tracker_lock = threading.RLock()
 _heartbeat_stop: Optional[Any] = None
 _watchdog_stop: Optional[Any] = None
 _DEFAULT_HEARTBEAT = "data/.message_intel_outcome_loop"
@@ -129,65 +130,78 @@ def _stop_outcome_watchdog() -> None:
 def _restart_outcome_loop(*, interval: int = 300) -> None:
     """Stop and start the outcome loop without clearing local running state mid-flight."""
     global _tracker
-    old = _tracker
-    _stop_heartbeat_loop()
-    if old is not None:
+    with _tracker_lock:
+        old = _tracker
+        _stop_heartbeat_loop()
+        if old is not None:
+            try:
+                old._running = False
+                thread = getattr(old, "_thread", None)
+                if thread is not None and thread.is_alive():
+                    thread.join(timeout=5)
+                if thread is not None and thread.is_alive():
+                    logger.warning("outcome watchdog: old loop did not stop; refusing replacement")
+                    _tracker = old
+                    return
+            except Exception:
+                logger.exception("outcome watchdog: failed stopping old loop")
+                _tracker = old
+                return
+        _clear_outcome_heartbeat()
         try:
-            old._running = False
-        except Exception:
-            pass
-    _clear_outcome_heartbeat()
-    try:
-        from internal.message_intel.store import get_db
-        from message_intel.price_tracker import PriceTracker
+            from internal.message_intel.store import get_db
+            from message_intel.price_tracker import PriceTracker
 
-        tracker = PriceTracker(db=get_db())
-        tracker.start_background_checks(interval=interval)
-        _tracker = tracker
-        _touch_outcome_heartbeat()
-        _start_heartbeat_loop()
-        logger.info("outcome watchdog: loop restarted (interval=%ds)", interval)
-    except Exception as exc:
-        logger.warning("outcome watchdog restart failed: %s", exc)
-        _tracker = old
+            tracker = PriceTracker(db=get_db(), progress_callback=_touch_outcome_heartbeat)
+            tracker.start_background_checks(interval=interval)
+            _tracker = tracker
+            _touch_outcome_heartbeat()
+            logger.info("outcome watchdog: loop restarted (interval=%ds)", interval)
+        except Exception as exc:
+            logger.warning("outcome watchdog restart failed: %s", exc)
+            _tracker = old
 
 
 def start_price_outcome_loop(*, interval: int = 300) -> bool:
     """Start periodic outcome checks against message price snapshots."""
     global _tracker
-    if _outcome_running_local():
-        return True
-    try:
-        from internal.message_intel.store import get_db
-        from message_intel.price_tracker import PriceTracker
+    with _tracker_lock:
+        if _outcome_running_local():
+            return True
+        try:
+            from internal.message_intel.store import get_db
+            from message_intel.price_tracker import PriceTracker
 
-        tracker = PriceTracker(db=get_db())
-        tracker.start_background_checks(interval=interval)
-        _tracker = tracker
-        _touch_outcome_heartbeat()
-        _start_heartbeat_loop()
-        _start_outcome_watchdog(interval=interval)
-        logger.info("Message-intel price outcome loop started (interval=%ds)", interval)
-        return True
-    except Exception as exc:
-        logger.warning("Price outcome loop failed to start: %s", exc)
-        _tracker = None
-        return False
+            tracker = PriceTracker(db=get_db(), progress_callback=_touch_outcome_heartbeat)
+            tracker.start_background_checks(interval=interval)
+            _tracker = tracker
+            _touch_outcome_heartbeat()
+            _start_outcome_watchdog(interval=interval)
+            logger.info("Message-intel price outcome loop started (interval=%ds)", interval)
+            return True
+        except Exception as exc:
+            logger.warning("Price outcome loop failed to start: %s", exc)
+            _tracker = None
+            return False
 
 
 def stop_price_outcome_loop() -> None:
     global _tracker
-    _stop_outcome_watchdog()
-    _stop_heartbeat_loop()
-    if _tracker is None:
+    with _tracker_lock:
+        _stop_outcome_watchdog()
+        _stop_heartbeat_loop()
+        if _tracker is None:
+            _clear_outcome_heartbeat()
+            return
+        try:
+            _tracker._running = False
+            thread = getattr(_tracker, "_thread", None)
+            if thread is not None:
+                thread.join(timeout=5)
+        except Exception:
+            logger.exception("Price outcome loop failed to stop cleanly")
+        _tracker = None
         _clear_outcome_heartbeat()
-        return
-    try:
-        _tracker._running = False
-    except Exception:
-        pass
-    _tracker = None
-    _clear_outcome_heartbeat()
 
 
 def outcome_loop_status() -> dict:

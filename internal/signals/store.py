@@ -11,6 +11,7 @@ from internal.signals.rules import signals_unchanged
 
 SIGNALS_PATH = os.environ.get("SIGNALS_PATH", "data/signals.json")
 RETENTION_DAYS = int(os.environ.get("SIGNAL_RETENTION_DAYS", "7"))
+MAX_CACHE_AGE_SECONDS = int(os.environ.get("SIGNAL_CACHE_MAX_AGE_SECONDS", "900"))
 EXPERTS = ("quant", "hype", "dark_horse", "technical")
 
 
@@ -115,6 +116,13 @@ class SignalStore:
         rows = list((self._data.get("latest_by_subnet") or {}).values())
         rows.sort(key=lambda r: r.get("subnet_id") or 0)
         return rows
+
+    def cache_is_stale(self) -> bool:
+        self.load()
+        if not self._data.get("latest_by_subnet"):
+            return True
+        updated = _parse_ts(str(self._data.get("updated_at") or ""))
+        return updated is None or (_utcnow() - updated).total_seconds() > MAX_CACHE_AGE_SECONDS
 
     def query(
         self,

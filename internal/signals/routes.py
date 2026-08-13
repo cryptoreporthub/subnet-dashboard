@@ -45,6 +45,7 @@ except ImportError as _conviction_exc:
 
 _store: Optional[SignalStore] = None
 _alerts: Optional[AlertEngine] = None
+_generation_lock = asyncio.Lock()
 
 
 def _get_store() -> SignalStore:
@@ -98,16 +99,33 @@ async def _refresh_and_broadcast() -> Dict[str, Any]:
         composites = engine.evaluate_correlation_alerts(result.get("signals") or [])
         return result, system, signal_alerts, composites
 
-    try:
-        result, system, signal_alerts, composites = await _to_thread_timeout(
-            _build, SIGNALS_HANDLER_TIMEOUT, label="signals-refresh"
-        )
-    except asyncio.TimeoutError:
+    if _generation_lock.locked():
+        cached = _get_store().query()
         return {
-            "signals": [],
-            "meta": {"count": 0, "appended": 0, "cached": False, "source": "timeout"},
+            "signals": cached,
+            "meta": {"count": len(cached), "appended": 0, "cached": True, "source": "refreshing"},
             "changed_signals": [],
         }
+    async with _generation_lock:
+        try:
+            result, system, signal_alerts, composites = await _to_thread_timeout(
+                _build, SIGNALS_HANDLER_TIMEOUT, label="signals-refresh"
+            )
+        except asyncio.TimeoutError:
+            cached = _get_store().query()
+            return {
+                "signals": cached,
+                "meta": {"count": len(cached), "appended": 0, "cached": bool(cached), "source": "refreshing"},
+                "changed_signals": [],
+            }
+        except Exception as exc:
+            logger.warning("signals refresh failed: %s", exc)
+            cached = _get_store().query()
+            return {
+                "signals": cached,
+                "meta": {"count": len(cached), "appended": 0, "cached": bool(cached), "source": "error"},
+                "changed_signals": [],
+            }
 
     hub = get_signal_hub()
     await hub.broadcast("signals", {"signals": result.get("signals", []), "meta": result.get("meta")})
@@ -131,13 +149,17 @@ async def api_signals(
         store = _get_store()
         signals = store.query(subnet_id=subnet_id, since=since)
         meta = {"count": len(signals), "appended": 0, "cached": True}
+        if store.cache_is_stale():
+            result = await _refresh_and_broadcast()
+            signals = result.get("signals") or signals
+            meta = result.get("meta") or meta
     try:
         from internal.subnet_names import refresh_stored_names
 
         signals = refresh_stored_names(signals)
     except Exception:
         pass
-    if refresh and subnet_id is not None:
+    if subnet_id is not None:
         signals = [s for s in signals if s.get("subnet_id") == subnet_id]
     elif refresh and since:
         since_signals = _get_store().query(since=since)
