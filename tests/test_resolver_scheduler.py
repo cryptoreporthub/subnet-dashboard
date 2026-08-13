@@ -300,6 +300,8 @@ def test_scheduler_start_stop(fresh_scheduler):
     sched.start()
     assert sched.state()["running"] is True
     assert sched.state()["next_run_at"] is not None
+    assert sched.state()["lifecycle"] == "scheduled"
+    assert sched.state()["first_tick_scheduled_at"] is not None
 
     sched.stop()
     assert sched.state()["running"] is False
@@ -627,7 +629,7 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     assert sched._last_run_ok is True
 
 
-def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
+def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     import time
 
     def _hang(self):
@@ -643,6 +645,7 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
     from internal.council.resolver_scheduler import _now_iso
 
     monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 1)
     monkeypatch.setattr(
         resolver_scheduler.PredictionResolverScheduler,
         "_run_refresh_cycle",
@@ -652,8 +655,41 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
     sched._running = True
+    sched._first_tick_pending = True
     sched._tick()
     with open(weights.SOUL_MAP_PATH, "r") as f:
         soul = json.load(f)
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert "cycle_timeout" in str(last.get("error"))
+    assert sched.state()["lifecycle"] == "degraded"
+    assert sched.state()["first_tick_ok"] is False
+    assert "resolver lifecycle event=timeout" in caplog.text
+
+
+def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
+    caplog.set_level("INFO", logger="internal.council.resolver_scheduler")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._running = True
+    sched._first_tick_pending = True
+    monkeypatch.setattr(
+        sched,
+        "_run_refresh_cycle_with_timeout",
+        lambda: {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        },
+    )
+    monkeypatch.setattr(sched, "_persist_cycle_summary", lambda _result: None)
+    monkeypatch.setattr(sched, "_schedule_next", lambda _minutes: None)
+
+    result = sched._tick()
+
+    assert result["ok"] is True
+    assert sched.state()["first_tick_ok"] is True
+    assert sched.state()["lifecycle"] == "running"
+    assert "resolver lifecycle event=success" in caplog.text

@@ -446,9 +446,22 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
             from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
 
             def _live_subnets_boot() -> None:
-                from internal.live_subnets import _record_boot_status
+                from internal.live_subnets import _record_boot_status, registry_ready
 
                 _record_boot_status(phase="boot_start")
+                if not registry_ready():
+                    _record_boot_status(
+                        phase="deferred",
+                        ok=False,
+                        reason="registry_not_ready",
+                    )
+                    logger.info("Live subnets sync deferred until registry refresh")
+                    defer_boot(
+                        "live-subnets-registry-retry",
+                        _live_subnets_boot,
+                        delay=max(30, int(os.environ.get("LIVE_SUBNETS_REGISTRY_RETRY_SECONDS", "60"))),
+                    )
+                    return
                 bootstrap_live_subnets_cache()
                 get_live_subnets()
                 _record_boot_status(phase="boot_done")

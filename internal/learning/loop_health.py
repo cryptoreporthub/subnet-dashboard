@@ -17,6 +17,7 @@ from internal.run_mode import inline_worker_expected, is_worker_mode, split_work
 
 logger = logging.getLogger(__name__)
 
+
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
 )
@@ -268,6 +269,8 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         sched = soul.get("prediction_resolver_scheduler") or {}
         if isinstance(sched, dict):
             last = sched.get("last_cycle") or {}
+            if sched.get("lifecycle"):
+                lifecycle = sched.get("lifecycle")
             if isinstance(last, dict) and last.get("run_at"):
                 run_at = last.get("run_at")
                 candidates.append(
@@ -281,11 +284,12 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     except Exception:
         pass
     tick, ok, mem_running = None, None, False
+    lifecycle = state.get("lifecycle") or "stopped"
     if candidates:
         candidates.sort(key=lambda row: row[0], reverse=True)
         _, tick, ok, mem_running = candidates[0]
     peer = _worker_peer()
-    running = mem_running
+    running = mem_running or lifecycle in {"starting", "scheduled", "ticking", "running"}
     if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
         running = bool(peer.get("alive")) or mem_running
     else:
@@ -299,6 +303,8 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         "at": tick,
         "ok": ok,
         "running": running,
+        "lifecycle": lifecycle,
+        "warming": lifecycle in {"starting", "scheduled", "ticking"} and tick is None,
         "refresh_minutes": refresh_m,
         "worker_peer": peer,
     }
@@ -431,6 +437,8 @@ def build_learning_loop_health(
             status = "degraded"
         else:
             status = "stalled"
+    elif resolver.get("warming") and boot_grace:
+        status = "warming"
     elif not resolver.get("running") or tick_at is None:
         status = "degraded"
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
@@ -443,6 +451,8 @@ def build_learning_loop_health(
         "last_resolver_tick": resolver.get("at"),
         "resolver": {
             "running": resolver.get("running"),
+            "lifecycle": resolver.get("lifecycle"),
+            "warming": resolver.get("warming", False),
             "last_ok": resolver.get("ok"),
             "age_seconds": tick_age_s,
             "refresh_minutes": refresh_m,

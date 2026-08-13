@@ -36,6 +36,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("live_subnets")
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(BASE_DIR)
 REGISTRY_PATH = os.path.join(REPO_ROOT, "config", "registry.json")
@@ -170,6 +171,11 @@ def _registry_netuids() -> List[int]:
     return sorted(set(out))
 
 
+def registry_ready() -> bool:
+    """The chain probe needs registry netuids; defer instead of probing empty."""
+    return bool(_registry_netuids())
+
+
 def _fetch_chain_data():
     global _fetch_thread
     result = {}
@@ -253,6 +259,15 @@ def _sync_once() -> bool:
         return False
     _record_boot_status(phase="sync_start")
     try:
+        if not registry_ready():
+            _record_boot_status(
+                phase="deferred",
+                ok=False,
+                reason="registry_not_ready",
+                rows=0,
+            )
+            logger.info("live_subnets sync deferred until registry is ready")
+            return False
         raw = _fetch_chain_data()
         if raw is None:
             logger.warning("live_subnets sync: chain fetch failed or timed out")
@@ -296,6 +311,15 @@ def bootstrap_live_subnets_cache() -> bool:
     if not AUTO_SYNC:
         return False
     if _in_ci_or_test:
+        return False
+    if not registry_ready():
+        _record_boot_status(
+            phase="deferred",
+            ok=False,
+            reason="registry_not_ready",
+            rows=0,
+        )
+        logger.info("live_subnets bootstrap deferred until registry is ready")
         return False
 
     # Dedicated worker respects LIVE_SUBNETS_BOOT_IMMEDIATE like web inline worker.

@@ -174,6 +174,8 @@ def build_readiness_report() -> Dict[str, Any]:
             "last_run_ok": worker_resolver.get("last_ok", resolver.get("last_run_ok")),
             "last_run_at": loop_health.get("last_resolver_tick") or resolver.get("last_run_at"),
             "age_seconds": worker_resolver.get("age_seconds"),
+            "lifecycle": worker_resolver.get("lifecycle") or resolver.get("lifecycle"),
+            "warming": worker_resolver.get("warming", resolver.get("warming", False)),
         }
 
     try:
@@ -191,7 +193,14 @@ def build_readiness_report() -> Dict[str, Any]:
         issues.append("dedicated_worker_not_running")
     if not resolver.get("running") and not (split_v2 and not is_worker_mode()):
         issues.append("prediction_resolver_not_running")
-    if feed.get("likely_total", 0) <= 0:
+    registry_warming = bool(
+        sync.get("background_running")
+        and sync.get("last_sync_at") is None
+        and feed.get("likely_total", 0) <= 0
+    )
+    if registry_warming:
+        issues.append("subnet_feed_warming")
+    elif feed.get("likely_total", 0) <= 0:
         issues.append("subnet_feed_empty")
     elif feed.get("effective_source") == "registry":
         issues.append("subnet_feed_registry_only")
@@ -232,6 +241,7 @@ def build_readiness_report() -> Dict[str, Any]:
             "background_running": sync.get("background_running"),
             "last_sync_at": sync.get("last_sync_at"),
             "last_sync_ok": sync.get("last_sync_ok"),
+            "warming": registry_warming,
         },
         "live_cache": live,
         "subnet_feed": feed,
