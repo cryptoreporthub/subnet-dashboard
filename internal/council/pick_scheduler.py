@@ -246,6 +246,13 @@ class DailyPickScheduler:
                 except FuturesTimeoutError:
                     result["error"] = f"daily pick tick timed out after {timeout}s"
                     logger.warning("%s", result["error"])
+                    # #region agent log
+                    try:
+                        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
+                            handle.write(__import__("json").dumps({"hypothesisId": "D", "location": "internal/council/pick_scheduler.py", "message": "daily pick timeout left worker future", "data": {"timeout_seconds": timeout, "thread": threading.current_thread().name}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
+                    except Exception:
+                        pass
+                    # #endregion
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             if isinstance(payload, dict):

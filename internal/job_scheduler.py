@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, Optional
 
@@ -33,9 +34,24 @@ def _guarded(job_id: str, func: Callable[[], None], retryable: bool) -> Callable
     """Wrap a scheduled func: log failures; reschedule one-shot jobs on error."""
 
     def _run() -> None:
+        started = time.monotonic()
+        # #region agent log
+        try:
+            with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
+                handle.write(__import__("json").dumps({"hypothesisId": "B", "location": "internal/job_scheduler.py", "message": "scheduled job entry", "data": {"job_id": job_id, "thread": threading.current_thread().name}, "timestamp": int(time.time() * 1000)}) + "\n")
+        except Exception:
+            pass
+        # #endregion
         try:
             func()
             _retry_counts.pop(job_id, None)
+            # #region agent log
+            try:
+                with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
+                    handle.write(__import__("json").dumps({"hypothesisId": "B", "location": "internal/job_scheduler.py", "message": "scheduled job exit", "data": {"job_id": job_id, "duration_seconds": round(time.monotonic() - started, 3)}, "timestamp": int(time.time() * 1000)}) + "\n")
+            except Exception:
+                pass
+            # #endregion
         except Exception as exc:
             logger.exception("background job %s failed: %s", job_id, exc)
             _retry_counts[job_id] = _retry_counts.get(job_id, 0) + 1

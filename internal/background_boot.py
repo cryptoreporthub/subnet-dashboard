@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import threading
@@ -11,6 +12,14 @@ from typing import Callable, Optional
 logger = logging.getLogger(__name__)
 
 BOOT_DEFER_SECONDS = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
+
+
+def _debug_log(hypothesis_id: str, message: str, data: dict) -> None:
+    try:
+        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"hypothesisId": hypothesis_id, "location": "internal/background_boot.py", "message": message, "data": data, "timestamp": time.time_ns() // 1_000_000}) + "\n")
+    except Exception:
+        pass
 
 
 def defer_boot(name: str, target: Callable[[], None], delay: Optional[int] = None) -> None:
@@ -439,14 +448,23 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
             def _live_subnets_boot() -> None:
                 from internal.live_subnets import _record_boot_status
 
+                # #region agent log
+                _debug_log("A", "live subnets boot entry", {"worker_mode": is_worker_mode(), "heavy": heavy, "run_live_subnets": run_live_subnets})
+                # #endregion
                 _record_boot_status(phase="boot_start")
                 bootstrap_live_subnets_cache()
                 get_live_subnets()
                 _record_boot_status(phase="boot_done")
+                # #region agent log
+                _debug_log("A", "live subnets boot exit", {"worker_mode": is_worker_mode(), "heavy": heavy})
+                # #endregion
 
             # ponytail: defer boot sync so :8081 serves health before chain I/O.
             boot_delay = max(BOOT_DEFER_SECONDS, 5)
             defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
+            # #region agent log
+            _debug_log("A", "live subnets scheduled", {"worker_mode": is_worker_mode(), "heavy": heavy, "delay": boot_delay})
+            # #endregion
             logger.info(
                 "Live subnets sync scheduled (deferred %ss, worker=%s, heavy=%s)",
                 boot_delay,
@@ -457,6 +475,9 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
             logger.warning("Live subnets sync failed to start: %s", exc)
 
     if not heavy:
+        # #region agent log
+        _debug_log("A", "essential mode returned", {"worker_mode": is_worker_mode(), "heavy": heavy, "run_live_subnets": run_live_subnets})
+        # #endregion
         return
 
     try:
