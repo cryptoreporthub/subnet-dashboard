@@ -16,7 +16,7 @@
         throw err;
       });
   };
-  g.PUBLISH_GATE_LABEL = {{ publish_gate_label()|tojson|safe }};
+  g.PUBLISH_GATE_LABEL = {{ publish_gate_label()|default('audit gate')|tojson|safe }};
 })(window);
 </script>
 <script type="application/json" id="subnet-group-data">{{ {
@@ -27,28 +27,28 @@
   'trail': (mindmap_trail|default([]))[:20],
   'predictions': (predictions|default([]))[:12]
 }|tojson|safe }}</script>
-<script src="/static/js/conviction_tiers.js" defer></script>
-<script src="/static/js/empty_state.js" defer></script>
-<script src="/static/js/weighing_room.js" defer></script>
-<script src="/static/js/data_freshness.js" defer></script>
-<script src="/static/js/api_fetch.js" defer></script>
-<script src="/static/js/ops_readiness_badge.js" defer></script>
-<script src="/static/js/subnet_integrations.js" defer></script>
-<script src="/static/js/trust_banner_ui.js" defer></script>
-<script src="/static/js/market_drivers_ui.js" defer></script>
-<script src="/static/js/brain_letter.js" defer></script>
-<script src="/static/js/story_path_ui.js" defer></script>
-<script src="/static/js/paper_portfolio.js" defer></script>
-<script src="/static/js/weekly_letter.js" defer></script>
-<script src="/static/js/daily_recap.js" defer></script>
-<script src="/static/js/watchlist_alerts.js" defer></script>
-<script src="/static/js/letter_export.js" defer></script>
-<script src="/static/js/time_capsule.js" defer></script>
-<script src="/static/js/hour_watch_ui.js" defer></script>
-    <script src="/static/js/pump_map.js" defer></script>
-<script src="/static/js/cockpit_hydrate.js" defer></script>
-<script src="/static/js/message_intel_feed.js" defer></script>
-<script src="/static/js/home_live_refresh.js" defer></script>
-<script src="/static/js/living_focus.js" defer></script>
-<script src="/static/js/home_deferred.js" defer></script>
-<script src="/static/js/thumb_dock.js" defer></script>
+<script src="/static/js/conviction_tiers.js?v={{ static_v }}" defer></script>
+<script src="/static/js/empty_state.js?v={{ static_v }}" defer></script>
+<script src="/static/js/weighing_room.js?v={{ static_v }}" defer></script>
+<script src="/static/js/data_freshness.js?v={{ static_v }}" defer></script>
+<script src="/static/js/api_fetch.js?v={{ static_v }}" defer></script>
+<script src="/static/js/ops_readiness_badge.js?v={{ static_v }}" defer></script>
+<script src="/static/js/subnet_integrations.js?v={{ static_v }}" defer></script>
+<script src="/static/js/trust_banner_ui.js?v={{ static_v }}" defer></script>
+<script src="/static/js/market_drivers_ui.js?v={{ static_v }}" defer></script>
+<script src="/static/js/brain_letter.js?v={{ static_v }}" defer></script>
+<script src="/static/js/story_path_ui.js?v={{ static_v }}" defer></script>
+<script src="/static/js/paper_portfolio.js?v={{ static_v }}" defer></script>
+<script src="/static/js/weekly_letter.js?v={{ static_v }}" defer></script>
+<script src="/static/js/daily_recap.js?v={{ static_v }}" defer></script>
+<script src="/static/js/watchlist_alerts.js?v={{ static_v }}" defer></script>
+<script src="/static/js/letter_export.js?v={{ static_v }}" defer></script>
+<script src="/static/js/time_capsule.js?v={{ static_v }}" defer></script>
+<script src="/static/js/hour_watch_ui.js?v={{ static_v }}" defer></script>
+<script src="/static/js/pump_map.js?v={{ static_v }}" defer></script>
+<script src="/static/js/cockpit_hydrate.js?v={{ static_v }}" defer></script>
+<script src="/static/js/message_intel_feed.js?v={{ static_v }}" defer></script>
+<script src="/static/js/home_live_refresh.js?v={{ static_v }}" defer></script>
+<script src="/static/js/living_focus.js?v={{ static_v }}" defer></script>
+<script src="/static/js/home_deferred.js?v={{ static_v }}" defer></script>
+<script src="/static/js/thumb_dock.js?v={{ static_v }}" defer></script>
