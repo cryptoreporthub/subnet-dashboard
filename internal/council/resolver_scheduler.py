@@ -323,6 +323,8 @@ class PredictionResolverScheduler:
             self._last_resolved = result.get("resolved_now", 0)
             self._last_expired = result.get("expired_now", 0)
             self._last_pending = result.get("pending", 0)
+            self._lifecycle = "running" if result.get("ok") else "degraded"
+            self._lifecycle_error = result.get("error")
             if result["ok"]:
                 self._consecutive_failures = 0
                 self._backoff_minutes = self.refresh_minutes
