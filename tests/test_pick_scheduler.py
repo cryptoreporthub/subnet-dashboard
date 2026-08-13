@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -186,6 +187,31 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     assert holds, result
     assert result.get("scheduler_hold") is True
     assert "timed out" in str(result.get("error") or holds[0])
+
+
+def test_daily_tick_skips_when_previous_work_is_still_running(monkeypatch):
+    release = threading.Event()
+    worker = threading.Thread(target=release.wait, daemon=True)
+    worker.start()
+
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: {"action": "HOLD", "date": "2026-08-03"},
+    )
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    sched._work_thread = worker
+    result = sched._tick(reschedule=False)
+
+    release.set()
+    worker.join(timeout=2)
+    assert result["error"] == "daily pick tick skipped; previous worker still running"
 
 
 def test_seconds_until_next_daily_tick_branches():
