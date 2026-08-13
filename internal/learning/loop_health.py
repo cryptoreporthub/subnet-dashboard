@@ -17,6 +17,21 @@ from internal.run_mode import inline_worker_expected, is_worker_mode, split_work
 
 logger = logging.getLogger(__name__)
 
+
+def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
+    try:
+        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({
+                "hypothesisId": hypothesis_id,
+                "location": "internal/learning/loop_health.py",
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            }) + "\n")
+    except Exception:
+        pass
+
+
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
 )
@@ -268,6 +283,8 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         sched = soul.get("prediction_resolver_scheduler") or {}
         if isinstance(sched, dict):
             last = sched.get("last_cycle") or {}
+            if sched.get("lifecycle"):
+                lifecycle = sched.get("lifecycle")
             if isinstance(last, dict) and last.get("run_at"):
                 run_at = last.get("run_at")
                 candidates.append(
@@ -281,11 +298,12 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     except Exception:
         pass
     tick, ok, mem_running = None, None, False
+    lifecycle = state.get("lifecycle") or "stopped"
     if candidates:
         candidates.sort(key=lambda row: row[0], reverse=True)
         _, tick, ok, mem_running = candidates[0]
     peer = _worker_peer()
-    running = mem_running
+    running = mem_running or lifecycle in {"starting", "scheduled", "ticking", "running"}
     if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
         running = bool(peer.get("alive")) or mem_running
     else:
@@ -299,6 +317,8 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         "at": tick,
         "ok": ok,
         "running": running,
+        "lifecycle": lifecycle,
+        "warming": lifecycle in {"starting", "scheduled", "ticking"} and tick is None,
         "refresh_minutes": refresh_m,
         "worker_peer": peer,
     }
@@ -393,6 +413,14 @@ def build_learning_loop_health(
     }
 
     resolver = _timed_health_stage("resolver_tick", _last_resolver_tick, soul_path)
+    # #region agent log
+    _debug_log("E", "learning health resolver probe", {
+        "running": resolver.get("running"),
+        "last_tick": resolver.get("at"),
+        "last_ok": resolver.get("ok"),
+        "peer_alive": (resolver.get("worker_peer") or {}).get("alive"),
+    })
+    # #endregion
     tick_at = _parse_iso(resolver.get("at"))
     refresh_m = max(1, int(resolver.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES))
     stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
@@ -431,11 +459,22 @@ def build_learning_loop_health(
             status = "degraded"
         else:
             status = "stalled"
+    elif resolver.get("warming") and boot_grace:
+        status = "warming"
     elif not resolver.get("running") or tick_at is None:
         status = "degraded"
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
 
+    # #region agent log
+    _debug_log("E", "learning health status", {
+        "status": status,
+        "pending": pending,
+        "running": resolver.get("running"),
+        "last_tick": resolver.get("at"),
+        "boot_grace": boot_grace,
+    })
+    # #endregion
     return {
         "status": status,
         "checked_at": _utcnow().isoformat().replace("+00:00", "Z"),
@@ -443,6 +482,8 @@ def build_learning_loop_health(
         "last_resolver_tick": resolver.get("at"),
         "resolver": {
             "running": resolver.get("running"),
+            "lifecycle": resolver.get("lifecycle"),
+            "warming": resolver.get("warming", False),
             "last_ok": resolver.get("ok"),
             "age_seconds": tick_age_s,
             "refresh_minutes": refresh_m,

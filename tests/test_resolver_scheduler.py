@@ -300,6 +300,8 @@ def test_scheduler_start_stop(fresh_scheduler):
     sched.start()
     assert sched.state()["running"] is True
     assert sched.state()["next_run_at"] is not None
+    assert sched.state()["lifecycle"] == "scheduled"
+    assert sched.state()["first_tick_scheduled_at"] is not None
 
     sched.stop()
     assert sched.state()["running"] is False
@@ -657,3 +659,5 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler):
         soul = json.load(f)
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert "cycle_timeout" in str(last.get("error"))
+    assert sched.state()["lifecycle"] == "degraded"
+    assert sched.state()["first_tick_ok"] is False

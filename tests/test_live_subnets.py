@@ -40,6 +40,22 @@ def test_bootstrap_calls_sync_once_on_worker(monkeypatch):
     sync.assert_called_once()
 
 
+def test_bootstrap_defers_until_registry_ready(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("LIVE_SUBNETS_BOOT_IMMEDIATE", "on")
+    monkeypatch.setenv("RUN_MODE", "worker")
+    from internal import live_subnets
+
+    monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
+    monkeypatch.setattr(live_subnets, "_registry_netuids", lambda: [])
+    with patch.object(live_subnets, "_sync_once") as sync:
+        assert live_subnets.bootstrap_live_subnets_cache() is False
+    sync.assert_not_called()
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
+    assert status["reason"] == "registry_not_ready"
+
+
 def test_bootstrap_skipped_when_immediate_off(monkeypatch):
     monkeypatch.delenv("CI", raising=False)
     monkeypatch.setenv("LIVE_SUBNETS_AUTO_SYNC", "true")
