@@ -78,3 +78,19 @@ def test_row_three_alignment_hidden():
     assert r.status_code == 200
     assert 'data-metric="alignment"' in r.text
     assert "hidden" in r.text.split('data-metric="alignment"')[1].split(">")[0]
+
+
+def test_eye_ring_shared_origin_no_scale_squash():
+    from pathlib import Path
+
+    html = Path("templates/partials/premium/tribunal_hero.html").read_text(encoding="utf-8")
+    css = Path("static/css/tribunal-hero-layout.css").read_text(encoding="utf-8")
+    preview = client.get("/preview/tribunal?state=gated").text
+    assert "tribunal-hero__ring" in html
+    assert 'class="tribunal-hero__ring"' in preview
+    assert "data-eye-path" in preview
+    assert "data-glass-ring" in preview
+    assert "scaleY(.62)" not in css
+    assert "scaleY(.62)" not in html
+    assert "feTurbulence" not in html
+    assert preview.count('data-instrument') == 1
