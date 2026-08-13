@@ -14777,6 +14777,45 @@ section.desk-zone,
     contain-intrinsic-size: auto 420px;
 }
 
+.message-intel--v2 .message-intel__locked-surface {
+    opacity: 0.62;
+    filter: saturate(0.55);
+}
+
+.message-intel--v2 .message-intel__locked-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
+.message-intel--v2 .message-intel__locked-button {
+    flex: none;
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    padding: 8px 14px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.04);
+    cursor: not-allowed;
+}
+
+.message-intel--v2 .message-intel__command-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.message-intel--v2 .message-intel__command-list span {
+    border: 1px solid var(--glass-border);
+    border-radius: 999px;
+    padding: 7px 11px;
+    color: var(--muted);
+    background: rgba(255,255,255,0.035);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+}
+
 /* -- Remaining solid panels → glass tiers (MOBILE-FIRST: no backdrop-filter by default) --
    These BEM-nested panels carry opaque fills (var(--mi-bg-card) #090d0b, rgba(...,~1) blacks)
    from higher-specificity `.message-intel--v2 ...` rules, so a bare `.glass-flat` class can't win.
