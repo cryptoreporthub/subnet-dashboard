@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any, Dict, List, Literal, Optional
+import threading
+from datetime import datetime, timezone
+from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, model_validator
@@ -20,9 +22,10 @@ logger = logging.getLogger(__name__)
 signals_router = APIRouter(tags=["signals"])
 
 SIGNALS_HANDLER_TIMEOUT = float(os.environ.get("SIGNALS_HANDLER_TIMEOUT_SECONDS", "8"))
-SIGNALS_NAME_REFRESH_TIMEOUT = float(
-    os.environ.get("SIGNALS_NAME_REFRESH_TIMEOUT_SECONDS", "2")
+SIGNALS_FRESHNESS_SECONDS = int(
+    os.environ.get("SIGNALS_FRESHNESS_SECONDS", "900")
 )
+_refresh_lock = threading.Lock()
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -48,8 +51,6 @@ except ImportError as _conviction_exc:
 
 _store: Optional[SignalStore] = None
 _alerts: Optional[AlertEngine] = None
-_generation_lock = asyncio.Lock()
-_name_refresh_lock = asyncio.Lock()
 
 
 def _get_store() -> SignalStore:
@@ -94,42 +95,78 @@ class WebhookSubscribeIn(BaseModel):
     url: str = Field(description="HTTPS webhook URL for alert callbacks")
 
 
-async def _refresh_and_broadcast() -> Dict[str, Any]:
-    def _build():
-        result = generate_signals(True)
-        engine = _get_alerts()
-        system = engine.check_system_alerts()
-        signal_alerts = engine.record_signal_changes(result.get("changed_signals") or [])
-        composites = engine.evaluate_correlation_alerts(result.get("signals") or [])
-        return result, system, signal_alerts, composites
+def _store_is_fresh(store: SignalStore) -> bool:
+    refreshed_at = store.load().get("refreshed_at")
+    if not refreshed_at:
+        return False
+    try:
+        refreshed = datetime.fromisoformat(
+            str(refreshed_at).replace("Z", "+00:00")
+        ).astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+    age = (datetime.now(timezone.utc) - refreshed).total_seconds()
+    return age <= SIGNALS_FRESHNESS_SECONDS
 
-    if _generation_lock.locked():
-        cached = _get_store().query()
+
+async def _refresh_and_broadcast(
+    *,
+    only_if_stale: bool = False,
+    fallback_signals: Optional[list[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    def _build():
+        # The lock spans the freshness check and generation. A request that
+        # waited for another refresh re-checks the store and returns its
+        # result instead of launching a duplicate generator.
+        with _refresh_lock:
+            if only_if_stale:
+                store = _get_store()
+                cached = store.latest_all()
+                if _store_is_fresh(store):
+                    return (
+                        {
+                            "signals": cached,
+                            "meta": {
+                                "count": len(cached),
+                                "appended": 0,
+                                "cached": True,
+                                "source": "fresh-cache",
+                            },
+                            "changed_signals": [],
+                        },
+                        [],
+                        [],
+                        [],
+                    )
+
+            result = generate_signals(True)
+            engine = _get_alerts()
+            system = engine.check_system_alerts()
+            signal_alerts = engine.record_signal_changes(
+                result.get("changed_signals") or []
+            )
+            composites = engine.evaluate_correlation_alerts(
+                result.get("signals") or []
+            )
+            return result, system, signal_alerts, composites
+
+    try:
+        result, system, signal_alerts, composites = await _to_thread_timeout(
+            _build, SIGNALS_HANDLER_TIMEOUT, label="signals-refresh"
+        )
+    except asyncio.TimeoutError:
+        cached = list(fallback_signals or [])
         return {
             "signals": cached,
-            "meta": {"count": len(cached), "appended": 0, "cached": True, "source": "refreshing"},
+            "meta": {
+                "count": len(cached),
+                "appended": 0,
+                "cached": bool(cached),
+                "stale": True,
+                "source": "timeout",
+            },
             "changed_signals": [],
         }
-    async with _generation_lock:
-        try:
-            result, system, signal_alerts, composites = await _to_thread_timeout(
-                _build, SIGNALS_HANDLER_TIMEOUT, label="signals-refresh"
-            )
-        except asyncio.TimeoutError:
-            cached = _get_store().query()
-            return {
-                "signals": cached,
-                "meta": {"count": len(cached), "appended": 0, "cached": bool(cached), "source": "refreshing"},
-                "changed_signals": [],
-            }
-        except Exception as exc:
-            logger.warning("signals refresh failed: %s", exc)
-            cached = _get_store().query()
-            return {
-                "signals": cached,
-                "meta": {"count": len(cached), "appended": 0, "cached": bool(cached), "source": "error"},
-                "changed_signals": [],
-            }
 
     hub = get_signal_hub()
     await hub.broadcast("signals", {"signals": result.get("signals", []), "meta": result.get("meta")})
@@ -137,23 +174,6 @@ async def _refresh_and_broadcast() -> Dict[str, Any]:
     if new_alerts:
         await hub.broadcast("alerts", {"alerts": new_alerts})
     return result
-
-
-async def _refresh_names_nonblocking(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Keep optional remote name refresh off the ASGI event loop."""
-    if _name_refresh_lock.locked():
-        return rows
-    async with _name_refresh_lock:
-        try:
-            from internal.subnet_names import refresh_stored_names
-
-            return await _to_thread_timeout(
-                lambda: refresh_stored_names(rows),
-                SIGNALS_NAME_REFRESH_TIMEOUT,
-                label="signals-name-refresh",
-            )
-        except Exception:
-            return rows
 
 
 @signals_router.get("/api/signals")
@@ -170,12 +190,33 @@ async def api_signals(
         store = _get_store()
         signals = store.query(subnet_id=subnet_id, since=since)
         meta = {"count": len(signals), "appended": 0, "cached": True}
-        if store.cache_is_stale():
-            result = await _refresh_and_broadcast()
-            signals = result.get("signals") or signals
-            meta = result.get("meta") or meta
-    signals = await _refresh_names_nonblocking(signals)
-    if subnet_id is not None:
+        if subnet_id is None and since is None and not _store_is_fresh(store):
+            try:
+                result = await _refresh_and_broadcast(
+                    only_if_stale=True,
+                    fallback_signals=signals,
+                )
+                signals = result.get("signals") or []
+                meta = result.get("meta") or {}
+            except Exception as exc:
+                # Keep the endpoint useful during a transient feed failure.
+                # The caller still gets the stale cache (if any), with an
+                # explicit freshness failure instead of an HTTP 500.
+                logger.warning("automatic signals refresh failed: %s", exc)
+                meta.update(
+                    {
+                        "cached": True,
+                        "stale": True,
+                        "refresh_error": type(exc).__name__,
+                    }
+                )
+    try:
+        from internal.subnet_names import refresh_stored_names
+
+        signals = refresh_stored_names(signals)
+    except Exception:
+        pass
+    if refresh and subnet_id is not None:
         signals = [s for s in signals if s.get("subnet_id") == subnet_id]
     elif refresh and since:
         since_signals = _get_store().query(since=since)
