@@ -132,7 +132,8 @@ primary_region = "sjc"
   processes = ["web"]
 
 [[vm]]
-  size = "shared-cpu-1x"
+  # Dedicated CPU keeps the worker HTTP port responsive during pump/resolver scans.
+  size = "performance-1x"
   memory = "2gb"
   processes = ["worker"]
 
