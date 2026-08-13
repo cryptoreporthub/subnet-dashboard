@@ -9,10 +9,12 @@
     <span class="message-intel__t-icon" aria-hidden="true">{{ (row.name|default('?'))[0]|upper }}</span>
     <div class="message-intel__t-body">
       <a class="message-intel__t-name" href="/subnet/{{ row.netuid }}">{{ row.name|default('Subnet') }}<span class="message-intel__t-sn">SN{{ row.netuid }}</span></a>
-      <div class="message-intel__t-count">{{ row.mentions|default(0) }} mentions · {{ window_label }}</div>
+      <div class="message-intel__t-count">{{ row.mentions|default(0) }} mentions · {{ row.chatter_power|default(row.heat|default(0)) }} power · {{ window_label }}</div>
+      {% if row.why %}<div class="message-intel__trend-why">{{ row.why }}</div>{% endif %}
     </div>
     <div class="message-intel__t-right">
       <span class="message-intel__tag message-intel__tag--{{ (row.sentiment|default('neutral'))|lower }}">{{ (row.sentiment|default('neutral'))|upper }}</span>
+      {% if row.delta is not none %}<div class="message-intel__trend-delta">{{ '+' if row.delta > 0 else '' }}{{ '%.3f'|format(row.delta|float) }}</div>{% endif %}
     </div>
   </div>
   {% endfor %}
@@ -35,6 +37,7 @@
     </div>
     <div class="message-intel__champ-score">
       <div class="message-intel__champ-num chip-flat">{{ '%.1f'|format(inf) }}</div>
+      {% if row.caution %}<div class="message-intel__champ-caution">Caution: under 5 graded calls</div>{% endif %}
     </div>
   </div>
   {% endfor %}
