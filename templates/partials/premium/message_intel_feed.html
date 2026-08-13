@@ -119,6 +119,25 @@
     </div>
   </div>
 
+  <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">My Desk</h3>
+      <span class="message-intel__panel-unit">watchlist · thresholds</span>
+    </div>
+    <div class="message-intel__my-desk">
+      <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
+        <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
+      </div>
+      <div class="message-intel__desk-block">
+        <p class="message-intel__desk-label">Watchlist</p>
+        <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
+          <p class="empty">Loading your watchlist…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <details class="message-intel__panel message-intel__crowns-drawer" id="message-intel-crowns-card">
     <summary class="message-intel__sec-label message-intel__crowns-summary">
       <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
@@ -130,6 +149,22 @@
       <p class="empty">No reaction crowns yet.</p>
     </div>
   </details>
+
+  <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Why-rank & divergence</h3>
+      <span class="message-intel__panel-unit">proof + divergence</span>
+    </div>
+    <div id="message-intel-callers" class="message-intel__leaderboard" aria-live="polite">
+      <p class="empty">Loading leaderboard…</p>
+    </div>
+    <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
+    <div id="message-intel-divergence" class="message-intel__divergence">
+      <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
+      <div id="message-intel-divergence-body" aria-live="polite"></div>
+    </div>
+  </div>
 
   <div class="message-intel__panel message-intel__panel--feed">
     <div class="message-intel__sec-label">
@@ -174,10 +209,49 @@
         <div class="hydrate-skeleton__line"></div>
         <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
       </div>
-      <p class="sr-only" role="status">Loading Telegram live feed</p>
+       <p class="sr-only" role="status">Loading live feed — Telegram desk</p>
       {% endif %}
     </div>
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
+  </div>
+
+  <div class="message-intel__panel glass-card" id="message-intel-pulse-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">My Pulse</h3>
+      <span class="message-intel__panel-unit">watchlisted subnets only</span>
+    </div>
+    <div id="message-intel-my-pulse" class="message-intel__pulse-list" aria-live="polite">
+      <p class="empty">Loading watchlisted pulse…</p>
+    </div>
+  </div>
+
+  <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-wallet-card" aria-label="Wallet connector coming soon">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Skin in the game</h3>
+      <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
+    </div>
+    <div class="message-intel__locked-body">
+      <div>
+        <p><b>Wallet connector</b> will let you track calls alongside on-chain positions and surface your own record.</p>
+        <p class="message-intel__panel-hint">No wallet connection is active yet. Your address will stay hidden until you choose to connect.</p>
+      </div>
+      <button type="button" class="message-intel__locked-button" disabled aria-disabled="true">Connect wallet</button>
+    </div>
+  </div>
+
+  <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-commands-card" aria-label="Telegram commands coming soon">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Telegram commands</h3>
+      <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
+    </div>
+    <p class="message-intel__panel-hint">The command suite is planned for the Telegram bot. These are shown for discoverability and are not active in the UI yet.</p>
+    <div class="message-intel__command-list" aria-label="Planned Telegram commands">
+      <span>/summary</span><span>/trending</span><span>/track</span><span>/rank</span>
+      <span>/who</span><span>/alerts</span><span>/link</span>
+    </div>
   </div>
 
   <p class="message-intel__foot">Conviction is auto-scored from message text and author track record — not financial advice.</p>
