@@ -35,6 +35,9 @@ if reason == 'disabled':
     print('NEXT — flyctl secrets set MESSAGE_INTEL_LISTENER=auto WORKER_HEAVY=essential --app subnet-dashboard')
     sys.exit(1)
 if reason == 'idle_not_started':
+    if listener.get('session_string_error'):
+        print('FIX — stale TELEGRAM_SESSION_STRING; unset secret or refresh from bootstrap_telegram_session.py')
+        sys.exit(1)
     print('WAIT — listener defers ~2min after worker boot; re-run this script')
     sys.exit(1)
 print('WARN — listener not live:', reason)
