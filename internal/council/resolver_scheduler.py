@@ -50,20 +50,6 @@ SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 JOB_ID = "prediction-resolver-scheduler"
 
 
-def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "hypothesisId": hypothesis_id,
-                "location": "internal/council/resolver_scheduler.py",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }) + "\n")
-    except Exception:
-        pass
-
-
 def _round_robin_batch(
     subnets: list,
     cursor: int,
@@ -182,13 +168,6 @@ class PredictionResolverScheduler:
             ).isoformat()
             self._persist_lifecycle_state()
 
-        # #region agent log
-        _debug_log("A", "resolver lifecycle start", {
-            "immediate": immediate,
-            "running": self._running,
-            "next_run_at": self._next_run_at,
-        })
-        # #endregion
         if immediate:
             # Run the first tick in a background thread so callers are not
             # blocked while prices are fetched and predictions are graded.
@@ -198,12 +177,6 @@ class PredictionResolverScheduler:
             # predictions is cleared quickly; normal cadence resumes after.
             self._schedule_next_seconds(RESOLVER_FIRST_TICK_DELAY_SECONDS)
 
-        # #region agent log
-        _debug_log("B", "resolver first tick scheduled", {
-            "immediate": immediate,
-            "next_run_at": self._next_run_at,
-        })
-        # #endregion
         return {
             "started": True,
             "refresh_minutes": self.refresh_minutes,
@@ -337,15 +310,6 @@ class PredictionResolverScheduler:
             next_interval = self._backoff_minutes
             self._mark_first_tick(result)
 
-        # #region agent log
-        _debug_log("C", "resolver tick completed", {
-            "event": "tick_completed",
-            "duration_ms": round((time.perf_counter() - tick_started) * 1000, 1),
-            "ok": result.get("ok"),
-            "error": result.get("error"),
-            "state": "running" if self._running else "stopped",
-        })
-        # #endregion
         if self._running:
             self._schedule_next(next_interval)
         return result
@@ -394,14 +358,6 @@ class PredictionResolverScheduler:
                     "pending": 0,
                     "error": f"cycle_timeout_{timeout}s",
                 }
-                # #region agent log
-                _debug_log("D", "resolver tick timeout", {
-                    "event": "tick_timeout",
-                    "duration_ms": round(timeout * 1000, 1),
-                    "error": result["error"],
-                    "state": "timeout",
-                })
-                # #endregion
                 self._persist_cycle_summary(result)
                 return result
         finally:

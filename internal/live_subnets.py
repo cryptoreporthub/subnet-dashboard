@@ -37,20 +37,6 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("live_subnets")
 
 
-def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "hypothesisId": hypothesis_id,
-                "location": "internal/live_subnets.py",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }) + "\n")
-    except Exception:
-        pass
-
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(BASE_DIR)
 REGISTRY_PATH = os.path.join(REPO_ROOT, "config", "registry.json")
@@ -280,14 +266,6 @@ def _sync_once() -> bool:
             return False
         if not raw:
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
-            # #region agent log
-            _debug_log("F", "live subnet sync empty", {
-                "event": "sync_empty",
-                "registry_netuids": len(_registry_netuids()),
-                "reason": empty_reason,
-                "preserve_cache": os.path.exists(_cache_path()),
-            })
-            # #endregion
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
             return False
@@ -304,13 +282,6 @@ def _sync_once() -> bool:
             with open(tmp, "w") as f:
                 json.dump(payload, f)
             os.replace(tmp, _cache_path())
-            # #region agent log
-            _debug_log("F", "live subnet sync success", {
-                "event": "sync_success",
-                "rows": len(merged),
-                "preserve_cache": True,
-            })
-            # #endregion
             logger.info("live_subnets sync OK: %d subnets", len(merged))
             _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
             return True

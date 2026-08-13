@@ -18,20 +18,6 @@ from internal.run_mode import inline_worker_expected, is_worker_mode, split_work
 logger = logging.getLogger(__name__)
 
 
-def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
-            handle.write(json.dumps({
-                "hypothesisId": hypothesis_id,
-                "location": "internal/learning/loop_health.py",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }) + "\n")
-    except Exception:
-        pass
-
-
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
 )
@@ -413,14 +399,6 @@ def build_learning_loop_health(
     }
 
     resolver = _timed_health_stage("resolver_tick", _last_resolver_tick, soul_path)
-    # #region agent log
-    _debug_log("E", "learning health resolver probe", {
-        "running": resolver.get("running"),
-        "last_tick": resolver.get("at"),
-        "last_ok": resolver.get("ok"),
-        "peer_alive": (resolver.get("worker_peer") or {}).get("alive"),
-    })
-    # #endregion
     tick_at = _parse_iso(resolver.get("at"))
     refresh_m = max(1, int(resolver.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES))
     stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
@@ -466,15 +444,6 @@ def build_learning_loop_health(
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
 
-    # #region agent log
-    _debug_log("E", "learning health status", {
-        "status": status,
-        "pending": pending,
-        "running": resolver.get("running"),
-        "last_tick": resolver.get("at"),
-        "boot_grace": boot_grace,
-    })
-    # #endregion
     return {
         "status": status,
         "checked_at": _utcnow().isoformat().replace("+00:00", "Z"),
