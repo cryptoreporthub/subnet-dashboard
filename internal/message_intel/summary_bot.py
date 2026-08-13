@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 import urllib.error
@@ -17,6 +18,7 @@ _POLL_THREAD: Optional[threading.Thread] = None
 _STOP = threading.Event()
 _RATE_LIMIT_SECONDS = 300
 _last_summary_at: Dict[int, float] = {}
+_last_command_at: Dict[tuple[str, int], float] = {}
 _RUNNING = False
 
 _ENABLED = frozenset({"1", "true", "yes", "on"})
@@ -67,6 +69,127 @@ def _registry_subnet_names() -> Dict[int, str]:
     from internal.message_intel.engine import _registry_subnet_names
 
     return _registry_subnet_names()
+
+
+def _parse_command_text(text: str) -> tuple[str, str]:
+    parts = str(text or "").strip().split(maxsplit=1)
+    cmd = parts[0].split("@", 1)[0].lower() if parts else ""
+    arg = parts[1].strip() if len(parts) > 1 else ""
+    return cmd, arg
+
+
+def _command_rate_limit(key: tuple[str, int], seconds: int = 60) -> Optional[str]:
+    now = time.monotonic()
+    last = _last_command_at.get(key, 0.0)
+    if now - last < seconds:
+        return "Please wait a moment before using that command again."
+    _last_command_at[key] = now
+    return None
+
+
+def _subnet_from_arg(arg: str) -> Optional[int]:
+    m = re.search(r"\b(?:sn|subnet)?\s*(\d+)\b", str(arg or ""), re.IGNORECASE)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _format_error(msg: str) -> str:
+    return f"<b>Subnet Summers</b>\n\n{msg}"
+
+
+def _format_trending(items: list[Dict[str, Any]], window: str) -> str:
+    lines = [f"<b>ChatterPower Trending — {window}</b>", ""]
+    if not items:
+        lines.append("No trending subnets found in that window.")
+    for row in items[:5]:
+        lines.append(
+            f"• SN{row.get('netuid')} {row.get('name') or ''} "
+            f"({row.get('mentions', 0)} mentions, power {row.get('chatter_power', 0)})"
+        )
+    return "\n".join(lines)
+
+
+def _format_summary_reply(db=None) -> str:
+    return build_summary_text(db=db)
+
+
+def _format_subnet_summary_reply(netuid: int, db=None) -> str:
+    from internal.message_intel.rollup import build_subnet_telegram_conviction
+
+    payload = build_subnet_telegram_conviction(netuid=netuid, limit=1, db=db)
+    item = next((row for row in payload.get("items") or [] if int(row.get("netuid") or 0) == int(netuid)), None)
+    if not item or not item.get("current_calls"):
+        return _format_error(f"No recent qualified Telegram calls for SN{netuid}.")
+    label = item.get("label") or "mixed"
+    lines = [
+        f"<b>SN{netuid} Telegram summary</b>",
+        "",
+        f"Current read: {label} · {item.get('call_count', 0)} calls from {item.get('contributor_count', 0)} contributors",
+    ]
+    for call in (item.get("current_calls") or [])[:3]:
+        direction = str(call.get("direction") or "neutral").upper()
+        snippet = str(call.get("content") or "").strip().replace("<", "&lt;").replace(">", "&gt;")
+        if len(snippet) > 140:
+            snippet = snippet[:137].rstrip() + "…"
+        lines.append(f"• {direction} — {snippet or 'call recorded'}")
+    lines.extend(["", "Evidence-qualified community commentary; not financial advice."])
+    return "\n".join(lines)
+
+
+def _format_rank(item: Dict[str, Any]) -> str:
+    if not item:
+        return _format_error("No matching subnet found.")
+    return (
+        f"<b>Subnet Rank — SN{item.get('netuid')}</b>\n\n"
+        f"{item.get('name') or ''}\n"
+        f"Mentions: {item.get('mentions', 0)}\n"
+        f"ChatterPower: {item.get('chatter_power', 0)}\n"
+        f"Why: {item.get('why') or 'n/a'}"
+    )
+
+
+def _format_author(item: Dict[str, Any]) -> str:
+    if not item:
+        return _format_error("No matching author found.")
+    return (
+        f"<b>Author Leaderboard</b>\n\n"
+        f"{item.get('author_name') or item.get('author_id')}\n"
+        f"Messages: {item.get('message_count', 0)}\n"
+        f"Accuracy: {item.get('accuracy_pct') if item.get('accuracy_pct') is not None else 'n/a'}"
+    )
+
+
+def _watchlist_load(owner=None):
+    from internal.watchlist.store import load_watchlist
+
+    return load_watchlist() if owner is None else load_watchlist(owner=owner)
+
+
+def _watchlist_save(netuids, thresholds=None, alerts=None, owner=None):
+    from internal.watchlist.store import save_watchlist
+
+    if owner is None:
+        return save_watchlist(netuids, thresholds=thresholds, alerts=alerts)
+    return save_watchlist(netuids, thresholds=thresholds, alerts=alerts, owner=owner)
+
+
+def _stable_telegram_user(message: Dict[str, Any]) -> str:
+    from internal.message_intel.proof import stable_author_id
+
+    return stable_author_id(message)
+
+
+def _telegram_watchlist_owner(message: Optional[Dict[str, Any]]) -> Optional[str]:
+    if not isinstance(message, dict):
+        return None
+    telegram_owner = f"telegram:{_stable_telegram_user(message)}"
+    from internal.watchlist.store import linked_owner
+
+    return linked_owner(telegram_owner) or telegram_owner
 
 
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
@@ -148,7 +271,92 @@ def handle_summary_command(chat_id: int, *, db=None) -> tuple[str, bool]:
     limited = _rate_limit_reply(chat_id)
     if limited:
         return limited, True
-    return build_summary_text(db=db), False
+    return _format_summary_reply(db=db), False
+
+
+def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
+    cmd, arg = _parse_command_text(text)
+    if cmd == "/summary":
+        subnet = _subnet_from_arg(arg)
+        if subnet is not None:
+            return _format_subnet_summary_reply(subnet, db=db)
+        return _format_summary_reply(db=db)
+    if cmd == "/trending":
+        window = "1h" if arg.strip() == "1h" else "24h"
+        from internal.message_intel.rollup import build_trending_subnets
+
+        items = build_trending_subnets(limit=5, rank_hours=1 if window == "1h" else 24, window_hours=24)
+        return _format_trending(items, window)
+    if cmd == "/track":
+        subnet = _subnet_from_arg(arg)
+        if subnet is None:
+            return _format_error("Usage: /track <subnet>")
+        owner = _telegram_watchlist_owner(message)
+        watch = _watchlist_load(owner) if owner is not None else _watchlist_load()
+        pins = list(watch.get("netuids") or [])
+        if subnet not in pins:
+            pins.append(subnet)
+            if owner is None:
+                _watchlist_save(pins, thresholds=watch.get("thresholds") or {}, alerts=watch.get("alerts") or {})
+            else:
+                _watchlist_save(pins, thresholds=watch.get("thresholds") or {}, alerts=watch.get("alerts") or {}, owner=owner)
+        return _format_error(f"Added SN{subnet} to watchlist.")
+    if cmd == "/link":
+        code = str(arg or "").strip().upper()
+        if not code or message is None:
+            return _format_error("Usage: /link <code from My Desk>")
+        telegram_owner = f"telegram:{_stable_telegram_user(message)}"
+        from internal.watchlist.store import claim_link_code
+
+        if not claim_link_code(code, telegram_owner):
+            return _format_error("That link code is invalid or already used.")
+        return _format_error("Telegram watchlist sync is linked. Your /track and /alerts settings now use My Desk.")
+    if cmd == "/rank":
+        subnet = _subnet_from_arg(arg)
+        from internal.message_intel.rollup import build_trending_subnets
+
+        items = build_trending_subnets(limit=50, rank_hours=1, window_hours=24)
+        row = next((r for r in items if subnet is not None and int(r.get("netuid") or 0) == subnet), {})
+        return _format_rank(row)
+    if cmd == "/who":
+        author = arg.strip().lstrip("@")
+        from internal.message_intel.rollup import build_author_reliability_rows
+
+        rows = build_author_reliability_rows(days=30, limit=25)
+        row = next(
+            (
+                r
+                for r in rows
+                if author.lower()
+                in {
+                    str(r.get("author_name") or "").lower(),
+                    str(r.get("author_username") or "").lower().lstrip("@"),
+                    str(r.get("author_id") or "").lower(),
+                }
+            ),
+            {},
+        )
+        return _format_author(row)
+    if cmd == "/alerts" and message is not None:
+        parts = arg.lower().split()
+        if not parts or parts[0] not in {"on", "off"}:
+            return _format_error("Usage: /alerts on|off")
+        owner = _telegram_watchlist_owner(message)
+        watch = _watchlist_load(owner) if owner is not None else _watchlist_load()
+        user_key = _stable_telegram_user(message)
+        alerts = dict(watch.get("alerts") or {})
+        alerts[user_key] = {"enabled": parts[0] == "on"}
+        if owner is None:
+            _watchlist_save(watch.get("netuids") or [], thresholds=watch.get("thresholds") or {}, alerts=alerts)
+        else:
+            _watchlist_save(
+                watch.get("netuids") or [],
+                thresholds=watch.get("thresholds") or {},
+                alerts=alerts,
+                owner=owner,
+            )
+        return _format_error(f"Alerts turned {parts[0]} for your Telegram identity.")
+    return None
 
 
 def send_message(chat_id: int, text: str, *, parse_mode: str = "HTML") -> Dict[str, Any]:
@@ -163,7 +371,7 @@ def _process_update(update: Dict[str, Any]) -> None:
     if not isinstance(message, dict):
         return
     text = str(message.get("text") or "").strip()
-    if not text or not text.split()[0].startswith("/summary"):
+    if not text or not text.split()[0].startswith("/"):
         return
     chat = message.get("chat") or {}
     chat_id = chat.get("id")
@@ -174,7 +382,15 @@ def _process_update(update: Dict[str, Any]) -> None:
     except (TypeError, ValueError):
         return
 
-    reply, _limited = handle_summary_command(chat_id)
+    cmd, _ = _parse_command_text(text)
+    rate_key = (cmd or "unknown", chat_id)
+    limited = _command_rate_limit(rate_key)
+    if limited:
+        reply = limited
+    else:
+        reply = handle_command(text, message=message)
+    if reply is None:
+        return
     resp = send_message(chat_id, reply)
     if not resp.get("ok"):
         logger.warning("summary bot send failed chat=%s: %s", chat_id, resp.get("error") or resp)
