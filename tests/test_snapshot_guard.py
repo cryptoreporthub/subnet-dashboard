@@ -57,3 +57,10 @@ def test_snapshot_guard_returns_stale_while_building(monkeypatch):
     guard._BUILDING.set()
 
     assert guard._patched() is stale
+
+
+def test_snapshot_guard_cold_fallback_has_resolver_stats():
+    import internal.snapshot_guard as guard
+
+    assert "resolver_stats" in guard._COLD_FALLBACK
+    assert guard._COLD_FALLBACK["resolver_stats"]["pending"] == 0
