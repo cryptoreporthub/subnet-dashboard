@@ -19,6 +19,7 @@ indicator scheduler so it is safe for single-worker Fly.io deployments.
 """
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -30,6 +31,8 @@ from typing import Any, Callable, Dict, Optional
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map
+
+logger = logging.getLogger(__name__)
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
@@ -45,6 +48,15 @@ RESOLVER_BATCH_SIZE = int(os.environ.get("RESOLVER_BATCH_SIZE", "32"))
 RESOLVER_CYCLE_TIMEOUT_SECONDS = int(os.environ.get("RESOLVER_CYCLE_TIMEOUT_SECONDS", "120"))
 RESOLVER_FIRST_TICK_DELAY_SECONDS = max(
     0, int(os.environ.get("RESOLVER_FIRST_TICK_DELAY_SECONDS", "60"))
+)
+RESOLVER_FIRST_TICK_TIMEOUT_SECONDS = max(
+    1,
+    int(
+        os.environ.get(
+            "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS",
+            str(min(RESOLVER_CYCLE_TIMEOUT_SECONDS, 90)),
+        )
+    ),
 )
 SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 JOB_ID = "prediction-resolver-scheduler"
@@ -167,6 +179,11 @@ class PredictionResolverScheduler:
                 time.time() + delay, timezone.utc
             ).isoformat()
             self._persist_lifecycle_state()
+            logger.info(
+                "resolver lifecycle event=start immediate=%s first_tick_at=%s",
+                immediate,
+                self._first_tick_scheduled_at,
+            )
 
         if immediate:
             # Run the first tick in a background thread so callers are not
@@ -176,6 +193,10 @@ class PredictionResolverScheduler:
             # First tick happens soon after boot so a backlog of pending
             # predictions is cleared quickly; normal cadence resumes after.
             self._schedule_next_seconds(RESOLVER_FIRST_TICK_DELAY_SECONDS)
+        logger.info(
+            "resolver lifecycle event=scheduled first_tick_at=%s",
+            self._first_tick_scheduled_at,
+        )
 
         return {
             "started": True,
@@ -262,10 +283,12 @@ class PredictionResolverScheduler:
 
         tick_started = time.perf_counter()
         with self._lock:
-            if self._first_tick_pending:
+            first_tick = self._first_tick_pending
+            if first_tick:
                 self._lifecycle = "ticking"
             else:
                 self._lifecycle = "running"
+        logger.info("resolver lifecycle event=tick_start first=%s", first_tick)
         with heavy_job_slot("prediction_resolver") as acquired:
             if not acquired:
                 skipped = {
@@ -283,6 +306,11 @@ class PredictionResolverScheduler:
                     self._last_run_ok = True
                     self._last_run_error = None
                     self._mark_first_tick(skipped)
+                logger.info(
+                    "resolver lifecycle event=success first=%s duration_ms=%.1f skipped=heavy_job_busy",
+                    first_tick,
+                    (time.perf_counter() - tick_started) * 1000,
+                )
                 if self._running:
                     # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
                     self._schedule_next(min(2, max(1, self.refresh_minutes)))
@@ -310,6 +338,27 @@ class PredictionResolverScheduler:
             next_interval = self._backoff_minutes
             self._mark_first_tick(result)
 
+        duration_ms = (time.perf_counter() - tick_started) * 1000
+        if result.get("error") and "timeout" in str(result.get("error")).lower():
+            logger.warning(
+                "resolver lifecycle event=timeout first=%s duration_ms=%.1f error=%s",
+                first_tick,
+                duration_ms,
+                result.get("error"),
+            )
+        elif result.get("ok"):
+            logger.info(
+                "resolver lifecycle event=success first=%s duration_ms=%.1f",
+                first_tick,
+                duration_ms,
+            )
+        else:
+            logger.warning(
+                "resolver lifecycle event=failure first=%s duration_ms=%.1f error=%s",
+                first_tick,
+                duration_ms,
+                result.get("error"),
+            )
         if self._running:
             self._schedule_next(next_interval)
         return result
@@ -341,7 +390,11 @@ class PredictionResolverScheduler:
             pass
 
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
-        timeout = RESOLVER_CYCLE_TIMEOUT_SECONDS
+        timeout = (
+            RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
+            if self._first_tick_pending
+            else RESOLVER_CYCLE_TIMEOUT_SECONDS
+        )
         if timeout <= 0:
             return self._run_refresh_cycle()
         pool = ThreadPoolExecutor(max_workers=1)

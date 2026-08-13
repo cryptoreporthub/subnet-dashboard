@@ -259,6 +259,15 @@ def _sync_once() -> bool:
         return False
     _record_boot_status(phase="sync_start")
     try:
+        if not registry_ready():
+            _record_boot_status(
+                phase="deferred",
+                ok=False,
+                reason="registry_not_ready",
+                rows=0,
+            )
+            logger.info("live_subnets sync deferred until registry is ready")
+            return False
         raw = _fetch_chain_data()
         if raw is None:
             logger.warning("live_subnets sync: chain fetch failed or timed out")

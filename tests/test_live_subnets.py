@@ -110,7 +110,7 @@ def test_sync_empty_registry_has_distinct_boot_reason(monkeypatch, tmp_path):
             assert live_subnets._sync_once() is False
 
     status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
-    assert status["reason"] == "empty_netuids"
+    assert status["reason"] == "registry_not_ready"
     assert status["ok"] is False
 
 
