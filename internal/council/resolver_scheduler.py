@@ -351,7 +351,7 @@ class PredictionResolverScheduler:
         return result
 
     def _mark_first_tick(self, result: Dict[str, Any]) -> None:
-        if not self._first_tick_pending:
+        if self._first_tick_at is not None:
             return
         self._first_tick_pending = False
         self._first_tick_at = result.get("run_at") or _now_iso()
