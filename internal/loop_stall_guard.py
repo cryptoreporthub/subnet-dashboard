@@ -85,7 +85,11 @@ def _resolver_tick_age_seconds() -> Optional[float]:
         raw = _last_resolver_tick()
         if not raw:
             return None
-        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        # _last_resolver_tick returns a dict with key "at" for the ISO timestamp.
+        tick_at = raw.get("at") if isinstance(raw, dict) else None
+        if not tick_at:
+            return None
+        dt = datetime.fromisoformat(str(tick_at).replace("Z", "+00:00"))
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()
