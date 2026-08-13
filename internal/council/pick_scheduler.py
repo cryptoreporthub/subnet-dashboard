@@ -195,6 +195,8 @@ class DailyPickScheduler:
         self._last_ok: Optional[bool] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
+        self._work_lock = threading.Lock()
+        self._work_thread: Optional[threading.Thread] = None
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
@@ -249,8 +251,18 @@ class DailyPickScheduler:
                 finally:
                     done.set()
 
-            threading.Thread(target=_run_pick, daemon=True, name="daily-pick-work").start()
-            if not done.wait(timeout):
+            with self._work_lock:
+                active = self._work_thread is not None and self._work_thread.is_alive()
+                if active:
+                    result["error"] = "daily pick tick skipped; previous worker still running"
+                else:
+                    self._work_thread = threading.Thread(
+                        target=_run_pick, daemon=True, name="daily-pick-work"
+                    )
+                    self._work_thread.start()
+            if active:
+                logger.warning("%s", result["error"])
+            elif not done.wait(timeout):
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 logger.warning("%s (worker left running)", result["error"])
             elif "exc" in error:
