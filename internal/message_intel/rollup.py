@@ -171,6 +171,30 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def _coerce_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return int(default)
+
+
+def _author_rolling_quality(stats: Dict[str, Any]) -> float:
+    graded = max(0, _coerce_int(stats.get("graded") or stats.get("total_messages")))
+    hits = max(0, _coerce_int(stats.get("hits") or stats.get("correct_predictions")))
+    if graded <= 0:
+        return 0.5
+    return (min(hits, graded) + 2.0) / (graded + 4.0)
+
+
+
+
 def build_trending_subnets(
     *,
     registry_names: Optional[Dict[int, str]] = None,
@@ -179,77 +203,129 @@ def build_trending_subnets(
     rank_hours: int = 1,
     db=None,
 ) -> List[Dict[str, Any]]:
-    """Top subnets by mention volume in the rank window (default last hour) with sparkline buckets."""
+    """Top subnets by ChatterPower over the rank window with sparkline buckets."""
     now = datetime.now(timezone.utc)
     rank_hours = max(1, int(rank_hours or 1))
     window_hours = max(rank_hours, int(window_hours or rank_hours))
     window_start = now - timedelta(hours=window_hours)
     rank_ago = now - timedelta(hours=rank_hours)
     prev_rank_ago = now - timedelta(hours=rank_hours * 2)
+    hour_ago = now - timedelta(hours=1)
+    day_ago = now - timedelta(hours=24)
+    lookback_start = now - timedelta(hours=max(window_hours, rank_hours * 2, 24))
     registry_names = registry_names or {}
 
     buckets: Dict[int, Dict[str, Any]] = defaultdict(
         lambda: {
-            "mentions_1h": 0,
-            "mentions_prev_1h": 0,
-            "sentiment_sum": 0.0,
-            "sentiment_n": 0,
-            "conviction_sum": 0.0,
+            "rank": {"mentions": 0, "sentiment_sum": 0.0, "conviction_sum": 0.0, "author_ids": set()},
+            "prev": {"mentions": 0, "sentiment_sum": 0.0, "conviction_sum": 0.0, "author_ids": set()},
+            "hour": {"mentions": 0, "sentiment_sum": 0.0, "conviction_sum": 0.0, "author_ids": set()},
+            "day": {"mentions": 0, "sentiment_sum": 0.0, "conviction_sum": 0.0, "author_ids": set()},
             "spark": [0] * window_hours,
         }
     )
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
-        if ts is None or ts < window_start:
+        if ts is None or ts < lookback_start:
             continue
-        netuids = _netuids_from_row(row)
-        if not netuids:
-            continue
-        hour_idx = int((ts - window_start).total_seconds() // 3600)
-        hour_idx = max(0, min(window_hours - 1, hour_idx))
         s_val = _sentiment_value(row.get("sentiment"))
-        try:
-            conviction = float(row.get("conviction") or 0)
-        except (TypeError, ValueError):
-            conviction = 0.0
+        conviction = _coerce_float(row.get("conviction"))
+        author_id = stable_author_id(row)
+        netuids = _netuids_from_row(row)
         for netuid in netuids:
             b = buckets[netuid]
-            b["spark"][hour_idx] += 1
             if ts >= rank_ago:
-                b["mentions_1h"] += 1
-                b["sentiment_sum"] += s_val
-                b["sentiment_n"] += 1
-                b["conviction_sum"] += conviction
+                bucket = b["rank"]
+                bucket["mentions"] += 1
+                bucket["sentiment_sum"] += s_val
+                bucket["conviction_sum"] += conviction
+                bucket["author_ids"].add(author_id)
             elif ts >= prev_rank_ago:
-                b["mentions_prev_1h"] += 1
+                bucket = b["prev"]
+                bucket["mentions"] += 1
+                bucket["sentiment_sum"] += s_val
+                bucket["conviction_sum"] += conviction
+                bucket["author_ids"].add(author_id)
+            if ts >= hour_ago:
+                bucket = b["hour"]
+                bucket["mentions"] += 1
+                bucket["sentiment_sum"] += s_val
+                bucket["conviction_sum"] += conviction
+                bucket["author_ids"].add(author_id)
+            if ts >= day_ago:
+                bucket = b["day"]
+                bucket["mentions"] += 1
+                bucket["sentiment_sum"] += s_val
+                bucket["conviction_sum"] += conviction
+                bucket["author_ids"].add(author_id)
+            if ts >= window_start:
+                hour_idx = int((ts - window_start).total_seconds() // 3600)
+                hour_idx = max(0, min(window_hours - 1, hour_idx))
+                b["spark"][hour_idx] += 1
 
     out: List[Dict[str, Any]] = []
+    reliability_rows = _author_reliability_rows(db)
     for netuid, b in buckets.items():
-        mentions = int(b["mentions_1h"])
+        rank = b["rank"]
+        mentions = int(rank["mentions"])
         if mentions <= 0:
             continue
-        prev = int(b["mentions_prev_1h"])
-        change = mentions - prev
-        avg = (b["sentiment_sum"] / b["sentiment_n"]) if b["sentiment_n"] else 0.0
-        avg_conv = (b["conviction_sum"] / mentions) if mentions else 0.0
-        # Rank by chatter × conviction so fluff spam doesn't dominate.
-        heat = mentions * (1.0 + avg_conv / 100.0)
+        def window_metrics(bucket: Dict[str, Any], hours: int) -> Dict[str, float]:
+            count = int(bucket["mentions"])
+            avg_sentiment = bucket["sentiment_sum"] / count if count else 0.0
+            avg_conviction = bucket["conviction_sum"] / count if count else 0.0
+            qualities = [
+                _author_rolling_quality(reliability_rows.get(aid, {}))
+                for aid in bucket["author_ids"]
+            ]
+            quality_value = sum(qualities) / len(qualities) if qualities else 0.5
+            velocity_value = count / max(hours, 1)
+            conviction_value = max(0.0, avg_conviction / 100.0)
+            power = velocity_value * conviction_value * max(0.1, quality_value)
+            return {
+                "mentions": count,
+                "sentiment": avg_sentiment,
+                "conviction": avg_conviction,
+                "quality": quality_value,
+                "velocity": velocity_value,
+                "power": power,
+            }
+
+        current = window_metrics(rank, rank_hours)
+        previous = window_metrics(b["prev"], rank_hours)
+        hourly = window_metrics(b["hour"], 1)
+        daily = window_metrics(b["day"], 24)
+        chatter_power = current["power"]
+        prev_power = previous["power"]
+        quality = current["quality"]
+        velocity = current["velocity"]
+        avg_conv = current["conviction"]
+        avg = current["sentiment"]
+        delta = chatter_power - prev_power
+        why = f"velocity {velocity:.2f} × conviction {current['conviction'] / 100.0:.2f} × quality {quality:.2f}"
         out.append(
             {
                 "netuid": netuid,
                 "name": registry_names.get(netuid) or f"Subnet {netuid}",
                 "mentions": mentions,
-                "change_1h": change,
+                "velocity": round(velocity, 3),
+                "conviction": round(avg_conv, 1),
+                "quality": round(quality, 3),
+                "chatter_power": round(chatter_power, 4),
+                "delta": round(delta, 4),
+                "movement_1h": round(hourly["power"], 4),
+                "movement_24h": round(daily["power"], 4),
                 "sentiment": _sentiment_tag(avg),
                 "avg_conviction": round(avg_conv, 1),
-                "heat": round(heat, 3),
+                "heat": round(chatter_power, 3),
                 "sparkline": list(b["spark"]),
                 "window": f"{rank_hours}h",
+                "why": why,
             }
         )
 
-    out.sort(key=lambda r: (r["heat"], r["mentions"], abs(r.get("change_1h", 0))), reverse=True)
+    out.sort(key=lambda r: (r["chatter_power"], r["mentions"], abs(r.get("delta", 0))), reverse=True)
     return out[:limit]
 
 
@@ -330,58 +406,82 @@ def build_yesterday_leader(
     return out
 
 
-def _author_outcome_stats(db=None) -> Dict[str, Dict[str, Any]]:
-    """Map author_id → {graded, hits, hit_rate} from price_outcomes + verdicts."""
-    database = db or get_db()
+def _author_outcome_stats(db=None, *, days: Optional[int] = None) -> Dict[str, Dict[str, Any]]:
+    """Map author_id → canonical resolved hit/miss stats."""
     stats: Dict[str, Dict[str, Any]] = {}
     try:
-        with database._connect() as conn:
-            rows = conn.execute(
-                """SELECT m.author_id, m.author_username, m.author_name,
-                          v.predicted_direction, po.outcome, po.pump_pct_max
-                   FROM messages m
-                   JOIN price_outcomes po ON po.message_id = m.id
-                   LEFT JOIN message_verdicts v ON v.message_id = m.id"""
-            ).fetchall()
+        rows = _proof_rows(db, days=days)
     except Exception:
         return {}
 
+    from internal.message_intel.proof import classify_call
+
     for row in rows:
-        author_id = str(row["author_id"] or row["author_username"] or row["author_name"] or "unknown")
+        proof = classify_call(row)
+        if not proof.get("eligible") or proof.get("status") not in {"hit", "miss"}:
+            continue
+        author_id = stable_author_id(row)
         entry = stats.setdefault(author_id, {"graded": 0, "hits": 0})
         entry["graded"] += 1
-        direction = str(row["predicted_direction"] or "").lower()
-        outcome = str(row["outcome"] or "").lower()
-        hit = False
-        if direction in ("up", "bullish") and outcome in ("pump", "mild_pump"):
-            hit = True
-        elif direction in ("down", "bearish") and outcome in ("dump", "mild_dump"):
-            hit = True
-        elif direction in ("flat", "sideways", "neutral", "") and outcome == "stable":
-            hit = True
-        elif outcome in ("pump", "mild_pump") and not direction:
-            hit = True
-        if hit:
+        if proof.get("status") == "hit":
             entry["hits"] += 1
 
     for entry in stats.values():
         graded = int(entry["graded"])
         hits = int(entry["hits"])
         entry["hit_rate"] = round((hits / graded) * 100.0, 1) if graded else None
+        entry["strike_rate"] = entry["hit_rate"]
+        entry["correct_predictions"] = hits
+        entry["total_graded_calls"] = graded
+        entry["caution"] = graded < 5
     return stats
+
+
+def _author_reliability_rows(db=None) -> Dict[str, Dict[str, Any]]:
+    """Read the persisted per-author strike-rate ledger."""
+    database = db or get_db()
+    try:
+        with database._connect() as conn:
+            rows = conn.execute(
+                """SELECT author_id, author_name, total_messages,
+                          correct_predictions, accuracy_score
+                   FROM author_reliability"""
+            ).fetchall()
+    except Exception:
+        return {}
+
+    result: Dict[str, Dict[str, Any]] = {}
+    for row in rows:
+        raw_id = str(row["author_id"])
+        record = {
+            "author_id": str(row["author_id"]),
+            "author_name": row["author_name"],
+            "total_messages": max(0, int(row["total_messages"] or 0)),
+            "correct_predictions": max(0, int(row["correct_predictions"] or 0)),
+            "accuracy_score": float(row["accuracy_score"] or 0.0),
+        }
+        if not raw_id:
+            continue
+        result[raw_id] = record
+        # The persisted ledger predates the prefixed stable-author contract.
+        # Keep a compatibility alias until historical rows are backfilled.
+        if not raw_id.startswith(("id:", "u:", "n:")):
+            result.setdefault(f"id:{raw_id}", record)
+    return result
 
 
 def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict[str, Any]]:
     """Top contributors by emoji-weighted influence over the last N days."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     authors: Dict[str, Dict[str, Any]] = {}
-    outcome_stats = _author_outcome_stats(db)
+    outcome_stats = _author_outcome_stats(db, days=days)
+    reliability_rows = _author_reliability_rows(db)
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < cutoff:
             continue
-        author_id = str(row.get("author_id") or row.get("author_username") or row.get("author_name") or "unknown")
+        author_id = stable_author_id(row)
         entry = authors.setdefault(
             author_id,
             {
@@ -411,6 +511,11 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
         name = str(entry["author_name"] or "Unknown")
         initials = "".join(part[0].upper() for part in name.split()[:2]) or "?"
         graded = outcome_stats.get(entry["author_id"]) or {}
+        persisted = reliability_rows.get(entry["author_id"])
+        persisted_total = persisted["total_messages"] if persisted else 0
+        persisted_hits = min(persisted["correct_predictions"], persisted_total) if persisted else 0
+        canonical_graded = int(graded.get("graded") or 0)
+        canonical_caution = canonical_graded > 0 and canonical_graded < 5
         out.append(
             {
                 "author_id": entry["author_id"],
@@ -424,10 +529,102 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
                 "graded": int(graded.get("graded") or 0),
                 "hits": int(graded.get("hits") or 0),
                 "hit_rate": graded.get("hit_rate"),
+                "strike_rate": graded.get("strike_rate"),
+                "correct_predictions": int(graded.get("correct_predictions") or 0),
+                "total_graded_calls": int(graded.get("total_graded_calls") or 0),
+                "caution": canonical_caution or (canonical_graded == 0 and 0 < persisted_total < 5),
+                "reliability_total_messages": persisted_total,
+                "reliability_correct_predictions": persisted_hits,
+                "reliability_accuracy_pct": (
+                    round((persisted_hits / persisted_total) * 100.0, 1)
+                    if persisted_total else None
+                ),
+                "receipt_friendly": {
+                    "author_id": entry["author_id"],
+                    "author_name": name,
+                    "author_username": entry["author_username"],
+                    "available": canonical_graded > 0,
+                    "graded": canonical_graded,
+                    "hit_rate": graded.get("hit_rate") if canonical_graded else None,
+                    "strike_rate": graded.get("strike_rate") if canonical_graded else None,
+                },
             }
         )
 
     out.sort(key=lambda r: (r["influence_score"], r["message_count"]), reverse=True)
+    return out[:limit]
+
+
+def build_author_reliability_rows(*, days: int = 7, limit: int = 8, db=None) -> List[Dict[str, Any]]:
+    """Expose SQLite-backed author reliability with strike-rate fields."""
+    rows = build_weekly_authors(days=days, limit=max(limit, 50), db=db)
+    reliability_rows = _author_reliability_rows(db)
+    present_ids = {str(row.get("author_id")) for row in rows}
+    for author_id, persisted in reliability_rows.items():
+        if author_id in present_ids:
+            continue
+        total = persisted["total_messages"]
+        hits = min(persisted["correct_predictions"], total)
+        name = str(persisted.get("author_name") or "Unknown")
+        rows.append(
+            {
+                "author_id": author_id,
+                "author_name": name,
+                "author_username": "",
+                "initials": "".join(part[0].upper() for part in name.split()[:2]) or "?",
+                "message_count": 0,
+                "subnet_count": 0,
+                "influence_score": 0.0,
+                "reactions": {key: 0 for key, _, _ in _REACTION_KEYS},
+                "graded": total,
+                "hits": hits,
+                "hit_rate": round((hits / total) * 100.0, 1) if total else None,
+                "strike_rate": round((hits / total) * 100.0, 1) if total else None,
+                "correct_predictions": hits,
+                "total_graded_calls": total,
+                "caution": total < 5,
+                "receipt_friendly": {
+                    "author_id": author_id,
+                    "author_name": name,
+                    "author_username": "",
+                    "graded": total,
+                    "hit_rate": round((hits / total) * 100.0, 1) if total else None,
+                    "strike_rate": round((hits / total) * 100.0, 1) if total else None,
+                },
+            }
+        )
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        graded = int(row.get("graded") or 0)
+        hits = int(row.get("hits") or 0)
+        strike_rate = row.get("strike_rate")
+        if strike_rate is None and graded:
+            strike_rate = round((hits / graded) * 100.0, 1)
+        reliability_total = int(row.get("reliability_total_messages") or 0)
+        reliability_hits = int(row.get("reliability_correct_predictions") or 0)
+        reliability_rate = row.get("reliability_accuracy_pct")
+        display_total = graded or reliability_total
+        display_hits = hits if graded else reliability_hits
+        display_rate = strike_rate if graded else reliability_rate
+        out.append(
+            {
+                **row,
+                "accuracy_pct": display_rate,
+                "strike_rate_pct": display_rate,
+                "correct_predictions": int(row.get("correct_predictions") or display_hits),
+                "total_graded_calls": int(row.get("total_graded_calls") or display_total),
+                "stats_source": "proof_contract" if graded else (
+                    "author_reliability" if reliability_total else "none"
+                ),
+                "caution": bool(row.get("caution")) if graded else (
+                    0 < reliability_total < 5
+                ),
+                "graded_calls_caution": bool(row.get("caution")) if graded else (
+                    0 < reliability_total < 5
+                ),
+            }
+        )
+    out.sort(key=lambda r: (r["influence_score"], r["message_count"], r["total_graded_calls"]), reverse=True)
     return out[:limit]
 
 
@@ -446,9 +643,7 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
         rx = _reaction_score(row.get("reactions"))
         if not any(rx.values()):
             continue
-        author_id = str(
-            row.get("author_id") or row.get("author_username") or row.get("author_name") or "unknown"
-        )
+        author_id = stable_author_id(row)
         name = row.get("author_name") or "Unknown"
         username = row.get("author_username") or ""
         for key, _, _ in _REACTION_KEYS:
@@ -759,6 +954,9 @@ def build_subnet_telegram_conviction(
     for row in rows:
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if timestamp is None or timestamp < cutoff:
+            continue
+        proof = classify_call(row)
+        if proof.get("resolved") or not proof.get("eligible"):
             continue
         direction = resolve_direction(row.get("verdict"), row.get("predicted_direction"))
         try:
