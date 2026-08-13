@@ -174,6 +174,8 @@ def build_readiness_report() -> Dict[str, Any]:
             "last_run_ok": worker_resolver.get("last_ok", resolver.get("last_run_ok")),
             "last_run_at": loop_health.get("last_resolver_tick") or resolver.get("last_run_at"),
             "age_seconds": worker_resolver.get("age_seconds"),
+            "lifecycle": worker_resolver.get("lifecycle") or resolver.get("lifecycle"),
+            "warming": worker_resolver.get("warming", resolver.get("warming", False)),
         }
 
     try:
