@@ -11,7 +11,6 @@ from internal.signals.rules import signals_unchanged
 
 SIGNALS_PATH = os.environ.get("SIGNALS_PATH", "data/signals.json")
 RETENTION_DAYS = int(os.environ.get("SIGNAL_RETENTION_DAYS", "7"))
-MAX_CACHE_AGE_SECONDS = int(os.environ.get("SIGNAL_CACHE_MAX_AGE_SECONDS", "900"))
 EXPERTS = ("quant", "hype", "dark_horse", "technical")
 
 
@@ -33,7 +32,12 @@ def _parse_ts(value: str) -> Optional[datetime]:
 
 
 def _default_store() -> Dict[str, Any]:
-    return {"updated_at": None, "entries": [], "by_subnet": {}}
+    return {
+        "updated_at": None,
+        "refreshed_at": None,
+        "entries": [],
+        "by_subnet": {},
+    }
 
 
 class SignalStore:
@@ -48,6 +52,7 @@ class SignalStore:
         raw = safe_read_json(self.path, _default_store())
         self._data = {
             "updated_at": raw.get("updated_at"),
+            "refreshed_at": raw.get("refreshed_at"),
             "entries": list(raw.get("entries") or []),
             "by_subnet": dict(raw.get("by_subnet") or {}),
         }
@@ -84,10 +89,26 @@ class SignalStore:
         self._data["updated_at"] = _utcnow_z()
         payload = {
             "updated_at": self._data["updated_at"],
+            "refreshed_at": self._data.get("refreshed_at"),
             "entries": self._data["entries"],
             "by_subnet": self._data.get("by_subnet") or {},
         }
         safe_write_json(self.path, payload)
+
+    def mark_refreshed(self, refreshed_at: Optional[str] = None) -> str:
+        """Record a successful full-generation time independent of row changes."""
+        self.load()
+        timestamp = refreshed_at or _utcnow_z()
+        self._data["refreshed_at"] = timestamp
+        self._prune()
+        payload = {
+            "updated_at": self._data.get("updated_at"),
+            "refreshed_at": timestamp,
+            "entries": self._data["entries"],
+            "by_subnet": self._data.get("by_subnet") or {},
+        }
+        safe_write_json(self.path, payload)
+        return timestamp
 
     def append_many(self, signals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Append changed signals; return list of newly persisted rows."""
@@ -116,13 +137,6 @@ class SignalStore:
         rows = list((self._data.get("latest_by_subnet") or {}).values())
         rows.sort(key=lambda r: r.get("subnet_id") or 0)
         return rows
-
-    def cache_is_stale(self) -> bool:
-        self.load()
-        if not self._data.get("latest_by_subnet"):
-            return True
-        updated = _parse_ts(str(self._data.get("updated_at") or ""))
-        return updated is None or (_utcnow() - updated).total_seconds() > MAX_CACHE_AGE_SECONDS
 
     def query(
         self,
