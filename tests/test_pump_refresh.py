@@ -110,6 +110,35 @@ def test_fetch_all_subnet_signals_loads_intel_maps_once(monkeypatch):
     assert scenario_calls == 1
 
 
+def test_transition_uses_feed_name_without_remote_resolution(monkeypatch):
+    import internal.pump.state as pump_state
+
+    monkeypatch.setattr(
+        "internal.subnet_names.resolve_subnet_name",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network name lookup")),
+    )
+    monkeypatch.setattr(
+        pump_state,
+        "classify_signals",
+        lambda signals, current_phase=None: {
+            "composite_score": 0.0,
+            "accum_score": 0.0,
+            "confirm_score": 0.0,
+            "suggested_phase": "DORMANT",
+            "signals": signals,
+            "score_layer": "dormant",
+        },
+    )
+
+    event, changed = pump_state.transition_subnet(
+        {"subnets": {}},
+        {"netuid": 1, "name": "Alpha"},
+    )
+
+    assert event is None
+    assert changed is False
+
+
 def test_scan_all_subnets_skips_when_already_running(tmp_path, monkeypatch):
     monkeypatch.setenv("PUMP_LADDER_STATE_PATH", str(tmp_path / "pump_ladder.json"))
     from internal.pump import constants

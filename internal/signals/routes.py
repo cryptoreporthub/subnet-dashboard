@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field, model_validator
@@ -20,6 +20,9 @@ logger = logging.getLogger(__name__)
 signals_router = APIRouter(tags=["signals"])
 
 SIGNALS_HANDLER_TIMEOUT = float(os.environ.get("SIGNALS_HANDLER_TIMEOUT_SECONDS", "8"))
+SIGNALS_NAME_REFRESH_TIMEOUT = float(
+    os.environ.get("SIGNALS_NAME_REFRESH_TIMEOUT_SECONDS", "2")
+)
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -46,6 +49,7 @@ except ImportError as _conviction_exc:
 _store: Optional[SignalStore] = None
 _alerts: Optional[AlertEngine] = None
 _generation_lock = asyncio.Lock()
+_name_refresh_lock = asyncio.Lock()
 
 
 def _get_store() -> SignalStore:
@@ -135,6 +139,23 @@ async def _refresh_and_broadcast() -> Dict[str, Any]:
     return result
 
 
+async def _refresh_names_nonblocking(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Keep optional remote name refresh off the ASGI event loop."""
+    if _name_refresh_lock.locked():
+        return rows
+    async with _name_refresh_lock:
+        try:
+            from internal.subnet_names import refresh_stored_names
+
+            return await _to_thread_timeout(
+                lambda: refresh_stored_names(rows),
+                SIGNALS_NAME_REFRESH_TIMEOUT,
+                label="signals-name-refresh",
+            )
+        except Exception:
+            return rows
+
+
 @signals_router.get("/api/signals")
 async def api_signals(
     subnet_id: Optional[int] = Query(None),
@@ -153,12 +174,7 @@ async def api_signals(
             result = await _refresh_and_broadcast()
             signals = result.get("signals") or signals
             meta = result.get("meta") or meta
-    try:
-        from internal.subnet_names import refresh_stored_names
-
-        signals = refresh_stored_names(signals)
-    except Exception:
-        pass
+    signals = await _refresh_names_nonblocking(signals)
     if subnet_id is not None:
         signals = [s for s in signals if s.get("subnet_id") == subnet_id]
     elif refresh and since:
