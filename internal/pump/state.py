@@ -7,7 +7,6 @@ import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-import concurrent.futures
 import os
 
 from internal.file_utils import safe_read_json, safe_write_json
@@ -26,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 _lock = threading.RLock()
 _scan_lock = threading.Lock()
+_fetch_thread_lock = threading.Lock()
+_fetch_thread: Optional[threading.Thread] = None
 # ponytail: ring buffer only — upgrade path is SQLite trail if scans go sub-minute
 _SCORE_TRAIL_MAX = 36
 
@@ -260,22 +261,36 @@ def transition_subnet(
 
 def _fetch_signal_rows_with_timeout() -> List[Dict[str, Any]]:
     """Bound signal gather so a hung merged/TMC fetch cannot wedgie ladder scans."""
+    global _fetch_thread
     try:
         timeout = float(os.environ.get("PUMP_LADDER_FETCH_TIMEOUT_SECONDS", "90"))
     except ValueError:
         timeout = 90.0
-    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
-    try:
-        fut = pool.submit(fetch_all_subnet_signals)
+    result: Dict[str, Any] = {}
+    error: Dict[str, BaseException] = {}
+
+    def _fetch() -> None:
         try:
-            rows = fut.result(timeout=timeout)
-            return rows if isinstance(rows, list) else []
-        except concurrent.futures.TimeoutError:
-            logger.warning("pump ladder signal fetch timed out after %.0fs", timeout)
+            result["rows"] = fetch_all_subnet_signals()
+        except BaseException as exc:
+            error["exc"] = exc
+
+    with _fetch_thread_lock:
+        if _fetch_thread is not None and _fetch_thread.is_alive():
+            logger.warning("pump ladder signal fetch skipped — previous fetch still running")
             return []
-    finally:
-        # wait=False: never wedge shutdown; avoids "schedule futures after shutdown".
-        pool.shutdown(wait=False, cancel_futures=True)
+        worker = threading.Thread(target=_fetch, daemon=True, name="pump-ladder-fetch")
+        _fetch_thread = worker
+        worker.start()
+    worker.join(timeout=timeout)
+    if worker.is_alive():
+        logger.warning("pump ladder signal fetch timed out after %.0fs (worker still running)", timeout)
+        return []
+    if "exc" in error:
+        logger.warning("pump ladder signal fetch failed: %s", error["exc"])
+        return []
+    rows = result.get("rows")
+    return rows if isinstance(rows, list) else []
 
 
 def scan_all_subnets(state: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -237,24 +236,25 @@ class DailyPickScheduler:
             subnets = _load_capped_subnets()
             ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
-            pool = ThreadPoolExecutor(max_workers=1)
             payload = None
-            try:
-                fut = pool.submit(get_or_create_today_pick, subnets, ctx, False)
+            done = threading.Event()
+            error: Dict[str, BaseException] = {}
+
+            def _run_pick() -> None:
+                nonlocal payload
                 try:
-                    payload = fut.result(timeout=timeout)
-                except FuturesTimeoutError:
-                    result["error"] = f"daily pick tick timed out after {timeout}s"
-                    logger.warning("%s", result["error"])
-                    # #region agent log
-                    try:
-                        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as handle:
-                            handle.write(__import__("json").dumps({"hypothesisId": "D", "location": "internal/council/pick_scheduler.py", "message": "daily pick timeout left worker future", "data": {"timeout_seconds": timeout, "thread": threading.current_thread().name}, "timestamp": int(__import__("time").time() * 1000)}) + "\n")
-                    except Exception:
-                        pass
-                    # #endregion
-            finally:
-                pool.shutdown(wait=False, cancel_futures=True)
+                    payload = get_or_create_today_pick(subnets, ctx, False)
+                except BaseException as exc:
+                    error["exc"] = exc
+                finally:
+                    done.set()
+
+            threading.Thread(target=_run_pick, daemon=True, name="daily-pick-work").start()
+            if not done.wait(timeout):
+                result["error"] = f"daily pick tick timed out after {timeout}s"
+                logger.warning("%s (worker left running)", result["error"])
+            elif "exc" in error:
+                raise error["exc"]
             if isinstance(payload, dict):
                 result["ok"] = True
                 result["action"] = payload.get("action")

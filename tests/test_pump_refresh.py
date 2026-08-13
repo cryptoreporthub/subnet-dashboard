@@ -151,6 +151,24 @@ def test_scan_all_subnets_skips_when_already_running(tmp_path, monkeypatch):
             t.join(timeout=3.0)
 
 
+def test_signal_fetch_timeout_does_not_accumulate_workers(monkeypatch):
+    import internal.pump.state as pump_state
+
+    release = threading.Event()
+    monkeypatch.setenv("PUMP_LADDER_FETCH_TIMEOUT_SECONDS", "0.01")
+    monkeypatch.setattr(
+        pump_state,
+        "fetch_all_subnet_signals",
+        lambda: (release.wait(timeout=2.0) or []),
+    )
+
+    assert pump_state._fetch_signal_rows_with_timeout() == []
+    assert pump_state._fetch_thread is not None
+    assert pump_state._fetch_thread.daemon is True
+    assert pump_state._fetch_signal_rows_with_timeout() == []
+    release.set()
+
+
 def test_ladder_age_minutes_missing_meta(tmp_path, monkeypatch):
     state_path = str(tmp_path / "pump_ladder.json")
     monkeypatch.setenv("PUMP_LADDER_STATE_PATH", state_path)
