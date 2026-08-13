@@ -94,3 +94,41 @@ def test_eye_ring_shared_origin_no_scale_squash():
     assert "scaleY(.62)" not in html
     assert "feTurbulence" not in html
     assert preview.count('data-instrument') == 1
+    assert "NEUTRAL" in preview
+    assert "-2.4%" in preview
+    assert "4 pt" in preview
+    assert 'data-metric="avg-acc"' in preview
+    assert 'data-metric="win-rate"' in preview
+    avg_acc = preview.split('data-metric="avg-acc"', 1)[1].split("</span>", 1)[0]
+    assert "0%" not in avg_acc
+
+
+def test_instrument_uses_trust_banner_not_zero_accuracy():
+    from internal.preview.tribunal_hero import build_tribunal_view
+
+    view = build_tribunal_view(
+        {
+            "action": "HOLD",
+            "candidate": {
+                "subnet": {"netuid": 1, "name": "SN1", "price_change_7d": 1.2},
+                "scenario_tags": {"rsi": "oversold"},
+                "signal_contributions": {"stochastic_reversal": {"score": 0.22}},
+                "judge_scores_at_creation": {
+                    "oracle": {"confidence": 0.4},
+                    "echo": {"confidence": 0.4},
+                    "pulse": {"confidence": 0.4},
+                },
+            },
+        },
+        {
+            "judge_weights": {"oracle": 0.4, "echo": 0.3, "pulse": 0.3},
+            "trust_banner": {"ready": False, "graded": 0, "correct": 0, "wrong": 0, "accuracy": 0.0},
+        },
+    )
+    inst = view["instrument"]
+    assert inst["avg_acc"] == "—"
+    assert inst["win_rate"] == "—"
+    assert inst["rsi"] == "OVERSOLD"
+    assert inst["stoch"] == "22"
+    assert inst["d7"] == "+1.2%"
+    assert inst["variance"] == "0 pt"

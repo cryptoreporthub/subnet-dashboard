@@ -347,6 +347,12 @@ def _decision_log_panel(
     if isinstance(brain, dict):
         brain = brain.get("action") or brain.get("recommended_action")
     brain_str = str(brain).upper() if brain else "—"
+    if brain_str == "—":
+        fallback = payload.get("action") or active.get("action")
+        if fallback:
+            brain_str = str(fallback).upper()
+            if brain_str == "BUY":
+                brain_str = "LONG"
 
     dissent_str = agreement["dissent"]
     if dissent_str == "—":
@@ -392,6 +398,162 @@ def _accuracy_ledger_panel(stats: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _acc_display(tb: Dict[str, Any]) -> tuple[str, float]:
+    """Honest accuracy — never paint 0% when nothing has been graded."""
+    if not isinstance(tb, dict):
+        return "—", 0.0
+    if tb.get("ready") and tb.get("accuracy") is not None:
+        try:
+            pct = round(float(tb["accuracy"]) * 100, 1)
+            return format_gauge_pct(pct), max(0.0, min(100.0, pct))
+        except (TypeError, ValueError):
+            pass
+    graded = int(tb.get("graded") or 0)
+    correct = int(tb.get("correct") or 0)
+    wrong = int(tb.get("wrong") or 0)
+    if graded > 0 and correct + wrong > 0:
+        pct = round(correct / (correct + wrong) * 100, 1)
+        return format_gauge_pct(pct), max(0.0, min(100.0, pct))
+    return "—", 0.0
+
+
+def _pick_block(payload: Dict[str, Any]) -> Dict[str, Any]:
+    active = payload.get("pick") or payload.get("candidate")
+    return active if isinstance(active, dict) else {}
+
+
+def _instrument_panel(
+    payload: Dict[str, Any],
+    stats: Dict[str, Any],
+    signals: Dict[str, Optional[float]],
+) -> Dict[str, Any]:
+    """Council Instrument cells — SSR so boxes aren't empty while JS fetches."""
+    tb = stats.get("trust_banner") or {}
+    acc_txt, acc_pct = _acc_display(tb)
+
+    deltas = stats.get("judge_weight_deltas") or {}
+    signed = 0.0
+    have_delta = False
+    if isinstance(deltas, dict):
+        for key in _JUDGE_KEYS:
+            try:
+                signed += float(deltas[key])
+                have_delta = True
+            except (TypeError, ValueError, KeyError):
+                continue
+    if have_delta and abs(signed) >= 0.0005:
+        signal_txt = f"{signed:+.2f}"
+        signal_arrow = "up" if signed >= 0 else "down"
+    else:
+        signal_txt = "·"
+        signal_arrow = ""
+
+    active = _pick_block(payload)
+    tags = active.get("scenario_tags") if isinstance(active.get("scenario_tags"), dict) else {}
+    rsi_txt = "—"
+    rsi_arrow = ""
+    raw_rsi = tags.get("rsi")
+    sn = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
+    for candidate in (sn.get("rsi"), active.get("rsi")):
+        if candidate is None:
+            continue
+        try:
+            rsi_n = float(candidate)
+            rsi_txt = str(int(round(rsi_n)))
+            rsi_arrow = "up" if rsi_n >= 50 else "down"
+            break
+        except (TypeError, ValueError):
+            continue
+    if rsi_txt == "—" and raw_rsi:
+        rsi_txt = str(raw_rsi).replace("_", " ").upper()
+
+    stoch_txt = "—"
+    stoch_arrow = ""
+    contrib = active.get("signal_contributions") if isinstance(active.get("signal_contributions"), dict) else {}
+    stoch_c = contrib.get("stochastic_reversal") if isinstance(contrib, dict) else None
+    stoch_n = None
+    if isinstance(stoch_c, dict) and stoch_c.get("score") is not None:
+        try:
+            stoch_n = float(stoch_c["score"])
+            if stoch_n <= 1:
+                stoch_n *= 100
+        except (TypeError, ValueError):
+            stoch_n = None
+    for candidate in (sn.get("stochastic_k"), sn.get("stoch"), stoch_n):
+        if candidate is None:
+            continue
+        try:
+            val = float(candidate)
+            stoch_txt = str(int(round(val)))
+            stoch_arrow = "up" if val >= 50 else "down"
+            break
+        except (TypeError, ValueError):
+            continue
+
+    d7_txt = "—"
+    d7_arrow = ""
+    d7 = None
+    hv = payload.get("horizon_views") if isinstance(payload.get("horizon_views"), dict) else {}
+    views = hv.get("views") if isinstance(hv.get("views"), dict) else {}
+    view7 = views.get("7d") if isinstance(views.get("7d"), dict) else {}
+    for candidate in (
+        sn.get("price_change_7d"),
+        sn.get("change_7d"),
+        active.get("price_change_7d"),
+        view7.get("pct_7d"),
+    ):
+        if candidate is None:
+            continue
+        try:
+            d7 = float(candidate)
+            break
+        except (TypeError, ValueError):
+            continue
+    if d7 is not None:
+        d7_txt = f"{d7:+.1f}%"
+        d7_arrow = "up" if d7 >= 0 else "down"
+
+    vals: List[float] = []
+    for key in _JUDGE_KEYS:
+        raw = signals.get(key)
+        if raw is None:
+            continue
+        try:
+            vals.append(float(raw))
+        except (TypeError, ValueError):
+            continue
+    if len(vals) >= 2:
+        spread = max(vals) - min(vals)
+        var_txt = f"{spread:.0f} pt"
+        var_pct = max(0.0, min(100.0, 100.0 - spread))
+    else:
+        var_txt = "—"
+        var_pct = 0.0
+
+    acc_arrow = ""
+    if acc_txt != "—":
+        acc_arrow = "up" if acc_pct >= 50 else "down"
+
+    return {
+        "avg_acc": acc_txt,
+        "avg_acc_pct": acc_pct,
+        "avg_acc_arrow": acc_arrow,
+        "win_rate": acc_txt,
+        "win_rate_pct": acc_pct,
+        "win_rate_arrow": acc_arrow,
+        "signal": signal_txt,
+        "signal_arrow": signal_arrow,
+        "rsi": rsi_txt,
+        "rsi_arrow": rsi_arrow,
+        "stoch": stoch_txt,
+        "stoch_arrow": stoch_arrow,
+        "d7": d7_txt,
+        "d7_arrow": d7_arrow,
+        "variance": var_txt,
+        "variance_pct": var_pct,
+    }
+
+
 def _jury_move_panel(stats: Dict[str, Any]) -> List[Dict[str, Any]]:
     deltas = stats.get("judge_weight_deltas") or {}
     rows: List[Dict[str, Any]] = []
@@ -421,10 +583,12 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
             "action": "LONG",
             "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             "pick": {
-                "subnet": {"netuid": 14, "name": "TaoHash", "symbol": "TH"},
+                "subnet": {"netuid": 14, "name": "TaoHash", "symbol": "TH", "price_change_7d": 8.1},
                 "final_confidence": 0.71,
                 "audit": {"approved": True},
                 "action": "LONG",
+                "scenario_tags": {"rsi": "neutral"},
+                "signal_contributions": {"stochastic_reversal": {"score": 0.71}},
                 "judge_scores_at_creation": {
                     "oracle": {"confidence": 0.72},
                     "echo": {"confidence": 0.70},
@@ -440,9 +604,11 @@ def _fixture_daily_pick(state: str) -> Dict[str, Any]:
             "action": "HOLD",
             "pick": None,
             "candidate": {
-                "subnet": {"netuid": 99, "name": "SN99", "symbol": "T99"},
+                "subnet": {"netuid": 99, "name": "SN99", "symbol": "T99", "price_change_7d": -2.4},
                 "final_confidence": 0.34,
                 "action": "LONG",
+                "scenario_tags": {"rsi": "neutral"},
+                "signal_contributions": {"stochastic_reversal": {"score": 0.32}},
                 "judge_scores_at_creation": {
                     "oracle": {"confidence": 0.36},
                     "echo": {"confidence": 0.32},
@@ -555,6 +721,12 @@ def build_tribunal_view(
         "gauge_attr": gauge_attr(gauge),
         "synced_at": synced_at_iso(pick),
         "judges": judges,
+        "weight_fracs": {
+            key: float(weights[key])
+            for key in _JUDGE_KEYS
+            if weights.get(key) is not None
+        },
+        "instrument": _instrument_panel(pick, stats, signals),
         "panels": {
             "decision_log": _decision_log_panel(pick, kind, gauge, signals),
             "accuracy_ledger": _accuracy_ledger_panel(stats),

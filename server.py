@@ -1132,11 +1132,29 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         from internal.learning.routes import _judge_weights_for_snapshot
         from internal.preview.tribunal_hero import build_tribunal_view
 
+        extras: Dict[str, Any] = {}
+        try:
+            from internal.learning.routes import _learning_snapshot_cache
+
+            snap = _learning_snapshot_cache.get("data")
+            if isinstance(snap, dict):
+                extras = {
+                    "judge_last5": snap.get("judge_last5"),
+                    "council_last5": snap.get("council_last5"),
+                    "judge_weight_deltas": snap.get("judge_weight_deltas") or {},
+                }
+                if snap.get("judge_weights"):
+                    extras["judge_weights"] = snap["judge_weights"]
+        except Exception:
+            extras = {}
         hero["tribunal"] = build_tribunal_view(
             pick_payload if isinstance(pick_payload, dict) else {},
             {
-                "judge_weights": _judge_weights_for_snapshot(),
+                "judge_weights": extras.get("judge_weights") or _judge_weights_for_snapshot(),
                 "trust_banner": hero.get("trust_banner") or {},
+                "judge_last5": extras.get("judge_last5"),
+                "council_last5": extras.get("council_last5"),
+                "judge_weight_deltas": extras.get("judge_weight_deltas") or {},
             },
         )
     except Exception as exc:

@@ -1,6 +1,8 @@
 {# Council Hero HUD — Glass instrument v2. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
 {% set p = t.conviction_pct if (t.conviction_pct is defined and t.conviction_pct) else 74 %}
+{% set inst = t.instrument if t.instrument is defined else {} %}
+{% set wf = t.weight_fracs if t.weight_fracs is defined else {} %}
 <style>
   .tribunal-hero { --glass: rgba(16,22,34,.55); --glass-border: rgba(148,178,255,.16); position: relative; }
   .tribunal-hero__eye-track { fill: none; stroke: rgba(255,255,255,.2); stroke-width: 11; stroke-linejoin: round; }
@@ -43,6 +45,7 @@
   data-hero-verdict="{{ t.verdict_kind }}"
   {% if t.gauge_attr is not none %}data-hero-conviction="{{ t.gauge_attr }}"{% endif %}
   {% if t.synced_at %}data-synced-at="{{ t.synced_at }}"{% endif %}
+  {% if wf.oracle is defined and wf.echo is defined and wf.pulse is defined %}data-weights="{{ wf.oracle }} {{ wf.echo }} {{ wf.pulse }}"{% endif %}
   style="--p: {{ p }};"
 >
   <header class="tribunal-hero__masthead">
@@ -191,43 +194,26 @@
     </div>
     <div class="tribunal-hero__cell tribunal-hero__cell--primary">
       <span class="tribunal-hero__cell-label">AVG ACC</span>
-      <span class="tribunal-hero__cell-value" data-metric="avg-acc">—</span>
-      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:0%"></i></span>
+      <span class="tribunal-hero__cell-value" data-metric="avg-acc"{% if inst.avg_acc_arrow %} data-arrow="{{ inst.avg_acc_arrow }}"{% endif %}>{{ inst.avg_acc if inst.avg_acc is defined else '—' }}</span>
+      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:{{ inst.avg_acc_pct if inst.avg_acc_pct is defined else 0 }}%"></i></span>
     </div>
     <div class="tribunal-hero__cell tribunal-hero__cell--primary">
       <span class="tribunal-hero__cell-label">WIN RATE</span>
-      <span class="tribunal-hero__cell-value" data-metric="win-rate">—</span>
-      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:0%"></i></span>
+      <span class="tribunal-hero__cell-value" data-metric="win-rate"{% if inst.win_rate_arrow %} data-arrow="{{ inst.win_rate_arrow }}"{% endif %}>{{ inst.win_rate if inst.win_rate is defined else '—' }}</span>
+      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:{{ inst.win_rate_pct if inst.win_rate_pct is defined else 0 }}%"></i></span>
     </div>
     <div class="tribunal-hero__instrument-main">
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7">—</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal"{% if inst.signal_arrow %} data-arrow="{{ inst.signal_arrow }}"{% endif %}>{{ inst.signal if inst.signal is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi"{% if inst.rsi_arrow %} data-arrow="{{ inst.rsi_arrow }}"{% endif %}>{{ inst.rsi if inst.rsi is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch"{% if inst.stoch_arrow %} data-arrow="{{ inst.stoch_arrow }}"{% endif %}>{{ inst.stoch if inst.stoch is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7"{% if inst.d7_arrow %} data-arrow="{{ inst.d7_arrow }}"{% endif %}>{{ inst.d7 if inst.d7 is defined else '—' }}</span></div>
     </div>
     <div class="tribunal-hero__variance">
       <span class="tribunal-hero__variance-label">Variance floor</span>
-      <span class="tribunal-hero__variance-track"><i class="tribunal-hero__variance-fill" style="width:0%"></i></span>
-      <span class="tribunal-hero__variance-value">—</span>
+      <span class="tribunal-hero__variance-track"><i class="tribunal-hero__variance-fill" style="width:{{ inst.variance_pct if inst.variance_pct is defined else 0 }}%"></i></span>
+      <span class="tribunal-hero__variance-value">{{ inst.variance if inst.variance is defined else '—' }}</span>
     </div>
   </div>
-  <script>
-  (function () {
-    var els = {};
-    document.querySelectorAll('[data-metric]').forEach(function (el) { els[el.getAttribute('data-metric')] = el; });
-    function flash(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
-    function set(k, v) { if (!els[k]) return; var t = String(v == null ? '—' : v); if (els[k].textContent !== t) { els[k].textContent = t; flash(els[k]); } }
-    fetch('/api/learning/stats').then(function (r) { return r.json(); }).then(function (d) {
-      var stats = d && d.engine_stats ? d.engine_stats : {};
-      var acc = d && d.accuracy != null ? d.accuracy : (stats.accuracy != null ? stats.accuracy : null);
-      if (acc != null) { set('avg-acc', Math.round(acc * 100) + '%'); }
-      var graded = stats.total_records || 0, correct = stats.correct != null ? stats.correct : 0;
-      if (graded > 0) { set('win-rate', Math.round(100 * correct / graded) + '%'); }
-      if (d.expert_weight_deltas) { var total = 0; Object.keys(d.expert_weight_deltas).forEach(function (k) { total += Number(d.expert_weight_deltas[k]) || 0; }); if (total) set('signal', (total >= 0 ? '+' : '') + total.toFixed(2)); }
-    }).catch(function () {});
-  })();
-  </script>
-
   <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
 
   <div class="tribunal-hero__feed" data-feed aria-hidden="true">
@@ -350,6 +336,13 @@
     placeOnPath(hero.querySelector('[data-comet]'), inner || outer, Math.min(0.99, (p || 0) / 100));
     hero.setAttribute('data-consensus-delta', ((maxF - 1/3) * 100).toFixed(1) + '%');
   }
+  function parseWeights() {
+    var raw = hero.getAttribute('data-weights');
+    if (!raw) return null;
+    var parts = raw.trim().split(/\s+/).map(Number);
+    if (parts.length !== 3 || parts.some(function (x) { return !isFinite(x); })) return null;
+    return { oracle: parts[0], echo: parts[1], pulse: parts[2] };
+  }
   function hydateMetrics(stats) {
     if (!stats) return;
     function setM(k, v, arrow) {
@@ -357,24 +350,42 @@
       if (el && v !== null && v !== undefined && v !== '') {
         el.textContent = v;
         if (arrow) el.setAttribute('data-arrow', arrow);
+        else el.removeAttribute('data-arrow');
       }
     }
-    var graded = stats.graded || 0, correct = stats.correct || 0, wrong = stats.wrong || 0;
-    if (graded > 0 && correct + wrong > 0) setM('win-rate', Math.round(correct / (correct + wrong) * 1000) / 10 + '%', correct >= wrong ? 'up' : 'down');
+    function setMeter(k, pct) {
+      var el = hero.querySelector('[data-metric="' + k + '"]');
+      var bar = el && el.parentNode && el.parentNode.querySelector('.tribunal-hero__cell-meter i');
+      if (bar && typeof pct === 'number' && isFinite(pct)) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    }
+    var tb = stats.trust_banner || {};
+    var graded = Number(tb.graded != null ? tb.graded : stats.graded) || 0;
+    var correct = Number(tb.correct != null ? tb.correct : stats.correct) || 0;
+    var wrong = Number(tb.wrong != null ? tb.wrong : stats.wrong) || 0;
+    var acc = null;
+    if (tb.ready && tb.accuracy != null && !isNaN(Number(tb.accuracy))) acc = Number(tb.accuracy) * 100;
+    else if (graded > 0 && correct + wrong > 0) acc = (correct / (correct + wrong)) * 100;
+    if (acc != null) {
+      var accTxt = Math.abs(acc - Math.round(acc)) < 0.05 ? Math.round(acc) + '%' : (Math.round(acc * 10) / 10) + '%';
+      setM('avg-acc', accTxt, acc >= 50 ? 'up' : 'down');
+      setM('win-rate', accTxt, acc >= 50 ? 'up' : 'down');
+      setMeter('avg-acc', acc);
+      setMeter('win-rate', acc);
+    }
     var dw = stats.judge_weight_deltas;
     if (dw) {
       var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, k) { return s + (typeof dw[k] === 'number' ? dw[k] : 0); }, 0);
-      setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
+      if (Math.abs(signed) >= 0.0005) setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
     }
-    var acc = stats.accuracy;
-    if (typeof acc === 'number') setM('avg-acc', (acc * 100).toFixed(0) + '%', acc >= 0.5 ? 'up' : 'down');
     var r = stats.rsi, st = stats.stoch, d7 = stats.last7;
     if (typeof r === 'number') setM('rsi', Math.round(r).toFixed(0), r >= 50 ? 'up' : 'down');
     if (typeof st === 'number') setM('stoch', Math.round(st).toFixed(0), st >= 50 ? 'up' : 'down');
     if (typeof d7 === 'number') setM('d7', (d7 >= 0 ? '+' : '') + d7.toFixed(1) + '%', d7 >= 0 ? 'up' : 'down');
   }
   function boot() {
-    hydateRing(null);
+    hydateRing(parseWeights());
+    if (document.documentElement.dataset.hydrate === '0') return;
+    if (document.documentElement.dataset.hydrate === '1') return;
     try {
       fetch('/api/learning/stats', { headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.ok ? r.json() : null; })
