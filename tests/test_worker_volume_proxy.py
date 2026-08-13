@@ -371,6 +371,7 @@ def test_learning_proxy_timeout_exceeds_fast_proxy_defaults(monkeypatch):
     import internal.worker_proxy as wp
 
     monkeypatch.delenv("WORKER_PROXY_LEARNING_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setenv("WORKER_PROXY_TIMEOUT_SECONDS", "4")
     learning = wp._learning_proxy_timeout()
     generic = wp._proxy_timeout()
     assert float(learning.read) == 25.0
