@@ -224,6 +224,8 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "patchTribunalPanels" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
+    assert "patchTribunalInstrument" in src
+    assert "patchTribunalEyeArcs" in src
     assert "convictionTemp" in src
     assert "syncCouncilTemp" in src
     assert "pickIsPublishable" in src

@@ -1,14 +1,16 @@
 {# Council Hero HUD — Glass instrument v2. Preserved IDs: k3-orb-score, k3-action-badge, k3-call-headline #}
 {% set t = tribunal %}
 {% set p = t.conviction_pct if (t.conviction_pct is defined and t.conviction_pct) else 74 %}
+{% set inst = t.instrument if t.instrument is defined else {} %}
+{% set wf = t.weight_fracs if t.weight_fracs is defined else {} %}
 <style>
   .tribunal-hero { --glass: rgba(16,22,34,.55); --glass-border: rgba(148,178,255,.16); position: relative; }
-  .tribunal-hero__radial { width: 210px; height: 210px; margin: 6px auto 2px; display: block; filter: drop-shadow(0 6px 22px rgba(0,0,0,.45)); }
-  .tribunal-hero__arc { fill: none; stroke-width: 11; stroke-linecap: round; opacity: .55; transition: stroke-dasharray .9s ease, opacity .5s ease; }
+  .tribunal-hero__eye-track { fill: none; stroke: rgba(255,255,255,.2); stroke-width: 11; stroke-linejoin: round; }
+  .tribunal-hero__arc { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; opacity: .85; transition: stroke-dasharray .9s ease, stroke-dashoffset .9s ease, opacity .5s ease; }
   .tribunal-hero__arc--oracle { stroke: url(#cgOracle); }
   .tribunal-hero__arc--echo { stroke: url(#cgEcho); }
   .tribunal-hero__arc--pulse { stroke: url(#cgPulse); }
-  .tribunal-hero__conviction-arc { fill: none; stroke: url(#cgConviction); stroke-width: 4; stroke-linecap: round; }
+  .tribunal-hero__conviction-arc { fill: none; stroke: url(#cgConviction); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
   .tribunal-hero__comet { fill: rgba(210,240,255,.9); filter: drop-shadow(0 0 5px cyan); }
   .tribunal-hero__rim { fill: rgba(255,255,255,.9); }
   .tribunal-hero.tribunal-hero--consensus .tribunal-hero__arc { opacity: .22; }
@@ -31,8 +33,8 @@
   .tribunal-hero__feed-tick--hot { height: 100%; opacity: 1; box-shadow: 0 0 8px cyan; animation: cgPulse 1.6s ease-in-out infinite; }
   .tribunal-hero__feed-label { display: block; flex-basis: 100%; font-size: 8px; letter-spacing: .14em; color: rgba(255,255,255,.5); text-transform: uppercase; margin-top: 2px; }
   @keyframes cgPulse { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
-  .tribunal-hero__ring-glow { background: radial-gradient(circle, rgba(124,170,255,.28) 0%, transparent 68%); }
-  @media (max-width: 420px) { .tribunal-hero__radial { width: 178px; height: 178px; } .tribunal-hero__cell { padding: 5px 6px; } .tribunal-hero__cell-value { font-size: 12px; } }
+  @media (max-width: 420px) { .tribunal-hero__cell { padding: 5px 6px; } .tribunal-hero__cell-value { font-size: 12px; } }
+  @media (prefers-reduced-motion: reduce) { .tribunal-hero__arc { transition: none; } }
 </style>
 <section
   class="tribunal-hero"
@@ -43,6 +45,7 @@
   data-hero-verdict="{{ t.verdict_kind }}"
   {% if t.gauge_attr is not none %}data-hero-conviction="{{ t.gauge_attr }}"{% endif %}
   {% if t.synced_at %}data-synced-at="{{ t.synced_at }}"{% endif %}
+  {% if wf.oracle is defined and wf.echo is defined and wf.pulse is defined %}data-weights="{{ wf.oracle }} {{ wf.echo }} {{ wf.pulse }}"{% endif %}
   style="--p: {{ p }};"
 >
   <header class="tribunal-hero__masthead">
@@ -80,12 +83,17 @@
       </div>
 
       <svg class="tribunal-hero__rays" viewBox="0 0 390 440" aria-hidden="true">
-        <path class="tribunal-hero__ray tribunal-hero__ray--oracle" d="M195 100 C195 107 195 114 195 121" />
-        <path class="tribunal-hero__ray tribunal-hero__ray--echo" d="M154 346 C144 324 138 297 134 273" />
-        <path class="tribunal-hero__ray tribunal-hero__ray--pulse" d="M236 346 C246 324 252 297 256 273" />
+        <path class="tribunal-hero__ray tribunal-hero__ray--oracle" d="M195 96 C195 108 195 118 195 128" />
+        <path class="tribunal-hero__ray tribunal-hero__ray--echo" d="M78 348 C104 328 118 310 132 294" />
+        <path class="tribunal-hero__ray tribunal-hero__ray--pulse" d="M312 348 C286 328 272 310 258 294" />
       </svg>
 
-      <svg class="tribunal-hero__radial" viewBox="0 0 200 200" aria-hidden="true" data-glass-ring>
+      {# Outer vesica (R=92, d=50); inner conviction (R=72, d=39). Starts at 12 o'clock, clockwise. #}
+      {% set eye_outer = "M120 28 A92 92 0 0 1 197.23 70 A92 92 0 0 1 120 112 A92 92 0 0 1 42.77 70 A92 92 0 0 1 120 28" %}
+      {% set eye_inner = "M120 37 A72 72 0 0 1 180.52 70 A72 72 0 0 1 120 103 A72 72 0 0 1 59.48 70 A72 72 0 0 1 120 37" %}
+      <div class="tribunal-hero__ring">
+      <div class="tribunal-hero__ring-glow" aria-hidden="true"></div>
+      <svg class="tribunal-hero__radial" viewBox="0 0 240 140" aria-hidden="true" data-glass-ring>
         <defs>
           <linearGradient id="cgOracle" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#3f8cff"/><stop offset="100%" stop-color="#7ec3ff"/>
@@ -100,17 +108,16 @@
             <stop offset="0%" stop-color="#2ee6e4"/><stop offset="100%" stop-color="#ffc36b"/>
           </linearGradient>
         </defs>
-        <circle class="tribunal-hero__arc tribunal-hero__arc--oracle" data-judge-arc="oracle" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
-        <circle class="tribunal-hero__arc tribunal-hero__arc--echo" data-judge-arc="echo" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
-        <circle class="tribunal-hero__arc tribunal-hero__arc--pulse" data-judge-arc="pulse" cx="100" cy="100" r="82" transform="rotate(-90 100 100)" stroke-dasharray="257.6 257.6"/>
-        <circle class="tribunal-hero__conviction-arc" data-conviction-arc cx="100" cy="100" r="68" transform="rotate(-90 100 100)" stroke-dasharray="213.6 213.6"/>
-        <circle class="tribunal-hero__comet" data-comet cx="100" cy="18" r="2.6"/>
-        <circle class="tribunal-hero__rim" data-rim-marker="oracle" cx="100" cy="18" r="3.4"/>
-        <circle class="tribunal-hero__rim" data-rim-marker="echo" cx="100" cy="18" r="3.4"/>
-        <circle class="tribunal-hero__rim" data-rim-marker="pulse" cx="100" cy="18" r="3.4"/>
+        <path class="tribunal-hero__eye-track" data-eye-path d="{{ eye_outer }}" pathLength="100"/>
+        <path class="tribunal-hero__arc tribunal-hero__arc--oracle" data-judge-arc="oracle" d="{{ eye_outer }}" pathLength="100" stroke-dasharray="40 60" stroke-dashoffset="0"/>
+        <path class="tribunal-hero__arc tribunal-hero__arc--echo" data-judge-arc="echo" d="{{ eye_outer }}" pathLength="100" stroke-dasharray="30 70" stroke-dashoffset="-40"/>
+        <path class="tribunal-hero__arc tribunal-hero__arc--pulse" data-judge-arc="pulse" d="{{ eye_outer }}" pathLength="100" stroke-dasharray="30 70" stroke-dashoffset="-70"/>
+        <path class="tribunal-hero__conviction-arc" data-conviction-arc d="{{ eye_inner }}" pathLength="100" stroke-dasharray="{% if t.gauge_attr is not none %}{{ p }} {{ 100 - p }}{% else %}0 100{% endif %}"/>
+        <circle class="tribunal-hero__comet" data-comet cx="120" cy="37" r="2.6"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="oracle" cx="120" cy="28" r="3.4"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="echo" cx="42.77" cy="70" r="3.4"/>
+        <circle class="tribunal-hero__rim" data-rim-marker="pulse" cx="197.23" cy="70" r="3.4"/>
       </svg>
-      <div class="tribunal-hero__ring-glow" aria-hidden="true"></div>
-
       <div class="tribunal-hero__ring-center">
         <span id="k3-orb-score" class="tribunal-hero__pct" data-gauge-value>{{ t.gauge_display }}</span>
         <span class="tribunal-hero__pct-label">VERDICT CONFIDENCE</span>
@@ -123,6 +130,7 @@
           <span id="k3-action-hold" class="tribunal-hero__verdict-label tribunal-hero__verdict-label--hold" hidden></span>
           {% endif %}
         </div>
+      </div>
       </div>
 
       {% for judge in t.judges %}
@@ -186,53 +194,28 @@
     </div>
     <div class="tribunal-hero__cell tribunal-hero__cell--primary">
       <span class="tribunal-hero__cell-label">AVG ACC</span>
-      <span class="tribunal-hero__cell-value" data-metric="avg-acc">—</span>
-      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:0%"></i></span>
+      <span class="tribunal-hero__cell-value" data-metric="avg-acc"{% if inst.avg_acc_arrow %} data-arrow="{{ inst.avg_acc_arrow }}"{% endif %}>{{ inst.avg_acc if inst.avg_acc is defined else '—' }}</span>
+      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:{{ inst.avg_acc_pct if inst.avg_acc_pct is defined else 0 }}%"></i></span>
     </div>
     <div class="tribunal-hero__cell tribunal-hero__cell--primary">
       <span class="tribunal-hero__cell-label">WIN RATE</span>
-      <span class="tribunal-hero__cell-value" data-metric="win-rate">—</span>
-      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:0%"></i></span>
+      <span class="tribunal-hero__cell-value" data-metric="win-rate"{% if inst.win_rate_arrow %} data-arrow="{{ inst.win_rate_arrow }}"{% endif %}>{{ inst.win_rate if inst.win_rate is defined else '—' }}</span>
+      <span class="tribunal-hero__cell-meter" aria-hidden="true"><i style="width:{{ inst.win_rate_pct if inst.win_rate_pct is defined else 0 }}%"></i></span>
     </div>
     <div class="tribunal-hero__instrument-main">
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch">—</span></div>
-      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7">—</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal"{% if inst.signal_arrow %} data-arrow="{{ inst.signal_arrow }}"{% endif %}>{{ inst.signal if inst.signal is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi"{% if inst.rsi_arrow %} data-arrow="{{ inst.rsi_arrow }}"{% endif %}>{{ inst.rsi if inst.rsi is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch"{% if inst.stoch_arrow %} data-arrow="{{ inst.stoch_arrow }}"{% endif %}>{{ inst.stoch if inst.stoch is defined else '—' }}</span></div>
+      <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7"{% if inst.d7_arrow %} data-arrow="{{ inst.d7_arrow }}"{% endif %}>{{ inst.d7 if inst.d7 is defined else '—' }}</span></div>
     </div>
     <div class="tribunal-hero__variance">
       <span class="tribunal-hero__variance-label">Variance floor</span>
-      <span class="tribunal-hero__variance-track"><i class="tribunal-hero__variance-fill" style="width:0%"></i></span>
-      <span class="tribunal-hero__variance-value">—</span>
+      <span class="tribunal-hero__variance-track"><i class="tribunal-hero__variance-fill" style="width:{{ inst.variance_pct if inst.variance_pct is defined else 0 }}%"></i></span>
+      <span class="tribunal-hero__variance-value">{{ inst.variance if inst.variance is defined else '—' }}</span>
     </div>
   </div>
-  <script>
-  (function () {
-    var els = {};
-    document.querySelectorAll('[data-metric]').forEach(function (el) { els[el.getAttribute('data-metric')] = el; });
-    function flash(el) { if (!el) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
-    function set(k, v) { if (!els[k]) return; var t = String(v == null ? '—' : v); if (els[k].textContent !== t) { els[k].textContent = t; flash(els[k]); } }
-    fetch('/api/learning/stats').then(function (r) { return r.json(); }).then(function (d) {
-      var stats = d && d.engine_stats ? d.engine_stats : {};
-      var acc = d && d.accuracy != null ? d.accuracy : (stats.accuracy != null ? stats.accuracy : null);
-      if (acc != null) { set('avg-acc', Math.round(acc * 100) + '%'); }
-      var graded = stats.total_records || 0, correct = stats.correct != null ? stats.correct : 0;
-      if (graded > 0) { set('win-rate', Math.round(100 * correct / graded) + '%'); }
-      if (d.expert_weight_deltas) { var total = 0; Object.keys(d.expert_weight_deltas).forEach(function (k) { total += Number(d.expert_weight_deltas[k]) || 0; }); if (total) set('signal', (total >= 0 ? '+' : '') + total.toFixed(2)); }
-    }).catch(function () {});
-  })();
-  </script>
-
   <p id="k3-call-headline" class="tribunal-hero__sr-only">{{ t.headline }}</p>
 
-  <div class="tribunal-hero__instrument" data-instrument aria-label="Instrument readout">
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">AVG ACC</span><span class="tribunal-hero__cell-value" data-metric="avg-acc">--</span></div>
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">WIN RATE</span><span class="tribunal-hero__cell-value" data-metric="win-rate">--</span></div>
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">SIGNAL</span><span class="tribunal-hero__cell-value" data-metric="signal">--</span></div>
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">RSI</span><span class="tribunal-hero__cell-value" data-metric="rsi">--</span></div>
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">STOCH</span><span class="tribunal-hero__cell-value" data-metric="stoch">--</span></div>
-    <div class="tribunal-hero__cell"><span class="tribunal-hero__cell-label">7D</span><span class="tribunal-hero__cell-value" data-metric="d7">--</span></div>
-  </div>
   <div class="tribunal-hero__feed" data-feed aria-hidden="true">
     <span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick"></span><span class="tribunal-hero__feed-tick tribunal-hero__feed-tick--hot"></span>
     <span class="tribunal-hero__feed-label">SIGNAL FEED · LATEST</span>
@@ -299,39 +282,66 @@
 (function () {
   var hero = document.getElementById('tribunal-hero');
   if (!hero) return;
-  var TAU = 2 * Math.PI;
-  var arcs = { oracle: 257.6, echo: 257.6, pulse: 257.6 };
-  function place(el, cx, cy, r, frac) {
+  var EYE_CX = 120, EYE_CY = 70, EYE_RX = 77.23, EYE_RY = 42;
+  function placeOnPath(el, path, frac) {
     if (!el) return;
-    var a = frac * TAU - Math.PI / 2;
-    el.setAttribute('cx', (cx + r * Math.cos(a)).toFixed(2));
-    el.setAttribute('cy', (cy + r * Math.sin(a)).toFixed(2));
+    if (path && path.getTotalLength) {
+      var len = path.getTotalLength();
+      if (len) {
+        var t = ((frac % 1) + 1) % 1;
+        var pt = path.getPointAtLength(t * len);
+        el.setAttribute('cx', pt.x.toFixed(2));
+        el.setAttribute('cy', pt.y.toFixed(2));
+        return;
+      }
+    }
+    var a = frac * Math.PI * 2 - Math.PI / 2;
+    el.setAttribute('cx', (EYE_CX + EYE_RX * Math.cos(a)).toFixed(2));
+    el.setAttribute('cy', (EYE_CY + EYE_RY * Math.sin(a)).toFixed(2));
+  }
+  function setArc(el, start, frac) {
+    if (!el) return;
+    var len = Math.max(0, Math.min(100, frac * 100));
+    el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (100 - len).toFixed(1));
+    el.setAttribute('stroke-dashoffset', (-start * 100).toFixed(1));
   }
   function hydateRing(weights) {
+    var outer = hero.querySelector('[data-eye-path]');
+    var inner = hero.querySelector('[data-conviction-arc]');
+    var p = parseFloat(hero.getAttribute('data-hero-conviction'));
+    if (inner && isFinite(p)) {
+      var c = Math.max(0, Math.min(100, p));
+      inner.setAttribute('stroke-dasharray', c.toFixed(1) + ' ' + (100 - c).toFixed(1));
+    }
     var present = weights && [weights.oracle, weights.echo, weights.pulse].every(function (x) { return typeof x === 'number' && isFinite(x); });
-    if (!present) { hero.classList.add('tribunal-hero--consensus'); place(hero.querySelector('[data-comet]'), 100, 100, 68, 0.25); return; }
+    if (!present) { hero.classList.add('tribunal-hero--consensus'); placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25); return; }
     var total = weights.oracle + weights.echo + weights.pulse;
     var fracs = ['oracle', 'echo', 'pulse'].map(function (k) { return weights[k] / total; });
     var maxF = Math.max.apply(null, fracs);
     if (maxF - Math.min.apply(null, fracs) < 0.02) {
       hero.classList.add('tribunal-hero--consensus');
-      place(hero.querySelector('[data-comet]'), 100, 100, 68, 0.25);
+      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
       return;
     }
     hero.classList.remove('tribunal-hero--consensus');
     var started = 0;
     ['oracle', 'echo', 'pulse'].forEach(function (k, i) {
-      var el = hero.querySelector('[data-judge-arc="' + k + '"]');
-      if (!el) return;
       var f = fracs[i];
-      var len = arcs[k] * f;
-      el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (arcs[k] - len).toFixed(1));
-      place(hero.querySelector('[data-rim-marker="' + k + '"]'), 100, 100, 82, started + f / 2);
+      setArc(hero.querySelector('[data-judge-arc="' + k + '"]'), started, f);
+      placeOnPath(hero.querySelector('[data-rim-marker="' + k + '"]'), outer, started + f / 2);
       started += f;
       var badge = hero.querySelector('[data-judge="' + k + '"] [data-dissent]');
       if (badge) badge.hidden = Math.abs(f - maxF) < 0.001;
     });
+    placeOnPath(hero.querySelector('[data-comet]'), inner || outer, Math.min(0.99, (p || 0) / 100));
     hero.setAttribute('data-consensus-delta', ((maxF - 1/3) * 100).toFixed(1) + '%');
+  }
+  function parseWeights() {
+    var raw = hero.getAttribute('data-weights');
+    if (!raw) return null;
+    var parts = raw.trim().split(/\s+/).map(Number);
+    if (parts.length !== 3 || parts.some(function (x) { return !isFinite(x); })) return null;
+    return { oracle: parts[0], echo: parts[1], pulse: parts[2] };
   }
   function hydateMetrics(stats) {
     if (!stats) return;
@@ -340,24 +350,42 @@
       if (el && v !== null && v !== undefined && v !== '') {
         el.textContent = v;
         if (arrow) el.setAttribute('data-arrow', arrow);
+        else el.removeAttribute('data-arrow');
       }
     }
-    var graded = stats.graded || 0, correct = stats.correct || 0, wrong = stats.wrong || 0;
-    if (graded > 0 && correct + wrong > 0) setM('win-rate', Math.round(correct / (correct + wrong) * 1000) / 10 + '%', correct >= wrong ? 'up' : 'down');
+    function setMeter(k, pct) {
+      var el = hero.querySelector('[data-metric="' + k + '"]');
+      var bar = el && el.parentNode && el.parentNode.querySelector('.tribunal-hero__cell-meter i');
+      if (bar && typeof pct === 'number' && isFinite(pct)) bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
+    }
+    var tb = stats.trust_banner || {};
+    var graded = Number(tb.graded != null ? tb.graded : stats.graded) || 0;
+    var correct = Number(tb.correct != null ? tb.correct : stats.correct) || 0;
+    var wrong = Number(tb.wrong != null ? tb.wrong : stats.wrong) || 0;
+    var acc = null;
+    if (tb.ready && tb.accuracy != null && !isNaN(Number(tb.accuracy))) acc = Number(tb.accuracy) * 100;
+    else if (graded > 0 && correct + wrong > 0) acc = (correct / (correct + wrong)) * 100;
+    if (acc != null) {
+      var accTxt = Math.abs(acc - Math.round(acc)) < 0.05 ? Math.round(acc) + '%' : (Math.round(acc * 10) / 10) + '%';
+      setM('avg-acc', accTxt, acc >= 50 ? 'up' : 'down');
+      setM('win-rate', accTxt, acc >= 50 ? 'up' : 'down');
+      setMeter('avg-acc', acc);
+      setMeter('win-rate', acc);
+    }
     var dw = stats.judge_weight_deltas;
     if (dw) {
       var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, k) { return s + (typeof dw[k] === 'number' ? dw[k] : 0); }, 0);
-      setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
+      if (Math.abs(signed) >= 0.0005) setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
     }
-    var acc = stats.accuracy;
-    if (typeof acc === 'number') setM('avg-acc', (acc * 100).toFixed(0) + '%', acc >= 0.5 ? 'up' : 'down');
     var r = stats.rsi, st = stats.stoch, d7 = stats.last7;
     if (typeof r === 'number') setM('rsi', Math.round(r).toFixed(0), r >= 50 ? 'up' : 'down');
     if (typeof st === 'number') setM('stoch', Math.round(st).toFixed(0), st >= 50 ? 'up' : 'down');
     if (typeof d7 === 'number') setM('d7', (d7 >= 0 ? '+' : '') + d7.toFixed(1) + '%', d7 >= 0 ? 'up' : 'down');
   }
   function boot() {
-    hydateRing(null);
+    hydateRing(parseWeights());
+    if (document.documentElement.dataset.hydrate === '0') return;
+    if (document.documentElement.dataset.hydrate === '1') return;
     try {
       fetch('/api/learning/stats', { headers: { 'Accept': 'application/json' } })
         .then(function (r) { return r.ok ? r.json() : null; })
