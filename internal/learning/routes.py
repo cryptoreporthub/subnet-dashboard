@@ -43,8 +43,10 @@ LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS"
 LEARNING_STATS_TIMEOUT = float(os.environ.get("LEARNING_STATS_TIMEOUT_SECONDS", "10"))
 RESOLVER_STATE_TIMEOUT = float(os.environ.get("RESOLVER_STATE_TIMEOUT_SECONDS", "8"))
 _LEARNING_HEALTH_CACHE_TTL = float(os.environ.get("LEARNING_HEALTH_CACHE_SECONDS", "10"))
+_LEARNING_HEALTH_STALE_TTL = float(os.environ.get("LEARNING_HEALTH_STALE_SECONDS", "60"))
 _LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
+_LEARNING_HEALTH_BUILDING = False
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
@@ -148,13 +150,61 @@ def _valid_learning_health(payload: Any) -> bool:
     )
 
 
-def _get_cached_learning_health() -> Dict[str, Any] | None:
+def _get_cached_learning_health(*, allow_stale: bool = False) -> Dict[str, Any] | None:
     now = time.time()
+    ttl = _LEARNING_HEALTH_STALE_TTL if allow_stale else _LEARNING_HEALTH_CACHE_TTL
     with _LEARNING_HEALTH_CACHE_LOCK:
         cached = _LEARNING_HEALTH_CACHE.get("payload")
-        if isinstance(cached, dict) and now - float(_LEARNING_HEALTH_CACHE.get("at") or 0) < _LEARNING_HEALTH_CACHE_TTL:
+        if isinstance(cached, dict) and now - float(_LEARNING_HEALTH_CACHE.get("at") or 0) < ttl:
             return dict(cached)
     return None
+
+
+def _learning_health_build_in_flight() -> bool:
+    with _LEARNING_HEALTH_CACHE_LOCK:
+        return _LEARNING_HEALTH_BUILDING
+
+
+def _build_learning_health_once() -> Dict[str, Any] | None:
+    global _LEARNING_HEALTH_BUILDING
+    with _LEARNING_HEALTH_CACHE_LOCK:
+        if _LEARNING_HEALTH_BUILDING:
+            return None
+        _LEARNING_HEALTH_BUILDING = True
+    try:
+        from internal.learning.loop_health import build_learning_loop_health
+
+        return build_learning_loop_health()
+    finally:
+        with _LEARNING_HEALTH_CACHE_LOCK:
+            _LEARNING_HEALTH_BUILDING = False
+
+
+def _stale_learning_health(payload: Dict[str, Any]) -> Dict[str, Any]:
+    stale = dict(payload)
+    meta = dict(stale.get("meta") or {})
+    meta.update({"source": "stale_timeout", "stale": True})
+    stale["meta"] = meta
+    return stale
+
+
+def _schedule_learning_health_refresh() -> None:
+    if _learning_health_build_in_flight():
+        return
+
+    def _refresh() -> None:
+        try:
+            payload = _build_learning_health_once()
+            if _valid_learning_health(payload):
+                _set_learning_health_cache(payload)
+        except Exception as exc:
+            logger.debug("learning health background refresh failed: %s", exc)
+
+    threading.Thread(
+        target=_refresh,
+        daemon=True,
+        name="learning-health-refresh",
+    ).start()
 
 
 def _set_learning_health_cache(payload: Dict[str, Any]) -> None:
@@ -875,22 +925,30 @@ async def share_call_page(prediction_id: str, request: Request):
 @learning_router.get("/api/learning/health")
 async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
-    from internal.learning.loop_health import build_learning_loop_health
-
     cached = _get_cached_learning_health()
     if cached is not None:
         return cached
+    if _learning_health_build_in_flight():
+        stale = _get_cached_learning_health(allow_stale=True)
+        return _stale_learning_health(stale) if stale is not None else _learning_health_degraded(source="refreshing")
 
     try:
         payload = await _to_thread_timeout(
-            build_learning_loop_health, LEARNING_HEALTH_TIMEOUT, label="learning-health"
+            _build_learning_health_once, LEARNING_HEALTH_TIMEOUT, label="learning-health"
         )
+        if payload is None:
+            stale = _get_cached_learning_health(allow_stale=True)
+            return _stale_learning_health(stale) if stale is not None else _learning_health_degraded(source="refreshing")
         if _valid_learning_health(payload):
             _set_learning_health_cache(payload)
             return payload
         logger.warning("learning health returned malformed payload")
         return _learning_health_degraded(source="invalid_payload", error="invalid_payload")
     except asyncio.TimeoutError:
+        stale = _get_cached_learning_health(allow_stale=True)
+        if stale is not None:
+            return _stale_learning_health(stale)
+        _schedule_learning_health_refresh()
         return _learning_health_degraded(source="timeout")
     except Exception as exc:
         logger.warning("learning health failed: %s", exc)

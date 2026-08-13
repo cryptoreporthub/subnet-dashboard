@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -12,6 +14,8 @@ from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import SOUL_MAP_PATH, _load_raw
 from internal.learning.predictions_store import PREDICTIONS_PATH, load_predictions
 from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
+
+logger = logging.getLogger(__name__)
 
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
@@ -26,6 +30,18 @@ _SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _timed_health_stage(label: str, fn, *args, **kwargs):
+    started = time.perf_counter()
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        logger.debug(
+            "learning health stage=%s duration_ms=%.1f",
+            label,
+            (time.perf_counter() - started) * 1000,
+        )
 
 
 def _parse_iso(value: Any) -> Optional[datetime]:
@@ -321,7 +337,7 @@ def build_learning_loop_health(
     soul_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Cheap JSON probe for pick→ledger→resolver loop status."""
-    daily = _daily_pick_today(daily_picks_path)
+    daily = _timed_health_stage("daily_pick", _daily_pick_today, daily_picks_path)
 
     try:
         from internal.council.pick_scheduler import (
@@ -329,11 +345,11 @@ def build_learning_loop_health(
             load_pick_scheduler_state_file,
         )
 
-        pick_scheduler = get_pick_scheduler_state()
+        pick_scheduler = _timed_health_stage("pick_scheduler", get_pick_scheduler_state)
         # Web process has BACKGROUND_ON_WEB=off — prefer worker-written volume state.
         daily_running = bool((pick_scheduler.get("daily") or {}).get("running"))
         if not daily_running:
-            file_state = load_pick_scheduler_state_file()
+            file_state = _timed_health_stage("pick_scheduler_file", load_pick_scheduler_state_file)
             if isinstance(file_state, dict):
                 pick_scheduler = {**pick_scheduler, **file_state, "source": "volume"}
     except Exception:
@@ -350,7 +366,7 @@ def build_learning_loop_health(
         except Exception:
             pred_data = {"predictions": [], "resolved": [], "stats": {}}
     else:
-        pred_data = load_predictions()
+        pred_data = _timed_health_stage("predictions", load_predictions)
 
     pending_rows: List[Any] = list(pred_data.get("predictions") or [])
     pending = len(pending_rows)
@@ -376,7 +392,7 @@ def build_learning_loop_health(
         "netuid": daily.get("pick_netuid") if is_published_long else None,
     }
 
-    resolver = _last_resolver_tick(soul_path)
+    resolver = _timed_health_stage("resolver_tick", _last_resolver_tick, soul_path)
     tick_at = _parse_iso(resolver.get("at"))
     refresh_m = max(1, int(resolver.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES))
     stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
@@ -384,9 +400,14 @@ def build_learning_loop_health(
     if tick_at is not None:
         tick_age_s = max(0.0, (_utcnow() - tick_at).total_seconds())
 
-    score_snapshot = _score_snapshot_meta(snapshots_path, soul_path=soul_path)
+    score_snapshot = _timed_health_stage(
+        "score_snapshot",
+        _score_snapshot_meta,
+        snapshots_path,
+        soul_path=soul_path,
+    )
     snapshot_age = score_snapshot.get("age_seconds")
-    watchdog = check_resolver_watchdog(pending_rows)
+    watchdog = _timed_health_stage("watchdog", check_resolver_watchdog, pending_rows)
     worker_peer = resolver.get("worker_peer") or {}
     hb = worker_peer.get("heartbeat") if isinstance(worker_peer.get("heartbeat"), dict) else {}
     hb_ts = _parse_iso(hb.get("ts"))
