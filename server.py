@@ -230,12 +230,6 @@ async def _lifespan(app: FastAPI):
 
     if is_worker_mode():
         if background_boot_allowed():
-            try:
-                from internal.snapshot_guard import install as install_snapshot_guard
-
-                install_snapshot_guard()
-            except Exception as exc:
-                logger.warning("worker snapshot guard install skipped: %s", exc)
             from internal.background_boot import start_background_workers, stop_background_workers
             from internal.worker_heartbeat import touch_heartbeat
 
@@ -644,7 +638,7 @@ def _ultra_minimal_index_html() -> str:
         "subnets": [],
         "data_source": "snapshot",
         "degraded": True,
-        "static_v": "1",
+        "static_v": STATIC_V,
         **shell,
         "simivision": {"top": [], "meta": {"count": 0, "source": "ultra-minimal"}},
         "signals": [],
@@ -1132,29 +1126,11 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
         from internal.learning.routes import _judge_weights_for_snapshot
         from internal.preview.tribunal_hero import build_tribunal_view
 
-        extras: Dict[str, Any] = {}
-        try:
-            from internal.learning.routes import _learning_snapshot_cache
-
-            snap = _learning_snapshot_cache.get("data")
-            if isinstance(snap, dict):
-                extras = {
-                    "judge_last5": snap.get("judge_last5"),
-                    "council_last5": snap.get("council_last5"),
-                    "judge_weight_deltas": snap.get("judge_weight_deltas") or {},
-                }
-                if snap.get("judge_weights"):
-                    extras["judge_weights"] = snap["judge_weights"]
-        except Exception:
-            extras = {}
         hero["tribunal"] = build_tribunal_view(
             pick_payload if isinstance(pick_payload, dict) else {},
             {
-                "judge_weights": extras.get("judge_weights") or _judge_weights_for_snapshot(),
+                "judge_weights": _judge_weights_for_snapshot(),
                 "trust_banner": hero.get("trust_banner") or {},
-                "judge_last5": extras.get("judge_last5"),
-                "council_last5": extras.get("council_last5"),
-                "judge_weight_deltas": extras.get("judge_weight_deltas") or {},
             },
         )
     except Exception as exc:
@@ -1470,7 +1446,14 @@ def _bailout_homepage_html() -> Optional[str]:
         daemon=True,
         name="bailout-emergency-prime",
     ).start()
-    return _INSTANT_HOME_SHELL
+    try:
+        # The ultra-minimal shell is deliberately local/file-backed and
+        # time-safe. Prefer it over a blank reload loop so API hydration can
+        # start immediately on a cold worker.
+        return _ultra_minimal_index_html()
+    except Exception as exc:
+        logger.warning("ultra-minimal bailout render failed: %s", exc)
+        return _INSTANT_HOME_SHELL
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
@@ -1506,7 +1489,14 @@ async def index(request: Request):
             daemon=True,
             name="emergency-prime-on-demand",
         ).start()
-        html = _INSTANT_HOME_SHELL
+        try:
+            # Keep the first paint useful even while the richer cache warms:
+            # this local fallback contains the same DOM and hydration scripts
+            # as the normal page, but does not wait on live providers.
+            html = _ultra_minimal_index_html()
+        except Exception as exc:
+            logger.warning("ultra-minimal cold homepage render failed: %s", exc)
+            html = _INSTANT_HOME_SHELL
     return HTMLResponse(
         html,
         headers={"Cache-Control": "no-store, max-age=0"},
