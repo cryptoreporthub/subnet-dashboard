@@ -667,6 +667,7 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
+    caplog.set_level("INFO", logger="internal.council.resolver_scheduler")
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
