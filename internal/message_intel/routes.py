@@ -9,11 +9,27 @@ from fastapi import APIRouter, Query, Request
 from starlette.concurrency import run_in_threadpool
 
 from internal.message_intel import engine
+from internal.message_intel.entitlements import entitlement_from_request, entitlement_payload
 from internal.message_intel.summary import summarize_message_intel
 
 logger = logging.getLogger(__name__)
 
 message_intel_router = APIRouter(tags=["message-intel"])
+
+
+def _upgrade_response(feature: str, tier: str, route: str = "") -> Dict[str, Any]:
+    return {
+        "status": "upgrade_required",
+        "feature": feature,
+        "required_tier": tier,
+        "route": route,
+        "message": f"{feature} is available on {tier.upper()} or above.",
+        "upgrade_prompt": {
+            "title": f"Upgrade to {tier.upper()}",
+            "body": f"Your current plan does not include {feature}.",
+            "cta": "Beta access may still unlock this surface; no payment flow is implemented.",
+        },
+    }
 
 
 @message_intel_router.post("/api/message-intel/ingest")
@@ -43,6 +59,7 @@ async def api_message_intel_ingest(request: Request):
 
 @message_intel_router.get("/api/message-intel")
 async def api_message_intel(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     min_conviction: Optional[float] = Query(default=None, ge=0),
@@ -50,13 +67,14 @@ async def api_message_intel(
     topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
 ):
     """Primary message-intel list endpoint (honest-empty when no messages)."""
+    ent = entitlement_from_request(request)
     try:
         # engine.list_messages() -> build_telegram_proof_band() runs a SQLite
         # query that can block on the DB's write lock while the Telegram
         # listener is ingesting — a live py-spy dump caught this exact route
         # (the most frequently polled endpoint in the app) holding the event
         # loop. Dispatch off-thread so /health can never queue behind it.
-        return await run_in_threadpool(
+        payload = await run_in_threadpool(
             engine.list_messages,
             limit=limit,
             offset=offset,
@@ -64,6 +82,8 @@ async def api_message_intel(
             netuid=netuid,
             topic=topic,
         )
+        payload["entitlement"] = entitlement_payload(ent)
+        return payload
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
         from internal.message_intel.listener_service import listener_status
@@ -152,17 +172,74 @@ async def api_message_intel_chatter(
 
 @message_intel_router.get("/api/message-intel/authors")
 async def api_message_intel_authors(
+    request: Request,
     days: int = Query(default=7, ge=1, le=30),
     limit: int = Query(default=8, ge=1, le=50),
 ):
+    ent = entitlement_from_request(request)
     # build_weekly_authors() does synchronous JSON parsing over stored
     # messages — a live py-spy dump caught this route blocking the
     # MainThread/event loop directly (it was never dispatched off-thread).
-    return await run_in_threadpool(engine.list_authors, days=days, limit=limit)
+    from internal.message_intel.rollup import build_author_reliability_rows, build_reaction_crowns
+
+    authors, reaction_crowns = await run_in_threadpool(
+        lambda: (
+            build_author_reliability_rows(days=days, limit=limit),
+            build_reaction_crowns(days=days),
+        )
+    )
+    return {
+        "status": "success",
+        "days": days,
+        "count": len(authors),
+        "authors": authors,
+        "reaction_crowns": reaction_crowns,
+        "empty": len(authors) == 0,
+        "entitlement": entitlement_payload(ent),
+    }
+
+
+@message_intel_router.get("/api/message-intel/trending-v2")
+async def api_message_intel_trending_v2(
+    request: Request,
+    limit: int = Query(default=8, ge=1, le=50),
+    rank_hours: int = Query(default=1, ge=1, le=24),
+    window_hours: int = Query(default=24, ge=1, le=48),
+):
+    ent = entitlement_from_request(request)
+    from internal.message_intel.rollup import build_trending_subnets
+
+    try:
+        result = await run_in_threadpool(
+            build_trending_subnets,
+            limit=limit,
+            rank_hours=rank_hours,
+            window_hours=window_hours,
+        )
+    except Exception as exc:
+        logger.error("message-intel trending v2 failed: %s", exc)
+        return {
+            "status": "error",
+            "count": 0,
+            "items": [],
+            "trending": [],
+            "empty": True,
+            "error": str(exc),
+        }
+    return {
+        "status": "success",
+        "count": len(result),
+        "items": result,
+        "trending": result,
+        "window": f"{rank_hours}h/{window_hours}h",
+        "empty": len(result) == 0,
+        "entitlement": entitlement_payload(ent),
+    }
 
 
 @message_intel_router.get("/api/message-intel/callers")
 async def api_message_intel_callers(
+    request: Request,
     days: int = Query(default=30, ge=7, le=90),
     limit: int = Query(default=25, ge=1, le=50),
 ):
@@ -176,6 +253,7 @@ async def api_message_intel_callers(
 
 @message_intel_router.get("/api/message-intel/callers/{author_id}/receipts")
 async def api_message_intel_caller_receipts(
+    request: Request,
     author_id: str,
     days: int = Query(default=30, ge=7, le=90),
     limit: int = Query(default=20, ge=1, le=50),
@@ -240,6 +318,7 @@ async def api_message_intel_social(limit: int = Query(default=6, ge=1, le=24)):
 
 @message_intel_router.get("/api/message-intel/subnet-conviction")
 async def api_subnet_telegram_conviction(
+    request: Request,
     limit: int = Query(default=12, ge=1, le=50),
 ):
     """Evidence-qualified current Telegram consensus, grouped by subnet."""
@@ -247,13 +326,14 @@ async def api_subnet_telegram_conviction(
 
 
 @message_intel_router.get("/api/message-intel/subnet-conviction/{netuid}")
-async def api_subnet_telegram_conviction_detail(netuid: int):
+async def api_subnet_telegram_conviction_detail(request: Request, netuid: int):
     """One subnet's consensus plus current calls and resolved proof receipts."""
     return await run_in_threadpool(engine.list_subnet_telegram_conviction, netuid=netuid, limit=1)
 
 
 @message_intel_router.get("/api/message-intel/divergence")
 async def api_telegram_divergence(
+    request: Request,
     days: int = Query(default=7, ge=1, le=30),
     limit: int = Query(default=8, ge=1, le=50),
 ):
@@ -263,6 +343,7 @@ async def api_telegram_divergence(
 
 @message_intel_router.get("/api/message-intel/divergence/{netuid}")
 async def api_telegram_divergence_detail(
+    request: Request,
     netuid: int,
     days: int = Query(default=7, ge=1, le=30),
 ):
