@@ -244,3 +244,4 @@ def test_hydrate_then_recover_grades(tmp_path, monkeypatch):
     data = json.loads(pred_path.read_text(encoding="utf-8"))
     assert data["resolved"][0]["correct"] is True
     assert data["resolved"][0]["graded_via"] == "pump_lead_candle_recover"
+    assert data["resolved"][0]["horizon_outcomes"]["1h"]["hit"] is True

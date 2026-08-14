@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # SciWeave Phase 2 weights (phase-n-design.md §6)
 _DIRECTION_WEIGHT = 0.4
@@ -106,16 +106,18 @@ def magnitude_calibration(
     return max(0.0, min(1.0, 1.0 - err / scale))
 
 
-def _gradeable_resolved_count() -> int:
+def _gradeable_resolved_count(rows: Optional[List[Dict[str, Any]]] = None) -> int:
     try:
-        from internal.learning.predictions_store import load_predictions
+        if rows is None:
+            from internal.learning.predictions_store import load_predictions
 
-        data = load_predictions()
+            data = load_predictions()
+            rows = data.get("resolved") or []
     except Exception:
         return 0
     n = 0
     skip = frozenset({"duplicate", "expired", "ungradeable"})
-    for row in data.get("resolved") or []:
+    for row in rows:
         if not isinstance(row, dict):
             continue
         if is_pump_lead(row):
@@ -131,9 +133,10 @@ def _gradeable_resolved_count() -> int:
 def hybrid_score_status(
     *,
     min_sample: int = HYBRID_MIN_SAMPLE,
+    rows: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Gate + reason for API/UI (honest-empty when thin history)."""
-    n = _gradeable_resolved_count()
+    n = _gradeable_resolved_count(rows)
     ok = n >= int(min_sample)
     return {
         "ready": ok,

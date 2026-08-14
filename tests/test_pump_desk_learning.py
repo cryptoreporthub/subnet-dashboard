@@ -160,11 +160,47 @@ def test_adapt_skips_until_n30():
     assert maybe_adapt_after_resolve(min_sample=30) is None
 
 
+def test_online_blend_weights_update_on_each_clean_grade():
+    row = _pump_row(
+        id="online-1",
+        correct=True,
+        actual_pct=3.0,
+        signal_snapshot={
+            "volume_intensity": 0.9,
+            "momentum_1h": 0.04,
+            "price_change_24h": 0.08,
+            "buy_ratio": 0.9,
+            "chatter_intensity": 0.8,
+        },
+    )
+    before = load_calibration()
+
+    out = maybe_adapt_after_resolve(min_sample=30, prediction=row)
+
+    assert out is not None
+    assert out["online_updates"] == 1
+    assert out["blend_weights"] != before["blend_weights"]
+
+
 def test_adapt_tightens_when_hit_rate_weak():
     rows = [_pump_row(id=f"e{i}", correct=False, actual_pct=0.5) for i in range(30)]
     predictions_store.save_predictions({"predictions": [], "resolved": rows, "stats": {}})
+    # Production adaptation requires a clean held-out comparison; this test
+    # isolates the knob movement after that gate has passed.
+    import internal.learning.pump_calibration as calibration
+    import internal.learning.pump_lead_train as pump_lead_train
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(
+        pump_lead_train,
+        "build_pump_evaluation",
+        lambda: {"status": "qualified", "adaptation_gate": {"passed": True}},
+    )
     before = load_calibration()
-    out = maybe_adapt_after_resolve(min_sample=30)
-    assert out is not None
-    assert out["lead_buy_ratio_min"] > before["lead_buy_ratio_min"]
-    assert out["adapted_from_n"] == 30
+    try:
+        out = maybe_adapt_after_resolve(min_sample=30)
+        assert out is not None
+        assert out["lead_buy_ratio_min"] > before["lead_buy_ratio_min"]
+        assert out["adapted_from_n"] == 30
+    finally:
+        monkeypatch.undo()

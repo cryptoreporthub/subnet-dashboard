@@ -883,6 +883,7 @@
     var resolverState = extras.resolver_state || {};
     var loopLearned = extras.loop_learned || {};
     var pumpTrust = extras.pump_desk_trust || {};
+    var pumpEvaluation = extras.pump_evaluation || {};
     var ready = !!tb.ready;
     var graded = tb.graded != null ? Number(tb.graded) : 0;
     var accRaw = tb.accuracy != null ? Number(tb.accuracy) : null;
@@ -969,6 +970,13 @@
       }
     }
     if (pumpTrust && pumpTrust.early) renderProofPumpTab(pumpTrust);
+    var pumpQuiet = document.getElementById('proof-pump-quiet');
+    if (pumpQuiet && pumpEvaluation.status) {
+      pumpQuiet.textContent =
+        pumpQuiet.textContent.replace(/\s*· evaluation .*$/, '') +
+        ' · evaluation ' +
+        String(pumpEvaluation.status).replace(/_/g, ' ');
+    }
   }
 
   function formatExpertLabel(name) {
@@ -3352,6 +3360,7 @@
     else syncProofBandGraded(0);
     syncProofEvidencePanels(tb, {
       pump_desk_trust: stats.pump_desk_trust,
+      pump_evaluation: stats.pump_evaluation,
       resolver_state: stats.resolver_state,
       loop_learned: stats.loop_learned,
       working_count: stats.working && stats.working.top_price_signals
@@ -4208,6 +4217,7 @@
           .then(function (mi) {
             syncProofEvidencePanels(stats.trust_banner, {
               pump_desk_trust: stats.pump_desk_trust,
+              pump_evaluation: stats.pump_evaluation,
               resolver_state: stats.resolver_state,
               loop_learned: stats.loop_learned,
               telegram_proof: (mi && mi.meta && mi.meta.telegram_proof) || {},

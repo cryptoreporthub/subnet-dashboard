@@ -20,6 +20,7 @@ def apply_resolver_semantics_patch() -> None:
     if getattr(resolver, _PATCH_ATTR, False):
         return
     setattr(resolver, _PATCH_ATTR, True)
+    resolver._PRICE_RETRY_CAP = _RETRY_CAP
     resolver._EXPIRY_GRACE_MULTIPLE = _GRACE_MULTIPLE
 
     original_lookup_horizon_price = resolver.lookup_horizon_price

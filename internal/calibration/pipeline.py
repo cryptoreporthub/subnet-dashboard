@@ -177,7 +177,12 @@ def _holdout_rows(rows: List[Dict[str, Any]], backtest_n: int) -> List[Dict[str,
     return ordered[-backtest_n:]
 
 
-def _cert_row_score(row: Dict[str, Any], actual_pct: float) -> float:
+def _cert_row_score(
+    row: Dict[str, Any],
+    actual_pct: float,
+    *,
+    hybrid_sample_n: Optional[int] = None,
+) -> float:
     """J4 phase 2: hybrid score for signal_impact rows when gated; else direction-only."""
     try:
         actual = float(actual_pct)
@@ -185,7 +190,9 @@ def _cert_row_score(row: Dict[str, Any], actual_pct: float) -> float:
         return 0.0
     mag_src = str(row.get("magnitude_source") or "")
     if mag_src == "signal_impact":
-        status = hybrid_score_status()
+        status = hybrid_score_status(
+            rows=None if hybrid_sample_n is None else [row] * hybrid_sample_n
+        )
         if status.get("ready"):
             hs = hybrid_score(row, actual, sample_n=int(status.get("n") or 0))
             if hs is not None:
@@ -196,6 +203,8 @@ def _cert_row_score(row: Dict[str, Any], actual_pct: float) -> float:
 def _weighted_accuracy(
     rows: List[Dict[str, Any]],
     weights: Dict[str, float],
+    *,
+    hybrid_sample_n: Optional[int] = None,
 ) -> Optional[float]:
     num = 0.0
     den = 0.0
@@ -209,7 +218,7 @@ def _weighted_accuracy(
             continue
         w = float(weights.get(expert, 1.0) or 1.0)
         den += w
-        num += w * _cert_row_score(row, actual_pct)
+        num += w * _cert_row_score(row, actual_pct, hybrid_sample_n=hybrid_sample_n)
     if den <= 0:
         return None
     return round(num / den, 4)
@@ -243,9 +252,14 @@ def certify_weights(
     current = current or load_weights()
     holdout = _holdout_rows(rows, backtest_n)
     sanity_errors = _sanity_checks(proposed)
-    proposed_accuracy = _weighted_accuracy(holdout, proposed)
-    current_accuracy = _weighted_accuracy(holdout, current)
-    hybrid_status = hybrid_score_status()
+    hybrid_status = hybrid_score_status(rows=holdout)
+    hybrid_sample_n = int(hybrid_status.get("n") or 0) if hybrid_status.get("ready") else None
+    proposed_accuracy = _weighted_accuracy(
+        holdout, proposed, hybrid_sample_n=hybrid_sample_n
+    )
+    current_accuracy = _weighted_accuracy(
+        holdout, current, hybrid_sample_n=hybrid_sample_n
+    )
     signal_impact_n = sum(
         1 for row in holdout if str(row.get("magnitude_source") or "") == "signal_impact"
     )
@@ -344,8 +358,18 @@ def run_calibration_pipeline(
 
     try:
         rows = load_training_rows(predictions_path)
-        proposed = compute_proposed_weights(rows)
+        ordered_rows = sorted(
+            rows,
+            key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""),
+        )
+        holdout_n = min(max(0, int(CERT_BACKTEST_N)), len(ordered_rows))
+        training_rows = (
+            ordered_rows[:-holdout_n] if holdout_n else ordered_rows
+        )
+        proposed = compute_proposed_weights(training_rows)
         cert = certify_weights(proposed, rows, current=backup)
+        cert["training_size"] = len(training_rows)
+        cert["holdout_is_future"] = bool(holdout_n)
         admin_token = os.environ.get("CALIBRATION_ADMIN_TOKEN")
         allow_force = force and not admin_token
 

@@ -357,6 +357,7 @@ def lookup_horizon_price(
         prediction.get("netuid"),
         resolve_at,
         cache=cache,
+        cache_path=cache_path or PRICE_CACHE_PATH,
     )
     if status == "ok" and price > 0:
         return status, price, meta
@@ -598,7 +599,7 @@ def resolve_prediction(
             try:
                 from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-                maybe_adapt_after_resolve()
+                maybe_adapt_after_resolve(prediction=prediction)
             except Exception:
                 pass
         return prediction
@@ -684,7 +685,7 @@ def resolve_prediction_at_horizon(
         try:
             from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-            maybe_adapt_after_resolve()
+            maybe_adapt_after_resolve(prediction=prediction)
         except Exception:
             pass
     return prediction

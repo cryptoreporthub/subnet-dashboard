@@ -12,7 +12,7 @@ missing_horizon_candles even when a live fetch would cover them.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from internal.council.grading import (
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 PREDICTIONS_PATH = "data/predictions.json"
 # Root / invalid netuids never become Upgrade-6 samples.
 _SKIP_NETUIDS = frozenset({0})
+PUMP_OUTCOME_HORIZONS = (0.25, 1.0, 4.0, 24.0)
 
 
 def _utcnow() -> datetime:
@@ -159,6 +160,64 @@ def _finalize_grade(
     out["sample_quality"] = "high"
     out["graded_via"] = "pump_lead_candle_recover"
     return out
+
+
+def update_pump_horizon_outcomes(
+    data: Dict[str, Any],
+    *,
+    now: Optional[datetime] = None,
+    cache_path: str = PRICE_CACHE_PATH,
+) -> int:
+    """Backfill immutable multi-horizon pump outcomes from candle data.
+
+    The primary resolver outcome remains the +2%/1h claim. These additional
+    observations are descriptive evaluation rows and never alter trust stats.
+    """
+    now = now or _utcnow()
+    cache = safe_read_json(cache_path, default={})
+    if not isinstance(cache, dict):
+        cache = {}
+    updated = 0
+    for row in data.get("resolved") or []:
+        if not isinstance(row, dict) or not is_pump_desk_claim(row):
+            continue
+        created_at = _parse_ts(row.get("created_at"))
+        if created_at is None:
+            continue
+        outcomes = row.setdefault("horizon_outcomes", {})
+        if not isinstance(outcomes, dict):
+            outcomes = {}
+            row["horizon_outcomes"] = outcomes
+        ref = float(row.get("reference_price") or 0)
+        if ref <= 0:
+            continue
+        for horizon in PUMP_OUTCOME_HORIZONS:
+            label = f"{int(horizon * 60)}m" if horizon < 1 else f"{int(horizon)}h"
+            if isinstance(outcomes.get(label), dict) and outcomes[label].get("status") == "graded":
+                continue
+            target = created_at + timedelta(hours=horizon)
+            if now < target:
+                continue
+            status, price, meta = price_at_resolve_at(
+                row.get("netuid"),
+                target,
+                cache=cache,
+                cache_path=cache_path,
+            )
+            if status != "ok" or price <= 0:
+                continue
+            actual_pct = compute_actual_pct(ref, price)
+            outcomes[label] = {
+                "status": "graded",
+                "target_at": target.isoformat().replace("+00:00", "Z"),
+                "price": price,
+                "actual_pct": actual_pct,
+                "hit": bool(actual_pct >= float(row.get("predicted_pct") or 2.0)),
+                "price_source": meta.get("price_source"),
+                "graded_at": now.isoformat().replace("+00:00", "Z"),
+            }
+            updated += 1
+    return updated
 
 
 def horizon_candles_ready(
@@ -401,10 +460,22 @@ def recover_overdue_pump_leads(
         elif status == "resolved":
             graded.append(result)
             resolved.append(result)
+            try:
+                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                maybe_adapt_after_resolve(prediction=result)
+            except Exception:
+                logger.exception("pump calibration online update failed")
         else:
             rejected.append(result)
             resolved.append(result)
 
+    horizon_updated = 0
+    if not dry_run:
+        data["resolved"] = resolved
+        horizon_updated = update_pump_horizon_outcomes(
+            data, now=now, cache_path=PRICE_CACHE_PATH
+        )
     summary = {
         "ok": True,
         "dry_run": dry_run,
@@ -414,6 +485,7 @@ def recover_overdue_pump_leads(
         "still_pending": sum(1 for p in still if isinstance(p, dict) and is_pump_desk_claim(p)),
         "hits": sum(1 for r in graded if r.get("correct") is True),
         "misses": sum(1 for r in graded if r.get("correct") is False),
+        "horizon_outcomes_updated": horizon_updated,
         "reject_reasons": {},
         "graded_netuids": [r.get("netuid") for r in graded],
     }
@@ -425,7 +497,6 @@ def recover_overdue_pump_leads(
         return summary
 
     data["predictions"] = still
-    data["resolved"] = resolved
     # Keep existing stats helper shape light — full stats recomputed by resolver.
     try:
         from internal.council.resolver import _compute_stats
@@ -441,11 +512,4 @@ def recover_overdue_pump_leads(
         summary["hits"],
         summary["misses"],
     )
-    try:
-        from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-        if summary["graded"]:
-            maybe_adapt_after_resolve()
-    except Exception:
-        pass
     return summary

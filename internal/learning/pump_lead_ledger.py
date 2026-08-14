@@ -121,8 +121,34 @@ def record_pump_lead_at_phase_entry(
         if not ok:
             logger.debug("pump_lead skip SN%s: %s", nu, reason)
             return None
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("pump_lead quality gate unavailable for SN%s: %s", nu, exc)
+        return None
+
+    if str(phase).upper() == "STIRRING":
+        try:
+            from internal.learning.pump_alert import _lead_qualifies
+
+            if not _lead_qualifies(
+                frozen.get("buy_ratio"),
+                frozen.get("volume_intensity"),
+            ):
+                logger.debug("pump_lead skip SN%s: visible lead gate not met", nu)
+                return None
+        except Exception as exc:
+            logger.warning("pump_lead visible gate unavailable for SN%s: %s", nu, exc)
+            return None
+
+    try:
+        from internal.learning.pump_calibration import effective_lead_gates, load_calibration
+        from internal.pump.pattern_ledger import pattern_payload
+
+        calibration = load_calibration()
+        pattern = pattern_payload(nu)
+        calibration_version = calibration.get("version", 1)
+    except Exception as exc:
+        logger.warning("pump_lead metadata unavailable for SN%s: %s", nu, exc)
+        return None
 
     prediction: Dict[str, Any] = {
         "id": uuid.uuid4().hex[:10],
@@ -142,6 +168,15 @@ def record_pump_lead_at_phase_entry(
         "pump_claim": claim,
         "composite_score": float(composite_score),
         "signal_snapshot": frozen,
+        "calibration_version": calibration_version,
+        "claim_gate": {
+            "phase": str(phase).upper(),
+            "buy_ratio_min": effective_lead_gates(calibration)["buy_ratio_min"],
+            "volume_intensity_min": effective_lead_gates(calibration)["volume_intensity_min"],
+        },
+        "pattern_class": pattern.get("pattern_class"),
+        "directional_path": pattern.get("direction_strip"),
+        "pattern_confidence": pattern.get("confidence"),
         "statement": f"pump lead +{PUMP_LEAD_CLAIM_PCT:.0f}% within 1h from {badge} entry",
     }
     if alert_id:

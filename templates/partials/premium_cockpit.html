@@ -32,6 +32,8 @@
 {% set tb_min = tb.min_graded|default(30) %}
 {% set resolver_state = lm.resolver_state if lm.resolver_state is mapping else {} %}
 {% set pump_trust = lm.pump_desk_trust if lm.pump_desk_trust is mapping else {} %}
+{% set pump_early = pump_trust.early if pump_trust.early is defined and pump_trust.early is mapping else {} %}
+{% set pump_evaluation = lm.pump_evaluation if lm.pump_evaluation is mapping else {} %}
 {% set loop_learned = lm.loop_learned if lm.loop_learned is mapping else {} %}
 {% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
 {% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
@@ -170,7 +172,7 @@
   </div>
   <div id="proof-tab-pump" class="proof-band__panel" hidden>
     <div class="proof-band__score-hero" id="proof-pump-hero">
-      <p class="proof-band__quiet" id="proof-pump-quiet">Pump early hit-rate — {{ pump_trust.early.n|default(0) }} graded{% if pump_trust.min_sample_trust is defined %} / {{ pump_trust.min_sample_trust }} needed{% endif %}{% if pump_trust.line %} · {{ pump_trust.line }}{% endif %}</p>
+      <p class="proof-band__quiet" id="proof-pump-quiet">Pump early hit-rate — {{ pump_early.n|default(0) }} graded{% if pump_trust.min_sample_trust is defined %} / {{ pump_trust.min_sample_trust }} needed{% endif %}{% if pump_trust.line %} · {{ pump_trust.line }}{% endif %} · evaluation {{ pump_evaluation.status|default('insufficient sample')|replace('_', ' ') }}</p>
       <div class="proof-band__pct" id="proof-pump-pct" hidden></div>
       <p class="proof-band__meta" id="proof-pump-meta" hidden></p>
     </div>

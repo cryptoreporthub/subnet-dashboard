@@ -9,8 +9,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
-CANDLE_LOOKUP_MINUTES = 15
-MIN_CANDLES_FOR_GRADE = 3
+# Hourly OHLCV is the canonical resolver source. A single quality-checked
+# candle within this window is preferable to retiring valid calls because the
+# feed cannot provide three 15-minute candles.
+CANDLE_LOOKUP_MINUTES = 90
+MIN_CANDLES_FOR_GRADE = 1
 
 
 def _load_cache(path: Optional[str] = None) -> Dict[str, Any]:
@@ -207,7 +210,7 @@ def _hydrate_once(netuid: Any, cache_path: str) -> bool:
     """
     import tempfile
 
-    key = f"{str(netuid)}|{cache_path}"
+    key = str(netuid)
     now = time.time()
     if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
         return False

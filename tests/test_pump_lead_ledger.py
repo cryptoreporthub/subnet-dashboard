@@ -79,7 +79,7 @@ def test_record_pump_lead_dedupes_pending_same_netuid():
         phase="STIRRING",
         composite_score=0.3,
         reference_price=1.0,
-        signal_snapshot={"buy_ratio": 0.6},
+        signal_snapshot={"buy_ratio": 0.6, "volume_intensity": 0.5},
     )
     second = record_pump_lead_at_phase_entry(
         netuid=7,
@@ -90,6 +90,9 @@ def test_record_pump_lead_dedupes_pending_same_netuid():
         signal_snapshot={"buy_ratio": 0.7},
     )
     assert first is not None
+    assert first["calibration_version"] >= 1
+    assert "claim_gate" in first
+    assert "directional_path" in first
     assert second is None
     assert len(predictions_store.load_predictions()["predictions"]) == 1
 

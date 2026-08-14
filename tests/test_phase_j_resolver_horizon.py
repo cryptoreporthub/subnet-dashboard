@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 import pytest
 
 import internal.council.resolver as resolver
-from internal.council.price_reference import CANDLE_LOOKUP_MINUTES
+from internal.council.price_reference import CANDLE_LOOKUP_MINUTES, price_at_resolve_at
 
 
 def _write_price_cache(path: str, netuid: int, resolve_at: datetime, price: float) -> None:
@@ -83,6 +83,31 @@ def test_resolve_uses_horizon_candle_not_late_live_price():
     assert result["correct"] is True
     assert result["resolved_price"] == pytest.approx(110.0, rel=1e-3)
     assert result.get("price_source") in {"vwap", "median"}
+
+
+def test_hourly_source_accepts_one_quality_candle():
+    resolve_at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
+    with open(resolver.PRICE_CACHE_PATH, "w", encoding="utf-8") as fh:
+        json.dump(
+            {
+                "3": {
+                    "candles": [
+                        {
+                            "timestamp": resolve_at.isoformat().replace("+00:00", "Z"),
+                            "close": 110.0,
+                            "volume": 1000.0,
+                        }
+                    ]
+                }
+            },
+            fh,
+        )
+
+    status, price, meta = price_at_resolve_at(3, resolve_at, cache_path=resolver.PRICE_CACHE_PATH)
+
+    assert status == "ok"
+    assert price == pytest.approx(110.0)
+    assert meta["candles_in_window"] == 1
 
 
 def test_watchdog_flags_large_backlog():

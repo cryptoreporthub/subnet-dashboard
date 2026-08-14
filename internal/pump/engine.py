@@ -30,12 +30,18 @@ def compute_composite_score(signals: Dict[str, Any]) -> float:
     price_term = min(max(price / 0.08, 0.0), 1.0)
     flow_term = max(buy_ratio - 0.5, 0.0) * 2.0
 
+    try:
+        from internal.learning.pump_calibration import load_calibration
+
+        weights = load_calibration().get("blend_weights") or {}
+    except Exception:
+        weights = {}
     score = (
-        0.30 * vol
-        + 0.25 * mom_term
-        + 0.20 * price_term
-        + 0.10 * flow_term
-        + 0.10 * chatter
+        float(weights.get("volume", 0.30)) * vol
+        + float(weights.get("momentum", 0.25)) * mom_term
+        + float(weights.get("price", 0.20)) * price_term
+        + float(weights.get("flow", 0.10)) * flow_term
+        + float(weights.get("chatter", 0.10)) * chatter
         + scenario_boost
     )
     return round(min(max(score, 0.0), 1.0), 4)

@@ -40,6 +40,7 @@ _DEFAULTS: Dict[str, Any] = {
     "adapted_from_ledger": None,
     "adapted_from_population": None,
     "adapted_from_fingerprint": None,
+    "calibration_history": [],
 }
 
 
@@ -57,7 +58,13 @@ def load_calibration(path: Optional[str] = None) -> Dict[str, Any]:
     if not isinstance(data, dict) or not data:
         return default_calibration()
     out = default_calibration()
-    out.update({k: v for k, v in data.items() if k in out or k in ("adapted_at", "adapted_from_n", "version")})
+    out.update(
+        {
+            k: v
+            for k, v in data.items()
+            if k in out or k in ("adapted_at", "adapted_from_n", "version")
+        }
+    )
     if isinstance(data.get("phase_entry"), dict):
         pe = dict(out["phase_entry"])
         pe.update({k: float(v) for k, v in data["phase_entry"].items() if k in pe})
@@ -96,23 +103,74 @@ def effective_phase_entry(cal: Optional[Dict[str, Any]] = None) -> Dict[str, flo
     return base
 
 
-def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional[Dict[str, Any]]:
+def _online_update_blend_weights(
+    cal: Dict[str, Any],
+    prediction: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Apply a bounded per-grade update to pump blend weights."""
+    snap = prediction.get("signal_snapshot") if isinstance(prediction, dict) else {}
+    if not isinstance(snap, dict):
+        return cal
+    correct = bool(prediction.get("correct"))
+    features = {
+        "volume": float(snap.get("volume_intensity") or 0.0),
+        "momentum": min(max(float(snap.get("momentum_1h") or 0.0) / 0.04, 0.0), 1.0),
+        "price": min(max(float(snap.get("price_change_24h") or 0.0) / 0.08, 0.0), 1.0),
+        "flow": max(float(snap.get("buy_ratio") or 0.5) - 0.5, 0.0) * 2.0,
+        "chatter": float(snap.get("chatter_intensity") or 0.0),
+    }
+    weights = dict(cal.get("blend_weights") or {})
+    learning_rate = 0.005
+    for name, value in features.items():
+        direction = 1.0 if correct else -1.0
+        centered = value - 0.5
+        weights[name] = max(0.02, float(weights.get(name, 0.1)) + learning_rate * direction * centered)
+    total = sum(weights.values())
+    if total > 0:
+        weights = {key: round(value / total * 0.95, 4) for key, value in weights.items()}
+    cal["blend_weights"] = weights
+    cal["last_online_update_at"] = _utcnow_z()
+    cal["online_updates"] = int(cal.get("online_updates") or 0) + 1
+    return cal
+
+
+def maybe_adapt_after_resolve(
+    *,
+    min_sample: int = MIN_ADAPT_SAMPLE,
+    prediction: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     """Nudge pump knobs from early-alert hit rate when n is large enough.
 
     Conservative: only tighten lead gates when hit rate is weak; loosen slightly
     when strong. Caps prevent runaway.
     """
     from internal.learning.pump_lead_stats import build_pump_desk_trust, pump_evidence_snapshot
+    from internal.learning import pump_lead_train
 
     trust = build_pump_desk_trust()
     evidence = pump_evidence_snapshot()
     early = trust.get("early") or {}
     n = int(early.get("n") or 0)
     rate = early.get("hit_rate")
+    cal = load_calibration()
+    if prediction is not None:
+        cal = _online_update_blend_weights(cal, prediction)
+        save_calibration(cal)
+        if n < int(min_sample):
+            return cal
     if n < int(min_sample) or rate is None:
         return None
-
-    cal = load_calibration()
+    evaluation = pump_lead_train.build_pump_evaluation()
+    try:
+        pump_lead_train.persist_pump_evaluation(evaluation)
+    except Exception:
+        logger.exception("pump evaluation persistence failed")
+    if not (evaluation.get("adaptation_gate") or {}).get("passed"):
+        logger.info(
+            "pump calibration held: evaluation status=%s",
+            evaluation.get("status"),
+        )
+        return None
     same_population = (
         cal.get("adapted_from_ledger") == evidence.get("ledger")
         and cal.get("adapted_from_population") == evidence.get("population")
@@ -142,6 +200,20 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
     else:
         return None  # mid band — leave knobs alone
 
+    old_version = int(cal.get("version") or 1)
+    history = cal.get("calibration_history")
+    if not isinstance(history, list):
+        history = []
+    history.append(
+        {
+            "version": old_version,
+            "adapted_at": cal.get("adapted_at"),
+            "adapted_from_n": cal.get("adapted_from_n", 0),
+            "hit_rate": cal.get("last_adapt_hit_rate"),
+        }
+    )
+    cal["calibration_history"] = history[-50:]
+    cal["version"] = old_version + 1
     cal["lead_buy_ratio_min"] = round(buy, 4)
     cal["lead_volume_intensity_min"] = round(vol, 4)
     pe = dict(cal.get("phase_entry") or {})

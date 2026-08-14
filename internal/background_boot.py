@@ -396,6 +396,13 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets and feed
       warmup on top of essential.
     """
+    try:
+        from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
+
+        apply_resolver_semantics_patch()
+    except Exception as exc:
+        logger.warning("resolver retry semantics unavailable: %s", exc)
+
     from internal.run_mode import background_heavy_on_web, is_worker_mode, worker_heavy_feeds_enabled
 
     if heavy is None:
