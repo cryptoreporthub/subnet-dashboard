@@ -457,7 +457,10 @@ async def _listener_page_context() -> Dict[str, Any]:
     conv_rows = []
     if isinstance(conv_payload, dict):
         conv_rows = _as_list(
-            conv_payload.get("rows") or conv_payload.get("subnets") or conv_payload.get("conviction")
+            conv_payload.get("items")
+            or conv_payload.get("rows")
+            or conv_payload.get("subnets")
+            or conv_payload.get("conviction")
         )
     elif isinstance(conv_payload, list):
         conv_rows = conv_payload
@@ -482,14 +485,22 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["subnet_conviction"] = conv_rows
 
     try:
-        from internal.message_intel.rollup import build_trending_subnets
-
-        tv2 = await _listener_call(
-            lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
-            None,
-            timeout=6,
+        tv2 = await _listener_worker_call(
+            "/api/message-intel/trending-v2?limit=8", None
         )
-        tv2_rows = tv2 if isinstance(tv2, list) else []
+        if tv2 is None:
+            from internal.message_intel.rollup import build_trending_subnets
+
+            tv2 = await _listener_call(
+                lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
+                None,
+                timeout=6,
+            )
+        tv2_rows = (
+            _as_list(tv2.get("items") or tv2.get("trending"))
+            if isinstance(tv2, dict)
+            else (tv2 if isinstance(tv2, list) else [])
+        )
         if tv2_rows:
             by_nu = {t.get("netuid"): t for t in trending if t.get("netuid") is not None}
             merged = []
