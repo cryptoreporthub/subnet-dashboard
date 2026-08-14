@@ -81,6 +81,7 @@ def test_trust_banner_keeps_council_and_pump_pending_separate():
             "correct": 0,
             "wrong": 0,
             "expired": 0,
+            "pending": 2,
             "council_pending": 2,
             "pump_pending": 6,
             "total_pending": 8,
