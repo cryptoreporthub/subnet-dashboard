@@ -112,7 +112,6 @@
       </div>
     </div>
 
-    <div class="message-intel__rail">
     <div class="message-intel__tile message-intel__tile--power">
       <div class="message-intel__panel glass-card" id="message-intel-power-card">
         <div class="message-intel__sec-label">
@@ -126,6 +125,7 @@
       </div>
     </div>
 
+    <div class="message-intel__hall">
     <div class="message-intel__tile message-intel__tile--callers">
       <div class="message-intel__panel glass-card" id="message-intel-callers">
         <div class="message-intel__sec-label">
@@ -140,34 +140,6 @@
         </div>
         <div id="message-intel-callers-body" class="message-intel__leaderboard" aria-live="polite">
           <p class="empty">Strike rate from resolved qualifying calls only. Under 5 graded calls we show “too few graded calls to trust” — never a fake rank.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--narr">
-      <div class="message-intel__panel glass-card" id="message-intel-narrative-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Narrative map</h3>
-          <span class="message-intel__panel-unit">rising · peaking · decaying</span>
-        </div>
-        <div id="message-intel-narrative" class="message-intel__narrative" aria-live="polite">
-          <p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group’s weather, not a price chart.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--div">
-      <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Divergence</h3>
-          <span class="message-intel__panel-unit">chatter vs price</span>
-        </div>
-        <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
-        <div id="message-intel-divergence" class="message-intel__divergence">
-          <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
-          <div id="message-intel-divergence-body" aria-live="polite"></div>
         </div>
       </div>
     </div>
@@ -201,7 +173,6 @@
         </div>
       </div>
     </div>
-    </div><!-- /.message-intel__rail -->
 
     <div class="message-intel__tile message-intel__tile--crowns">
       <div class="message-intel__panel message-intel__crowns-drawer glass-card" id="message-intel-crowns-card">
@@ -213,6 +184,35 @@
         <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
         <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
           <p class="empty">No reaction crowns yet — they appear as the group reacts.</p>
+        </div>
+      </div>
+    </div>
+    </div><!-- /.message-intel__hall -->
+
+    <div class="message-intel__tile message-intel__tile--narr">
+      <div class="message-intel__panel glass-card" id="message-intel-narrative-card">
+        <div class="message-intel__sec-label">
+          <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+          <h3 class="message-intel__panel-title">Narrative map</h3>
+          <span class="message-intel__panel-unit">rising · peaking · decaying</span>
+        </div>
+        <div id="message-intel-narrative" class="message-intel__narrative" aria-live="polite">
+          <p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group’s weather, not a price chart.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="message-intel__tile message-intel__tile--div">
+      <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
+        <div class="message-intel__sec-label">
+          <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+          <h3 class="message-intel__panel-title">Divergence</h3>
+          <span class="message-intel__panel-unit">chatter vs price</span>
+        </div>
+        <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
+        <div id="message-intel-divergence" class="message-intel__divergence">
+          <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
+          <div id="message-intel-divergence-body" aria-live="polite"></div>
         </div>
       </div>
     </div>

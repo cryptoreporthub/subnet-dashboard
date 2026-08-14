@@ -92,7 +92,8 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__tile--orbit" in css
     assert ".message-intel__sky-track--1" in css
     assert ".message-intel__sky-carrier" in css
-    assert ".message-intel__rail { display: contents; }" in css
+    assert ".message-intel__hall" in css
+    assert ".message-intel__hall { display: contents; }" in css
     assert '[data-rank="1"] { --spin: 26s; --r: 21.43%;' in css
     assert ".message-intel__sky-legend" in css
     assert ".message-intel__cell { display: none; }" not in css
@@ -122,7 +123,8 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__pulsar" in html
     assert "message-intel__sky-track" in html
     assert "message-intel__sky-carrier" in html
-    assert "message-intel__rail" in html
+    assert "message-intel__hall" in html
+    assert "message-intel__rail\"" not in html
     assert 'id="message-intel-sky"' in html
     assert "hidden" not in html.split('id="message-intel-sky"', 1)[1].split(">", 1)[0]
     assert "message-intel__sky-legend" in html
@@ -156,11 +158,12 @@ def test_listener_share_page_composition():
     assert "/who" in html
     assert "lsn-orbit" in html
     assert "lsn-orbit__track" in html
-    assert "lsn-rail" in html
+    assert "lsn-hall" in html
+    assert "lsn-rail" not in html
     assert "lsn-orbit-legend" in html
     assert "closer = higher rank" in html
     assert ".lsn-orbit" in css
-    assert ".lsn-rail{display:contents}" in css.replace(" ", "")
+    assert ".lsn-hall" in css
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html

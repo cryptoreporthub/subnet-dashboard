@@ -532,18 +532,14 @@ body.lsn-body.quiet .lsn-gauge .qempty{display:block}
 @keyframes lsn-orbit-spin-rev{from{transform:rotate(var(--start,0deg))}to{transform:rotate(calc(var(--start,0deg) - 360deg))}}
 @keyframes lsn-orbit-unspin{from{transform:translate(-50%,-50%) rotate(calc(var(--start,0deg) * -1))}to{transform:translate(-50%,-50%) rotate(calc((var(--start,0deg) * -1) - 360deg))}}
 @keyframes lsn-orbit-unspin-rev{from{transform:translate(-50%,-50%) rotate(calc(var(--start,0deg) * -1))}to{transform:translate(-50%,-50%) rotate(calc((var(--start,0deg) * -1) + 360deg))}}
-.lsn-rail{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:2px 2px 10px;scrollbar-width:none}
-.lsn-rail::-webkit-scrollbar{display:none}
-.lsn-rail > .lsn-panel{flex:0 0 min(78%,280px);scroll-snap-align:start}
 .lsn-tile{min-width:0;display:flex;flex-direction:column;gap:16px}
 .lsn-tile--orbit{grid-area:orbit}
 .lsn-tile--feed{grid-area:feed}
 .lsn-tile--desk{grid-area:desk;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lsn-hall{grid-template-columns:1fr 1fr}
 .lsn-tile--desk > *{min-width:0}
 @media (min-width: 740px){
   .lsn-bay{grid-template-columns:1.2fr 1fr;grid-template-areas:"orbit feed" "desk desk"}
-  .lsn-rail{display:contents}
-  .lsn-rail > .lsn-panel{flex:none}
 }
 @media (max-width: 739px){
   .lsn-pulsar{width:72px;height:72px}
@@ -554,9 +550,6 @@ body.lsn-body.quiet .lsn-gauge .qempty{display:block}
   .lsn-panel--trend .lsn-why,
   .lsn-panel--trend .lsn-qstate--trend{display:none}
   .lsn-orbit{width:100%}
-}
-@media (max-width: 520px){
-  .lsn-tile--desk{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion: reduce){
   .lsn-trust .ekg path{animation:none}

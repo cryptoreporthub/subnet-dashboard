@@ -12150,10 +12150,12 @@ body.wrap {
   gap: 10px;
   grid-template-areas:
     "orbit orbit"
-    "rail rail"
+    "power power"
     "feed feed"
+    "div div"
+    "narr narr"
+    "hall hall"
     "spot spot"
-    "crowns crowns"
     "proof hc"
     "desk pulse";
   align-items: start;
@@ -12162,20 +12164,12 @@ body.wrap {
 .message-intel--v2 .message-intel__tile--orbit {
   scroll-margin-top: 72px;
 }
-.message-intel--v2 .message-intel__rail {
-  grid-area: rail;
-  display: flex;
+.message-intel--v2 .message-intel__hall {
+  grid-area: hall;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  -webkit-overflow-scrolling: touch;
-  padding: 2px 2px 10px;
-  scrollbar-width: none;
-}
-.message-intel--v2 .message-intel__rail::-webkit-scrollbar { display: none; }
-.message-intel--v2 .message-intel__rail > .message-intel__tile {
-  flex: 0 0 min(78%, 280px);
-  scroll-snap-align: start;
+  align-items: start;
 }
 .message-intel--v2 .message-intel__tile { min-width: 0; }
 .message-intel--v2 .message-intel__tile .message-intel__panel,
@@ -12365,8 +12359,7 @@ body.wrap {
   .message-intel--v2 .message-intel__identity .message-intel__page-title {
     font-size: clamp(1.55rem, 3.6vw, 2.4rem);
   }
-  .message-intel--v2 .message-intel__rail { display: contents; }
-  .message-intel--v2 .message-intel__rail > .message-intel__tile { flex: none; }
+  .message-intel--v2 .message-intel__hall { display: contents; }
   .message-intel--v2 .message-intel__bay {
     grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.95fr);
     grid-template-areas:
@@ -12402,8 +12395,6 @@ body.wrap {
   .message-intel--v2 .message-intel__trending,
   .message-intel--v2 .message-intel__view-all { display: none; }
   .message-intel--v2 .message-intel__tile--orbit .message-intel__panel.glass-card,
-  .message-intel--v2 .message-intel__rail .message-intel__panel.glass-card,
-  .message-intel--v2 .message-intel__tile--crowns .message-intel__panel.glass-card,
   .message-intel--v2 .message-intel__tile--feed .message-intel__panel.glass-card,
   .message-intel--v2 .message-intel__tile--desk .message-intel__panel.glass-card,
   .message-intel--v2 .message-intel__tile--pulse .message-intel__panel.glass-card {
@@ -12411,12 +12402,6 @@ body.wrap {
     border: 0;
     box-shadow: none;
     padding: 6px 2px 10px;
-  }
-  .message-intel--v2 .message-intel__rail > .message-intel__tile {
-    border: 1px solid var(--glass-border);
-    border-radius: 14px;
-    padding: 4px 8px;
-    background: var(--glass-fill-subtle);
   }
 }
 @media (prefers-reduced-motion: reduce) {
