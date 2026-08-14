@@ -7,7 +7,7 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2 glass-card">
+<div class="message-intel message-intel--v2 glass-card" data-pulse-mode="listen">
 
   <div class="message-intel__heartbeat" id="message-intel-heartbeat" data-mode="warming" aria-live="polite">
     <svg class="message-intel__ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
@@ -17,13 +17,6 @@
     <span class="message-intel__hb-last" id="message-intel-hb-last">awaiting first beat</span>
     <span class="message-intel__hb-cal" id="message-intel-hb-cal">cal …</span>
   </div>
-
-  <ol class="message-intel__loop" aria-label="Listen Learn Rank Serve">
-    <li data-beat="listen"><b>Listen</b><span>ingest</span></li>
-    <li data-beat="learn"><b>Learn</b><span>who's right</span></li>
-    <li data-beat="rank"><b>Rank</b><span>chatter power</span></li>
-    <li data-beat="serve"><b>Serve</b><span>desk + bot</span></li>
-  </ol>
 
   <div class="message-intel__masthead">
     <div class="message-intel__instrument">
@@ -36,14 +29,17 @@
       <div class="message-intel__identity">
         <div class="message-intel__topbar">
           <span class="message-intel__brand">SUBNET SUMMERS · <em>SIMIVISION</em></span>
-          <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
+          <div class="message-intel__top-actions">
+            <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
+            <a class="message-intel__full-desk" href="/listener">Open full listener →</a>
+          </div>
         </div>
         <p class="message-intel__eyebrow">SIGNAL DECK ·
           <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">t.me/OfficialSubnetSummer</a>
         </p>
         <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
         <p class="section-sub message-intel__page-sub" id="message-intel-sub">
-          Telegram supercharger for Subnet Summers — trending, champs, crowns, and a desk that ranks by who's been right.
+          Telegram supercharger for Subnet Summers — scan here, open the full listener when you want the whole desk.
         </p>
         <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
           <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
@@ -54,323 +50,343 @@
             <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
           </span>
         </div>
-        <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
-          <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">{% if mi_meta.total_messages %}{{ mi_meta.total_messages }}{% else %}warming{% endif %}</b><span>Archived</span></div>
-          <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">warming</b><span>Last 24h</span></div>
-          <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">warming</b><span>Live conv.</span></div>
-          <div class="message-intel__stat-chip"><b id="message-intel-stat-active">{% if mi_trending %}{{ mi_trending|length }}{% else %}warming{% endif %}</b><span>Active</span></div>
-        </div>
       </div>
     </div>
+  </div>
 
-    <div class="message-intel__pulse-stage message-intel__flow glass-card" id="message-intel-flow" aria-live="polite">
-      <div class="message-intel__sec-label">
-        <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
-        <h3 class="message-intel__panel-title">Net flow</h3>
-        <span class="message-intel__panel-unit" id="message-intel-flow-dir">WARMING</span>
-      </div>
-      <button type="button" class="message-intel__flow-anchor" id="message-intel-flow-anchor">SN — · tap a trending row</button>
-      <div class="message-intel__flow-val" id="message-intel-flow-val">warming <small>· pool delta</small></div>
-      <div class="message-intel__flow-meter" aria-hidden="true"><div id="message-intel-flow-bar"></div></div>
-      <p class="message-intel__flow-sub" id="message-intel-flow-sub">Needs two pool snapshots — nothing faked while it’s quiet.</p>
-    </div>
+  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve">
+    <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span></button>
+    <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who's right</span></button>
+    <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span></button>
+    <button type="button" role="tab" id="pulse-tab-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve" aria-selected="false" tabindex="-1"><b>Serve</b><span>desk + bot</span></button>
   </div>
 
   <div class="message-intel__bay">
 
-    <div class="message-intel__tile message-intel__tile--orbit">
-      <div class="message-intel__panel glass-card" id="message-intel-trending-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title" id="message-intel-trending-title">Trending orbit</h3>
-          <span class="message-intel__panel-unit">{{ mi_window }}</span>
-        </div>
-        <div class="message-intel__axis" role="group" aria-label="Rank by axis">
-          <button type="button" class="message-intel__axis-chip message-intel__axis-chip--active" data-axis="chatter">Chatter</button>
-          <button type="button" class="message-intel__axis-chip" data-axis="conviction">Conviction</button>
-        </div>
-        <div id="message-intel-sky" class="message-intel__sky" data-empty="true" aria-label="Trending orbit">
-          <svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">
-            <ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>
-            <ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
-            <ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>
-          </svg>
-          <div class="message-intel__sky-hub"><span>ORBIT</span><b>—</b></div>
-          <div class="message-intel__sky-carrier" data-rank="1"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#1</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
-          <div class="message-intel__sky-carrier" data-rank="2"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#2</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
-          <div class="message-intel__sky-carrier" data-rank="3"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#3</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
-        </div>
-        <p class="message-intel__sky-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
-        <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
-          {% if mi_trending %}
-          {{ trend_rows(mi_trending, mi_window) }}
-          {% else %}
-          <p class="empty">No subnet chatter in the last hour yet — orbit stays honest while the group is quiet.</p>
-          {% endif %}
-        </div>
-        <button type="button" class="message-intel__view-all" id="message-intel-trending-refresh">Refresh trending</button>
+    <div class="message-intel__mode" data-pulse-pane="listen" role="tabpanel" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
+      <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">{% if mi_meta.total_messages %}{{ mi_meta.total_messages }}{% else %}warming{% endif %}</b><span>Archived</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">warming</b><span>Last 24h</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">warming</b><span>Live conv.</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-active">{% if mi_trending %}{{ mi_trending|length }}{% else %}warming{% endif %}</b><span>Active</span></div>
       </div>
-    </div>
 
-    <div class="message-intel__tile message-intel__tile--power">
-      <div class="message-intel__panel glass-card" id="message-intel-power-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Chatter Power</h3>
-          <span class="message-intel__panel-unit">v × conv × quality</span>
-        </div>
-        <div id="message-intel-power" class="message-intel__power" aria-live="polite">
-          <p class="empty">Ranks by who's talking, not how loud — velocity × conviction × author hit-rate. Why-lines land with trending v2.</p>
+      <div class="message-intel__tile message-intel__tile--flow">
+        <div class="message-intel__pulse-stage message-intel__flow glass-card" id="message-intel-flow" aria-live="polite">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Net flow</h3>
+            <span class="message-intel__panel-unit" id="message-intel-flow-dir">WARMING</span>
+          </div>
+          <button type="button" class="message-intel__flow-anchor" id="message-intel-flow-anchor">SN — · tap a trending row</button>
+          <div class="message-intel__flow-val" id="message-intel-flow-val">warming <small>· pool delta</small></div>
+          <div class="message-intel__flow-meter" aria-hidden="true"><div id="message-intel-flow-bar"></div></div>
+          <p class="message-intel__flow-sub" id="message-intel-flow-sub">Needs two pool snapshots — nothing faked while it’s quiet.</p>
         </div>
       </div>
-    </div>
 
-    <div class="message-intel__hall">
-    <div class="message-intel__tile message-intel__tile--callers">
-      <div class="message-intel__panel glass-card" id="message-intel-callers">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Caller leaderboard</h3>
-          <span class="message-intel__panel-unit">strike · N≥5</span>
-        </div>
-        <div class="message-intel__caller-tabs" role="group" aria-label="Leaderboard window">
-          <button type="button" data-caller-days="7">7d</button>
-          <button type="button" class="is-active" data-caller-days="30">30d</button>
-          <button type="button" data-caller-days="90">90d</button>
-        </div>
-        <div id="message-intel-callers-body" class="message-intel__leaderboard" aria-live="polite">
-          <p class="empty">Strike rate from resolved qualifying calls only. Under 5 graded calls we show “too few graded calls to trust” — never a fake rank.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--champ">
-      <div class="message-intel__panel glass-card" id="message-intel-champions-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Weekly champions</h3>
-          <span class="message-intel__panel-unit">hit-rate first</span>
-        </div>
-        <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
-          {% if mi_authors %}
-          {{ champion_rows(mi_authors) }}
-          {% else %}
-          <p class="empty">No contributor history yet — champs appear as traffic grades.</p>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--accolade">
-      <div class="message-intel__panel glass-card" id="message-intel-accolades-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Accolades</h3>
-          <span class="message-intel__panel-unit">earned · N≥5</span>
-        </div>
-        <div id="message-intel-accolades" class="message-intel__accolades" aria-live="polite">
-          <p class="empty">Early &amp; Right / On Fire / High Signal land once strike samples fill. Building samples stay unlabeled.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--crowns">
-      <div class="message-intel__panel message-intel__crowns-drawer glass-card" id="message-intel-crowns-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Reaction crowns</h3>
-          <span class="message-intel__panel-unit">7d · social</span>
-        </div>
-        <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
-        <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
-          <p class="empty">No reaction crowns yet — they appear as the group reacts.</p>
-        </div>
-      </div>
-    </div>
-    </div><!-- /.message-intel__hall -->
-
-    <div class="message-intel__tile message-intel__tile--narr">
-      <div class="message-intel__panel glass-card" id="message-intel-narrative-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Narrative map</h3>
-          <span class="message-intel__panel-unit">rising · peaking · decaying</span>
-        </div>
-        <div id="message-intel-narrative" class="message-intel__narrative" aria-live="polite">
-          <p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group’s weather, not a price chart.</p>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--div">
-      <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Divergence</h3>
-          <span class="message-intel__panel-unit">chatter vs price</span>
-        </div>
-        <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
-        <div id="message-intel-divergence" class="message-intel__divergence">
-          <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
-          <div id="message-intel-divergence-body" aria-live="polite"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--spot">
-      <div class="message-intel__spotlight">
-        <div class="message-intel__hero glass-card" id="message-intel-yesterday" hidden>
-          <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
-          <div class="message-intel__hero-main">
-            <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">warming</span>
-            <div>
-              <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">warming</a>
-              <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
+      <div class="message-intel__tile message-intel__tile--spot">
+        <div class="message-intel__spotlight">
+          <div class="message-intel__hero glass-card" id="message-intel-yesterday" hidden>
+            <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
+            <div class="message-intel__hero-main">
+              <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">warming</span>
+              <div>
+                <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">warming</a>
+                <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
+              </div>
+            </div>
+            <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
+            <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
+          </div>
+          <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
+            <div class="message-intel__sec-label">
+              <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+              <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
+              <span class="message-intel__panel-unit">7d · engagement</span>
+            </div>
+            <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
+            <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
+            <div class="message-intel__week-top-meta">
+              <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
+              <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
             </div>
           </div>
-          <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
-          <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
+          <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" hidden aria-live="polite">
+            <p class="message-intel__summary-24h-label">Last 24 hours</p>
+            <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body"></div>
+          </div>
         </div>
-        <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--feed">
+        <div class="message-intel__panel message-intel__panel--feed glass-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Live feed</h3>
+            <span class="message-intel__panel-unit" id="message-intel-feed-hint">newest first · filters under the tape</span>
+          </div>
+          <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="{{ 'false' if mi_messages else 'true' }}">
+            {% if mi_messages %}
+            {{ feed_rows(mi_messages) }}
+            {% else %}
+            <div class="hydrate-skeleton hydrate-skeleton--tall" aria-hidden="true">
+              <div class="hydrate-skeleton__line hydrate-skeleton__line--med"></div>
+              <div class="hydrate-skeleton__line"></div>
+              <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
+            </div>
+             <p class="sr-only" role="status">Loading live feed — Telegram desk</p>
+            {% endif %}
+          </div>
+          <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
+          <div class="message-intel__filter-bar" id="message-intel-filter-bar" aria-label="Feed filters">
+            <div class="message-intel__filter-group">
+              <span class="message-intel__filter-label">Min conviction</span>
+              <div class="message-intel__filter-chips" id="message-intel-conv-filters" role="group" aria-label="Minimum conviction">
+                <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-min-conv="">All</button>
+                <button type="button" class="message-intel__filter-chip" data-min-conv="60">60%+</button>
+                <button type="button" class="message-intel__filter-chip" data-min-conv="70">70%+</button>
+                <button type="button" class="message-intel__filter-chip" data-min-conv="80">80%+</button>
+              </div>
+            </div>
+            <div class="message-intel__filter-group">
+              <span class="message-intel__filter-label">Subnet</span>
+              <div class="message-intel__filter-chips" id="message-intel-subnet-filters" role="group" aria-label="Subnet filter">
+                <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-netuid="">All</button>
+              </div>
+            </div>
+            <div class="message-intel__filter-group">
+              <span class="message-intel__filter-label">Topic</span>
+              <div class="message-intel__filter-chips" id="message-intel-topic-filters" role="group" aria-label="Topic filter">
+                <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-topic="">All</button>
+                <button type="button" class="message-intel__filter-chip" data-topic="validator">Validator</button>
+                <button type="button" class="message-intel__filter-chip" data-topic="emissions">Emissions</button>
+                <button type="button" class="message-intel__filter-chip" data-topic="alpha">Alpha</button>
+                <button type="button" class="message-intel__filter-chip" data-topic="partnership">Partnership</button>
+                <button type="button" class="message-intel__filter-chip" data-topic="market">Market</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="message-intel__mode" data-pulse-pane="learn" role="tabpanel" id="message-intel-pane-learn" aria-labelledby="pulse-tab-learn" hidden>
+      <div class="message-intel__tile message-intel__tile--callers">
+        <div class="message-intel__panel glass-card" id="message-intel-callers">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Caller leaderboard</h3>
+            <span class="message-intel__panel-unit">strike · N≥5</span>
+          </div>
+          <div class="message-intel__caller-tabs" role="group" aria-label="Leaderboard window">
+            <button type="button" data-caller-days="7">7d</button>
+            <button type="button" class="is-active" data-caller-days="30">30d</button>
+            <button type="button" data-caller-days="90">90d</button>
+          </div>
+          <div id="message-intel-callers-body" class="message-intel__leaderboard" aria-live="polite">
+            <p class="empty">Strike rate from resolved qualifying calls only. Under 5 graded calls we show “too few graded calls to trust” — never a fake rank.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--proof">
+        <div class="message-intel__proof glass-card" id="message-intel-proof" hidden aria-live="polite">
+          <p class="message-intel__proof-label">Telegram call proof</p>
+          <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--hc">
+        <div class="message-intel__hc-strip glass-card" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
+          <p class="message-intel__hc-label">High conviction</p>
+          <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
+        </div>
+      </div>
+
+      <p class="message-intel__skinline">Skin is proof of belief, never proof of edge. STAKED = verified on-chain · APE = aligned · words only shown honestly, never penalized.</p>
+    </div>
+
+    <div class="message-intel__mode" data-pulse-pane="rank" role="tabpanel" id="message-intel-pane-rank" aria-labelledby="pulse-tab-rank" hidden>
+      <div class="message-intel__tile message-intel__tile--orbit">
+        <div class="message-intel__panel glass-card" id="message-intel-trending-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title" id="message-intel-trending-title">Trending orbit</h3>
+            <span class="message-intel__panel-unit">{{ mi_window }}</span>
+          </div>
+          <div class="message-intel__axis" role="group" aria-label="Rank by axis">
+            <button type="button" class="message-intel__axis-chip message-intel__axis-chip--active" data-axis="chatter">Chatter</button>
+            <button type="button" class="message-intel__axis-chip" data-axis="conviction">Conviction</button>
+          </div>
+          <div id="message-intel-sky" class="message-intel__sky" data-empty="true" aria-label="Trending orbit">
+            <svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">
+              <ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>
+              <ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
+              <ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>
+            </svg>
+            <div class="message-intel__sky-hub"><span>ORBIT</span><b>—</b></div>
+            <div class="message-intel__sky-carrier" data-rank="1"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#1</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
+            <div class="message-intel__sky-carrier" data-rank="2"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#2</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
+            <div class="message-intel__sky-carrier" data-rank="3"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-n">awaiting signal</span></span></div>
+          </div>
+          <p class="message-intel__sky-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
+          <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
+            {% if mi_trending %}
+            {{ trend_rows(mi_trending, mi_window) }}
+            {% else %}
+            <p class="empty">No subnet chatter in the last hour yet — orbit stays honest while the group is quiet.</p>
+            {% endif %}
+          </div>
+          <button type="button" class="message-intel__view-all" id="message-intel-trending-refresh">Refresh trending</button>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--power">
+        <div class="message-intel__panel glass-card" id="message-intel-power-card">
           <div class="message-intel__sec-label">
             <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-            <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
-            <span class="message-intel__panel-unit">7d · engagement</span>
+            <h3 class="message-intel__panel-title">Chatter Power</h3>
+            <span class="message-intel__panel-unit">v × conv × quality</span>
           </div>
-          <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
-          <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
-          <div class="message-intel__week-top-meta">
-            <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
-            <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
+          <div id="message-intel-power" class="message-intel__power" aria-live="polite">
+            <p class="empty">Ranks by who's talking, not how loud — velocity × conviction × author hit-rate. Why-lines land with trending v2.</p>
           </div>
         </div>
-        <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" hidden aria-live="polite">
-          <p class="message-intel__summary-24h-label">Last 24 hours</p>
-          <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body"></div>
+      </div>
+
+      <div class="message-intel__hall">
+      <div class="message-intel__tile message-intel__tile--champ">
+        <div class="message-intel__panel glass-card" id="message-intel-champions-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Weekly champions</h3>
+            <span class="message-intel__panel-unit">hit-rate first</span>
+          </div>
+          <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
+            {% if mi_authors %}
+            {{ champion_rows(mi_authors) }}
+            {% else %}
+            <p class="empty">No contributor history yet — champs appear as traffic grades.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--accolade">
+        <div class="message-intel__panel glass-card" id="message-intel-accolades-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Accolades</h3>
+            <span class="message-intel__panel-unit">earned · N≥5</span>
+          </div>
+          <div id="message-intel-accolades" class="message-intel__accolades" aria-live="polite">
+            <p class="empty">Early &amp; Right / On Fire / High Signal land once strike samples fill. Building samples stay unlabeled.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--crowns">
+        <div class="message-intel__panel message-intel__crowns-drawer glass-card" id="message-intel-crowns-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Reaction crowns</h3>
+            <span class="message-intel__panel-unit">7d · social</span>
+          </div>
+          <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
+          <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
+            <p class="empty">No reaction crowns yet — they appear as the group reacts.</p>
+          </div>
+        </div>
+      </div>
+      </div><!-- /.message-intel__hall -->
+
+      <div class="message-intel__tile message-intel__tile--narr">
+        <div class="message-intel__panel glass-card" id="message-intel-narrative-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Narrative map</h3>
+            <span class="message-intel__panel-unit">rising · peaking · decaying</span>
+          </div>
+          <div id="message-intel-narrative" class="message-intel__narrative" aria-live="polite">
+            <p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group’s weather, not a price chart.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--div">
+        <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Divergence</h3>
+            <span class="message-intel__panel-unit">chatter vs price</span>
+          </div>
+          <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
+          <div id="message-intel-divergence" class="message-intel__divergence">
+            <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
+            <div id="message-intel-divergence-body" aria-live="polite"></div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="message-intel__tile message-intel__tile--feed">
-      <div class="message-intel__panel message-intel__panel--feed glass-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">Live feed</h3>
-          <span class="message-intel__panel-unit" id="message-intel-feed-hint">newest first · filters under the tape</span>
-        </div>
-        <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="{{ 'false' if mi_messages else 'true' }}">
-          {% if mi_messages %}
-          {{ feed_rows(mi_messages) }}
-          {% else %}
-          <div class="hydrate-skeleton hydrate-skeleton--tall" aria-hidden="true">
-            <div class="hydrate-skeleton__line hydrate-skeleton__line--med"></div>
-            <div class="hydrate-skeleton__line"></div>
-            <div class="hydrate-skeleton__line hydrate-skeleton__line--short"></div>
+    <div class="message-intel__mode" data-pulse-pane="serve" role="tabpanel" id="message-intel-pane-serve" aria-labelledby="pulse-tab-serve" hidden>
+      <div class="message-intel__tile message-intel__tile--desk">
+        <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">My Desk</h3>
+            <span class="message-intel__panel-unit">watchlist · bot sync</span>
           </div>
-           <p class="sr-only" role="status">Loading live feed — Telegram desk</p>
-          {% endif %}
-        </div>
-        <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
-        <div class="message-intel__filter-bar" id="message-intel-filter-bar" aria-label="Feed filters">
-          <div class="message-intel__filter-group">
-            <span class="message-intel__filter-label">Min conviction</span>
-            <div class="message-intel__filter-chips" id="message-intel-conv-filters" role="group" aria-label="Minimum conviction">
-              <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-min-conv="">All</button>
-              <button type="button" class="message-intel__filter-chip" data-min-conv="60">60%+</button>
-              <button type="button" class="message-intel__filter-chip" data-min-conv="70">70%+</button>
-              <button type="button" class="message-intel__filter-chip" data-min-conv="80">80%+</button>
+          <div class="message-intel__my-desk">
+            <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
+              <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
+            </div>
+            <div class="message-intel__desk-block">
+              <p class="message-intel__desk-label">Watchlist</p>
+              <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
+                <p class="empty">Loading your watchlist…</p>
+              </div>
             </div>
           </div>
-          <div class="message-intel__filter-group">
-            <span class="message-intel__filter-label">Subnet</span>
-            <div class="message-intel__filter-chips" id="message-intel-subnet-filters" role="group" aria-label="Subnet filter">
-              <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-netuid="">All</button>
-            </div>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--pulse">
+        <div class="message-intel__panel glass-card" id="message-intel-pulse-card">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">My Pulse</h3>
+            <span class="message-intel__panel-unit">watchlisted only</span>
           </div>
-          <div class="message-intel__filter-group">
-            <span class="message-intel__filter-label">Topic</span>
-            <div class="message-intel__filter-chips" id="message-intel-topic-filters" role="group" aria-label="Topic filter">
-              <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-topic="">All</button>
-              <button type="button" class="message-intel__filter-chip" data-topic="validator">Validator</button>
-              <button type="button" class="message-intel__filter-chip" data-topic="emissions">Emissions</button>
-              <button type="button" class="message-intel__filter-chip" data-topic="alpha">Alpha</button>
-              <button type="button" class="message-intel__filter-chip" data-topic="partnership">Partnership</button>
-              <button type="button" class="message-intel__filter-chip" data-topic="market">Market</button>
-            </div>
+          <div id="message-intel-my-pulse" class="message-intel__pulse-list" aria-live="polite">
+            <p class="empty">Pin a subnet — this digest only speaks for your desk.</p>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="message-intel__tile message-intel__tile--proof">
-      <div class="message-intel__proof glass-card" id="message-intel-proof" hidden aria-live="polite">
-        <p class="message-intel__proof-label">Telegram call proof</p>
-        <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--hc">
-      <div class="message-intel__hc-strip glass-card" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
-        <p class="message-intel__hc-label">High conviction</p>
-        <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--desk">
-      <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">My Desk</h3>
-          <span class="message-intel__panel-unit">watchlist · bot sync</span>
+      <div class="message-intel__dock">
+        <div class="message-intel__command-list" id="message-intel-commands-card" aria-label="Telegram commands">
+          <span class="is-live">/summary</span>
+          <span>/trending</span>
+          <span>/track</span>
+          <span>/rank</span>
+          <span>/who</span>
+          <span>/alerts</span>
+          <span>/champions</span>
+          <span>/crowns</span>
         </div>
-        <div class="message-intel__my-desk">
-          <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
-            <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
-          </div>
-          <div class="message-intel__desk-block">
-            <p class="message-intel__desk-label">Watchlist</p>
-            <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
-              <p class="empty">Loading your watchlist…</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="message-intel__tile message-intel__tile--pulse">
-      <div class="message-intel__panel glass-card" id="message-intel-pulse-card">
-        <div class="message-intel__sec-label">
-          <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
-          <h3 class="message-intel__panel-title">My Pulse</h3>
-          <span class="message-intel__panel-unit">watchlisted only</span>
-        </div>
-        <div id="message-intel-my-pulse" class="message-intel__pulse-list" aria-live="polite">
-          <p class="empty">Pin a subnet — this digest only speaks for your desk.</p>
+        <p class="message-intel__dock-note">Green = live in chat. The rest are the same Listen→Learn→Rank→Serve loop — marked until the bot ships them.</p>
+        <div class="message-intel__legend" aria-label="Scoring legend">
+          <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
+          <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--violet" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
+          <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + light reaction bump, 7d</span>
+          <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--lilac" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders</span>
         </div>
       </div>
     </div>
 
   </div><!-- /.message-intel__bay -->
-
-  <div class="message-intel__dock">
-    <div class="message-intel__command-list" id="message-intel-commands-card" aria-label="Telegram commands">
-      <span class="is-live">/summary</span>
-      <span>/trending</span>
-      <span>/track</span>
-      <span>/rank</span>
-      <span>/who</span>
-      <span>/alerts</span>
-      <span>/champions</span>
-      <span>/crowns</span>
-    </div>
-    <p class="message-intel__dock-note">Green = live in chat. The rest are the same Listen→Learn→Rank→Serve loop — marked until the bot ships them.</p>
-    <div class="message-intel__legend" aria-label="Scoring legend">
-      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--blue" aria-hidden="true"></span><b>Conv.</b> jury score 0–100%</span>
-      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--violet" aria-hidden="true"></span><b>High</b> ≥ 60%</span>
-      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--orange" aria-hidden="true"></span><b>Influence</b> reach + light reaction bump, 7d</span>
-      <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--lilac" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders</span>
-    </div>
-  </div>
 
   <p class="message-intel__foot">Conviction is auto-scored from message text and author track record — not financial advice.</p>
 </div>

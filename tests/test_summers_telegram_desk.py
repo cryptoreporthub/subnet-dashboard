@@ -61,6 +61,7 @@ def test_summers_desk_js_renders_conviction():
     assert "renderChatterPower" in src
     assert "too few graded calls to trust" in src
     assert "pollNetFlow" in src
+    assert "bindPulseModes" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -89,6 +90,8 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__instrument" in css
     assert ".message-intel__heartbeat" in css
     assert ".message-intel__loop" in css
+    assert ".message-intel__full-desk" in css
+    assert ".message-intel__mode" in css
     assert ".message-intel__tile--orbit" in css
     assert ".message-intel__sky-track--1" in css
     assert ".message-intel__sky-carrier" in css
@@ -132,6 +135,13 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
+    assert 'role="tablist"' in html
+    assert 'href="/listener"' in html
+    assert "Open full listener" in html
+    assert 'data-pulse-pane="listen"' in html
+    assert 'data-pulse-pane="learn"' in html
+    assert 'data-pulse-pane="rank"' in html
+    assert 'data-pulse-pane="serve"' in html
     assert "Chatter Power" in html
     assert "message-intel__instrument" in html
     assert "message-intel__zones" not in html
