@@ -160,6 +160,28 @@ def test_adapt_skips_until_n30():
     assert maybe_adapt_after_resolve(min_sample=30) is None
 
 
+def test_online_blend_weights_update_on_each_clean_grade():
+    row = _pump_row(
+        id="online-1",
+        correct=True,
+        actual_pct=3.0,
+        signal_snapshot={
+            "volume_intensity": 0.9,
+            "momentum_1h": 0.04,
+            "price_change_24h": 0.08,
+            "buy_ratio": 0.9,
+            "chatter_intensity": 0.8,
+        },
+    )
+    before = load_calibration()
+
+    out = maybe_adapt_after_resolve(min_sample=30, prediction=row)
+
+    assert out is not None
+    assert out["online_updates"] == 1
+    assert out["blend_weights"] != before["blend_weights"]
+
+
 def test_adapt_tightens_when_hit_rate_weak():
     rows = [_pump_row(id=f"e{i}", correct=False, actual_pct=0.5) for i in range(30)]
     predictions_store.save_predictions({"predictions": [], "resolved": rows, "stats": {}})

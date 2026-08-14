@@ -460,6 +460,12 @@ def recover_overdue_pump_leads(
         elif status == "resolved":
             graded.append(result)
             resolved.append(result)
+            try:
+                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                maybe_adapt_after_resolve(prediction=result)
+            except Exception:
+                logger.exception("pump calibration online update failed")
         else:
             rejected.append(result)
             resolved.append(result)
@@ -506,11 +512,4 @@ def recover_overdue_pump_leads(
         summary["hits"],
         summary["misses"],
     )
-    try:
-        from internal.learning.pump_calibration import maybe_adapt_after_resolve
-
-        if summary["graded"]:
-            maybe_adapt_after_resolve()
-    except Exception:
-        pass
     return summary

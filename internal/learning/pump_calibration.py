@@ -103,7 +103,42 @@ def effective_phase_entry(cal: Optional[Dict[str, Any]] = None) -> Dict[str, flo
     return base
 
 
-def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional[Dict[str, Any]]:
+def _online_update_blend_weights(
+    cal: Dict[str, Any],
+    prediction: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Apply a bounded per-grade update to pump blend weights."""
+    snap = prediction.get("signal_snapshot") if isinstance(prediction, dict) else {}
+    if not isinstance(snap, dict):
+        return cal
+    correct = bool(prediction.get("correct"))
+    features = {
+        "volume": float(snap.get("volume_intensity") or 0.0),
+        "momentum": min(max(float(snap.get("momentum_1h") or 0.0) / 0.04, 0.0), 1.0),
+        "price": min(max(float(snap.get("price_change_24h") or 0.0) / 0.08, 0.0), 1.0),
+        "flow": max(float(snap.get("buy_ratio") or 0.5) - 0.5, 0.0) * 2.0,
+        "chatter": float(snap.get("chatter_intensity") or 0.0),
+    }
+    weights = dict(cal.get("blend_weights") or {})
+    learning_rate = 0.005
+    for name, value in features.items():
+        direction = 1.0 if correct else -1.0
+        centered = value - 0.5
+        weights[name] = max(0.02, float(weights.get(name, 0.1)) + learning_rate * direction * centered)
+    total = sum(weights.values())
+    if total > 0:
+        weights = {key: round(value / total * 0.95, 4) for key, value in weights.items()}
+    cal["blend_weights"] = weights
+    cal["last_online_update_at"] = _utcnow_z()
+    cal["online_updates"] = int(cal.get("online_updates") or 0) + 1
+    return cal
+
+
+def maybe_adapt_after_resolve(
+    *,
+    min_sample: int = MIN_ADAPT_SAMPLE,
+    prediction: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     """Nudge pump knobs from early-alert hit rate when n is large enough.
 
     Conservative: only tighten lead gates when hit rate is weak; loosen slightly
@@ -114,6 +149,17 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
 
     trust = build_pump_desk_trust()
     evidence = pump_evidence_snapshot()
+    early = trust.get("early") or {}
+    n = int(early.get("n") or 0)
+    rate = early.get("hit_rate")
+    cal = load_calibration()
+    if prediction is not None:
+        cal = _online_update_blend_weights(cal, prediction)
+        save_calibration(cal)
+        if n < int(min_sample):
+            return cal
+    if n < int(min_sample) or rate is None:
+        return None
     evaluation = pump_lead_train.build_pump_evaluation()
     try:
         pump_lead_train.persist_pump_evaluation(evaluation)
@@ -125,13 +171,6 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
             evaluation.get("status"),
         )
         return None
-    early = trust.get("early") or {}
-    n = int(early.get("n") or 0)
-    rate = early.get("hit_rate")
-    if n < int(min_sample) or rate is None:
-        return None
-
-    cal = load_calibration()
     same_population = (
         cal.get("adapted_from_ledger") == evidence.get("ledger")
         and cal.get("adapted_from_population") == evidence.get("population")

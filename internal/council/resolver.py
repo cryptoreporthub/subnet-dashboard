@@ -599,7 +599,7 @@ def resolve_prediction(
             try:
                 from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-                maybe_adapt_after_resolve()
+                maybe_adapt_after_resolve(prediction=prediction)
             except Exception:
                 pass
         return prediction
@@ -685,7 +685,7 @@ def resolve_prediction_at_horizon(
         try:
             from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
-            maybe_adapt_after_resolve()
+            maybe_adapt_after_resolve(prediction=prediction)
         except Exception:
             pass
     return prediction
