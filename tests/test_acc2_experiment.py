@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_percent
@@ -62,3 +64,19 @@ def test_attach_council_prediction_day_horizon(monkeypatch):
         horizon_type="day",
     )
     assert pred["horizon_hours"] == 24
+
+
+def test_council_prediction_timestamps_are_parseable_utc():
+    pred = attach_council_prediction(
+        {"netuid": 1, "name": "A", "price": 1.0},
+        {"confidence": 0.5, "signal_impact": {"net_direction": "up"}},
+        0.55,
+        horizon_type="hour",
+        horizon_hours=1,
+    )
+    created = datetime.fromisoformat(pred["created_at"].replace("Z", "+00:00"))
+    resolve_at = datetime.fromisoformat(pred["resolve_at"].replace("Z", "+00:00"))
+    assert created.tzinfo == timezone.utc
+    assert resolve_at > created
+    assert "+00:00Z" not in pred["created_at"]
+    assert "+00:00Z" not in pred["resolve_at"]
