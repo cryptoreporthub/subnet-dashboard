@@ -582,6 +582,10 @@ body.lsn-body.quiet .lsn-gauge .qempty{display:block}
   .lsn-panel--trend .lsn-qstate--trend{display:none}
   .lsn-orbit{width:100%}
 }
+/* Phone: stack hall so a short Accolades card is not a sky hole beside Reaction. */
+@media (max-width: 520px){
+  .lsn-tile--desk,.lsn-hall{grid-template-columns:1fr}
+}
 @media (prefers-reduced-motion: reduce){
   .lsn-trust .ekg path{animation:none}
   .lsn-live .dot{animation:none}
