@@ -90,6 +90,73 @@ def _decode_scale_compact(raw):
         return val, 1 + byte_len
 
 
+def _decode_dynamic_info_pool(raw):
+    """Decode current Subtensor DynamicInfo enough to read pool reserves.
+
+    Current nodes return SCALE-encoded ``Option<DynamicInfo>`` as a byte
+    array. Older nodes exposed the same values through ``Swap_get_pool``,
+    which is no longer exported by the runtime used by the live RPC.
+    """
+    if isinstance(raw, str):
+        raw = _hex_to_bytes(raw)
+    if not isinstance(raw, (bytes, bytearray, list, tuple)) or not raw:
+        return None
+    data = list(raw)
+    if data[0] == 0:
+        return None
+    if data[0] != 1:
+        return None
+
+    def compact_at(offset):
+        value, consumed = _decode_scale_compact(data[offset:])
+        if not consumed:
+            raise ValueError("invalid compact value")
+        return value, offset + consumed
+
+    def compact_vec_at(offset):
+        length, offset = compact_at(offset)
+        values = []
+        for _ in range(length):
+            value, offset = compact_at(offset)
+            values.append(value)
+        return values, offset
+
+    try:
+        offset = 1
+        netuid, offset = compact_at(offset)
+        # AccountId is [u8; 32] for Bittensor hotkeys and coldkeys.
+        offset += 64
+        if offset > len(data):
+            return None
+        subnet_name, offset = compact_vec_at(offset)
+        token_symbol, offset = compact_vec_at(offset)
+        # tempo, last_step, blocks_since_last_step, emission
+        for _ in range(4):
+            _, offset = compact_at(offset)
+        alpha_in, offset = compact_at(offset)
+        alpha_out, offset = compact_at(offset)
+        tao_in, offset = compact_at(offset)
+    except (IndexError, TypeError, ValueError):
+        return None
+
+    if tao_in <= 0:
+        return None
+    tao_reserve = tao_in / 1e9
+    alpha_reserve = alpha_in / 1e9
+    alpha_price = tao_reserve / alpha_reserve if alpha_reserve > 0 else 0.0
+    return {
+        "netuid": int(netuid),
+        "name": bytes(subnet_name).decode("utf-8", errors="replace") or f"SN{netuid}",
+        "symbol": bytes(token_symbol).decode("utf-8", errors="replace"),
+        "total_tao": round(tao_reserve, 6),
+        "total_alpha": round(alpha_reserve, 6),
+        "liquidity": round(tao_reserve + (alpha_reserve * alpha_price), 6),
+        "tao_reserve_raw": int(tao_in),
+        "alpha_reserve_raw": int(alpha_in),
+        "alpha_out": int(alpha_out),
+    }
+
+
 def _decode_scale_u128(raw):
     if len(raw) < 16:
         padded = raw + b'\x00' * (16 - len(raw))
@@ -253,22 +320,16 @@ class ChainClient:
         if not self.is_healthy():
             return None
         try:
-            result = self._call_quiet("state_call", ["Swap_get_pool", _encode_netuid_arg(netuid)])
-            if result and result != "0x":
-                raw = _hex_to_bytes(result)
-                if len(raw) >= 33:
-                    offset = 1 if raw[0] in (0, 1) else 0
-                    tao_reserve = _decode_scale_u128(raw[offset:offset+16])
-                    alpha_reserve = _decode_scale_u128(raw[offset+16:offset+32])
-                    tao = tao_reserve / 1e9
-                    alpha = alpha_reserve / 1e9
-                    root_prop = alpha / (tao + alpha) if (tao + alpha) > 0 else 0
-                    return {
-                        "netuid": netuid, "liquidity": round(tao + alpha, 4),
-                        "total_tao": round(tao, 4), "total_alpha": round(alpha, 4),
-                        "root_prop": round(root_prop, 4),
-                        "tao_reserve_raw": tao_reserve, "alpha_reserve_raw": alpha_reserve,
-                    }
+            raw = self._call_quiet("subnetInfo_getDynamicInfo", [int(netuid)])
+            pool = _decode_dynamic_info_pool(raw)
+            if pool:
+                tao = float(pool["total_tao"])
+                alpha = float(pool["total_alpha"])
+                return {
+                    **pool,
+                    "netuid": int(netuid),
+                    "root_prop": round(alpha / (tao + alpha), 4) if (tao + alpha) > 0 else 0,
+                }
         except Exception as exc:
             logger.debug("get_pool_state failed for netuid %d: %s", netuid, exc)
         return None
@@ -469,7 +530,7 @@ class ChainClient:
         return subnets
 
     def get_subnet_price_rows(self, netuids):
-        """Fast path for live_subnets cache — price only (~0.2s/SN vs ~30s full)."""
+        """Fast path for live_subnets cache with price and pool reserves."""
         # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
         if not self.is_healthy():
             logger.warning("RPC health false-negative — attempting lite price fetch anyway")
@@ -478,12 +539,25 @@ class ChainClient:
             try:
                 price = self.get_alpha_price(netuid)
                 if price is not None:
-                    return {
+                    row = {
                         "netuid": netuid,
                         "name": f"SN{netuid}",
                         "price": price,
                         "source": "blockmachine",
                     }
+                    pool = self.get_pool_state(netuid)
+                    if pool:
+                        row.update(
+                            {
+                                "liquidity": pool.get("liquidity"),
+                                "total_tao": pool.get("total_tao"),
+                                "total_alpha": pool.get("total_alpha"),
+                                "taoLiquidity": pool.get("total_tao"),
+                                "tao_reserve_raw": pool.get("tao_reserve_raw"),
+                                "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
+                            }
+                        )
+                    return row
             except Exception as exc:
                 logger.debug("price fetch netuid %d: %s", netuid, exc)
             return None
@@ -505,38 +579,19 @@ class ChainClient:
         deadline = time.time() + batch_budget
 
         rows = []
-        pool = ThreadPoolExecutor(max_workers=workers)
-        completed = set()
-        pending = set()
-        try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = [pool.submit(_one, n) for n in netuids]
-            pending = set(futures)
-            try:
-                for fut in as_completed(futures, timeout=max(0.0, deadline - time.time())):
-                    pending.discard(fut)
-                    completed.add(fut)
-                    row = fut.result()
-                    if row:
-                        rows.append(row)
-            except _FutureTimeout:
-                # Capture futures which finished at the deadline even if
-                # as_completed had not yielded them yet.
-                for fut in pending.copy():
-                    if fut.done():
-                        pending.discard(fut)
-                        completed.add(fut)
+            remaining = set(futures)
+            while remaining and time.time() < deadline:
+                try:
+                    for fut in as_completed(remaining, timeout=max(0.0, deadline - time.time())):
+                        remaining.discard(fut)
                         row = fut.result()
                         if row:
                             rows.append(row)
-                logger.warning(
-                    "get_subnet_price_rows batch deadline: completed=%d pending=%d",
-                    len(completed),
-                    len(pending),
-                )
-        finally:
-            # Do not wait for timed-out RPC calls; live_subnets owns the
-            # outer timeout and its thread-alive guard prevents overlap.
-            pool.shutdown(wait=False, cancel_futures=True)
+                except _FutureTimeout:
+                    # Budget exhausted — stop awaiting; keep whatever completed.
+                    break
         rows.sort(key=lambda r: r["netuid"])
         logger.info(
             "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
