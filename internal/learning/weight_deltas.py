@@ -23,8 +23,8 @@ def expert_graded_counts() -> Dict[str, int]:
     counts = {name: 0 for name in _CANONICAL}
     try:
         from internal.learning.predictions_store import load_predictions
-        from internal.council.expert_attribution import attribute_expert_for_row
         from internal.council.grading import is_pump_desk_claim
+        from internal.council.signal_expert import expert_for_replay_row
 
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
@@ -37,13 +37,16 @@ def expert_graded_counts() -> Dict[str, int]:
             # not pump-desk or HOLD-shadow outcomes.
             if is_pump_desk_claim(pred) or pred.get("shadow") or pred.get("counterfactual"):
                 continue
-            expert = _normalize_expert(attribute_expert_for_row(pred))
+            # Use the replay attribution guard so a bare legacy ``expert:
+            # quant`` stamp cannot create a fake Quant sample.
+            replay_expert = expert_for_replay_row(pred)
+            expert = _normalize_expert(replay_expert)
             if expert:
                 counts[expert] = counts.get(expert, 0) + 1
                 continue
             # Rogue bucket: rows that resolve to no canonical expert are counted
             # so the Rogue track record can earn a later promotion.
-            if attribute_expert_for_row(pred) == "rogue":
+            if replay_expert == "rogue":
                 counts["rogue"] = counts.get("rogue", 0) + 1
     except Exception:
         pass

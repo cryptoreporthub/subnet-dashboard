@@ -91,3 +91,20 @@ def test_trust_banner_keeps_council_and_pump_pending_separate():
     assert banner["council_pending"] == 2
     assert banner["pump_pending"] == 6
     assert banner["total_pending"] == 8
+
+
+def test_expert_samples_reject_bare_legacy_quant_and_pump_rows(monkeypatch):
+    from internal.learning.weight_deltas import expert_graded_counts
+
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.load_predictions",
+        lambda: {
+            "resolved": [
+                {"expert": "quant", "correct": True},
+                {"signal_source": "emission_momentum", "correct": True},
+                {"pick_source": "pump_lead", "correct": True},
+            ]
+        },
+    )
+    counts = expert_graded_counts()
+    assert counts["quant"] == 1
