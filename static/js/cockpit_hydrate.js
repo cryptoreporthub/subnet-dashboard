@@ -10,6 +10,24 @@
   var lastHourPicks = [];
   var lastDayPicks = [];
 
+  // #region agent log
+  function debugHydration(hypothesisId, message, data) {
+    try {
+      fetch('/__debug/hydration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hypothesisId: hypothesisId,
+          location: 'static/js/cockpit_hydrate.js',
+          message: message,
+          data: data || {},
+        }),
+        keepalive: true,
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  // #endregion
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -862,6 +880,9 @@
     if (!councilVal) return;
 
     tb = tb || {};
+    var resolverState = extras.resolver_state || {};
+    var loopLearned = extras.loop_learned || {};
+    var pumpTrust = extras.pump_desk_trust || {};
     var ready = !!tb.ready;
     var graded = tb.graded != null ? Number(tb.graded) : 0;
     var accRaw = tb.accuracy != null ? Number(tb.accuracy) : null;
@@ -884,11 +905,12 @@
         councilMeta.classList.remove('desk-empty');
       }
     } else {
-      councilVal.textContent = '—';
+      councilVal.textContent = graded + '/' + (tb.min_graded != null ? tb.min_graded : 30);
       if (councilMeta) {
         var councilProgress = 'Published grades ' + graded + '/' + minGraded;
         if (councilPending > 0) councilProgress += ' · ' + councilPending + ' pending';
         if (missingPrice > 0) councilProgress += ' · ' + missingPrice + ' missing price';
+        if (tb.gate_reason) councilProgress += ' · ' + String(tb.gate_reason).replace(/_/g, ' ');
         councilMeta.textContent = councilProgress;
         councilMeta.classList.add('desk-empty');
       }
@@ -915,22 +937,16 @@
       }
     }
 
-    var expiredRate = tb.expired_rate != null ? Number(tb.expired_rate) : null;
-    var resolvedPct =
-      expiredRate != null ? Math.max(0, Math.round((1 - expiredRate) * 100)) : null;
-    if (resolvedPct != null && graded > 0) {
-      if (resVal) resVal.textContent = resolvedPct + '%';
+    var pending = Number(resolverState.pending != null ? resolverState.pending : tb.pending) || 0;
+    var retryable = Number(resolverState.retryable != null ? resolverState.retryable : pending) || 0;
+    if (resVal) {
+      resVal.textContent = pending + ' pending';
       if (resMeta) {
-        resMeta.textContent = 'Resolved vs expired backlog';
-        resMeta.classList.remove('desk-empty');
-      }
-    } else {
-      if (resVal) resVal.textContent = 'Waiting';
-      if (resMeta) {
-        resMeta.textContent = (graded > 0 ? graded + ' published grades' : 'No published grades yet') +
-          (councilPending > 0 ? ' · ' + councilPending + ' council pending' : '') +
-          (pumpPending > 0 ? ' · ' + pumpPending + ' pump pending' : '');
-        resMeta.classList.add('desk-empty');
+        resMeta.textContent = retryable + ' retryable · ' + graded + ' graded';
+        if (councilPending > 0 || pumpPending > 0) {
+          resMeta.textContent += ' · ' + councilPending + ' council · ' + pumpPending + ' pump';
+        }
+        resMeta.classList.toggle('desk-empty', pending <= 0 && graded <= 0);
       }
     }
 
@@ -941,22 +957,18 @@
         loopMeta.textContent = 'Signals with graded hit-rate';
         loopMeta.classList.remove('desk-empty');
       }
-    } else if (graded > 0) {
-      if (loopVal) loopVal.textContent = String(graded);
-      if (loopMeta) {
-        loopMeta.textContent = 'Graded picks in ledger';
-        loopMeta.classList.remove('desk-empty');
-      }
     } else {
-      if (loopVal) loopVal.textContent = 'Building';
+      var loopGraded = Number(loopLearned.graded != null ? loopLearned.graded : graded) || 0;
+      var loopPending = Number(loopLearned.pending != null ? loopLearned.pending : pending) || 0;
+      var loopRetryable = Number(loopLearned.retryable != null ? loopLearned.retryable : retryable) || 0;
+      if (loopVal) loopVal.textContent = loopGraded + ' graded';
       if (loopMeta) {
-        loopMeta.textContent = graded > 0
-          ? graded + ' graded outcomes; outcome-backed learning is building'
-          : 'No outcome-backed council learning yet' +
-            (alignmentDiagnostics > 0 ? ' · ' + alignmentDiagnostics + ' diagnostic events' : '');
-        loopMeta.classList.add('desk-empty');
+        loopMeta.textContent = loopPending + ' pending · ' + loopRetryable + ' retryable';
+        if (alignmentDiagnostics > 0) loopMeta.textContent += ' · ' + alignmentDiagnostics + ' diagnostic events';
+        loopMeta.classList.toggle('desk-empty', loopGraded <= 0 && loopPending <= 0);
       }
     }
+    if (pumpTrust && pumpTrust.early) renderProofPumpTab(pumpTrust);
   }
 
   function formatExpertLabel(name) {
@@ -2938,7 +2950,18 @@
   function renderDailyPick(payload) {
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
-    if (!shouldApplyDailyPickPayload(payload)) {
+    var shouldApply = shouldApplyDailyPickPayload(payload);
+    // #region agent log
+    debugHydration('C', 'daily pick patch decision', {
+      status: payload.status || null,
+      action: payload.action || null,
+      hasPick: !!payload.pick,
+      hasCandidate: !!payload.candidate,
+      shouldApply: shouldApply,
+      hero: !!document.getElementById('tribunal-hero'),
+    });
+    // #endregion
+    if (!shouldApply) {
       console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
       return;
     }
@@ -3328,6 +3351,9 @@
     if (hasTrust) syncProofBandFromTrust(tb);
     else syncProofBandGraded(0);
     syncProofEvidencePanels(tb, {
+      pump_desk_trust: stats.pump_desk_trust,
+      resolver_state: stats.resolver_state,
+      loop_learned: stats.loop_learned,
       working_count: stats.working && stats.working.top_price_signals
         ? stats.working.top_price_signals.length
         : null,
@@ -4046,6 +4072,13 @@
   }
 
   async function run() {
+    // #region agent log
+    debugHydration('A', 'cockpit hydrate run entry', {
+      hydrate: document.documentElement.dataset.hydrate || null,
+      hero: !!document.getElementById('tribunal-hero'),
+      readyState: document.readyState,
+    });
+    // #endregion
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
@@ -4070,6 +4103,14 @@
       // Tier 1a — daily call first (parallel request; legacy marker)
       var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3)
         .then(function (dpResult) {
+          // #region agent log
+          debugHydration('C', 'daily pick fetch resolved in browser', {
+            status: dpResult && dpResult.status || null,
+            action: dpResult && dpResult.action || null,
+            hasPick: !!(dpResult && dpResult.pick),
+            hasCandidate: !!(dpResult && dpResult.candidate),
+          });
+          // #endregion
           renderDailyPick(dpResult);
           // Make the Daily Call immediately reusable by SSE / hot-refresh
           // listeners instead of leaving a race window before tier-2 completes.
@@ -4080,6 +4121,11 @@
           return dpResult;
         })
         .catch(function (e) {
+          // #region agent log
+          debugHydration('C', 'daily pick fetch rejected in browser', {
+            errorType: e && e.name || 'Error',
+          });
+          // #endregion
           console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
           markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
           return null;
@@ -4161,6 +4207,9 @@
         fetchJsonRetry('/api/message-intel?limit=1', 12000, 1)
           .then(function (mi) {
             syncProofEvidencePanels(stats.trust_banner, {
+              pump_desk_trust: stats.pump_desk_trust,
+              resolver_state: stats.resolver_state,
+              loop_learned: stats.loop_learned,
               telegram_proof: (mi && mi.meta && mi.meta.telegram_proof) || {},
               working_count:
                 stats.working && stats.working.top_price_signals
@@ -4982,6 +5031,14 @@
 
   function renderTribunalHero(dailyPick, learningStats) {
     var hero = document.getElementById('tribunal-hero');
+    // #region agent log
+    debugHydration('D', 'tribunal hero render entered', {
+      hero: !!hero,
+      payload: !!dailyPick,
+      stats: !!learningStats,
+      status: dailyPick && dailyPick.status || null,
+    });
+    // #endregion
     if (!hero || !dailyPick) return false;
     var kind = verdictKind(dailyPick);
     hero.setAttribute('data-verdict-kind', kind);
@@ -5027,6 +5084,15 @@
       patchTribunalInstrument(learningStats, dailyPick);
       patchTribunalEyeArcs(learningStats.judge_weights);
     }
+    // #region agent log
+    debugHydration('D', 'tribunal hero render completed', {
+      kind: kind,
+      temp: temp,
+      conviction: pct,
+      title: title && title.textContent || null,
+      actionBadge: badge && badge.textContent || null,
+    });
+    // #endregion
     return true;
   }
 

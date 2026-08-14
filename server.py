@@ -26,6 +26,21 @@ from internal.letter.routes import letter_router
 
 logger = logging.getLogger("server")
 
+# #region agent log
+def _debug_hydration_log(hypothesis_id: str, location: str, message: str, data: Dict[str, Any]) -> None:
+    try:
+        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "hypothesisId": hypothesis_id,
+                "location": location,
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            }, default=str) + "\n")
+    except OSError:
+        pass
+# #endregion
+
 try:
     from internal.judges.council_routes import council_router
 
@@ -314,6 +329,26 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
 
+# #region agent log
+@app.post("/__debug/hydration")
+async def _debug_hydration_event(request: Request):
+    try:
+        payload = await request.json()
+    except Exception:
+        return {"ok": False}
+    if not isinstance(payload, dict):
+        return {"ok": False}
+    allowed = {"hypothesisId", "location", "message", "data"}
+    data = payload.get("data")
+    _debug_hydration_log(
+        str(payload.get("hypothesisId") or "JS"),
+        str(payload.get("location") or "browser"),
+        str(payload.get("message") or "browser hydration event"),
+        data if isinstance(data, dict) else {},
+    )
+    return {"ok": True, "accepted": sorted(allowed.intersection(payload))}
+# #endregion
+
 try:
     from internal.load_shed import mount_load_shed
 
@@ -508,6 +543,25 @@ async def add_cors_headers(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
+    if request.url.path in {
+        "/",
+        "/api/daily-pick",
+        "/api/learning/stats",
+        "/api/subnets",
+    } or request.url.path.startswith("/static/js/cockpit_hydrate.js"):
+        # #region agent log
+        _debug_hydration_log(
+            "B",
+            "server.py:514",
+            "hydration request completed",
+            {
+                "path": request.url.path,
+                "status": response.status_code,
+                "duration_ms": round(elapsed_ms, 1),
+                "cache_control": response.headers.get("cache-control", ""),
+            },
+        )
+        # #endregion
     # Browser DevTools exposes this directly and structured logs retain the
     # route-level baseline without adding a second telemetry dependency.
     response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
@@ -1436,9 +1490,23 @@ def _bailout_homepage_html() -> Optional[str]:
         and cached_html
         and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
     ):
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1493", "homepage bailout served cached shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in cached_html,
+            "has_hero": 'id="tribunal-hero"' in cached_html,
+            "has_hydrate_script": "cockpit_hydrate.js" in cached_html,
+        })
+        # #endregion
         return cached_html
     _schedule_homepage_warm(None)
     if _EMERGENCY_HOME_HTML:
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1503", "homepage bailout served emergency shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in _EMERGENCY_HOME_HTML,
+            "has_hero": 'id="tribunal-hero"' in _EMERGENCY_HOME_HTML,
+            "has_hydrate_script": "cockpit_hydrate.js" in _EMERGENCY_HOME_HTML,
+        })
+        # #endregion
         return _EMERGENCY_HOME_HTML
     # ponytail: never sync-prime here — blocks the ASGI loop and wedges /health (Fly 36s 503).
     threading.Thread(
@@ -1450,9 +1518,24 @@ def _bailout_homepage_html() -> Optional[str]:
         # The ultra-minimal shell is deliberately local/file-backed and
         # time-safe. Prefer it over a blank reload loop so API hydration can
         # start immediately on a cold worker.
-        return _ultra_minimal_index_html()
+        html = _ultra_minimal_index_html()
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1517", "homepage bailout served ultra-minimal shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in html,
+            "has_hero": 'id="tribunal-hero"' in html,
+            "has_hydrate_script": "cockpit_hydrate.js" in html,
+        })
+        # #endregion
+        return html
     except Exception as exc:
         logger.warning("ultra-minimal bailout render failed: %s", exc)
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1526", "homepage bailout served hardcoded shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in _INSTANT_HOME_SHELL,
+            "has_hero": 'id="tribunal-hero"' in _INSTANT_HOME_SHELL,
+            "has_hydrate_script": "cockpit_hydrate.js" in _INSTANT_HOME_SHELL,
+        })
+        # #endregion
         return _INSTANT_HOME_SHELL
 
 
@@ -1497,6 +1580,20 @@ async def index(request: Request):
         except Exception as exc:
             logger.warning("ultra-minimal cold homepage render failed: %s", exc)
             html = _INSTANT_HOME_SHELL
+    # #region agent log
+    _debug_hydration_log(
+        "A",
+        "server.py:1518",
+        "homepage shell delivered",
+        {
+            "emergency_cached": bool(_EMERGENCY_HOME_HTML),
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in html
+            or 'document.documentElement.dataset.hydrate="1"' in html,
+            "has_hero": 'id="tribunal-hero"' in html,
+            "has_hydrate_script": "cockpit_hydrate.js" in html,
+        },
+    )
+    # #endregion
     return HTMLResponse(
         html,
         headers={"Cache-Control": "no-store, max-age=0"},
@@ -2855,8 +2952,26 @@ async def api_daily_pick(full: bool = False):
         )
 
     try:
-        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")
+        result = await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")
+        # #region agent log
+        _debug_hydration_log(
+            "C",
+            "server.py:2880",
+            "daily pick payload returned",
+            {
+                "status": result.get("status"),
+                "action": result.get("action"),
+                "has_pick": isinstance(result.get("pick"), dict),
+                "has_candidate": isinstance(result.get("candidate"), dict),
+                "generated_at": bool(result.get("generated_at") or result.get("timestamp_utc")),
+            },
+        )
+        # #endregion
+        return result
     except asyncio.TimeoutError:
+        # #region agent log
+        _debug_hydration_log("C", "server.py:2895", "daily pick timed out", {"timeout_seconds": PICK_HANDLER_TIMEOUT})
+        # #endregion
         return _attach_daily_pick_meta(
             {
             "status": "timeout",
@@ -2868,6 +2983,9 @@ async def api_daily_pick(full: bool = False):
         )
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
+        # #region agent log
+        _debug_hydration_log("C", "server.py:2908", "daily pick errored", {"error_type": type(e).__name__})
+        # #endregion
         return _attach_daily_pick_meta(
             {
             "status": "error",

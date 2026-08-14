@@ -76,6 +76,15 @@ def build_trust_banner(
         message = None
         headline = f"Last {graded} graded: {pct}% directionally right"
 
+    if watchdog_warn:
+        gate_reason = (watchdog or {}).get("reason") or "resolver_watchdog"
+    elif graded < min_graded:
+        gate_reason = "insufficient_graded_sample"
+    elif expired_rate >= max_expired_rate:
+        gate_reason = "expired_backlog"
+    else:
+        gate_reason = "qualified"
+
     streak = None
     streak_whisper = None
     try:
@@ -154,6 +163,17 @@ def build_trust_banner(
             "expired_ok": (expired_rate < max_expired_rate) if graded >= min_graded else None,
             "watchdog_ok": not watchdog_warn,
         },
+        "sample": {
+            "graded": graded,
+            "correct": correct,
+            "wrong": wrong,
+            "pending": pending,
+            "expired": expired,
+            "duplicate": duplicate,
+            "total": total,
+            "minimum": min_graded,
+        },
+        "gate_reason": gate_reason,
         "watchdog": watchdog,
         "source": "/api/learning/stats",
         "note": (

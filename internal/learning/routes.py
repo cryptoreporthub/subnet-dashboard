@@ -356,6 +356,33 @@ def _learning_snapshot() -> Dict[str, Any]:
             ledger_context=ledger_context,
             predictions_data=data,
         )
+        from internal.learning.pump_lead_stats import build_pump_desk_trust
+        from internal.council.grading import is_pump_desk_claim
+
+        pump_desk_trust = build_pump_desk_trust(data)
+        retryable = sum(
+            1
+            for row in pending_rows
+            if isinstance(row, dict)
+            and str(row.get("status") or "pending") == "pending"
+            and not is_pump_desk_claim(row)
+            and not (row.get("shadow") or row.get("counterfactual"))
+        )
+        resolver_state = {
+            "graded": trust_banner.get("graded", 0),
+            "pending": resolver_stats.get("pending", 0),
+            "retryable": retryable,
+            "expired": resolver_stats.get("expired", 0),
+            "gate_reason": trust_banner.get("gate_reason"),
+        }
+        loop_learned = {
+            "status": "ready" if trust_banner.get("ready") else "building",
+            "graded": trust_banner.get("graded", 0),
+            "pending": resolver_state["pending"],
+            "retryable": retryable,
+            "gate_reason": trust_banner.get("gate_reason"),
+            "weight_updates": 0,
+        }
         # Weight dials read the mindmap trail (soul map + ledger + dev signals).
         # That scan costs seconds on a warm volume, so it belongs in this cached
         # snapshot — the request handlers must never run it on the event loop.
@@ -388,6 +415,9 @@ def _learning_snapshot() -> Dict[str, Any]:
             "predictions_data": data,
             "watchdog": watchdog,
             "trust_banner": trust_banner,
+            "pump_desk_trust": pump_desk_trust,
+            "resolver_state": resolver_state,
+            "loop_learned": loop_learned,
             "recent": resolved[-10:],
             "scenario": _scenario_memory_summary(),
             "expert_weights": weights,
@@ -453,6 +483,9 @@ def _learning_stats_payload(
             "scenario_memory": snap.get("scenario"),
             "watchdog": watchdog,
             "trust_banner": trust_banner,
+            "pump_desk_trust": snap.get("pump_desk_trust"),
+            "resolver_state": snap.get("resolver_state"),
+            "loop_learned": snap.get("loop_learned"),
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": trust_banner.get("ready"),
             "alignment_diagnostic_events": snap.get("alignment_diagnostic_events", 0),
@@ -503,6 +536,26 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
             "scenario_memory": {},
             "watchdog": {},
             "trust_banner": trust_banner,
+            "pump_desk_trust": {
+                "ready": False,
+                "line": "Pump early hit-rate warming up",
+                "early": {"n": 0, "hits": 0, "hit_rate": None},
+                "min_sample_trust": 5,
+            },
+            "resolver_state": {
+                "graded": 0,
+                "pending": 0,
+                "retryable": 0,
+                "expired": 0,
+                "gate_reason": "learning_stats_timeout",
+            },
+            "loop_learned": {
+                "status": "warming_up",
+                "graded": 0,
+                "pending": 0,
+                "retryable": 0,
+                "gate_reason": "learning_stats_timeout",
+            },
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": False,
             "alignment_diagnostic_events": 0,
@@ -578,6 +631,9 @@ def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str
         "expired_rate": trust_banner.get("expired_rate"),
         "graded": trust_banner.get("graded"),
         "trust_banner": trust_banner,
+        "pump_desk_trust": snap.get("pump_desk_trust"),
+        "resolver_state": snap.get("resolver_state"),
+        "loop_learned": snap.get("loop_learned"),
         "watchdog": watchdog,
         "brain_ui_ready": trust_banner.get("ready"),
         "deltas": {"correct": _LEARNING_DELTA_CORRECT, "wrong": _LEARNING_DELTA_WRONG},

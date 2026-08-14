@@ -18,7 +18,8 @@
   {% set dp_subnet = dpick.candidate.subnet %}
 {% endif %}
 {% set focus_netuid = dp_subnet.netuid if dp_subnet and dp_subnet.netuid is not none else none %}
-{% set tb = trust_banner if trust_banner is mapping else {} %}
+{% set lm = learning_metrics if learning_metrics is mapping else {} %}
+{% set tb = lm.trust_banner if lm.trust_banner is mapping else (trust_banner if trust_banner is mapping else {}) %}
 {% set cal_n = tb.graded|default(0) %}
 {% set tb_ready = tb.ready|default(false) %}
 {% if tb_ready and tb.accuracy is not none and cal_n|int > 0 %}
@@ -29,6 +30,9 @@
   {% set cal_acc = none %}
 {% endif %}
 {% set tb_min = tb.min_graded|default(30) %}
+{% set resolver_state = lm.resolver_state if lm.resolver_state is mapping else {} %}
+{% set pump_trust = lm.pump_desk_trust if lm.pump_desk_trust is mapping else {} %}
+{% set loop_learned = lm.loop_learned if lm.loop_learned is mapping else {} %}
 {% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
 {% set caution = wr_meta.caution_cells if wr_meta.caution_cells is iterable and wr_meta.caution_cells is not string else [] %}
 {% set pa = pump_alerts if pump_alerts is mapping else {} %}
@@ -107,8 +111,8 @@
     <article class="proof-band__subpanel proof-band__subpanel--council">
       <span class="proof-band__subpanel-bar proof-band__subpanel-bar--green" aria-hidden="true"></span>
       <h3 class="proof-band__subpanel-label">Council accuracy</h3>
-      <p class="proof-band__subpanel-val" id="proof-sub-council-val">—</p>
-      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-council-meta">Building graded history</p>
+      <p class="proof-band__subpanel-val" id="proof-sub-council-val">{% if tb_ready and cal_acc is not none %}{{ cal_acc }}%{% else %}{{ cal_n }}/{{ tb_min }}{% endif %}</p>
+      <p class="proof-band__subpanel-meta{% if tb_ready %}{% else %} desk-empty{% endif %}" id="proof-sub-council-meta">{% if tb_ready %}{{ cal_n }} graded picks{% else %}{{ cal_n }}/{{ tb_min }} graded · {{ tb.gate_reason|default('sample gate')|replace('_', ' ') }}{% endif %}</p>
     </article>
     <article class="proof-band__subpanel proof-band__subpanel--telegram">
       <span class="proof-band__subpanel-bar proof-band__subpanel-bar--blue" aria-hidden="true"></span>
@@ -119,14 +123,14 @@
     <article class="proof-band__subpanel proof-band__subpanel--resolver">
       <span class="proof-band__subpanel-bar proof-band__subpanel-bar--orange" aria-hidden="true"></span>
       <h3 class="proof-band__subpanel-label">Resolver</h3>
-      <p class="proof-band__subpanel-val" id="proof-sub-resolver-val">—</p>
-      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-resolver-meta">Backlog clears as picks grade</p>
+      <p class="proof-band__subpanel-val" id="proof-sub-resolver-val">{{ resolver_state.pending|default(0) }} pending</p>
+      <p class="proof-band__subpanel-meta{% if resolver_state.pending|default(0)|int > 0 %}{% else %} desk-empty{% endif %}" id="proof-sub-resolver-meta">{{ resolver_state.pending|default(0) }} pending · {{ resolver_state.retryable|default(0) }} retryable · {{ resolver_state.graded|default(cal_n) }} graded</p>
     </article>
     <article class="proof-band__subpanel proof-band__subpanel--loop">
       <span class="proof-band__subpanel-bar proof-band__subpanel-bar--lilac" aria-hidden="true"></span>
       <h3 class="proof-band__subpanel-label">Loop learned</h3>
-      <p class="proof-band__subpanel-val" id="proof-sub-loop-val">—</p>
-      <p class="proof-band__subpanel-meta desk-empty" id="proof-sub-loop-meta">Signal rankings fill after grades</p>
+      <p class="proof-band__subpanel-val" id="proof-sub-loop-val">{{ loop_learned.graded|default(cal_n) }} graded</p>
+      <p class="proof-band__subpanel-meta{% if loop_learned.graded|default(0)|int > 0 %}{% else %} desk-empty{% endif %}" id="proof-sub-loop-meta">{{ loop_learned.graded|default(cal_n) }} graded · {{ loop_learned.pending|default(0) }} pending · {{ loop_learned.retryable|default(0) }} retryable</p>
     </article>
   </div>
   <div class="accuracy-lift-panel" id="accuracy-lift-panel" aria-labelledby="accuracy-lift-title">
@@ -166,7 +170,7 @@
   </div>
   <div id="proof-tab-pump" class="proof-band__panel" hidden>
     <div class="proof-band__score-hero" id="proof-pump-hero">
-      <p class="proof-band__quiet" id="proof-pump-quiet">Pump early hit-rate — grading +2% in 1h from WARMING UP / BUILDING entries.</p>
+      <p class="proof-band__quiet" id="proof-pump-quiet">Pump early hit-rate — {{ pump_trust.early.n|default(0) }} graded{% if pump_trust.min_sample_trust is defined %} / {{ pump_trust.min_sample_trust }} needed{% endif %}{% if pump_trust.line %} · {{ pump_trust.line }}{% endif %}</p>
       <div class="proof-band__pct" id="proof-pump-pct" hidden></div>
       <p class="proof-band__meta" id="proof-pump-meta" hidden></p>
     </div>
