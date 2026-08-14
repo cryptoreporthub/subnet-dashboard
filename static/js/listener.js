@@ -198,9 +198,31 @@
           } else {
             row = subs[0];
           }
-          var tao = parseFloat(row.taoLiquidity != null ? row.taoLiquidity : (row.pool_tao != null ? row.pool_tao : (row.liquidity_tao != null ? row.liquidity_tao : NaN)));
+          var tao = parseFloat(
+            row.taoLiquidity != null
+              ? row.taoLiquidity
+              : row.tao_liquidity != null
+                ? row.tao_liquidity
+                : row.pool_tao != null
+                  ? row.pool_tao
+                  : row.liquidity_tao != null
+                    ? row.liquidity_tao
+                    : row.total_tao != null
+                      ? row.total_tao
+                      : NaN
+          );
           var holders = parseInt(row.subnet_holders != null ? row.subnet_holders : row.holders, 10);
-          var rate = parseFloat(row.taoPriceUsd != null ? row.taoPriceUsd : (row.tao_price_usd != null ? row.tao_price_usd : (row.price_usd != null ? row.price_usd : NaN)));
+          var rate = parseFloat(
+            row.taoPriceUsd != null
+              ? row.taoPriceUsd
+              : row.tao_price_usd != null
+                ? row.tao_price_usd
+                : row.price_usd != null
+                  ? row.price_usd
+                  : row.price != null
+                    ? row.price
+                    : NaN
+          );
           if (isNaN(tao)) { warming(); return; }
           var netuid = row.netuid || row.id;
           if (!anchor || String(anchor.netuid) !== String(netuid)) setAnchor(netuid, row.name);
@@ -211,7 +233,7 @@
   }
 
   /* ── re-anchor on row / feed clicks ── */
-  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-msg, .lsn-drow, .lsn-orbit__node").forEach(function (el) {
+  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-msg, .lsn-drow").forEach(function (el) {
     el.addEventListener("click", function () {
       var sn = el.getAttribute("data-sn");
       var nm = el.getAttribute("data-name");

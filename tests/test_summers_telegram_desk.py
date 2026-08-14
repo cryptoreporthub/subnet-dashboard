@@ -60,6 +60,13 @@ def test_summers_listener_hydration_contracts():
     assert "/subnetsummers" in template_src
 
 
+def test_listener_net_flow_reads_live_subnet_reserve_fields():
+    js_src = open("static/js/listener.js", encoding="utf-8").read()
+    assert "row.total_tao" in js_src
+    assert "row.price" in js_src
+    assert "subnetInfo_getDynamicInfo" not in js_src
+
+
 def test_summers_flagship_css_tokens():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert "--mi-green:" in css
