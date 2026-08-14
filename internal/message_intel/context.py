@@ -173,9 +173,11 @@ def build_message_intel_context(
         listed = _listed_messages_for_home(limit)
         authors_payload: Dict[str, Any] = {}
         try:
-            from internal.message_intel.engine import list_authors
+            from internal.message_intel.rollup import build_author_reliability_rows
 
-            authors_payload = list_authors(days=7, limit=8)
+            authors_payload = {
+                "authors": build_author_reliability_rows(days=7, limit=8)
+            }
         except Exception as exc:
             logger.debug("message_intel authors shell context failed: %s", exc)
         return {

@@ -34,6 +34,11 @@
     <div class="message-intel__champ-body">
       <div class="message-intel__champ-name">{% if row.author_username %}@{{ row.author_username|replace('@','') }}{% else %}{{ row.author_name|default('Unknown') }}{% endif %}</div>
       <div class="message-intel__champ-basis">{{ row.message_count|default(0) }} msgs · {{ row.subnet_count|default(0) }} subnets</div>
+      {% if row.strike_rate_pct is not none or row.accuracy_pct is not none %}
+      <div class="message-intel__champ-reliability">
+        {{ row.strike_rate_pct|default(row.accuracy_pct) }}% strike · {{ row.total_graded_calls|default(0) }} graded
+      </div>
+      {% endif %}
     </div>
     <div class="message-intel__champ-score">
       <div class="message-intel__champ-num chip-flat">{{ '%.1f'|format(inf) }}</div>

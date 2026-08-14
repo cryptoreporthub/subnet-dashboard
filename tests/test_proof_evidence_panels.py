@@ -26,5 +26,13 @@ def test_hydrate_syncs_proof_evidence_panels():
     js = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function syncProofEvidencePanels" in js
     assert "Published grades ' + graded + '/' + minGraded" in js
-    assert "No outcome-backed council learning yet" in js
+    assert "retryable" in js
     assert "PRIOR · " in js
+
+
+def test_message_intel_ssr_surfaces_author_reliability():
+    macro = Path("templates/partials/premium/message_intel_ssr_macros.html").read_text(encoding="utf-8")
+    context = Path("internal/message_intel/context.py").read_text(encoding="utf-8")
+    assert "build_author_reliability_rows" in context
+    assert "strike_rate_pct" in macro
+    assert "total_graded_calls" in macro
