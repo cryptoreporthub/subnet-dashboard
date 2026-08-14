@@ -24,6 +24,8 @@ def evidence_population(row: Dict[str, Any]) -> str:
         if claim in {"JUST_STARTED", "JUST STARTED"}:
             return "pump_just_started"
         return "pump_early"
+    if source == "council_shadow":
+        return "council_shadow"
     if source in {"council", "council_pick", "daily_pick", "hour_pick"}:
         return "council_published"
     if row.get("archived") or row.get("archive_source"):
