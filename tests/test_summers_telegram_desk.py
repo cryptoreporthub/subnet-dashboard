@@ -54,6 +54,7 @@ def test_summers_desk_js_renders_conviction():
     assert "renderHeroStats" in src
     assert "renderInterceptWave" in src
     assert "renderTrendingSky" in src
+    assert "awaiting signal" in src
     assert "pingPulsar" in src
     assert "message-intel__conv-ring" in src
     assert "renderHeartbeat" in src
@@ -92,6 +93,8 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__sky-track--1" in css
     assert ".message-intel__sky-carrier" in css
     assert ".message-intel__rail { display: contents; }" in css
+    assert '[data-rank="1"] { --spin: 26s; --r: 21.43%;' in css
+    assert ".message-intel__sky-legend" in css
     assert ".message-intel__cell { display: none; }" not in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
@@ -122,6 +125,8 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__rail" in html
     assert 'id="message-intel-sky"' in html
     assert "hidden" not in html.split('id="message-intel-sky"', 1)[1].split(">", 1)[0]
+    assert "message-intel__sky-legend" in html
+    assert "closer = higher rank" in html
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
@@ -152,6 +157,8 @@ def test_listener_share_page_composition():
     assert "lsn-orbit" in html
     assert "lsn-orbit__track" in html
     assert "lsn-rail" in html
+    assert "lsn-orbit-legend" in html
+    assert "closer = higher rank" in html
     assert ".lsn-orbit" in css
     assert ".lsn-rail{display:contents}" in css.replace(" ", "")
     assert "lsn-zones" not in html

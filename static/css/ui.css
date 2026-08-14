@@ -11835,11 +11835,12 @@ body.wrap {
 }
 .message-intel--v2 .message-intel__sky-track {
   fill: none;
-  stroke-width: 2.4;
+  stroke-width: 1.6;
+  stroke-dasharray: 4 6;
 }
-.message-intel--v2 .message-intel__sky-track--1 { stroke: var(--mi-green); opacity: 0.7; }
-.message-intel--v2 .message-intel__sky-track--2 { stroke: var(--mi-violet); opacity: 0.85; }
-.message-intel--v2 .message-intel__sky-track--3 { stroke: var(--mi-orange); opacity: 0.7; }
+.message-intel--v2 .message-intel__sky-track--1 { stroke: var(--mi-green); opacity: 0.55; }
+.message-intel--v2 .message-intel__sky-track--2 { stroke: var(--mi-blue); opacity: 0.45; }
+.message-intel--v2 .message-intel__sky-track--3 { stroke: var(--mi-orange); opacity: 0.28; }
 .message-intel--v2 .message-intel__sky-hub {
   position: absolute;
   top: 50%;
@@ -11851,6 +11852,7 @@ body.wrap {
   border: 1px solid var(--glass-border);
   background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.55), var(--mi-violet) 55%, transparent 80%);
   box-shadow: 0 0 28px rgba(157, 140, 255, 0.35);
+  animation: message-intel-hub-pulse 3s ease-in-out infinite;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -11881,9 +11883,9 @@ body.wrap {
   --start: 0deg;
   animation: message-intel-orbit-spin var(--spin, 28s) linear infinite;
 }
-.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] { --spin: 32s; --r: 44.3%; --start: 18deg; }
-.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] { --spin: 24s; --r: 32.86%; --start: 140deg; animation-name: message-intel-orbit-spin-rev; }
-.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] { --spin: 18s; --r: 21.43%; --start: 262deg; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] { --spin: 26s; --r: 21.43%; --start: 20deg; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] { --spin: 42s; --r: 32.86%; --start: 140deg; animation-name: message-intel-orbit-spin-rev; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] { --spin: 60s; --r: 44.3%; --start: 250deg; }
 .message-intel--v2 .message-intel__sky-node {
   display: flex;
   flex-direction: column;
@@ -11925,29 +11927,40 @@ body.wrap {
   background: radial-gradient(circle at 35% 30%, #fff, var(--mi-orange) 60%);
   box-shadow: 0 0 12px var(--mi-orange-glow);
 }
-.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] .message-intel__sky-dot {
-  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-green) 60%);
-  box-shadow: 0 0 14px var(--mi-green-glow);
-}
-.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] .message-intel__sky-dot {
-  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-violet) 60%);
-  box-shadow: 0 0 14px var(--mi-violet, #9d8cff);
-}
-.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] .message-intel__sky-dot {
-  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-orange) 60%);
-  box-shadow: 0 0 14px var(--mi-orange-glow);
+.message-intel--v2 .message-intel__sky-node.is-ghost .message-intel__sky-dot {
+  background: var(--mi-orange);
+  box-shadow: 0 0 8px var(--mi-orange-glow);
+  opacity: 0.5;
 }
 .message-intel--v2 .message-intel__sky-sn {
   font-family: var(--font-brand, var(--font-display), sans-serif);
   font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
+  background: color-mix(in srgb, var(--ds-void, #080911) 72%, transparent);
+  padding: 1px 6px;
+  border-radius: 6px;
 }
 .message-intel--v2 .message-intel__sky-n {
   font-family: var(--font-mono, monospace);
   font-size: 8px;
   color: var(--mi-text-faint);
   white-space: nowrap;
+}
+.message-intel--v2 .message-intel__sky-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 0 0 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  color: var(--mi-text-faint);
+}
+.message-intel--v2 .message-intel__sky-legend span { display: inline-flex; align-items: center; gap: 4px; }
+@keyframes message-intel-hub-pulse {
+  0%, 100% { box-shadow: 0 0 28px rgba(157, 140, 255, 0.35); }
+  50% { box-shadow: 0 0 48px rgba(157, 140, 255, 0.75); }
 }
 @keyframes message-intel-orbit-spin {
   from { transform: rotate(var(--start, 0deg)); }
@@ -12227,7 +12240,71 @@ body.wrap {
   line-height: 1.4;
   margin-top: 2px;
 }
-.message-intel--v2 .message-intel__axes { display: grid; gap: 4px; margin-top: 6px; }
+.message-intel--v2 .message-intel__factor {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 5px;
+}
+.message-intel--v2 .message-intel__factor span,
+.message-intel--v2 .message-intel__factor em {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  color: var(--mi-text-faint);
+}
+.message-intel--v2 .message-intel__factor em { text-align: right; }
+.message-intel--v2 .message-intel__factor i {
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--mi-green);
+}
+.message-intel--v2 .message-intel__factor i[data-axis="conviction"] { background: var(--mi-blue); }
+.message-intel--v2 .message-intel__factor i[data-axis="quality"] { background: var(--mi-orange); }
+.message-intel--v2 .message-intel__power-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.message-intel--v2 .message-intel__power-sent {
+  margin-left: auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 9.5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: var(--mi-blue);
+  background: rgba(63, 201, 255, 0.12);
+}
+.message-intel--v2 .message-intel__power-sent[data-sent="bullish"] {
+  color: var(--mi-green);
+  background: rgba(31, 212, 124, 0.12);
+}
+.message-intel--v2 .message-intel__power-sent[data-sent="bearish"] {
+  color: var(--mi-orange);
+  background: rgba(240, 197, 111, 0.12);
+}
+.message-intel--v2 .message-intel__awaiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+.message-intel--v2 .message-intel__awaiting-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--mi-orange);
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+.message-intel--v2 .message-intel__awaiting p {
+  margin: 0;
+  font-size: 11px;
+  color: var(--mi-text-faint);
+  line-height: 1.45;
+}
 .message-intel--v2 .message-intel__axes span {
   font-family: var(--font-mono, monospace);
   font-size: 9px;
@@ -12345,7 +12422,8 @@ body.wrap {
 @media (prefers-reduced-motion: reduce) {
   .message-intel--v2 .message-intel__ekg path,
   .message-intel--v2 .message-intel__sky-carrier,
-  .message-intel--v2 .message-intel__sky-carrier .message-intel__sky-node { animation: none !important; }
+  .message-intel--v2 .message-intel__sky-carrier .message-intel__sky-node,
+  .message-intel--v2 .message-intel__sky-hub { animation: none !important; }
 }
 
 /* Kept for Quiet-motion / test hooks — root no longer breathes an opaque board. */

@@ -91,15 +91,16 @@
         </div>
         <div id="message-intel-sky" class="message-intel__sky" data-empty="true" aria-label="Trending orbit">
           <svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">
-            <ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="124" ry="124"></ellipse>
+            <ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>
             <ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
-            <ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>
+            <ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>
           </svg>
           <div class="message-intel__sky-hub"><span>ORBIT</span><b>—</b></div>
-          <div class="message-intel__sky-carrier" data-rank="1"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">—</span><span class="message-intel__sky-n">awaiting</span></span></div>
-          <div class="message-intel__sky-carrier" data-rank="2"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">—</span><span class="message-intel__sky-n">awaiting</span></span></div>
-          <div class="message-intel__sky-carrier" data-rank="3"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">—</span><span class="message-intel__sky-n">awaiting</span></span></div>
+          <div class="message-intel__sky-carrier" data-rank="1"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#1</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
+          <div class="message-intel__sky-carrier" data-rank="2"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#2</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
+          <div class="message-intel__sky-carrier" data-rank="3"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#3</span><span class="message-intel__sky-n">awaiting signal</span></span></div>
         </div>
+        <p class="message-intel__sky-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
         <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
           {% if mi_trending %}
           {{ trend_rows(mi_trending, mi_window) }}

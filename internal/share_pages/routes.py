@@ -483,6 +483,7 @@ async def _listener_page_context() -> Dict[str, Any]:
                         "why": row.get("why"),
                         "delta": row.get("delta"),
                         "velocity": row.get("velocity"),
+                        "quality": row.get("quality"),
                     }
                 )
             if merged:

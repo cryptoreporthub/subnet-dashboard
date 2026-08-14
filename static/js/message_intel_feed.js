@@ -1194,30 +1194,41 @@
 
   function renderChatterPower(rows) {
     if (!powerEl) return;
-    var list = (rows || []).slice(0, 5);
+    var list = (rows || []).slice(0, 3);
     if (!list.length) {
       powerEl.innerHTML = '<p class="empty">Ranks by who\'s talking, not how loud — velocity × conviction × author hit-rate. Why-lines land with trending v2.</p>';
       return;
     }
-    var maxP = 0.0001;
+    var maxV = 0.0001;
     list.forEach(function (r) {
-      var p = Number(r.chatter_power != null ? r.chatter_power : r.heat) || 0;
-      if (p > maxP) maxP = p;
+      var v = Number(r.velocity) || 0;
+      if (v > maxV) maxV = v;
     });
-    powerEl.innerHTML = list.map(function (row, idx) {
-      var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || 0;
+    var html = list.map(function (row, idx) {
       var conv = Number(row.conviction != null ? row.conviction : row.avg_conviction) || 0;
       var vel = Number(row.velocity) || 0;
+      var qRaw = Number(row.quality);
+      var qPct = !isFinite(qRaw) ? 0 : (qRaw <= 1 ? Math.round(qRaw * 100) : Math.round(qRaw));
       var why = row.why || ("velocity " + vel.toFixed(2) + " × conviction " + (conv / 100).toFixed(2));
+      var sent = String(row.sentiment || "").toLowerCase();
+      var sentLbl = sent.indexOf("bull") !== -1 ? "bullish" : sent.indexOf("bear") !== -1 ? "bearish" : "";
       return '<div class="message-intel__power-row">' +
         '<span class="message-intel__rank">' + esc(idx + 1) + '</span>' +
-        '<div><a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name || ("SN" + row.netuid)) + '</b></a>' +
-        '<div class="message-intel__power-why">' + esc(why) + '</div>' +
-        '<div class="message-intel__axes">' +
-        '<span>chatter</span><i style="width:' + Math.round((power / maxP) * 100) + '%"></i>' +
-        '<span>conviction</span><i data-axis="conviction" style="width:' + Math.max(4, Math.round(conv)) + '%"></i>' +
-        '</div></div></div>';
+        '<div><div class="message-intel__power-top"><a href="/subnet/' + esc(row.netuid) + '"><b>' +
+        esc(row.name || ("SN" + row.netuid)) + '</b></a>' +
+        (sentLbl ? '<span class="message-intel__power-sent" data-sent="' + sentLbl + '">' + sentLbl.toUpperCase() + "</span>" : "") +
+        "</div>" +
+        '<div class="message-intel__factor"><span>velocity</span><i style="width:' + Math.round((vel / maxV) * 100) + '%"></i><em>' + vel.toFixed(1) + "</em></div>" +
+        '<div class="message-intel__factor"><span>conviction</span><i data-axis="conviction" style="width:' + Math.max(4, Math.round(conv)) + '%"></i><em>' + (conv ? Math.round(conv) : "—") + "</em></div>" +
+        '<div class="message-intel__factor"><span>quality</span><i data-axis="quality" style="width:' + qPct + '%"></i><em>' + (qPct ? qPct : "—") + "</em></div>" +
+        '<div class="message-intel__power-why">' + esc(why) + "</div></div></div>";
     }).join("");
+    var slot;
+    for (slot = list.length + 1; slot <= 3; slot++) {
+      html += '<div class="message-intel__awaiting"><span class="message-intel__awaiting-dot" aria-hidden="true"></span><p>Slot #' +
+        slot + " awaiting a fresh directional call with resolved caller history.</p></div>";
+    }
+    powerEl.innerHTML = html;
   }
 
   function narrativeStage(row) {
@@ -1410,14 +1421,14 @@
     skyEl.setAttribute("aria-hidden", "false");
     var max = 1;
     list.forEach(function (r) {
-      var n = Number(r.mentions) || Number(r.chatter_power) || 0;
+      var n = Number(r.chatter_power != null ? r.chatter_power : r.heat) || Number(r.mentions) || 0;
       if (n > max) max = n;
     });
     var html =
       '<svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">' +
-      '<ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="124" ry="124"></ellipse>' +
+      '<ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>' +
       '<ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>' +
-      '<ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>' +
+      '<ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>' +
       "</svg>" +
       '<div class="message-intel__sky-hub"><span>ORBIT</span><b>' +
       (empty ? "—" : "TOP 3") +
@@ -1430,15 +1441,18 @@
         html +=
           '<div class="message-intel__sky-carrier" data-rank="' +
           rank +
-          '"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">—</span><span class="message-intel__sky-n">awaiting</span></span></div>';
+          '"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#' +
+          rank +
+          '</span><span class="message-intel__sky-n">awaiting signal</span></span></div>';
         continue;
       }
-      var mentions = Number(row.mentions) || 0;
-      var size = 10 + Math.round(((mentions || Number(row.chatter_power) || 0) / max) * 14);
+      var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || Number(row.mentions) || 0;
+      var size = 9 + Math.round((power / max) * 11);
       var sent = String(row.sentiment || "").toLowerCase();
       if (sent.indexOf("bull") !== -1) sent = "bull";
       else if (sent.indexOf("bear") !== -1) sent = "bear";
       else sent = "mix";
+      var sentLbl = sent === "bull" ? "bullish" : sent === "bear" ? "bearish" : "mix";
       html +=
         '<div class="message-intel__sky-carrier" data-rank="' +
         rank +
@@ -1459,8 +1473,10 @@
         '<span class="message-intel__sky-sn">' +
         esc(row.name || "SN" + row.netuid) +
         "</span>" +
-        '<span class="message-intel__sky-n">' +
-        (mentions ? esc(mentions) + " msgs" : "quiet") +
+        '<span class="message-intel__sky-n">#' +
+        rank +
+        " · " +
+        sentLbl +
         "</span></button></div>";
     }
     skyEl.innerHTML = html;

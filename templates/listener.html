@@ -155,9 +155,9 @@
       <div class="lsn-sect"><span class="bar"></span><b>Trending orbit</b><span>60s refresh</span></div>
       <div class="lsn-orbit" aria-label="Trending orbit">
         <svg class="lsn-orbit__svg" viewBox="0 0 280 280" aria-hidden="true">
-          <ellipse class="lsn-orbit__track lsn-orbit__track--1" cx="140" cy="140" rx="124" ry="124"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>
           <ellipse class="lsn-orbit__track lsn-orbit__track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
-          <ellipse class="lsn-orbit__track lsn-orbit__track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>
         </svg>
         <div class="lsn-orbit__hub"><span>ORBIT</span><b>{% if trending %}TOP 3{% else %}—{% endif %}</b></div>
         {% for i in [1, 2, 3] %}
@@ -167,14 +167,15 @@
           <button type="button" class="lsn-orbit__node" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}" data-sent="{{ t["sent"] or "mix" }}">
             <span class="lsn-orbit__dot"></span>
             <span class="lsn-orbit__sn">{{ t["name"] or ("SN" ~ t["netuid"]) }}</span>
-            <span class="lsn-orbit__n">SN{{ t["netuid"] or "?" }}</span>
+            <span class="lsn-orbit__n">#{{ i }} · {{ t["sent"] or "mix" }}</span>
           </button>
           {% else %}
-          <span class="lsn-orbit__node is-ghost"><span class="lsn-orbit__dot"></span><span class="lsn-orbit__sn">—</span><span class="lsn-orbit__n">awaiting</span></span>
+          <span class="lsn-orbit__node is-ghost"><span class="lsn-orbit__dot"></span><span class="lsn-orbit__sn">#{{ i }}</span><span class="lsn-orbit__n">awaiting signal</span></span>
           {% endif %}
         </div>
         {% endfor %}
       </div>
+      <p class="lsn-orbit-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
       {% if trending %}
       {% for t in trending[:5] %}
       <div class="lsn-trow" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}">
