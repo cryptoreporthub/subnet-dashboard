@@ -306,7 +306,12 @@
     <div class="lsn-tile lsn-tile--desk lsn-hall">
     <!-- CALLER LEADERBOARD (skin in the game) -->
     <div class="lsn-glass lsn-cboard">
-      <div class="lsn-sect"><span class="bar"></span><b>Caller leaderboard</b><span>accuracy · resolved only</span></div>
+      <div class="lsn-sect"><span class="bar"></span><b>Caller leaderboard</b><span>{{ leaderboard_window|capitalize }} · accuracy · resolved only</span></div>
+      <nav class="lsn-window-tabs" aria-label="Leaderboard window">
+        {% for key, label in [("day", "Day"), ("week", "Week"), ("month", "Month")] %}
+        <a href="?window={{ key }}" class="{% if leaderboard_window == key %}is-active{% endif %}">{{ label }}</a>
+        {% endfor %}
+      </nav>
       {% if callers %}
       {% for c in callers %}
       <div class="lsn-crow3">
@@ -331,7 +336,7 @@
 
     <!-- WEEKLY CHAMPIONS -->
     <div class="lsn-glass lsn-panel">
-      <div class="lsn-sect"><span class="bar"></span><b>Weekly champions</b><span>7d influence</span></div>
+      <div class="lsn-sect"><span class="bar"></span><b>{{ leaderboard_window|capitalize }} champions</b><span>{{ leaderboard_days }}d influence</span></div>
       {% set champ_sub = trending[0] if trending else none %}
       {% if champ_sub %}
       <div class="lsn-ylead" style="margin-bottom:8px" data-sn="{{ champ_sub["netuid"] or "" }}" data-name="{{ champ_sub["name"] or "" }}">

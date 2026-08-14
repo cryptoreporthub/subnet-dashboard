@@ -275,6 +275,10 @@ def test_callers_api_days_validation(client, intel_db):
     _seed(intel_db, outcome="pump")
     ok = client.get("/api/message-intel/callers?days=30").json()
     assert ok["status"] == "success" and ok["count"] >= 1
+    day = client.get("/api/message-intel/callers?days=1").json()
+    assert day["status"] == "success"
+    authors = client.get("/api/message-intel/authors?days=1").json()
+    assert authors["status"] == "success" and authors["days"] == 1
     res = client.get("/api/message-intel/callers?days=45").json()
     assert res["status"] == "error" and res["callers"] == []
 
