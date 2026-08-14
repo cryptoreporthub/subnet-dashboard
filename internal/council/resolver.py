@@ -164,15 +164,24 @@ def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tup
     attribution stamping and weight nudging stay in agreement (fixes quant
     sink / dark_horse starvation where legacy string normalization diverged)."""
     from internal.council.expert_attribution import resolve_expert_attribution
+    from internal.council.signal_expert import expert_for_replay_row
+    from internal.learning.evidence import evidence_population, stamp_evidence
 
     stamped_expert, expert_source = resolve_expert_attribution(prediction)
+    stamp_evidence(prediction)
     if stamped_expert:
         prediction["expert"] = stamped_expert
         if expert_source != "existing":
             prediction["expert_attribution_source"] = expert_source
-    # Nudge with the same expert used for stamping — NOT the legacy string
-    # normalizer (removes the quant sink / dark_horse starvation).
-    nudge_expert = stamped_expert
+    # Outcome weights require both a published council row and attributable
+    # signal evidence. A bare legacy expert label is diagnostic only.
+    replay_expert = expert_for_replay_row(prediction)
+    nudge_expert = (
+        stamped_expert
+        if evidence_population(prediction) == "council_published"
+        and replay_expert == stamped_expert
+        else None
+    )
     if nudge_expert and not _skip_council_learning(prediction):
         _nudge_weights(bool(correct), nudge_expert)
     return stamped_expert, nudge_expert

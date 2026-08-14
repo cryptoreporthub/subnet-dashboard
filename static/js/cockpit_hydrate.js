@@ -873,6 +873,7 @@
     var pumpPending = extras.pump_pending != null
       ? Number(extras.pump_pending)
       : (tb.pump_pending != null ? Number(tb.pump_pending) : 0);
+    var alignmentDiagnostics = Number(extras.alignment_diagnostic_events || 0);
     var missingPrice = tb.price_data_unavailable != null
       ? Number(tb.price_data_unavailable)
       : 0;
@@ -895,6 +896,8 @@
 
     var tgProof = extras.telegram_proof || {};
     var tgGraded = Number(tgProof.graded || 0);
+    var tgPending = Number(tgProof.pending || 0);
+    var tgUngradeable = Number(tgProof.ungradeable || 0);
     var tgRatePct = ratePercent(tgProof.hit_rate);
     if (tgProof.ready && tgRatePct != null && tgGraded > 0) {
       if (tgVal) tgVal.textContent = tgRatePct + '%';
@@ -905,7 +908,9 @@
     } else {
       if (tgVal) tgVal.textContent = '—';
       if (tgMeta) {
-        tgMeta.textContent = 'Telegram call proof grades after resolve';
+        tgMeta.textContent = (tgGraded > 0 ? tgGraded + ' graded calls' : 'No graded calls yet') +
+          (tgPending > 0 ? ' · ' + tgPending + ' pending' : '') +
+          (tgUngradeable > 0 ? ' · ' + tgUngradeable + ' ungradeable' : '');
         tgMeta.classList.add('desk-empty');
       }
     }
@@ -947,7 +952,8 @@
       if (loopMeta) {
         loopMeta.textContent = graded > 0
           ? graded + ' graded outcomes; outcome-backed learning is building'
-          : 'No outcome-backed council learning yet';
+          : 'No outcome-backed council learning yet' +
+            (alignmentDiagnostics > 0 ? ' · ' + alignmentDiagnostics + ' diagnostic events' : '');
         loopMeta.classList.add('desk-empty');
       }
     }
@@ -3327,6 +3333,7 @@
         : null,
       council_pending: stats.council_pending,
       pump_pending: stats.pump_pending,
+      alignment_diagnostic_events: stats.alignment_diagnostic_events,
     });
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
@@ -4161,6 +4168,7 @@
                   : null,
               council_pending: stats.council_pending,
               pump_pending: stats.pump_pending,
+              alignment_diagnostic_events: stats.alignment_diagnostic_events,
             });
           })
           .catch(function () {});

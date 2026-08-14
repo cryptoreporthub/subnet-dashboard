@@ -367,6 +367,16 @@ def _learning_snapshot() -> Dict[str, Any]:
         )
 
         trail_events = collect_weight_trail_events()
+        alignment_diagnostic_events = sum(
+            1
+            for event in trail_events
+            if isinstance(event, dict)
+            and (
+                str(event.get("decision") or "").startswith("alignment_")
+                or (isinstance(event.get("evidence"), dict)
+                    and event["evidence"].get("outcome_weight_changed") is False)
+            )
+        )
         snapshot = {
             "engine_stats": engine_stats,
             "expert_weight_deltas": recent_expert_weight_deltas(events=trail_events),
@@ -384,6 +394,7 @@ def _learning_snapshot() -> Dict[str, Any]:
             "judge_weights": _judge_weights_for_snapshot(),
             "judge_last5": _build_last5_from_resolved(resolved_payload)["judge_last5"],
             "council_last5": _build_last5_from_resolved(resolved_payload)["council_last5"],
+            "alignment_diagnostic_events": alignment_diagnostic_events,
         }
         _learning_snapshot_cache["at"] = now
         _learning_snapshot_cache["data"] = snapshot
@@ -444,6 +455,7 @@ def _learning_stats_payload(
             "trust_banner": trust_banner,
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": trust_banner.get("ready"),
+            "alignment_diagnostic_events": snap.get("alignment_diagnostic_events", 0),
         },
     }
     if meta:
@@ -493,6 +505,7 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
             "trust_banner": trust_banner,
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": False,
+            "alignment_diagnostic_events": 0,
         },
     }
 
