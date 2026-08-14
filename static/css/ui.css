@@ -11787,7 +11787,13 @@ body.wrap {
   font-size: 8px;
   color: var(--mi-text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 420px) {
+  .message-intel--v2 .message-intel__hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .message-intel--v2 .message-intel__conv-ring {
   flex: 0 0 auto;
