@@ -1490,9 +1490,23 @@ def _bailout_homepage_html() -> Optional[str]:
         and cached_html
         and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
     ):
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1493", "homepage bailout served cached shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in cached_html,
+            "has_hero": 'id="tribunal-hero"' in cached_html,
+            "has_hydrate_script": "cockpit_hydrate.js" in cached_html,
+        })
+        # #endregion
         return cached_html
     _schedule_homepage_warm(None)
     if _EMERGENCY_HOME_HTML:
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1503", "homepage bailout served emergency shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in _EMERGENCY_HOME_HTML,
+            "has_hero": 'id="tribunal-hero"' in _EMERGENCY_HOME_HTML,
+            "has_hydrate_script": "cockpit_hydrate.js" in _EMERGENCY_HOME_HTML,
+        })
+        # #endregion
         return _EMERGENCY_HOME_HTML
     # ponytail: never sync-prime here — blocks the ASGI loop and wedges /health (Fly 36s 503).
     threading.Thread(
@@ -1504,9 +1518,24 @@ def _bailout_homepage_html() -> Optional[str]:
         # The ultra-minimal shell is deliberately local/file-backed and
         # time-safe. Prefer it over a blank reload loop so API hydration can
         # start immediately on a cold worker.
-        return _ultra_minimal_index_html()
+        html = _ultra_minimal_index_html()
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1517", "homepage bailout served ultra-minimal shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in html,
+            "has_hero": 'id="tribunal-hero"' in html,
+            "has_hydrate_script": "cockpit_hydrate.js" in html,
+        })
+        # #endregion
+        return html
     except Exception as exc:
         logger.warning("ultra-minimal bailout render failed: %s", exc)
+        # #region agent log
+        _debug_hydration_log("A", "server.py:1526", "homepage bailout served hardcoded shell", {
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in _INSTANT_HOME_SHELL,
+            "has_hero": 'id="tribunal-hero"' in _INSTANT_HOME_SHELL,
+            "has_hydrate_script": "cockpit_hydrate.js" in _INSTANT_HOME_SHELL,
+        })
+        # #endregion
         return _INSTANT_HOME_SHELL
 
 
@@ -1558,7 +1587,8 @@ async def index(request: Request):
         "homepage shell delivered",
         {
             "emergency_cached": bool(_EMERGENCY_HOME_HTML),
-            "has_hydrate_marker": "data-hydrate='1'" in html or 'data-hydrate="1"' in html,
+            "has_hydrate_marker": "document.documentElement.dataset.hydrate='1'" in html
+            or 'document.documentElement.dataset.hydrate="1"' in html,
             "has_hero": 'id="tribunal-hero"' in html,
             "has_hydrate_script": "cockpit_hydrate.js" in html,
         },
