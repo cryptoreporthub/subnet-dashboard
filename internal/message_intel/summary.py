@@ -116,4 +116,9 @@ def summarize_message_intel() -> Dict[str, Any]:
     except Exception:
         pass
 
-    return _sentences(parts[:5])
+    parts.append(
+        "Subnet-linked calls use the named subnet or netuid for movement; "
+        "TAO/USD is reserved for explicit TAO messages, and neutral calls stay "
+        "outside hit-rate accuracy."
+    )
+    return _sentences(parts[:6])
