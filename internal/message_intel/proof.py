@@ -189,7 +189,8 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     pump_pct = _to_float(row.get("pump_pct_max"))
     netuid = row.get("netuid")
     subnet_name = str(row.get("subnet_name") or (f"SN{netuid}" if netuid is not None else "")).strip()
-    price_basis = "subnet" if netuid is not None and subnet_name else ("tao" if _about_tao(row) else None)
+    has_subnet_identity = netuid is not None or bool(subnet_name)
+    price_basis = "subnet" if has_subnet_identity else ("tao" if _about_tao(row) else None)
 
     eligible = (
         source == "telegram"

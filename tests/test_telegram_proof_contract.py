@@ -128,6 +128,20 @@ def test_price_basis_requires_subnet_or_explicit_tao():
     assert subnet["price_basis"] == "subnet"
     assert subnet["subnet_name"] == "SN7"
 
+    named_subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "subnet_name": "Subnet Seven",
+            "outcome": "pump",
+        }
+    )
+    assert named_subnet["eligible"] is True
+    assert named_subnet["price_basis"] == "subnet"
+    assert named_subnet["subnet_name"] == "Subnet Seven"
+
     tao = classify_call(
         {
             "source": "telegram",
