@@ -118,7 +118,7 @@ def test_listener_share_page_composition():
     assert "Telegram pulse" in html
     assert "Trending orbit" in html
     assert "Syne" in html
-    assert "Space Grotesk" in html
+    assert "Space+Grotesk" in html
     assert "wallet" not in html.lower()
     assert "lsn-vault" not in html
     assert ".lsn-intercept" in css
