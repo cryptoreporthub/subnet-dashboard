@@ -62,7 +62,8 @@ def test_short_ohlcv_still_penalized_but_can_clear_gate():
     conf = sv._compute_confidence(sn, indicators, experts)
     # Cold-start × completeness 0.85
     assert conf == pytest.approx(sv._COLD_START_PRIOR * 0.85, rel=1e-2)
-    assert conf > publish_gate_fraction()
+    # The 50% publish gate correctly keeps this short-history row unpublishable.
+    assert conf < publish_gate_fraction()
 
 
 def test_directional_publish_guard_blocks_bearish_long():
