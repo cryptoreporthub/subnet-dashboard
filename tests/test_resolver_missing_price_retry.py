@@ -59,6 +59,7 @@ def test_missing_price_stays_pending_and_expires_after_cap(resolver, monkeypatch
     expired = resolver.resolve_prediction_at_horizon(pred, now=now + timedelta(hours=5), live_prices={})
     assert expired["status"] == "expired"
     assert expired["expired_reason"] == "price_data_unavailable"
+    assert expired["retirement_reason"] == "missing_price_at_horizon"
     assert expired["resolve_attempts"] == 3
 
 

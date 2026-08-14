@@ -206,9 +206,16 @@ def build_story_path(daily_pick_payload: Optional[Dict[str, Any]] = None) -> Dic
 
     pick = _pick_block(payload)
     if not pick:
+        candidate = payload.get("candidate")
+        if isinstance(candidate, dict) and not candidate.get("subnet"):
+            reason = "pick_missing_subnet"
+        elif str(payload.get("action") or "HOLD").upper() == "HOLD":
+            reason = "daily_pick_is_hold"
+        else:
+            reason = "no_daily_pick"
         return {
             "data_available": False,
-            "reason": "no_pick",
+            "reason": reason,
             "netuid": None,
             "action": str(payload.get("action") or "HOLD").upper(),
             "steps": [],

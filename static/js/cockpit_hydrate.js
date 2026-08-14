@@ -3265,6 +3265,9 @@
     var wrong = hasTrust ? Number(tb.wrong || 0) : 0;
     var expired = hasTrust && tb.expired != null ? Number(tb.expired) : null;
     var expiredRate = hasTrust && tb.expired_rate != null ? tb.expired_rate : null;
+    var priceUnavailable = hasTrust && tb.price_data_unavailable != null
+      ? Number(tb.price_data_unavailable)
+      : 0;
     var expiredPct = expiredRate != null ? Math.round(Number(expiredRate) * 1000) / 10 : null;
     var wd = hasTrust ? (tb.watchdog || stats.watchdog || {}) : (stats.watchdog || {});
     var ready = hasTrust && tb.ready != null ? tb.ready : stats.brain_ui_ready;
@@ -3312,7 +3315,9 @@
     }
     var expRateEl = document.getElementById('kpi-expired-rate');
     if (expRateEl) {
-      expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
+      expRateEl.textContent = expiredPct != null
+        ? expiredPct + '% of resolved flow' + (priceUnavailable ? ' · ' + priceUnavailable + ' missing price' : '')
+        : 'resolver backlog';
     }
     var pendEl = document.getElementById('kpi-pending');
     if (pendEl) {

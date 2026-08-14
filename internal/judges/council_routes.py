@@ -425,7 +425,7 @@ async def api_judge_postmortems(judge: str):
 
 @council_router.get("/api/paper-portfolio")
 async def api_paper_portfolio():
-    """Return aggregate paper portfolios for all judges."""
+    """Return legacy judge portfolios plus the canonical ledger view."""
     try:
         from internal.judges.portfolios import all_portfolios
 
@@ -433,7 +433,20 @@ async def api_paper_portfolio():
     except Exception as e:
         logger.warning("Portfolio fetch failed: %s", e)
         portfolios = {}
-    return {"aggregate": _aggregate_portfolios(portfolios), "judges": portfolios}
+    try:
+        from internal.portfolio.engine import build_portfolio_status
+
+        canonical = build_portfolio_status()
+    except Exception as e:
+        logger.warning("Canonical portfolio fetch failed: %s", e)
+        canonical = {"status": "degraded", "error": str(e)}
+    return {
+        "aggregate": _aggregate_portfolios(portfolios),
+        "judges": portfolios,
+        "canonical": canonical,
+        "source": "legacy_judge_portfolios",
+        "canonical_source": "data/predictions.json",
+    }
 
 
 @council_router.get("/api/portfolios")

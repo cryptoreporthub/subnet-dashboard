@@ -15,19 +15,25 @@ _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
 _DISPLAY_LIMIT = max(10, int(os.environ.get("PORTFOLIO_DISPLAY_LIMIT", "48")))
 
 
-def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
+def _is_council_row(row: Dict[str, Any]) -> bool:
     from internal.accuracy_lift.populations import is_shadow_row
     from internal.council.grading import is_pump_desk_claim
 
+    return (
+        not is_pump_desk_claim(row)
+        and not is_shadow_row(row)
+        and row.get("outcome") not in _SKIP_OUTCOMES
+    )
+
+
+def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     for row in rows or []:
         if not isinstance(row, dict):
             continue
-        if row.get("outcome") in _SKIP_OUTCOMES:
+        if not _is_council_row(row):
             continue
         if row.get("actual_pct") is None:
-            continue
-        if is_pump_desk_claim(row) or is_shadow_row(row):
             continue
         out.append(row)
     return out
@@ -74,12 +80,12 @@ def build_portfolio_status(
     total_pnl = round(sum(float(p["pnl_pct"]) for p in closed), 4) if closed else 0.0
     avg_pnl = round(total_pnl / total, 4) if total else 0.0
 
-    # Open = pending predictions only (real rows, not invented fills).
+    # Open = eligible council predictions only (same scope as closed rows).
     open_positions: List[Dict[str, Any]] = []
     for row in predictions_data.get("predictions") or []:
         if not isinstance(row, dict):
             continue
-        if row.get("status") == "resolved":
+        if row.get("status") == "resolved" or not _is_council_row(row):
             continue
         open_positions.append(
             {
@@ -93,6 +99,11 @@ def build_portfolio_status(
             }
         )
 
+    excluded_resolved = sum(
+        1
+        for row in predictions_data.get("resolved") or []
+        if isinstance(row, dict) and not _is_council_row(row)
+    )
     return {
         "status": "ok",
         "empty": total == 0 and not open_positions,
@@ -111,4 +122,9 @@ def build_portfolio_status(
         },
         "closed_positions": closed[-_DISPLAY_LIMIT:],
         "open_positions": open_positions[:_DISPLAY_LIMIT],
+        "eligibility": {
+            "source": "data/predictions.json",
+            "excluded_resolved": excluded_resolved,
+            "gradeable_closed": total,
+        },
     }

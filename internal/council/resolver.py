@@ -314,6 +314,12 @@ def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, A
     prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
     prediction["resolved_price"] = None
     prediction["actual_pct"] = None
+    prediction.setdefault(
+        "retirement_reason",
+        "missing_price_at_horizon"
+        if prediction.get("price_data_unavailable")
+        else "genuine_expiry",
+    )
     return prediction
 
 
@@ -324,6 +330,7 @@ def _mark_ungradeable(prediction: Dict[str, Any], now: datetime) -> Dict[str, An
     prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
     prediction["resolved_price"] = None
     prediction["actual_pct"] = None
+    prediction.setdefault("retirement_reason", "missing_price_at_horizon")
     return prediction
 
 
@@ -729,6 +736,26 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         for r in resolved
         if r.get("outcome") == "expired" and not is_pump_desk_claim(r) and not _is_shadow(r)
     )
+    ungradeable = sum(
+        1
+        for r in resolved
+        if r.get("outcome") == "ungradeable" and not is_pump_desk_claim(r) and not _is_shadow(r)
+    )
+    price_data_unavailable = sum(
+        1
+        for r in resolved
+        if r.get("retirement_reason") == "missing_price_at_horizon"
+        and not is_pump_desk_claim(r)
+        and not _is_shadow(r)
+    )
+    genuine_expired = sum(
+        1
+        for r in resolved
+        if r.get("outcome") == "expired"
+        and r.get("retirement_reason") == "genuine_expiry"
+        and not is_pump_desk_claim(r)
+        and not _is_shadow(r)
+    )
     duplicates = sum(1 for r in resolved if r.get("outcome") == "duplicate")
     council_pending = sum(
         1 for r in pending if not is_pump_desk_claim(r) and not _is_shadow(r)
@@ -741,6 +768,9 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         "correct": correct,
         "wrong": wrong,
         "expired": expired,
+        "expired_genuine": genuine_expired,
+        "ungradeable": ungradeable,
+        "price_data_unavailable": price_data_unavailable,
         "duplicate": duplicates,
         "pending": council_pending,
         "total": total,

@@ -32,7 +32,13 @@ def apply_resolver_semantics_patch() -> None:
         grace_multiple: float = _GRACE_MULTIPLE,
     ) -> bool:
         attempts = int(prediction.get("resolve_attempts") or 0)
-        if prediction.get("price_data_unavailable") and attempts < _RETRY_CAP:
+        # The second expiry check in one resolve pass must not consume the
+        # final retry; the next scheduler tick gets the bounded final attempt.
+        if prediction.pop("_price_lookup_attempted", False):
+            return False
+        # Give real ledger rows a bounded chance to obtain their historical
+        # price before classifying them as genuine expiry.
+        if attempts < _RETRY_CAP and ("id" in prediction or "resolve_at" in prediction):
             return False
         if now < resolve_at:
             return False
@@ -66,12 +72,16 @@ def apply_resolver_semantics_patch() -> None:
 
         prediction["resolve_attempts"] = int(prediction.get("resolve_attempts") or 0) + 1
         prediction["price_data_unavailable"] = True
+        prediction["_price_lookup_attempted"] = True
         return status, price, meta
 
     def _patched_expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
         expired = original_expire_prediction(prediction, now)
         if prediction.get("price_data_unavailable"):
             expired["expired_reason"] = "price_data_unavailable"
+            expired["retirement_reason"] = "missing_price_at_horizon"
+        else:
+            expired.setdefault("retirement_reason", "genuine_expiry")
         return expired
 
     resolver._is_expired = _patched_is_expired
