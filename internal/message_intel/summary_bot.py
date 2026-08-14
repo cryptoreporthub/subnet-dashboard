@@ -192,15 +192,32 @@ def _format_rank(item: Dict[str, Any]) -> str:
     )
 
 
-def _format_author(item: Dict[str, Any]) -> str:
-    if not item:
+def _format_author(item: Dict[str, Any] | List[Dict[str, Any]]) -> str:
+    rows = item if isinstance(item, list) else [item]
+    rows = [row for row in rows if isinstance(row, dict) and row]
+    if not rows:
         return _format_error("No matching author found.")
-    return (
-        f"<b>Author Leaderboard</b>\n\n"
-        f"{item.get('author_name') or item.get('author_id')}\n"
-        f"Messages: {item.get('message_count', 0)}\n"
-        f"Accuracy: {item.get('accuracy_pct') if item.get('accuracy_pct') is not None else 'n/a'}"
-    )
+    lines = ["<b>Author Leaderboard — top 3</b>", ""]
+    for index, row in enumerate(rows[:3], 1):
+        name = row.get("author_name") or row.get("author_id") or "Unknown"
+        hits = int(row.get("hits") or 0)
+        misses = int(row.get("misses") or 0)
+        neutral = int(row.get("neutral") or 0)
+        scored = hits + misses
+        accuracy = row.get("accuracy")
+        if accuracy is None:
+            accuracy = row.get("accuracy_pct")
+        accuracy_label = f"{accuracy}%" if accuracy is not None else "n/a"
+        lines.extend(
+            [
+                f"{index}. {name}",
+                f"Qualifying calls: {row.get('sample_size', row.get('total_graded_calls', 0))}",
+                f"Accuracy: {accuracy_label} ({hits} hits / {scored} scored; {neutral} neutral excluded)",
+                "",
+            ]
+        )
+    lines.append("Accuracy is hits/(hits+misses); neutral calls are excluded.")
+    return "\n".join(lines)
 
 
 def _watchlist_load(owner=None):
@@ -390,23 +407,19 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
         return _format_rank(row)
     if cmd == "/who":
         author = arg.strip().lstrip("@")
-        from internal.message_intel.rollup import build_author_reliability_rows
+        from internal.message_intel.rollup import build_telegram_caller_leaderboard
 
-        rows = build_author_reliability_rows(days=30, limit=25)
-        row = next(
-            (
-                r
-                for r in rows
-                if author.lower()
-                in {
-                    str(r.get("author_name") or "").lower(),
-                    str(r.get("author_username") or "").lower().lstrip("@"),
-                    str(r.get("author_id") or "").lower(),
+        rows = build_telegram_caller_leaderboard(days=30, limit=50).get("callers") or []
+        if author:
+            rows = [
+                row for row in rows
+                if author.lower() in {
+                    str(row.get("author_name") or "").lower(),
+                    str(row.get("author_username") or "").lower().lstrip("@"),
+                    str(row.get("author_id") or "").lower(),
                 }
-            ),
-            {},
-        )
-        return _format_author(row)
+            ]
+        return _format_author(rows[:1] if author else rows[:3])
     if cmd == "/alerts" and not arg.strip():
         return _format_active_alerts()
     if cmd == "/alerts" and message is not None:

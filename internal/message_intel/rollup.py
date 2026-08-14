@@ -830,18 +830,29 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
-                      m.content, m.timestamp, m.created_at, v.predicted_direction, v.conviction,
+                      m.content, m.timestamp, m.created_at, a.entities_json,
+                      v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
                       po.price_1h, po.price_4h, po.price_24h
                FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                LEFT JOIN price_outcomes po ON po.message_id = m.id
                WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
         ).fetchall()
     out = []
+    try:
+        from internal.subnet_names import name_for_netuid
+    except Exception:
+        name_for_netuid = None
     for raw in rows:
         row = dict(raw)
+        if row.get("netuid") is not None:
+            try:
+                row["subnet_name"] = name_for_netuid(int(row["netuid"])) if name_for_netuid else f"SN{row['netuid']}"
+            except (TypeError, ValueError):
+                row["subnet_name"] = f"SN{row['netuid']}"
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if cutoff and (timestamp is None or timestamp < cutoff):
             continue
@@ -1303,6 +1314,8 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "evaluation": proof["evaluation"],
         "direction": proof["direction"],
         "move_pct": proof["move_pct"],
+        "price_basis": proof.get("price_basis"),
+        "subnet_name": proof.get("subnet_name"),
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
     }
@@ -1339,7 +1352,8 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
             recent.append(
                 {
                     "id": int(row["id"]), "author_name": row.get("author_name"),
-                    "netuid": row.get("netuid"), "move_pct": proof["move_pct"],
+                    "netuid": row.get("netuid"), "subnet_name": proof.get("subnet_name"),
+                    "price_basis": proof.get("price_basis"), "move_pct": proof["move_pct"],
                     "pump_pct_max": proof["move_pct"], "status": proof["status"],
                     "hit": proof["status"] == "hit",
                 }

@@ -111,6 +111,65 @@ def test_flat_direction_uses_stable(intel_db):
     assert miss["status"] == "miss"
 
 
+def test_price_basis_requires_subnet_or_explicit_tao():
+    from internal.message_intel.proof import classify_call
+
+    subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "netuid": 7,
+            "outcome": "pump",
+        }
+    )
+    assert subnet["eligible"] is True
+    assert subnet["price_basis"] == "subnet"
+    assert subnet["subnet_name"] == "SN7"
+
+    named_subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "subnet_name": "Subnet Seven",
+            "outcome": "pump",
+        }
+    )
+    assert named_subnet["eligible"] is True
+    assert named_subnet["price_basis"] == "subnet"
+    assert named_subnet["subnet_name"] == "Subnet Seven"
+
+    tao = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "content": "TAO looks strong",
+            "outcome": "pump",
+        }
+    )
+    assert tao["eligible"] is True
+    assert tao["price_basis"] == "tao"
+    assert tao["subnet_name"] is None
+
+    chatter = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "flat",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "content": "Robotics along",
+            "outcome": "stable",
+        }
+    )
+    assert chatter["eligible"] is False
+    assert chatter["price_basis"] is None
+
+
 def test_pending_call_not_counted(intel_db):
     from internal.message_intel.proof import classify_call
     pending = classify_call({"source": "telegram", "predicted_direction": "up",
