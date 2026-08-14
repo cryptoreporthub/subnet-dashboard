@@ -308,7 +308,7 @@
     return line;
   }
 
-  function renderSpineChrome() {
+  function renderSpineChrome(graph) {
     const chrome = document.getElementById('mindmap-spine-chrome');
     if (!chrome) return;
     const focusNu = getFocusNetuid();
@@ -317,7 +317,18 @@
     const learnEl = chrome.querySelector('[data-spine="learn"]');
     if (!focusNu) {
       if (convEl) convEl.textContent = 'Focus conviction — pick a subnet in Living Focus';
-      if (learnEl) learnEl.textContent = 'Last learn — waiting for focus';
+      if (learnEl && graph && graph.learning_state) {
+        var resolver = graph.learning_state.resolver || {};
+        var loop = graph.learning_state.loop_learned || {};
+        learnEl.textContent =
+          'Loop state — ' +
+          Number(loop.graded || 0) +
+          ' graded · ' +
+          Number(resolver.pending || 0) +
+          ' pending · ' +
+          Number(resolver.retryable || 0) +
+          ' retryable';
+      } else if (learnEl) learnEl.textContent = 'Last learn — waiting for focus';
       return;
     }
     const conv = pickConvictionForFocus(cache.dailyPick, cache.dayPick, focusNu);
@@ -327,6 +338,19 @@
     }
     const trail = cache.trail || [];
     if (learnEl) learnEl.textContent = formatLearnLine(trail, focusNu);
+    if (learnEl && graph && graph.learning_state) {
+      var state = graph.learning_state;
+      var loopState = state.loop_learned || {};
+      var resolverState = state.resolver || {};
+      learnEl.textContent =
+        'Loop state — ' +
+        Number(loopState.graded || 0) +
+        ' graded · ' +
+        Number(resolverState.pending || 0) +
+        ' pending · ' +
+        Number(resolverState.retryable || 0) +
+        ' retryable';
+    }
   }
 
   function initSpineChrome() {
@@ -515,6 +539,7 @@
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
     const graph = await fetchGraph(root);
+    renderSpineChrome(graph);
     renderIntegrationStatusLegend(graph);
     if (graph.status === 'unavailable') {
       setEmptyMessage(

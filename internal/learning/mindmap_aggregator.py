@@ -111,6 +111,22 @@ def _build_runtime_status() -> Dict[str, str]:
     }
 
 
+def build_learning_state() -> Dict[str, Any]:
+    """Return structured resolver/pump loop state for graph and panel consumers."""
+    try:
+        from internal.learning.routes import _learning_snapshot
+
+        snapshot = _learning_snapshot()
+        return {
+            "resolver": snapshot.get("resolver_state") or {},
+            "pump_desk": snapshot.get("pump_desk_trust") or {},
+            "loop_learned": snapshot.get("loop_learned") or {},
+        }
+    except Exception as exc:
+        logger.warning("learning state snapshot unavailable: %s", exc)
+        return {}
+
+
 def _parse_time(entry: Dict[str, Any]) -> str:
     return str(entry.get("time") or entry.get("created_at") or "")
 
@@ -383,6 +399,8 @@ def build_mindmap_state() -> Dict[str, Any]:
     if pump_desk_snapshots:
         summaries["pump_desk_snapshots"] = pump_desk_snapshots
 
+    learning_state = build_learning_state()
+
     try:
         from internal.council.selector_scheduler import get_selector_scheduler_state
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
@@ -403,6 +421,7 @@ def build_mindmap_state() -> Dict[str, Any]:
         "schedulers": schedulers,
         "integration_status": _build_integration_status(),
         "runtime_status": _build_runtime_status(),
+        "learning_state": learning_state,
     }
     _STATE_CACHE["at"] = now
     _STATE_CACHE["payload"] = payload

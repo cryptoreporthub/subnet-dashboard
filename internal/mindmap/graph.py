@@ -14,7 +14,11 @@ def _utcnow_z() -> str:
 
 
 def _empty_graph() -> Dict[str, Any]:
-    from internal.learning.mindmap_aggregator import _build_integration_status, _build_runtime_status
+    from internal.learning.mindmap_aggregator import (
+        _build_integration_status,
+        _build_runtime_status,
+        build_learning_state,
+    )
 
     return {
         "status": "success",
@@ -22,6 +26,7 @@ def _empty_graph() -> Dict[str, Any]:
         "nodes": [],
         "edges": [],
         "integration_status": _build_integration_status(),
+        "learning_state": build_learning_state(),
         "runtime_status": _build_runtime_status(),
     }
 
@@ -531,7 +536,11 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         node_list = [n for n in node_list if n["id"] in keep_ids]
         edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
 
-    from internal.learning.mindmap_aggregator import _build_integration_status, _build_runtime_status
+    from internal.learning.mindmap_aggregator import (
+        _build_integration_status,
+        _build_runtime_status,
+        build_learning_state,
+    )
 
     try:
         integration_status = _build_integration_status()
@@ -543,6 +552,7 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("mindmap runtime_status failed: %s", exc)
         runtime_status = {}
+    learning_state = build_learning_state()
 
     return {
         "status": "success",
@@ -552,5 +562,6 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         "nodes": node_list,
         "edges": edges,
         "integration_status": integration_status,
+        "learning_state": learning_state,
         "runtime_status": runtime_status,
     }
