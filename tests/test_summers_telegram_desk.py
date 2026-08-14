@@ -136,7 +136,7 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
     assert 'role="tablist"' in html
-    assert 'href="/listener"' in html
+    assert 'href="/subnetsummer"' in html
     assert "Open full listener" in html
     assert 'data-pulse-pane="listen"' in html
     assert 'data-pulse-pane="learn"' in html
@@ -159,7 +159,10 @@ def test_summers_flagship_composition_hooks():
 def test_listener_share_page_composition():
     html = open("templates/listener.html", encoding="utf-8").read()
     css = open("static/css/listener.css", encoding="utf-8").read()
-    assert "lsn-intercept" in html
+    assert "lsn-site" in html
+    assert 'href="/"' in html
+    assert "Open the full website" in html
+    assert ".lsn-site" in css
     assert "lsn-title" in html
     assert "lsn-bay" in html
     assert "lsn-loop" in html
@@ -184,11 +187,16 @@ def test_listener_share_page_composition():
     assert "lsn-vault" not in html
     assert ".lsn-intercept" in css
     assert "--lsn-font-brand:'Syne'" in css.replace(" ", "")
-    resp = client.get("/listener")
+    resp = client.get("/subnetsummer")
     assert resp.status_code == 200
     body = resp.text
     assert "lsn-intercept" in body
     assert "Trending orbit" in body
+    assert "Open the full website" in body
+    assert 'href="/"' in body
+    bounced = client.get("/listener", follow_redirects=False)
+    assert bounced.status_code == 308
+    assert bounced.headers.get("location") == "/subnetsummer"
 
 
 def test_summers_divergence_mobile_and_keyboard_hooks():

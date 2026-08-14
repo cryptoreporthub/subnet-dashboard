@@ -10,7 +10,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from internal.share_pages.search import global_search
@@ -298,7 +298,7 @@ async def wallet_share_page(request: Request, wallet: str):
     )
 
 
-# ── §28-3 Telegram Listener page (/listener) ──────────────────────────────
+# ── §28-3 Telegram Listener page (/subnetsummer; /listener 308) ───────────
 # SSR from message-intel engine calls with honest empty fallbacks. The live
 # deploy has shown degraded /api/message-intel GETs (422 shared-gating class),
 # so every block is individually guarded — the page must never 5xx.
@@ -681,12 +681,12 @@ async def _listener_page_context() -> Dict[str, Any]:
     return ctx
 
 
-@share_router.get("/listener")
+@share_router.get("/subnetsummer")
 async def listener_page(request: Request):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
     ctx = await _listener_page_context()
     base = _public_base(request)
-    page_url = f"{base}/listener"
+    page_url = f"{base}/subnetsummer"
     title = "SimiVision — Telegram Listener"
     desc = (
         ctx.get("summary_text")
@@ -705,3 +705,8 @@ async def listener_page(request: Request):
         }
     )
     return templates.TemplateResponse(request, "listener.html", ctx)
+
+
+@share_router.get("/listener")
+async def listener_legacy_path():
+    return RedirectResponse(url="/subnetsummer", status_code=308)

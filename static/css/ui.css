@@ -11825,6 +11825,7 @@ body.wrap {
   aspect-ratio: 1;
   height: auto;
   margin: 4px auto 10px;
+  overflow: visible;
 }
 .message-intel--v2 .message-intel__sky-tracks {
   position: absolute;
@@ -12236,6 +12237,7 @@ body.wrap {
 .message-intel--v2 .message-intel__tile--orbit,
 .message-intel--v2 .message-intel__hall {
   scroll-margin-top: 72px;
+  overflow: visible;
 }
 .message-intel--v2 .message-intel__hall {
   grid-area: hall;
@@ -12737,7 +12739,7 @@ body.wrap {
   .message-intel--v2 {
     padding-left: max(0px, env(safe-area-inset-left, 0px));
     padding-right: max(0px, env(safe-area-inset-right, 0px));
-    overflow-x: clip;
+    overflow-x: visible;
   }
 
   .message-intel--v2 .message-intel__page-title {
