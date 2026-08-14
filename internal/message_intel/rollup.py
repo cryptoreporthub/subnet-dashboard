@@ -830,10 +830,12 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
-                      m.content, m.timestamp, m.created_at, v.predicted_direction, v.conviction,
+                      m.content, m.timestamp, m.created_at, a.entities_json,
+                      v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
                       po.price_1h, po.price_4h, po.price_24h
                FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                LEFT JOIN price_outcomes po ON po.message_id = m.id
@@ -1303,6 +1305,7 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "evaluation": proof["evaluation"],
         "direction": proof["direction"],
         "move_pct": proof["move_pct"],
+        "price_basis": proof.get("price_basis"),
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
     }

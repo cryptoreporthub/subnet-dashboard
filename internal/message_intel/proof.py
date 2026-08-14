@@ -31,6 +31,8 @@ Not financial advice.
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Any, Dict, Optional
 
 # ── Constants (one source of truth) ────────────────────────────────────────
@@ -117,6 +119,30 @@ def _to_float(value: Any) -> Optional[float]:
     return f
 
 
+def _about_tao(row: Dict[str, Any]) -> bool:
+    """Allow TAO/USD grading only for explicit TAO messages.
+
+    Rows without message text are legacy/unit records and retain the old TAO
+    fallback; real Telegram rows must mention TAO in text or extracted entities.
+    """
+    if row.get("netuid") is not None:
+        return False
+    if row.get("about_tao") is True:
+        return True
+    raw_entities = row.get("entities_json")
+    try:
+        entities = json.loads(raw_entities) if isinstance(raw_entities, str) else raw_entities
+        protocols = entities.get("protocols") if isinstance(entities, dict) else []
+        if any(str(item).lower() in {"tao", "dtao"} for item in protocols or []):
+            return True
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    content = str(row.get("content") or "")
+    if not content:
+        return row.get("tao_usd_price") is not None
+    return bool(re.search(r"\b(?:d?TAO)\b", content, re.IGNORECASE))
+
+
 def _classify_status(direction: Optional[str], outcome: str, pump_pct: Optional[float]) -> str:
     """Return OC_HIT | OC_MISS | OC_NEUTRAL for a resolved call."""
     outcome = str(outcome or "").lower()
@@ -161,6 +187,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     baseline = _to_float(row.get("tao_usd_price"))
     outcome = (row.get("outcome") or "").strip()
     pump_pct = _to_float(row.get("pump_pct_max"))
+    price_basis = "subnet" if row.get("netuid") is not None else ("tao" if _about_tao(row) else None)
 
     eligible = (
         source == "telegram"
@@ -168,6 +195,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         and conviction >= min_conviction
         and baseline is not None
         and baseline > 0
+        and price_basis is not None
     )
 
     move_pct: Optional[float] = None
@@ -183,6 +211,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "resolved": False,
             "direction": direction,
             "move_pct": move_pct,
+            "price_basis": price_basis,
             "raw_outcome": outcome or None,
             "threshold": min_conviction,
         }
@@ -195,6 +224,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "resolved": False,
             "direction": direction,
             "move_pct": move_pct,
+            "price_basis": price_basis,
             "raw_outcome": None,
             "threshold": min_conviction,
         }
@@ -207,6 +237,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         "resolved": True,
         "direction": direction,
         "move_pct": move_pct,
+        "price_basis": price_basis,
         "raw_outcome": outcome,
         "threshold": min_conviction,
     }
