@@ -39,3 +39,29 @@ def test_pump_calibration_requires_active_ledger_sample(monkeypatch, tmp_path):
         lambda: {"early": {"n": 29, "hit_rate": 0.1}},
     )
     assert maybe_adapt_after_resolve(min_sample=30) is None
+
+
+def test_stale_pump_calibration_provenance_does_not_block_recalibration(monkeypatch):
+    saved = []
+    monkeypatch.setattr(
+        "internal.learning.pump_lead_stats.build_pump_desk_trust",
+        lambda: {"early": {"n": 30, "hit_rate": 0.1}},
+    )
+    monkeypatch.setattr(
+        "internal.learning.pump_calibration.load_calibration",
+        lambda path=None: {
+            "adapted_from_n": 49,
+            "adapted_at": "2026-01-01T00:00:00Z",
+            "adapted_from_fingerprint": None,
+            "lead_buy_ratio_min": 0.55,
+            "lead_volume_intensity_min": 0.22,
+            "phase_entry": {"STIRRING": 0.22, "ACCUMULATING": 0.42},
+        },
+    )
+    monkeypatch.setattr(
+        "internal.learning.pump_calibration.save_calibration",
+        lambda data, path=None: saved.append(data),
+    )
+    result = maybe_adapt_after_resolve(min_sample=30)
+    assert result is not None
+    assert saved and saved[0]["adapted_from_fingerprint"]

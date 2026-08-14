@@ -72,12 +72,13 @@ def _build_runtime_status() -> Dict[str, str]:
     """Evidence state, separate from import/wiring status above."""
     try:
         from internal.council.resolver import _compute_stats
+        from internal.learning.trust_stats import build_trust_banner
         from internal.learning.predictions_store import load_predictions
 
         data = load_predictions()
         stats = _compute_stats(data)
-        council_graded = int(stats.get("correct", 0) or 0) + int(stats.get("wrong", 0) or 0)
-        council = "live" if council_graded else (
+        trust = build_trust_banner(stats)
+        council = "live" if trust.get("ready") else (
             "evidence_building" if data.get("predictions") or data.get("resolved") else "blocked"
         )
     except Exception:
@@ -93,7 +94,8 @@ def _build_runtime_status() -> Dict[str, str]:
     try:
         from internal.message_intel.rollup import build_telegram_proof_band
 
-        telegram = "live" if (build_telegram_proof_band().get("graded") or 0) else "evidence_building"
+        proof = build_telegram_proof_band()
+        telegram = "live" if proof.get("ready") else "evidence_building"
     except Exception:
         telegram = "blocked"
 
