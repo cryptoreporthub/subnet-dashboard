@@ -59,6 +59,59 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
     assert len([r for r in rows if r.get("date") == today]) == 1
 
 
+def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path):
+    path = str(tmp_path / "daily_picks.json")
+    daily_pick_engine.DAILY_PICKS_PATH = path
+    today = daily_pick_engine._today_str()
+
+    stale_long = {
+        "status": "ok",
+        "date": today,
+        "action": "long",
+        "pick": {
+            "subnet": {"netuid": 2, "name": "DSperse"},
+            "final_confidence": 0.4741,
+            "signal_impact": {"net_direction": "bearish", "net_predicted_pct": -11.32},
+            "audit": {"approved": True, "concerns": ["Thin volume"]},
+        },
+        "reason": None,
+    }
+    import json
+
+    with open(path, "w") as f:
+        json.dump([stale_long], f)
+
+    regen_calls = {"n": 0}
+
+    def _fake_select(subnets, ctx):
+        regen_calls["n"] += 1
+        return {
+            "subnet": {"netuid": 30, "name": "Endure Network"},
+            "final_confidence": 0.57,
+            "action": "long",
+            "signal_impact": {"net_direction": "bullish", "net_predicted_pct": 2.1},
+            "audit": {"approved": True, "concerns": []},
+        }
+
+    monkeypatch.setattr(daily_pick_engine, "select_daily_pick", _fake_select)
+    monkeypatch.setattr(daily_pick_engine, "classify_regime", lambda ctx: "neutral")
+    monkeypatch.setattr(daily_pick_engine, "get_rotation_summary", lambda s: {})
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick_prediction",
+        lambda *a, **k: {"id": "p1"},
+    )
+
+    subnets = [
+        {"netuid": 2, "name": "DSperse", "price": 1.0, "volume": 3792, "marketcap_rank": 18},
+        {"netuid": 30, "name": "Endure Network", "price": 0.5, "volume": 12000, "marketcap_rank": 30},
+    ]
+    out = daily_pick_engine.get_or_create_today_pick(subnets, {}, force=False)
+
+    assert regen_calls["n"] == 1
+    assert out["action"] == "long"
+    assert out["pick"]["subnet"]["netuid"] == 30
+
+
 def test_fresh_hold_not_regenerated(monkeypatch, tmp_path):
     path = str(tmp_path / "daily_picks.json")
     daily_pick_engine.DAILY_PICKS_PATH = path

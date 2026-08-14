@@ -1,6 +1,7 @@
 <!-- Council is weighing — Conviction Board (Weighing Room) -->
 {% set wr_meta = simivision.meta if simivision is mapping and simivision.meta is mapping else {} %}
 {% set gap_tick = wr_meta.gap_tick_pct if wr_meta.gap_tick_pct is not none else none %}
+{% set primary_call = dp_subnet if dp_subnet is mapping else none %}
 <section class="row weighing-room" id="section-simivision-picks" aria-labelledby="simivision-picks-title"
   data-gap-tick="{{ gap_tick if gap_tick is not none else '' }}">
   <div class="section-label">
@@ -9,6 +10,9 @@
   </div>
   <h2 class="section-title" id="simivision-picks-title">Council is weighing</h2>
   <p class="section-sub">Names still on the table — sorted by proximity to a call, not a scoreboard.</p>
+  {% if primary_call and primary_call.netuid is not none %}
+  <p class="wr-handoff" id="wr-primary-call">Primary daily call: {{ primary_call.name|default('SN' ~ primary_call.netuid) }} · SN{{ primary_call.netuid }}. Alternatives below are not the published call.</p>
+  {% endif %}
   <p class="wr-spine" id="wr-spine">{{ wr_meta.spine_whisper|default('Graded on close · weights update after resolve') }}</p>
   {% if wr_meta.quiet_label %}
   <p class="wr-quiet" id="wr-quiet">{{ wr_meta.quiet_label }}</p>

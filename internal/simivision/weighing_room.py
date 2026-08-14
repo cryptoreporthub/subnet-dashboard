@@ -12,7 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 NEAR_CALL_MIN_PROXIMITY = 82
 FADING_MAX_PROXIMITY = 48
-MAX_ROWS = 5
+MAX_ROWS = 10
+JUDGE_LONG_LIMIT = 6
 
 _EXPERT_DISPLAY = {
     "quant": "Quant",
@@ -36,6 +37,156 @@ _BAND_BY_STATE = {
 
 SPINE_WHISPER = "Graded on close · weights update after resolve"
 
+_JUDGE_DISPLAY = ("oracle", "echo", "pulse")
+_LONG_VERDICTS = frozenset({"long", "bullish"})
+
+
+def judge_split_line(judge_scores: Any) -> Optional[str]:
+    """Oracle / Echo / Pulse blend for judge-long peel rows."""
+    if not isinstance(judge_scores, dict):
+        return None
+    ranked: List[Tuple[str, float]] = []
+    for key in _JUDGE_DISPLAY:
+        block = judge_scores.get(key)
+        if not isinstance(block, dict):
+            continue
+        try:
+            ranked.append((key.title(), float(block.get("score", 0))))
+        except (TypeError, ValueError):
+            continue
+    if not ranked:
+        return None
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    lead_label, lead_val = ranked[0]
+    rest = " / ".join(f"{lab} {val:.2f}" for lab, val in ranked[1:])
+    if rest:
+        return f"Judge council · {lead_label} leads · {lead_val:.2f} / {rest}"
+    return f"Judge council · {lead_label} · {lead_val:.2f}"
+
+
+def _judge_long_rows(
+    subnets: List[Dict[str, Any]],
+    *,
+    limit: int = JUDGE_LONG_LIMIT,
+) -> List[Dict[str, Any]]:
+    """Top judge-council rows with unanimous long verdict — never hide from weighing."""
+    if not subnets:
+        return []
+    scored: List[Dict[str, Any]] = []
+    try:
+        from internal.judges.council_routes import _cap_subnets_for_judges, _load_judges_cache_file
+        from internal.judges.subnet_judges import score_all_subnets
+
+        cached = _load_judges_cache_file()
+        judges = cached.get("judges") if isinstance(cached, dict) else None
+        if isinstance(judges, list) and judges:
+            scored = judges
+        else:
+            capped = _cap_subnets_for_judges(list(subnets))
+            scored = score_all_subnets(capped, use_chain=False)
+    except Exception:
+        return []
+
+    by_netuid: Dict[int, Dict[str, Any]] = {}
+    for sn in subnets:
+        try:
+            by_netuid[int(sn.get("netuid", sn.get("id")))] = sn
+        except (TypeError, ValueError):
+            continue
+
+    rows: List[Dict[str, Any]] = []
+    for item in scored:
+        if not isinstance(item, dict):
+            continue
+        consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+        verdict = str(consensus.get("verdict") or "").lower()
+        if verdict not in _LONG_VERDICTS:
+            continue
+        nu = item.get("netuid")
+        sn = by_netuid.get(int(nu)) if nu is not None else {}
+        try:
+            conv = int(round(float(consensus.get("score", 0)) * 100))
+        except (TypeError, ValueError):
+            conv = 0
+        from internal.subnets.apy import subnet_apy_percent
+        from internal.subnets.tradable import subnet_volume
+
+        apy_val = subnet_apy_percent(sn) if sn else None
+        if apy_val is None and sn:
+            apy_val = float(sn.get("apy", 0) or 0)
+        rows.append(
+            {
+                "netuid": nu,
+                "name": item.get("name"),
+                "conviction": conv,
+                "judge_long": True,
+                "source": "judge_council",
+                "judge_scores": {
+                    "oracle": item.get("oracle"),
+                    "echo": item.get("echo"),
+                    "pulse": item.get("pulse"),
+                },
+                "why_not": (
+                    f"Judge consensus {conv}% — Oracle, Echo, and Pulse all above the long bar."
+                ),
+                "emission": sn.get("emission", 0) if sn else 0,
+                "apy": apy_val or 0,
+                "volume": subnet_volume(sn) if sn else 0,
+                "recommendation": "LONG",
+            }
+        )
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def _merge_weighing_candidates(
+    expert_rows: List[Dict[str, Any]],
+    judge_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Union expert deliberation + judge-long leaders; dedupe by netuid."""
+    merged: Dict[int, Dict[str, Any]] = {}
+    for row in expert_rows:
+        if not isinstance(row, dict) or row.get("netuid") is None:
+            continue
+        try:
+            nu = int(row["netuid"])
+        except (TypeError, ValueError):
+            continue
+        merged[nu] = dict(row)
+        merged[nu]["sources"] = ["expert_council"]
+    for row in judge_rows:
+        if not isinstance(row, dict) or row.get("netuid") is None:
+            continue
+        try:
+            nu = int(row["netuid"])
+        except (TypeError, ValueError):
+            continue
+        if nu in merged:
+            existing = merged[nu]
+            existing["judge_long"] = True
+            existing["judge_scores"] = row.get("judge_scores")
+            existing["sources"] = list(
+                dict.fromkeys((existing.get("sources") or []) + ["judge_council"])
+            )
+            existing["conviction"] = max(
+                int(existing.get("conviction") or 0),
+                int(row.get("conviction") or 0),
+            )
+            if not existing.get("why_not"):
+                existing["why_not"] = row.get("why_not")
+        else:
+            merged[nu] = dict(row)
+            merged[nu]["sources"] = ["judge_council"]
+    out = list(merged.values())
+    out.sort(
+        key=lambda r: (
+            -int(r.get("conviction") or 0),
+            0 if r.get("judge_long") else 1,
+        )
+    )
+    return out
+
 
 def build_weighing_candidates_from_shortlist(
     subnets: List[Dict[str, Any]],
@@ -55,8 +206,6 @@ def build_weighing_candidates_from_shortlist(
     min_alts = 1
     if isinstance(daily_pick, dict) and str(daily_pick.get("action", "")).upper() != "HOLD":
         min_alts = 2
-    if len(alternatives) < min_alts:
-        return [], total_considered
 
     by_netuid: Dict[int, Dict[str, Any]] = {}
     for sn in subnets:
@@ -88,7 +237,12 @@ def build_weighing_candidates_from_shortlist(
                 "recommendation": "WATCH",
             }
         )
-    return raw_top, total_considered
+
+    judge_rows = _judge_long_rows(subnets)
+    merged = _merge_weighing_candidates(raw_top, judge_rows)
+    if len(alternatives) < min_alts and not merged:
+        return [], total_considered
+    return merged, total_considered
 
 
 def conviction_pct(raw: Any) -> int:
@@ -368,6 +522,47 @@ def shape_weighing_board(
     last = _load_last_convictions()
     horizon_line = peel_horizon_line(horizon=horizon, resolves_in=resolves_in)
     rows: List[Dict[str, Any]] = []
+    if call_netuid is not None:
+        primary_block = None
+        if isinstance(daily_pick, dict):
+            pick_block = daily_pick.get("pick")
+            if isinstance(pick_block, dict) and pick_block.get("subnet"):
+                primary_block = pick_block
+        primary_subnet = (
+            primary_block.get("subnet") if isinstance(primary_block, dict) else {}
+        )
+        primary_experts = (
+            primary_block.get("expert_contributions", {})
+            if isinstance(primary_block, dict)
+            else {}
+        )
+        rows.append(
+            {
+                "netuid": call_netuid,
+                "name": primary_subnet.get("name") or f"SN{call_netuid}",
+                "conviction": call_conv or 0,
+                "proximity": 100,
+                "conviction_delta": 0,
+                "deliberation_state": "NEAR-CALL",
+                "reason": "Published primary daily call",
+                "why_not": "This is the published call, not an alternative.",
+                "trigger": f"Locks in after the {horizon} resolution window.",
+                "expert_contributions": primary_experts,
+                "expert_split": expert_split_line(primary_experts),
+                "track_record": subnet_graded_snippet(call_netuid),
+                "horizon_line": horizon_line,
+                "near_call_strip": None,
+                "closest_to_call": True,
+                "gap_whisper": "PRIMARY DAILY CALL",
+                "gap_pts": 0,
+                "stitch_border": True,
+                "primary_call": True,
+                "band": "near",
+                "band_label": "PRIMARY CALL",
+                "mud_band": "near",
+                "mud_label": "PRIMARY CALL",
+            }
+        )
     for raw in top or []:
         if not isinstance(raw, dict):
             continue
@@ -406,6 +601,23 @@ def shape_weighing_board(
             or "Has not crossed today's call threshold."
         )
         split = expert_split_line(raw.get("expert_contributions"))
+        judge_split = judge_split_line(raw.get("judge_scores"))
+        if raw.get("judge_long"):
+            band_slug, band_label = ("near", "JUDGE LONG")
+            if not split and judge_split:
+                split = judge_split
+            elif split and judge_split:
+                split = f"{judge_split} · {split}"
+            if raw.get("source") == "judge_council" and not raw.get("expert_contributions"):
+                reason = (
+                    raw.get("reason")
+                    or raw.get("why_not")
+                    or "All three judges scored above the long bar."
+                )
+                why_not = (
+                    raw.get("why_not")
+                    or "Expert council still sizing conviction on this name."
+                )
         row = dict(raw)
         row.update(
             {
@@ -417,6 +629,7 @@ def shape_weighing_board(
                 "why_not": why_not,
                 "trigger": trigger_for_state(state),
                 "expert_split": split,
+                "judge_split": judge_split,
                 "track_record": subnet_graded_snippet(nu),
                 "horizon_line": horizon_line,
                 "near_call_strip": (
@@ -436,26 +649,57 @@ def shape_weighing_board(
         )
         rows.append(row)
 
-    rows.sort(key=lambda r: (-int(r.get("proximity") or 0), -int(r.get("conviction") or 0)))
-    rows = rows[:MAX_ROWS]
+    rows.sort(
+        key=lambda r: (
+            0 if r.get("primary_call") else 1,
+            -int(r.get("proximity") or 0),
+            -int(r.get("conviction") or 0),
+        )
+    )
+    primary_rows = [r for r in rows if r.get("primary_call")]
+    judge_rows = [
+        r for r in rows if r.get("judge_long") and not r.get("primary_call")
+    ]
+    judge_rows.sort(key=lambda r: -int(r.get("conviction") or 0))
+    judge_rows = judge_rows[:JUDGE_LONG_LIMIT]
+    judge_netuids = {r.get("netuid") for r in judge_rows}
+    expert_rows = [
+        r
+        for r in rows
+        if not r.get("primary_call")
+        and not r.get("judge_long")
+        and r.get("netuid") not in judge_netuids
+    ]
+    expert_rows.sort(
+        key=lambda r: (-int(r.get("proximity") or 0), -int(r.get("conviction") or 0))
+    )
+    slots_left = max(0, MAX_ROWS - len(primary_rows) - len(judge_rows))
+    rows = primary_rows + judge_rows + expert_rows[:slots_left]
     if rows and call_conv is not None:
-        top_row = rows[0]
-        top_row["closest_to_call"] = True
-        whisper = gap_whisper(int(top_row.get("conviction") or 0), call_conv)
-        top_row["gap_whisper"] = whisper
-        top_row["gap_pts"] = abs(int(top_row.get("conviction") or 0) - int(call_conv))
-        # Green border only when stitch is not FADING
-        top_row["stitch_border"] = top_row.get("deliberation_state") != "FADING"
+        primary = next((r for r in rows if r.get("primary_call")), rows[0])
+        if not primary.get("primary_call"):
+            primary = rows[0]
+        primary["closest_to_call"] = True
+        if primary.get("primary_call"):
+            primary["gap_whisper"] = "PRIMARY DAILY CALL"
+            primary["gap_pts"] = 0
+            primary["stitch_border"] = True
+        else:
+            whisper = gap_whisper(int(primary.get("conviction") or 0), call_conv)
+            primary["gap_whisper"] = whisper
+            primary["gap_pts"] = abs(int(primary.get("conviction") or 0) - int(call_conv))
+            primary["stitch_border"] = primary.get("deliberation_state") != "FADING"
     elif rows:
         rows[0]["closest_to_call"] = True
 
+    judge_long_on_table = sum(1 for r in rows if r.get("judge_long"))
     persist_map = {str(r["netuid"]): r["conviction"] for r in rows if r.get("netuid") is not None}
     if persist_map:
         merged = dict(last)
         merged.update(persist_map)
         _persist_convictions(merged)
 
-    excluded = 1 if call_netuid is not None else 0
+    excluded = 0
     on_table = len(rows)
     considered = total_considered if total_considered is not None else pool_count
     quiet = max(0, int(considered or 0) - on_table - excluded)
@@ -466,6 +710,7 @@ def shape_weighing_board(
     meta = {
         "call_netuid": call_netuid,
         "call_conviction": call_conv,
+        "primary_netuid": call_netuid,
         "updated_ago": _human_updated_ago(updated_at),
         "on_table": on_table,
         "quiet_count": quiet,
@@ -474,5 +719,6 @@ def shape_weighing_board(
         "gap_tick_pct": call_conv,
         "spine_whisper": SPINE_WHISPER,
         "horizon": horizon,
+        "judge_long_on_table": judge_long_on_table,
     }
     return rows, meta

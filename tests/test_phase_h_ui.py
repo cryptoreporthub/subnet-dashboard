@@ -319,6 +319,7 @@ def test_h_full_simivision_picks_or_honest_empty():
     # SSR shell may be empty; hydrate fills — require honest empty or weighing rows
     assert "wr-row" in html or "warming up" in html or "on the table" in html
     assert "These may become tomorrow" in html
+    assert "Primary daily call:" in html or "No other names on the table" in html
     assert "pick-rank" not in html or "wr-row" in html
 
 

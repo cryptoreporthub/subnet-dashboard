@@ -1104,6 +1104,13 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 .wr-row--stitch-border {
   border-left: 3px solid rgba(57, 255, 20, 0.4);
 }
+.wr-row--primary {
+  border-left: 3px solid rgba(63, 201, 255, 0.8);
+  box-shadow: 0 0 18px rgba(63, 201, 255, 0.12);
+}
+.wr-row--judge-long {
+  border-left: 3px solid rgba(201, 154, 75, 0.75);
+}
 .wr-row__face {
   width: 100%;
   display: grid;
@@ -1134,6 +1141,11 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   border-color: rgba(31, 212, 124, 0.45);
   background: rgba(31, 212, 124, 0.08);
   animation: wr-near-pulse 2.2s ease-in-out infinite;
+}
+.wr-chip--judge-long {
+  color: #c99a4b;
+  border-color: rgba(201, 154, 75, 0.55);
+  background: rgba(201, 154, 75, 0.1);
 }
 .wr-chip--weighing {
   color: rgba(233, 247, 239, 0.65);
