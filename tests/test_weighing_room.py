@@ -2,11 +2,13 @@
 
 from internal.simivision.weighing_room import (
     SPINE_WHISPER,
+    _merge_weighing_candidates,
     _near_call_strip,
     build_weighing_candidates_from_shortlist,
     deliberation_state,
     expert_split_line,
     gap_whisper,
+    judge_split_line,
     peel_horizon_line,
     proximity_to_call,
     shape_weighing_board,
@@ -207,7 +209,11 @@ def _sample_subnets():
     ]
 
 
-def test_shortlist_wire_builds_from_deliberation_alternatives():
+def test_shortlist_wire_builds_from_deliberation_alternatives(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room._judge_long_rows",
+        lambda subnets, limit=6: [],
+    )
     daily = {
         "pick": {
             "subnet": {"netuid": 1, "name": "Alpha"},
@@ -225,7 +231,104 @@ def test_shortlist_wire_builds_from_deliberation_alternatives():
     assert isinstance(raw[0].get("expert_contributions"), dict)
 
 
-def test_shortlist_wire_honest_empty_when_thin():
+def test_judge_split_line_formats_oracle_echo_pulse():
+    line = judge_split_line(
+        {
+            "oracle": {"score": 0.94},
+            "echo": {"score": 0.83},
+            "pulse": {"score": 0.75},
+        }
+    )
+    assert line is not None
+    assert "Judge council" in line
+    assert "Oracle" in line
+
+
+def test_merge_weighing_candidates_unions_judge_longs():
+    expert = [{"netuid": 30, "name": "Endure", "conviction": 57}]
+    judge = [
+        {
+            "netuid": 8,
+            "name": "Vanta",
+            "conviction": 88,
+            "judge_long": True,
+            "judge_scores": {"oracle": {"score": 0.9}},
+        },
+        {
+            "netuid": 38,
+            "name": "ChronoLLM",
+            "conviction": 87,
+            "judge_long": True,
+        },
+    ]
+    merged = _merge_weighing_candidates(expert, judge)
+    netuids = {r["netuid"] for r in merged}
+    assert netuids == {8, 30, 38}
+    endure = next(r for r in merged if r["netuid"] == 30)
+    assert endure.get("sources") == ["expert_council"]
+
+
+def test_shape_includes_judge_long_rows(monkeypatch):
+    top = [
+        {
+            "netuid": 8,
+            "name": "Vanta",
+            "conviction": 88,
+            "judge_long": True,
+            "source": "judge_council",
+            "judge_scores": {
+                "oracle": {"score": 0.94},
+                "echo": {"score": 0.83},
+                "pulse": {"score": 0.75},
+            },
+            "why_not": "Judge consensus 88%",
+        },
+        {"netuid": 30, "name": "Endure", "conviction": 57, "why_not": "expert alt"},
+    ]
+    daily = {
+        "pick": {"subnet": {"netuid": 2, "name": "DSperse"}, "final_confidence": 0.47},
+        "resolves_in": "8h",
+    }
+    rows, meta = shape_weighing_board(top, pool_count=20, daily_pick=daily)
+    judge_rows = [r for r in rows if r.get("judge_long")]
+    assert rows[0]["primary_call"] is True
+    assert judge_rows
+    assert any(r["netuid"] == 8 for r in judge_rows)
+    assert meta.get("judge_long_on_table", 0) >= 1
+    vanta = next(r for r in rows if r["netuid"] == 8)
+    assert vanta.get("band_label") == "JUDGE LONG"
+    assert vanta.get("judge_split")
+
+
+def test_shortlist_wire_includes_judge_longs_when_expert_thin(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room._judge_long_rows",
+        lambda subnets, limit=6: [
+            {
+                "netuid": 8,
+                "name": "Vanta",
+                "conviction": 88,
+                "judge_long": True,
+                "source": "judge_council",
+                "judge_scores": {"oracle": {"score": 0.9}},
+                "why_not": "Judge consensus 88%",
+            }
+        ],
+    )
+    raw, total = build_weighing_candidates_from_shortlist(
+        [{"netuid": 1, "name": "Only", "price": 1.0, "volume": 5000}],
+        {"pick": None},
+        {},
+    )
+    assert raw
+    assert any(r.get("netuid") == 8 and r.get("judge_long") for r in raw)
+
+
+def test_shortlist_wire_honest_empty_when_thin(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room._judge_long_rows",
+        lambda subnets, limit=6: [],
+    )
     raw, total = build_weighing_candidates_from_shortlist(
         [{"netuid": 1, "name": "Only"}], {"pick": None}, {}
     )
@@ -233,7 +336,11 @@ def test_shortlist_wire_honest_empty_when_thin():
     assert total >= 0
 
 
-def test_shortlist_wire_reason_on_shaped_rows():
+def test_shortlist_wire_reason_on_shaped_rows(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room._judge_long_rows",
+        lambda subnets, limit=6: [],
+    )
     daily = {
         "pick": {
             "subnet": {"netuid": 1, "name": "Alpha"},

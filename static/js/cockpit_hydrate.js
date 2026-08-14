@@ -442,6 +442,13 @@
           ';" aria-hidden="true"></span>'
         : '';
     var peelExtra = '';
+    if (pick.judge_split) {
+      peelExtra +=
+        '<div class="wr-peel__block"><div class="wr-peel__label">Judge council</div>' +
+        '<p class="wr-peel__split">' +
+        esc(pick.judge_split) +
+        '</p></div>';
+    }
     if (pick.expert_split) {
       peelExtra +=
         '<div class="wr-peel__block"><div class="wr-peel__label">Council experts</div>' +
@@ -469,10 +476,16 @@
       '">' +
       esc(name) +
       '</a>';
+    var chipLabel = pick.primary_call
+      ? 'PRIMARY CALL'
+      : pick.judge_long
+        ? 'JUDGE LONG'
+        : state;
     return (
       '<article class="wr-row wr-row--' +
       esc(stateSlug) +
       (pick.primary_call ? ' wr-row--primary' : '') +
+      (pick.judge_long ? ' wr-row--judge-long' : '') +
       (pick.closest_to_call ? ' wr-row--stitch' : '') +
       stitchBorder +
       '" data-netuid="' +
@@ -486,8 +499,9 @@
       '">' +
       '<span class="wr-chip wr-chip--' +
       esc(stateSlug) +
+      (pick.judge_long && !pick.primary_call ? ' wr-chip--judge-long' : '') +
       '">' +
-      esc(pick.primary_call ? 'PRIMARY CALL' : state) +
+      esc(chipLabel) +
       '</span>' +
       '<div class="wr-row__main"><div class="wr-name">' +
       nameLink +
