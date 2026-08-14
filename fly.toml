@@ -39,7 +39,7 @@ primary_region = "sjc"
   # auto: start Telethon listener when session exists on worker volume (see DEPLOY.md).
   MESSAGE_INTEL_LISTENER = "auto"
   # SS-TG W6: Bot API /summary in group — separate from Telethon user-session listener.
-  TELEGRAM_SUMMARY_BOT = "off"
+  TELEGRAM_SUMMARY_BOT = "on"
   RESOLVER_REFRESH_MINUTES = "15"
   # Defer heavy resolver tick on boot — immediate=True wedges single-worker Fly.
   RESOLVER_BOOT_IMMEDIATE = "off"

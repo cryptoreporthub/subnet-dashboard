@@ -123,6 +123,38 @@ def test_process_update_handles_summary_command(intel_env):
         assert "Subnet Summers" in args[1]
 
 
+def test_start_command_lists_all_bot_commands():
+    reply = summary_bot.handle_command("/start")
+
+    assert "/summary" in reply
+    assert "/trending" in reply
+    assert "/track" in reply
+    assert "/rank" in reply
+    assert "/who" in reply
+    assert "/alerts" in reply
+    assert "/link" in reply
+
+
+def test_alerts_command_without_toggle_lists_active_alerts(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALERTS_PATH", str(tmp_path / "alerts.json"))
+    from internal.signals.alerts import AlertEngine
+
+    engine = AlertEngine(alerts_path=str(tmp_path / "alerts.json"))
+    engine.create_alert(
+        {
+            "alert_type": "manual",
+            "message": "SN7 is warming",
+            "severity": "info",
+            "subnet_id": 7,
+        }
+    )
+
+    with patch("internal.signals.alerts.AlertEngine", return_value=engine):
+        reply = summary_bot.handle_command("/alerts")
+
+    assert "SN7 is warming" in reply
+
+
 def test_start_summary_bot_spawns_thread(monkeypatch):
     import threading
 
@@ -168,8 +200,8 @@ def test_background_boot_wires_summary_bot():
     assert "stop_summary_bot" in boot
 
 
-def test_fly_toml_summary_bot_off():
+def test_fly_toml_summary_bot_on():
     from pathlib import Path
 
     fly = Path("fly.toml").read_text(encoding="utf-8")
-    assert 'TELEGRAM_SUMMARY_BOT = "off"' in fly
+    assert 'TELEGRAM_SUMMARY_BOT = "on"' in fly
