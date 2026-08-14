@@ -165,7 +165,10 @@ def test_listener_share_page_composition():
     assert ".lsn-site" in css
     assert "lsn-title" in html
     assert "lsn-bay" in html
-    assert "lsn-loop" in html
+    assert "lsn-loop" not in html
+    assert 'role="tablist"' not in html
+    assert "cosmic-sky" in html
+    assert "council-first-theme" in html
     assert "Chatter Power" in html
     assert "/rank" in html
     assert "/who" in html

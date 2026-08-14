@@ -14,9 +14,13 @@
 <meta name="theme-color" content="#080911">
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
+<link rel="stylesheet" href="/static/css/smoke-tokens.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/ui.css?v={{ static_v }}">
 <link rel="stylesheet" href="/static/css/listener.css?v={{ static_v }}">
 </head>
-<body class="lsn-body">
+<body class="lsn-body council-first-theme">
+  <div class="cosmic-sky" aria-hidden="true"></div>
   <div class="lsn-page">
 
     <!-- TRUST STRIP — static at top (never sticky) -->
@@ -72,19 +76,13 @@
     </div>
 
     <a class="lsn-site" href="/">
+      <span class="lsn-site__orb" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="lsn-site__copy">
-        <span class="lsn-site__kicker">Subnet Summers</span>
+        <span class="lsn-site__kicker">SimiVision · Subnet Summers</span>
         <span class="lsn-site__label">Open the full website</span>
       </span>
-      <span class="lsn-site__go" aria-hidden="true">→</span>
+      <span class="lsn-site__go">Enter<span aria-hidden="true"> →</span></span>
     </a>
-
-    <ol class="lsn-loop" aria-label="Listen Learn Rank Serve">
-      <li data-beat="listen"><b>Listen</b><span>ingest</span></li>
-      <li data-beat="learn"><b>Learn</b><span>who's right</span></li>
-      <li data-beat="rank"><b>Rank</b><span>chatter power</span></li>
-      <li data-beat="serve"><b>Serve</b><span>desk + bot</span></li>
-    </ol>
 
     <!-- COMMANDS — live subset marked; rest share the same loop -->
     <div class="lsn-glass lsn-cmds">
@@ -445,13 +443,7 @@
 
     <p class="lsn-dock-note">Green /summary is live in chat. /rank /who /trending share the same Listen→Learn→Rank→Serve loop — marked until the bot ships them.</p>
 
-    <a class="lsn-site lsn-site--foot" href="/">
-      <span class="lsn-site__copy">
-        <span class="lsn-site__kicker">Back to the dashboard</span>
-        <span class="lsn-site__label">Open the full website</span>
-      </span>
-      <span class="lsn-site__go" aria-hidden="true">→</span>
-    </a>
+    <a class="lsn-site-quiet" href="/">← Back to the full website</a>
 
     <div class="lsn-disc">Conviction is <b>auto-scored</b>, not financial advice. Leaderboard measured from resolved qualifying calls — not engagement. Skin is belief, never edge.</div>
   </div>
