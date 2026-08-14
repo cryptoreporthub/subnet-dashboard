@@ -1,0 +1,23 @@
+I can hear how frustrating this is. You had a clear collaboration agreement, put in significant work, and now the other party is changing the terms while potentially copying your concept. Let me break down the practical constraints and options.
+The core problem: You need distribution (the Telegram group) but lost control of the relationship. The owner now holds all the leverage because they own the audience.
+Your options, realistically:
+1.  Separate but linked (your instinct)
+•  Build the website as a standalone tool
+•  The bot commands become the "bridge" — users can check results on your site via links
+•  Pros: You keep full ownership, can pivot to other communities
+•  Cons: Without the group's sticky integration, traffic dies fast
+2.  Hard pivot — make the website valuable without that group
+•  Expand to track calls from any Telegram group, Discord, or Twitter
+•  Position as "track your trading group calls" — a universal tool
+•  Pros: You're not dependent on one gatekeeper
+•  Cons: Requires rebuilding your value proposition
+3.  The "soft launch" play
+•  Release the bot commands as agreed
+•  Quietly have your website ready
+•  If the bot gets traction, users will ask for a dashboard — you become the obvious solution
+•  Pros: Low conflict, lets you prove value
+•  Cons: The owner might block links or build his own first
+The uncomfortable truth: In crypto/Telegram spaces, group owners often treat collaborators as disposable. The fact that he won't share his website URL suggests he's either copying you or doesn't trust you not to compete. Either way, the partnership is already broken.
+My suggestion: Do option 1, but immediately start building option 2 in parallel. Release the bot. Make your site live but don't announce it as "the partner site" — announce it as your tool that happens to work with that bot. Find 2-3 other groups to onboard. Diversify fast.
+You mentioned you're not well-known — that's actually why you can't afford to be dependent on one gatekeeper. Better to have three small groups using your tool than one big one controlling you.
+What's your technical setup like? Is the website already functional enough to stand alone?

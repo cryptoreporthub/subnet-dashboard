@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
 from internal.signals.pipeline import build_signal, generate_signals
+from internal.signals import routes
 from internal.signals.store import SignalStore
 from server import app
 
@@ -30,7 +33,7 @@ def test_store_append_ttl_and_index(temp_store):
         "signal_type": "buy",
         "confidence": 0.7,
         "source_expert": "hype",
-        "timestamp": "2026-07-12T10:00:00Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "evidence": "test",
     }
     assert len(store.append_many([row])) == 1
@@ -72,3 +75,145 @@ def test_api_signals_and_summary(client):
     assert "buy_sell_ratio" in s
     assert "avg_confidence" in s
     assert "total_signals" in s
+
+
+def test_api_signals_refreshes_empty_cache_once(client, tmp_path, monkeypatch):
+    """The homepage's refresh=false read repairs an empty signal cache."""
+    path = str(tmp_path / "empty-signals.json")
+    monkeypatch.setattr(routes, "_store", SignalStore(path=path))
+    generated = [
+        {
+            "subnet_id": 7,
+            "name": "Alpha",
+            "signal_type": "buy",
+            "confidence": 0.8,
+            "source_expert": "quant",
+            "timestamp": "2099-01-01T00:00:00Z",
+            "evidence": "test",
+        }
+    ]
+    calls = []
+
+    def fake_generate(persist=True):
+        calls.append(persist)
+        routes._get_store().append_many(generated)
+        routes._get_store().mark_refreshed("2099-01-01T00:00:00Z")
+        return {
+            "signals": generated,
+            "changed_signals": generated,
+            "meta": {"count": 1, "appended": 1},
+        }
+
+    monkeypatch.setattr(routes, "generate_signals", fake_generate)
+
+    first = client.get("/api/signals?refresh=false")
+    second = client.get("/api/signals?refresh=false")
+
+    assert first.status_code == 200
+    assert first.json()["signals"][0]["subnet_id"] == 7
+    assert first.json()["signals"][0]["confidence"] == 0.8
+    assert first.json()["meta"].get("cached") is not True
+    assert second.json()["signals"][0]["subnet_id"] == 7
+    assert second.json()["signals"][0]["confidence"] == 0.8
+    assert len(calls) == 1
+
+
+def test_signal_refresh_is_single_flight(tmp_path, monkeypatch):
+    """Concurrent stale reads share one generator invocation."""
+    import asyncio
+    import time
+
+    path = str(tmp_path / "single-flight-signals.json")
+    monkeypatch.setattr(routes, "_store", SignalStore(path=path))
+    generated = [
+        {
+            "subnet_id": 8,
+            "name": "Beta",
+            "signal_type": "neutral",
+            "confidence": 0.5,
+            "source_expert": "technical",
+            "timestamp": "2099-01-01T00:00:00Z",
+            "evidence": "test",
+        }
+    ]
+    calls = []
+
+    class FakeAlerts:
+        def check_system_alerts(self):
+            return []
+
+        def record_signal_changes(self, _signals):
+            return []
+
+        def evaluate_correlation_alerts(self, _signals):
+            return []
+
+    def fake_generate(persist=True):
+        calls.append(persist)
+        time.sleep(0.05)
+        routes._get_store().append_many(generated)
+        routes._get_store().mark_refreshed("2099-01-01T00:00:00Z")
+        return {"signals": generated, "changed_signals": generated}
+
+    monkeypatch.setattr(routes, "generate_signals", fake_generate)
+    monkeypatch.setattr(routes, "_get_alerts", lambda: FakeAlerts())
+
+    async def run():
+        return await asyncio.gather(
+            routes._refresh_and_broadcast(only_if_stale=True),
+            routes._refresh_and_broadcast(only_if_stale=True),
+        )
+
+    results = asyncio.run(run())
+
+    assert len(calls) == 1
+    assert all(result["signals"] for result in results)
+
+
+def test_store_freshness_uses_full_refresh_not_row_change_time(tmp_path):
+    store = SignalStore(path=str(tmp_path / "refresh-time.json"))
+    store.append_many(
+        [
+            {
+                "subnet_id": 1,
+                "signal_type": "buy",
+                "confidence": 0.7,
+                "timestamp": "2020-01-01T00:00:00Z",
+            },
+            {
+                "subnet_id": 2,
+                "signal_type": "neutral",
+                "confidence": 0.5,
+                "timestamp": "2024-01-01T00:00:00Z",
+            },
+        ]
+    )
+    store.mark_refreshed("2099-01-01T00:00:00Z")
+
+    assert routes._store_is_fresh(store) is True
+
+    store.mark_refreshed("2020-01-01T00:00:00Z")
+    assert routes._store_is_fresh(store) is False
+
+
+def test_automatic_refresh_timeout_keeps_stale_cache(monkeypatch):
+    """A slow generator never blanks the homepage's existing signal data."""
+    import asyncio
+
+    stale = [{"subnet_id": 9, "timestamp": "2020-01-01T00:00:00Z"}]
+
+    async def timed_out(*args, **kwargs):
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(routes, "_to_thread_timeout", timed_out)
+
+    result = asyncio.run(
+        routes._refresh_and_broadcast(
+            only_if_stale=True,
+            fallback_signals=stale,
+        )
+    )
+
+    assert result["signals"] == stale
+    assert result["meta"]["stale"] is True
+    assert result["meta"]["source"] == "timeout"

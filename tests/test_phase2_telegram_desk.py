@@ -28,3 +28,12 @@ def test_message_intel_ssr_populates_from_context():
     assert "trend_rows(mi_trending" in html
     assert "champion_rows(mi_authors)" in html
     assert 'aria-busy="{{ \'false\' if mi_messages else \'true\' }}"' in html
+
+
+def test_future_wallet_and_command_surfaces_are_visible_but_locked():
+    html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert 'id="message-intel-wallet-card"' in html
+    assert "Connect wallet" in html
+    assert 'id="message-intel-commands-card"' in html
+    assert "/trending" in html
+    assert "LOCKED · COMING SOON" in html

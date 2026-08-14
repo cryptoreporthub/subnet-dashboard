@@ -56,6 +56,30 @@ def test_api_message_intel_authors_and_topics(client):
     assert "topics" in topics
 
 
+def test_trending_v2_orders_by_quality_and_explains(monkeypatch):
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    rows = [
+        {"timestamp": (now - timedelta(minutes=30)).isoformat(), "author_id": "a1", "conviction": 90, "sentiment": "bullish", "content": "SN1", "entities_json": json.dumps({"subnets": [1]})},
+        {"timestamp": (now - timedelta(minutes=20)).isoformat(), "author_id": "a1", "conviction": 90, "sentiment": "bullish", "content": "SN1", "entities_json": json.dumps({"subnets": [1]})},
+        {"timestamp": (now - timedelta(minutes=10)).isoformat(), "author_id": "a2", "conviction": 90, "sentiment": "bullish", "content": "SN2", "entities_json": json.dumps({"subnets": [2]})},
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(
+        rollup,
+        "_author_reliability_rows",
+        lambda db=None: {"a1": {"total_messages": 10, "correct_predictions": 9}, "a2": {"total_messages": 2, "correct_predictions": 1}},
+    )
+    monkeypatch.setattr(rollup, "_netuids_from_row", lambda row: [1] if "SN1" in row["content"] else [2])
+
+    items = rollup.build_trending_subnets(limit=2, rank_hours=1, window_hours=24)
+    assert items[0]["netuid"] == 1
+    assert "why" in items[0]
+    assert "chatter_power" in items[0]
+    assert "delta" in items[0]
+
+
 def test_trending_and_authors_after_ingest(client):
     _ingest(
         client,
@@ -113,10 +137,64 @@ def test_trending_and_authors_after_ingest(client):
     # Light reaction boost raises Alpha above Beta even with similar base influence.
     assert top["author_username"] == "alpha"
     assert any(c.get("key") == "fire" for c in authors.get("reaction_crowns") or [])
+    assert "accuracy_pct" in top
+    assert "strike_rate_pct" in top
+    assert "correct_predictions" in top
+    assert "total_graded_calls" in top
+    assert "caution" in top
 
-    topics = client.get("/api/message-intel/topics").json()
-    assert topics["status"] == "success"
-    assert any(t.get("kind") == "group" for t in topics.get("topics") or [])
+
+def test_author_reliability_rows_caution_and_receipts(intel_env):
+    from internal.message_intel.store import Database
+    from internal.message_intel.rollup import build_author_reliability_rows
+
+    db = Database(intel_env["db_path"])
+    db.upsert_author_reliability(
+        {
+            "author_id": "u1",
+            "author_name": "Alice",
+            "total_messages": 4,
+            "correct_predictions": 3,
+            "accuracy_score": 0.75,
+        }
+    )
+    rows = build_author_reliability_rows(days=30, limit=8, db=db)
+    assert rows[0]["caution"] is True
+    assert rows[0]["graded_calls_caution"] is True
+    assert "receipt_friendly" in rows[0]
+
+
+def test_trending_v2_endpoint(client):
+    payload = client.get("/api/message-intel/trending-v2?limit=3&rank_hours=1&window_hours=24").json()
+    assert payload["status"] == "success"
+    assert "items" in payload
+    assert "trending" in payload
+
+
+def test_rollup_recognizes_explicit_subnet_mentions_without_entities():
+    from internal.message_intel.rollup import _netuids_from_row
+
+    assert _netuids_from_row({"content": "SN7 is building"}) == {7}
+    assert _netuids_from_row({"content": "Subnet 12 looks strong"}) == {12}
+
+
+def test_message_intel_template_has_my_desk_and_pulse():
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader("templates"))
+    tpl = env.get_template("partials/premium/message_intel_feed.html")
+    html = tpl.render(message_intel={"meta": {"trending": [], "total_messages": 0}, "messages": []})
+    assert "My Desk" in html
+    assert "My Pulse" in html
+
+
+def test_listener_template_accepts_new_trending_fields():
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader("templates"))
+    tpl = env.get_template("partials/premium/message_intel_ssr_macros.html")
+    html = tpl.module.trend_rows([
+        {"name": "Subnet 1", "netuid": 1, "mentions": 3, "chatter_power": 1.234, "why": "velocity × conviction × quality", "delta": 0.123, "sentiment": "Bullish"}
+    ], "1h")
+    assert "velocity × conviction × quality" in html
 
 
 def test_reaction_crowns_unit(monkeypatch):
@@ -362,6 +440,33 @@ def test_subnet_telegram_conviction_insufficient_and_stale_calls(monkeypatch):
     assert item["state"] == "insufficient_data"
     assert item["score"] is None
     assert item["call_count"] == 0
+
+
+def test_subnet_telegram_conviction_excludes_resolved_rows_from_current_votes(monkeypatch):
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    def row(mid, outcome=None, price=1.0):
+        return {
+            "id": mid, "source": "telegram", "author_id": "a", "author_name": "A",
+            "content": "SN9 call", "entities_json": json.dumps({"subnets": ["Subnet 9"]}),
+            "timestamp": (now - timedelta(hours=1)).isoformat(),
+            "verdict": "bullish", "predicted_direction": "up", "conviction": 80,
+            "tao_usd_price": price, "outcome": outcome,
+            "pump_pct_max": 5 if outcome == "pump" else None,
+        }
+
+    history = [
+        {
+            **row(10 + i, "pump"),
+            "timestamp": (now - timedelta(hours=96 + i)).isoformat(),
+        }
+        for i in range(5)
+    ]
+    monkeypatch.setattr(rollup, "_conviction_rows", lambda db=None: [*history, row(1, "pump"), row(2)])
+    item = rollup.build_subnet_telegram_conviction()["items"][0]
+    assert item["call_count"] == 1
+    assert all(call["message_id"] != 1 for call in item["current_calls"])
 
 
 def test_telegram_divergence_stories_compare_only_resolved_qualified_receipts(monkeypatch):

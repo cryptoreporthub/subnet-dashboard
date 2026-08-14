@@ -1,0 +1,54 @@
+{
+  "status": "ok",
+  "captured_at": "2026-08-14T09:15:41.250769Z",
+  "alert_level": "alert",
+  "alert_reasons": [
+    "worker_peer not alive",
+    "actionable badges: SN23 BUILDING, SN67 BUILDING, SN97 BUILDING, SN11 JUST STARTED"
+  ],
+  "pump_desk": {
+    "status": "success",
+    "count": 6,
+    "early_count": 3,
+    "confirmed_count": 3,
+    "error": null
+  },
+  "daily_pick": {
+    "date": "2026-08-14",
+    "action": "LONG",
+    "has_pick": true,
+    "pick_netuid": 15,
+    "reason": null
+  },
+  "learning_loop": {
+    "status": "ok",
+    "pending": 0,
+    "worker_peer_alive": null
+  },
+  "actionable_badges": [
+    {
+      "netuid": 23,
+      "name": "Trishool",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Trishool (SN23)"
+    },
+    {
+      "netuid": 67,
+      "name": "Harnyx",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Harnyx (SN67)"
+    },
+    {
+      "netuid": 97,
+      "name": "Albedo",
+      "badge": "BUILDING",
+      "move": "BUILDING \u00b7 Albedo (SN97)"
+    },
+    {
+      "netuid": 11,
+      "name": "TrajectoryRL",
+      "badge": "JUST STARTED",
+      "move": "LIVE \u00b7 TrajectoryRL (SN11)"
+    }
+  ]
+}

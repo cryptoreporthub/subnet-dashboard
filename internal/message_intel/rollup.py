@@ -62,17 +62,40 @@ def _parse_ts(raw: Optional[str]) -> Optional[datetime]:
 def _netuids_from_row(row: Dict[str, Any]) -> Set[int]:
     found: Set[int] = set()
     if row.get("snap_netuid") is not None:
-        found.add(int(row["snap_netuid"]))
-    raw = row.get("entities_json")
-    if not raw:
-        return found
-    try:
-        entities = json.loads(raw) if isinstance(raw, str) else raw
-        for token in (entities or {}).get("subnets") or []:
+        try:
+            found.add(int(row["snap_netuid"]))
+        except (TypeError, ValueError):
+            pass
+
+    # Rollups read both compact SQL rows and enriched API rows. Keep the
+    # subnet extraction contract tolerant of either shape.
+    raw_values: List[Any] = [row.get("entities_json")]
+    analysis = row.get("analysis")
+    if isinstance(analysis, dict):
+        raw_values.extend([analysis.get("entities_json"), analysis.get("entities")])
+    raw_values.append(row.get("raw_json"))
+    for raw in raw_values:
+        if not raw:
+            continue
+        try:
+            entities = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if not isinstance(entities, dict):
+            continue
+        for token in entities.get("subnets") or []:
             for num in re.findall(r"\d+", str(token)):
                 found.add(int(num))
-    except (TypeError, ValueError, json.JSONDecodeError):
-        pass
+
+    # Manual/API ingests sometimes preserve the source text but not the
+    # structured entity JSON. Recognize explicit subnet references without
+    # treating unrelated numbers (hours, prices, message IDs) as subnets.
+    content = str(row.get("content") or "")
+    for match in re.findall(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", content, re.IGNORECASE):
+        try:
+            found.add(int(match))
+        except (TypeError, ValueError):
+            continue
     return found
 
 
@@ -159,7 +182,7 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
-                      m.timestamp, m.created_at, m.content, a.sentiment, a.influence_score, a.entities_json,
+                      m.timestamp, m.created_at, a.sentiment, a.influence_score, a.entities_json,
                       mm.reactions, ps.netuid AS snap_netuid, v.conviction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
@@ -830,29 +853,18 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
-                      m.content, m.timestamp, m.created_at, a.entities_json,
-                      v.predicted_direction, v.conviction,
+                      m.content, m.timestamp, m.created_at, v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
                       po.price_1h, po.price_4h, po.price_24h
                FROM messages m
-               LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                LEFT JOIN price_outcomes po ON po.message_id = m.id
                WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
         ).fetchall()
     out = []
-    try:
-        from internal.subnet_names import name_for_netuid
-    except Exception:
-        name_for_netuid = None
     for raw in rows:
         row = dict(raw)
-        if row.get("netuid") is not None:
-            try:
-                row["subnet_name"] = name_for_netuid(int(row["netuid"])) if name_for_netuid else f"SN{row['netuid']}"
-            except (TypeError, ValueError):
-                row["subnet_name"] = f"SN{row['netuid']}"
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if cutoff and (timestamp is None or timestamp < cutoff):
             continue
@@ -1314,8 +1326,6 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "evaluation": proof["evaluation"],
         "direction": proof["direction"],
         "move_pct": proof["move_pct"],
-        "price_basis": proof.get("price_basis"),
-        "subnet_name": proof.get("subnet_name"),
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
     }
@@ -1323,23 +1333,16 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
     """Backward-compatible aggregate from the shared public-proof contract."""
-    graded = hits = misses = neutral = pending = ungradeable = 0
+    graded = hits = misses = neutral = 0
     recent: List[Dict[str, Any]] = []
     try:
         rows = _proof_rows(db)
     except Exception:
-        return {
-            "graded": 0, "hits": 0, "misses": 0, "neutral": 0,
-            "pending": 0, "ungradeable": 0, "hit_rate": None, "ready": False, "recent": [],
-        }
+        return {"graded": 0, "hits": 0, "misses": 0, "neutral": 0, "hit_rate": None, "ready": False, "recent": []}
 
     for row in rows:
         proof = classify_call(row)
         if not proof["resolved"]:
-            if proof["status"] == "pending":
-                pending += 1
-            else:
-                ungradeable += 1
             continue
         graded += 1
         if proof["status"] == "hit":
@@ -1352,8 +1355,7 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
             recent.append(
                 {
                     "id": int(row["id"]), "author_name": row.get("author_name"),
-                    "netuid": row.get("netuid"), "subnet_name": proof.get("subnet_name"),
-                    "price_basis": proof.get("price_basis"), "move_pct": proof["move_pct"],
+                    "netuid": row.get("netuid"), "move_pct": proof["move_pct"],
                     "pump_pct_max": proof["move_pct"], "status": proof["status"],
                     "hit": proof["status"] == "hit",
                 }
@@ -1363,7 +1365,6 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
     hit_rate = round((hits / scored) * 100.0, 1) if scored else None
     return {
         "graded": graded, "hits": hits, "misses": misses, "neutral": neutral,
-        "pending": pending, "ungradeable": ungradeable,
         "hit_rate": hit_rate, "ready": scored >= MIN_LEADERBOARD_SAMPLE, "recent": recent,
     }
 
@@ -1425,20 +1426,6 @@ def list_telegram_caller_receipts(*, author_id: str, days: int = 30, limit: int 
 _MIN_24H_SUMMARY_MESSAGES = 10
 
 
-def _mention_context(rows: List[str]) -> Optional[str]:
-    """Return one concise public-message line explaining a subnet's mentions."""
-    snippets: List[str] = []
-    for raw in rows[:2]:
-        text = re.sub(r"\s+", " ", str(raw or "")).strip()
-        if not text:
-            continue
-        if len(text) > 110:
-            text = text[:107].rstrip() + "…"
-        if text not in snippets:
-            snippets.append(text)
-    return " / ".join(snippets) if snippets else None
-
-
 def build_24h_summary(
     *,
     registry_names: Optional[Dict[int, str]] = None,
@@ -1460,7 +1447,6 @@ def build_24h_summary(
     subnet_counts: Dict[int, int] = defaultdict(int)
     prev_subnet_counts: Dict[int, int] = defaultdict(int)
     group_counts: Dict[str, int] = defaultdict(int)
-    mention_contexts: Dict[int, List[str]] = defaultdict(list)
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1488,8 +1474,6 @@ def build_24h_summary(
                 group_counts[group] += 1
             for netuid in _netuids_from_row(row):
                 subnet_counts[netuid] += 1
-                if row.get("content") and len(mention_contexts[netuid]) < 2:
-                    mention_contexts[netuid].append(str(row["content"]))
 
         if in_prev:
             for netuid in _netuids_from_row(row):
@@ -1518,7 +1502,6 @@ def build_24h_summary(
                 "netuid": netuid,
                 "name": registry_names.get(netuid) or f"Subnet {netuid}",
                 "mentions": int(mentions),
-                "mention_context": _mention_context(mention_contexts.get(netuid) or []),
             }
         )
 
@@ -1582,17 +1565,8 @@ def build_high_conviction_strip(
         analysis = row.get("analysis") if isinstance(row.get("analysis"), dict) else {}
         conviction = verdict.get("conviction") if verdict else row.get("conviction")
         direction = verdict.get("predicted_direction") if verdict else row.get("predicted_direction")
-        netuid = None
-        try:
-            entities = json.loads(analysis.get("entities_json") or "{}")
-            for token in entities.get("subnets") or []:
-                for num in re.findall(r"\d+", str(token)):
-                    netuid = int(num)
-                    break
-                if netuid is not None:
-                    break
-        except Exception:
-            pass
+        netuids = _netuids_from_row(row)
+        netuid = min(netuids) if netuids else None
         out.append(
             {
                 "id": row.get("id"),

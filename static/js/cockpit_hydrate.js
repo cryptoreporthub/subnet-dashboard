@@ -10,24 +10,6 @@
   var lastHourPicks = [];
   var lastDayPicks = [];
 
-  // #region agent log
-  function debugHydration(hypothesisId, message, data) {
-    try {
-      fetch('/__debug/hydration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hypothesisId: hypothesisId,
-          location: 'static/js/cockpit_hydrate.js',
-          message: message,
-          data: data || {},
-        }),
-        keepalive: true,
-      }).catch(function () {});
-    } catch (e) {}
-  }
-  // #endregion
-
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -442,13 +424,6 @@
           ';" aria-hidden="true"></span>'
         : '';
     var peelExtra = '';
-    if (pick.judge_split) {
-      peelExtra +=
-        '<div class="wr-peel__block"><div class="wr-peel__label">Judge council</div>' +
-        '<p class="wr-peel__split">' +
-        esc(pick.judge_split) +
-        '</p></div>';
-    }
     if (pick.expert_split) {
       peelExtra +=
         '<div class="wr-peel__block"><div class="wr-peel__label">Council experts</div>' +
@@ -476,32 +451,23 @@
       '">' +
       esc(name) +
       '</a>';
-    var chipLabel = pick.primary_call
-      ? 'PRIMARY CALL'
-      : pick.judge_long
-        ? 'JUDGE LONG'
-        : state;
     return (
       '<article class="wr-row wr-row--' +
       esc(stateSlug) +
-      (pick.primary_call ? ' wr-row--primary' : '') +
-      (pick.judge_long ? ' wr-row--judge-long' : '') +
       (pick.closest_to_call ? ' wr-row--stitch' : '') +
       stitchBorder +
       '" data-netuid="' +
       esc(nu) +
       '" data-state="' +
       esc(state) +
-      (pick.primary_call ? '" data-primary-call="true' : '') +
       '">' +
       '<button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-' +
       esc(nu) +
       '">' +
       '<span class="wr-chip wr-chip--' +
       esc(stateSlug) +
-      (pick.judge_long && !pick.primary_call ? ' wr-chip--judge-long' : '') +
       '">' +
-      esc(chipLabel) +
+      esc(state) +
       '</span>' +
       '<div class="wr-row__main"><div class="wr-name">' +
       nameLink +
@@ -534,9 +500,7 @@
       '<div class="wr-peel" id="wr-peel-' +
       esc(nu) +
       '" hidden>' +
-      '<div class="wr-peel__block"><div class="wr-peel__label">' +
-      (pick.primary_call ? 'Primary call' : 'Why not the call') +
-      '</div><p>' +
+      '<div class="wr-peel__block"><div class="wr-peel__label">Why not the call</div><p>' +
       esc(pick.why_not || "Has not crossed today's call threshold.") +
       '</p></div>' +
       '<div class="wr-peel__block"><div class="wr-peel__label">What would make it the call</div><p>' +
@@ -898,25 +862,10 @@
     if (!councilVal) return;
 
     tb = tb || {};
-    var resolverState = extras.resolver_state || {};
-    var loopLearned = extras.loop_learned || {};
-    var pumpTrust = extras.pump_desk_trust || {};
-    var pumpEvaluation = extras.pump_evaluation || {};
     var ready = !!tb.ready;
     var graded = tb.graded != null ? Number(tb.graded) : 0;
     var accRaw = tb.accuracy != null ? Number(tb.accuracy) : null;
     var accPct = accRaw != null ? Math.round(accRaw * 100) : null;
-    var minGraded = tb.min_graded != null ? Number(tb.min_graded) : 30;
-    var councilPending = extras.council_pending != null
-      ? Number(extras.council_pending)
-      : (tb.council_pending != null ? Number(tb.council_pending) : 0);
-    var pumpPending = extras.pump_pending != null
-      ? Number(extras.pump_pending)
-      : (tb.pump_pending != null ? Number(tb.pump_pending) : 0);
-    var alignmentDiagnostics = Number(extras.alignment_diagnostic_events || 0);
-    var missingPrice = tb.price_data_unavailable != null
-      ? Number(tb.price_data_unavailable)
-      : 0;
     if (ready && accPct != null && graded > 0) {
       councilVal.textContent = accPct + '%';
       if (councilMeta) {
@@ -924,21 +873,16 @@
         councilMeta.classList.remove('desk-empty');
       }
     } else {
-      councilVal.textContent = graded + '/' + (tb.min_graded != null ? tb.min_graded : 30);
+      councilVal.textContent = '—';
       if (councilMeta) {
-        var councilProgress = 'Published grades ' + graded + '/' + minGraded;
-        if (councilPending > 0) councilProgress += ' · ' + councilPending + ' pending';
-        if (missingPrice > 0) councilProgress += ' · ' + missingPrice + ' missing price';
-        if (tb.gate_reason) councilProgress += ' · ' + String(tb.gate_reason).replace(/_/g, ' ');
-        councilMeta.textContent = councilProgress;
+        councilMeta.textContent =
+          tb.message || (graded > 0 ? 'Building trust gate' : 'Building graded history');
         councilMeta.classList.add('desk-empty');
       }
     }
 
     var tgProof = extras.telegram_proof || {};
     var tgGraded = Number(tgProof.graded || 0);
-    var tgPending = Number(tgProof.pending || 0);
-    var tgUngradeable = Number(tgProof.ungradeable || 0);
     var tgRatePct = ratePercent(tgProof.hit_rate);
     if (tgProof.ready && tgRatePct != null && tgGraded > 0) {
       if (tgVal) tgVal.textContent = tgRatePct + '%';
@@ -949,23 +893,25 @@
     } else {
       if (tgVal) tgVal.textContent = '—';
       if (tgMeta) {
-        tgMeta.textContent = (tgGraded > 0 ? tgGraded + ' graded calls' : 'No graded calls yet') +
-          (tgPending > 0 ? ' · ' + tgPending + ' pending' : '') +
-          (tgUngradeable > 0 ? ' · ' + tgUngradeable + ' ungradeable' : '');
+        tgMeta.textContent = 'Telegram call proof grades after resolve';
         tgMeta.classList.add('desk-empty');
       }
     }
 
-    var pending = Number(resolverState.pending != null ? resolverState.pending : tb.pending) || 0;
-    var retryable = Number(resolverState.retryable != null ? resolverState.retryable : pending) || 0;
-    if (resVal) {
-      resVal.textContent = pending + ' pending';
+    var expiredRate = tb.expired_rate != null ? Number(tb.expired_rate) : null;
+    var resolvedPct =
+      expiredRate != null ? Math.max(0, Math.round((1 - expiredRate) * 100)) : null;
+    if (resolvedPct != null && graded > 0) {
+      if (resVal) resVal.textContent = resolvedPct + '%';
       if (resMeta) {
-        resMeta.textContent = retryable + ' retryable · ' + graded + ' graded';
-        if (councilPending > 0 || pumpPending > 0) {
-          resMeta.textContent += ' · ' + councilPending + ' council · ' + pumpPending + ' pump';
-        }
-        resMeta.classList.toggle('desk-empty', pending <= 0 && graded <= 0);
+        resMeta.textContent = 'Resolved vs expired backlog';
+        resMeta.classList.remove('desk-empty');
+      }
+    } else {
+      if (resVal) resVal.textContent = '—';
+      if (resMeta) {
+        resMeta.textContent = 'Resolver backlog clears as picks grade';
+        resMeta.classList.add('desk-empty');
       }
     }
 
@@ -976,24 +922,18 @@
         loopMeta.textContent = 'Signals with graded hit-rate';
         loopMeta.classList.remove('desk-empty');
       }
-    } else {
-      var loopGraded = Number(loopLearned.graded != null ? loopLearned.graded : graded) || 0;
-      var loopPending = Number(loopLearned.pending != null ? loopLearned.pending : pending) || 0;
-      var loopRetryable = Number(loopLearned.retryable != null ? loopLearned.retryable : retryable) || 0;
-      if (loopVal) loopVal.textContent = loopGraded + ' graded';
+    } else if (graded > 0) {
+      if (loopVal) loopVal.textContent = String(graded);
       if (loopMeta) {
-        loopMeta.textContent = loopPending + ' pending · ' + loopRetryable + ' retryable';
-        if (alignmentDiagnostics > 0) loopMeta.textContent += ' · ' + alignmentDiagnostics + ' diagnostic events';
-        loopMeta.classList.toggle('desk-empty', loopGraded <= 0 && loopPending <= 0);
+        loopMeta.textContent = 'Graded picks in ledger';
+        loopMeta.classList.remove('desk-empty');
       }
-    }
-    if (pumpTrust && pumpTrust.early) renderProofPumpTab(pumpTrust);
-    var pumpQuiet = document.getElementById('proof-pump-quiet');
-    if (pumpQuiet && pumpEvaluation.status) {
-      pumpQuiet.textContent =
-        pumpQuiet.textContent.replace(/\s*· evaluation .*$/, '') +
-        ' · evaluation ' +
-        String(pumpEvaluation.status).replace(/_/g, ' ');
+    } else {
+      if (loopVal) loopVal.textContent = '—';
+      if (loopMeta) {
+        loopMeta.textContent = 'Signal rankings fill after grades';
+        loopMeta.classList.add('desk-empty');
+      }
     }
   }
 
@@ -2976,27 +2916,7 @@
   function renderDailyPick(payload) {
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
-    var shouldApply = shouldApplyDailyPickPayload(payload);
-    // #region agent log
-    debugHydration('C', 'daily pick patch decision', {
-      status: payload.status || null,
-      action: payload.action || null,
-      hasPick: !!payload.pick,
-      hasCandidate: !!payload.candidate,
-      shouldApply: shouldApply,
-      hero: !!document.getElementById('tribunal-hero'),
-    });
-    // #endregion
-    if (!shouldApply) {
-      // A forming response is still useful when the fast shell has no real
-      // call to protect. Without this path the tribunal remains an inert SSR
-      // snapshot until a publishable pick exists.
-      var pendingStatus = String(payload.status || '').toLowerCase() === 'pending';
-      var ssr = ssrDailyPickMeta();
-      if (pendingStatus && !ssr.generatedAt && !ssr.action && document.getElementById('tribunal-hero')) {
-        lastDailyPickPayload = payload;
-        renderTribunalHero(payload, window.SimiLearning && window.SimiLearning.stats);
-      }
+    if (!shouldApplyDailyPickPayload(payload)) {
       console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
       return;
     }
@@ -3278,13 +3198,11 @@
     return 'even';
   }
 
-  function councilBiasLabel(trend, expertGraded, weight) {
-    var sample = 'n=' + String(expertGraded || 0);
-    if ((expertGraded || 0) <= 0) return 'PRIOR · ' + sample;
-    if (Number(weight) >= 2.0) return '\u25B2 CAPPED · ' + sample;
-    if (trend === 'up') return '\u25B2 LEARNED UP · ' + sample;
-    if (trend === 'down') return '\u25BC LEARNED DOWN · ' + sample;
-    return 'EVEN · ' + sample;
+  function councilBiasLabel(trend, expertGraded) {
+    if ((expertGraded || 0) <= 0) return 'PRIOR';
+    if (trend === 'up') return '\u25B2 LEARNED UP';
+    if (trend === 'down') return '\u25BC LEARNED DOWN';
+    return 'EVEN';
   }
 
   function soulTrendFromDelta(delta, w, expertGraded) {
@@ -3310,7 +3228,7 @@
       var w = Number(normalized[name]) || 0;
       var gradedN = Number(gradedMap[name]) || 0;
       var trend = soulTrendFromDelta(deltaMap[name], w, gradedN);
-      var biasLabel = councilBiasLabel(trend, gradedN, w);
+      var biasLabel = councilBiasLabel(trend, gradedN);
       var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
       var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);
       return (
@@ -3347,9 +3265,6 @@
     var wrong = hasTrust ? Number(tb.wrong || 0) : 0;
     var expired = hasTrust && tb.expired != null ? Number(tb.expired) : null;
     var expiredRate = hasTrust && tb.expired_rate != null ? tb.expired_rate : null;
-    var priceUnavailable = hasTrust && tb.price_data_unavailable != null
-      ? Number(tb.price_data_unavailable)
-      : 0;
     var expiredPct = expiredRate != null ? Math.round(Number(expiredRate) * 1000) / 10 : null;
     var wd = hasTrust ? (tb.watchdog || stats.watchdog || {}) : (stats.watchdog || {});
     var ready = hasTrust && tb.ready != null ? tb.ready : stats.brain_ui_ready;
@@ -3386,16 +3301,9 @@
     if (hasTrust) syncProofBandFromTrust(tb);
     else syncProofBandGraded(0);
     syncProofEvidencePanels(tb, {
-      pump_desk_trust: stats.pump_desk_trust,
-      pump_evaluation: stats.pump_evaluation,
-      resolver_state: stats.resolver_state,
-      loop_learned: stats.loop_learned,
       working_count: stats.working && stats.working.top_price_signals
         ? stats.working.top_price_signals.length
         : null,
-      council_pending: stats.council_pending,
-      pump_pending: stats.pump_pending,
-      alignment_diagnostic_events: stats.alignment_diagnostic_events,
     });
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
@@ -3404,9 +3312,7 @@
     }
     var expRateEl = document.getElementById('kpi-expired-rate');
     if (expRateEl) {
-      expRateEl.textContent = expiredPct != null
-        ? expiredPct + '% of resolved flow' + (priceUnavailable ? ' · ' + priceUnavailable + ' missing price' : '')
-        : 'resolver backlog';
+      expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
     }
     var pendEl = document.getElementById('kpi-pending');
     if (pendEl) {
@@ -4108,13 +4014,6 @@
   }
 
   async function run() {
-    // #region agent log
-    debugHydration('A', 'cockpit hydrate run entry', {
-      hydrate: document.documentElement.dataset.hydrate || null,
-      hero: !!document.getElementById('tribunal-hero'),
-      readyState: document.readyState,
-    });
-    // #endregion
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
@@ -4139,14 +4038,6 @@
       // Tier 1a — daily call first (parallel request; legacy marker)
       var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3)
         .then(function (dpResult) {
-          // #region agent log
-          debugHydration('C', 'daily pick fetch resolved in browser', {
-            status: dpResult && dpResult.status || null,
-            action: dpResult && dpResult.action || null,
-            hasPick: !!(dpResult && dpResult.pick),
-            hasCandidate: !!(dpResult && dpResult.candidate),
-          });
-          // #endregion
           renderDailyPick(dpResult);
           // Make the Daily Call immediately reusable by SSE / hot-refresh
           // listeners instead of leaving a race window before tier-2 completes.
@@ -4157,11 +4048,6 @@
           return dpResult;
         })
         .catch(function (e) {
-          // #region agent log
-          debugHydration('C', 'daily pick fetch rejected in browser', {
-            errorType: e && e.name || 'Error',
-          });
-          // #endregion
           console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
           markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
           return null;
@@ -4233,8 +4119,6 @@
           } else {
             patchTribunalJudges(stats, {});
             patchTribunalPanels({}, stats);
-            patchTribunalInstrument(stats, {});
-            patchTribunalEyeArcs(stats.judge_weights);
           }
         }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
@@ -4243,18 +4127,11 @@
         fetchJsonRetry('/api/message-intel?limit=1', 12000, 1)
           .then(function (mi) {
             syncProofEvidencePanels(stats.trust_banner, {
-              pump_desk_trust: stats.pump_desk_trust,
-              pump_evaluation: stats.pump_evaluation,
-              resolver_state: stats.resolver_state,
-              loop_learned: stats.loop_learned,
               telegram_proof: (mi && mi.meta && mi.meta.telegram_proof) || {},
               working_count:
                 stats.working && stats.working.top_price_signals
                   ? stats.working.top_price_signals.length
                   : null,
-              council_pending: stats.council_pending,
-              pump_pending: stats.pump_pending,
-              alignment_diagnostic_events: stats.alignment_diagnostic_events,
             });
           })
           .catch(function () {});
@@ -4723,146 +4600,6 @@
     return { consensus: consensus, dissent: dissent };
   }
 
-  function patchTribunalEyeArcs(weights) {
-    var hero = document.getElementById('tribunal-hero');
-    if (!hero) return;
-    var outer = hero.querySelector('[data-eye-path]');
-    var inner = hero.querySelector('[data-conviction-arc]');
-    function placeOnPath(el, path, frac) {
-      if (!el) return;
-      if (path && path.getTotalLength) {
-        var len = path.getTotalLength();
-        if (len) {
-          var t = ((frac % 1) + 1) % 1;
-          var pt = path.getPointAtLength(t * len);
-          el.setAttribute('cx', pt.x.toFixed(2));
-          el.setAttribute('cy', pt.y.toFixed(2));
-          return;
-        }
-      }
-      var a = frac * Math.PI * 2 - Math.PI / 2;
-      el.setAttribute('cx', (120 + 77.23 * Math.cos(a)).toFixed(2));
-      el.setAttribute('cy', (70 + 42 * Math.sin(a)).toFixed(2));
-    }
-    function setArc(el, start, frac) {
-      if (!el) return;
-      var len = Math.max(0, Math.min(100, frac * 100));
-      el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (100 - len).toFixed(1));
-      el.setAttribute('stroke-dashoffset', (-start * 100).toFixed(1));
-    }
-    var p = parseFloat(hero.getAttribute('data-hero-conviction'));
-    if (inner && isFinite(p)) {
-      var c = Math.max(0, Math.min(100, p));
-      inner.setAttribute('stroke-dasharray', c.toFixed(1) + ' ' + (100 - c).toFixed(1));
-    }
-    var present = weights && [weights.oracle, weights.echo, weights.pulse].every(function (x) {
-      return typeof x === 'number' && isFinite(x);
-    });
-    if (!present) {
-      hero.classList.add('tribunal-hero--consensus');
-      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
-      return;
-    }
-    var total = weights.oracle + weights.echo + weights.pulse;
-    var fracs = ['oracle', 'echo', 'pulse'].map(function (k) { return weights[k] / total; });
-    var maxF = Math.max.apply(null, fracs);
-    if (maxF - Math.min.apply(null, fracs) < 0.02) {
-      hero.classList.add('tribunal-hero--consensus');
-      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
-      return;
-    }
-    hero.classList.remove('tribunal-hero--consensus');
-    var started = 0;
-    ['oracle', 'echo', 'pulse'].forEach(function (k, i) {
-      var f = fracs[i];
-      setArc(hero.querySelector('[data-judge-arc="' + k + '"]'), started, f);
-      placeOnPath(hero.querySelector('[data-rim-marker="' + k + '"]'), outer, started + f / 2);
-      started += f;
-    });
-    placeOnPath(hero.querySelector('[data-comet]'), inner || outer, Math.min(0.99, (isFinite(p) ? p : 0) / 100));
-  }
-
-  function patchTribunalInstrument(stats, dailyPick) {
-    var hero = document.getElementById('tribunal-hero');
-    if (!hero || !stats) return;
-    function setM(k, v, arrow) {
-      var el = hero.querySelector('[data-metric="' + k + '"]');
-      if (!el || v == null || v === '') return;
-      el.textContent = v;
-      if (arrow) el.setAttribute('data-arrow', arrow);
-      else el.removeAttribute('data-arrow');
-    }
-    function setMeter(k, pct) {
-      var el = hero.querySelector('[data-metric="' + k + '"]');
-      var bar = el && el.parentNode && el.parentNode.querySelector('.tribunal-hero__cell-meter i');
-      if (bar && typeof pct === 'number' && isFinite(pct)) {
-        bar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-      }
-    }
-    var tb = stats.trust_banner || {};
-    var graded = Number(tb.graded != null ? tb.graded : stats.graded) || 0;
-    var correct = Number(tb.correct != null ? tb.correct : stats.correct) || 0;
-    var wrong = Number(tb.wrong != null ? tb.wrong : stats.wrong) || 0;
-    var acc = null;
-    if (tb.ready && tb.accuracy != null && !isNaN(Number(tb.accuracy))) acc = Number(tb.accuracy) * 100;
-    else if (graded > 0 && correct + wrong > 0) acc = (correct / (correct + wrong)) * 100;
-    if (acc != null) {
-      var accTxt = formatGaugePct(acc);
-      var accArrow = acc >= 50 ? 'up' : 'down';
-      setM('avg-acc', accTxt, accArrow);
-      setM('win-rate', accTxt, accArrow);
-      setMeter('avg-acc', acc);
-      setMeter('win-rate', acc);
-    } else {
-      setM('avg-acc', '—');
-      setM('win-rate', '—');
-      setMeter('avg-acc', 0);
-      setMeter('win-rate', 0);
-    }
-    var dw = stats.judge_weight_deltas || {};
-    var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, k) {
-      return s + (typeof dw[k] === 'number' ? dw[k] : 0);
-    }, 0);
-    if (Math.abs(signed) >= 0.0005) {
-      setM('signal', (signed >= 0 ? '+' : '') + signed.toFixed(2), signed >= 0 ? 'up' : 'down');
-    } else {
-      setM('signal', '·');
-    }
-    var active = (dailyPick && (dailyPick.pick || dailyPick.candidate)) || {};
-    var tags = active.scenario_tags || {};
-    var sn = active.subnet || {};
-    var rsiN = sn.rsi != null ? Number(sn.rsi) : NaN;
-    if (!isNaN(rsiN)) setM('rsi', String(Math.round(rsiN)), rsiN >= 50 ? 'up' : 'down');
-    else if (tags.rsi) setM('rsi', String(tags.rsi).replace(/_/g, ' ').toUpperCase());
-    var stochC = active.signal_contributions && active.signal_contributions.stochastic_reversal;
-    var stochN = sn.stochastic_k != null ? Number(sn.stochastic_k) : NaN;
-    if (isNaN(stochN) && stochC && stochC.score != null) {
-      stochN = Number(stochC.score);
-      if (stochN <= 1) stochN *= 100;
-    }
-    if (!isNaN(stochN)) setM('stoch', String(Math.round(stochN)), stochN >= 50 ? 'up' : 'down');
-    var hv = dailyPick && dailyPick.horizon_views && dailyPick.horizon_views.views
-      ? dailyPick.horizon_views.views['7d']
-      : null;
-    var d7 = sn.price_change_7d != null ? Number(sn.price_change_7d)
-      : sn.change_7d != null ? Number(sn.change_7d)
-      : active.price_change_7d != null ? Number(active.price_change_7d)
-      : hv && hv.pct_7d != null ? Number(hv.pct_7d)
-      : NaN;
-    if (!isNaN(d7)) setM('d7', (d7 >= 0 ? '+' : '') + d7.toFixed(1) + '%', d7 >= 0 ? 'up' : 'down');
-    var signals = judgeSignalsFromPick(dailyPick || {});
-    var vals = ['oracle', 'echo', 'pulse'].map(function (k) { return signals[k]; }).filter(function (v) {
-      return v != null && !isNaN(Number(v));
-    }).map(Number);
-    var varEl = hero.querySelector('.tribunal-hero__variance-value');
-    var varFill = hero.querySelector('.tribunal-hero__variance-fill');
-    if (vals.length >= 2) {
-      var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
-      if (varEl) varEl.textContent = Math.round(spread) + ' pt';
-      if (varFill) varFill.style.width = Math.max(0, Math.min(100, 100 - spread)) + '%';
-    }
-  }
-
   function patchTribunalRingFill(pct) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero) return;
@@ -4871,10 +4608,6 @@
       clamped = Math.max(0, Math.min(100, Number(pct)));
     }
     var target = String(clamped);
-    var inner = hero.querySelector('[data-conviction-arc]');
-    if (inner) {
-      inner.setAttribute('stroke-dasharray', clamped.toFixed(1) + ' ' + (100 - clamped).toFixed(1));
-    }
     if (!hero.hasAttribute('data-ring-animated')) {
       hero.style.setProperty('--p', '0');
       hero.setAttribute('data-ring-animated', '1');
@@ -5068,14 +4801,6 @@
 
   function renderTribunalHero(dailyPick, learningStats) {
     var hero = document.getElementById('tribunal-hero');
-    // #region agent log
-    debugHydration('D', 'tribunal hero render entered', {
-      hero: !!hero,
-      payload: !!dailyPick,
-      stats: !!learningStats,
-      status: dailyPick && dailyPick.status || null,
-    });
-    // #endregion
     if (!hero || !dailyPick) return false;
     var kind = verdictKind(dailyPick);
     hero.setAttribute('data-verdict-kind', kind);
@@ -5118,18 +4843,7 @@
     if (learningStats) {
       patchTribunalJudges(learningStats, dailyPick);
       patchTribunalPanels(dailyPick, learningStats);
-      patchTribunalInstrument(learningStats, dailyPick);
-      patchTribunalEyeArcs(learningStats.judge_weights);
     }
-    // #region agent log
-    debugHydration('D', 'tribunal hero render completed', {
-      kind: kind,
-      temp: temp,
-      conviction: pct,
-      title: title && title.textContent || null,
-      actionBadge: badge && badge.textContent || null,
-    });
-    // #endregion
     return true;
   }
 

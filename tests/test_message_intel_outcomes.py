@@ -70,6 +70,130 @@ def test_outcome_loop_cross_process_heartbeat(intel_env, tmp_path, monkeypatch):
     assert outcome_loop.outcome_loop_status()["running"] is False
 
 
+def test_price_tracker_reports_progress_while_checking(intel_env):
+    from message_intel.price_tracker import PriceTracker
+
+    db = MagicMock()
+    db.get_unresolved_outcomes.return_value = []
+    progress = []
+    tracker = PriceTracker(db=db, progress_callback=lambda: progress.append(True))
+
+    tracker.check_outcomes()
+
+    assert progress
+
+
+def test_price_tracker_stop_interrupts_waiting_worker(intel_env):
+    from message_intel.price_tracker import PriceTracker
+
+    tracker = PriceTracker(db=MagicMock())
+    tracker.start_background_checks(interval=60)
+
+    assert tracker.stop_background_checks(join_timeout=1.0) is True
+    assert tracker._thread is not None
+    assert not tracker._thread.is_alive()
+
+
+def test_watchdog_refuses_to_stack_live_checker(intel_env, monkeypatch):
+    from internal.message_intel import outcome_loop
+
+    class StillRunning:
+        _running = True
+
+        def stop_background_checks(self, *, join_timeout):
+            return False
+
+    old = StillRunning()
+    outcome_loop.stop_price_outcome_loop()
+    outcome_loop._tracker = old
+    monkeypatch.setattr(outcome_loop, "_clear_outcome_heartbeat", lambda: None)
+
+    outcome_loop._restart_outcome_loop(interval=60)
+
+    assert outcome_loop._tracker is old
+    outcome_loop._tracker = None
+    outcome_loop._recovery_pending = False
+
+
+def test_watchdog_detects_stalled_checker_without_sidecar_heartbeat(
+    intel_env, monkeypatch
+):
+    from internal.message_intel import outcome_loop
+
+    stalled = MagicMock(_running=True)
+    outcome_loop.stop_price_outcome_loop()
+    outcome_loop._tracker = stalled
+    restarted = []
+    seen = __import__("threading").Event()
+    monkeypatch.setattr(
+        outcome_loop, "_outcome_alive_cross_process", lambda **kwargs: False
+    )
+    monkeypatch.setattr(outcome_loop, "_WATCHDOG_CHECK_SECONDS", 0.01)
+    def fake_restart(interval=300):
+        restarted.append(interval)
+        stalled._running = False
+        seen.set()
+
+    monkeypatch.setattr(outcome_loop, "_restart_outcome_loop", fake_restart)
+
+    outcome_loop._start_outcome_watchdog(interval=60)
+    assert seen.wait(1)
+    outcome_loop._stop_outcome_watchdog()
+    outcome_loop._tracker = None
+
+    assert restarted == [60]
+
+
+def test_stalled_checker_recovers_after_blocked_worker_exits(intel_env, monkeypatch):
+    from internal.message_intel import outcome_loop
+    from message_intel.price_tracker import PriceTracker
+
+    import threading
+    import time
+
+    entered = threading.Event()
+    release = threading.Event()
+    tracker = PriceTracker(db=MagicMock())
+
+    def blocked_check():
+        entered.set()
+        release.wait(2)
+
+    tracker.check_outcomes = blocked_check
+    outcome_loop.stop_price_outcome_loop()
+    tracker.start_background_checks(interval=60)
+    assert entered.wait(1)
+    outcome_loop._tracker = tracker
+
+    monkeypatch.setattr(outcome_loop, "_TRACKER_JOIN_TIMEOUT_SECONDS", 0.01)
+    outcome_loop._restart_outcome_loop(interval=60)
+    assert outcome_loop._recovery_pending is True
+
+    replacement = MagicMock(_running=True)
+    replacement.start_background_checks = MagicMock()
+    with patch("message_intel.price_tracker.PriceTracker", return_value=replacement):
+        monkeypatch.setattr(outcome_loop, "_WATCHDOG_CHECK_SECONDS", 0.01)
+        release.set()
+        assert tracker._thread is not None
+        tracker._thread.join(timeout=1)
+        assert not tracker._thread.is_alive()
+
+        outcome_loop._start_outcome_watchdog(interval=60)
+        deadline = time.monotonic() + 1
+        while (
+            outcome_loop._tracker is not replacement
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.01)
+
+    outcome_loop._stop_outcome_watchdog()
+    assert replacement.start_background_checks.called
+    assert outcome_loop._tracker is replacement
+    assert outcome_loop._recovery_pending is False
+    outcome_loop._tracker = None
+    outcome_loop._recovery_pending = False
+
+
 def test_price_outcome_records_24h_observation_timestamp_once(intel_env):
     """A first-hour receipt is enriched at 24h instead of duplicating outcomes."""
     from internal.message_intel.store import get_db
