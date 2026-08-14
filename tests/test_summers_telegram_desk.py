@@ -56,6 +56,10 @@ def test_summers_desk_js_renders_conviction():
     assert "renderTrendingSky" in src
     assert "pingPulsar" in src
     assert "message-intel__conv-ring" in src
+    assert "renderHeartbeat" in src
+    assert "renderChatterPower" in src
+    assert "too few graded calls to trust" in src
+    assert "pollNetFlow" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -82,6 +86,10 @@ def test_summers_flagship_css_tokens():
     assert "message-intel-spotlight-gleam" in css
     assert ".message-intel__bay" in css
     assert ".message-intel__instrument" in css
+    assert ".message-intel__heartbeat" in css
+    assert ".message-intel__loop" in css
+    assert ".message-intel__tile--orbit" in css
+    assert ".message-intel__cell { display: none; }" not in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
 
@@ -108,8 +116,17 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__pulsar" in html
     assert 'id="message-intel-sky"' in html
     assert "message-intel__bay" in html
-    assert "message-intel__zones" in html
+    assert "message-intel__heartbeat" in html
+    assert "message-intel__loop" in html
+    assert "Chatter Power" in html
     assert "message-intel__instrument" in html
+    assert "message-intel__zones" not in html
+    assert "mi-zone-feed" not in html
+    assert 'id="message-intel-flow"' in html
+    assert 'id="message-intel-callers-body"' in html
+    assert 'id="message-intel-power"' in html
+    assert "/rank" in html
+    assert "/who" in html
     assert "message-intel__conv-ring" in open(
         "templates/partials/premium/message_intel_ssr_macros.html", encoding="utf-8"
     ).read()
@@ -121,7 +138,12 @@ def test_listener_share_page_composition():
     assert "lsn-intercept" in html
     assert "lsn-title" in html
     assert "lsn-bay" in html
-    assert "lsn-zones" in html
+    assert "lsn-loop" in html
+    assert "Chatter Power" in html
+    assert "/rank" in html
+    assert "/who" in html
+    assert "lsn-zones" not in html
+    assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html
     assert "Trending orbit" in html
     assert "Syne" in html

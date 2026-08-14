@@ -36,6 +36,22 @@
   var callersBody = document.getElementById("message-intel-callers-body");
   var consensusBody = document.getElementById("message-intel-consensus-body");
   var divergenceBody = document.getElementById("message-intel-divergence-body");
+  var heartbeatEl = document.getElementById("message-intel-heartbeat");
+  var ekgPath = document.getElementById("message-intel-ekg");
+  var hbModeEl = document.getElementById("message-intel-hb-mode");
+  var hbLastEl = document.getElementById("message-intel-hb-last");
+  var hbCalEl = document.getElementById("message-intel-hb-cal");
+  var powerEl = document.getElementById("message-intel-power");
+  var narrativeEl = document.getElementById("message-intel-narrative");
+  var accoladesEl = document.getElementById("message-intel-accolades");
+  var flowAnchorBtn = document.getElementById("message-intel-flow-anchor");
+  var flowValEl = document.getElementById("message-intel-flow-val");
+  var flowDirEl = document.getElementById("message-intel-flow-dir");
+  var flowBarEl = document.getElementById("message-intel-flow-bar");
+  var flowSubEl = document.getElementById("message-intel-flow-sub");
+  var trendAxis = "chatter";
+  var flowAnchor = null;
+  var flowPrev = null;
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   var topicFiltersEl = document.getElementById("message-intel-topic-filters");
@@ -547,13 +563,15 @@
       callersBody.innerHTML = '<p class="empty">No resolved qualifying Telegram calls in this window yet. A caller needs explicit direction, 60%+ conviction, and a tracked price snapshot.</p>';
       return;
     }
-    var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 3) + ' resolved calls.</p><div class="message-intel__caller-list">';
+    var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 5) + ' resolved calls.</p><div class="message-intel__caller-list">';
     callers.forEach(function (row, index) {
       var name = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name || "Unknown";
-      var accuracy = row.accuracy != null ? row.accuracy + "%" : "—";
+      var accuracy = row.accuracy != null ? row.accuracy + "%" : "warming";
+      var caution = !row.qualified ? '<span class="message-intel__caution">too few graded calls to trust</span>' : "";
       html += '<article class="message-intel__caller-row' + (row.qualified ? "" : " is-provisional") + '">' +
         '<span class="message-intel__caller-rank">' + esc(index + 1) + '</span><div class="message-intel__caller-main"><b>' + esc(name) + '</b>' +
-        '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span></div>' +
+        '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span>' +
+        caution + '</div>' +
         '<strong>' + esc(accuracy) + '</strong>' +
         '<button type="button" class="message-intel__receipt-toggle" data-caller-id="' + esc(row.author_id) + '" data-caller-name="' + esc(name) + '">' + (row.qualified ? "Receipts" : "Provisional receipts") + "</button></article>";
     });
@@ -1120,22 +1138,37 @@
     return html;
   }
 
+  function sortedTrending(rows) {
+    var list = (rows || []).slice();
+    list.sort(function (a, b) {
+      if (trendAxis === "conviction") {
+        return (Number(b.conviction) || 0) - (Number(a.conviction) || 0);
+      }
+      return (Number(b.chatter_power != null ? b.chatter_power : b.heat) || 0) -
+        (Number(a.chatter_power != null ? a.chatter_power : a.heat) || 0);
+    });
+    return list;
+  }
+
   function renderTrendingV2(rows, windowLabel) {
     if (!trendingEl) return;
-    if (!rows || !rows.length) {
-      trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet.</p>';
+    var list = sortedTrending(rows);
+    if (!list.length) {
+      trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet — orbit stays honest while the group is quiet.</p>';
       renderTrendingSky([]);
+      renderChatterPower([]);
+      renderNarrative([]);
       return;
     }
     if (trendingTitle) trendingTitle.textContent = "Trending orbit";
-    renderTrendingSky(rows);
+    renderTrendingSky(list);
     if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
     trendingEl.innerHTML =
       '<div class="message-intel__trend-rows">' +
-       rows.slice(0, 6).map(function (row, idx) {
+       list.slice(0, 6).map(function (row, idx) {
         var score = row.chatter_power != null ? Number(row.chatter_power) : Number(row.heat) || 0;
         var delta = row.delta != null ? Number(row.delta) : 0;
-        return '<div class="message-intel__trend-row">' +
+        return '<div class="message-intel__trend-row" data-sn="' + esc(row.netuid) + '" data-name="' + esc(row.name || "") + '">' +
           '<span class="message-intel__rank">' + esc((idx + 1 < 10 ? "0" : "") + (idx + 1)) + '</span>' +
           '<span class="message-intel__t-icon" aria-hidden="true">' + esc(initialLetter(row.name)) + '</span>' +
           '<div class="message-intel__t-body">' +
@@ -1150,11 +1183,175 @@
           '</div></div>';
       }).join("") +
       '</div>';
+    trendingEl.querySelectorAll("[data-sn]").forEach(function (rowEl) {
+      rowEl.addEventListener("click", function () {
+        setFlowAnchor(rowEl.getAttribute("data-sn"), rowEl.getAttribute("data-name"));
+      });
+    });
+    renderChatterPower(list);
+    renderNarrative(list);
+  }
+
+  function renderChatterPower(rows) {
+    if (!powerEl) return;
+    var list = (rows || []).slice(0, 5);
+    if (!list.length) {
+      powerEl.innerHTML = '<p class="empty">Ranks by who\'s talking, not how loud — velocity × conviction × author hit-rate. Why-lines land with trending v2.</p>';
+      return;
+    }
+    var maxP = 0.0001;
+    list.forEach(function (r) {
+      var p = Number(r.chatter_power != null ? r.chatter_power : r.heat) || 0;
+      if (p > maxP) maxP = p;
+    });
+    powerEl.innerHTML = list.map(function (row, idx) {
+      var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || 0;
+      var conv = Number(row.conviction != null ? row.conviction : row.avg_conviction) || 0;
+      var vel = Number(row.velocity) || 0;
+      var why = row.why || ("velocity " + vel.toFixed(2) + " × conviction " + (conv / 100).toFixed(2));
+      return '<div class="message-intel__power-row">' +
+        '<span class="message-intel__rank">' + esc(idx + 1) + '</span>' +
+        '<div><a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name || ("SN" + row.netuid)) + '</b></a>' +
+        '<div class="message-intel__power-why">' + esc(why) + '</div>' +
+        '<div class="message-intel__axes">' +
+        '<span>chatter</span><i style="width:' + Math.round((power / maxP) * 100) + '%"></i>' +
+        '<span>conviction</span><i data-axis="conviction" style="width:' + Math.max(4, Math.round(conv)) + '%"></i>' +
+        '</div></div></div>';
+    }).join("");
+  }
+
+  function narrativeStage(row) {
+    var delta = Number(row.delta) || 0;
+    var mentions = Number(row.mentions) || 0;
+    if (delta > 0.02) return { label: "Rising", why: "Chatter power just went hot vs the prior window." };
+    if (delta < -0.02) return { label: "Decaying", why: "Talk is cooling — velocity faded this window." };
+    if (mentions >= 8) return { label: "Peaking", why: "High volume now, little delta — the crowd is already here." };
+    return { label: "Steady", why: "No sharp move yet — watching the next beat." };
+  }
+
+  function renderNarrative(rows) {
+    if (!narrativeEl) return;
+    var list = (rows || []).slice(0, 4);
+    if (!list.length) {
+      narrativeEl.innerHTML = '<p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group\'s weather, not a price chart.</p>';
+      return;
+    }
+    narrativeEl.innerHTML = list.map(function (row, idx) {
+      var stage = narrativeStage(row);
+      return '<div class="message-intel__narr-row">' +
+        '<span class="message-intel__rank">' + esc(idx + 1) + '</span>' +
+        '<div><b>' + esc(row.name || ("SN" + row.netuid)) + '</b> · ' + esc(stage.label) +
+        '<div class="message-intel__narr-why">' + esc(stage.why) + '</div></div></div>';
+    }).join("");
+  }
+
+  function renderAccolades(rows) {
+    if (!accoladesEl) return;
+    var earned = [];
+    (rows || []).forEach(function (row) {
+      var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name;
+      var graded = Number(row.graded) || 0;
+      var hits = Number(row.hits) || 0;
+      var hit = Number(row.hit_rate);
+      if (row.caution || graded < 5) return;
+      if (hit >= 60 && hits >= 3) earned.push({ handle: handle, badge: "Early & Right", why: hit + "% strike · n=" + graded });
+      else if (hits >= 3 && hit >= 50) earned.push({ handle: handle, badge: "On Fire", why: hits + " hits this window" });
+      else if ((Number(row.influence_score) || 0) >= 20 && (Number(row.message_count) || 0) >= 8) {
+        earned.push({ handle: handle, badge: "High Signal", why: "low fluff, high substance this week" });
+      }
+    });
+    if (!earned.length) {
+      accoladesEl.innerHTML = '<p class="empty">Early &amp; Right / On Fire / High Signal land once strike samples fill (N≥5). Building samples stay unlabeled.</p>';
+      return;
+    }
+    accoladesEl.innerHTML = earned.slice(0, 4).map(function (row) {
+      return '<div class="message-intel__accolade-row"><span aria-hidden="true">★</span><div><b>' +
+        esc(row.handle || "Unknown") + '</b> · ' + esc(row.badge) +
+        '<div class="message-intel__power-why">' + esc(row.why) + '</div></div></div>';
+    }).join("");
+  }
+
+  function ekgPathFor(mode) {
+    if (mode === "live") return "M0,13 L20,13 L24,9 L28,17 L32,13 L55,13 L59,9 L63,17 L67,13 L90,13 L94,9 L98,17 L102,13 L120,13";
+    if (mode === "reconnecting") return "M0,13 L10,13 L14,6 L18,20 L22,11 L28,13 L36,13 L40,7 L44,19 L48,10 L56,13 L64,13 L68,6 L72,20 L76,11 L84,13 L92,13 L96,7 L100,19 L104,10 L120,13";
+    if (mode === "archive") return "M0,13 L120,13";
+    return "M0,13 L18,13 L22,10 L26,16 L30,13 L58,13 L62,10 L66,16 L70,13 L98,13 L102,10 L106,16 L110,13 L120,13";
+  }
+
+  function fmtAge(seconds) {
+    if (seconds == null || seconds === "") return "awaiting first beat";
+    var n = Number(seconds);
+    if (!isFinite(n)) return "awaiting first beat";
+    if (n < 60) return "just now";
+    if (n < 3600) return Math.round(n / 60) + "m ago";
+    if (n < 86400) return Math.round(n / 3600) + "h ago";
+    return Math.round(n / 86400) + "d ago";
+  }
+
+  function renderHeartbeat(status, payload) {
+    var listener = (status && status.listener) || (payload && payload.meta && payload.meta.listener) || {};
+    var mode =
+      listener.display_mode ||
+      (listener.live && !listener.feed_stale ? "live" : "warming");
+    if (heartbeatEl) heartbeatEl.setAttribute("data-mode", mode);
+    if (hbModeEl) hbModeEl.textContent = String(mode).toUpperCase();
+    if (ekgPath) ekgPath.setAttribute("d", ekgPathFor(mode));
+    if (hbLastEl) hbLastEl.textContent = fmtAge(listener.last_message_age_seconds);
+  }
+
+  function setFlowAnchor(netuid, name) {
+    if (!netuid && !name) return;
+    flowAnchor = { netuid: netuid, name: name || ("SN" + netuid) };
+    flowPrev = null;
+    if (flowAnchorBtn) flowAnchorBtn.textContent = (netuid ? "SN" + netuid : flowAnchor.name) + " · tap a trending row";
+    pollNetFlow();
+  }
+
+  function flowWarming(note) {
+    if (flowDirEl) flowDirEl.textContent = "WARMING";
+    if (flowValEl) flowValEl.innerHTML = 'warming <small>· pool delta</small>';
+    if (flowBarEl) flowBarEl.style.width = "0";
+    if (flowSubEl) flowSubEl.textContent = note || "Needs two pool snapshots — nothing faked while it's quiet.";
+  }
+
+  function pollNetFlow() {
+    if (!flowValEl) return;
+    try {
+      fetch("/api/subnets?limit=16", { headers: { Accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var subs = j && j.subnets ? j.subnets : (j && j.results ? j.results : (Array.isArray(j) ? j : null));
+          if (!subs || !subs.length) { flowWarming("Live pool feed unreachable — warming kept."); return; }
+          var row = null;
+          if (flowAnchor && flowAnchor.netuid) {
+            row = subs.find(function (x) { return String(x.netuid || x.id) === String(flowAnchor.netuid); }) || subs[0];
+          } else {
+            row = subs[0];
+            flowAnchor = { netuid: row.netuid || row.id, name: row.name };
+            if (flowAnchorBtn) flowAnchorBtn.textContent = "SN" + flowAnchor.netuid + " · tap a trending row";
+          }
+          var tao = parseFloat(row.taoLiquidity != null ? row.taoLiquidity : (row.pool_tao != null ? row.pool_tao : NaN));
+          if (isNaN(tao)) { flowWarming(); return; }
+          if (!flowPrev) {
+            flowPrev = { tao: tao };
+            flowWarming("Baseline locked — next poll paints the delta.");
+            return;
+          }
+          var delta = tao - flowPrev.tao;
+          flowPrev = { tao: tao };
+          var dir = delta > 0 ? "IN" : (delta < 0 ? "OUT" : "FLAT");
+          if (flowDirEl) flowDirEl.textContent = dir;
+          if (flowValEl) flowValEl.innerHTML = (delta > 0 ? "+" : "") + delta.toFixed(2) + "τ <small>· net flow</small>";
+          if (flowBarEl) flowBarEl.style.width = Math.min(100, Math.abs(delta) * 8 + 8) + "%";
+          if (flowSubEl) flowSubEl.textContent = "Pool TAO " + tao.toFixed(1) + " · 60s delta on SN" + (row.netuid || row.id);
+        })
+        .catch(function () { flowWarming("Live pool feed unreachable — warming kept."); });
+    } catch (e) { flowWarming(); }
   }
 
   function setStat(id, value) {
     var el = document.getElementById(id);
-    if (el) el.textContent = value == null || value === "" ? "—" : String(value);
+    if (el) el.textContent = value == null || value === "" ? "warming" : String(value);
   }
 
   function renderHeroStats(payload, status) {
@@ -1166,13 +1363,13 @@
     var last24 = summary.message_count != null ? summary.message_count : gp.messages;
     var avgConv = gp.avg_conviction;
     var trending = pmeta.trending || [];
-    setStat("message-intel-stat-archived", total || "—");
-    setStat("message-intel-stat-24h", last24 != null ? last24 : "—");
+    setStat("message-intel-stat-archived", total || "warming");
+    setStat("message-intel-stat-24h", last24 != null ? last24 : "warming");
     setStat(
       "message-intel-stat-conv",
-      avgConv != null && !isNaN(Number(avgConv)) ? Math.round(Number(avgConv)) + "%" : "—"
+      avgConv != null && !isNaN(Number(avgConv)) ? Math.round(Number(avgConv)) + "%" : "warming"
     );
-    setStat("message-intel-stat-active", trending.length || "—");
+    setStat("message-intel-stat-active", trending.length || "warming");
   }
 
   function renderInterceptWave(messages) {
@@ -1343,6 +1540,9 @@
         row.hit_rate != null && row.graded
           ? esc(row.hit_rate) + "% hit-rate · " + esc(row.message_count) + " calls"
           : esc(row.message_count) + " msgs · " + esc(row.subnet_count) + " subnets";
+      var caution = row.caution || (Number(row.graded) > 0 && Number(row.graded) < 5)
+        ? '<span class="message-intel__caution">too few graded calls to trust</span>'
+        : "";
       html +=
         '<div class="message-intel__champ-row">' +
         '<span class="message-intel__rank ' +
@@ -1360,7 +1560,7 @@
         "</div>" +
         '<div class="message-intel__champ-basis">' +
         basis +
-        "</div></div>" +
+        "</div>" + caution + "</div>" +
         '<div class="message-intel__champ-score">' +
         '<div class="message-intel__champ-num">' +
         esc(inf.toFixed ? inf.toFixed(1) : inf) +
@@ -1736,6 +1936,7 @@
     }
 
     lastStatus = status;
+    renderHeartbeat(status, payload);
   }
 
   async function fetchJsonWithRetry(url, attempts) {
@@ -1823,7 +2024,7 @@
        }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
        latestTrendingRows = trending;
-      setStat("message-intel-stat-active", trending.length || "—");
+      setStat("message-intel-stat-active", trending.length || "warming");
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
@@ -1861,6 +2062,7 @@
       if (championsEl) {
         championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
       }
+      renderAccolades(authors);
       if (crownsEl) {
         crownsEl.innerHTML = renderReactionCrowns(crowns);
       }
@@ -1907,20 +2109,48 @@
     });
   }
 
+  document.querySelectorAll(".message-intel__axis-chip").forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      trendAxis = chip.getAttribute("data-axis") || "chatter";
+      document.querySelectorAll(".message-intel__axis-chip").forEach(function (c) {
+        c.classList.toggle("message-intel__axis-chip--active", c === chip);
+      });
+      renderTrendingV2(latestTrendingRows, "1h");
+    });
+  });
+
+  function hydrateCalibration() {
+    if (!hbCalEl) return;
+    fetch("/api/message-intel/calibration", { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) {
+        if (!j) return;
+        if (j.active === false) hbCalEl.textContent = "cal drift";
+        else hbCalEl.textContent = "cal ok";
+      })
+      .catch(function () { hbCalEl.textContent = "cal …"; });
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
       bindFilterClicks();
       syncFilterChipStates();
        hydrateWatchlist();
       hydrate();
+      hydrateCalibration();
+      pollNetFlow();
       refreshTimer = window.setInterval(hydrate, 60000);
+      window.setInterval(pollNetFlow, 60000);
     });
   } else {
     bindFilterClicks();
     syncFilterChipStates();
     hydrateWatchlist();
     hydrate();
+    hydrateCalibration();
+    pollNetFlow();
     refreshTimer = window.setInterval(hydrate, 60000);
+    window.setInterval(pollNetFlow, 60000);
   }
 
   window.addEventListener("pagehide", function () {

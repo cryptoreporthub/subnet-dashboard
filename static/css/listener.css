@@ -182,7 +182,7 @@ body.lsn-body::after{background:
 /* COMMANDS top strip */
 .lsn-cmds{display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px 8px}
 .lsn-cmds .clabel{font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--lsn-muted); padding-top:5px; width:100%}
-.lsn-cmd{font-size:11px; font-weight:700; padding:4px 10px; border-radius:99px; border:1px solid var(--lsn-glass-brd);
+.lsn-cmd{font-size:11px; font-weight:700; min-height:44px; display:inline-flex; align-items:center; padding:4px 10px; border-radius:99px; border:1px solid var(--lsn-glass-brd);
   color:var(--lsn-muted); cursor:pointer; transition:.12s; background:rgba(255,255,255,.03)}
 .lsn-cmd:hover{color:var(--lsn-cyan); border-color:rgba(110,231,255,.4)}
 .lsn-cmd.live{color:var(--lsn-gold); border-color:rgba(255,207,110,.35)}
@@ -495,33 +495,31 @@ body.lsn-body.quiet .lsn-gauge .qempty{display:block}
 .lsn-disc{margin-top:2px; text-align:center; font-size:10.5px; color:var(--lsn-muted); line-height:1.6; opacity:.85; padding:0 10px}
 .lsn-disc b{color:var(--lsn-gold); font-weight:700}
 
-.lsn-zone-input{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-.lsn-zones{display:none; gap:8px}
-.lsn-zone{flex:1 1 0; display:flex; align-items:center; justify-content:center; min-height:44px; padding:8px 10px;
-  border:1px solid var(--lsn-glass-brd); border-radius:999px; background:transparent; color:var(--lsn-muted);
-  font-family:var(--lsn-font-mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer}
-.lsn-bay{display:flex; flex-direction:column; gap:16px}
-.lsn-cell{display:flex; flex-direction:column; gap:16px; min-width:0}
+.lsn-loop{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;list-style:none;margin:0}
+.lsn-loop li{min-height:44px;padding:8px 6px;border:1px solid var(--lsn-glass-brd);border-radius:12px;display:flex;flex-direction:column;justify-content:center;gap:2px;background:rgba(255,255,255,.03)}
+.lsn-loop b{font-family:var(--lsn-font-brand);font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.lsn-loop span{font-family:var(--lsn-font-mono);font-size:9px;color:var(--lsn-muted)}
+.lsn-why{font-size:11px;color:var(--lsn-muted);line-height:1.4;margin:2px 0 8px 28px}
+.lsn-caution{margin-top:4px;font-family:var(--lsn-font-mono);font-size:9.5px;color:var(--lsn-gold)}
+.lsn-dock-note{font-size:11px;color:var(--lsn-muted);line-height:1.45;padding:0 6px}
+
+.lsn-bay{display:grid;grid-template-columns:1fr 1fr;gap:12px;grid-template-areas:"orbit orbit" "feed feed" "desk desk";align-items:start}
+.lsn-tile{min-width:0;display:flex;flex-direction:column;gap:16px}
+.lsn-tile--orbit{grid-area:orbit}
+.lsn-tile--feed{grid-area:feed}
+.lsn-tile--desk{grid-area:desk;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.lsn-tile--desk > *{min-width:0}
 @media (min-width: 740px){
-  .lsn-bay{display:grid; grid-template-columns:minmax(0,1.45fr) minmax(260px,.95fr); grid-template-areas:"feed orbit" "desk desk"; align-items:start}
-  .lsn-cell--feed{grid-area:feed}
-  .lsn-cell--orbit{grid-area:orbit}
-  .lsn-cell--desk{grid-area:desk; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px}
+  .lsn-bay{grid-template-columns:1.2fr 1fr;grid-template-areas:"orbit feed" "desk desk"}
 }
 @media (max-width: 739px){
-  .lsn-zones{display:flex}
-  .lsn-cell{display:none}
-  .lsn-page:has(#lsn-zone-feed:checked) .lsn-cell--feed,
-  .lsn-page:has(#lsn-zone-orbit:checked) .lsn-cell--orbit,
-  .lsn-page:has(#lsn-zone-desk:checked) .lsn-cell--desk{display:flex}
-  .lsn-page:has(#lsn-zone-feed:checked) .lsn-zone[for="lsn-zone-feed"],
-  .lsn-page:has(#lsn-zone-orbit:checked) .lsn-zone[for="lsn-zone-orbit"],
-  .lsn-page:has(#lsn-zone-desk:checked) .lsn-zone[for="lsn-zone-desk"]{
-    color:var(--lsn-ink); border-color:rgba(63,201,255,.55); box-shadow:0 0 0 3px rgba(63,201,255,.12)
-  }
   .lsn-pulsar{width:72px;height:72px}
   .lsn-core{width:48px;height:48px}
   .lsn-title{font-size:clamp(1.35rem,7vw,1.85rem)}
+  .lsn-tile--desk{grid-template-columns:1fr 1fr}
+}
+@media (max-width: 520px){
+  .lsn-tile--desk{grid-template-columns:1fr}
 }
 @media (prefers-reduced-motion: reduce){
   .lsn-trust .ekg path{animation:none}

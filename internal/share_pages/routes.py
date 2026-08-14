@@ -455,6 +455,42 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["trending"] = trending
     ctx["subnet_conviction"] = conv_rows
 
+    try:
+        from internal.message_intel.rollup import build_trending_subnets
+
+        tv2 = await _listener_call(
+            lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
+            None,
+            timeout=6,
+        )
+        tv2_rows = tv2 if isinstance(tv2, list) else []
+        if tv2_rows:
+            by_nu = {t.get("netuid"): t for t in trending if t.get("netuid") is not None}
+            merged = []
+            for row in tv2_rows:
+                if not isinstance(row, dict):
+                    continue
+                netuid = _safe_int(row.get("netuid"))
+                base = by_nu.get(netuid) or {}
+                merged.append(
+                    {
+                        "netuid": netuid,
+                        "name": row.get("name") or base.get("name") or (f"SN{netuid}" if netuid else "warming"),
+                        "conviction": row.get("conviction") if row.get("conviction") is not None else base.get("conviction"),
+                        "sent": str(row.get("sentiment") or base.get("sent") or "mix").lower()[:4],
+                        "mentions": row.get("mentions") or base.get("mentions"),
+                        "chatter_power": row.get("chatter_power") or row.get("heat"),
+                        "why": row.get("why"),
+                        "delta": row.get("delta"),
+                        "velocity": row.get("velocity"),
+                    }
+                )
+            if merged:
+                ctx["trending"] = merged
+                trending = merged
+    except Exception:
+        pass
+
     # conviction index top5
     ci_payload = None
     try:
@@ -540,9 +576,12 @@ async def _listener_page_context() -> Dict[str, Any]:
             continue
         authors.append(
             {
-                "author": a.get("author_name") or a.get("author") or a.get("author_id") or "—",
+                "author": a.get("author_name") or a.get("author") or a.get("author_id") or "warming",
                 "messages": a.get("messages") or a.get("total_messages") or a.get("count"),
                 "accuracy": a.get("accuracy") or a.get("hit_rate") or a.get("accuracy_score"),
+                "hit_rate": a.get("hit_rate") or a.get("accuracy"),
+                "graded": a.get("graded") or a.get("total_graded_calls") or 0,
+                "caution": bool(a.get("caution")),
                 "influence": a.get("influence") or a.get("influence_score"),
             }
         )
