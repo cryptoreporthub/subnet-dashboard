@@ -320,6 +320,7 @@
       if (learnEl && graph && graph.learning_state) {
         var resolver = graph.learning_state.resolver || {};
         var loop = graph.learning_state.loop_learned || {};
+        var evaluation = graph.learning_state.pump_evaluation || {};
         learnEl.textContent =
           'Loop state — ' +
           Number(loop.graded || 0) +
@@ -327,7 +328,8 @@
           Number(resolver.pending || 0) +
           ' pending · ' +
           Number(resolver.retryable || 0) +
-          ' retryable';
+          ' retryable · eval ' +
+          String(evaluation.status || 'warming_up').replace(/_/g, ' ');
       } else if (learnEl) learnEl.textContent = 'Last learn — waiting for focus';
       return;
     }
@@ -342,6 +344,7 @@
       var state = graph.learning_state;
       var loopState = state.loop_learned || {};
       var resolverState = state.resolver || {};
+      var evaluationState = state.pump_evaluation || {};
       learnEl.textContent =
         'Loop state — ' +
         Number(loopState.graded || 0) +
@@ -349,7 +352,8 @@
         Number(resolverState.pending || 0) +
         ' pending · ' +
         Number(resolverState.retryable || 0) +
-        ' retryable';
+        ' retryable · eval ' +
+        String(evaluationState.status || 'warming_up').replace(/_/g, ' ');
     }
   }
 

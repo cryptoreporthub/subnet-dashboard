@@ -357,9 +357,11 @@ def _learning_snapshot() -> Dict[str, Any]:
             predictions_data=data,
         )
         from internal.learning.pump_lead_stats import build_pump_desk_trust
+        from internal.learning.pump_lead_train import build_pump_evaluation
         from internal.council.grading import is_pump_desk_claim
 
         pump_desk_trust = build_pump_desk_trust(data)
+        pump_evaluation = build_pump_evaluation()
         retryable = sum(
             1
             for row in pending_rows
@@ -382,6 +384,7 @@ def _learning_snapshot() -> Dict[str, Any]:
             "retryable": retryable,
             "gate_reason": trust_banner.get("gate_reason"),
             "weight_updates": 0,
+            "evaluation_status": pump_evaluation.get("status"),
         }
         # Weight dials read the mindmap trail (soul map + ledger + dev signals).
         # That scan costs seconds on a warm volume, so it belongs in this cached
@@ -416,6 +419,7 @@ def _learning_snapshot() -> Dict[str, Any]:
             "watchdog": watchdog,
             "trust_banner": trust_banner,
             "pump_desk_trust": pump_desk_trust,
+            "pump_evaluation": pump_evaluation,
             "resolver_state": resolver_state,
             "loop_learned": loop_learned,
             "recent": resolved[-10:],
@@ -484,6 +488,7 @@ def _learning_stats_payload(
             "watchdog": watchdog,
             "trust_banner": trust_banner,
             "pump_desk_trust": snap.get("pump_desk_trust"),
+            "pump_evaluation": snap.get("pump_evaluation"),
             "resolver_state": snap.get("resolver_state"),
             "loop_learned": snap.get("loop_learned"),
             "integrity": trust_banner.get("integrity_gate"),
@@ -541,6 +546,16 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
                 "line": "Pump early hit-rate warming up",
                 "early": {"n": 0, "hits": 0, "hit_rate": None},
                 "min_sample_trust": 5,
+            },
+            "pump_evaluation": {
+                "status": "insufficient_sample",
+                "rows": 0,
+                "holdout": {"n": 0},
+                "adaptation_gate": {
+                    "sample_ok": False,
+                    "beats_baseline": False,
+                    "passed": False,
+                },
             },
             "resolver_state": {
                 "graded": 0,
@@ -632,6 +647,7 @@ def _compute_learning_metrics(snap: Optional[Dict[str, Any]] = None) -> Dict[str
         "graded": trust_banner.get("graded"),
         "trust_banner": trust_banner,
         "pump_desk_trust": snap.get("pump_desk_trust"),
+        "pump_evaluation": snap.get("pump_evaluation"),
         "resolver_state": snap.get("resolver_state"),
         "loop_learned": snap.get("loop_learned"),
         "watchdog": watchdog,
@@ -1120,14 +1136,13 @@ async def api_predictions():
         from internal.subnet_names import refresh_stored_names
 
         data = load_predictions()
-        update_stats(data)
-        save_predictions(data)
         predictions = refresh_stored_names(data.get("predictions", []))
         resolved = refresh_stored_names(data.get("resolved", []))
+        stats = resolver._compute_stats(data)
         return {
             "predictions": predictions,
             "resolved": resolved,
-            "stats": data.get("stats", {}),
+            "stats": stats,
         }
     except Exception as exc:
         logger.error("Error fetching predictions: %s", exc)
@@ -1316,9 +1331,15 @@ async def api_pump_lead_recover(request: Request, dry_run: bool = False, hydrate
 async def api_pump_lead_train_status():
     """Upgrade-6 dataset gate: gradeable n, frozen features, ready_to_train."""
     try:
-        from internal.learning.pump_lead_train import dataset_status
+        from internal.learning.pump_lead_train import build_pump_evaluation, dataset_status
 
-        return {"status": "success", "data": dataset_status()}
+        return {
+            "status": "success",
+            "data": {
+                **dataset_status(),
+                "evaluation": build_pump_evaluation(),
+            },
+        }
     except Exception as exc:
         logger.warning("pump_lead train-status failed: %s", exc)
         return {"status": "error", "message": str(exc)}

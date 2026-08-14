@@ -8,6 +8,8 @@ when the package is installed and gradeable n meets the gate.
 from __future__ import annotations
 
 import logging
+import math
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.grading import is_pump_lead
@@ -23,9 +25,11 @@ logger = logging.getLogger(__name__)
 
 PREDICTIONS_PATH = "data/predictions.json"
 MATRIX_PATH = "data/pump_lead_train_matrix.json"
+EVALUATION_PATH = "data/pump_lead_evaluation.json"
 MIN_TRAIN_SAMPLES = 50
 # Prod hand-score replace stays gated higher (Upgrade 6 LOCK).
 MIN_PROD_REPLACE = 100
+MIN_HOLDOUT_SAMPLES = 10
 
 
 def _is_gradeable_train_row(row: Dict[str, Any]) -> bool:
@@ -64,6 +68,10 @@ def collect_training_rows(
                 "netuid": row.get("netuid"),
                 "correct": bool(row.get("correct")),
                 "outcome": row.get("outcome"),
+                "actual_pct": row.get("actual_pct"),
+                "created_at": row.get("created_at") or row.get("resolved_at"),
+                "pattern_class": row.get("pattern_class"),
+                "calibration_version": row.get("calibration_version"),
                 "feature_schema_version": row.get(
                     "feature_schema_version", FEATURE_SCHEMA_VERSION
                 ),
@@ -74,6 +82,112 @@ def collect_training_rows(
             }
         )
     return out
+
+
+def chronological_splits(
+    rows: List[Dict[str, Any]],
+    *,
+    validation_fraction: float = 0.2,
+    holdout_fraction: float = 0.2,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Split rows by time so future outcomes never train the baseline."""
+    ordered = sorted(rows, key=lambda row: str(row.get("created_at") or ""))
+    n = len(ordered)
+    holdout_n = max(1, int(n * holdout_fraction)) if n else 0
+    validation_n = max(1, int(n * validation_fraction)) if n >= 3 else 0
+    train_end = max(0, n - holdout_n - validation_n)
+    return {
+        "train": ordered[:train_end],
+        "validation": ordered[train_end : train_end + validation_n],
+        "holdout": ordered[train_end + validation_n :],
+    }
+
+
+def _wilson_interval(hits: int, n: int) -> Dict[str, Optional[float]]:
+    if n <= 0:
+        return {"low": None, "high": None}
+    z = 1.96
+    p = hits / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    margin = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n) / denom
+    return {
+        "low": round(max(0.0, centre - margin), 4),
+        "high": round(min(1.0, centre + margin), 4),
+    }
+
+
+def build_pump_evaluation(
+    *,
+    path: Optional[str] = None,
+    min_holdout: int = MIN_HOLDOUT_SAMPLES,
+) -> Dict[str, Any]:
+    """Compare learned claims against a simple positive-momentum baseline."""
+    rows = collect_training_rows(path=path)
+    splits = chronological_splits(rows)
+    holdout = splits["holdout"]
+    learned_hits = sum(1 for row in holdout if row["y"] == 1)
+    baseline_hits = sum(
+        1
+        for row in holdout
+        if row.get("actual_pct") is not None and float(row["actual_pct"]) > 0
+    )
+    n = len(holdout)
+    learned_rate = round(learned_hits / n, 4) if n else None
+    baseline_rate = round(baseline_hits / n, 4) if n else None
+    enough = n >= int(min_holdout)
+    beats_baseline = bool(
+        enough
+        and learned_rate is not None
+        and baseline_rate is not None
+        and learned_rate > baseline_rate
+    )
+    return {
+        "status": "qualified" if beats_baseline else ("insufficient_sample" if not enough else "regression"),
+        "rows": len(rows),
+        "split_sizes": {key: len(value) for key, value in splits.items()},
+        "holdout": {
+            "n": n,
+            "learned_hits": learned_hits,
+            "learned_rate": learned_rate,
+            "learned_interval": _wilson_interval(learned_hits, n),
+            "baseline_hits": baseline_hits,
+            "baseline_rate": baseline_rate,
+            "baseline_interval": _wilson_interval(baseline_hits, n),
+        },
+        "minimum_holdout": int(min_holdout),
+        "adaptation_gate": {
+            "sample_ok": enough,
+            "beats_baseline": beats_baseline,
+            "passed": beats_baseline,
+        },
+    }
+
+
+def persist_pump_evaluation(
+    report: Dict[str, Any],
+    *,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Append an immutable evaluation snapshot without changing production scoring."""
+    out_path = path or EVALUATION_PATH
+    existing = safe_read_json(out_path, default={})
+    if not isinstance(existing, dict):
+        existing = {}
+    history = existing.get("history") if isinstance(existing.get("history"), list) else []
+    history.append(
+        {
+            "at": datetime.now(timezone.utc).isoformat(),
+            "status": report.get("status"),
+            "rows": report.get("rows", 0),
+            "holdout": report.get("holdout", {}),
+            "adaptation_gate": report.get("adaptation_gate", {}),
+        }
+    )
+    existing["latest"] = report
+    existing["history"] = history[-200:]
+    safe_write_json(out_path, existing)
+    return {"path": out_path, "history_size": len(existing["history"])}
 
 
 def dataset_status(*, path: Optional[str] = None) -> Dict[str, Any]:

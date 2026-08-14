@@ -40,6 +40,7 @@ _DEFAULTS: Dict[str, Any] = {
     "adapted_from_ledger": None,
     "adapted_from_population": None,
     "adapted_from_fingerprint": None,
+    "calibration_history": [],
 }
 
 
@@ -57,7 +58,13 @@ def load_calibration(path: Optional[str] = None) -> Dict[str, Any]:
     if not isinstance(data, dict) or not data:
         return default_calibration()
     out = default_calibration()
-    out.update({k: v for k, v in data.items() if k in out or k in ("adapted_at", "adapted_from_n", "version")})
+    out.update(
+        {
+            k: v
+            for k, v in data.items()
+            if k in out or k in ("adapted_at", "adapted_from_n", "version")
+        }
+    )
     if isinstance(data.get("phase_entry"), dict):
         pe = dict(out["phase_entry"])
         pe.update({k: float(v) for k, v in data["phase_entry"].items() if k in pe})
@@ -103,9 +110,21 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
     when strong. Caps prevent runaway.
     """
     from internal.learning.pump_lead_stats import build_pump_desk_trust, pump_evidence_snapshot
+    from internal.learning import pump_lead_train
 
     trust = build_pump_desk_trust()
     evidence = pump_evidence_snapshot()
+    evaluation = pump_lead_train.build_pump_evaluation()
+    try:
+        pump_lead_train.persist_pump_evaluation(evaluation)
+    except Exception:
+        logger.exception("pump evaluation persistence failed")
+    if not (evaluation.get("adaptation_gate") or {}).get("passed"):
+        logger.info(
+            "pump calibration held: evaluation status=%s",
+            evaluation.get("status"),
+        )
+        return None
     early = trust.get("early") or {}
     n = int(early.get("n") or 0)
     rate = early.get("hit_rate")
@@ -142,6 +161,20 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
     else:
         return None  # mid band — leave knobs alone
 
+    old_version = int(cal.get("version") or 1)
+    history = cal.get("calibration_history")
+    if not isinstance(history, list):
+        history = []
+    history.append(
+        {
+            "version": old_version,
+            "adapted_at": cal.get("adapted_at"),
+            "adapted_from_n": cal.get("adapted_from_n", 0),
+            "hit_rate": cal.get("last_adapt_hit_rate"),
+        }
+    )
+    cal["calibration_history"] = history[-50:]
+    cal["version"] = old_version + 1
     cal["lead_buy_ratio_min"] = round(buy, 4)
     cal["lead_volume_intensity_min"] = round(vol, 4)
     pe = dict(cal.get("phase_entry") or {})

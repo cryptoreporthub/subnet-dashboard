@@ -36,6 +36,7 @@ def recover_expired_predictions(
     """Re-resolve retired rows whose price may now be available. Idempotent."""
     from internal.learning.predictions_store import load_predictions, save_predictions, update_stats
     from internal.council.price_reference import price_at_resolve_at
+    from internal.council import resolver
     from internal.council.grading import compute_actual_pct, grade_prediction
 
     data = load_predictions()
@@ -104,10 +105,31 @@ def recover_expired_predictions(
             recovered += 1
             continue
 
-        row["outcome"] = new_outcome
-        row["correct"] = bool(correct)
-        row["actual_pct"] = actual_pct
-        row["resolved_price"] = price
+        expert, _ = resolver._stamp_and_nudge_expert(row, correct=bool(correct))
+        resolver._ensure_subnet_snapshot(row)
+        if not resolver._skip_council_learning(row):
+            resolver._nudge_impact_strength(row, bool(correct))
+        resolver.atomic_finalize_resolution(
+            row,
+            actual_pct=actual_pct,
+            outcome=new_outcome,
+            correct=bool(correct),
+            resolved_price=price,
+            resolved_at=resolve_at.isoformat().replace("+00:00", "Z"),
+            price_meta=meta,
+        )
+        if not resolver._skip_council_learning(row):
+            resolver._record_scenario_outcome(
+                row, actual_pct, new_outcome, bool(correct), expert
+            )
+            resolver._nudge_signal_weights(row, bool(correct))
+        else:
+            try:
+                from internal.learning.pump_calibration import maybe_adapt_after_resolve
+
+                maybe_adapt_after_resolve()
+            except Exception:
+                logger.exception("expired recovery pump calibration failed")
         row["recovered_at"] = _utcnow_iso()
         row["recovery"] = {"from": outcome, "price_source": meta.get("price_source")}
         recovered += 1

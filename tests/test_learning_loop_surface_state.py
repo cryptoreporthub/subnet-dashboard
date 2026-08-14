@@ -24,6 +24,8 @@ def test_learning_stats_exposes_shared_loop_state():
     payload = TestClient(app).get("/api/learning/stats").json()["data"]
 
     assert isinstance(payload["pump_desk_trust"], dict)
+    assert isinstance(payload["pump_evaluation"], dict)
+    assert "adaptation_gate" in payload["pump_evaluation"]
     assert set(("graded", "pending", "retryable")).issubset(payload["resolver_state"])
     assert set(("graded", "pending", "retryable")).issubset(payload["loop_learned"])
 
@@ -34,3 +36,12 @@ def test_mindmap_graph_exposes_learning_state():
     assert isinstance(payload["learning_state"], dict)
     assert "resolver" in payload["learning_state"]
     assert "loop_learned" in payload["learning_state"]
+    assert "pump_evaluation" in payload["learning_state"]
+
+
+def test_home_ssr_exposes_non_empty_learning_state_labels():
+    html = TestClient(app).get("/").text
+
+    assert "evaluation" in html
+    assert "pending" in html
+    assert "retryable" in html

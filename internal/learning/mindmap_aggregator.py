@@ -120,6 +120,7 @@ def build_learning_state() -> Dict[str, Any]:
         return {
             "resolver": snapshot.get("resolver_state") or {},
             "pump_desk": snapshot.get("pump_desk_trust") or {},
+            "pump_evaluation": snapshot.get("pump_evaluation") or {},
             "loop_learned": snapshot.get("loop_learned") or {},
         }
     except Exception as exc:

@@ -344,8 +344,18 @@ def run_calibration_pipeline(
 
     try:
         rows = load_training_rows(predictions_path)
-        proposed = compute_proposed_weights(rows)
+        ordered_rows = sorted(
+            rows,
+            key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""),
+        )
+        holdout_n = min(max(0, int(CERT_BACKTEST_N)), len(ordered_rows))
+        training_rows = (
+            ordered_rows[:-holdout_n] if holdout_n else ordered_rows
+        )
+        proposed = compute_proposed_weights(training_rows)
         cert = certify_weights(proposed, rows, current=backup)
+        cert["training_size"] = len(training_rows)
+        cert["holdout_is_future"] = bool(holdout_n)
         admin_token = os.environ.get("CALIBRATION_ADMIN_TOKEN")
         allow_force = force and not admin_token
 
