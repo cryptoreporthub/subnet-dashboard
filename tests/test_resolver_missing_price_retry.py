@@ -91,3 +91,19 @@ def test_expiry_grace_is_four_horizon_hours(resolver):
 
     assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=3), 2.0) is False
     assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=5), 2.0) is True
+
+
+def test_stats_expose_council_and_pump_pending_separately(resolver):
+    stats = resolver._compute_stats(
+        {
+            "resolved": [],
+            "predictions": [
+                {"id": "council", "status": "pending"},
+                {"id": "pump", "status": "pending", "pick_source": "pump_lead"},
+            ],
+        }
+    )
+    assert stats["pending"] == 1
+    assert stats["council_pending"] == 1
+    assert stats["pump_pending"] == 1
+    assert stats["total_pending"] == 2

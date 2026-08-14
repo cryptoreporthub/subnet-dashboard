@@ -76,9 +76,10 @@ def test_alignment_nudge_updates_weight(tmp_path, monkeypatch):
     from internal.learning.alignment_nudge import apply_alignment_nudge
 
     out = apply_alignment_nudge({"alignment_score": 0.9, "status": "aligned"})
-    assert out.get("applied") is True
+    assert out.get("applied") is False
+    assert out.get("diagnostic_recorded") is True
     updated = weights_mod.load_weights(str(soul))
-    assert updated["quant"] > 1.0
+    assert updated["quant"] == 1.0
 
 
 def test_panel_summaries_live_council():

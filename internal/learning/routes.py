@@ -429,6 +429,13 @@ def _learning_stats_payload(
             "expired_rate": trust_banner.get("expired_rate"),
             "duplicate": resolver_stats.get("duplicate", 0),
             "pending": resolver_stats.get("pending", stats.get("pending", 0)),
+            "council_pending": resolver_stats.get(
+                "council_pending", resolver_stats.get("pending", stats.get("pending", 0))
+            ),
+            "pump_pending": resolver_stats.get("pump_pending", 0),
+            "total_pending": resolver_stats.get(
+                "total_pending", resolver_stats.get("pending", stats.get("pending", 0))
+            ),
             "graded": trust_banner.get("graded"),
             "unclassified_count": unclassified,
             "last_updated": stats.get("last_updated") or _utcnow_z(),
@@ -475,6 +482,9 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
             "expired_rate": None,
             "duplicate": 0,
             "pending": 0,
+            "council_pending": 0,
+            "pump_pending": 0,
+            "total_pending": 0,
             "graded": 0,
             "unclassified_count": 0,
             "last_updated": _utcnow_z(),

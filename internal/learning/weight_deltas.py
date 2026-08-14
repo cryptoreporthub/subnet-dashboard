@@ -24,6 +24,7 @@ def expert_graded_counts() -> Dict[str, int]:
     try:
         from internal.learning.predictions_store import load_predictions
         from internal.council.expert_attribution import attribute_expert_for_row
+        from internal.council.grading import is_pump_desk_claim
 
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
@@ -32,7 +33,11 @@ def expert_graded_counts() -> Dict[str, int]:
                 continue
             if pred.get("correct") is None:
                 continue
-            expert = _normalize_expert(pred.get("expert"))
+            # Expert sample sizes describe the published council population,
+            # not pump-desk or HOLD-shadow outcomes.
+            if is_pump_desk_claim(pred) or pred.get("shadow") or pred.get("counterfactual"):
+                continue
+            expert = _normalize_expert(attribute_expert_for_row(pred))
             if expert:
                 counts[expert] = counts.get(expert, 0) + 1
                 continue

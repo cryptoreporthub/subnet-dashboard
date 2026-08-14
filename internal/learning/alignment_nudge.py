@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from internal.council import weights as council_weights
-from internal.learning.trail_bus import emit_disposition_shift, emit_weight_change
+from internal.learning.trail_bus import emit_disposition_shift
 
 logger = logging.getLogger(__name__)
-
-_MIN = 0.1
-_MAX = 2.0
-
 
 def _expert_for_alignment_status(status: str) -> str:
     s = (status or "").lower()
@@ -26,7 +22,12 @@ def _expert_for_alignment_status(status: str) -> str:
 
 
 def apply_alignment_nudge(feedback: Dict[str, Any]) -> Dict[str, Any]:
-    """Nudge the expert weight that best matches selector↔brain alignment."""
+    """Record selector↔brain alignment without changing outcome weights.
+
+    Alignment is a diagnostic about agreement between two selectors, not a
+    verified market outcome. Mixing it into outcome weights made Quant appear
+    learned with zero attributed grades.
+    """
     if not isinstance(feedback, dict):
         return {"applied": False, "reason": "invalid feedback"}
 
@@ -36,35 +37,24 @@ def apply_alignment_nudge(feedback: Dict[str, Any]) -> Dict[str, Any]:
 
     weights_before = council_weights.load_weights(council_weights.SOUL_MAP_PATH)
     before = float(weights_before.get(expert, 1.0))
-    after = None
-    try:
-        after = council_weights.nudge_expert(
-            expert, alignment >= 0.5, council_weights.SOUL_MAP_PATH
-        )
-    except Exception:
-        after = None
-    if after is None:
-        return {"applied": False, "reason": "nudge failed", "expert": expert}
-
-    emit_weight_change(
-        expert,
-        before=before,
-        after=after,
-        reason=f"alignment_{status}",
-        correct=alignment >= 0.75,
-    )
     emit_disposition_shift(
         expert=expert,
         from_action="pre_alignment",
         to_action=status,
-        evidence={"alignment_score": alignment, "expert_nudged": expert},
+        evidence={
+            "alignment_score": alignment,
+            "expert_observed": expert,
+            "outcome_weight_changed": False,
+        },
     )
 
     return {
-        "applied": True,
+        "applied": False,
+        "diagnostic_recorded": True,
+        "reason": "alignment_diagnostic_only",
         "expert": expert,
         "alignment_score": alignment,
         "status": status,
         "weight_before": before,
-        "weight_after": after,
+        "weight_after": before,
     }

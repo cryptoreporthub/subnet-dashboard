@@ -73,3 +73,20 @@ def test_trust_banner_exposes_missing_price_retirements_separately():
     assert banner["ungradeable"] == 3
     assert banner["price_data_unavailable"] == 3
     assert "resolved-flow" in banner["message"]
+
+
+def test_trust_banner_keeps_council_and_pump_pending_separate():
+    banner = build_trust_banner(
+        {
+            "correct": 0,
+            "wrong": 0,
+            "expired": 0,
+            "council_pending": 2,
+            "pump_pending": 6,
+            "total_pending": 8,
+        }
+    )
+    assert banner["pending"] == 2
+    assert banner["council_pending"] == 2
+    assert banner["pump_pending"] == 6
+    assert banner["total_pending"] == 8

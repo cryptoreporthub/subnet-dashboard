@@ -32,6 +32,9 @@ def build_trust_banner(
     price_data_unavailable = int(stats.get("price_data_unavailable", 0) or 0)
     duplicate = int(stats.get("duplicate", 0) or 0)
     pending = int(stats.get("pending", 0) or 0)
+    council_pending = int(stats.get("council_pending", pending) or 0)
+    pump_pending = int(stats.get("pump_pending", 0) or 0)
+    total_pending = int(stats.get("total_pending", council_pending + pump_pending) or 0)
     total = int(stats.get("total", 0) or 0)
     if total <= 0:
         total = graded + expired + duplicate + pending
@@ -140,6 +143,9 @@ def build_trust_banner(
         ) if expired else None,
         "duplicate": duplicate,
         "pending": pending,
+        "council_pending": council_pending,
+        "pump_pending": pump_pending,
+        "total_pending": total_pending,
         "total": total,
         "min_graded": min_graded,
         "max_expired_rate": max_expired_rate,
