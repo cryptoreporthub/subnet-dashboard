@@ -85,6 +85,7 @@ def test_build_24h_summary_with_data(intel_env):
     assert summary["high_conviction_count"] == 12
     assert len(summary["top_subnets"]) >= 1
     assert summary["group_pulse"]["group"] == "OfficialSubnetSummer"
+    assert summary["top_subnets"][0]["mention_context"] == "SN25 is moving"
 
 
 def test_format_summary_includes_desk_link(monkeypatch, intel_env):
@@ -96,6 +97,48 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
     assert "Subnet Summers — 24h pulse" in text
     assert "https://example.test/#section-message-intel" in text
     assert "Top subnets" in text
+
+
+def test_format_summary_includes_what_mentions_are_about():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "top_subnets": [
+                {
+                    "netuid": 7,
+                    "name": "Allways",
+                    "mentions": 3,
+                    "mention_context": "Validators discussed a new release",
+                }
+            ],
+        }
+    )
+
+    assert "SN7 Allways (3 mentions)" in text
+    assert "SN7 Allways (3 mentions)\n  Validators discussed a new release" in text
+    assert "Validators discussed a new release" in text
+
+
+def test_format_summary_includes_hour_price_change():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "top_subnets": [
+                {
+                    "netuid": 28,
+                    "name": "gm",
+                    "mentions": 2,
+                    "price_change_1h": 4.8,
+                }
+            ],
+        }
+    )
+
+    assert "SN28 gm (2 mentions, +4.8% 1h)" in text
 
 
 def test_rate_limit_per_chat(intel_env):
@@ -121,6 +164,38 @@ def test_process_update_handles_summary_command(intel_env):
         args, kwargs = send.call_args
         assert args[0] == 42
         assert "Subnet Summers" in args[1]
+
+
+def test_start_command_lists_all_bot_commands():
+    reply = summary_bot.handle_command("/start")
+
+    assert "/summary" in reply
+    assert "/trending" in reply
+    assert "/track" in reply
+    assert "/rank" in reply
+    assert "/who" in reply
+    assert "/alerts" in reply
+    assert "/link" in reply
+
+
+def test_alerts_command_without_toggle_lists_active_alerts(tmp_path, monkeypatch):
+    monkeypatch.setenv("ALERTS_PATH", str(tmp_path / "alerts.json"))
+    from internal.signals.alerts import AlertEngine
+
+    engine = AlertEngine(alerts_path=str(tmp_path / "alerts.json"))
+    engine.create_alert(
+        {
+            "alert_type": "manual",
+            "message": "SN7 is warming",
+            "severity": "info",
+            "subnet_id": 7,
+        }
+    )
+
+    with patch("internal.signals.alerts.AlertEngine", return_value=engine):
+        reply = summary_bot.handle_command("/alerts")
+
+    assert "SN7 is warming" in reply
 
 
 def test_start_summary_bot_spawns_thread(monkeypatch):
@@ -168,8 +243,8 @@ def test_background_boot_wires_summary_bot():
     assert "stop_summary_bot" in boot
 
 
-def test_fly_toml_summary_bot_off():
+def test_fly_toml_summary_bot_on():
     from pathlib import Path
 
     fly = Path("fly.toml").read_text(encoding="utf-8")
-    assert 'TELEGRAM_SUMMARY_BOT = "off"' in fly
+    assert 'TELEGRAM_SUMMARY_BOT = "on"' in fly
