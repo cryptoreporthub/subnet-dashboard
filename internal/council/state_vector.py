@@ -1108,7 +1108,7 @@ def attach_council_prediction(
     hours = horizon_hours if horizon_hours is not None else (
         1 if horizon_type == "hour" else day_horizon_hours()
     )
-    return build_prediction_statement(
+    prediction = build_prediction_statement(
         sn=candidate,
         predicted_pct=predicted_pct,
         horizon=hours,
@@ -1120,6 +1120,11 @@ def attach_council_prediction(
         horizon_type=horizon_type,
         active_signals=fields["active_signals"] or None,
     )
+    prediction["pick_source"] = "council"
+    from internal.learning.evidence import stamp_evidence
+
+    stamp_evidence(prediction)
+    return prediction
 
 
 # ---------------------------------------------------------------------------

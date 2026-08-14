@@ -37,6 +37,9 @@ _DEFAULTS: Dict[str, Any] = {
     },
     "adapted_at": None,
     "adapted_from_n": 0,
+    "adapted_from_ledger": None,
+    "adapted_from_population": None,
+    "adapted_from_fingerprint": None,
 }
 
 
@@ -99,9 +102,10 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
     Conservative: only tighten lead gates when hit rate is weak; loosen slightly
     when strong. Caps prevent runaway.
     """
-    from internal.learning.pump_lead_stats import build_pump_desk_trust
+    from internal.learning.pump_lead_stats import build_pump_desk_trust, pump_evidence_snapshot
 
     trust = build_pump_desk_trust()
+    evidence = pump_evidence_snapshot()
     early = trust.get("early") or {}
     n = int(early.get("n") or 0)
     rate = early.get("hit_rate")
@@ -142,6 +146,9 @@ def maybe_adapt_after_resolve(*, min_sample: int = MIN_ADAPT_SAMPLE) -> Optional
     cal["adapted_at"] = _utcnow_z()
     cal["adapted_from_n"] = n
     cal["last_adapt_hit_rate"] = rate
+    cal["adapted_from_ledger"] = evidence["ledger"]
+    cal["adapted_from_population"] = evidence["population"]
+    cal["adapted_from_fingerprint"] = evidence["fingerprint"]
     save_calibration(cal)
     logger.info(
         "pump_calibration adapted n=%s hit_rate=%s buy=%.2f vol=%.2f",

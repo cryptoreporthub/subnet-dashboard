@@ -52,6 +52,16 @@ def _migrate_phases(data: Dict[str, Any]) -> bool:
     return changed
 
 
+def _migrate_evidence(data: Dict[str, Any]) -> bool:
+    from internal.learning.evidence import stamp_evidence
+
+    changed = False
+    for bucket in ("predictions", "resolved"):
+        for pred in data.get(bucket, []) or []:
+            changed = stamp_evidence(pred) or changed
+    return changed
+
+
 def load_predictions() -> Dict[str, Any]:
     try:
         with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
@@ -63,7 +73,9 @@ def load_predictions() -> Dict[str, Any]:
     data.setdefault("predictions", [])
     data.setdefault("resolved", [])
     data.setdefault("stats", _default_data()["stats"])
-    changed = _migrate_phases(data) or _migrate_expert_labels(data)
+    changed = _migrate_phases(data)
+    changed = _migrate_expert_labels(data) or changed
+    changed = _migrate_evidence(data) or changed
     if changed:
         save_predictions(data)
     return data
@@ -104,6 +116,9 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
     """
     if not isinstance(prediction, dict):
         return False
+    from internal.learning.evidence import stamp_evidence
+
+    stamp_evidence(prediction)
     netuid = prediction.get("netuid")
     horizon_type = prediction.get("horizon_type", "hour")
     if netuid is None:

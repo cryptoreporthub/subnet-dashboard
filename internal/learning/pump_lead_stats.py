@@ -6,6 +6,8 @@ Honesty gate before adaptive knobs (LOCK step 3).
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any, Dict, List
 
 from internal.council.grading import is_pump_lead
@@ -101,4 +103,33 @@ def build_pump_desk_trust(
         "min_sample_adapt": MIN_SAMPLE_FOR_ADAPT,
         "claim": "+2% within 1h from WARMING UP / BUILDING entry",
         "source": "predictions.json pick_source=pump_lead",
+    }
+
+
+def pump_evidence_snapshot(predictions_data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """Return reproducible provenance for the active pump proof population."""
+    if predictions_data is None:
+        try:
+            from internal.learning.predictions_store import load_predictions
+
+            predictions_data = load_predictions()
+        except Exception:
+            predictions_data = {"resolved": [], "predictions": []}
+    rows = _gradeable_pump_rows(predictions_data.get("resolved") or [])
+    early = [row for row in rows if _is_early_claim(row)]
+    keys = [
+        {
+            "id": str(row.get("id") or ""),
+            "resolved_at": row.get("resolved_at"),
+            "correct": row.get("correct"),
+            "outcome": row.get("outcome"),
+        }
+        for row in early
+    ]
+    encoded = json.dumps(keys, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "ledger": "predictions.json",
+        "population": "pump_early",
+        "graded": len(early),
+        "fingerprint": hashlib.sha256(encoded).hexdigest()[:16],
     }
