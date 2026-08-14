@@ -723,26 +723,60 @@
   function refreshFocus() {
     if (focusNetuid == null) return Promise.resolve();
     var action = 'HOLD';
-    var trailFetch = trailPromise();
-    return Promise.all([
-      fetchJson('/api/judges/' + focusNetuid, 15000),
-      fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
-      trailFetch,
-      dailyPickPromise(),
-      fetchJson('/api/pick-explain/' + focusNetuid, 10000).catch(function () { return {}; }),
-    ]).then(function (res) {
-      var judges = res[0];
-      var cal = res[1];
-      var trail = (res[2] && res[2].trail) || [];
-      var dp = res[3] || {};
-      var explain = res[4] || {};
-      action = focusActionBadge(dp, judges);
-      var weights = calibrationWeights(cal);
-      updateIdentityChip(dp);
-      renderJudges(judges, action, weights, explain, trail);
-      renderTrailTeaser(trail);
-      return loadChips();
-    }).catch(function () {
+    // The trail is enrichment, not a prerequisite for showing the live judge
+    // read. A shared trail event can fire before this module attaches its
+    // listener, so never let that race keep Living Focus on its skeleton.
+    var trailFetch = trailPromise().catch(function (err) {
+      console.warn('[living_focus] trail enrichment failed', err);
+      return { trail: [] };
+    });
+    var cached = window.HomeHydrateCache || {};
+    var initialDp = cached.dailyPick || {};
+    var initialTrail = cachedTrail || (cached.trail != null ? cached.trail : []);
+    var activeWeights = {};
+
+    // Paint the required judge surface from its own request. Calibration,
+    // explainability, daily-pick refresh, and trail are enrichments and must
+    // never make a healthy /api/judges response disappear behind the skeleton.
+    return fetchJson('/api/judges/' + focusNetuid, 15000).then(function (judges) {
+      action = focusActionBadge(initialDp, judges);
+      updateIdentityChip(initialDp);
+      renderJudges(judges, action, {}, {}, initialTrail);
+      renderTrailTeaser(initialTrail);
+
+      Promise.all([
+        fetchJson('/api/calibration/status', 8000).catch(function () { return {}; }),
+        dailyPickPromise(),
+        fetchJson('/api/pick-explain/' + focusNetuid, 10000).catch(function () { return {}; }),
+      ]).then(function (res) {
+        var cal = res[0] || {};
+        var dp = res[1] || initialDp;
+        var explain = res[2] || {};
+        activeWeights = calibrationWeights(cal);
+        action = focusActionBadge(dp, judges);
+        updateIdentityChip(dp);
+        renderJudges(judges, action, activeWeights, explain, cachedTrail || initialTrail);
+      }).catch(function (err) {
+        console.warn('[living_focus] optional judge enrichment failed', err);
+      });
+
+      // Keep secondary evidence independent as well. A malformed optional
+      // chip payload must not turn a successfully rendered judge panel into
+      // the generic quiet fallback.
+      loadChips().catch(function (err) {
+        console.warn('[living_focus] evidence enrichment failed', err);
+      });
+
+      return trailFetch.then(function (trailPayload) {
+        var nextTrail = (trailPayload && trailPayload.trail) || [];
+        cachedTrail = nextTrail;
+        renderTrailTeaser(nextTrail);
+        renderLearnStrip(nextTrail, activeWeights);
+        showWeightLean(activeWeights, weightNudgeFromTrail(nextTrail, activeWeights));
+        return nextTrail;
+      });
+    }).catch(function (err) {
+      console.warn('[living_focus] judge hydration failed', err);
       renderJudgesQuiet('Quiet — lane judges unavailable right now.', cachedTrail, {});
     });
   }
@@ -813,6 +847,23 @@
       renderSwitcher(cached.top);
       scrollToFocus();
       return refreshFocus();
+    }
+
+    // The SSR shell already carries the day's focus when the homepage knows
+    // it. Start the judge request from that value instead of waiting for a
+    // cache event that cockpit_hydrate may have emitted before this deferred
+    // script attached its listener. A URL focus is equally authoritative.
+    var urlFocus = parseFocusParam();
+    var ssrFocusRaw = root.getAttribute('data-focus-netuid');
+    var ssrFocus = ssrFocusRaw != null && ssrFocusRaw !== '' ? Number(ssrFocusRaw) : null;
+    var immediateFocus = urlFocus != null ? urlFocus : (!isNaN(ssrFocus) ? ssrFocus : null);
+    if (immediateFocus != null) {
+      var ssrName = root.getAttribute('data-focus-name') || ('SN' + immediateFocus);
+      setFocus(immediateFocus, ssrName);
+      scrollToFocus();
+      refreshFocus();
+      // The cache event still updates the identity/name and switcher once the
+      // full homepage payload arrives.
     }
 
     var waited = false;

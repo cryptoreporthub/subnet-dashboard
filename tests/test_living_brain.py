@@ -46,6 +46,13 @@ def test_b0_a_living_focus_four_beat_present():
     assert data["weights"]
 
 
+def test_living_focus_paints_judges_before_optional_enrichment():
+    js = Path("static/js/living_focus.js").read_text(encoding="utf-8")
+    assert "var immediateFocus" in js
+    assert "return fetchJson('/api/judges/' + focusNetuid, 15000)" in js
+    assert "optional judge enrichment failed" in js
+
+
 def test_trail_matches_focus_netuid_logic():
     """LB-2: null netuid must not match unless payload carries focus netuid."""
     focus = 42
