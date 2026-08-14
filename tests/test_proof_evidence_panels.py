@@ -26,7 +26,7 @@ def test_hydrate_syncs_proof_evidence_panels():
     js = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function syncProofEvidencePanels" in js
     assert "Published grades ' + graded + '/' + minGraded" in js
-    assert "No outcome-backed council learning yet" in js
+    assert "retryable" in js
     assert "PRIOR · " in js
 
 
