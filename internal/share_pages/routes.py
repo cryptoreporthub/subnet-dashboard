@@ -313,6 +313,20 @@ async def _listener_call(fn, default, timeout: float = 6.0):
         return default
 
 
+async def _listener_worker_call(path: str, default):
+    """Read worker-owned listener data when the web process has no volume."""
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if not needs_worker_volume_proxy():
+            return None
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        return await _listener_call(lambda: fetch_worker_json_sync(path), default)
+    except Exception:
+        return default
+
+
 def _as_list(v, default=None):
     return v if isinstance(v, list) else (default or [])
 
@@ -365,6 +379,12 @@ async def _listener_page_context() -> Dict[str, Any]:
         "recap": {},
     }
 
+    remote_status = await _listener_worker_call("/api/message-intel/status", None)
+    if isinstance(remote_status, dict) and remote_status.get("status") == "success":
+        ctx["listener"] = remote_status.get("listener") or ctx["listener"]
+        ctx["outcomes"] = remote_status.get("outcomes") or ctx["outcomes"]
+        ctx["store"] = remote_status.get("store") or ctx["store"]
+
     store = ctx["store"] if isinstance(ctx["store"], dict) else {}
     ctx["graded_count"] = int(store.get("total_messages") or 0)
     ctx["high_conviction"] = int(store.get("high_conviction_count") or 0)
@@ -389,9 +409,11 @@ async def _listener_page_context() -> Dict[str, Any]:
     # messages (live feed) — safe_list/coerce discipline
     try:
         engine = _listener_engine()
-        msgs_payload = await _listener_call(
-            lambda: engine.list_messages(limit=24), None, timeout=6
-        )
+        msgs_payload = await _listener_worker_call("/api/message-intel?limit=24", None)
+        if msgs_payload is None:
+            msgs_payload = await _listener_call(
+                lambda: engine.list_messages(limit=24), None, timeout=6
+            )
     except Exception:
         msgs_payload = None
     msgs = []
@@ -423,9 +445,13 @@ async def _listener_page_context() -> Dict[str, Any]:
     conv_payload = None
     try:
         engine = _listener_engine()
-        conv_payload = await _listener_call(
-            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+        conv_payload = await _listener_worker_call(
+            "/api/message-intel/subnet-conviction?limit=8", None
         )
+        if conv_payload is None:
+            conv_payload = await _listener_call(
+                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+            )
     except Exception:
         pass
     conv_rows = []
@@ -523,10 +549,14 @@ async def _listener_page_context() -> Dict[str, Any]:
     # callers — resolved qualifying accuracy only
     callers_payload = None
     try:
-        build_board = _listener_caller_board()
-        callers_payload = await _listener_call(
-            lambda: build_board(days=30, limit=8), None, timeout=6
+        callers_payload = await _listener_worker_call(
+            "/api/message-intel/callers?days=30&limit=8", None
         )
+        if callers_payload is None:
+            build_board = _listener_caller_board()
+            callers_payload = await _listener_call(
+                lambda: build_board(days=30, limit=8), None, timeout=6
+            )
     except Exception:
         pass
     caller_rows = []
@@ -560,10 +590,14 @@ async def _listener_page_context() -> Dict[str, Any]:
     # authors — weekly champions
     authors_payload = None
     try:
-        engine = _listener_engine()
-        authors_payload = await _listener_call(
-            lambda: engine.list_authors(days=7, limit=5), None, timeout=6
+        authors_payload = await _listener_worker_call(
+            "/api/message-intel/authors?days=7&limit=5", None
         )
+        if authors_payload is None:
+            engine = _listener_engine()
+            authors_payload = await _listener_call(
+                lambda: engine.list_authors(days=7, limit=5), None, timeout=6
+            )
     except Exception:
         pass
     author_rows = []
@@ -591,10 +625,12 @@ async def _listener_page_context() -> Dict[str, Any]:
     # hot topics
     topics_payload = None
     try:
-        engine = _listener_engine()
-        topics_payload = await _listener_call(
-            lambda: engine.list_topics(limit=8), None, timeout=5
-        )
+        topics_payload = await _listener_worker_call("/api/message-intel/topics?limit=8", None)
+        if topics_payload is None:
+            engine = _listener_engine()
+            topics_payload = await _listener_call(
+                lambda: engine.list_topics(limit=8), None, timeout=5
+            )
     except Exception:
         pass
     topics = []
@@ -619,10 +655,14 @@ async def _listener_page_context() -> Dict[str, Any]:
     # divergence stories
     div_payload = None
     try:
-        engine = _listener_engine()
-        div_payload = await _listener_call(
-            lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
+        div_payload = await _listener_worker_call(
+            "/api/message-intel/divergence?days=7&limit=3", None
         )
+        if div_payload is None:
+            engine = _listener_engine()
+            div_payload = await _listener_call(
+                lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
+            )
     except Exception:
         pass
     div_rows = []
@@ -648,9 +688,12 @@ async def _listener_page_context() -> Dict[str, Any]:
 
     # summary text (plain-language recap)
     try:
-        from internal.message_intel.summary import summarize_message_intel
+        summ_payload = await _listener_worker_call("/api/message-intel/summary", None)
+        summ = summ_payload.get("summary") if isinstance(summ_payload, dict) else None
+        if summ is None:
+            from internal.message_intel.summary import summarize_message_intel
 
-        summ = await _listener_call(summarize_message_intel, None, timeout=5)
+            summ = await _listener_call(summarize_message_intel, None, timeout=5)
         if isinstance(summ, dict):
             ctx["summary_text"] = summ.get("text") or ""
     except Exception as exc:
