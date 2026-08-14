@@ -11821,32 +11821,38 @@ body.wrap {
 .message-intel--v2 .message-intel__feed-row--hot .message-intel__conv-ring i { color: var(--mi-violet); }
 .message-intel--v2 .message-intel__sky {
   position: relative;
-  width: 100%;
-  max-width: 280px;
-  height: 220px;
-  margin: 8px auto 12px;
+  width: min(100%, 340px);
+  aspect-ratio: 1;
+  height: auto;
+  margin: 4px auto 10px;
 }
-.message-intel--v2 .message-intel__sky-ring {
+.message-intel--v2 .message-intel__sky-tracks {
   position: absolute;
-  border: 1px dashed rgba(255,255,255,0.12);
-  border-radius: 50%;
-  top: 50%;
-  left: 50%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
-.message-intel--v2 .message-intel__sky-ring--outer { width: 200px; height: 200px; margin: -100px 0 0 -100px; }
-.message-intel--v2 .message-intel__sky-ring--inner { width: 118px; height: 118px; margin: -59px 0 0 -59px; }
+.message-intel--v2 .message-intel__sky-track {
+  fill: none;
+  stroke-width: 2.4;
+}
+.message-intel--v2 .message-intel__sky-track--1 { stroke: var(--mi-green); opacity: 0.7; }
+.message-intel--v2 .message-intel__sky-track--2 { stroke: var(--mi-violet); opacity: 0.85; }
+.message-intel--v2 .message-intel__sky-track--3 { stroke: var(--mi-orange); opacity: 0.7; }
 .message-intel--v2 .message-intel__sky-hub {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 52px;
-  height: 52px;
-  margin: -26px 0 0 -26px;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
   border-radius: 50%;
   border: 1px solid var(--glass-border);
-  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.5), var(--mi-violet) 55%, transparent 80%);
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.55), var(--mi-violet) 55%, transparent 80%);
   box-shadow: 0 0 28px rgba(157, 140, 255, 0.35);
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono, monospace);
@@ -11855,14 +11861,34 @@ body.wrap {
   color: #080911;
   text-align: center;
   line-height: 1.15;
+  letter-spacing: 0.08em;
+  z-index: 2;
+  pointer-events: none;
 }
-.message-intel--v2 .message-intel__sky-node {
+.message-intel--v2 .message-intel__sky-hub span {
+  font-size: 7.5px;
+  letter-spacing: 0.14em;
+  opacity: 0.75;
+}
+.message-intel--v2 .message-intel__sky-hub b {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+.message-intel--v2 .message-intel__sky-carrier {
   position: absolute;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  --start: 0deg;
+  animation: message-intel-orbit-spin var(--spin, 28s) linear infinite;
+}
+.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] { --spin: 32s; --r: 44.3%; --start: 18deg; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] { --spin: 24s; --r: 32.86%; --start: 140deg; animation-name: message-intel-orbit-spin-rev; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] { --spin: 18s; --r: 21.43%; --start: 262deg; }
+.message-intel--v2 .message-intel__sky-node {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   background: none;
   border: 0;
   color: inherit;
@@ -11870,9 +11896,24 @@ body.wrap {
   padding: 0;
   min-width: 44px;
   min-height: 44px;
+  z-index: 1;
 }
+.message-intel--v2 .message-intel__sky-carrier .message-intel__sky-node {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin-top: calc(var(--r) * -1);
+  transform: translate(-50%, -50%);
+  animation: message-intel-orbit-unspin var(--spin, 28s) linear infinite;
+}
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] .message-intel__sky-node {
+  animation-name: message-intel-orbit-unspin-rev;
+}
+.message-intel--v2 .message-intel__sky-node.is-ghost { cursor: default; opacity: 0.45; }
 .message-intel--v2 .message-intel__sky-dot {
   border-radius: 50%;
+  width: 12px;
+  height: 12px;
   background: radial-gradient(circle at 35% 30%, #fff, var(--mi-blue) 60%);
   box-shadow: 0 0 12px var(--mi-blue-glow);
 }
@@ -11883,6 +11924,18 @@ body.wrap {
 .message-intel--v2 .message-intel__sky-node[data-sent="bear"] .message-intel__sky-dot {
   background: radial-gradient(circle at 35% 30%, #fff, var(--mi-orange) 60%);
   box-shadow: 0 0 12px var(--mi-orange-glow);
+}
+.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] .message-intel__sky-dot {
+  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-green) 60%);
+  box-shadow: 0 0 14px var(--mi-green-glow);
+}
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] .message-intel__sky-dot {
+  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-violet) 60%);
+  box-shadow: 0 0 14px var(--mi-violet, #9d8cff);
+}
+.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] .message-intel__sky-dot {
+  background: radial-gradient(circle at 35% 30%, #fff, var(--mi-orange) 60%);
+  box-shadow: 0 0 14px var(--mi-orange-glow);
 }
 .message-intel--v2 .message-intel__sky-sn {
   font-family: var(--font-brand, var(--font-display), sans-serif);
@@ -11895,6 +11948,22 @@ body.wrap {
   font-size: 8px;
   color: var(--mi-text-faint);
   white-space: nowrap;
+}
+@keyframes message-intel-orbit-spin {
+  from { transform: rotate(var(--start, 0deg)); }
+  to { transform: rotate(calc(var(--start, 0deg) + 360deg)); }
+}
+@keyframes message-intel-orbit-spin-rev {
+  from { transform: rotate(var(--start, 0deg)); }
+  to { transform: rotate(calc(var(--start, 0deg) - 360deg)); }
+}
+@keyframes message-intel-orbit-unspin {
+  from { transform: translate(-50%, -50%) rotate(calc(var(--start, 0deg) * -1)); }
+  to { transform: translate(-50%, -50%) rotate(calc((var(--start, 0deg) * -1) - 360deg)); }
+}
+@keyframes message-intel-orbit-unspin-rev {
+  from { transform: translate(-50%, -50%) rotate(calc(var(--start, 0deg) * -1)); }
+  to { transform: translate(-50%, -50%) rotate(calc((var(--start, 0deg) * -1) + 360deg)); }
 }
 .message-intel--v2 .message-intel__command-list span.is-live {
   color: var(--mi-green);
@@ -11914,8 +11983,8 @@ body.wrap {
   .message-intel--v2 .message-intel__wavestrip .message-intel__wave i { animation: none !important; }
 }
 
-/* Mobile-first mosaic — every tile visible at 390. Desktop is denser columns
-   of the same tiles, never a richer hidden layout. */
+/* Phone: orbit sky + snap rail (not a stack of glass boxes).
+   Desktop ≥740: restore feed | orbit cockpit; rail tiles join the bay grid. */
 .message-intel--v2 .message-intel__heartbeat {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto auto;
@@ -12068,15 +12137,28 @@ body.wrap {
   gap: 10px;
   grid-template-areas:
     "orbit orbit"
-    "power callers"
-    "narr div"
-    "champ accolade"
-    "crowns crowns"
-    "spot spot"
+    "rail rail"
     "feed feed"
+    "spot spot"
+    "crowns crowns"
     "proof hc"
     "desk pulse";
   align-items: start;
+}
+.message-intel--v2 .message-intel__rail {
+  grid-area: rail;
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px 10px;
+  scrollbar-width: none;
+}
+.message-intel--v2 .message-intel__rail::-webkit-scrollbar { display: none; }
+.message-intel--v2 .message-intel__rail > .message-intel__tile {
+  flex: 0 0 min(78%, 280px);
+  scroll-snap-align: start;
 }
 .message-intel--v2 .message-intel__tile { min-width: 0; }
 .message-intel--v2 .message-intel__tile .message-intel__panel,
@@ -12202,17 +12284,21 @@ body.wrap {
   .message-intel--v2 .message-intel__identity .message-intel__page-title {
     font-size: clamp(1.55rem, 3.6vw, 2.4rem);
   }
+  .message-intel--v2 .message-intel__rail { display: contents; }
+  .message-intel--v2 .message-intel__rail > .message-intel__tile { flex: none; }
   .message-intel--v2 .message-intel__bay {
-    grid-template-columns: 1.15fr 1fr 1fr;
+    grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.95fr);
     grid-template-areas:
-      "orbit orbit orbit"
-      "power callers narr"
-      "div champ accolade"
-      "crowns crowns spot"
-      "feed feed feed"
-      "proof hc desk"
-      "pulse pulse pulse";
+      "feed orbit"
+      "feed power"
+      "feed callers"
+      "spot narr"
+      "div champ"
+      "accolade crowns"
+      "proof hc"
+      "desk pulse";
   }
+  .message-intel--v2 .message-intel__trending { display: block; }
 }
 @media (max-width: 739px) {
   .message-intel--v2 .message-intel__heartbeat {
@@ -12228,9 +12314,34 @@ body.wrap {
     width: 48px;
     height: 48px;
   }
+  .message-intel--v2 .message-intel__sky {
+    max-width: none;
+    width: 100%;
+  }
+  .message-intel--v2 .message-intel__trending,
+  .message-intel--v2 .message-intel__view-all { display: none; }
+  .message-intel--v2 .message-intel__tile--orbit .message-intel__panel.glass-card,
+  .message-intel--v2 .message-intel__rail .message-intel__panel.glass-card,
+  .message-intel--v2 .message-intel__tile--crowns .message-intel__panel.glass-card,
+  .message-intel--v2 .message-intel__tile--feed .message-intel__panel.glass-card,
+  .message-intel--v2 .message-intel__tile--desk .message-intel__panel.glass-card,
+  .message-intel--v2 .message-intel__tile--pulse .message-intel__panel.glass-card {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    padding: 6px 2px 10px;
+  }
+  .message-intel--v2 .message-intel__rail > .message-intel__tile {
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 4px 8px;
+    background: var(--glass-fill-subtle);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .message-intel--v2 .message-intel__ekg path { animation: none !important; }
+  .message-intel--v2 .message-intel__ekg path,
+  .message-intel--v2 .message-intel__sky-carrier,
+  .message-intel--v2 .message-intel__sky-carrier .message-intel__sky-node { animation: none !important; }
 }
 
 /* Kept for Quiet-motion / test hooks — root no longer breathes an opaque board. */

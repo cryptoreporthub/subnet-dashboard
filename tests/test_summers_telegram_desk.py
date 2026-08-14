@@ -89,6 +89,9 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__heartbeat" in css
     assert ".message-intel__loop" in css
     assert ".message-intel__tile--orbit" in css
+    assert ".message-intel__sky-track--1" in css
+    assert ".message-intel__sky-carrier" in css
+    assert ".message-intel__rail { display: contents; }" in css
     assert ".message-intel__cell { display: none; }" not in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
@@ -114,7 +117,11 @@ def test_summers_flagship_composition_hooks():
         assert f'id="{eid}"' in html
     assert "Telegram outcome stories" in html
     assert "message-intel__pulsar" in html
+    assert "message-intel__sky-track" in html
+    assert "message-intel__sky-carrier" in html
+    assert "message-intel__rail" in html
     assert 'id="message-intel-sky"' in html
+    assert "hidden" not in html.split('id="message-intel-sky"', 1)[1].split(">", 1)[0]
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
@@ -142,6 +149,11 @@ def test_listener_share_page_composition():
     assert "Chatter Power" in html
     assert "/rank" in html
     assert "/who" in html
+    assert "lsn-orbit" in html
+    assert "lsn-orbit__track" in html
+    assert "lsn-rail" in html
+    assert ".lsn-orbit" in css
+    assert ".lsn-rail{display:contents}" in css.replace(" ", "")
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html

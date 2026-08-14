@@ -1403,45 +1403,53 @@
 
   function renderTrendingSky(rows) {
     if (!skyEl) return;
-    var list = (rows || []).slice(0, 4);
-    if (!list.length) {
-      skyEl.hidden = true;
-      skyEl.innerHTML = "";
-      return;
-    }
+    var list = (rows || []).slice(0, 3);
+    var empty = !list.length;
     skyEl.hidden = false;
+    skyEl.setAttribute("data-empty", empty ? "true" : "false");
+    skyEl.setAttribute("aria-hidden", "false");
     var max = 1;
     list.forEach(function (r) {
-      var n = Number(r.mentions) || 0;
+      var n = Number(r.mentions) || Number(r.chatter_power) || 0;
       if (n > max) max = n;
     });
-    var pos = [
-      { l: "78%", t: "22%" },
-      { l: "22%", t: "22%" },
-      { l: "22%", t: "78%" },
-      { l: "78%", t: "78%" },
-    ];
     var html =
-      '<div class="message-intel__sky-ring message-intel__sky-ring--outer"></div>' +
-      '<div class="message-intel__sky-ring message-intel__sky-ring--inner"></div>' +
-      '<div class="message-intel__sky-hub">PULSE<br>ORIGIN</div>';
-    list.forEach(function (row, i) {
+      '<svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">' +
+      '<ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="124" ry="124"></ellipse>' +
+      '<ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>' +
+      '<ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>' +
+      "</svg>" +
+      '<div class="message-intel__sky-hub"><span>ORBIT</span><b>' +
+      (empty ? "—" : "TOP 3") +
+      "</b></div>";
+    var i;
+    for (i = 0; i < 3; i++) {
+      var row = list[i];
+      var rank = i + 1;
+      if (!row) {
+        html +=
+          '<div class="message-intel__sky-carrier" data-rank="' +
+          rank +
+          '"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">—</span><span class="message-intel__sky-n">awaiting</span></span></div>';
+        continue;
+      }
       var mentions = Number(row.mentions) || 0;
-      var size = 8 + Math.round((mentions / max) * 14);
+      var size = 10 + Math.round(((mentions || Number(row.chatter_power) || 0) / max) * 14);
       var sent = String(row.sentiment || "").toLowerCase();
       if (sent.indexOf("bull") !== -1) sent = "bull";
       else if (sent.indexOf("bear") !== -1) sent = "bear";
       else sent = "mix";
-      var p = pos[i] || pos[0];
       html +=
-        '<button type="button" class="message-intel__sky-node" data-netuid="' +
+        '<div class="message-intel__sky-carrier" data-rank="' +
+        rank +
+        '"><button type="button" class="message-intel__sky-node" data-netuid="' +
         esc(row.netuid) +
         '" data-sent="' +
         sent +
-        '" style="left:' +
-        p.l +
-        ";top:" +
-        p.t +
+        '" data-sn="' +
+        esc(row.netuid) +
+        '" data-name="' +
+        esc(row.name || "") +
         '">' +
         '<span class="message-intel__sky-dot" style="width:' +
         size +
@@ -1453,8 +1461,8 @@
         "</span>" +
         '<span class="message-intel__sky-n">' +
         (mentions ? esc(mentions) + " msgs" : "quiet") +
-        "</span></button>";
-    });
+        "</span></button></div>";
+    }
     skyEl.innerHTML = html;
     skyEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -1463,6 +1471,7 @@
         filters.netuid = filters.netuid === n ? null : n;
         saveFilters();
         syncFilterChipStates();
+        setFlowAnchor(btn.getAttribute("data-sn"), btn.getAttribute("data-name"));
         hydrate();
       });
     });

@@ -151,8 +151,32 @@
     </div>
 
     <!-- CURRENTLY TRENDING -->
-    <div class="lsn-glass lsn-panel">
+    <div class="lsn-glass lsn-panel lsn-panel--trend">
       <div class="lsn-sect"><span class="bar"></span><b>Trending orbit</b><span>60s refresh</span></div>
+      <div class="lsn-orbit" aria-label="Trending orbit">
+        <svg class="lsn-orbit__svg" viewBox="0 0 280 280" aria-hidden="true">
+          <ellipse class="lsn-orbit__track lsn-orbit__track--1" cx="140" cy="140" rx="124" ry="124"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>
+        </svg>
+        <div class="lsn-orbit__hub"><span>ORBIT</span><b>{% if trending %}TOP 3{% else %}—{% endif %}</b></div>
+        {% set top3 = trending[:3] if trending else [] %}
+        {% for t in top3 %}
+        <div class="lsn-orbit__carrier" data-rank="{{ loop.index }}">
+          <button type="button" class="lsn-orbit__node" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}" data-sent="{{ t["sent"] or "mix" }}">
+            <span class="lsn-orbit__dot"></span>
+            <span class="lsn-orbit__sn">{{ t["name"] or ("SN" ~ t["netuid"]) }}</span>
+            <span class="lsn-orbit__n">SN{{ t["netuid"] or "?" }}</span>
+          </button>
+        </div>
+        {% else %}
+        {% for i in [1, 2, 3] %}
+        <div class="lsn-orbit__carrier" data-rank="{{ i }}">
+          <span class="lsn-orbit__node is-ghost"><span class="lsn-orbit__dot"></span><span class="lsn-orbit__sn">—</span><span class="lsn-orbit__n">awaiting</span></span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+      </div>
       {% if trending %}
       {% for t in trending[:5] %}
       <div class="lsn-trow" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}">
@@ -164,10 +188,11 @@
       {% if t.get("why") %}<div class="lsn-why">{{ t["why"] }}</div>{% endif %}
       {% endfor %}
       {% else %}
-      <div class="lsn-qstate" style="display:block"><b>No subnet chatter in the last hour yet.</b><div class="tiny">The panel stays honest instead of showing stale numbers.</div></div>
+      <div class="lsn-qstate lsn-qstate--trend" style="display:block"><b>No subnet chatter in the last hour yet.</b><div class="tiny">The panel stays honest instead of showing stale numbers.</div></div>
       {% endif %}
     </div>
 
+    <div class="lsn-rail">
     <!-- CHATTER POWER -->
     <div class="lsn-glass lsn-panel">
       <div class="lsn-sect"><span class="bar"></span><b>Chatter Power</b><span>v × conv × quality</span></div>
@@ -216,6 +241,8 @@
       <p class="lsn-dstory-empty">No divergence stories yet — chatter and price are in agreement. Stories land here the moment the listener spots a split.</p>
       {% endif %}
     </div>
+
+    </div><!-- /lsn-rail -->
 
     </div><!-- /orbit -->
 
