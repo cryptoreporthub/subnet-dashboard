@@ -140,3 +140,10 @@ def test_api_portfolio_status_200():
     assert "summary" in body
     assert "closed_positions" in body
     assert body["benchmark"] == "hold_tao"
+
+
+def test_legacy_paper_portfolio_exposes_canonical_ledger_scope():
+    body = TestClient(app).get("/api/paper-portfolio").json()
+    assert body["source"] == "legacy_judge_portfolios"
+    assert body["canonical_source"] == "data/predictions.json"
+    assert "canonical" in body
