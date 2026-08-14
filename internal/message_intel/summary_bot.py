@@ -257,7 +257,16 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
         lines.append("<b>Top subnets</b>")
         for row in top[:5]:
             name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
-            line = f"• SN{row.get('netuid')} {name} ({row.get('mentions', 0)} mentions)"
+            price_label = ""
+            try:
+                if row.get("price_change_1h") is not None:
+                    price_label = f", {float(row['price_change_1h']):+.1f}% 1h"
+            except (TypeError, ValueError):
+                pass
+            line = (
+                f"• SN{row.get('netuid')} {name} "
+                f"({row.get('mentions', 0)} mentions{price_label})"
+            )
             context = row.get("mention_context")
             if context:
                 context_text = html.escape(str(context).strip())
@@ -296,6 +305,20 @@ def build_summary_text(*, db=None) -> str:
     from internal.message_intel.rollup import build_24h_summary
 
     summary = build_24h_summary(registry_names=_registry_subnet_names(), db=db)
+    try:
+        from fetchers.merged_data import _get_cached
+
+        cached = _get_cached("all_merged") or {}
+        changes = {
+            int(row["netuid"]): row.get("price_change_1h")
+            for row in cached.get("subnets") or []
+            if isinstance(row, dict) and row.get("netuid") is not None
+        }
+        for row in summary.get("top_subnets") or []:
+            if int(row.get("netuid") or 0) in changes:
+                row["price_change_1h"] = changes[int(row["netuid"])]
+    except Exception:
+        pass
     return format_summary_message(summary)
 
 

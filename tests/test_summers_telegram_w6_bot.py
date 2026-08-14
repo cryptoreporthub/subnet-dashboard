@@ -121,6 +121,26 @@ def test_format_summary_includes_what_mentions_are_about():
     assert "Validators discussed a new release" in text
 
 
+def test_format_summary_includes_hour_price_change():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "top_subnets": [
+                {
+                    "netuid": 28,
+                    "name": "gm",
+                    "mentions": 2,
+                    "price_change_1h": 4.8,
+                }
+            ],
+        }
+    )
+
+    assert "SN28 gm (2 mentions, +4.8% 1h)" in text
+
+
 def test_rate_limit_per_chat(intel_env):
     chat_id = 999001
     first, limited1 = summary_bot.handle_summary_command(chat_id, db=intel_env)
