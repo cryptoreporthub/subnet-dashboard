@@ -2988,6 +2988,15 @@
     });
     // #endregion
     if (!shouldApply) {
+      // A forming response is still useful when the fast shell has no real
+      // call to protect. Without this path the tribunal remains an inert SSR
+      // snapshot until a publishable pick exists.
+      var pendingStatus = String(payload.status || '').toLowerCase() === 'pending';
+      var ssr = ssrDailyPickMeta();
+      if (pendingStatus && !ssr.generatedAt && !ssr.action && document.getElementById('tribunal-hero')) {
+        lastDailyPickPayload = payload;
+        renderTribunalHero(payload, window.SimiLearning && window.SimiLearning.stats);
+      }
       console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
       return;
     }
