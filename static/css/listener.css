@@ -211,13 +211,12 @@ body.lsn-body{
 .lsn-pop .copylink.ok{color:#0a2b1d; background:var(--lsn-pos); border-color:var(--lsn-pos)}
 .lsn-pop .note{margin-top:8px; font-size:9.5px; color:var(--lsn-muted); line-height:1.5}
 
-/* COMMANDS top strip */
-.lsn-cmds{display:flex; gap:6px; flex-wrap:wrap; padding:10px 12px 8px}
-.lsn-cmds .clabel{font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--lsn-muted); padding-top:5px; width:100%}
-.lsn-cmd{font-size:11px; font-weight:700; min-height:44px; display:inline-flex; align-items:center; padding:4px 10px; border-radius:99px; border:1px solid var(--lsn-glass-brd);
-  color:var(--lsn-muted); cursor:pointer; transition:.12s; background:rgba(255,255,255,.03)}
-.lsn-cmd:hover{color:var(--lsn-cyan); border-color:rgba(110,231,255,.4)}
+.lsn-cmds{display:flex; gap:4px; flex-wrap:wrap; align-items:center; padding:4px 2px 0}
+.lsn-cmds .clabel{font-size:8.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--lsn-muted); width:100%}
+.lsn-cmd{font-size:9.5px; font-weight:600; min-height:0; display:inline-flex; align-items:center; padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.12);
+  color:var(--lsn-muted); pointer-events:none; background:transparent}
 .lsn-cmd.live{color:var(--lsn-gold); border-color:rgba(255,207,110,.35)}
+.lsn-cmds .lsn-dock-note{width:100%; margin:4px 0 0; padding:0}
 
 /* SUMMARY */
 .lsn-summary{padding:15px 16px 13px}
