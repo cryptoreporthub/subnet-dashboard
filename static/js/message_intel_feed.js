@@ -28,30 +28,11 @@
   var proofBody = document.getElementById("message-intel-proof-body");
   var summary24hCard = document.getElementById("message-intel-summary-24h");
   var summary24hBody = document.getElementById("message-intel-summary-24h-body");
-  var skyEl = document.getElementById("message-intel-sky");
-  var wavestripEl = document.getElementById("message-intel-wavestrip");
-  var lastSeenMsgId = null;
   var detailPanel = document.getElementById("message-intel-detail");
   var callersEl = document.getElementById("message-intel-callers");
   var callersBody = document.getElementById("message-intel-callers-body");
   var consensusBody = document.getElementById("message-intel-consensus-body");
   var divergenceBody = document.getElementById("message-intel-divergence-body");
-  var heartbeatEl = document.getElementById("message-intel-heartbeat");
-  var ekgPath = document.getElementById("message-intel-ekg");
-  var hbModeEl = document.getElementById("message-intel-hb-mode");
-  var hbLastEl = document.getElementById("message-intel-hb-last");
-  var hbCalEl = document.getElementById("message-intel-hb-cal");
-  var powerEl = document.getElementById("message-intel-power");
-  var narrativeEl = document.getElementById("message-intel-narrative");
-  var accoladesEl = document.getElementById("message-intel-accolades");
-  var flowAnchorBtn = document.getElementById("message-intel-flow-anchor");
-  var flowValEl = document.getElementById("message-intel-flow-val");
-  var flowDirEl = document.getElementById("message-intel-flow-dir");
-  var flowBarEl = document.getElementById("message-intel-flow-bar");
-  var flowSubEl = document.getElementById("message-intel-flow-sub");
-  var trendAxis = "chatter";
-  var flowAnchor = null;
-  var flowPrev = null;
   var convFiltersEl = document.getElementById("message-intel-conv-filters");
   var subnetFiltersEl = document.getElementById("message-intel-subnet-filters");
   var topicFiltersEl = document.getElementById("message-intel-topic-filters");
@@ -563,15 +544,13 @@
       callersBody.innerHTML = '<p class="empty">No resolved qualifying Telegram calls in this window yet. A caller needs explicit direction, 60%+ conviction, and a tracked price snapshot.</p>';
       return;
     }
-    var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 5) + ' resolved calls.</p><div class="message-intel__caller-list">';
+    var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 3) + ' resolved calls.</p><div class="message-intel__caller-list">';
     callers.forEach(function (row, index) {
       var name = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name || "Unknown";
-      var accuracy = row.accuracy != null ? row.accuracy + "%" : "warming";
-      var caution = !row.qualified ? '<span class="message-intel__caution">too few graded calls to trust</span>' : "";
+      var accuracy = row.accuracy != null ? row.accuracy + "%" : "—";
       html += '<article class="message-intel__caller-row' + (row.qualified ? "" : " is-provisional") + '">' +
         '<span class="message-intel__caller-rank">' + esc(index + 1) + '</span><div class="message-intel__caller-main"><b>' + esc(name) + '</b>' +
-        '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span>' +
-        caution + '</div>' +
+        '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span></div>' +
         '<strong>' + esc(accuracy) + '</strong>' +
         '<button type="button" class="message-intel__receipt-toggle" data-caller-id="' + esc(row.author_id) + '" data-caller-name="' + esc(name) + '">' + (row.qualified ? "Receipts" : "Provisional receipts") + "</button></article>";
     });
@@ -1138,37 +1117,36 @@
     return html;
   }
 
-  function sortedTrending(rows) {
-    var list = (rows || []).slice();
-    list.sort(function (a, b) {
-      if (trendAxis === "conviction") {
-        return (Number(b.conviction) || 0) - (Number(a.conviction) || 0);
-      }
-      return (Number(b.chatter_power != null ? b.chatter_power : b.heat) || 0) -
-        (Number(a.chatter_power != null ? a.chatter_power : a.heat) || 0);
-    });
-    return list;
-  }
-
-  function renderTrendingV2(rows, windowLabel) {
+  function renderTrendingV2(rows, windowLabel, meta) {
     if (!trendingEl) return;
-    var list = sortedTrending(rows);
-    if (!list.length) {
-      trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet — orbit stays honest while the group is quiet.</p>';
-      renderTrendingSky([]);
-      renderChatterPower([]);
-      renderNarrative([]);
+    if (!rows || !rows.length) {
+      var archiveCount = meta && meta.total_messages != null ? Number(meta.total_messages) : 0;
+      var dayCount =
+        meta && meta.summary_24h && meta.summary_24h.message_count != null
+          ? Number(meta.summary_24h.message_count)
+          : 0;
+      var archiveLabel = archiveCount
+        ? archiveCount + ' archived message' + (archiveCount === 1 ? '' : 's')
+        : 'The archive is ready';
+      var dayLabel = dayCount
+        ? dayCount + ' message' + (dayCount === 1 ? '' : 's') + ' in the 24h window'
+        : 'No 24h messages have landed yet';
+      trendingEl.innerHTML =
+        '<div class="message-intel__trend-status" role="status">' +
+        '<strong>Ranked chatter is quiet right now.</strong>' +
+        '<span>' + esc(archiveLabel) + ' · ' + esc(dayLabel) + '.</span>' +
+        '<small>New subnet mentions will appear here as the archive warms.</small>' +
+        '</div>';
       return;
     }
-    if (trendingTitle) trendingTitle.textContent = "Trending orbit";
-    renderTrendingSky(list);
+    if (trendingTitle) trendingTitle.textContent = "Currently trending";
     if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
     trendingEl.innerHTML =
       '<div class="message-intel__trend-rows">' +
-       list.slice(0, 6).map(function (row, idx) {
+       rows.slice(0, 6).map(function (row, idx) {
         var score = row.chatter_power != null ? Number(row.chatter_power) : Number(row.heat) || 0;
         var delta = row.delta != null ? Number(row.delta) : 0;
-        return '<div class="message-intel__trend-row" data-sn="' + esc(row.netuid) + '" data-name="' + esc(row.name || "") + '">' +
+        return '<div class="message-intel__trend-row">' +
           '<span class="message-intel__rank">' + esc((idx + 1 < 10 ? "0" : "") + (idx + 1)) + '</span>' +
           '<span class="message-intel__t-icon" aria-hidden="true">' + esc(initialLetter(row.name)) + '</span>' +
           '<div class="message-intel__t-body">' +
@@ -1183,314 +1161,6 @@
           '</div></div>';
       }).join("") +
       '</div>';
-    trendingEl.querySelectorAll("[data-sn]").forEach(function (rowEl) {
-      rowEl.addEventListener("click", function () {
-        setFlowAnchor(rowEl.getAttribute("data-sn"), rowEl.getAttribute("data-name"));
-      });
-    });
-    renderChatterPower(list);
-    renderNarrative(list);
-  }
-
-  function renderChatterPower(rows) {
-    if (!powerEl) return;
-    var list = (rows || []).slice(0, 3);
-    if (!list.length) {
-      powerEl.innerHTML = '<p class="empty">Ranks by who\'s talking, not how loud — velocity × conviction × author hit-rate. Why-lines land with trending v2.</p>';
-      return;
-    }
-    var maxV = 0.0001;
-    list.forEach(function (r) {
-      var v = Number(r.velocity) || 0;
-      if (v > maxV) maxV = v;
-    });
-    var html = list.map(function (row, idx) {
-      var conv = Number(row.conviction != null ? row.conviction : row.avg_conviction) || 0;
-      var vel = Number(row.velocity) || 0;
-      var qRaw = Number(row.quality);
-      var qPct = !isFinite(qRaw) ? 0 : (qRaw <= 1 ? Math.round(qRaw * 100) : Math.round(qRaw));
-      var why = row.why || ("velocity " + vel.toFixed(2) + " × conviction " + (conv / 100).toFixed(2));
-      var sent = String(row.sentiment || "").toLowerCase();
-      var sentLbl = sent.indexOf("bull") !== -1 ? "bullish" : sent.indexOf("bear") !== -1 ? "bearish" : "";
-      return '<div class="message-intel__power-row">' +
-        '<span class="message-intel__rank">' + esc(idx + 1) + '</span>' +
-        '<div><div class="message-intel__power-top"><a href="/subnet/' + esc(row.netuid) + '"><b>' +
-        esc(row.name || ("SN" + row.netuid)) + '</b></a>' +
-        (sentLbl ? '<span class="message-intel__power-sent" data-sent="' + sentLbl + '">' + sentLbl.toUpperCase() + "</span>" : "") +
-        "</div>" +
-        '<div class="message-intel__factor"><span>velocity</span><i style="width:' + Math.round((vel / maxV) * 100) + '%"></i><em>' + vel.toFixed(1) + "</em></div>" +
-        '<div class="message-intel__factor"><span>conviction</span><i data-axis="conviction" style="width:' + Math.max(4, Math.round(conv)) + '%"></i><em>' + (conv ? Math.round(conv) : "—") + "</em></div>" +
-        '<div class="message-intel__factor"><span>quality</span><i data-axis="quality" style="width:' + qPct + '%"></i><em>' + (qPct ? qPct : "—") + "</em></div>" +
-        '<div class="message-intel__power-why">' + esc(why) + "</div></div></div>";
-    }).join("");
-    var slot;
-    for (slot = list.length + 1; slot <= 3; slot++) {
-      html += '<div class="message-intel__awaiting"><span class="message-intel__awaiting-dot" aria-hidden="true"></span><p>Slot #' +
-        slot + " awaiting a fresh directional call with resolved caller history.</p></div>";
-    }
-    powerEl.innerHTML = html;
-  }
-
-  function narrativeStage(row) {
-    var delta = Number(row.delta) || 0;
-    var mentions = Number(row.mentions) || 0;
-    if (delta > 0.02) return { label: "Rising", why: "Chatter power just went hot vs the prior window." };
-    if (delta < -0.02) return { label: "Decaying", why: "Talk is cooling — velocity faded this window." };
-    if (mentions >= 8) return { label: "Peaking", why: "High volume now, little delta — the crowd is already here." };
-    return { label: "Steady", why: "No sharp move yet — watching the next beat." };
-  }
-
-  function renderNarrative(rows) {
-    if (!narrativeEl) return;
-    var list = (rows || []).slice(0, 4);
-    if (!list.length) {
-      narrativeEl.innerHTML = '<p class="empty">Rising / peaking / decaying fills from chatter-power deltas — the group\'s weather, not a price chart.</p>';
-      return;
-    }
-    narrativeEl.innerHTML = list.map(function (row, idx) {
-      var stage = narrativeStage(row);
-      return '<div class="message-intel__narr-row">' +
-        '<span class="message-intel__rank">' + esc(idx + 1) + '</span>' +
-        '<div><b>' + esc(row.name || ("SN" + row.netuid)) + '</b> · ' + esc(stage.label) +
-        '<div class="message-intel__narr-why">' + esc(stage.why) + '</div></div></div>';
-    }).join("");
-  }
-
-  function renderAccolades(rows) {
-    if (!accoladesEl) return;
-    var earned = [];
-    (rows || []).forEach(function (row) {
-      var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name;
-      var graded = Number(row.graded) || 0;
-      var hits = Number(row.hits) || 0;
-      var hit = Number(row.hit_rate);
-      if (row.caution || graded < 5) return;
-      if (hit >= 60 && hits >= 3) earned.push({ handle: handle, badge: "Early & Right", why: hit + "% strike · n=" + graded });
-      else if (hits >= 3 && hit >= 50) earned.push({ handle: handle, badge: "On Fire", why: hits + " hits this window" });
-      else if ((Number(row.influence_score) || 0) >= 20 && (Number(row.message_count) || 0) >= 8) {
-        earned.push({ handle: handle, badge: "High Signal", why: "low fluff, high substance this week" });
-      }
-    });
-    if (!earned.length) {
-      accoladesEl.innerHTML = '<p class="empty">Early &amp; Right / On Fire / High Signal land once strike samples fill (N≥5). Building samples stay unlabeled.</p>';
-      return;
-    }
-    accoladesEl.innerHTML = earned.slice(0, 4).map(function (row) {
-      return '<div class="message-intel__accolade-row"><span aria-hidden="true">★</span><div><b>' +
-        esc(row.handle || "Unknown") + '</b> · ' + esc(row.badge) +
-        '<div class="message-intel__power-why">' + esc(row.why) + '</div></div></div>';
-    }).join("");
-  }
-
-  function ekgPathFor(mode) {
-    if (mode === "live") return "M0,13 L20,13 L24,9 L28,17 L32,13 L55,13 L59,9 L63,17 L67,13 L90,13 L94,9 L98,17 L102,13 L120,13";
-    if (mode === "reconnecting") return "M0,13 L10,13 L14,6 L18,20 L22,11 L28,13 L36,13 L40,7 L44,19 L48,10 L56,13 L64,13 L68,6 L72,20 L76,11 L84,13 L92,13 L96,7 L100,19 L104,10 L120,13";
-    if (mode === "archive") return "M0,13 L120,13";
-    return "M0,13 L18,13 L22,10 L26,16 L30,13 L58,13 L62,10 L66,16 L70,13 L98,13 L102,10 L106,16 L110,13 L120,13";
-  }
-
-  function fmtAge(seconds) {
-    if (seconds == null || seconds === "") return "awaiting first beat";
-    var n = Number(seconds);
-    if (!isFinite(n)) return "awaiting first beat";
-    if (n < 60) return "just now";
-    if (n < 3600) return Math.round(n / 60) + "m ago";
-    if (n < 86400) return Math.round(n / 3600) + "h ago";
-    return Math.round(n / 86400) + "d ago";
-  }
-
-  function renderHeartbeat(status, payload) {
-    var listener = (status && status.listener) || (payload && payload.meta && payload.meta.listener) || {};
-    var mode =
-      listener.display_mode ||
-      (listener.live && !listener.feed_stale ? "live" : "warming");
-    if (heartbeatEl) heartbeatEl.setAttribute("data-mode", mode);
-    if (hbModeEl) hbModeEl.textContent = String(mode).toUpperCase();
-    if (ekgPath) ekgPath.setAttribute("d", ekgPathFor(mode));
-    if (hbLastEl) hbLastEl.textContent = fmtAge(listener.last_message_age_seconds);
-  }
-
-  function setFlowAnchor(netuid, name) {
-    if (!netuid && !name) return;
-    flowAnchor = { netuid: netuid, name: name || ("SN" + netuid) };
-    flowPrev = null;
-    if (flowAnchorBtn) flowAnchorBtn.textContent = (netuid ? "SN" + netuid : flowAnchor.name) + " · tap a trending row";
-    pollNetFlow();
-  }
-
-  function flowWarming(note) {
-    if (flowDirEl) flowDirEl.textContent = "WARMING";
-    if (flowValEl) flowValEl.innerHTML = 'warming <small>· pool delta</small>';
-    if (flowBarEl) flowBarEl.style.width = "0";
-    if (flowSubEl) flowSubEl.textContent = note || "Needs two pool snapshots — nothing faked while it's quiet.";
-  }
-
-  function pollNetFlow() {
-    if (!flowValEl) return;
-    try {
-      fetch("/api/subnets?limit=16", { headers: { Accept: "application/json" } })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) {
-          var subs = j && j.subnets ? j.subnets : (j && j.results ? j.results : (Array.isArray(j) ? j : null));
-          if (!subs || !subs.length) { flowWarming("Live pool feed unreachable — warming kept."); return; }
-          var row = null;
-          if (flowAnchor && flowAnchor.netuid) {
-            row = subs.find(function (x) { return String(x.netuid || x.id) === String(flowAnchor.netuid); }) || subs[0];
-          } else {
-            row = subs[0];
-            flowAnchor = { netuid: row.netuid || row.id, name: row.name };
-            if (flowAnchorBtn) flowAnchorBtn.textContent = "SN" + flowAnchor.netuid + " · tap a trending row";
-          }
-          var tao = parseFloat(row.taoLiquidity != null ? row.taoLiquidity : (row.pool_tao != null ? row.pool_tao : NaN));
-          if (isNaN(tao)) { flowWarming(); return; }
-          if (!flowPrev) {
-            flowPrev = { tao: tao };
-            flowWarming("Baseline locked — next poll paints the delta.");
-            return;
-          }
-          var delta = tao - flowPrev.tao;
-          flowPrev = { tao: tao };
-          var dir = delta > 0 ? "IN" : (delta < 0 ? "OUT" : "FLAT");
-          if (flowDirEl) flowDirEl.textContent = dir;
-          if (flowValEl) flowValEl.innerHTML = (delta > 0 ? "+" : "") + delta.toFixed(2) + "τ <small>· net flow</small>";
-          if (flowBarEl) flowBarEl.style.width = Math.min(100, Math.abs(delta) * 8 + 8) + "%";
-          if (flowSubEl) flowSubEl.textContent = "Pool TAO " + tao.toFixed(1) + " · 60s delta on SN" + (row.netuid || row.id);
-        })
-        .catch(function () { flowWarming("Live pool feed unreachable — warming kept."); });
-    } catch (e) { flowWarming(); }
-  }
-
-  function setStat(id, value) {
-    var el = document.getElementById(id);
-    if (el) el.textContent = value == null || value === "" ? "warming" : String(value);
-  }
-
-  function renderHeroStats(payload, status) {
-    var pmeta = (payload && payload.meta) || {};
-    var summary = pmeta.summary_24h || {};
-    var gp = summary.group_pulse || {};
-    var store = (status && status.store) || {};
-    var total = store.total_messages || pmeta.total_messages || 0;
-    var last24 = summary.message_count != null ? summary.message_count : gp.messages;
-    var avgConv = gp.avg_conviction;
-    var trending = pmeta.trending || [];
-    setStat("message-intel-stat-archived", total || "warming");
-    setStat("message-intel-stat-24h", last24 != null ? last24 : "warming");
-    setStat(
-      "message-intel-stat-conv",
-      avgConv != null && !isNaN(Number(avgConv)) ? Math.round(Number(avgConv)) + "%" : "warming"
-    );
-    setStat("message-intel-stat-active", trending.length || "warming");
-  }
-
-  function renderInterceptWave(messages) {
-    if (!wavestripEl) return;
-    var buckets = new Array(24).fill(0);
-    var now = Date.now();
-    (messages || []).forEach(function (m) {
-      var t = Date.parse(m.timestamp);
-      if (!isFinite(t)) return;
-      var hoursAgo = (now - t) / 3600000;
-      if (hoursAgo < 0 || hoursAgo >= 24) return;
-      buckets[23 - Math.floor(hoursAgo)] += 1;
-    });
-    var peak = Math.max.apply(null, buckets.concat([1]));
-    var html = '<span class="message-intel__wave">';
-    for (var i = 0; i < 24; i++) {
-      var h = 6 + Math.round((buckets[i] / peak) * 34);
-      html += '<i style="height:' + h + "px;animation-delay:" + (i * 0.05).toFixed(2) + 's"></i>';
-    }
-    html += "</span>";
-    wavestripEl.innerHTML = html;
-  }
-
-  function pingPulsar() {
-    var core = document.querySelector(".message-intel__core");
-    if (!core) return;
-    core.classList.remove("is-ping");
-    void core.offsetWidth;
-    core.classList.add("is-ping");
-  }
-
-  function renderTrendingSky(rows) {
-    if (!skyEl) return;
-    var list = (rows || []).slice(0, 3);
-    var empty = !list.length;
-    skyEl.hidden = false;
-    skyEl.setAttribute("data-empty", empty ? "true" : "false");
-    skyEl.setAttribute("aria-hidden", "false");
-    var max = 1;
-    list.forEach(function (r) {
-      var n = Number(r.chatter_power != null ? r.chatter_power : r.heat) || Number(r.mentions) || 0;
-      if (n > max) max = n;
-    });
-    var html =
-      '<svg class="message-intel__sky-tracks" viewBox="0 0 280 280" aria-hidden="true">' +
-      '<ellipse class="message-intel__sky-track message-intel__sky-track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>' +
-      '<ellipse class="message-intel__sky-track message-intel__sky-track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>' +
-      '<ellipse class="message-intel__sky-track message-intel__sky-track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>' +
-      "</svg>" +
-      '<div class="message-intel__sky-hub"><span>ORBIT</span><b>' +
-      (empty ? "—" : "TOP 3") +
-      "</b></div>";
-    var i;
-    for (i = 0; i < 3; i++) {
-      var row = list[i];
-      var rank = i + 1;
-      if (!row) {
-        html +=
-          '<div class="message-intel__sky-carrier" data-rank="' +
-          rank +
-          '"><span class="message-intel__sky-node is-ghost"><span class="message-intel__sky-dot"></span><span class="message-intel__sky-sn">#' +
-          rank +
-          '</span><span class="message-intel__sky-n">awaiting signal</span></span></div>';
-        continue;
-      }
-      var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || Number(row.mentions) || 0;
-      var size = 9 + Math.round((power / max) * 11);
-      var sent = String(row.sentiment || "").toLowerCase();
-      if (sent.indexOf("bull") !== -1) sent = "bull";
-      else if (sent.indexOf("bear") !== -1) sent = "bear";
-      else sent = "mix";
-      var sentLbl = sent === "bull" ? "bullish" : sent === "bear" ? "bearish" : "mix";
-      html +=
-        '<div class="message-intel__sky-carrier" data-rank="' +
-        rank +
-        '"><button type="button" class="message-intel__sky-node" data-netuid="' +
-        esc(row.netuid) +
-        '" data-sent="' +
-        sent +
-        '" data-sn="' +
-        esc(row.netuid) +
-        '" data-name="' +
-        esc(row.name || "") +
-        '">' +
-        '<span class="message-intel__sky-dot" style="width:' +
-        size +
-        "px;height:" +
-        size +
-        'px"></span>' +
-        '<span class="message-intel__sky-sn">' +
-        esc(row.name || "SN" + row.netuid) +
-        "</span>" +
-        '<span class="message-intel__sky-n">#' +
-        rank +
-        " · " +
-        sentLbl +
-        "</span></button></div>";
-    }
-    skyEl.innerHTML = html;
-    skyEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var n = Number(btn.getAttribute("data-netuid"));
-        if (!n) return;
-        filters.netuid = filters.netuid === n ? null : n;
-        saveFilters();
-        syncFilterChipStates();
-        setFlowAnchor(btn.getAttribute("data-sn"), btn.getAttribute("data-name"));
-        hydrate();
-      });
-    });
   }
 
   function renderWatchlistPanel(trending) {
@@ -1565,9 +1235,6 @@
         row.hit_rate != null && row.graded
           ? esc(row.hit_rate) + "% hit-rate · " + esc(row.message_count) + " calls"
           : esc(row.message_count) + " msgs · " + esc(row.subnet_count) + " subnets";
-      var caution = row.caution || (Number(row.graded) > 0 && Number(row.graded) < 5)
-        ? '<span class="message-intel__caution">too few graded calls to trust</span>'
-        : "";
       html +=
         '<div class="message-intel__champ-row">' +
         '<span class="message-intel__rank ' +
@@ -1585,7 +1252,7 @@
         "</div>" +
         '<div class="message-intel__champ-basis">' +
         basis +
-        "</div>" + caution + "</div>" +
+        "</div></div>" +
         '<div class="message-intel__champ-score">' +
         '<div class="message-intel__champ-num">' +
         esc(inf.toFixed ? inf.toFixed(1) : inf) +
@@ -1761,17 +1428,10 @@
         railClass +
         '" style="--mi-i: ' +
         i +
-        (conv != null ? "; --pct: " + conv : "") +
         '" data-msg-id="' +
         esc(row.id) +
         '" tabindex="0" role="button">' +
-        (conv != null
-          ? '<div class="message-intel__conv-ring" style="--pct: ' +
-            esc(conv) +
-            '" aria-hidden="true"><i>' +
-            esc(conv) +
-            "%</i></div>"
-          : '<div class="message-intel__rail-node" aria-hidden="true"></div>') +
+        '<div class="message-intel__rail-node" aria-hidden="true"></div>' +
         '<div class="message-intel__feed-body">' +
         '<div class="message-intel__feed-top">' +
         '<span class="message-intel__f-avatar" aria-hidden="true">' +
@@ -1961,7 +1621,6 @@
     }
 
     lastStatus = status;
-    renderHeartbeat(status, payload);
   }
 
   async function fetchJsonWithRetry(url, attempts) {
@@ -2033,23 +1692,22 @@
       }
 
       applyMeta(payload, status);
-      renderHeroStats(payload, status);
-      renderInterceptWave(payload.messages);
-      var newestId = payload.messages && payload.messages[0] && payload.messages[0].id;
-      if (newestId && lastSeenMsgId && newestId !== lastSeenMsgId) pingPulsar();
-      if (newestId) lastSeenMsgId = newestId;
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
        try {
          var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
-         if (trendingV2 && Array.isArray(trendingV2.items)) trending = trendingV2.items;
+          // Do not erase the compatibility rollup when the narrow ranked
+          // window is empty. The desk has usable archive data even when no
+          // subnet clears the current chatter threshold.
+          if (trendingV2 && Array.isArray(trendingV2.items) && trendingV2.items.length) {
+            trending = trendingV2.items;
+          }
        } catch (trendingErr) {
          /* Keep the server-rendered compatibility rollup. */
        }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
        latestTrendingRows = trending;
-      setStat("message-intel-stat-active", trending.length || "warming");
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
@@ -2064,7 +1722,7 @@
       renderWatchlistPanel(trending);
        renderMyPulse(trending);
       syncFilterChipStates();
-      renderTrendingV2(trending, trendingWindow);
+       renderTrendingV2(trending, trendingWindow, payload.meta || {});
        bindWatchlistInteractions();
 
       var authorsUnavailable = false;
@@ -2087,7 +1745,6 @@
       if (championsEl) {
         championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
       }
-      renderAccolades(authors);
       if (crownsEl) {
         crownsEl.innerHTML = renderReactionCrowns(crowns);
       }
@@ -2120,69 +1777,6 @@
     }
   }
 
-  function pulseModeFromHash() {
-    var h = (location.hash || "").replace(/^#/, "").toLowerCase();
-    if (h.indexOf("pulse-") === 0) h = h.slice(6);
-    if (h === "listen" || h === "learn" || h === "rank" || h === "serve") return h;
-    return "listen";
-  }
-
-  function setPulseMode(mode, opts) {
-    var root = document.querySelector(".message-intel--v2");
-    if (!root) return;
-    if (mode !== "listen" && mode !== "learn" && mode !== "rank" && mode !== "serve") mode = "listen";
-    root.setAttribute("data-pulse-mode", mode);
-    var tabs = root.querySelectorAll(".message-intel__loop [role='tab']");
-    tabs.forEach(function (tab) {
-      var on = tab.getAttribute("data-pulse-mode") === mode;
-      tab.setAttribute("aria-selected", on ? "true" : "false");
-      tab.tabIndex = on ? 0 : -1;
-    });
-    root.querySelectorAll(".message-intel__mode").forEach(function (pane) {
-      var on = pane.getAttribute("data-pulse-pane") === mode;
-      pane.hidden = !on;
-    });
-    if (!opts || opts.hash !== false) {
-      try {
-        history.replaceState(null, "", "#pulse-" + mode);
-      } catch (e) { /* ignore */ }
-    }
-  }
-
-  function bindPulseModes() {
-    var root = document.querySelector(".message-intel--v2");
-    if (!root) return;
-    var tabs = root.querySelectorAll(".message-intel__loop [role='tab']");
-    tabs.forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        setPulseMode(tab.getAttribute("data-pulse-mode") || "listen");
-      });
-    });
-    var list = root.querySelector(".message-intel__loop");
-    if (list) {
-      list.addEventListener("keydown", function (ev) {
-        var keys = { ArrowLeft: -1, ArrowRight: 1, Home: "first", End: "last" };
-        var dir = keys[ev.key];
-        if (dir == null) return;
-        var items = Array.prototype.slice.call(tabs);
-        var i = items.indexOf(document.activeElement);
-        if (i < 0) i = items.findIndex(function (t) { return t.getAttribute("aria-selected") === "true"; });
-        var next;
-        if (dir === "first") next = items[0];
-        else if (dir === "last") next = items[items.length - 1];
-        else next = items[(i + dir + items.length) % items.length];
-        if (!next) return;
-        ev.preventDefault();
-        next.focus();
-        setPulseMode(next.getAttribute("data-pulse-mode") || "listen");
-      });
-    }
-    setPulseMode(pulseModeFromHash(), { hash: false });
-    window.addEventListener("hashchange", function () {
-      setPulseMode(pulseModeFromHash(), { hash: false });
-    });
-  }
-
   document.addEventListener("home:cockpit-tick", hydrate);
   if (refreshBtn) {
     refreshBtn.addEventListener("click", hydrate);
@@ -2197,50 +1791,20 @@
     });
   }
 
-  document.querySelectorAll(".message-intel__axis-chip").forEach(function (chip) {
-    chip.addEventListener("click", function () {
-      trendAxis = chip.getAttribute("data-axis") || "chatter";
-      document.querySelectorAll(".message-intel__axis-chip").forEach(function (c) {
-        c.classList.toggle("message-intel__axis-chip--active", c === chip);
-      });
-      renderTrendingV2(latestTrendingRows, "1h");
-    });
-  });
-
-  function hydrateCalibration() {
-    if (!hbCalEl) return;
-    fetch("/api/message-intel/calibration", { headers: { Accept: "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) {
-        if (!j) return;
-        if (j.active === false) hbCalEl.textContent = "cal drift";
-        else hbCalEl.textContent = "cal ok";
-      })
-      .catch(function () { hbCalEl.textContent = "cal …"; });
-  }
-
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
-      bindPulseModes();
       bindFilterClicks();
       syncFilterChipStates();
        hydrateWatchlist();
       hydrate();
-      hydrateCalibration();
-      pollNetFlow();
       refreshTimer = window.setInterval(hydrate, 60000);
-      window.setInterval(pollNetFlow, 60000);
     });
   } else {
-    bindPulseModes();
     bindFilterClicks();
     syncFilterChipStates();
     hydrateWatchlist();
     hydrate();
-    hydrateCalibration();
-    pollNetFlow();
     refreshTimer = window.setInterval(hydrate, 60000);
-    window.setInterval(pollNetFlow, 60000);
   }
 
   window.addEventListener("pagehide", function () {

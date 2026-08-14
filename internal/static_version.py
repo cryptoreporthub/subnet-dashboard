@@ -1,9 +1,9 @@
-"""Cache-bust token for static asset links (`?v=...`).
+"""Cache-bust token for homepage static asset links (``?v=...``).
 
-Computed once at import from the mtimes of the shipped stylesheets and
-homepage hydration scripts, so every deploy that touches dashboard rendering
-gets a fresh token and browsers revalidate. Falls back to a fixed string when
-the files are unreadable (tests, partial checkouts).
+Computed once at import from the mtimes of the shipped stylesheets and all
+homepage JavaScript, so a deploy that touches any below-fold hydrator also
+causes browsers to revalidate it. Falls back to a fixed string when the files
+are unreadable (tests, partial checkouts).
 """
 
 from __future__ import annotations
@@ -17,9 +17,44 @@ _ASSET_ROOT = os.path.join(
 _ASSETS = (
     ("css", "base.css"),
     ("css", "ui.css"),
+    # Keep this list aligned with the homepage script includes and the
+    # deferred scripts loaded by home_deferred.js. All of these share the
+    # static_v token in templates, so one token must cover every hydrator.
+    ("js", "conviction_tiers.js"),
+    ("js", "empty_state.js"),
+    ("js", "weighing_room.js"),
+    ("js", "data_freshness.js"),
+    ("js", "api_fetch.js"),
+    ("js", "ops_readiness_badge.js"),
+    ("js", "subnet_integrations.js"),
+    ("js", "trust_banner_ui.js"),
+    ("js", "market_drivers_ui.js"),
+    ("js", "brain_letter.js"),
+    ("js", "story_path_ui.js"),
+    ("js", "paper_portfolio.js"),
+    ("js", "weekly_letter.js"),
+    ("js", "daily_recap.js"),
+    ("js", "watchlist_alerts.js"),
+    ("js", "letter_export.js"),
+    ("js", "time_capsule.js"),
+    ("js", "hour_watch_ui.js"),
+    ("js", "pump_map.js"),
     ("js", "cockpit_hydrate.js"),
     ("js", "message_intel_feed.js"),
     ("js", "home_live_refresh.js"),
+    ("js", "living_focus.js"),
+    ("js", "home_deferred.js"),
+    ("js", "thumb_dock.js"),
+    ("js", "mindmap_graph.js"),
+    ("js", "dev_pulse.js"),
+    ("js", "uplot_charts.js"),
+    ("js", "premium_signals.js"),
+    ("js", "subnet_grouping.js"),
+    ("js", "premium_scanner.js"),
+    ("js", "investigation_panel.js"),
+    ("js", "premium_judges.js"),
+    ("js", "subnet_report.js"),
+    ("js", "social_sentiment.js"),
 )
 
 
