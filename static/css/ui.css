@@ -12161,7 +12161,8 @@ body.wrap {
   align-items: start;
 }
 #section-message-intel,
-.message-intel--v2 .message-intel__tile--orbit {
+.message-intel--v2 .message-intel__tile--orbit,
+.message-intel--v2 .message-intel__hall {
   scroll-margin-top: 72px;
 }
 .message-intel--v2 .message-intel__hall {
@@ -12171,6 +12172,7 @@ body.wrap {
   gap: 10px;
   align-items: start;
 }
+.message-intel--v2 .message-intel__hall > .message-intel__tile { grid-area: auto; }
 .message-intel--v2 .message-intel__tile { min-width: 0; }
 .message-intel--v2 .message-intel__tile .message-intel__panel,
 .message-intel--v2 .message-intel__tile .message-intel__spotlight,
