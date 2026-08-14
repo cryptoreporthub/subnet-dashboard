@@ -12129,6 +12129,13 @@ body.wrap {
   gap: 10px;
 }
 .message-intel--v2 .message-intel__mode[hidden] { display: none; }
+.message-intel--v2 .message-intel__mode > .message-intel__tile,
+.message-intel--v2 .message-intel__mode > .message-intel__hall,
+.message-intel--v2 .message-intel__mode > .message-intel__hero-stats,
+.message-intel--v2 .message-intel__mode > .message-intel__dock,
+.message-intel--v2 .message-intel__mode > .message-intel__skinline {
+  grid-area: auto;
+}
 .message-intel--v2 .message-intel__mode[data-pulse-pane="learn"],
 .message-intel--v2 .message-intel__mode[data-pulse-pane="serve"],
 .message-intel--v2 .message-intel__mode[data-pulse-pane="rank"] {
