@@ -160,21 +160,19 @@
           <ellipse class="lsn-orbit__track lsn-orbit__track--3" cx="140" cy="140" rx="60" ry="60"></ellipse>
         </svg>
         <div class="lsn-orbit__hub"><span>ORBIT</span><b>{% if trending %}TOP 3{% else %}—{% endif %}</b></div>
-        {% set top3 = trending[:3] if trending else [] %}
-        {% for t in top3 %}
-        <div class="lsn-orbit__carrier" data-rank="{{ loop.index }}">
+        {% for i in [1, 2, 3] %}
+        {% set t = trending[i - 1] if trending and trending|length >= i else none %}
+        <div class="lsn-orbit__carrier" data-rank="{{ i }}">
+          {% if t %}
           <button type="button" class="lsn-orbit__node" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}" data-sent="{{ t["sent"] or "mix" }}">
             <span class="lsn-orbit__dot"></span>
             <span class="lsn-orbit__sn">{{ t["name"] or ("SN" ~ t["netuid"]) }}</span>
             <span class="lsn-orbit__n">SN{{ t["netuid"] or "?" }}</span>
           </button>
-        </div>
-        {% else %}
-        {% for i in [1, 2, 3] %}
-        <div class="lsn-orbit__carrier" data-rank="{{ i }}">
+          {% else %}
           <span class="lsn-orbit__node is-ghost"><span class="lsn-orbit__dot"></span><span class="lsn-orbit__sn">—</span><span class="lsn-orbit__n">awaiting</span></span>
+          {% endif %}
         </div>
-        {% endfor %}
         {% endfor %}
       </div>
       {% if trending %}

@@ -12145,6 +12145,10 @@ body.wrap {
     "desk pulse";
   align-items: start;
 }
+#section-message-intel,
+.message-intel--v2 .message-intel__tile--orbit {
+  scroll-margin-top: 72px;
+}
 .message-intel--v2 .message-intel__rail {
   grid-area: rail;
   display: flex;
