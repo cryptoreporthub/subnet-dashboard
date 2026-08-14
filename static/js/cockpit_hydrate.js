@@ -10,6 +10,24 @@
   var lastHourPicks = [];
   var lastDayPicks = [];
 
+  // #region agent log
+  function debugHydration(hypothesisId, message, data) {
+    try {
+      fetch('/__debug/hydration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hypothesisId: hypothesisId,
+          location: 'static/js/cockpit_hydrate.js',
+          message: message,
+          data: data || {},
+        }),
+        keepalive: true,
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  // #endregion
+
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
@@ -2938,7 +2956,18 @@
   function renderDailyPick(payload) {
     // §34-1 / K3-7: patch K3 dossier fields — never wipe #k3-dossier via innerHTML
     if (!payload) return;
-    if (!shouldApplyDailyPickPayload(payload)) {
+    var shouldApply = shouldApplyDailyPickPayload(payload);
+    // #region agent log
+    debugHydration('C', 'daily pick patch decision', {
+      status: payload.status || null,
+      action: payload.action || null,
+      hasPick: !!payload.pick,
+      hasCandidate: !!payload.candidate,
+      shouldApply: shouldApply,
+      hero: !!document.getElementById('tribunal-hero'),
+    });
+    // #endregion
+    if (!shouldApply) {
       console.warn('[cockpit_hydrate] daily-pick patch skipped (stale/pending)');
       return;
     }
@@ -4046,6 +4075,13 @@
   }
 
   async function run() {
+    // #region agent log
+    debugHydration('A', 'cockpit hydrate run entry', {
+      hydrate: document.documentElement.dataset.hydrate || null,
+      hero: !!document.getElementById('tribunal-hero'),
+      readyState: document.readyState,
+    });
+    // #endregion
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
@@ -4070,6 +4106,14 @@
       // Tier 1a — daily call first (parallel request; legacy marker)
       var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3)
         .then(function (dpResult) {
+          // #region agent log
+          debugHydration('C', 'daily pick fetch resolved in browser', {
+            status: dpResult && dpResult.status || null,
+            action: dpResult && dpResult.action || null,
+            hasPick: !!(dpResult && dpResult.pick),
+            hasCandidate: !!(dpResult && dpResult.candidate),
+          });
+          // #endregion
           renderDailyPick(dpResult);
           // Make the Daily Call immediately reusable by SSE / hot-refresh
           // listeners instead of leaving a race window before tier-2 completes.
@@ -4080,6 +4124,11 @@
           return dpResult;
         })
         .catch(function (e) {
+          // #region agent log
+          debugHydration('C', 'daily pick fetch rejected in browser', {
+            errorType: e && e.name || 'Error',
+          });
+          // #endregion
           console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
           markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
           return null;
@@ -4982,6 +5031,14 @@
 
   function renderTribunalHero(dailyPick, learningStats) {
     var hero = document.getElementById('tribunal-hero');
+    // #region agent log
+    debugHydration('D', 'tribunal hero render entered', {
+      hero: !!hero,
+      payload: !!dailyPick,
+      stats: !!learningStats,
+      status: dailyPick && dailyPick.status || null,
+    });
+    // #endregion
     if (!hero || !dailyPick) return false;
     var kind = verdictKind(dailyPick);
     hero.setAttribute('data-verdict-kind', kind);
@@ -5027,6 +5084,15 @@
       patchTribunalInstrument(learningStats, dailyPick);
       patchTribunalEyeArcs(learningStats.judge_weights);
     }
+    // #region agent log
+    debugHydration('D', 'tribunal hero render completed', {
+      kind: kind,
+      temp: temp,
+      conviction: pct,
+      title: title && title.textContent || null,
+      actionBadge: badge && badge.textContent || null,
+    });
+    // #endregion
     return true;
   }
 
