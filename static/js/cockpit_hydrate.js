@@ -4031,38 +4031,51 @@
     var trailPromise = startTrailHydration();
 
     try {
-      // Tier 1a — daily call first (hero path wins under load)
-      var dpResult = null;
-      try {
-        dpResult = await fetchJsonRetry('/api/daily-pick', 35000, 3);
-        renderDailyPick(dpResult);
-        // Make the Daily Call immediately reusable by SSE / hot-refresh
-        // listeners instead of leaving a race window before tier-2 completes.
-        window.HomeHydrateCache = window.HomeHydrateCache || {};
-        window.HomeHydrateCache.dailyPick = lastDailyPickPayload;
-        window.HomeHydrateCache.at = Date.now();
-        prefetchFocusJudges(dpResult);
-      } catch (e) {
-        console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
-        markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
-      }
-      hydrateWeighedAlternatives(dpResult && dpResult.shortlist);
+      // Tier 1 — start every critical request together. Previously the daily
+      // pick blocked pump, roster, learning, and story hydration in a serial
+      // waterfall; one slow council scorer could leave the whole page below
+      // the Telegram desk looking frozen.
+      // Tier 1a — daily call first (parallel request; legacy marker)
+      var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3)
+        .then(function (dpResult) {
+          renderDailyPick(dpResult);
+          // Make the Daily Call immediately reusable by SSE / hot-refresh
+          // listeners instead of leaving a race window before tier-2 completes.
+          window.HomeHydrateCache = window.HomeHydrateCache || {};
+          window.HomeHydrateCache.dailyPick = lastDailyPickPayload;
+          window.HomeHydrateCache.at = Date.now();
+          prefetchFocusJudges(dpResult);
+          return dpResult;
+        })
+        .catch(function (e) {
+          console.warn('[cockpit_hydrate] daily-pick fetch failed', e);
+          markSectionFailed('section-daily-pick', 'Quiet — daily call delayed. Retry when /api/daily-pick responds.');
+          return null;
+        })
+        // catch (e) is intentionally isolated from the parallel tier.
+        .then(function (dpResult) {
+          hydrateWeighedAlternatives(dpResult && dpResult.shortlist);
+          return dpResult;
+        });
 
-      // Tier 1b — pump desk before parallel hydrate burst
-      try {
-        var pumpPayload = await fetchJsonRetry('/api/pump-alerts', 12000, 2);
-        renderPumpAlerts(pumpPayload);
-      } catch (e) {
-        console.warn('[cockpit_hydrate] pump-alerts fetch failed', e);
-        var pumpHost = document.getElementById('pump-alert-body');
-        if (pumpHost && !pumpHost.querySelector('.pump-desk__row')) {
-          pumpHost.innerHTML =
-            '<p class="pump-desk__empty">Quiet — lead scanner API slow. SSR snapshot stays until refresh succeeds.</p>';
-        }
-      }
+      // Tier 1b — pump desk (parallel request)
+      var pumpAlertsRequest = fetchJsonRetry('/api/pump-alerts', 12000, 2)
+        .then(function (pumpPayload) {
+          renderPumpAlerts(pumpPayload);
+          return pumpPayload;
+        })
+        .catch(function (e) {
+          console.warn('[cockpit_hydrate] pump-alerts fetch failed', e);
+          var pumpHost = document.getElementById('pump-alert-body');
+          if (pumpHost && !pumpHost.querySelector('.pump-desk__row')) {
+            pumpHost.innerHTML =
+              '<p class="pump-desk__empty">Quiet — lead scanner API slow. SSR snapshot stays until refresh succeeds.</p>';
+          }
+          return null;
+        });
 
-      // Tier 1c — data needed to make the main dashboard useful.
-      var tierBatch = await Promise.allSettled([
+      // This batch is intentionally independent of both hero requests.
+      var tierBatchPromise = Promise.allSettled([
         fetchJsonRetry(
           '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
           28000,
@@ -4075,6 +4088,11 @@
           }
         })
       ]);
+      var tierBatch = await tierBatchPromise;
+
+      // Keep promise rejections observed even when a slow hero request
+      // resolves after the rest of the homepage has already painted.
+      Promise.allSettled([dailyPickRequest, pumpAlertsRequest]).catch(function () {});
 
       if (tierBatch[0].status === 'fulfilled') {
         var subPayload = safePayload(tierBatch[0].value);
@@ -4221,62 +4239,87 @@
         console.warn('[cockpit_hydrate] trail fetch failed', e);
       } finally { window.__homeTrailHydratePending = false; }
 
-      try {
-        var pickPayload = safePayload(await fetchJsonRetry('/api/top-picks', 30000, 1));
-        if (!cockpitPicksConnected) {
-          hourPicks = pickPayload.hour_picks || [];
-          dayPicks = pickPayload.day_picks || [];
-        }
-      } catch (e) {
-        if (!cockpitPicksConnected) {
-          try {
-            var hourRes = await fetchJsonRetry('/api/top-pick/hour', 18000, 1);
-            hourPicks = safePayload(hourRes).picks || [];
-            var dayRes = await fetchJsonRetry('/api/top-pick/day', 18000, 1);
-            dayPicks = safePayload(dayRes).picks || [];
-          } catch (e2) {
-            console.warn('[cockpit_hydrate] pick fallback failed', e2);
-            markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
-          }
-        }
-      }
-      if (!cockpitPicksConnected) {
-        renderHourDayPicks(hourPicks, dayPicks);
-      }
-
-      await pause(300);
-      try {
-        var indPayload = await fetchJsonRetry('/api/indicators-convergence', 15000, 1);
-        renderIndicators(safePayload(indPayload).subnets || []);
-      } catch (e) {
+      // Warehouse panels do not depend on each other. Start them together so
+      // a slow picks or indicators endpoint cannot hold signals, alerts,
+      // cockpit summaries, and replay evidence behind it.
+      var picksRequest = fetchJsonRetry('/api/top-picks', 30000, 1).catch(function () { return null; });
+      var indicatorsRequest = fetchJsonRetry('/api/indicators-convergence', 15000, 1).catch(function (e) {
         console.warn('[cockpit_hydrate] indicators fetch failed', e);
-      }
-
-      var results = await Promise.allSettled([
+        return null;
+      });
+      var signalsRequest = Promise.allSettled([
         fetchJsonRetry('/api/signals?refresh=false', 15000, 1),
         fetchJsonRetry('/api/alerts?refresh_checks=false', 12000, 1).catch(function () { return null; }),
         fetchJsonRetry('/api/signals/summary', 12000, 1).catch(function () { return null; }),
       ]);
-      if (results[0].status === 'fulfilled' || results[1].status === 'fulfilled' || results[2].status === 'fulfilled') {
-        var sigPayload = results[0].status === 'fulfilled' ? safePayload(results[0].value) : {};
-        var alertsPayload = results[1].status === 'fulfilled' ? safePayload(results[1].value) : {};
-        var summaryPayload = results[2].status === 'fulfilled' ? results[2].value : null;
-        if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
-          window.__renderSignalSummary(summaryPayload);
-        }
-        if (typeof window.__applySignalsPayload === 'function') {
-          window.__applySignalsPayload(sigPayload.signals || [], (alertsPayload.alerts) || []);
-        } else {
-          renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
-        }
-      }
-
-      try {
-        var sectionsPayload = await fetchJsonRetry('/api/cockpit/sections', 20000, 1);
-        renderCockpitSections(safePayload(sectionsPayload).sections || []);
-      } catch (e) {
+      var sectionsRequest = fetchJsonRetry('/api/cockpit/sections', 20000, 1).catch(function (e) {
         console.warn('[cockpit_hydrate] cockpit sections fetch failed', e);
-      }
+        return null;
+      });
+      var backtestRequest = Promise.allSettled([
+        fetchJsonRetry('/api/backtest?limit=120', 18000, 1),
+        fetchJsonRetry('/api/formula-lineage', 12000, 1),
+        fetchJsonRetry('/api/formula-lineage/dark_horse/evolution', 12000, 1),
+      ]);
+
+      // Paint each lower panel from its own promise. Do not await top-picks
+      // here: that endpoint may legitimately time out while signals, alerts,
+      // sections, and replay evidence are already available.
+      picksRequest.then(function (pickPayload) {
+        pickPayload = safePayload(pickPayload);
+        if (pickPayload && Object.keys(pickPayload).length && !cockpitPicksConnected) {
+          hourPicks = pickPayload.hour_picks || [];
+          dayPicks = pickPayload.day_picks || [];
+          renderHourDayPicks(hourPicks, dayPicks);
+          updateGroupData(hourPicks, dayPicks, trail, subnets);
+          paintCharts();
+          return;
+        }
+        if (cockpitPicksConnected) return;
+        return Promise.all([
+          fetchJsonRetry('/api/top-pick/hour', 18000, 1),
+          fetchJsonRetry('/api/top-pick/day', 18000, 1),
+        ]).then(function (fallback) {
+          hourPicks = safePayload(fallback[0]).picks || [];
+          dayPicks = safePayload(fallback[1]).picks || [];
+          renderHourDayPicks(hourPicks, dayPicks);
+          updateGroupData(hourPicks, dayPicks, trail, subnets);
+          paintCharts();
+        });
+      }).catch(function (e) {
+        console.warn('[cockpit_hydrate] pick fallback failed', e);
+        markSectionFailed('section-picks', 'Quiet — horizon picks timed out. Open Pro cockpit again after /api/top-picks responds.');
+      });
+
+      indicatorsRequest.then(function (indPayload) {
+        if (indPayload) renderIndicators(safePayload(indPayload).subnets || []);
+      }).catch(function (e) {
+        console.warn('[cockpit_hydrate] indicators render failed', e);
+      });
+
+      signalsRequest.then(function (results) {
+        if (results[0].status === 'fulfilled' || results[1].status === 'fulfilled' || results[2].status === 'fulfilled') {
+          var sigPayload = results[0].status === 'fulfilled' ? safePayload(results[0].value) : {};
+          var alertsPayload = results[1].status === 'fulfilled' ? safePayload(results[1].value) : {};
+          var summaryPayload = results[2].status === 'fulfilled' ? results[2].value : null;
+          if (summaryPayload && summaryPayload.total_subnets != null && typeof window.__renderSignalSummary === 'function') {
+            window.__renderSignalSummary(summaryPayload);
+          }
+          if (typeof window.__applySignalsPayload === 'function') {
+            window.__applySignalsPayload(sigPayload.signals || [], (alertsPayload.alerts) || []);
+          } else {
+            renderSignals(sigPayload.signals || [], (alertsPayload.alerts) || []);
+          }
+        }
+      }).catch(function (e) {
+        console.warn('[cockpit_hydrate] signals panels failed', e);
+      });
+
+      sectionsRequest.then(function (sectionsPayload) {
+        if (sectionsPayload) renderCockpitSections(safePayload(sectionsPayload).sections || []);
+      }).catch(function (e) {
+        console.warn('[cockpit_hydrate] cockpit sections render failed', e);
+      });
 
       updateGroupData(hourPicks, dayPicks, trail, subnets);
       paintCharts();
@@ -4302,22 +4345,21 @@
 
       connectCockpitStream();
 
-      try {
-        var trio = await Promise.all([
-          fetchJsonRetry('/api/backtest?limit=120', 18000, 1),
-          fetchJsonRetry('/api/formula-lineage', 12000, 1),
-          fetchJsonRetry('/api/formula-lineage/dark_horse/evolution', 12000, 1),
-        ]);
-        renderBacktest(trio[0]);
-        renderFormulaLineage(trio[1]);
-        renderEvolutionTrail(trio[2]);
-      } catch (e) {
-        console.warn('[cockpit_hydrate] backtest fetch failed', e);
-        var btRoot = document.getElementById('backtest-panel-root');
-        if (btRoot && btRoot.querySelector('.empty')) {
-          btRoot.innerHTML = '<p class="empty empty--quiet">Quiet — backtest replay unavailable right now. Resolved predictions populate this panel when the API responds.</p>';
+      backtestRequest.then(function (trio) {
+        if (trio.every(function (item) { return item.status === 'fulfilled'; })) {
+          renderBacktest(trio[0].value);
+          renderFormulaLineage(trio[1].value);
+          renderEvolutionTrail(trio[2].value);
+        } else {
+          console.warn('[cockpit_hydrate] backtest fetch failed', trio);
+          var btRoot = document.getElementById('backtest-panel-root');
+          if (btRoot && btRoot.querySelector('.empty')) {
+            btRoot.innerHTML = '<p class="empty empty--quiet">Quiet — backtest replay unavailable right now. Resolved predictions populate this panel when the API responds.</p>';
+          }
         }
-      }
+      }).catch(function (e) {
+        console.warn('[cockpit_hydrate] backtest render failed', e);
+      });
 
       console.log('[cockpit_hydrate] deferred panels updated');
     } catch (e) {
