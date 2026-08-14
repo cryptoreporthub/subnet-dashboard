@@ -1310,16 +1310,23 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
 
 def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
     """Backward-compatible aggregate from the shared public-proof contract."""
-    graded = hits = misses = neutral = 0
+    graded = hits = misses = neutral = pending = ungradeable = 0
     recent: List[Dict[str, Any]] = []
     try:
         rows = _proof_rows(db)
     except Exception:
-        return {"graded": 0, "hits": 0, "misses": 0, "neutral": 0, "hit_rate": None, "ready": False, "recent": []}
+        return {
+            "graded": 0, "hits": 0, "misses": 0, "neutral": 0,
+            "pending": 0, "ungradeable": 0, "hit_rate": None, "ready": False, "recent": [],
+        }
 
     for row in rows:
         proof = classify_call(row)
         if not proof["resolved"]:
+            if proof["status"] == "pending":
+                pending += 1
+            else:
+                ungradeable += 1
             continue
         graded += 1
         if proof["status"] == "hit":
@@ -1342,6 +1349,7 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
     hit_rate = round((hits / scored) * 100.0, 1) if scored else None
     return {
         "graded": graded, "hits": hits, "misses": misses, "neutral": neutral,
+        "pending": pending, "ungradeable": ungradeable,
         "hit_rate": hit_rate, "ready": scored >= MIN_LEADERBOARD_SAMPLE, "recent": recent,
     }
 
