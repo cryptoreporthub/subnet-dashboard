@@ -22,7 +22,8 @@ body.lsn-body{
 .lsn-site{
   position:relative;
   display:flex; align-items:center; gap:8px;
-  width:auto; max-width:100%; min-height:44px;
+  align-self:center;
+  width:max-content; max-width:100%; min-height:44px;
   padding:5px 6px 5px 8px;
   overflow:hidden;
   text-decoration:none; color:var(--lsn-ink);
@@ -59,7 +60,7 @@ body.lsn-body{
 .lsn-site__orb i:nth-child(1){height:6px}
 .lsn-site__orb i:nth-child(2){height:11px}
 .lsn-site__orb i:nth-child(3){height:8px}
-.lsn-site__copy{position:relative; z-index:1; flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; text-align:left}
+.lsn-site__copy{position:relative; z-index:1; flex:0 1 auto; min-width:0; display:flex; flex-direction:column; gap:1px; text-align:left}
 .lsn-site__kicker{
   font-family:var(--lsn-font-mono); font-size:8px; font-weight:600;
   letter-spacing:.12em; text-transform:uppercase; color:rgba(207,224,255,.7);
