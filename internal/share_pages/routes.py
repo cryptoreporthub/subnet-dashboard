@@ -544,20 +544,6 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     if isinstance(ci_payload, dict):
         ci_top = _as_list(ci_payload.get("top5"))
     ctx["conviction_top"] = ci_top
-    if not trending and ci_top:
-        for r in ci_top[:4]:
-            if not isinstance(r, dict):
-                continue
-            netuid = _safe_int(r.get("netuid"))
-            ctx["trending"].append(
-                {
-                    "netuid": netuid,
-                    "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                    "conviction": r.get("index") or r.get("conviction"),
-                    "sent": "mix",
-                    "mentions": r.get("mentions"),
-                }
-            )
 
     # callers — resolved qualifying accuracy only
     callers_payload = None
