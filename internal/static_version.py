@@ -17,6 +17,9 @@ _ASSET_ROOT = os.path.join(
 _ASSETS = (
     ("css", "base.css"),
     ("css", "ui.css"),
+    # Keep this list aligned with the homepage script includes and the
+    # deferred scripts loaded by home_deferred.js. All of these share the
+    # static_v token in templates, so one token must cover every hydrator.
     ("js", "conviction_tiers.js"),
     ("js", "empty_state.js"),
     ("js", "weighing_room.js"),

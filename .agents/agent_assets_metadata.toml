@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "igOvWHKbTG-diXEnp5MRh"
+uri = "file://attached_assets/generated_images/subnet-summer-bot-welcome.png"
+type = "image"
+title = "Subnet Summer Bot welcome graphic"
+description = "A polished 1600×900 summer-themed subnet network banner with crisp Subnet Summer Bot and Powered by SimiVision branding."
+
+[[outputs]]
+id = "09-8dy8ycWm0SrCE7ylMN"
+uri = "file://attached_assets/IMG_0131_1786717720260_fixed.png"
+type = "image"
+title = "Corrected Subnet Summer Bot graphic"
+description = "The original beach-themed Subnet Summer Bot graphic with the badge corrected to read Powered by SimiVision."

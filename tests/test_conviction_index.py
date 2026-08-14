@@ -10,7 +10,9 @@ from internal.conviction_index import (
     author_weight,
     compute_index,
     decay_factor,
+    get_conviction_snapshot,
     momentum_sign,
+    populate_author_reliability,
     signed_strength,
     weighted_median,
 )
@@ -140,3 +142,37 @@ def test_direction_from_momentum_not_verdict_label():
     sign2 = momentum_sign("BUY", momentum=-1.0)
     assert sign2 == -1
     assert momentum_sign("buy", momentum=0.5) == 1
+
+
+def test_conviction_snapshot_refresh_uses_persisted_state(tmp_path, monkeypatch):
+    state_path = tmp_path / "conviction_index.json"
+    monkeypatch.setenv("CONVICTION_INDEX_PATH", str(state_path))
+    from internal import conviction_index as ci
+
+    ci._INDEX_PATH = str(state_path)
+    monkeypatch.setattr(ci, "populate_author_reliability", lambda *a, **k: {"ok": True})
+    state_path.write_text(
+        '{"subnets": {"7": {"index": 66.0}}, "leaderboard": {"id:u1": {"author_id": "id:u1", "author_name": "Alice", "long_total": 3, "fade_total": 2, "long_hits": 2, "fade_hits": 1}}, "updated_at": "2026-08-01T00:00:00+00:00"}',
+        encoding="utf-8",
+    )
+
+    snapshot = get_conviction_snapshot(refresh=True)
+    assert snapshot["subnets"]["7"]["index"] == 66.0
+    assert snapshot["leaderboard"]["id:u1"]["author_name"] == "Alice"
+
+
+def test_conviction_leaderboard_marks_low_sample_caution(tmp_path, monkeypatch):
+    state_path = tmp_path / "conviction_index.json"
+    monkeypatch.setenv("CONVICTION_INDEX_PATH", str(state_path))
+    from internal import conviction_index as ci
+
+    ci._INDEX_PATH = str(state_path)
+    state_path.write_text(
+        '{"subnets": {}, "leaderboard": {"id:u1": {"author_id": "id:u1", "author_name": "Alice", "long_total": 1, "fade_total": 2, "long_hits": 1, "fade_hits": 0}}, "updated_at": null}',
+        encoding="utf-8",
+    )
+
+    board = ci.build_leaderboard(days=30)
+    assert board["authors"][0]["total_calls"] == 3
+    assert board["authors"][0]["low_confidence"] is True
+    assert board["authors"][0]["new_voice"] is False

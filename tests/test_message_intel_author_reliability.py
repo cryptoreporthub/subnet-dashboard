@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from internal.message_intel.jury import _build_signal, evaluate_message
+from internal.message_intel.rollup import build_author_reliability_rows
 from message_intel.models import Database
 from message_intel.price_tracker import PriceTracker
 
@@ -248,3 +249,39 @@ def test_write_then_read_e2e(intel_env):
         trusted = evaluate_message(2, "test", ANALYSIS, author_id="e2e_u")
 
     assert trusted["conviction"] != baseline["conviction"]
+
+
+def test_author_reliability_rows_expose_strike_rate_and_caution(intel_env):
+    db = Database(intel_env["db_path"])
+    db.save_message(
+        {
+            "source": "telegram",
+            "author_id": "u1",
+            "author_name": "Alice",
+            "content": "one",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    with db._connect() as conn:
+        conn.execute(
+            """INSERT INTO price_outcomes (message_id, outcome, price_24h)
+               VALUES (1, ?, ?)""",
+            ("pump", 1.0),
+        )
+    db.upsert_author_reliability(
+        {
+            "author_id": "u1",
+            "author_name": "Alice",
+            "total_messages": 4,
+            "correct_predictions": 3,
+            "accuracy_score": 0.75,
+        }
+    )
+
+    rows = build_author_reliability_rows(days=30, limit=8, db=db)
+    assert rows
+    row = rows[0]
+    assert row["accuracy_pct"] == row["strike_rate_pct"]
+    assert row["correct_predictions"] == 3
+    assert row["total_graded_calls"] == 4
+    assert row["caution"] is True

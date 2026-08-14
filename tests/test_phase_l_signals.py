@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -156,7 +158,7 @@ def test_store_append_dedupes_unchanged(temp_signal_store):
         "signal_type": "buy",
         "confidence": 0.7,
         "source_expert": "hype",
-        "timestamp": "2026-07-12T10:00:00Z",
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "evidence": "test",
     }
     assert len(store.append_many([row])) == 1
@@ -310,6 +312,9 @@ def test_ws_refresh_broadcasts_signals(monkeypatch):
     captured = []
 
     class FakeWebSocket:
+        async def accept(self):
+            pass
+
         async def send_text(self, text):
             captured.append(text)
 

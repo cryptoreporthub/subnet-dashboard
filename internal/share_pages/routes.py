@@ -10,7 +10,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from internal.share_pages.search import global_search
@@ -298,7 +298,7 @@ async def wallet_share_page(request: Request, wallet: str):
     )
 
 
-# ── §28-3 Telegram Listener page (/subnetsummer; /listener 308) ───────────
+# ── §28-3 Telegram Listener page (/listener) ──────────────────────────────
 # SSR from message-intel engine calls with honest empty fallbacks. The live
 # deploy has shown degraded /api/message-intel GETs (422 shared-gating class),
 # so every block is individually guarded — the page must never 5xx.
@@ -310,20 +310,6 @@ async def _listener_call(fn, default, timeout: float = 6.0):
         return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout)
     except Exception as exc:
         logger.debug("listener page call %s failed: %s", getattr(fn, "__name__", "?"), exc)
-        return default
-
-
-async def _listener_worker_call(path: str, default):
-    """Read worker-owned listener data when the web process has no volume."""
-    try:
-        from internal.data_volume import needs_worker_volume_proxy
-
-        if not needs_worker_volume_proxy():
-            return None
-        from internal.worker_proxy import fetch_worker_json_sync
-
-        return await _listener_call(lambda: fetch_worker_json_sync(path), default)
-    except Exception:
         return default
 
 
@@ -357,7 +343,7 @@ def _listener_caller_board():
     return build_telegram_caller_leaderboard
 
 
-async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_window: str = "week") -> Dict[str, Any]:
+async def _listener_page_context() -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
@@ -370,6 +356,7 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
         "trending": [],
         "callers": [],
         "authors": [],
+        "reaction_crowns": [],
         "topics": [],
         "divergence": [],
         "subnet_conviction": [],
@@ -377,15 +364,7 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
         "summary_text": "",
         "hourly": [],
         "recap": {},
-        "leaderboard_days": leaderboard_days,
-        "leaderboard_window": leaderboard_window,
     }
-
-    remote_status = await _listener_worker_call("/api/message-intel/status", None)
-    if isinstance(remote_status, dict) and remote_status.get("status") == "success":
-        ctx["listener"] = remote_status.get("listener") or ctx["listener"]
-        ctx["outcomes"] = remote_status.get("outcomes") or ctx["outcomes"]
-        ctx["store"] = remote_status.get("store") or ctx["store"]
 
     store = ctx["store"] if isinstance(ctx["store"], dict) else {}
     ctx["graded_count"] = int(store.get("total_messages") or 0)
@@ -411,11 +390,9 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     # messages (live feed) — safe_list/coerce discipline
     try:
         engine = _listener_engine()
-        msgs_payload = await _listener_worker_call("/api/message-intel?limit=24", None)
-        if msgs_payload is None:
-            msgs_payload = await _listener_call(
-                lambda: engine.list_messages(limit=24), None, timeout=6
-            )
+        msgs_payload = await _listener_call(
+            lambda: engine.list_messages(limit=24), None, timeout=6
+        )
     except Exception:
         msgs_payload = None
     msgs = []
@@ -432,8 +409,20 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
             {
                 "author": m.get("author_name") or m.get("author") or m.get("author_id") or "—",
                 "text": m.get("text") or m.get("message") or m.get("content") or "",
-                "conviction": m.get("conviction"),
-                "verdict": m.get("verdict"),
+                "conviction": (
+                    m.get("conviction")
+                    if m.get("conviction") is not None
+                    else (
+                        (m.get("verdict") or {}).get("conviction")
+                        if isinstance(m.get("verdict"), dict)
+                        else None
+                    )
+                ),
+                "verdict": (
+                    (m.get("verdict") or {}).get("predicted_direction")
+                    if isinstance(m.get("verdict"), dict)
+                    else m.get("verdict")
+                ),
                 "netuid": netuid,
                 "name": m.get("name") or (f"SN{netuid}" if netuid else ""),
                 "topic": m.get("topic") or m.get("tags"),
@@ -447,13 +436,9 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     conv_payload = None
     try:
         engine = _listener_engine()
-        conv_payload = await _listener_worker_call(
-            "/api/message-intel/subnet-conviction?limit=8", None
+        conv_payload = await _listener_call(
+            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
         )
-        if conv_payload is None:
-            conv_payload = await _listener_call(
-                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
-            )
     except Exception:
         pass
     conv_rows = []
@@ -480,56 +465,44 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
                 "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
                 "conviction": conv,
                 "sent": sent_tag,
-                "mentions": r.get("mentions") or r.get("count") or r.get("messages"),
+                "mentions": (
+                    r.get("mentions")
+                    or r.get("call_count")
+                    or r.get("count")
+                    or r.get("messages")
+                ),
             }
         )
     ctx["trending"] = trending
     ctx["subnet_conviction"] = conv_rows
 
-    try:
-        tv2 = await _listener_worker_call(
-            "/api/message-intel/trending-v2?limit=8", None
-        )
-        if tv2 is None:
+    # The evidence-qualified conviction rollup can be empty while the
+    # broader chatter rank still has useful subnet mentions. Keep the desk
+    # populated from the canonical ChatterPower rollup in that case.
+    if not ctx["trending"]:
+        try:
             from internal.message_intel.rollup import build_trending_subnets
 
-            tv2 = await _listener_call(
-                lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
-                None,
+            rank_rows = await _listener_call(
+                lambda: build_trending_subnets(limit=8, rank_hours=24, window_hours=24),
+                [],
                 timeout=6,
             )
-        tv2_rows = (
-            _as_list(tv2.get("items") or tv2.get("trending"))
-            if isinstance(tv2, dict)
-            else (tv2 if isinstance(tv2, list) else [])
-        )
-        if tv2_rows:
-            by_nu = {t.get("netuid"): t for t in trending if t.get("netuid") is not None}
-            merged = []
-            for row in tv2_rows:
-                if not isinstance(row, dict):
-                    continue
-                netuid = _safe_int(row.get("netuid"))
-                base = by_nu.get(netuid) or {}
-                merged.append(
-                    {
-                        "netuid": netuid,
-                        "name": row.get("name") or base.get("name") or (f"SN{netuid}" if netuid else "warming"),
-                        "conviction": row.get("conviction") if row.get("conviction") is not None else base.get("conviction"),
-                        "sent": str(row.get("sentiment") or base.get("sent") or "mix").lower()[:4],
-                        "mentions": row.get("mentions") or base.get("mentions"),
-                        "chatter_power": row.get("chatter_power") or row.get("heat"),
-                        "why": row.get("why"),
-                        "delta": row.get("delta"),
-                        "velocity": row.get("velocity"),
-                        "quality": row.get("quality"),
-                    }
-                )
-            if merged:
-                ctx["trending"] = merged
-                trending = merged
-    except Exception:
-        pass
+        except Exception:
+            rank_rows = []
+        for r in _as_list(rank_rows):
+            if not isinstance(r, dict):
+                continue
+            netuid = _safe_int(r.get("netuid"))
+            ctx["trending"].append(
+                {
+                    "netuid": netuid,
+                    "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                    "conviction": r.get("avg_conviction") or r.get("conviction"),
+                    "sent": str(r.get("sentiment") or "mixed").lower()[:4],
+                    "mentions": r.get("mentions"),
+                }
+            )
 
     # conviction index top5
     ci_payload = None
@@ -544,18 +517,28 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     if isinstance(ci_payload, dict):
         ci_top = _as_list(ci_payload.get("top5"))
     ctx["conviction_top"] = ci_top
+    if not trending and ci_top:
+        for r in ci_top[:4]:
+            if not isinstance(r, dict):
+                continue
+            netuid = _safe_int(r.get("netuid"))
+            ctx["trending"].append(
+                {
+                    "netuid": netuid,
+                    "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                    "conviction": r.get("index") or r.get("conviction"),
+                    "sent": "mix",
+                    "mentions": r.get("mentions"),
+                }
+            )
 
     # callers — resolved qualifying accuracy only
     callers_payload = None
     try:
-        callers_payload = await _listener_worker_call(
-            f"/api/message-intel/callers?days={leaderboard_days}&limit=8", None
+        build_board = _listener_caller_board()
+        callers_payload = await _listener_call(
+            lambda: build_board(days=30, limit=8), None, timeout=6
         )
-        if callers_payload is None:
-            build_board = _listener_caller_board()
-            callers_payload = await _listener_call(
-                lambda: build_board(days=leaderboard_days, limit=8), None, timeout=6
-            )
     except Exception:
         pass
     caller_rows = []
@@ -589,14 +572,10 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     # authors — weekly champions
     authors_payload = None
     try:
-        authors_payload = await _listener_worker_call(
-            f"/api/message-intel/authors?days={leaderboard_days}&limit=5", None
+        engine = _listener_engine()
+        authors_payload = await _listener_call(
+            lambda: engine.list_authors(days=7, limit=5), None, timeout=6
         )
-        if authors_payload is None:
-            engine = _listener_engine()
-            authors_payload = await _listener_call(
-                lambda: engine.list_authors(days=leaderboard_days, limit=5), None, timeout=6
-            )
     except Exception:
         pass
     author_rows = []
@@ -610,26 +589,37 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
             continue
         authors.append(
             {
-                "author": a.get("author_name") or a.get("author") or a.get("author_id") or "warming",
+                "author": a.get("author_name") or a.get("author") or a.get("author_id") or "—",
                 "messages": a.get("messages") or a.get("total_messages") or a.get("count"),
                 "accuracy": a.get("accuracy") or a.get("hit_rate") or a.get("accuracy_score"),
-                "hit_rate": a.get("hit_rate") or a.get("accuracy"),
-                "graded": a.get("graded") or a.get("total_graded_calls") or 0,
-                "caution": bool(a.get("caution")),
                 "influence": a.get("influence") or a.get("influence_score"),
             }
         )
     ctx["authors"] = authors
+    if isinstance(authors_payload, dict):
+        crowns = authors_payload.get("reaction_crowns") or []
+        if isinstance(crowns, list):
+            ctx["reaction_crowns"] = [
+                {
+                    "emoji": row.get("emoji") or "✨",
+                    "label": row.get("label") or row.get("key") or "Reaction",
+                    "author": row.get("display_name")
+                    or row.get("author_username")
+                    or row.get("author_name")
+                    or "—",
+                    "count": row.get("count") or 0,
+                }
+                for row in crowns[:6]
+                if isinstance(row, dict)
+            ]
 
     # hot topics
     topics_payload = None
     try:
-        topics_payload = await _listener_worker_call("/api/message-intel/topics?limit=8", None)
-        if topics_payload is None:
-            engine = _listener_engine()
-            topics_payload = await _listener_call(
-                lambda: engine.list_topics(limit=8), None, timeout=5
-            )
+        engine = _listener_engine()
+        topics_payload = await _listener_call(
+            lambda: engine.list_topics(limit=8), None, timeout=5
+        )
     except Exception:
         pass
     topics = []
@@ -654,14 +644,10 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     # divergence stories
     div_payload = None
     try:
-        div_payload = await _listener_worker_call(
-            "/api/message-intel/divergence?days=7&limit=3", None
+        engine = _listener_engine()
+        div_payload = await _listener_call(
+            lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
         )
-        if div_payload is None:
-            engine = _listener_engine()
-            div_payload = await _listener_call(
-                lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
-            )
     except Exception:
         pass
     div_rows = []
@@ -687,12 +673,9 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
 
     # summary text (plain-language recap)
     try:
-        summ_payload = await _listener_worker_call("/api/message-intel/summary", None)
-        summ = summ_payload.get("summary") if isinstance(summ_payload, dict) else None
-        if summ is None:
-            from internal.message_intel.summary import summarize_message_intel
+        from internal.message_intel.summary import summarize_message_intel
 
-            summ = await _listener_call(summarize_message_intel, None, timeout=5)
+        summ = await _listener_call(summarize_message_intel, None, timeout=5)
         if isinstance(summ, dict):
             ctx["summary_text"] = summ.get("text") or ""
     except Exception as exc:
@@ -723,18 +706,12 @@ async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_windo
     return ctx
 
 
-@share_router.get("/subnetsummer")
-async def listener_page(request: Request, window: str = Query(default="week")):
+@share_router.get("/listener")
+async def listener_page(request: Request):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
-    window = str(window or "week").lower()
-    window_days = {"day": 1, "week": 7, "month": 30}.get(window, 7)
-    window = {1: "day", 7: "week", 30: "month"}[window_days]
-    ctx = await _listener_page_context(
-        leaderboard_days=window_days,
-        leaderboard_window=window,
-    )
+    ctx = await _listener_page_context()
     base = _public_base(request)
-    page_url = f"{base}/subnetsummer"
+    page_url = f"{base}/listener"
     title = "SimiVision — Telegram Listener"
     desc = (
         ctx.get("summary_text")
@@ -753,8 +730,3 @@ async def listener_page(request: Request, window: str = Query(default="week")):
         }
     )
     return templates.TemplateResponse(request, "listener.html", ctx)
-
-
-@share_router.get("/listener")
-async def listener_legacy_path():
-    return RedirectResponse(url="/subnetsummer", status_code=308)
