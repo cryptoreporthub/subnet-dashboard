@@ -7,7 +7,7 @@ import json
 import pytest
 
 from internal.council import state_vector as sv
-from internal.council.publish_gate import publish_gate_fraction
+from internal.council.publish_gate import directional_publish_guard, publish_gate_fraction
 from internal.council.red_team import audit_daily_pick
 
 
@@ -63,3 +63,18 @@ def test_short_ohlcv_still_penalized_but_can_clear_gate():
     # Cold-start × completeness 0.85
     assert conf == pytest.approx(sv._COLD_START_PRIOR * 0.85, rel=1e-2)
     assert conf > publish_gate_fraction()
+
+
+def test_directional_publish_guard_blocks_bearish_long():
+    guard = directional_publish_guard(
+        {"signal_impact": {"net_direction": "bearish", "net_predicted_pct": -11.3}}
+    )
+    assert guard["approved"] is False
+    assert "bearish" in guard["reason"].lower()
+
+
+def test_directional_publish_guard_allows_nonconflicting_signal():
+    guard = directional_publish_guard(
+        {"signal_impact": {"net_direction": "bullish", "net_predicted_pct": 2.1}}
+    )
+    assert guard["approved"] is True

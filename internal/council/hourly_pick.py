@@ -18,7 +18,11 @@ from internal.council.state_vector import (
     unpack_score_learning_fields,
 )
 from internal.council.red_team import audit_daily_pick
-from internal.council.publish_gate import publish_gate_fraction, publish_gate_label
+from internal.council.publish_gate import (
+    directional_publish_guard,
+    publish_gate_fraction,
+    publish_gate_label,
+)
 from internal.subnets.tradable import tradable_subnets
 
 try:
@@ -128,9 +132,12 @@ def select_hourly_pick(
 
     gate = publish_gate_fraction()
     hold_reason = None
-    if final_confidence < gate:
+    directional_gate = directional_publish_guard(
+        {**prediction, "signal_impact": learning["signal_impact"]}
+    )
+    if final_confidence < gate or not directional_gate["approved"]:
         action = "HOLD"
-        hold_reason = (
+        hold_reason = directional_gate["reason"] if not directional_gate["approved"] else (
             f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
             "no long call published"
         )
