@@ -184,6 +184,11 @@
     text-transform: lowercase;
     letter-spacing: 0.02em;
   }
+  .mindmap-integration-badge__runtime {
+    color: var(--text-muted, #6b7280);
+    font-size: 0.58rem;
+    text-transform: lowercase;
+  }
   .mindmap-integration-badge--closed {
     border-color: rgba(31, 212, 124, 0.35);
     background: rgba(31, 212, 124, 0.08);
@@ -270,10 +275,12 @@
     {% if mindmap_graph is defined and mindmap_graph and mindmap_graph.integration_status %}
       {% for key, label in integration_labels.items() %}
         {% set st = mindmap_graph.integration_status.get(key) %}
+        {% set runtime = (mindmap_graph.runtime_status or {}).get(key) %}
         {% if st %}
-      <span class="mindmap-integration-badge mindmap-integration-badge--{{ st }}" data-source="{{ key }}" data-status="{{ st }}"{% if st == 'blocked' %} title="Not yet wired — pending activation"{% elif key in ('dispositions', 'scenario') and st == 'partial' %} title="Capped soft-tilt in pick score — not a hard gate"{% elif st == 'display_only' %} title="Shown for context — not yet actionable"{% elif st == 'read_only' %} title="Read-only feed — no write-back"{% endif %}>
+      <span class="mindmap-integration-badge mindmap-integration-badge--{{ st }}" data-source="{{ key }}" data-status="{{ st }}" data-runtime-status="{{ runtime or 'unknown' }}"{% if st == 'blocked' %} title="Not yet wired — pending activation"{% elif key in ('dispositions', 'scenario') and st == 'partial' %} title="Capped soft-tilt in pick score — not a hard gate"{% elif st == 'display_only' %} title="Shown for context — not yet actionable"{% elif st == 'read_only' %} title="Read-only feed — no write-back"{% endif %}>
         <span class="mindmap-integration-badge__label">{{ label }}</span>
         <span class="mindmap-integration-badge__pill">{{ st.replace('_', ' ') }}</span>
+        {% if runtime %}<span class="mindmap-integration-badge__runtime">· {{ runtime.replace('_', ' ') }}</span>{% endif %}
       </span>
         {% endif %}
       {% endfor %}

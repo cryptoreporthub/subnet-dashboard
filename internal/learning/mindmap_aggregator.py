@@ -17,6 +17,7 @@ _STATE_CACHE_TTL = float(os.environ.get("MINDMAP_STATE_CACHE_SECONDS", "30"))
 _INTEGRATION_STATUS_VALUES = frozenset(
     {"closed", "partial", "blocked", "display_only", "read_only"}
 )
+_RUNTIME_STATUS_VALUES = frozenset({"live", "evidence_building", "wired", "blocked", "read_only"})
 
 
 def _judges_integration_status() -> str:
@@ -63,6 +64,47 @@ def _build_integration_status() -> Dict[str, str]:
         "dispositions": _dispositions_integration_status(),
         "scenario": _scenario_integration_status(),
         "pump_desk": "partial",
+        "whales_indicators": "read_only",
+    }
+
+
+def _build_runtime_status() -> Dict[str, str]:
+    """Evidence state, separate from import/wiring status above."""
+    try:
+        from internal.council.resolver import _compute_stats
+        from internal.learning.predictions_store import load_predictions
+
+        data = load_predictions()
+        stats = _compute_stats(data)
+        council_graded = int(stats.get("correct", 0) or 0) + int(stats.get("wrong", 0) or 0)
+        council = "live" if council_graded else (
+            "evidence_building" if data.get("predictions") or data.get("resolved") else "blocked"
+        )
+    except Exception:
+        council = "blocked"
+
+    try:
+        from internal.learning.pump_lead_stats import build_pump_desk_trust
+
+        pump = "live" if build_pump_desk_trust().get("ready") else "evidence_building"
+    except Exception:
+        pump = "blocked"
+
+    try:
+        from internal.message_intel.rollup import build_telegram_proof_band
+
+        telegram = "live" if (build_telegram_proof_band().get("graded") or 0) else "evidence_building"
+    except Exception:
+        telegram = "blocked"
+
+    return {
+        "council_trail": council,
+        "expert_weights": "live" if council == "live" else "wired",
+        "judges": "live" if council == "live" else "wired",
+        "telegram_pulse": telegram,
+        "dispositions": "live" if council == "live" else "evidence_building",
+        "scenario": "live" if council == "live" else "evidence_building",
+        "pump_desk": pump,
         "whales_indicators": "read_only",
     }
 
@@ -358,6 +400,7 @@ def build_mindmap_state() -> Dict[str, Any]:
         "summaries": summaries,
         "schedulers": schedulers,
         "integration_status": _build_integration_status(),
+        "runtime_status": _build_runtime_status(),
     }
     _STATE_CACHE["at"] = now
     _STATE_CACHE["payload"] = payload
