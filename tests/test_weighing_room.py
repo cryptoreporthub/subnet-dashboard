@@ -147,7 +147,7 @@ def test_shape_puts_daily_call_first_then_sorts_alternatives():
     assert rows[0]["gap_whisper"]
     assert rows[0]["stitch_border"] is True
     assert rows[0]["mud_band"] in ("near", "watching")
-    assert rows[0]["band_label"] in ("NEAR A CALL", "WATCHING")
+    assert rows[0]["band_label"] in ("PRIMARY CALL", "NEAR A CALL", "WATCHING")
     # peel receipts
     alternative = next(r for r in rows if r["netuid"] == 2)
     assert "Quant leads" in (alternative.get("expert_split") or "")
@@ -253,5 +253,6 @@ def test_shortlist_wire_reason_on_shaped_rows():
     assert rows
     assert rows[0]["reason"]
     assert meta["quiet_count"] >= 0
-    assert all(r["netuid"] != 1 for r in rows)
+    assert rows[0]["netuid"] == 1
+    assert rows[0]["primary_call"] is True
     assert meta["spine_whisper"] == SPINE_WHISPER
