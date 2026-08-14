@@ -37,3 +37,12 @@ def test_who_author_filter_returns_one_author(monkeypatch):
     text = bot.handle_command("/who second")
     assert "1. Second" in text
     assert "Dr.dre" not in text
+
+
+def test_every_command_response_includes_clickable_full_desk_link(monkeypatch):
+    import internal.message_intel.summary_bot as bot
+
+    monkeypatch.setattr(bot, "_format_help", lambda: "Help")
+    reply = bot.handle_command("/start")
+    assert 'href="https://subnet-dashboard.fly.dev/subnetsummer"' in reply
+    assert "View full Subnet Summer Analytics here." in reply

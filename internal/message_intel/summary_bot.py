@@ -20,6 +20,16 @@ _STOP = threading.Event()
 _RATE_LIMIT_SECONDS = 300
 _last_summary_at: Dict[int, float] = {}
 _last_command_at: Dict[tuple[str, int], float] = {}
+_FULL_DESK_CTA = (
+    '\n\n<a href="https://subnet-dashboard.fly.dev/subnetsummer">'
+    "View full Subnet Summer Analytics here.</a>"
+)
+
+
+def _with_full_desk_link(text: Optional[str]) -> Optional[str]:
+    if not text or "subnet-dashboard.fly.dev/subnetsummer" in text:
+        return text
+    return text + _FULL_DESK_CTA
 _RUNNING = False
 
 _ENABLED = frozenset({"1", "true", "yes", "on"})
@@ -355,11 +365,11 @@ def handle_summary_command(chat_id: int, *, db=None) -> tuple[str, bool]:
     """Return (text, rate_limited)."""
     limited = _rate_limit_reply(chat_id)
     if limited:
-        return limited, True
-    return _format_summary_reply(db=db), False
+        return _with_full_desk_link(limited) or "", True
+    return _with_full_desk_link(_format_summary_reply(db=db)) or "", False
 
 
-def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
+def _handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
     cmd, arg = _parse_command_text(text)
     if cmd == "/start":
         return _format_help()
@@ -444,6 +454,11 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
     return None
 
 
+def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
+    """Handle one bot command and append the full analytics-desk CTA."""
+    return _with_full_desk_link(_handle_command(text, message=message, db=db))
+
+
 def send_message(chat_id: int, text: str, *, parse_mode: str = "HTML") -> Dict[str, Any]:
     return _telegram_api(
         "sendMessage",
@@ -471,7 +486,7 @@ def _process_update(update: Dict[str, Any]) -> None:
     rate_key = (cmd or "unknown", chat_id)
     limited = _command_rate_limit(rate_key)
     if limited:
-        reply = limited
+        reply = _with_full_desk_link(limited)
     else:
         reply = handle_command(text, message=message)
     if reply is None:
