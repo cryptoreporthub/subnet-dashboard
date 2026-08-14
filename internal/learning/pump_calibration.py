@@ -149,17 +149,6 @@ def maybe_adapt_after_resolve(
 
     trust = build_pump_desk_trust()
     evidence = pump_evidence_snapshot()
-    evaluation = pump_lead_train.build_pump_evaluation()
-    try:
-        pump_lead_train.persist_pump_evaluation(evaluation)
-    except Exception:
-        logger.exception("pump evaluation persistence failed")
-    if not (evaluation.get("adaptation_gate") or {}).get("passed"):
-        logger.info(
-            "pump calibration held: evaluation status=%s",
-            evaluation.get("status"),
-        )
-        return None
     early = trust.get("early") or {}
     n = int(early.get("n") or 0)
     rate = early.get("hit_rate")
