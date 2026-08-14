@@ -211,7 +211,7 @@
   }
 
   /* ── re-anchor on row / feed clicks ── */
-  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-msg, .lsn-drow").forEach(function (el) {
+  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-msg, .lsn-drow, .lsn-orbit__node").forEach(function (el) {
     el.addEventListener("click", function () {
       var sn = el.getAttribute("data-sn");
       var nm = el.getAttribute("data-name");
