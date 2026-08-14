@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -255,8 +256,12 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
         lines.append("")
         lines.append("<b>Top subnets</b>")
         for row in top[:5]:
-            name = row.get("name") or f"SN{row.get('netuid')}"
-            lines.append(f"• SN{row.get('netuid')} {name} ({row.get('mentions', 0)} mentions)")
+            name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
+            line = f"• SN{row.get('netuid')} {name} ({row.get('mentions', 0)} mentions)"
+            context = row.get("mention_context")
+            if context:
+                line += f" — {html.escape(str(context))}"
+            lines.append(line)
 
     movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
     if movers:

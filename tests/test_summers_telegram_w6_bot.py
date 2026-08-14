@@ -85,6 +85,7 @@ def test_build_24h_summary_with_data(intel_env):
     assert summary["high_conviction_count"] == 12
     assert len(summary["top_subnets"]) >= 1
     assert summary["group_pulse"]["group"] == "OfficialSubnetSummer"
+    assert summary["top_subnets"][0]["mention_context"] == "SN25 is moving"
 
 
 def test_format_summary_includes_desk_link(monkeypatch, intel_env):
@@ -96,6 +97,27 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
     assert "Subnet Summers — 24h pulse" in text
     assert "https://example.test/#section-message-intel" in text
     assert "Top subnets" in text
+
+
+def test_format_summary_includes_what_mentions_are_about():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "top_subnets": [
+                {
+                    "netuid": 7,
+                    "name": "Allways",
+                    "mentions": 3,
+                    "mention_context": "Validators discussed a new release",
+                }
+            ],
+        }
+    )
+
+    assert "SN7 Allways (3 mentions)" in text
+    assert "Validators discussed a new release" in text
 
 
 def test_rate_limit_per_chat(intel_env):

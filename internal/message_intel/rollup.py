@@ -159,7 +159,7 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
-                      m.timestamp, m.created_at, a.sentiment, a.influence_score, a.entities_json,
+                      m.timestamp, m.created_at, m.content, a.sentiment, a.influence_score, a.entities_json,
                       mm.reactions, ps.netuid AS snap_netuid, v.conviction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
@@ -1403,6 +1403,20 @@ def list_telegram_caller_receipts(*, author_id: str, days: int = 30, limit: int 
 _MIN_24H_SUMMARY_MESSAGES = 10
 
 
+def _mention_context(rows: List[str]) -> Optional[str]:
+    """Return one concise public-message line explaining a subnet's mentions."""
+    snippets: List[str] = []
+    for raw in rows[:2]:
+        text = re.sub(r"\s+", " ", str(raw or "")).strip()
+        if not text:
+            continue
+        if len(text) > 110:
+            text = text[:107].rstrip() + "…"
+        if text not in snippets:
+            snippets.append(text)
+    return " / ".join(snippets) if snippets else None
+
+
 def build_24h_summary(
     *,
     registry_names: Optional[Dict[int, str]] = None,
@@ -1424,6 +1438,7 @@ def build_24h_summary(
     subnet_counts: Dict[int, int] = defaultdict(int)
     prev_subnet_counts: Dict[int, int] = defaultdict(int)
     group_counts: Dict[str, int] = defaultdict(int)
+    mention_contexts: Dict[int, List[str]] = defaultdict(list)
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1451,6 +1466,8 @@ def build_24h_summary(
                 group_counts[group] += 1
             for netuid in _netuids_from_row(row):
                 subnet_counts[netuid] += 1
+                if row.get("content") and len(mention_contexts[netuid]) < 2:
+                    mention_contexts[netuid].append(str(row["content"]))
 
         if in_prev:
             for netuid in _netuids_from_row(row):
@@ -1479,6 +1496,7 @@ def build_24h_summary(
                 "netuid": netuid,
                 "name": registry_names.get(netuid) or f"Subnet {netuid}",
                 "mentions": int(mentions),
+                "mention_context": _mention_context(mention_contexts.get(netuid) or []),
             }
         )
 
