@@ -357,7 +357,7 @@ def _listener_caller_board():
     return build_telegram_caller_leaderboard
 
 
-async def _listener_page_context() -> Dict[str, Any]:
+async def _listener_page_context(*, leaderboard_days: int = 7, leaderboard_window: str = "week") -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
@@ -377,6 +377,8 @@ async def _listener_page_context() -> Dict[str, Any]:
         "summary_text": "",
         "hourly": [],
         "recap": {},
+        "leaderboard_days": leaderboard_days,
+        "leaderboard_window": leaderboard_window,
     }
 
     remote_status = await _listener_worker_call("/api/message-intel/status", None)
@@ -561,12 +563,12 @@ async def _listener_page_context() -> Dict[str, Any]:
     callers_payload = None
     try:
         callers_payload = await _listener_worker_call(
-            "/api/message-intel/callers?days=30&limit=8", None
+            f"/api/message-intel/callers?days={leaderboard_days}&limit=8", None
         )
         if callers_payload is None:
             build_board = _listener_caller_board()
             callers_payload = await _listener_call(
-                lambda: build_board(days=30, limit=8), None, timeout=6
+                lambda: build_board(days=leaderboard_days, limit=8), None, timeout=6
             )
     except Exception:
         pass
@@ -602,12 +604,12 @@ async def _listener_page_context() -> Dict[str, Any]:
     authors_payload = None
     try:
         authors_payload = await _listener_worker_call(
-            "/api/message-intel/authors?days=7&limit=5", None
+            f"/api/message-intel/authors?days={leaderboard_days}&limit=5", None
         )
         if authors_payload is None:
             engine = _listener_engine()
             authors_payload = await _listener_call(
-                lambda: engine.list_authors(days=7, limit=5), None, timeout=6
+                lambda: engine.list_authors(days=leaderboard_days, limit=5), None, timeout=6
             )
     except Exception:
         pass
@@ -736,9 +738,15 @@ async def _listener_page_context() -> Dict[str, Any]:
 
 
 @share_router.get("/subnetsummer")
-async def listener_page(request: Request):
+async def listener_page(request: Request, window: str = Query(default="week")):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
-    ctx = await _listener_page_context()
+    window = str(window or "week").lower()
+    window_days = {"day": 1, "week": 7, "month": 30}.get(window, 7)
+    window = {1: "day", 7: "week", 30: "month"}[window_days]
+    ctx = await _listener_page_context(
+        leaderboard_days=window_days,
+        leaderboard_window=window,
+    )
     base = _public_base(request)
     page_url = f"{base}/subnetsummer"
     title = "SimiVision — Telegram Listener"
