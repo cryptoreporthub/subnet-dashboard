@@ -222,6 +222,22 @@ def test_mindmap_cache_served_when_degraded(monkeypatch):
     assert len(data["nodes"]) == 1
 
 
+def test_payload_cache_served_for_pump_and_message_intel(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(
+        wp,
+        "_LAST_GOOD_PAYLOADS",
+        {"/api/pump-alerts": {"status": "success", "count": 2, "alerts": [{"netuid": 1}]}},
+    )
+    response = wp._proxy_degraded_response("/api/pump-alerts")
+    data = response.body
+    import json
+
+    assert json.loads(data)["status"] == "cached"
+    assert json.loads(data)["count"] == 2
+
+
 def test_candidate_bases_flycast_before_process(monkeypatch):
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.delenv("FLY_REGION", raising=False)

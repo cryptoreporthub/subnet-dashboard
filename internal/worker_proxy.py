@@ -19,6 +19,7 @@ _LAST_GOOD_BASE: Optional[str] = None
 _LAST_PROBE_ERROR: Optional[str] = None
 _LAST_FAIL_MONO: float = 0.0
 _LAST_GOOD_MINDMAP: Optional[Dict[str, Any]] = None
+_LAST_GOOD_PAYLOADS: Dict[str, Dict[str, Any]] = {}
 _DISCOVER_STARTED: bool = False
 
 
@@ -343,6 +344,23 @@ def _store_mindmap_cache(payload: Dict[str, Any]) -> None:
         _LAST_GOOD_MINDMAP = dict(payload)
 
 
+def _store_payload_cache(path: str, payload: Dict[str, Any]) -> None:
+    if path == "/api/pump-alerts" or path.startswith("/api/message-intel"):
+        if str(payload.get("status") or "").lower() in {"success", "ok"}:
+            _LAST_GOOD_PAYLOADS[path] = dict(payload)
+
+
+def _cached_payload_response(path: str) -> Optional[JSONResponse]:
+    payload = _LAST_GOOD_PAYLOADS.get(path)
+    if not payload:
+        return None
+    content = dict(payload)
+    content["status"] = "cached"
+    content["detail"] = "Serving last-good worker payload while the volume reconnects."
+    content["path"] = path
+    return JSONResponse(status_code=200, content=content)
+
+
 def _mindmap_degraded_response(path: str) -> JSONResponse:
     if _LAST_GOOD_MINDMAP:
         content = dict(_LAST_GOOD_MINDMAP)
@@ -367,6 +385,9 @@ def _mindmap_degraded_response(path: str) -> JSONResponse:
 def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
     if _mindmap_path(path):
         return _mindmap_degraded_response(path)
+    cached = _cached_payload_response(path)
+    if cached is not None:
+        return cached
     if path == "/api/learning/health":
         return JSONResponse(
             status_code=200,
@@ -513,6 +534,8 @@ async def _fetch_worker_http(
                     continue
                 if isinstance(data, dict) and _mindmap_path(path):
                     _store_mindmap_cache(data)
+                if isinstance(data, dict):
+                    _store_payload_cache(path, data)
             except Exception:
                 pass
             _record_good_base(base)
