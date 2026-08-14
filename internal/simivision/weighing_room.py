@@ -368,6 +368,47 @@ def shape_weighing_board(
     last = _load_last_convictions()
     horizon_line = peel_horizon_line(horizon=horizon, resolves_in=resolves_in)
     rows: List[Dict[str, Any]] = []
+    if call_netuid is not None:
+        primary_block = None
+        if isinstance(daily_pick, dict):
+            pick_block = daily_pick.get("pick")
+            if isinstance(pick_block, dict) and pick_block.get("subnet"):
+                primary_block = pick_block
+        primary_subnet = (
+            primary_block.get("subnet") if isinstance(primary_block, dict) else {}
+        )
+        primary_experts = (
+            primary_block.get("expert_contributions", {})
+            if isinstance(primary_block, dict)
+            else {}
+        )
+        rows.append(
+            {
+                "netuid": call_netuid,
+                "name": primary_subnet.get("name") or f"SN{call_netuid}",
+                "conviction": call_conv or 0,
+                "proximity": 100,
+                "conviction_delta": 0,
+                "deliberation_state": "NEAR-CALL",
+                "reason": "Published primary daily call",
+                "why_not": "This is the published call, not an alternative.",
+                "trigger": f"Locks in after the {horizon} resolution window.",
+                "expert_contributions": primary_experts,
+                "expert_split": expert_split_line(primary_experts),
+                "track_record": subnet_graded_snippet(call_netuid),
+                "horizon_line": horizon_line,
+                "near_call_strip": None,
+                "closest_to_call": True,
+                "gap_whisper": "PRIMARY DAILY CALL",
+                "gap_pts": 0,
+                "stitch_border": True,
+                "primary_call": True,
+                "band": "near",
+                "band_label": "PRIMARY CALL",
+                "mud_band": "near",
+                "mud_label": "PRIMARY CALL",
+            }
+        )
     for raw in top or []:
         if not isinstance(raw, dict):
             continue
@@ -455,7 +496,7 @@ def shape_weighing_board(
         merged.update(persist_map)
         _persist_convictions(merged)
 
-    excluded = 1 if call_netuid is not None else 0
+    excluded = 0
     on_table = len(rows)
     considered = total_considered if total_considered is not None else pool_count
     quiet = max(0, int(considered or 0) - on_table - excluded)
@@ -466,6 +507,7 @@ def shape_weighing_board(
     meta = {
         "call_netuid": call_netuid,
         "call_conviction": call_conv,
+        "primary_netuid": call_netuid,
         "updated_ago": _human_updated_ago(updated_at),
         "on_table": on_table,
         "quiet_count": quiet,

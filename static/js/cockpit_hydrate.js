@@ -472,12 +472,14 @@
     return (
       '<article class="wr-row wr-row--' +
       esc(stateSlug) +
+      (pick.primary_call ? ' wr-row--primary' : '') +
       (pick.closest_to_call ? ' wr-row--stitch' : '') +
       stitchBorder +
       '" data-netuid="' +
       esc(nu) +
       '" data-state="' +
       esc(state) +
+      (pick.primary_call ? '" data-primary-call="true' : '') +
       '">' +
       '<button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-' +
       esc(nu) +
@@ -485,7 +487,7 @@
       '<span class="wr-chip wr-chip--' +
       esc(stateSlug) +
       '">' +
-      esc(state) +
+      esc(pick.primary_call ? 'PRIMARY CALL' : state) +
       '</span>' +
       '<div class="wr-row__main"><div class="wr-name">' +
       nameLink +
@@ -518,7 +520,9 @@
       '<div class="wr-peel" id="wr-peel-' +
       esc(nu) +
       '" hidden>' +
-      '<div class="wr-peel__block"><div class="wr-peel__label">Why not the call</div><p>' +
+      '<div class="wr-peel__block"><div class="wr-peel__label">' +
+      (pick.primary_call ? 'Primary call' : 'Why not the call') +
+      '</div><p>' +
       esc(pick.why_not || "Has not crossed today's call threshold.") +
       '</p></div>' +
       '<div class="wr-peel__block"><div class="wr-peel__label">What would make it the call</div><p>' +

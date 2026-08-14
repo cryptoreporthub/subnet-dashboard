@@ -1104,6 +1104,10 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 .wr-row--stitch-border {
   border-left: 3px solid rgba(57, 255, 20, 0.4);
 }
+.wr-row--primary {
+  border-left: 3px solid rgba(63, 201, 255, 0.8);
+  box-shadow: 0 0 18px rgba(63, 201, 255, 0.12);
+}
 .wr-row__face {
   width: 100%;
   display: grid;

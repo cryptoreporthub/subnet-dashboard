@@ -108,7 +108,7 @@ def test_track_record_hit_with_n(monkeypatch):
     assert "2✓ / 1✗" in line
 
 
-def test_shape_excludes_daily_call_and_sorts_by_proximity():
+def test_shape_puts_daily_call_first_then_sorts_alternatives():
     top = [
         {"netuid": 1, "name": "A", "conviction": 90, "reasons": ["strong"], "recommendation": "BUY"},
         {
@@ -132,12 +132,14 @@ def test_shape_excludes_daily_call_and_sorts_by_proximity():
     rows, meta = shape_weighing_board(
         top, pool_count=20, daily_pick=daily, updated_at="2026-07-19T12:00:00Z"
     )
-    assert all(r["netuid"] != 1 for r in rows)
+    assert rows[0]["netuid"] == 1
+    assert rows[0]["primary_call"] is True
+    assert all(r["netuid"] != 1 for r in rows[1:])
     assert rows[0]["closest_to_call"] is True
     assert rows[0]["proximity"] >= rows[-1]["proximity"]
     assert "pick-rank" not in str(rows)
     assert meta["handoff"] and "10h 42m" in meta["handoff"]
-    assert meta["quiet_label"].startswith("2 on table")
+    assert meta["quiet_label"].startswith("3 on table")
     assert meta["gap_tick_pct"] == 90
     assert meta["spine_whisper"] == SPINE_WHISPER
     assert "BUY" not in {r.get("deliberation_state") for r in rows}
@@ -147,7 +149,8 @@ def test_shape_excludes_daily_call_and_sorts_by_proximity():
     assert rows[0]["mud_band"] in ("near", "watching")
     assert rows[0]["band_label"] in ("NEAR A CALL", "WATCHING")
     # peel receipts
-    assert "Quant leads" in (rows[0].get("expert_split") or "")
+    alternative = next(r for r in rows if r["netuid"] == 2)
+    assert "Quant leads" in (alternative.get("expert_split") or "")
     assert rows[0].get("track_record")
     assert rows[0].get("horizon_line") and "24h" in rows[0]["horizon_line"]
     assert "placeholder" not in str(rows).lower()
@@ -163,11 +166,13 @@ def test_fading_stitch_no_green_border():
         "resolves_in": "4h",
     }
     rows, _meta = shape_weighing_board(top, pool_count=10, daily_pick=daily)
-    assert rows[0]["closest_to_call"] is True
-    assert rows[0]["deliberation_state"] == "FADING"
-    assert rows[0]["stitch_border"] is False
-    assert rows[0]["mud_label"] == "WATCHING"
-    assert rows[0]["band"] == "watching"
+    fading = next(r for r in rows if r["netuid"] == 2)
+    assert rows[0]["primary_call"] is True
+    assert fading["closest_to_call"] is False
+    assert fading["deliberation_state"] == "FADING"
+    assert fading["stitch_border"] is False
+    assert fading["mud_label"] == "WATCHING"
+    assert fading["band"] == "watching"
 
 
 def _sample_subnets():

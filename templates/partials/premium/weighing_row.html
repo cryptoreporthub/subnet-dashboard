@@ -7,11 +7,11 @@
 {% set delta = (pick.conviction_delta|default(0))|int %}
 {% set reason = pick.reason|default(pick.call_line)|default('Council still weighing this name.') %}
 {% set stitch_border = pick.stitch_border|default(false) %}
-<article class="wr-row wr-row--{{ state_slug }}{% if pick.closest_to_call %} wr-row--stitch{% endif %}{% if stitch_border %} wr-row--stitch-border{% endif %}"
+<article class="wr-row wr-row--{{ state_slug }}{% if pick.primary_call %} wr-row--primary{% endif %}{% if pick.closest_to_call %} wr-row--stitch{% endif %}{% if stitch_border %} wr-row--stitch-border{% endif %}"
   data-netuid="{{ pick.netuid }}"
   data-state="{{ state }}">
   <button type="button" class="wr-row__face" aria-expanded="false" aria-controls="wr-peel-{{ pick.netuid }}">
-    <span class="wr-chip wr-chip--{{ state_slug }}">{{ state }}</span>
+    <span class="wr-chip wr-chip--{{ state_slug }}">{{ 'PRIMARY CALL' if pick.primary_call else state }}</span>
     <div class="wr-row__main">
       <div class="wr-name">
         <a class="wr-name__link" href="?netuid={{ pick.netuid }}" data-wr-netuid="{{ pick.netuid }}"
@@ -52,7 +52,7 @@
   {% endif %}
   <div class="wr-peel" id="wr-peel-{{ pick.netuid }}" hidden>
     <div class="wr-peel__block">
-      <div class="wr-peel__label">Why not the call</div>
+      <div class="wr-peel__label">{{ 'Primary call' if pick.primary_call else 'Why not the call' }}</div>
       <p>{{ pick.why_not|default("Has not crossed today's call threshold.") }}</p>
     </div>
     <div class="wr-peel__block">
