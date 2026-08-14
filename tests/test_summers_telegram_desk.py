@@ -180,6 +180,8 @@ def test_listener_share_page_composition():
     assert "closer = higher rank" in html
     assert ".lsn-orbit" in css
     assert ".lsn-hall" in css
+    assert "@media (max-width: 520px)" in css
+    assert ".lsn-tile--desk,.lsn-hall{grid-template-columns:1fr}" in css.replace(" ", "")
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html
