@@ -1,4 +1,4 @@
-<!-- SS-TG flagship — Subnet Summers Telegram pulse (v2 + yellow board frame) -->
+<!-- SS-TG — Subnet Summers Telegram pulse (cosmic glass intercept) -->
 {% from "partials/premium/message_intel_ssr_macros.html" import trend_rows, champion_rows, feed_rows %}
 {% set mi = message_intel or {} %}
 {% set mi_meta = mi.meta if mi.meta is mapping else {} %}
@@ -7,23 +7,40 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2">
-  <!-- Masthead: brand bar + big title + sub-line -->
+<div class="message-intel message-intel--v2 glass-card">
   <div class="message-intel__masthead">
     <div class="message-intel__topbar">
-      <span class="message-intel__brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></span>
-      <span class="message-intel__flagship-chip" title="Flagship desk">FLAGSHIP</span>
+      <span class="message-intel__brand">SUBNET SUMMERS · <em>SIMIVISION</em></span>
       <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
     </div>
-    <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
-    <p class="section-sub message-intel__page-sub" id="message-intel-sub">
-      Real-time intelligence from the
-      <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">Subnet Summers</a>
-      Telegram group.
-    </p>
+    <div class="message-intel__intercept">
+      <div class="message-intel__pulsar" aria-hidden="true">
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+      <p class="message-intel__eyebrow">SIGNAL DECK ·
+        <a class="message-intel__group-link" id="message-intel-group-link" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">t.me/OfficialSubnetSummer</a>
+      </p>
+      <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
+      <p class="section-sub message-intel__page-sub" id="message-intel-sub">
+        Deep intercept from the Subnet Summers Telegram group — every call jury-scored the instant it lands.
+      </p>
+      <div class="message-intel__wavestrip" id="message-intel-wavestrip" aria-hidden="true">
+        <span class="message-intel__wave">
+          <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
+        </span>
+      </div>
+    </div>
+    <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
+      <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">{% if mi_meta.total_messages %}{{ mi_meta.total_messages }}{% else %}—{% endif %}</b><span>Archived</span></div>
+      <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">—</b><span>Last 24h</span></div>
+      <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">—</b><span>Live conv.</span></div>
+      <div class="message-intel__stat-chip"><b id="message-intel-stat-active">{% if mi_trending %}{{ mi_trending|length }}{% else %}—{% endif %}</b><span>Active</span></div>
+    </div>
   </div><!-- /.message-intel__masthead -->
 
-  <!-- Pulse stage: source + 24h + proof + high-conviction as one command ribbon -->
   <div class="message-intel__pulse-stage">
     <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
       <span class="message-intel__wave" aria-hidden="true">
@@ -56,117 +73,7 @@
     </div>
   </div><!-- /.message-intel__pulse-stage -->
 
-  <!-- Spotlight: yesterday hero + comment of the week side-by-side on desktop -->
-  <div class="message-intel__spotlight">
-    <div class="message-intel__hero" id="message-intel-yesterday" hidden>
-      <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
-      <div class="message-intel__hero-main">
-        <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">—</span>
-        <div>
-          <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">—</a>
-          <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
-        </div>
-      </div>
-      <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
-      <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
-    </div>
-
-    <div class="message-intel__week-top" id="message-intel-week-top" hidden aria-live="polite">
-      <div class="message-intel__sec-label">
-        <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-        <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
-        <span class="message-intel__panel-unit">7d · engagement</span>
-      </div>
-      <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
-      <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
-      <div class="message-intel__week-top-meta">
-        <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
-        <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
-      </div>
-    </div>
-  </div><!-- /.message-intel__spotlight -->
-
-  <div class="message-intel__grid">
-    <div class="message-intel__panel glass-flat" id="message-intel-trending-card">
-      <div class="message-intel__sec-label">
-        <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
-        <h3 class="message-intel__panel-title" id="message-intel-trending-title">Currently trending</h3>
-        <span class="message-intel__panel-unit">{{ mi_window }}</span>
-      </div>
-      <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
-        {% if mi_trending %}
-        {{ trend_rows(mi_trending, mi_window) }}
-        {% else %}
-        <p class="empty">No subnet chatter in the last hour yet.</p>
-        {% endif %}
-      </div>
-      <button type="button" class="message-intel__view-all" id="message-intel-trending-refresh">Refresh trending</button>
-    </div>
-
-    <div class="message-intel__panel glass-card" id="message-intel-champions-card">
-      <div class="message-intel__sec-label">
-        <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-        <h3 class="message-intel__panel-title">Weekly champions</h3>
-        <span class="message-intel__panel-unit">hit-rate first</span>
-      </div>
-      <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
-        {% if mi_authors %}
-        {{ champion_rows(mi_authors) }}
-        {% else %}
-        <p class="empty">No contributor history yet.</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
-  <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">My Desk</h3>
-      <span class="message-intel__panel-unit">watchlist · thresholds</span>
-    </div>
-    <div class="message-intel__my-desk">
-      <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
-        <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
-      </div>
-      <div class="message-intel__desk-block">
-        <p class="message-intel__desk-label">Watchlist</p>
-        <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
-          <p class="empty">Loading your watchlist…</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <details class="message-intel__panel message-intel__crowns-drawer" id="message-intel-crowns-card">
-    <summary class="message-intel__sec-label message-intel__crowns-summary">
-      <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">Reaction crowns</h3>
-      <span class="message-intel__panel-unit">7d · social · tap to open</span>
-    </summary>
-    <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
-    <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
-      <p class="empty">No reaction crowns yet.</p>
-    </div>
-  </details>
-
-  <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">Why-rank & divergence</h3>
-      <span class="message-intel__panel-unit">proof + divergence</span>
-    </div>
-    <div id="message-intel-callers" class="message-intel__leaderboard" aria-live="polite">
-      <p class="empty">Loading leaderboard…</p>
-    </div>
-    <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
-    <div id="message-intel-divergence" class="message-intel__divergence">
-      <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
-      <div id="message-intel-divergence-body" aria-live="polite"></div>
-    </div>
-  </div>
-
-  <div class="message-intel__panel message-intel__panel--feed">
+  <div class="message-intel__panel message-intel__panel--feed glass-card">
     <div class="message-intel__sec-label">
       <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
       <h3 class="message-intel__panel-title">Live feed</h3>
@@ -215,6 +122,116 @@
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
   </div>
 
+  <div class="message-intel__spotlight">
+    <div class="message-intel__hero glass-card" id="message-intel-yesterday" hidden>
+      <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
+      <div class="message-intel__hero-main">
+        <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">—</span>
+        <div>
+          <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">—</a>
+          <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
+        </div>
+      </div>
+      <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
+      <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
+    </div>
+
+    <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
+        <span class="message-intel__panel-unit">7d · engagement</span>
+      </div>
+      <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
+      <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
+      <div class="message-intel__week-top-meta">
+        <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
+        <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
+      </div>
+    </div>
+  </div><!-- /.message-intel__spotlight -->
+
+  <div class="message-intel__grid">
+    <div class="message-intel__panel glass-card" id="message-intel-trending-card">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title" id="message-intel-trending-title">Trending orbit</h3>
+        <span class="message-intel__panel-unit">{{ mi_window }}</span>
+      </div>
+      <div id="message-intel-sky" class="message-intel__sky" hidden aria-hidden="true"></div>
+      <div id="message-intel-trending" class="message-intel__trending" aria-live="polite">
+        {% if mi_trending %}
+        {{ trend_rows(mi_trending, mi_window) }}
+        {% else %}
+        <p class="empty">No subnet chatter in the last hour yet.</p>
+        {% endif %}
+      </div>
+      <button type="button" class="message-intel__view-all" id="message-intel-trending-refresh">Refresh trending</button>
+    </div>
+
+    <div class="message-intel__panel glass-card" id="message-intel-champions-card">
+      <div class="message-intel__sec-label">
+        <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+        <h3 class="message-intel__panel-title">Weekly champions</h3>
+        <span class="message-intel__panel-unit">hit-rate first</span>
+      </div>
+      <div id="message-intel-champions" class="message-intel__champions" aria-live="polite">
+        {% if mi_authors %}
+        {{ champion_rows(mi_authors) }}
+        {% else %}
+        <p class="empty">No contributor history yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">My Desk</h3>
+      <span class="message-intel__panel-unit">watchlist · thresholds</span>
+    </div>
+    <div class="message-intel__my-desk">
+      <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
+        <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
+      </div>
+      <div class="message-intel__desk-block">
+        <p class="message-intel__desk-label">Watchlist</p>
+        <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
+          <p class="empty">Loading your watchlist…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <details class="message-intel__panel message-intel__crowns-drawer glass-card" id="message-intel-crowns-card">
+    <summary class="message-intel__sec-label message-intel__crowns-summary">
+      <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Reaction crowns</h3>
+      <span class="message-intel__panel-unit">7d · social · tap to open</span>
+    </summary>
+    <p class="message-intel__panel-hint">Per-emoji leaders — fun side board, not call grading.</p>
+    <div id="message-intel-crowns" class="message-intel__crowns" aria-live="polite">
+      <p class="empty">No reaction crowns yet.</p>
+    </div>
+  </details>
+
+  <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">Why-rank &amp; divergence</h3>
+      <span class="message-intel__panel-unit">proof + divergence</span>
+    </div>
+    <div id="message-intel-callers" class="message-intel__leaderboard" aria-live="polite">
+      <p class="empty">Loading leaderboard…</p>
+    </div>
+    <div id="message-intel-consensus-body" class="message-intel__consensus" aria-live="polite"></div>
+    <div id="message-intel-divergence" class="message-intel__divergence">
+      <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
+      <div id="message-intel-divergence-body" aria-live="polite"></div>
+    </div>
+  </div>
+
   <div class="message-intel__panel glass-card" id="message-intel-pulse-card">
     <div class="message-intel__sec-label">
       <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
@@ -226,31 +243,15 @@
     </div>
   </div>
 
-  <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-wallet-card" aria-label="Wallet connector coming soon">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">Skin in the game</h3>
-      <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
-    </div>
-    <div class="message-intel__locked-body">
-      <div>
-        <p><b>Wallet connector</b> will let you track calls alongside on-chain positions and surface your own record.</p>
-        <p class="message-intel__panel-hint">No wallet connection is active yet. Your address will stay hidden until you choose to connect.</p>
-      </div>
-      <button type="button" class="message-intel__locked-button" disabled aria-disabled="true">Connect wallet</button>
-    </div>
-  </div>
-
-  <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-commands-card" aria-label="Telegram commands coming soon">
+  <div class="message-intel__panel glass-card" id="message-intel-commands-card" aria-label="Live Telegram commands">
     <div class="message-intel__sec-label">
       <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
       <h3 class="message-intel__panel-title">Telegram commands</h3>
-      <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
+      <span class="message-intel__panel-unit">live · /summary</span>
     </div>
-    <p class="message-intel__panel-hint">The command suite is planned for the Telegram bot. These are shown for discoverability and are not active in the UI yet.</p>
-    <div class="message-intel__command-list" aria-label="Planned Telegram commands">
-      <span>/summary</span><span>/trending</span><span>/track</span><span>/rank</span>
-      <span>/who</span><span>/alerts</span><span>/link</span>
+    <p class="message-intel__panel-hint">Talk to the SimiVision bot inside Telegram. Only shipped commands are marked live.</p>
+    <div class="message-intel__command-list" aria-label="Telegram commands">
+      <span class="is-live">/summary</span><span>/trending</span><span>/track</span><span>/alerts</span>
     </div>
   </div>
 

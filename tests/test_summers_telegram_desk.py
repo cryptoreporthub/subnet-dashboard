@@ -26,8 +26,10 @@ def test_summers_desk_first_class_on_home():
     assert "Comment of the week" in html
     assert "message-intel__sec-bar" in html
     assert "message-intel__sw--violet" in html
-    assert "message-intel__flagship-chip" in html
-    assert "FLAGSHIP" in html
+    assert "glass-card" in html
+    assert "message-intel__pulsar" in html
+    assert "message-intel__sky" in html
+    assert "FLAGSHIP" not in html
     assert "Loading live feed" in html or "Warming up Telegram" in html
 
     # Must sit on the spine — not only inside the More intel drawer
@@ -49,6 +51,11 @@ def test_summers_desk_js_renders_conviction():
     assert "week_top_comment" in src
     assert "renderDivergence" in src
     assert "/api/message-intel/divergence" in src
+    assert "renderHeroStats" in src
+    assert "renderInterceptWave" in src
+    assert "renderTrendingSky" in src
+    assert "pingPulsar" in src
+    assert "message-intel__conv-ring" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -59,9 +66,11 @@ def test_summers_flagship_css_tokens():
     assert "--mi-violet:" in css
     # Compat: --mi-pink aliases onto violet after sitewide magenta→violet migration
     assert "--mi-pink: var(--mi-violet)" in css
-    assert "--mi-yellow: #f5d547" in css
-    assert "rgba(245, 213, 71, 0.72)" in css  # yellow flagship board border
-    assert ".message-intel__flagship-chip" in css
+    assert "--mi-yellow:" in css
+    assert "--glass-fill-card" in css
+    assert ".message-intel__pulsar" in css
+    assert ".message-intel__sky" in css
+    assert ".message-intel__conv-ring" in css
     assert ".message-intel__rail-node" in css
     assert ".message-intel__sec-bar--green" in css
     assert "message-intel-wave" in css
@@ -71,6 +80,8 @@ def test_summers_flagship_css_tokens():
     assert "message-intel__pulse-stage" in css
     assert "message-intel-board-breathe" in css
     assert "message-intel-spotlight-gleam" in css
+    # Cosmic glass: desk must stay transparent so the site sky reads through
+    assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
 
 
 def test_summers_flagship_composition_hooks():
@@ -92,6 +103,31 @@ def test_summers_flagship_composition_hooks():
     ):
         assert f'id="{eid}"' in html
     assert "Telegram outcome stories" in html
+    assert "message-intel__pulsar" in html
+    assert 'id="message-intel-sky"' in html
+    assert "message-intel__conv-ring" in open(
+        "templates/partials/premium/message_intel_ssr_macros.html", encoding="utf-8"
+    ).read()
+
+
+def test_listener_share_page_composition():
+    html = open("templates/listener.html", encoding="utf-8").read()
+    css = open("static/css/listener.css", encoding="utf-8").read()
+    assert "lsn-intercept" in html
+    assert "lsn-title" in html
+    assert "Telegram pulse" in html
+    assert "Trending orbit" in html
+    assert "Syne" in html
+    assert "Space Grotesk" in html
+    assert "wallet" not in html.lower()
+    assert "lsn-vault" not in html
+    assert ".lsn-intercept" in css
+    assert "--lsn-font-brand:'Syne'" in css.replace(" ", "")
+    resp = client.get("/listener")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "lsn-intercept" in body
+    assert "Trending orbit" in body
 
 
 def test_summers_divergence_mobile_and_keyboard_hooks():

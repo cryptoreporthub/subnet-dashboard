@@ -2,15 +2,18 @@
 /* Standalone design: fixed nebula + starfield behind frosted glass panels. */
 
 :root{
-  --lsn-bg:#05070f; --lsn-star:#cfe0ff;
-  --lsn-glass:rgba(255,255,255,.055); --lsn-glass-brd:rgba(255,255,255,.14);
-  --lsn-ink:#eef3ff; --lsn-muted:#93a0c2;
-  --lsn-pos:#3bffb8; --lsn-neg:#ff5d7a; --lsn-gold:#ffcf6e; --lsn-cyan:#6ee7ff; --lsn-violet:#b78bff;
+  --lsn-bg:#080911; --lsn-star:#cfe0ff;
+  --lsn-glass:transparent; --lsn-glass-brd:rgba(255,255,255,.14);
+  --lsn-ink:#f8fafc; --lsn-muted:#b8c2d2;
+  --lsn-pos:#1fd47c; --lsn-neg:#ff5d7a; --lsn-gold:#f0c56f; --lsn-cyan:#3fc9ff; --lsn-violet:#9d8cff;
+  --lsn-font-brand:'Syne', system-ui, sans-serif;
+  --lsn-font-body:'Space Grotesk', system-ui, sans-serif;
+  --lsn-font-mono:'JetBrains Mono', ui-monospace, monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body.lsn-body{
   background:var(--lsn-bg); color:var(--lsn-ink);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  font-family:var(--lsn-font-body);
   min-height:100vh; display:flex; flex-direction:column; align-items:center;
   padding:8px 14px 60px; position:relative; overflow-x:hidden;
 }
@@ -60,10 +63,32 @@ body.lsn-body::after{background:
 
 .lsn-page{position:relative; z-index:1; width:100%; max-width:420px; display:flex; flex-direction:column; gap:16px}
 .lsn-glass{
-  background:linear-gradient(160deg, rgba(255,255,255,.085), rgba(255,255,255,.03));
-  border:1px solid var(--lsn-glass-brd); border-radius:20px;
-  backdrop-filter:blur(26px) saturate(1.4); -webkit-backdrop-filter:blur(26px) saturate(1.4);
-  box-shadow:0 18px 48px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.12), inset 0 -1px 0 rgba(255,255,255,.04);
+  background:linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 40%, transparent 72%);
+  border:1px solid var(--lsn-glass-brd); border-radius:12px;
+  box-shadow:0 1px 0 rgba(255,255,255,.08), 0 8px 32px rgba(0,0,0,.32);
+}
+.lsn-intercept{display:flex; flex-direction:column; align-items:center; text-align:center; padding:10px 4px 4px}
+.lsn-pulsar{position:relative; width:96px; height:96px; margin-bottom:12px; display:flex; align-items:center; justify-content:center}
+.lsn-ping{position:absolute; inset:0; border-radius:50%; border:1.5px solid var(--lsn-violet); opacity:0; animation:lsn-ping 3s ease-out infinite}
+.lsn-ping:nth-child(2){animation-delay:1s; border-color:var(--lsn-cyan)}
+.lsn-ping:nth-child(3){animation-delay:2s; border-color:var(--lsn-pos)}
+@keyframes lsn-ping{0%{transform:scale(.42);opacity:.7}100%{transform:scale(1.32);opacity:0}}
+.lsn-core{position:relative; width:64px; height:64px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, rgba(255,255,255,.5), rgba(157,140,255,.35) 42%, rgba(8,9,17,.15) 75%);
+  box-shadow:0 0 32px rgba(157,140,255,.35); display:flex; align-items:center; justify-content:center; gap:2.5px;
+  border:1px solid var(--lsn-glass-brd)}
+.lsn-core i{width:3px; border-radius:2px; background:rgba(8,9,17,.85); animation:lsn-core-wave 1.3s ease-in-out infinite}
+.lsn-core i:nth-child(1){height:8px}.lsn-core i:nth-child(2){height:16px;animation-delay:.12s}
+.lsn-core i:nth-child(3){height:11px;animation-delay:.24s}.lsn-core i:nth-child(4){height:20px;animation-delay:.36s}
+.lsn-core i:nth-child(5){height:13px;animation-delay:.48s}.lsn-core i:nth-child(6){height:7px;animation-delay:.6s}
+@keyframes lsn-core-wave{0%,100%{transform:scaleY(.45)}50%{transform:scaleY(1.45)}}
+.lsn-eyebrow{font-family:var(--lsn-font-mono); font-size:10px; letter-spacing:.08em; color:var(--lsn-muted); margin-bottom:8px}
+.lsn-title{font-family:var(--lsn-font-brand); font-weight:800; font-size:clamp(1.8rem,8vw,2.4rem); letter-spacing:-.03em; margin:0 0 8px;
+  background:linear-gradient(92deg,#f8fafc 20%, var(--lsn-pos) 70%, var(--lsn-cyan) 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent}
+.lsn-sub{font-size:13px; color:var(--lsn-muted); line-height:1.5; max-width:32ch; margin:0}
+@media (prefers-reduced-motion:reduce){
+  .lsn-ping,.lsn-core i{animation:none!important}
 }
 .lsn-sect{display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:0 2px}
 .lsn-sect .bar{width:3px; height:14px; border-radius:2px; background:linear-gradient(180deg,var(--lsn-gold),var(--lsn-cyan))}
@@ -74,9 +99,17 @@ body.lsn-body::after{background:
 .lsn-trust{
   display:flex; align-items:center; gap:9px;
   padding:7px 12px; border-radius:14px;
-  background:rgba(5,7,15,.66); border:1px solid rgba(255,255,255,.12);
-  backdrop-filter:blur(16px) saturate(1.3); -webkit-backdrop-filter:blur(16px) saturate(1.3);
-  box-shadow:0 8px 24px rgba(0,0,0,.35);
+  background:linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.02) 40%, transparent 72%);
+  border:1px solid var(--lsn-glass-brd);
+  box-shadow:0 1px 0 rgba(255,255,255,.08), 0 8px 32px rgba(0,0,0,.32);
+}
+@media (hover: hover) and (pointer: fine), (min-width: 1024px) {
+  @media not (prefers-reduced-transparency: reduce) {
+    .lsn-glass, .lsn-trust {
+      backdrop-filter: blur(12px) saturate(1.2);
+      -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    }
+  }
 }
 .lsn-trust .ekg{flex:1; height:24px; min-width:0}
 .lsn-trust .ekg path{stroke:var(--lsn-pos); stroke-width:1.8; fill:none; stroke-linecap:round; stroke-linejoin:round;

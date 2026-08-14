@@ -28,6 +28,9 @@
   var proofBody = document.getElementById("message-intel-proof-body");
   var summary24hCard = document.getElementById("message-intel-summary-24h");
   var summary24hBody = document.getElementById("message-intel-summary-24h-body");
+  var skyEl = document.getElementById("message-intel-sky");
+  var wavestripEl = document.getElementById("message-intel-wavestrip");
+  var lastSeenMsgId = null;
   var detailPanel = document.getElementById("message-intel-detail");
   var callersEl = document.getElementById("message-intel-callers");
   var callersBody = document.getElementById("message-intel-callers-body");
@@ -1121,9 +1124,11 @@
     if (!trendingEl) return;
     if (!rows || !rows.length) {
       trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet.</p>';
+      renderTrendingSky([]);
       return;
     }
-    if (trendingTitle) trendingTitle.textContent = "Currently trending";
+    if (trendingTitle) trendingTitle.textContent = "Trending orbit";
+    renderTrendingSky(rows);
     if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
     trendingEl.innerHTML =
       '<div class="message-intel__trend-rows">' +
@@ -1145,6 +1150,125 @@
           '</div></div>';
       }).join("") +
       '</div>';
+  }
+
+  function setStat(id, value) {
+    var el = document.getElementById(id);
+    if (el) el.textContent = value == null || value === "" ? "—" : String(value);
+  }
+
+  function renderHeroStats(payload, status) {
+    var pmeta = (payload && payload.meta) || {};
+    var summary = pmeta.summary_24h || {};
+    var gp = summary.group_pulse || {};
+    var store = (status && status.store) || {};
+    var total = store.total_messages || pmeta.total_messages || 0;
+    var last24 = summary.message_count != null ? summary.message_count : gp.messages;
+    var avgConv = gp.avg_conviction;
+    var trending = pmeta.trending || [];
+    setStat("message-intel-stat-archived", total || "—");
+    setStat("message-intel-stat-24h", last24 != null ? last24 : "—");
+    setStat(
+      "message-intel-stat-conv",
+      avgConv != null && !isNaN(Number(avgConv)) ? Math.round(Number(avgConv)) + "%" : "—"
+    );
+    setStat("message-intel-stat-active", trending.length || "—");
+  }
+
+  function renderInterceptWave(messages) {
+    if (!wavestripEl) return;
+    var buckets = new Array(24).fill(0);
+    var now = Date.now();
+    (messages || []).forEach(function (m) {
+      var t = Date.parse(m.timestamp);
+      if (!isFinite(t)) return;
+      var hoursAgo = (now - t) / 3600000;
+      if (hoursAgo < 0 || hoursAgo >= 24) return;
+      buckets[23 - Math.floor(hoursAgo)] += 1;
+    });
+    var peak = Math.max.apply(null, buckets.concat([1]));
+    var html = '<span class="message-intel__wave">';
+    for (var i = 0; i < 24; i++) {
+      var h = 6 + Math.round((buckets[i] / peak) * 34);
+      html += '<i style="height:' + h + "px;animation-delay:" + (i * 0.05).toFixed(2) + 's"></i>';
+    }
+    html += "</span>";
+    wavestripEl.innerHTML = html;
+  }
+
+  function pingPulsar() {
+    var core = document.querySelector(".message-intel__core");
+    if (!core) return;
+    core.classList.remove("is-ping");
+    void core.offsetWidth;
+    core.classList.add("is-ping");
+  }
+
+  function renderTrendingSky(rows) {
+    if (!skyEl) return;
+    var list = (rows || []).slice(0, 4);
+    if (!list.length) {
+      skyEl.hidden = true;
+      skyEl.innerHTML = "";
+      return;
+    }
+    skyEl.hidden = false;
+    var max = 1;
+    list.forEach(function (r) {
+      var n = Number(r.mentions) || 0;
+      if (n > max) max = n;
+    });
+    var pos = [
+      { l: "78%", t: "22%" },
+      { l: "22%", t: "22%" },
+      { l: "22%", t: "78%" },
+      { l: "78%", t: "78%" },
+    ];
+    var html =
+      '<div class="message-intel__sky-ring message-intel__sky-ring--outer"></div>' +
+      '<div class="message-intel__sky-ring message-intel__sky-ring--inner"></div>' +
+      '<div class="message-intel__sky-hub">PULSE<br>ORIGIN</div>';
+    list.forEach(function (row, i) {
+      var mentions = Number(row.mentions) || 0;
+      var size = 8 + Math.round((mentions / max) * 14);
+      var sent = String(row.sentiment || "").toLowerCase();
+      if (sent.indexOf("bull") !== -1) sent = "bull";
+      else if (sent.indexOf("bear") !== -1) sent = "bear";
+      else sent = "mix";
+      var p = pos[i] || pos[0];
+      html +=
+        '<button type="button" class="message-intel__sky-node" data-netuid="' +
+        esc(row.netuid) +
+        '" data-sent="' +
+        sent +
+        '" style="left:' +
+        p.l +
+        ";top:" +
+        p.t +
+        '">' +
+        '<span class="message-intel__sky-dot" style="width:' +
+        size +
+        "px;height:" +
+        size +
+        'px"></span>' +
+        '<span class="message-intel__sky-sn">' +
+        esc(row.name || "SN" + row.netuid) +
+        "</span>" +
+        '<span class="message-intel__sky-n">' +
+        (mentions ? esc(mentions) + " msgs" : "quiet") +
+        "</span></button>";
+    });
+    skyEl.innerHTML = html;
+    skyEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var n = Number(btn.getAttribute("data-netuid"));
+        if (!n) return;
+        filters.netuid = filters.netuid === n ? null : n;
+        saveFilters();
+        syncFilterChipStates();
+        hydrate();
+      });
+    });
   }
 
   function renderWatchlistPanel(trending) {
@@ -1412,10 +1536,17 @@
         railClass +
         '" style="--mi-i: ' +
         i +
+        (conv != null ? "; --pct: " + conv : "") +
         '" data-msg-id="' +
         esc(row.id) +
         '" tabindex="0" role="button">' +
-        '<div class="message-intel__rail-node" aria-hidden="true"></div>' +
+        (conv != null
+          ? '<div class="message-intel__conv-ring" style="--pct: ' +
+            esc(conv) +
+            '" aria-hidden="true"><i>' +
+            esc(conv) +
+            "%</i></div>"
+          : '<div class="message-intel__rail-node" aria-hidden="true"></div>') +
         '<div class="message-intel__feed-body">' +
         '<div class="message-intel__feed-top">' +
         '<span class="message-intel__f-avatar" aria-hidden="true">' +
@@ -1676,6 +1807,11 @@
       }
 
       applyMeta(payload, status);
+      renderHeroStats(payload, status);
+      renderInterceptWave(payload.messages);
+      var newestId = payload.messages && payload.messages[0] && payload.messages[0].id;
+      if (newestId && lastSeenMsgId && newestId !== lastSeenMsgId) pingPulsar();
+      if (newestId) lastSeenMsgId = newestId;
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
@@ -1687,6 +1823,7 @@
        }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
        latestTrendingRows = trending;
+      setStat("message-intel-stat-active", trending.length || "—");
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
