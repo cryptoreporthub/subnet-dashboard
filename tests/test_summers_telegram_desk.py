@@ -80,6 +80,8 @@ def test_summers_flagship_css_tokens():
     assert "message-intel__pulse-stage" in css
     assert "message-intel-board-breathe" in css
     assert "message-intel-spotlight-gleam" in css
+    assert ".message-intel__bay" in css
+    assert ".message-intel__instrument" in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
 
@@ -105,6 +107,9 @@ def test_summers_flagship_composition_hooks():
     assert "Telegram outcome stories" in html
     assert "message-intel__pulsar" in html
     assert 'id="message-intel-sky"' in html
+    assert "message-intel__bay" in html
+    assert "message-intel__zones" in html
+    assert "message-intel__instrument" in html
     assert "message-intel__conv-ring" in open(
         "templates/partials/premium/message_intel_ssr_macros.html", encoding="utf-8"
     ).read()
@@ -115,6 +120,8 @@ def test_listener_share_page_composition():
     css = open("static/css/listener.css", encoding="utf-8").read()
     assert "lsn-intercept" in html
     assert "lsn-title" in html
+    assert "lsn-bay" in html
+    assert "lsn-zones" in html
     assert "Telegram pulse" in html
     assert "Trending orbit" in html
     assert "Syne" in html

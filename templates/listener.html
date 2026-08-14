@@ -64,9 +64,11 @@
         <span class="lsn-ping"></span><span class="lsn-ping"></span><span class="lsn-ping"></span>
         <span class="lsn-core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
       </div>
-      <p class="lsn-eyebrow">SIGNAL DECK · t.me/{{ monitored_group or "OfficialSubnetSummer" }}</p>
-      <h1 class="lsn-title">Telegram pulse</h1>
-      <p class="lsn-sub">Shareable intercept of Subnet Summers — every call jury-scored the instant it lands.</p>
+      <div class="lsn-identity">
+        <p class="lsn-eyebrow">SIGNAL DECK · t.me/{{ monitored_group or "OfficialSubnetSummer" }}</p>
+        <h1 class="lsn-title">Telegram pulse</h1>
+        <p class="lsn-sub">Shareable intercept of Subnet Summers — every call jury-scored the instant it lands.</p>
+      </div>
     </div>
 
     <!-- COMMANDS — live subset only -->
@@ -78,6 +80,17 @@
       <span class="lsn-cmd">/alerts</span>
     </div>
 
+    <input class="lsn-zone-input" type="radio" name="lsn-zone" id="lsn-zone-feed" checked>
+    <input class="lsn-zone-input" type="radio" name="lsn-zone" id="lsn-zone-orbit">
+    <input class="lsn-zone-input" type="radio" name="lsn-zone" id="lsn-zone-desk">
+    <nav class="lsn-zones" aria-label="Listener views">
+      <label class="lsn-zone" for="lsn-zone-feed">Feed</label>
+      <label class="lsn-zone" for="lsn-zone-orbit">Orbit</label>
+      <label class="lsn-zone" for="lsn-zone-desk">Desk</label>
+    </nav>
+
+    <div class="lsn-bay">
+    <div class="lsn-cell lsn-cell--orbit">
     <!-- YESTERDAY IN SUMMARY -->
     <div class="lsn-glass lsn-summary">
       <div class="lsn-sect"><span class="bar"></span><b>Yesterday in summary</b><span>24h lens</span></div>
@@ -183,6 +196,9 @@
       {% endif %}
     </div>
 
+    </div><!-- /orbit -->
+
+    <div class="lsn-cell lsn-cell--feed">
     <!-- CONVICTION JURY (recent graded calls) -->
     {% set ns = namespace(bull=0, bear=0, neutral=0, s=0, n=0) %}
     {% for m in feed %}
@@ -208,6 +224,50 @@
       </div>
     </div>
 
+    <!-- LIVE FEED -->
+    <div class="lsn-glass lsn-feed">
+      <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span>newest first · drives gauge ↑</span></div>
+      {% if feed %}
+      {% for m in feed[:6] %}
+      <div class="lsn-msg{% if loop.first %} focused{% endif %}" data-sn="{{ m["netuid"] or "" }}" data-name="{{ m["name"] or "" }}">
+        <div class="av">{{ (m["author"] or "?")[1:2] or "?" }}</div>
+        <div class="body">
+          <div class="meta"><span class="h">{{ m["author"] or "—" }}</span>{% if m["netuid"] %}<span class="subchip">SN{{ m["netuid"] }}</span>{% endif %}{% if m["verdict"] %}<span class="dirchip {{ "long" if "bull" in (m["verdict"]|lower) else ("short" if "bear" in (m["verdict"]|lower) else "neutral") }}">{{ "▲ LONG" if "bull" in (m["verdict"]|lower) else ("▼ SHORT" if "bear" in (m["verdict"]|lower) else "NEUTRAL") }}</span>{% endif %}{% if m["topic"] %}<span class="topic">{{ m["topic"] }}</span>{% endif %}</div>
+          <div class="quote"><div class="txt">“{{ m["text"] or "" }}”</div></div>
+          <div class="ftr">
+            <div class="lsn-conv-meter"><div style="width:{{ m["conviction"] if m["conviction"] is not none else 0 }}%"></div></div>
+            <div class="lsn-conv-lbl">{{ m["conviction"] if m["conviction"] is not none else "—" }}</div>
+            {% if m["base"] is not none %}<span class="lsn-base">base {{ m["base"] }}</span>{% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+      {% else %}
+      <div class="lsn-qstate" style="display:block"><b>Quiet — the listener is warming up.</b><div class="tiny">New graded messages appear here the moment the listener scores them.</div></div>
+      {% endif %}
+    </div>
+
+    <!-- TELEGRAM PROOF -->
+    <div class="lsn-glass lsn-proof">
+      <div class="lsn-sect"><span class="bar"></span><b>Telegram proof</b><span>graded calls only</span></div>
+      {% if feed %}
+      {% set p = feed[0] %}
+      <div class="lead">
+        <div class="av">{{ (p["author"] or "?")[1:2] or "?" }}</div>
+        <div class="body">
+          <div class="meta">{{ p["author"] or "—" }}{% if p["netuid"] %} · SN{{ p["netuid"] }}{% endif %} <span class="verdict">GRADED ✓</span></div>
+          <div class="quote"><div class="call">“{{ p["text"] or "" }}”</div></div>
+          <div class="row">{% if p["base"] is not none %}<span>baseline <span class="lsn-base">{{ p["base"] }}</span></span>{% else %}<span>baseline —</span>{% endif %}<b>{{ p["conviction"] if p["conviction"] is not none else "—" }}% conv</b></div>
+        </div>
+      </div>
+      <div class="lsn-hourglass">⏳ <span><b>Price outcomes land here as the resolver settles them.</b> No silent 200-OK — every call gets a receipt the moment it resolves.</span></div>
+      {% else %}
+      <p class="lsn-proof-empty">No graded calls yet — receipts appear here the moment the listener scores its first messages.</p>
+      {% endif %}
+    </div>
+    </div><!-- /feed -->
+
+    <div class="lsn-cell lsn-cell--desk">
     <!-- CALLER LEADERBOARD (skin in the game) -->
     <div class="lsn-glass lsn-cboard">
       <div class="lsn-sect"><span class="bar"></span><b>Caller leaderboard</b><span>accuracy · resolved only</span></div>
@@ -305,48 +365,8 @@
       </div>
       <div class="note">Alerts fire in-bot when a watched subnet's flow flips or a call resolves. Shared with My Desk — chips below reflect your bot watchlist when connected.</div>
     </div>
-
-    <!-- LIVE FEED -->
-    <div class="lsn-glass lsn-feed">
-      <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span>newest first · drives gauge ↑</span></div>
-      {% if feed %}
-      {% for m in feed[:6] %}
-      <div class="lsn-msg{% if loop.first %} focused{% endif %}" data-sn="{{ m["netuid"] or "" }}" data-name="{{ m["name"] or "" }}">
-        <div class="av">{{ (m["author"] or "?")[1:2] or "?" }}</div>
-        <div class="body">
-          <div class="meta"><span class="h">{{ m["author"] or "—" }}</span>{% if m["netuid"] %}<span class="subchip">SN{{ m["netuid"] }}</span>{% endif %}{% if m["verdict"] %}<span class="dirchip {{ "long" if "bull" in (m["verdict"]|lower) else ("short" if "bear" in (m["verdict"]|lower) else "neutral") }}">{{ "▲ LONG" if "bull" in (m["verdict"]|lower) else ("▼ SHORT" if "bear" in (m["verdict"]|lower) else "NEUTRAL") }}</span>{% endif %}{% if m["topic"] %}<span class="topic">{{ m["topic"] }}</span>{% endif %}</div>
-          <div class="quote"><div class="txt">“{{ m["text"] or "" }}”</div></div>
-          <div class="ftr">
-            <div class="lsn-conv-meter"><div style="width:{{ m["conviction"] if m["conviction"] is not none else 0 }}%"></div></div>
-            <div class="lsn-conv-lbl">{{ m["conviction"] if m["conviction"] is not none else "—" }}</div>
-            {% if m["base"] is not none %}<span class="lsn-base">base {{ m["base"] }}</span>{% endif %}
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-      {% else %}
-      <div class="lsn-qstate" style="display:block"><b>Quiet — the listener is warming up.</b><div class="tiny">New graded messages appear here the moment the listener scores them.</div></div>
-      {% endif %}
-    </div>
-
-    <!-- TELEGRAM PROOF -->
-    <div class="lsn-glass lsn-proof">
-      <div class="lsn-sect"><span class="bar"></span><b>Telegram proof</b><span>graded calls only</span></div>
-      {% if feed %}
-      {% set p = feed[0] %}
-      <div class="lead">
-        <div class="av">{{ (p["author"] or "?")[1:2] or "?" }}</div>
-        <div class="body">
-          <div class="meta">{{ p["author"] or "—" }}{% if p["netuid"] %} · SN{{ p["netuid"] }}{% endif %} <span class="verdict">GRADED ✓</span></div>
-          <div class="quote"><div class="call">“{{ p["text"] or "" }}”</div></div>
-          <div class="row">{% if p["base"] is not none %}<span>baseline <span class="lsn-base">{{ p["base"] }}</span></span>{% else %}<span>baseline —</span>{% endif %}<b>{{ p["conviction"] if p["conviction"] is not none else "—" }}% conv</b></div>
-        </div>
-      </div>
-      <div class="lsn-hourglass">⏳ <span><b>Price outcomes land here as the resolver settles them.</b> No silent 200-OK — every call gets a receipt the moment it resolves.</span></div>
-      {% else %}
-      <p class="lsn-proof-empty">No graded calls yet — receipts appear here the moment the listener scores its first messages.</p>
-      {% endif %}
-    </div>
+    </div><!-- /desk -->
+    </div><!-- /bay -->
 
     <div class="lsn-disc">Conviction is <b>auto-scored</b>, not financial advice. Leaderboard measured from resolved qualifying calls — not engagement. Skin is belief, never edge.</div>
   </div>
