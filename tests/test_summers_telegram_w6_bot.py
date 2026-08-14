@@ -117,6 +117,7 @@ def test_format_summary_includes_what_mentions_are_about():
     )
 
     assert "SN7 Allways (3 mentions)" in text
+    assert "SN7 Allways (3 mentions)\n  Validators discussed a new release" in text
     assert "Validators discussed a new release" in text
 
 

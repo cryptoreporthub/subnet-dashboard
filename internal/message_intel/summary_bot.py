@@ -260,7 +260,8 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
             line = f"• SN{row.get('netuid')} {name} ({row.get('mentions', 0)} mentions)"
             context = row.get("mention_context")
             if context:
-                line += f" — {html.escape(str(context))}"
+                context_text = html.escape(str(context).strip())
+                line += f"\n  {context_text}"
             lines.append(line)
 
     movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
