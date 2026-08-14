@@ -12,6 +12,16 @@ def test_proof_band_has_evidence_subpanels():
     assert 'id="proof-sub-telegram-val"' in html
 
 
+def test_cockpit_brands_beta_badges():
+    header = Path("templates/partials/premium/header.html").read_text(encoding="utf-8")
+    css = Path("static/css/ui.css").read_text(encoding="utf-8")
+    assert 'class="beta-stamp"' in header
+    assert 'aria-label="Beta"' in header
+    assert '.section-label::after' in css
+    assert 'content: "BETA"' in css
+    assert '#22b8ff' in css
+
+
 def test_hydrate_syncs_proof_evidence_panels():
     js = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function syncProofEvidencePanels" in js
