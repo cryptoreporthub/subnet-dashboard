@@ -842,8 +842,17 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
                WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
         ).fetchall()
     out = []
+    try:
+        from internal.subnet_names import name_for_netuid
+    except Exception:
+        name_for_netuid = None
     for raw in rows:
         row = dict(raw)
+        if row.get("netuid") is not None:
+            try:
+                row["subnet_name"] = name_for_netuid(int(row["netuid"])) if name_for_netuid else f"SN{row['netuid']}"
+            except (TypeError, ValueError):
+                row["subnet_name"] = f"SN{row['netuid']}"
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if cutoff and (timestamp is None or timestamp < cutoff):
             continue
@@ -1306,6 +1315,7 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "direction": proof["direction"],
         "move_pct": proof["move_pct"],
         "price_basis": proof.get("price_basis"),
+        "subnet_name": proof.get("subnet_name"),
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
     }
@@ -1342,7 +1352,8 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
             recent.append(
                 {
                     "id": int(row["id"]), "author_name": row.get("author_name"),
-                    "netuid": row.get("netuid"), "move_pct": proof["move_pct"],
+                    "netuid": row.get("netuid"), "subnet_name": proof.get("subnet_name"),
+                    "price_basis": proof.get("price_basis"), "move_pct": proof["move_pct"],
                     "pump_pct_max": proof["move_pct"], "status": proof["status"],
                     "hit": proof["status"] == "hit",
                 }

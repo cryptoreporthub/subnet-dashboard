@@ -187,7 +187,9 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     baseline = _to_float(row.get("tao_usd_price"))
     outcome = (row.get("outcome") or "").strip()
     pump_pct = _to_float(row.get("pump_pct_max"))
-    price_basis = "subnet" if row.get("netuid") is not None else ("tao" if _about_tao(row) else None)
+    netuid = row.get("netuid")
+    subnet_name = str(row.get("subnet_name") or (f"SN{netuid}" if netuid is not None else "")).strip()
+    price_basis = "subnet" if netuid is not None and subnet_name else ("tao" if _about_tao(row) else None)
 
     eligible = (
         source == "telegram"
@@ -212,6 +214,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "direction": direction,
             "move_pct": move_pct,
             "price_basis": price_basis,
+            "subnet_name": subnet_name or None,
             "raw_outcome": outcome or None,
             "threshold": min_conviction,
         }
@@ -225,6 +228,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "direction": direction,
             "move_pct": move_pct,
             "price_basis": price_basis,
+            "subnet_name": subnet_name or None,
             "raw_outcome": None,
             "threshold": min_conviction,
         }
@@ -238,6 +242,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         "direction": direction,
         "move_pct": move_pct,
         "price_basis": price_basis,
+        "subnet_name": subnet_name or None,
         "raw_outcome": outcome,
         "threshold": min_conviction,
     }

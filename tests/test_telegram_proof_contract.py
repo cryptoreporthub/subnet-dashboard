@@ -126,6 +126,7 @@ def test_price_basis_requires_subnet_or_explicit_tao():
     )
     assert subnet["eligible"] is True
     assert subnet["price_basis"] == "subnet"
+    assert subnet["subnet_name"] == "SN7"
 
     tao = classify_call(
         {
@@ -139,6 +140,7 @@ def test_price_basis_requires_subnet_or_explicit_tao():
     )
     assert tao["eligible"] is True
     assert tao["price_basis"] == "tao"
+    assert tao["subnet_name"] is None
 
     chatter = classify_call(
         {
