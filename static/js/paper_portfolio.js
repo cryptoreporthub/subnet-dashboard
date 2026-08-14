@@ -158,7 +158,7 @@
     if (payload.empty) {
       root.classList.remove("is-error");
       root.innerHTML =
-        '<p class="paper-portfolio__empty empty--quiet">No council paper trades yet — P&amp;L appears after resolved picks are graded.</p>';
+        '<p class="paper-portfolio__empty empty--quiet">No closed council paper trades yet — P&amp;L appears after verified picks are graded. Pending, pump-desk, shadow, and ungradeable rows stay outside this portfolio.</p>';
       return;
     }
     root.classList.remove("is-error");

@@ -55,3 +55,21 @@ def test_trust_banner_ready_when_gates_pass():
     assert banner["ready"] is True
     assert banner["headline"] is not None
     assert "58" in banner["headline"]
+
+
+def test_trust_banner_exposes_missing_price_retirements_separately():
+    banner = build_trust_banner(
+        {
+            "correct": 0,
+            "wrong": 0,
+            "expired": 4,
+            "expired_genuine": 1,
+            "ungradeable": 3,
+            "price_data_unavailable": 3,
+            "total": 7,
+        }
+    )
+    assert banner["expired_genuine"] == 1
+    assert banner["ungradeable"] == 3
+    assert banner["price_data_unavailable"] == 3
+    assert "resolved-flow" in banner["message"]

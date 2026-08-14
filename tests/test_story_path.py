@@ -6,8 +6,20 @@ from internal.learning.story_path import build_story_path
 def test_story_path_honest_empty_without_pick():
     out = build_story_path({"action": "HOLD", "pick": None, "candidate": None})
     assert out["data_available"] is False
-    assert out["reason"] == "no_pick"
+    assert out["reason"] == "daily_pick_is_hold"
     assert out["steps"] == []
+
+
+def test_story_path_distinguishes_missing_daily_pick():
+    out = build_story_path({"action": "LONG", "pick": None, "candidate": None})
+    assert out["data_available"] is False
+    assert out["reason"] == "no_daily_pick"
+
+
+def test_story_path_distinguishes_incomplete_candidate():
+    out = build_story_path({"action": "HOLD", "candidate": {"final_confidence": 0.4}})
+    assert out["data_available"] is False
+    assert out["reason"] == "pick_missing_subnet"
 
 
 def test_story_path_five_step_chain():

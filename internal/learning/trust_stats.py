@@ -27,6 +27,9 @@ def build_trust_banner(
     wrong = int(stats.get("wrong", 0) or 0)
     graded = correct + wrong
     expired = int(stats.get("expired", 0) or 0)
+    expired_genuine = int(stats.get("expired_genuine", 0) or 0)
+    ungradeable = int(stats.get("ungradeable", 0) or 0)
+    price_data_unavailable = int(stats.get("price_data_unavailable", 0) or 0)
     duplicate = int(stats.get("duplicate", 0) or 0)
     pending = int(stats.get("pending", 0) or 0)
     total = int(stats.get("total", 0) or 0)
@@ -56,7 +59,7 @@ def build_trust_banner(
             if expired > 0:
                 message += (
                     f" \u00b7 backlog {expired} expired ({round(expired_rate * 100)}% of resolved) "
-                    f"- price data missing at resolve, not graded outcomes"
+                    f"- resolved-flow denominator; {price_data_unavailable} missing-price retirements"
                 )
         headline = None
     elif expired_rate >= max_expired_rate:
@@ -125,10 +128,14 @@ def build_trust_banner(
         "wrong": wrong,
         "accuracy": accuracy,
         "expired": expired,
+        "expired_genuine": expired_genuine,
+        "ungradeable": ungradeable,
+        "price_data_unavailable": price_data_unavailable,
         "expired_rate": expired_rate,
         "expired_total_rate": expired_total_rate,
         "expired_note": (
-            f"{expired} rows expired at resolve - price data unavailable, not graded outcomes. "
+            f"{expired} rows retired as expired, {ungradeable} ungradeable; "
+            f"{price_data_unavailable} have an explicit missing-price reason. "
             f"expired/(graded+expired+duplicate) = {expired_rate}; gate activates at {min_graded} graded."
         ) if expired else None,
         "duplicate": duplicate,

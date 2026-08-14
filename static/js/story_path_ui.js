@@ -49,9 +49,13 @@
     var emptyPro =
       '<li class="story-path__empty" id="story-path-empty">' +
       esc(
-        payload && payload.reason === "no_pick"
-          ? "No audited pick today — chain appears when council clears a call."
-          : "Quiet — story path fills when council clears an audited pick."
+        payload && payload.reason === "daily_pick_is_hold"
+          ? "Council is holding today — chain will appear when a call clears."
+          : payload && payload.reason === "pick_missing_subnet"
+            ? "Council call is incomplete — subnet context is still warming."
+            : payload && payload.reason === "no_daily_pick"
+              ? "No daily council call yet — chain appears when one clears."
+              : "Quiet — story path fills when council clears an audited pick."
       ) +
       "</li>";
 
@@ -72,13 +76,15 @@
       } else if (homeEmpty) {
         homeEmpty.hidden = false;
         homeEmpty.textContent =
-          payload && payload.reason === "no_pick"
-            ? "Quiet — chain appears when council clears an audited pick."
-            : "Quiet — chain appears when council clears an audited pick.";
+          payload && payload.reason === "daily_pick_is_hold"
+            ? "Council is holding today — chain will appear when a call clears."
+            : payload && payload.reason === "pick_missing_subnet"
+              ? "Council call is incomplete — subnet context is still warming."
+              : "No daily council call yet — chain appears when one clears.";
         if (homeChain) homeChain.innerHTML = "";
       } else if (homeChain) {
         homeChain.innerHTML =
-          '<li class="sr-cause-chain__empty">Quiet — chain appears when council clears an audited pick.</li>';
+          '<li class="sr-cause-chain__empty">No daily council call yet — chain appears when one clears.</li>';
       }
     }
   }
@@ -101,6 +107,7 @@
   }
 
   document.addEventListener("home-daily-call-updated", loadStoryPath);
+  document.addEventListener("home:hydrate-cache", loadStoryPath);
   document.addEventListener("living-focus:change", loadStoryPath);
 
   window.SimiStoryPath = { refresh: loadStoryPath, render: renderStoryPath };

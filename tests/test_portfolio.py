@@ -116,6 +116,21 @@ def test_portfolio_excludes_pump_and_shadow_rows():
     assert status["closed_positions"][0]["id"] == "council"
 
 
+def test_portfolio_excludes_pump_and_shadow_rows_from_open_scope():
+    status = build_portfolio_status(
+        {
+            "predictions": [
+                {"id": "council", "netuid": 1, "direction": "up"},
+                {"id": "pump", "netuid": 2, "direction": "up", "pick_source": "pump_lead"},
+                {"id": "shadow", "netuid": 3, "direction": "up", "shadow": True},
+            ],
+            "resolved": [],
+        }
+    )
+    assert [row["id"] for row in status["open_positions"]] == ["council"]
+    assert status["eligibility"]["source"] == "data/predictions.json"
+
+
 def test_api_portfolio_status_200():
     client = TestClient(app)
     resp = client.get("/api/portfolio/status")
