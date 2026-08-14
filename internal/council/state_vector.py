@@ -1006,6 +1006,9 @@ def build_prediction_statement(
 ) -> Dict[str, Any]:
     """Build a predictive forecast dict without persisting it."""
     horizon = clamp_prediction_horizon(horizon, predicted_pct, horizon_type=horizon_type)
+    stamp = now.replace(tzinfo=_tz.utc) if now.tzinfo is None else now.astimezone(_tz.utc)
+    stamp_z = stamp.isoformat().replace("+00:00", "Z")
+    resolve_z = (stamp + _td(hours=horizon)).isoformat().replace("+00:00", "Z")
     prediction: Dict[str, Any] = {
         "id": _uuid.uuid4().hex[:10],
         "netuid": sn.get("netuid"),
@@ -1014,8 +1017,8 @@ def build_prediction_statement(
         "predicted_pct": round(predicted_pct, 2),
         "horizon_hours": horizon,
         "reference_price": ref_price,
-        "created_at": now.isoformat() + "Z",
-        "resolve_at": (now + _td(hours=horizon)).isoformat() + "Z",
+        "created_at": stamp_z,
+        "resolve_at": resolve_z,
         "status": "pending",
         "signal_source": signal_source,
         "expert": expert,
