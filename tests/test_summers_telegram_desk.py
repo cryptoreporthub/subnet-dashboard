@@ -165,6 +165,7 @@ def test_listener_share_page_composition():
     assert ".lsn-site" in css
     assert "lsn-title" in html
     assert "lsn-bay" in html
+    assert ".lsn-bay{display:grid" in css.replace(" ", "")
     assert "lsn-loop" not in html
     assert 'role="tablist"' not in html
     assert "cosmic-sky" in html

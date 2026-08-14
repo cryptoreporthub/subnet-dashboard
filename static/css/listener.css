@@ -566,6 +566,7 @@ body.lsn-body.quiet .lsn-gauge .qempty{display:block}
 @keyframes lsn-orbit-spin-rev{from{transform:rotate(var(--start,0deg))}to{transform:rotate(calc(var(--start,0deg) - 360deg))}}
 @keyframes lsn-orbit-unspin{from{transform:translate(-50%,-50%) rotate(calc(var(--start,0deg) * -1))}to{transform:translate(-50%,-50%) rotate(calc((var(--start,0deg) * -1) - 360deg))}}
 @keyframes lsn-orbit-unspin-rev{from{transform:translate(-50%,-50%) rotate(calc(var(--start,0deg) * -1))}to{transform:translate(-50%,-50%) rotate(calc((var(--start,0deg) * -1) + 360deg))}}
+.lsn-bay{display:grid;grid-template-columns:1fr;grid-template-areas:"orbit" "feed" "desk";gap:16px}
 .lsn-tile{min-width:0;display:flex;flex-direction:column;gap:16px}
 .lsn-tile--orbit{grid-area:orbit}
 .lsn-tile--feed{grid-area:feed}
