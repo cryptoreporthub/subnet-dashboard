@@ -73,3 +73,38 @@ def test_trust_banner_exposes_missing_price_retirements_separately():
     assert banner["ungradeable"] == 3
     assert banner["price_data_unavailable"] == 3
     assert "resolved-flow" in banner["message"]
+
+
+def test_trust_banner_keeps_council_and_pump_pending_separate():
+    banner = build_trust_banner(
+        {
+            "correct": 0,
+            "wrong": 0,
+            "expired": 0,
+            "pending": 2,
+            "council_pending": 2,
+            "pump_pending": 6,
+            "total_pending": 8,
+        }
+    )
+    assert banner["pending"] == 2
+    assert banner["council_pending"] == 2
+    assert banner["pump_pending"] == 6
+    assert banner["total_pending"] == 8
+
+
+def test_expert_samples_reject_bare_legacy_quant_and_pump_rows(monkeypatch):
+    from internal.learning.weight_deltas import expert_graded_counts
+
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.load_predictions",
+        lambda: {
+            "resolved": [
+                {"expert": "quant", "correct": True},
+                {"signal_source": "emission_momentum", "correct": True},
+                {"pick_source": "pump_lead", "correct": True},
+            ]
+        },
+    )
+    counts = expert_graded_counts()
+    assert counts["quant"] == 1

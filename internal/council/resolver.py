@@ -760,6 +760,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     council_pending = sum(
         1 for r in pending if not is_pump_desk_claim(r) and not _is_shadow(r)
     )
+    pump_pending = sum(1 for r in pending if is_pump_desk_claim(r))
     total = (
         len([r for r in resolved if not is_pump_desk_claim(r) and not _is_shadow(r)])
         + council_pending
@@ -773,6 +774,9 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         "price_data_unavailable": price_data_unavailable,
         "duplicate": duplicates,
         "pending": council_pending,
+        "council_pending": council_pending,
+        "pump_pending": pump_pending,
+        "total_pending": council_pending + pump_pending,
         "total": total,
         "shadow_graded": len(shadow_gradable),
     }

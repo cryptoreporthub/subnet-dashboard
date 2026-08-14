@@ -866,6 +866,16 @@
     var graded = tb.graded != null ? Number(tb.graded) : 0;
     var accRaw = tb.accuracy != null ? Number(tb.accuracy) : null;
     var accPct = accRaw != null ? Math.round(accRaw * 100) : null;
+    var minGraded = tb.min_graded != null ? Number(tb.min_graded) : 30;
+    var councilPending = extras.council_pending != null
+      ? Number(extras.council_pending)
+      : (tb.council_pending != null ? Number(tb.council_pending) : 0);
+    var pumpPending = extras.pump_pending != null
+      ? Number(extras.pump_pending)
+      : (tb.pump_pending != null ? Number(tb.pump_pending) : 0);
+    var missingPrice = tb.price_data_unavailable != null
+      ? Number(tb.price_data_unavailable)
+      : 0;
     if (ready && accPct != null && graded > 0) {
       councilVal.textContent = accPct + '%';
       if (councilMeta) {
@@ -875,8 +885,10 @@
     } else {
       councilVal.textContent = '—';
       if (councilMeta) {
-        councilMeta.textContent =
-          tb.message || (graded > 0 ? 'Building trust gate' : 'Building graded history');
+        var councilProgress = 'Published grades ' + graded + '/' + minGraded;
+        if (councilPending > 0) councilProgress += ' · ' + councilPending + ' pending';
+        if (missingPrice > 0) councilProgress += ' · ' + missingPrice + ' missing price';
+        councilMeta.textContent = councilProgress;
         councilMeta.classList.add('desk-empty');
       }
     }
@@ -908,9 +920,11 @@
         resMeta.classList.remove('desk-empty');
       }
     } else {
-      if (resVal) resVal.textContent = '—';
+      if (resVal) resVal.textContent = 'Waiting';
       if (resMeta) {
-        resMeta.textContent = 'Resolver backlog clears as picks grade';
+        resMeta.textContent = (graded > 0 ? graded + ' published grades' : 'No published grades yet') +
+          (councilPending > 0 ? ' · ' + councilPending + ' council pending' : '') +
+          (pumpPending > 0 ? ' · ' + pumpPending + ' pump pending' : '');
         resMeta.classList.add('desk-empty');
       }
     }
@@ -929,9 +943,11 @@
         loopMeta.classList.remove('desk-empty');
       }
     } else {
-      if (loopVal) loopVal.textContent = '—';
+      if (loopVal) loopVal.textContent = 'Building';
       if (loopMeta) {
-        loopMeta.textContent = 'Signal rankings fill after grades';
+        loopMeta.textContent = graded > 0
+          ? graded + ' graded outcomes; outcome-backed learning is building'
+          : 'No outcome-backed council learning yet';
         loopMeta.classList.add('desk-empty');
       }
     }
@@ -3198,11 +3214,13 @@
     return 'even';
   }
 
-  function councilBiasLabel(trend, expertGraded) {
-    if ((expertGraded || 0) <= 0) return 'PRIOR';
-    if (trend === 'up') return '\u25B2 LEARNED UP';
-    if (trend === 'down') return '\u25BC LEARNED DOWN';
-    return 'EVEN';
+  function councilBiasLabel(trend, expertGraded, weight) {
+    var sample = 'n=' + String(expertGraded || 0);
+    if ((expertGraded || 0) <= 0) return 'PRIOR · ' + sample;
+    if (Number(weight) >= 2.0) return '\u25B2 CAPPED · ' + sample;
+    if (trend === 'up') return '\u25B2 LEARNED UP · ' + sample;
+    if (trend === 'down') return '\u25BC LEARNED DOWN · ' + sample;
+    return 'EVEN · ' + sample;
   }
 
   function soulTrendFromDelta(delta, w, expertGraded) {
@@ -3228,7 +3246,7 @@
       var w = Number(normalized[name]) || 0;
       var gradedN = Number(gradedMap[name]) || 0;
       var trend = soulTrendFromDelta(deltaMap[name], w, gradedN);
-      var biasLabel = councilBiasLabel(trend, gradedN);
+      var biasLabel = councilBiasLabel(trend, gradedN, w);
       var orbColor = SOUL_ORB_COLORS[name] || SOUL_ORB_FALLBACK[index % SOUL_ORB_FALLBACK.length];
       var orbPx = Math.round(58 + Math.min(w, 2.0) / 2.0 * 46);
       return (
@@ -3307,6 +3325,8 @@
       working_count: stats.working && stats.working.top_price_signals
         ? stats.working.top_price_signals.length
         : null,
+      council_pending: stats.council_pending,
+      pump_pending: stats.pump_pending,
     });
     var expEl = document.getElementById('kpi-expired');
     if (expEl) {
@@ -4139,6 +4159,8 @@
                 stats.working && stats.working.top_price_signals
                   ? stats.working.top_price_signals.length
                   : null,
+              council_pending: stats.council_pending,
+              pump_pending: stats.pump_pending,
             });
           })
           .catch(function () {});

@@ -163,8 +163,10 @@ def test_alignment_uses_nudge_expert(tmp_path, monkeypatch):
     from internal.learning.alignment_nudge import apply_alignment_nudge
 
     out = apply_alignment_nudge({"alignment_score": 0.9, "status": "aligned"})
-    assert out["applied"] is True
-    assert load_weights(str(soul))["quant"] > 1.0
+    assert out["applied"] is False
+    assert out["diagnostic_recorded"] is True
+    assert out["reason"] == "alignment_diagnostic_only"
+    assert load_weights(str(soul))["quant"] == 1.0
 
 
 def test_self_learning_adjust_jury_uses_nudge_expert(tmp_path, monkeypatch):
