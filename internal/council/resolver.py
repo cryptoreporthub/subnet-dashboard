@@ -640,7 +640,14 @@ def resolve_prediction_at_horizon(
     if resolve_at is None:
         return _expire_prediction(prediction, now)
 
-    if _is_expired(prediction, resolve_at, now, grace_multiple):
+    first_due_attempt = (
+        bool(globals().get("_resolver_semantics_patch_applied"))
+        and
+        now >= resolve_at
+        and not prediction.get("resolve_attempts")
+        and not prediction.get("price_data_unavailable")
+    )
+    if not first_due_attempt and _is_expired(prediction, resolve_at, now, grace_multiple):
         return _expire_prediction(prediction, now)
 
     if now < resolve_at:
@@ -654,6 +661,13 @@ def resolve_prediction_at_horizon(
         live_prices=live_prices,
     )
     if status != "ok" or price <= 0:
+        if (
+            prediction.get("price_data_unavailable")
+            and int(prediction.get("resolve_attempts") or 0)
+            >= int(globals().get("_PRICE_RETRY_CAP", 0) or 0)
+        ):
+            prediction["status"] = "pending"
+            return prediction
         if _is_expired(prediction, resolve_at, now, grace_multiple):
             return _expire_prediction(prediction, now)
         prediction["status"] = "pending"
