@@ -125,6 +125,22 @@ def _subnets_for_pick_creation(subnets: List[Dict[str, Any]]) -> List[Dict[str, 
     return cap_subnets_for_scoring(subnets, limit=limit)
 
 
+def _published_pick_fails_gate(payload: Dict[str, Any]) -> bool:
+    """True when a cached LONG would not pass today's publish or directional gates."""
+    if str(payload.get("action", "")).upper() not in ("LONG", "BUY"):
+        return False
+    pick = payload.get("pick")
+    if not isinstance(pick, dict):
+        return True
+    try:
+        final_confidence = float(pick.get("final_confidence", 0.0))
+    except (TypeError, ValueError):
+        final_confidence = 0.0
+    if final_confidence < publish_gate_fraction():
+        return True
+    return not directional_publish_guard(pick)["approved"]
+
+
 def _payload_uses_root(payload: Dict[str, Any]) -> bool:
     """True if cached pick/candidate points at Root or a missing netuid."""
     for key in ("pick", "candidate"):
@@ -202,6 +218,8 @@ def get_or_create_today_pick(
                 return existing
             elif _hold_from_stale_boot_data(existing, subnets):
                 logger.info("daily pick: regen stale boot HOLD once subnets hydrated")
+            elif _published_pick_fails_gate(existing):
+                logger.info("daily pick: regen stale published LONG that fails publish gates")
             else:
                 return existing
         # Stale Root-era cache: fall through and regenerate.

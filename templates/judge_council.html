@@ -23,7 +23,8 @@ fetch('/api/judges').then(function(r){return r.json()}).then(function(data){
   if(!judges.length){el.innerHTML='<p class="empty">No judge data available.</p>';return}
   var h='<table class="tbl"><thead><tr><th>Subnet</th><th>Oracle</th><th>Echo</th><th>Pulse</th><th>Consensus</th><th>Verdict</th></tr></thead><tbody>';
   judges.forEach(function(j){
-    var vc=j.consensus&&j.consensus.verdict==='bullish'?'badge-buy':j.consensus&&j.consensus.verdict==='bearish'?'badge-sell':'badge-watch';
+    var v=j.consensus?String(j.consensus.verdict||''):'';
+    var vc=(v==='bullish'||v==='long')?'badge-buy':(v==='bearish'||v==='short')?'badge-sell':'badge-watch';
     h+='<tr><td><b>'+(j.name||'SN'+j.netuid)+'</b><br><span class="pick-meta">SN'+j.netuid+'</span></td>'+
     '<td>'+(j.oracle?j.oracle.score.toFixed(2):'-')+'</td>'+
     '<td>'+(j.echo?j.echo.score.toFixed(2):'-')+'</td>'+
