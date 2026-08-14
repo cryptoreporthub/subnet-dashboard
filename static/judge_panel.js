@@ -88,9 +88,10 @@
 </tr></thead><tbody>`;
 
         judges.forEach(function(j, idx) {
-          var verdictColor = j.consensus && j.consensus.verdict === 'bullish' ? '#4caf50' : j.consensus && j.consensus.verdict === 'bearish' ? '#f44336' : '#888';
+          var verdict = j.consensus ? String(j.consensus.verdict || '') : '';
+          var verdictColor = (verdict === 'bullish' || verdict === 'long') ? '#4caf50' : (verdict === 'bearish' || verdict === 'short') ? '#f44336' : '#888';
           var score = j.consensus ? j.consensus.score.toFixed(3) : 'N/A';
-          var verdict = j.consensus ? esc(String(j.consensus.verdict)) : 'N/A';
+          var verdictLabel = verdict ? esc(verdict) : 'N/A';
           var agreement = j.consensus ? (j.consensus.agreement * 100).toFixed(0) + '%' : 'N/A';
           var oracleDegr = j.oracle && j.oracle.degraded ? ' \u26a0' : '';
           var echoDegr = j.echo && j.echo.degraded ? ' \u26a0' : '';
@@ -103,7 +104,7 @@
   <td style="padding:8px 4px;text-align:right;">${j.echo ? j.echo.score.toFixed(3) : '-'}${echoDegr}</td>
   <td style="padding:8px 4px;text-align:right;">${j.pulse ? j.pulse.score.toFixed(3) : '-'}${pulseDegr}</td>
   <td style="padding:8px 4px;text-align:right;">${score} <span style="color:#666;font-size:11px;">${agreement}</span></td>
-  <td style="padding:8px 8px;color:${verdictColor};">${verdict}</td>
+  <td style="padding:8px 8px;color:${verdictColor};">${verdictLabel}</td>
 </tr>`;
         });
         html += '</tbody></table></div>';

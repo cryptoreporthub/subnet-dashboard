@@ -1,3 +1,6 @@
+.lsn-window-tabs { display: inline-flex; gap: 4px; margin: 8px 0 10px; }
+.lsn-window-tabs a { border: 1px solid rgba(148, 163, 184, .22); border-radius: 999px; color: var(--lsn-muted, #9aa6bd); font-size: 11px; padding: 4px 9px; text-decoration: none; }
+.lsn-window-tabs a.is-active, .lsn-window-tabs a:hover { background: rgba(110, 231, 255, .12); border-color: rgba(110, 231, 255, .5); color: #e8fbff; }
 /* SimiVision Listener — same cosmic-sky + glass as the main site. */
 
 :root{

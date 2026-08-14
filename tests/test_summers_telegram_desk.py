@@ -199,6 +199,10 @@ def test_listener_share_page_composition():
     assert "Trending orbit" in body
     assert "Open the full website" in body
     assert 'href="/"' in body
+    day = client.get("/subnetsummer?window=day")
+    assert day.status_code == 200
+    assert "Day champions" in day.text
+    assert 'href="?window=month"' in day.text
     bounced = client.get("/listener", follow_redirects=False)
     assert bounced.status_code == 308
     assert bounced.headers.get("location") == "/subnetsummer"

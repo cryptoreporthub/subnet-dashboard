@@ -69,6 +69,16 @@
   var GROUP_URL = "https://t.me/OfficialSubnetSummer";
   var callerDays = 30;
 
+  function leaderboardWindowLabel(days) {
+    return Number(days) === 1 ? "day" : Number(days) === 7 ? "week" : "month";
+  }
+
+  function syncLeaderboardWindowLabel() {
+    var label = leaderboardWindowLabel(callerDays);
+    var unit = document.querySelector("#message-intel-champions-card .message-intel__panel-unit");
+    if (unit) unit.textContent = label + " influence";
+  }
+
   function loadFilters() {
     try {
       var raw = sessionStorage.getItem(FILTER_KEY);
@@ -2071,7 +2081,7 @@
       var authors = [];
       var crowns = (payload.meta && payload.meta.reaction_crowns) || [];
       try {
-        var authorsRes = await fetch("/api/message-intel/authors?limit=8");
+        var authorsRes = await fetch("/api/message-intel/authors?days=" + callerDays + "&limit=8");
         if (authorsRes.ok) {
           var authorsPayload = await authorsRes.json();
           authors = authorsPayload.authors || [];
@@ -2192,6 +2202,7 @@
       button.addEventListener("click", function () {
         callerDays = Number(button.getAttribute("data-caller-days")) || 30;
         callersEl.querySelectorAll("[data-caller-days]").forEach(function (tab) { tab.classList.toggle("is-active", tab === button); });
+        syncLeaderboardWindowLabel();
         hydrateCallerLeaderboard();
       });
     });
@@ -2227,6 +2238,7 @@
        hydrateWatchlist();
       hydrate();
       hydrateCalibration();
+      syncLeaderboardWindowLabel();
       pollNetFlow();
       refreshTimer = window.setInterval(hydrate, 60000);
       window.setInterval(pollNetFlow, 60000);

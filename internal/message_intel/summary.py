@@ -53,10 +53,37 @@ def summarize_message_intel() -> Dict[str, Any]:
         recent = stats.get("recent") or []
         if recent:
             row = recent[0]
+            proof = {}
+            try:
+                from internal.message_intel.rollup import build_telegram_proof_band
+
+                proof = build_telegram_proof_band()
+            except Exception:
+                pass
+            proof_line = ""
+            if proof:
+                proof_line = (
+                    f" Telegram proof: {proof.get('graded', 0)} resolved qualifying calls, "
+                    f"{proof.get('hits', 0)} hits, {proof.get('misses', 0)} misses, "
+                    f"{proof.get('neutral', 0)} neutral."
+                )
             parts.append(
-                f"Latest signal from {row.get('group_name') or row.get('source')}: "
+                f"Latest Telegram signal from {row.get('group_name') or row.get('source')}: "
                 f"{row.get('verdict') or 'pending'} at {row.get('conviction') or 0:.0f}% conviction."
+                + proof_line
             )
+        else:
+            try:
+                from internal.message_intel.rollup import build_telegram_proof_band
+
+                proof = build_telegram_proof_band()
+                parts.append(
+                    f"Telegram proof: {proof.get('graded', 0)} resolved qualifying calls, "
+                    f"{proof.get('hits', 0)} hits, {proof.get('misses', 0)} misses, "
+                    f"{proof.get('neutral', 0)} neutral."
+                )
+            except Exception:
+                pass
 
     configured = []
     if sources["telegram"]["configured"]:
@@ -89,4 +116,9 @@ def summarize_message_intel() -> Dict[str, Any]:
     except Exception:
         pass
 
-    return _sentences(parts[:5])
+    parts.append(
+        "Subnet-linked calls use the named subnet or netuid for movement; "
+        "TAO/USD is reserved for explicit TAO messages, and neutral calls stay "
+        "outside hit-rate accuracy."
+    )
+    return _sentences(parts[:6])

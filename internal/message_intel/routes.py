@@ -240,13 +240,13 @@ async def api_message_intel_trending_v2(
 @message_intel_router.get("/api/message-intel/callers")
 async def api_message_intel_callers(
     request: Request,
-    days: int = Query(default=30, ge=7, le=90),
+    days: int = Query(default=30, ge=1, le=90),
     limit: int = Query(default=25, ge=1, le=50),
 ):
     """Resolved, qualifying Telegram-call accuracy only; never engagement."""
     from internal.message_intel.rollup import build_telegram_caller_leaderboard
-    if days not in (7, 30, 90):
-        return {"status": "error", "error": "days must be one of 7, 30, or 90", "callers": []}
+    if days not in (1, 7, 30, 90):
+        return {"status": "error", "error": "days must be one of 1, 7, 30, or 90", "callers": []}
     result = await run_in_threadpool(build_telegram_caller_leaderboard, days=days, limit=limit)
     return {"status": "success", **result}
 
@@ -255,14 +255,14 @@ async def api_message_intel_callers(
 async def api_message_intel_caller_receipts(
     request: Request,
     author_id: str,
-    days: int = Query(default=30, ge=7, le=90),
+    days: int = Query(default=30, ge=1, le=90),
     limit: int = Query(default=20, ge=1, le=50),
     offset: int = Query(default=0, ge=0),
 ):
     """Public proof receipts for one stable Telegram author identity."""
     from internal.message_intel.rollup import list_telegram_caller_receipts
-    if days not in (7, 30, 90):
-        return {"status": "error", "error": "days must be one of 7, 30, or 90", "receipts": []}
+    if days not in (1, 7, 30, 90):
+        return {"status": "error", "error": "days must be one of 1, 7, 30, or 90", "receipts": []}
     result = await run_in_threadpool(
         list_telegram_caller_receipts, author_id=author_id, days=days, limit=limit, offset=offset
     )
