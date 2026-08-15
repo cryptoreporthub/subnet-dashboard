@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -148,6 +149,20 @@ def _save_json(path: str, data: Any) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+
+
+def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
+    try:
+        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({
+                "hypothesisId": hypothesis_id,
+                "location": "internal/council/resolver.py",
+                "message": message,
+                "data": data,
+                "timestamp": int(time.time() * 1000),
+            }) + "\n")
+    except Exception:
+        pass
 
 
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
@@ -1069,7 +1084,36 @@ def _resolve_due_predictions(
     resolved.extend(duplicate_rows)
 
     prices = fetch_prices(subnets)
+    regrade_started = time.perf_counter()
+    # #region agent log
+    _debug_log(
+        "A",
+        "expired regrade stage entered",
+        {
+            "resolved_rows": len(resolved),
+            "hydration_cap": _RESOLVER_HYDRATION_MAX,
+            "hydrate_on_miss": os.environ.get("CALIBRATION_HYDRATE_ON_MISS", ""),
+        },
+    )
+    # #endregion
     regraded_expired = regrade_expired_predictions(live_prices=prices)
+    # #region agent log
+    _debug_log(
+        "A",
+        "expired regrade stage exited",
+        {
+            "duration_ms": round((time.perf_counter() - regrade_started) * 1000, 1),
+            "attempted": regraded_expired.get("attempted", 0),
+            "historical_hydration_attempted": regraded_expired.get(
+                "historical_hydration_attempted", 0
+            ),
+            "historical_hydration_ungradeable": regraded_expired.get(
+                "historical_hydration_ungradeable", 0
+            ),
+            "ledger_mutated": regraded_expired.get("ledger_mutated", False),
+        },
+    )
+    # #endregion
     # Re-sync the in-memory resolved list whenever regrade_expired_predictions wrote
     # anything to disk — not only on successful regrades.  Without this, stamp-only
     # mutations (historical_hydration_attempted, horizon_too_old_for_history) are
