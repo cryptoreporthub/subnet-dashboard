@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import internal.council.scenario_memory as scenario_memory
+import internal.council.state_vector as state_vector
+import internal.indicators.price_fetcher as price_fetcher
+from internal.council.resolver import _scenario_signals_for_subnet
 from internal.council.daily_pick import select_daily_pick
 from internal.council.state_vector import score_subnet_for_day
+from internal.learning.prediction_loop import _link_scenario_memory
 import internal.council.resolver_scheduler as resolver_scheduler
 
 
@@ -65,4 +70,41 @@ def test_daily_scoring_does_not_hydrate_cold_price_cache(monkeypatch):
     pick = select_daily_pick(rows, {"skip_pump_overlay": True})
 
     assert pick["subnet"]["netuid"] in range(1, 25)
+    assert calls == []
+
+
+def test_resolver_scenario_signals_does_not_hydrate_cold_price_cache(monkeypatch):
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {})
+    calls: list[str] = []
+
+    def _unexpected_fetch(netuid, **_kwargs):
+        calls.append(str(netuid))
+        return []
+
+    monkeypatch.setattr(price_fetcher, "fetch_ohlcv", _unexpected_fetch)
+
+    assert _scenario_signals_for_subnet({"netuid": 7, "volume": 10.0}) == {"volume": "low"}
+    assert calls == []
+
+
+def test_scenario_memory_link_does_not_hydrate_cold_price_cache(monkeypatch):
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {})
+    monkeypatch.setattr(state_vector, "_scenario_tags", lambda *_args: {})
+    calls: list[str] = []
+
+    def _unexpected_fetch(netuid, **_kwargs):
+        calls.append(str(netuid))
+        return []
+
+    monkeypatch.setattr(price_fetcher, "fetch_ohlcv", _unexpected_fetch)
+    monkeypatch.setattr(scenario_memory, "get_memory_snapshot", lambda: {"scenarios": []})
+    monkeypatch.setattr(scenario_memory, "_find_scenario_by_prediction_id", lambda *_args: None)
+    monkeypatch.setattr(
+        scenario_memory,
+        "add_scenario",
+        lambda **_kwargs: {"id": "scenario-1"},
+    )
+
+    prediction = {"id": "prediction-1", "netuid": 7, "name": "SN7"}
+    assert _link_scenario_memory(prediction, {"netuid": 7}, None) == "scenario-1"
     assert calls == []

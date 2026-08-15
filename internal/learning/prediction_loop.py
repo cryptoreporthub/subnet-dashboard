@@ -425,7 +425,7 @@ def _link_scenario_memory(
             if existing is not None:
                 return existing.get("id")
 
-        indicators = _compute_technical_indicators(subnet)
+        indicators = _compute_technical_indicators(subnet, allow_hydration=False)
         tags = _scenario_tags(subnet, indicators, market_context or {})
         try:
             from internal.analytics.market_drivers import market_driver_tags
