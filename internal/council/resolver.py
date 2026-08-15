@@ -1102,8 +1102,8 @@ def _resolve_due_predictions(
                         grade_pump_lead_at_resolve_candle,
                     )
 
-                    # Hydrate OHLCV before candle grade so past-grace leads
-                    # are not expired solely because price_cache was cold.
+                    # Critical cycles do not hydrate; recovery handles cold
+                    # price-cache windows separately.
                     recovered = grade_pump_lead_at_resolve_candle(
                         pred, now=now, hydrate=False
                     )
