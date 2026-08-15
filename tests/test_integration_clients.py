@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 from internal.integrations.clients import (
+    chat_llm_targets,
     chutes_configured,
     desearch_subnet_snippet,
 )
@@ -44,3 +45,21 @@ def test_enrichment_merges_drivers(monkeypatch):
 
 def test_chutes_configured():
     assert chutes_configured() is False
+
+
+def test_openrouter_is_first_llm_target(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-key")
+    monkeypatch.delenv("CHUTES_API_KEY", raising=False)
+    monkeypatch.delenv("THIRTY_SPOKES_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("LLM_API_KEY", raising=False)
+    with patch(
+        "internal.integrations.clients._models_endpoint_ok",
+        return_value=True,
+    ):
+        targets = chat_llm_targets()
+    assert targets[0] == (
+        "https://openrouter.ai/api/v1",
+        "openai/gpt-4o-mini",
+        "openrouter",
+    )

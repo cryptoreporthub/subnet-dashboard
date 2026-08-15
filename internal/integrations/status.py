@@ -60,6 +60,13 @@ INTEGRATIONS: List[Dict[str, Any]] = [
         "docs_url": "https://chutes.ai",
     },
     {
+        "netuid": None,
+        "slug": "openrouter",
+        "name": "OpenRouter",
+        "role": "Council LLM provider",
+        "docs_url": "https://openrouter.ai/docs",
+    },
+    {
         "netuid": 99,
         "slug": "thirty_spokes",
         "name": "Thirty Spokes",
@@ -200,6 +207,10 @@ def _llm_api_key() -> Optional[str]:
     )
 
 
+def _openrouter_api_key() -> Optional[str]:
+    return os.environ.get("OPENROUTER_API_KEY")
+
+
 def _thirty_spokes_base_url() -> str:
     return (
         os.environ.get("THIRTY_SPOKES_BASE_URL")
@@ -276,6 +287,17 @@ def _probe_chutes() -> Dict[str, Any]:
     return probe
 
 
+def _probe_openrouter() -> Dict[str, Any]:
+    from internal.integrations.clients import openrouter_base_url
+
+    probe = _probe_openai_models(openrouter_base_url(), _openrouter_api_key())
+    if probe.get("connected"):
+        probe["detail"] = "models ok · council chat · OpenRouter"
+    elif not _openrouter_api_key():
+        probe["detail"] = "add OPENROUTER_API_KEY"
+    return probe
+
+
 def _probe_thirty_spokes(api_key: Optional[str] = None) -> Dict[str, Any]:
     key = api_key or _llm_api_key()
     base = _thirty_spokes_base_url()
@@ -317,6 +339,7 @@ _PROBERS = {
     "blockmachine": _probe_blockmachine,
     "desearch": _probe_desearch,
     "chutes": _probe_chutes,
+    "openrouter": _probe_openrouter,
     "thirty_spokes": _probe_thirty_spokes,
     "ditto": _probe_ditto,
 }

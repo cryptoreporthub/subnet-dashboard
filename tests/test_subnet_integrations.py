@@ -20,8 +20,9 @@ def test_subnet_integrations_api_contract():
     assert resp.status_code == 200
     body = resp.json()
     assert "integrations" in body
-    assert len(body["integrations"]) == 6
-    assert body["integration_total"] == 6
+    assert len(body["integrations"]) == 7
+    assert any(row["slug"] == "openrouter" for row in body["integrations"])
+    assert body["integration_total"] == 7
     assert body["target_minimum"] == 3
     slugs = {row["slug"] for row in body["integrations"]}
     assert slugs == {
@@ -29,6 +30,7 @@ def test_subnet_integrations_api_contract():
         "blockmachine",
         "desearch",
         "chutes",
+        "openrouter",
         "thirty_spokes",
         "ditto",
     }
