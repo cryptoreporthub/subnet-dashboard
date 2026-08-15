@@ -94,20 +94,6 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({
-                "hypothesisId": hypothesis_id,
-                "location": "internal/council/resolver_scheduler.py",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }) + "\n")
-    except Exception:
-        pass
-
-
 def _load_json(path: str) -> Dict[str, Any]:
     if os.path.exists(path):
         try:
@@ -156,6 +142,7 @@ class PredictionResolverScheduler:
         self._subnet_provider = subnet_provider or _default_subnets
 
         self._lock = threading.Lock()
+        self._cycle_lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
@@ -302,19 +289,6 @@ class PredictionResolverScheduler:
                 self._lifecycle = "ticking"
             else:
                 self._lifecycle = "running"
-        # #region agent log
-        _debug_log(
-            "A",
-            "resolver tick entered",
-            {
-                "first_tick": first_tick,
-                "hydration_cap": getattr(resolver, "_RESOLVER_HYDRATION_MAX", None),
-                "cycle_timeout_seconds": RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
-                if first_tick
-                else RESOLVER_CYCLE_TIMEOUT_SECONDS,
-            },
-        )
-        # #endregion
         logger.info("resolver lifecycle event=tick_start first=%s", first_tick)
         with heavy_job_slot("prediction_resolver") as acquired:
             if not acquired:
@@ -417,31 +391,43 @@ class PredictionResolverScheduler:
             pass
 
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
+        if not self._cycle_lock.acquire(blocking=False):
+            result = {
+                "ok": True,
+                "run_at": _now_iso(),
+                "resolved_now": 0,
+                "expired_now": 0,
+                "pending": 0,
+                "skipped": "cycle_in_flight",
+            }
+            self._persist_cycle_summary(result)
+            return result
+
         timeout = (
             RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
             if self._first_tick_pending
             else RESOLVER_CYCLE_TIMEOUT_SECONDS
         )
         if timeout <= 0:
-            return self._run_refresh_cycle()
-        cycle_started = time.perf_counter()
+            try:
+                return self._run_refresh_cycle()
+            finally:
+                self._cycle_lock.release()
         pool = ThreadPoolExecutor(max_workers=1)
+        submitted = False
+
+        def _run_cycle() -> Dict[str, Any]:
+            try:
+                return self._run_refresh_cycle()
+            finally:
+                self._cycle_lock.release()
+
         try:
-            fut = pool.submit(self._run_refresh_cycle)
+            fut = pool.submit(_run_cycle)
+            submitted = True
             try:
                 return fut.result(timeout=timeout)
             except FuturesTimeoutError:
-                # #region agent log
-                _debug_log(
-                    "C",
-                    "resolver cycle timed out",
-                    {
-                        "timeout_seconds": timeout,
-                        "elapsed_ms": round((time.perf_counter() - cycle_started) * 1000, 1),
-                        "future_done": fut.done(),
-                    },
-                )
-                # #endregion
                 result = {
                     "ok": False,
                     "run_at": _now_iso(),
@@ -452,6 +438,10 @@ class PredictionResolverScheduler:
                 }
                 self._persist_cycle_summary(result)
                 return result
+        except BaseException:
+            if not submitted:
+                self._cycle_lock.release()
+            raise
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
 
@@ -498,27 +488,7 @@ class PredictionResolverScheduler:
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            resolve_started = time.perf_counter()
-            # #region agent log
-            _debug_log(
-                "B",
-                "resolver grading stage entered",
-                {"subnet_count": len(subnets), "batch_size": len(batch)},
-            )
-            # #endregion
             resolved = resolver.resolve_due_predictions(subnets)
-            # #region agent log
-            _debug_log(
-                "B",
-                "resolver grading stage exited",
-                {
-                    "duration_ms": round((time.perf_counter() - resolve_started) * 1000, 1),
-                    "resolved_now": len(resolved.get("resolved_now", [])),
-                    "pending": len(resolved.get("pending", [])),
-                    "regrade": resolved.get("regraded_expired", {}),
-                },
-            )
-            # #endregion
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
 
@@ -527,22 +497,7 @@ class PredictionResolverScheduler:
             #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
             #    Most are already retired in step 1; this catches stragglers
             #    (e.g. corrupt records that step 1 skipped).
-            expire_started = time.perf_counter()
-            # #region agent log
-            _debug_log("D", "resolver expiry stage entered", {})
-            # #endregion
             expired = resolver.expire_stale_predictions()
-            # #region agent log
-            _debug_log(
-                "D",
-                "resolver expiry stage exited",
-                {
-                    "duration_ms": round((time.perf_counter() - expire_started) * 1000, 1),
-                    "expired_now": len(expired.get("expired_now", [])),
-                    "pending": expired.get("stats", {}).get("pending", 0),
-                },
-            )
-            # #endregion
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count
             result["pending"] = expired.get("stats", {}).get("pending", 0)

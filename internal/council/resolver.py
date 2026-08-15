@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timedelta, timezone
@@ -62,9 +61,6 @@ except Exception:  # pragma: no cover
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
-_RESOLVER_HYDRATION_MAX = max(
-    0, int(os.environ.get("CALIBRATION_RESOLVE_HYDRATION_MAX", "4"))
-)
 
 # Cold-cache alert: warn when price_data_unavailable / total_resolved exceeds this ratio.
 # Override with COLD_CACHE_ALERT_RATIO env var (float in [0, 1], e.g. "0.05" for 5%).
@@ -149,20 +145,6 @@ def _save_json(path: str, data: Any) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
-
-
-def _debug_log(hypothesis_id: str, message: str, data: Dict[str, Any]) -> None:
-    try:
-        with open("/opt/cursor/logs/debug.log", "a", encoding="utf-8") as fh:
-            fh.write(json.dumps({
-                "hypothesisId": hypothesis_id,
-                "location": "internal/council/resolver.py",
-                "message": message,
-                "data": data,
-                "timestamp": int(time.time() * 1000),
-            }) + "\n")
-    except Exception:
-        pass
 
 
 def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, float]:
@@ -1052,8 +1034,10 @@ def resolve_due_predictions(
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
-    """Resolve due predictions with bounded cache-miss hydration per cycle."""
-    with resolver_hydration_budget(_RESOLVER_HYDRATION_MAX):
+    """Resolve due predictions without network hydration on cache misses."""
+    # The critical cycle must remain bounded by local cache work. Missing
+    # candles stay pending for the separately bounded recovery sweep.
+    with resolver_hydration_budget(0):
         return _resolve_due_predictions(
             subnets,
             horizon_hours=horizon_hours,
@@ -1084,36 +1068,7 @@ def _resolve_due_predictions(
     resolved.extend(duplicate_rows)
 
     prices = fetch_prices(subnets)
-    regrade_started = time.perf_counter()
-    # #region agent log
-    _debug_log(
-        "A",
-        "expired regrade stage entered",
-        {
-            "resolved_rows": len(resolved),
-            "hydration_cap": _RESOLVER_HYDRATION_MAX,
-            "hydrate_on_miss": os.environ.get("CALIBRATION_HYDRATE_ON_MISS", ""),
-        },
-    )
-    # #endregion
     regraded_expired = regrade_expired_predictions(live_prices=prices)
-    # #region agent log
-    _debug_log(
-        "A",
-        "expired regrade stage exited",
-        {
-            "duration_ms": round((time.perf_counter() - regrade_started) * 1000, 1),
-            "attempted": regraded_expired.get("attempted", 0),
-            "historical_hydration_attempted": regraded_expired.get(
-                "historical_hydration_attempted", 0
-            ),
-            "historical_hydration_ungradeable": regraded_expired.get(
-                "historical_hydration_ungradeable", 0
-            ),
-            "ledger_mutated": regraded_expired.get("ledger_mutated", False),
-        },
-    )
-    # #endregion
     # Re-sync the in-memory resolved list whenever regrade_expired_predictions wrote
     # anything to disk — not only on successful regrades.  Without this, stamp-only
     # mutations (historical_hydration_attempted, horizon_too_old_for_history) are
@@ -1150,7 +1105,7 @@ def _resolve_due_predictions(
                     # Hydrate OHLCV before candle grade so past-grace leads
                     # are not expired solely because price_cache was cold.
                     recovered = grade_pump_lead_at_resolve_candle(
-                        pred, now=now, hydrate=True
+                        pred, now=now, hydrate=False
                     )
                     if recovered.get("status") == "resolved":
                         resolved.append(recovered)

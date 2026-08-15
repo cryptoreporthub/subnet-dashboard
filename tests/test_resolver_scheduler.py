@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -717,6 +718,50 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert sched.state()["lifecycle"] == "degraded"
     assert sched.state()["first_tick_ok"] is False
     assert "resolver lifecycle event=timeout" in caplog.text
+
+
+def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
+    monkeypatch, fresh_scheduler
+):
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        finished.set()
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._running = True
+    sched._first_tick_pending = True
+
+    timed_out = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(timed_out["error"])
+
+    skipped = sched._run_refresh_cycle_with_timeout()
+    assert skipped["skipped"] == "cycle_in_flight"
+    assert not finished.is_set()
+
+    release.set()
+    assert finished.wait(timeout=1)
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
