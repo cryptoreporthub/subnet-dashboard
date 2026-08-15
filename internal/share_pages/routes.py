@@ -730,3 +730,9 @@ async def listener_page(request: Request):
         }
     )
     return templates.TemplateResponse(request, "listener.html", ctx)
+
+
+@share_router.get("/subnetsummer", include_in_schema=False)
+async def subnet_summer_alias(request: Request):
+    """Backward-compatible singular alias for the Telegram listener page."""
+    return await listener_page(request)

@@ -180,7 +180,7 @@ def test_rollup_recognizes_explicit_subnet_mentions_without_entities():
 
 def test_message_intel_template_has_my_desk_and_pulse():
     from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
     tpl = env.get_template("partials/premium/message_intel_feed.html")
     html = tpl.render(message_intel={"meta": {"trending": [], "total_messages": 0}, "messages": []})
     assert "My Desk" in html
@@ -189,7 +189,7 @@ def test_message_intel_template_has_my_desk_and_pulse():
 
 def test_listener_template_accepts_new_trending_fields():
     from jinja2 import Environment, FileSystemLoader
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
     tpl = env.get_template("partials/premium/message_intel_ssr_macros.html")
     html = tpl.module.trend_rows([
         {"name": "Subnet 1", "netuid": 1, "mentions": 3, "chatter_power": 1.234, "why": "velocity × conviction × quality", "delta": 0.123, "sentiment": "Bullish"}
