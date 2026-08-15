@@ -115,11 +115,14 @@ def test_summers_template_has_w4_markers():
     js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert 'id="message-intel-summary-24h"' in html
+    assert "message-intel__tile--recap" in html
     assert "message-intel__summary-24h" in html
     assert "Yesterday in summary" in html
     assert "renderYesterdaySummary" in js
     assert "yesterday_summary" in js
     assert "message-intel__summary-24h-stats" in js
+    assert "hot subnets" in js
+    assert "top acc" in js
     assert "message-intel__summary-24h-bars" in js
     assert "renderSummary24h" in js
     assert ".message-intel__summary-24h" in css

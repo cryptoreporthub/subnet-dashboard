@@ -451,13 +451,13 @@
         stats.high_conviction != null ? stats.high_conviction : summary.high_conviction_count,
         "high conv"
       ) +
-      statChip(stats.active_subnets, "act. subnets") +
-      statChip(stats.topics, "topics") +
-      statChip(stats.authors, "authors") +
+      statChip(stats.hot_subnets != null ? stats.hot_subnets : stats.active_subnets, "hot subnets") +
       statChip(
-        stats.peak_hour != null ? String(stats.peak_hour).padStart(2, "0") + ":00" : "—",
-        "peak"
+        stats.top_acc != null ? Number(stats.top_acc).toFixed(1) : "—",
+        "top acc"
       ) +
+      statChip(stats.topics, "topics") +
+      statChip(stats.recent_msgs != null ? stats.recent_msgs : summary.message_count, "recent msgs") +
       "</div>";
 
     function chipRow(label, rows, kind) {

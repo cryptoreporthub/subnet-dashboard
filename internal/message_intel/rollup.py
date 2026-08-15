@@ -1573,6 +1573,52 @@ def _topic_label(tag: str) -> str:
     return str(tag or "").replace("_", " ").strip().title()
 
 
+def _display_group_name(name: Optional[str]) -> str:
+    raw = str(name or "").strip()
+    if not raw:
+        return "The group"
+    lowered = raw.lower()
+    if lowered in {"officialsubnetsummer", "subnet summer", "subnetsummer"}:
+        return "Subnet Summer"
+    if " " in raw:
+        return raw
+    spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", raw)
+    return spaced or raw
+
+
+def _subnet_names_phrase(rows: List[Dict[str, Any]], *, limit: int = 3) -> str:
+    names: List[str] = []
+    for row in rows[:limit]:
+        netuid = row.get("netuid")
+        names.append(str(row.get("name") or (f"SN{netuid}" if netuid is not None else "—")))
+    return _join_phrase(names)
+
+
+def _yesterday_top_accuracy(
+    author_counts: Dict[str, int],
+    author_names: Dict[str, str],
+    reliability_rows: Dict[str, Dict[str, Any]],
+    *,
+    min_graded: int = 5,
+) -> Optional[Dict[str, Any]]:
+    best_name: Optional[str] = None
+    best_score = -1.0
+    for key in author_counts:
+        rel = reliability_rows.get(key) or reliability_rows.get(f"id:{key}")
+        if not rel:
+            continue
+        graded = int(rel.get("total_messages") or 0)
+        if graded < min_graded:
+            continue
+        score = float(rel.get("accuracy_score") or 0.0)
+        if score > best_score:
+            best_score = score
+            best_name = author_names.get(key) or rel.get("author_name") or key
+    if best_name is None or best_score < 0:
+        return None
+    return {"name": best_name, "accuracy": round(best_score * 100.0, 1)}
+
+
 def _yesterday_narrative(summary: Dict[str, Any]) -> str:
     if not summary.get("ready"):
         return str(
@@ -1581,66 +1627,86 @@ def _yesterday_narrative(summary: Dict[str, Any]) -> str:
         )
 
     pulse = summary.get("group_pulse") or {}
-    group = pulse.get("group") or "The group"
+    group = _display_group_name(pulse.get("group"))
     sentiment = str(pulse.get("sentiment") or "Mixed").lower()
-    tone = {
-        "bullish": "bullish",
-        "bearish": "bearish",
-        "cautious": "cautious",
-    }.get(sentiment, "mixed")
-
-    sentences: List[str] = [
-        (
-            f"{group} logged {summary.get('message_count', 0)} messages yesterday "
-            f"with a {tone} tone."
-        )
-    ]
-
+    top_subnets = summary.get("top_subnets") or []
     topics = summary.get("topics") or []
     topic_labels = [_topic_label(t.get("topic")) for t in topics[:4] if t.get("topic")]
-    if topic_labels:
-        sentences.append(f"Chat leaned into {_join_phrase(topic_labels)}.")
+    movers = summary.get("movers") or []
+    highlight = summary.get("highlight") or {}
+    top_author = summary.get("top_author") or {}
+    top_accuracy = summary.get("top_accuracy") or {}
 
-    top_subnets = summary.get("top_subnets") or []
+    sentences: List[str] = []
+
+    if top_subnets:
+        opener = f"{group} circled {_subnet_names_phrase(top_subnets, limit=2)} yesterday"
+    else:
+        opener = f"{group} kept {summary.get('message_count', 0)} messages moving yesterday"
+
+    if topic_labels:
+        opener += f", with {_join_phrase(topic_labels).lower()} taking most of the airtime"
+
+    if sentiment == "bullish":
+        opener += ", and the room leaned bullish"
+    elif sentiment == "bearish":
+        opener += ", with bearish calls carrying the thread"
+    elif sentiment == "cautious":
+        opener += ", in a cautious wait-and-see mood"
+    sentences.append(opener + ".")
+
     if top_subnets:
         lead = top_subnets[0]
         lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
-        lead_line = f"{lead_name} (SN{lead.get('netuid')}) led mentions at {lead.get('mentions', 0)}"
+        detail = f"{lead_name} drew the most attention ({lead.get('mentions', 0)} mentions)"
         if len(top_subnets) > 1:
             runner = top_subnets[1]
             runner_name = runner.get("name") or f"SN{runner.get('netuid')}"
-            lead_line += (
-                f", followed by {runner_name} (SN{runner.get('netuid')}) "
-                f"at {runner.get('mentions', 0)}"
-            )
-        sentences.append(lead_line + ".")
+            detail += f", ahead of {runner_name} ({runner.get('mentions', 0)})"
+        sentences.append(detail + ".")
 
-    movers = summary.get("movers") or []
-    rising = [m for m in movers if int(m.get("change") or 0) > 0]
+    lead_netuid = top_subnets[0].get("netuid") if top_subnets else None
+    rising = [
+        m
+        for m in movers
+        if int(m.get("change") or 0) >= 2 and m.get("netuid") != lead_netuid
+    ]
     if rising:
         mover = rising[0]
         mover_name = mover.get("name") or f"SN{mover.get('netuid')}"
         sentences.append(
-            f"{mover_name} picked up steam (+{mover.get('change')} mentions vs the prior day)."
+            f"{mover_name} heated up late (+{mover.get('change')} mentions vs the day before)."
         )
 
-    highlight = summary.get("highlight") or {}
     snippet = _clip_snippet(highlight.get("content"))
     if snippet:
-        author = highlight.get("author_name") or "Someone"
+        author = highlight.get("author_name") or "A caller"
         conv = highlight.get("conviction")
-        conv_bit = f" at {conv:.0f}% conviction" if conv is not None else ""
-        sentences.append(f'Standout line from {author}{conv_bit}: "{snippet}".')
-
-    top_author = summary.get("top_author") or {}
-    if top_author.get("name") and not snippet:
+        direction = str(highlight.get("direction") or "").lower()
+        dir_word = {"up": "bullish", "down": "bearish"}.get(direction, "")
+        conv_bit = f" ({conv:.0f}% conviction)" if conv is not None else ""
+        mood = f" — a {dir_word} read" if dir_word else ""
+        sentences.append(f'The line that stuck came from {author}{conv_bit}: "{snippet}"{mood}.')
+    elif top_author.get("name"):
+        if top_accuracy.get("name") == top_author.get("name") and top_accuracy.get("accuracy") is not None:
+            sentences.append(
+                f"{top_author['name']} drove the thread "
+                f"({top_author.get('messages', 0)} messages) with "
+                f"{top_accuracy['accuracy']:.1f}% strike on graded calls."
+            )
+        else:
+            sentences.append(
+                f"{top_author['name']} posted the most ({top_author.get('messages', 0)} messages)."
+            )
+    elif top_accuracy.get("name") and top_accuracy.get("accuracy") is not None:
         sentences.append(
-            f"{top_author['name']} drove the most messages ({top_author.get('messages', 0)})."
+            f"{top_accuracy['name']} led strike rate at {top_accuracy['accuracy']:.1f}% "
+            f"on graded calls."
         )
 
     peak = summary.get("hourly_peak")
     if peak is not None:
-        sentences.append(f"Chatter peaked around {int(peak):02d}:00 UTC.")
+        sentences.append(f"Traffic peaked near {int(peak):02d}:00 UTC.")
 
     return " ".join(sentences)
 
@@ -1812,6 +1878,9 @@ def build_yesterday_chat_summary(
     if highlight.get("content"):
         highlight = {**highlight, "content": _clip_snippet(highlight.get("content"))}
 
+    reliability_rows = _author_reliability_rows(db)
+    top_accuracy = _yesterday_top_accuracy(author_counts, author_names, reliability_rows)
+
     out = {
         **base,
         "top_subnets": top_subnets,
@@ -1820,15 +1889,17 @@ def build_yesterday_chat_summary(
         "group_pulse": group_pulse,
         "topics": topics,
         "top_author": top_author,
+        "top_accuracy": top_accuracy,
         "highlight": highlight or None,
         "hourly": hourly,
         "hourly_peak": hourly_peak,
         "stats": {
             "graded": message_count,
             "high_conviction": hc_count,
-            "active_subnets": len(subnet_counts),
+            "hot_subnets": len(subnet_counts),
             "topics": len(topic_counts),
-            "authors": len(author_counts),
+            "top_acc": top_accuracy.get("accuracy") if top_accuracy else None,
+            "recent_msgs": message_count,
             "peak_hour": hourly_peak,
         },
         "generated_at": now.isoformat().replace("+00:00", "Z"),
