@@ -272,6 +272,60 @@ def test_outcomes_start_when_listener_off(monkeypatch):
     assert "message-intel-listeners" not in scheduled
 
 
+def test_message_intel_listener_starts_immediately_on_worker(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("BOOT_DEFER_SECONDS", "90")
+    scheduled = {}
+
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: scheduled.__setitem__(name, delay),
+    )
+
+    from internal.background_boot import _maybe_start_message_intel
+
+    _maybe_start_message_intel()
+
+    assert scheduled["message-intel-listeners"] == 0
+
+
+def test_message_intel_listener_stays_deferred_on_web(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setattr("internal.background_boot.BOOT_DEFER_SECONDS", 90)
+    scheduled = {}
+
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: scheduled.__setitem__(name, delay),
+    )
+
+    from internal.background_boot import _maybe_start_message_intel
+
+    _maybe_start_message_intel()
+
+    assert scheduled["message-intel-listeners"] == 150
+
+
+def test_message_intel_listener_worker_override_is_preserved(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER_DEFER_SECONDS", "12")
+    scheduled = {}
+
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: scheduled.__setitem__(name, delay),
+    )
+
+    from internal.background_boot import _maybe_start_message_intel
+
+    _maybe_start_message_intel()
+
+    assert scheduled["message-intel-listeners"] == 12
+
+
 def test_worker_peer_split_v2_web(monkeypatch):
     from internal.learning.loop_health import _worker_peer
 

@@ -26,8 +26,10 @@ def test_summers_desk_first_class_on_home():
     assert "Comment of the week" in html
     assert "message-intel__sec-bar" in html
     assert "message-intel__sw--violet" in html
-    assert "message-intel__flagship-chip" in html
-    assert "FLAGSHIP" in html
+    assert "glass-card" in html
+    assert "message-intel__pulsar" in html
+    assert "message-intel__sky" in html
+    assert "FLAGSHIP" not in html
     assert "Loading live feed" in html or "Warming up Telegram" in html
 
     # Must sit on the spine — not only inside the More intel drawer
@@ -49,22 +51,17 @@ def test_summers_desk_js_renders_conviction():
     assert "week_top_comment" in src
     assert "renderDivergence" in src
     assert "/api/message-intel/divergence" in src
-
-
-def test_summers_listener_hydration_contracts():
-    route_src = open("internal/share_pages/routes.py", encoding="utf-8").read()
-    template_src = open("templates/listener.html", encoding="utf-8").read()
-    assert 'conv_payload.get("items")' in route_src
-    assert 'authors_payload.get("reaction_crowns")' in route_src
-    assert "reaction_crowns[:6]" in template_src
-    assert "/subnetsummers" in template_src
-
-
-def test_listener_net_flow_reads_live_subnet_reserve_fields():
-    js_src = open("static/js/listener.js", encoding="utf-8").read()
-    assert "row.total_tao" in js_src
-    assert "row.price" in js_src
-    assert "subnetInfo_getDynamicInfo" not in js_src
+    assert "renderHeroStats" in src
+    assert "renderInterceptWave" in src
+    assert "renderTrendingSky" in src
+    assert "awaiting signal" in src
+    assert "pingPulsar" in src
+    assert "message-intel__conv-ring" in src
+    assert "renderHeartbeat" in src
+    assert "renderChatterPower" in src
+    assert "too few graded calls to trust" in src
+    assert "pollNetFlow" in src
+    assert "bindPulseModes" in src
 
 
 def test_summers_flagship_css_tokens():
@@ -75,9 +72,11 @@ def test_summers_flagship_css_tokens():
     assert "--mi-violet:" in css
     # Compat: --mi-pink aliases onto violet after sitewide magenta→violet migration
     assert "--mi-pink: var(--mi-violet)" in css
-    assert "--mi-yellow: #f5d547" in css
-    assert "rgba(245, 213, 71, 0.72)" in css  # yellow flagship board border
-    assert ".message-intel__flagship-chip" in css
+    assert "--mi-yellow:" in css
+    assert "--glass-fill-card" in css
+    assert ".message-intel__pulsar" in css
+    assert ".message-intel__sky" in css
+    assert ".message-intel__conv-ring" in css
     assert ".message-intel__rail-node" in css
     assert ".message-intel__sec-bar--green" in css
     assert "message-intel-wave" in css
@@ -87,6 +86,22 @@ def test_summers_flagship_css_tokens():
     assert "message-intel__pulse-stage" in css
     assert "message-intel-board-breathe" in css
     assert "message-intel-spotlight-gleam" in css
+    assert ".message-intel__bay" in css
+    assert ".message-intel__instrument" in css
+    assert ".message-intel__heartbeat" in css
+    assert ".message-intel__loop" in css
+    assert ".message-intel__full-desk" in css
+    assert ".message-intel__mode" in css
+    assert ".message-intel__tile--orbit" in css
+    assert ".message-intel__sky-track--1" in css
+    assert ".message-intel__sky-carrier" in css
+    assert ".message-intel__hall" in css
+    assert ".message-intel__hall { display: contents; }" in css
+    assert '[data-rank="1"] { --spin: 26s; --r: 21.43%;' in css
+    assert ".message-intel__sky-legend" in css
+    assert ".message-intel__cell { display: none; }" not in css
+    # Cosmic glass: desk must stay transparent so the site sky reads through
+    assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
 
 
 def test_summers_flagship_composition_hooks():
@@ -108,6 +123,85 @@ def test_summers_flagship_composition_hooks():
     ):
         assert f'id="{eid}"' in html
     assert "Telegram outcome stories" in html
+    assert "message-intel__pulsar" in html
+    assert "message-intel__sky-track" in html
+    assert "message-intel__sky-carrier" in html
+    assert "message-intel__hall" in html
+    assert "message-intel__rail\"" not in html
+    assert 'id="message-intel-sky"' in html
+    assert "hidden" not in html.split('id="message-intel-sky"', 1)[1].split(">", 1)[0]
+    assert "message-intel__sky-legend" in html
+    assert "closer = higher rank" in html
+    assert "message-intel__bay" in html
+    assert "message-intel__heartbeat" in html
+    assert "message-intel__loop" in html
+    assert 'role="tablist"' in html
+    assert 'href="/subnetsummer"' in html
+    assert "Open full listener" in html
+    assert 'data-pulse-pane="listen"' in html
+    assert 'data-pulse-pane="learn"' in html
+    assert 'data-pulse-pane="rank"' in html
+    assert 'data-pulse-pane="serve"' in html
+    assert "Chatter Power" in html
+    assert "message-intel__instrument" in html
+    assert "message-intel__zones" not in html
+    assert "mi-zone-feed" not in html
+    assert 'id="message-intel-flow"' in html
+    assert 'id="message-intel-callers-body"' in html
+    assert 'id="message-intel-power"' in html
+    assert "/rank" in html
+    assert "/who" in html
+    assert "message-intel__conv-ring" in open(
+        "templates/partials/premium/message_intel_ssr_macros.html", encoding="utf-8"
+    ).read()
+
+
+def test_listener_share_page_composition():
+    html = open("templates/listener.html", encoding="utf-8").read()
+    css = open("static/css/listener.css", encoding="utf-8").read()
+    assert "lsn-site" in html
+    assert 'href="/"' in html
+    assert "Open the full website" in html
+    assert ".lsn-site" in css
+    assert "lsn-title" in html
+    assert "lsn-bay" in html
+    assert "lsn-loop" not in html
+    assert 'role="tablist"' not in html
+    assert "cosmic-sky" in html
+    assert "council-first-theme" in html
+    assert "Chatter Power" in html
+    assert "/rank" in html
+    assert "/who" in html
+    assert "lsn-orbit" in html
+    assert "lsn-orbit__track" in html
+    assert "lsn-hall" in html
+    assert "lsn-rail" not in html
+    assert "lsn-orbit-legend" in html
+    assert "closer = higher rank" in html
+    assert ".lsn-orbit" in css
+    assert ".lsn-hall" in css
+    assert "@media (max-width: 520px)" in css
+    assert ".lsn-tile--desk,.lsn-hall{grid-template-columns:1fr}" in css.replace(" ", "")
+    assert "lsn-zones" not in html
+    assert "lsn-zone-feed" not in html
+    assert "Telegram pulse" in html
+    assert "Trending orbit" in html
+    assert "Syne" in html
+    assert "Space+Grotesk" in html
+    assert "wallet" not in html.lower()
+    assert "lsn-vault" not in html
+    assert ".lsn-intercept" in css
+    assert "--lsn-font-brand:'Syne'" in css.replace(" ", "")
+    resp = client.get("/subnetsummer")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "lsn-intercept" in body
+    assert "Trending orbit" in body
+    assert "Open the full website" in body
+    assert 'href="/"' in body
+    bounced = client.get("/listener", follow_redirects=False)
+    assert bounced.status_code == 308
+    assert bounced.headers.get("location") == "/subnetsummer"
 
 
 def test_summers_divergence_mobile_and_keyboard_hooks():

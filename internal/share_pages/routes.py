@@ -10,7 +10,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from internal.share_pages.search import global_search
@@ -774,6 +774,12 @@ async def _listener_page_context() -> Dict[str, Any]:
 
 @share_router.get("/listener")
 async def listener_page(request: Request):
+    """§28-3 — compatibility redirect to the full Telegram desk."""
+    return RedirectResponse(url="/subnetsummer", status_code=308)
+
+
+@share_router.get("/subnetsummer")
+async def subnet_summer_page(request: Request):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
     ctx = await _listener_page_context()
     base = _public_base(request)
@@ -798,7 +804,7 @@ async def listener_page(request: Request):
     return templates.TemplateResponse(request, "listener.html", ctx)
 
 
-@share_router.get("/subnetsummer", include_in_schema=False)
-async def subnet_summer_alias(request: Request):
-    """Backward-compatible singular alias for the Telegram listener page."""
-    return await listener_page(request)
+@share_router.get("/subnetsummers", include_in_schema=False)
+async def subnet_summers_alias(request: Request):
+    """Backward-compatible plural alias for the Telegram listener desk."""
+    return await subnet_summer_page(request)
