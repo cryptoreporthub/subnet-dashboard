@@ -47,7 +47,7 @@ def test_judge_agreement_from_signal_spread():
     assert labels["dissent"] == "High dissent · 41 pts"
 
 
-def test_attach_judge_scores_to_daily_pick_backfills_from_predictions(monkeypatch):
+def test_attach_judge_scores_does_not_use_ambiguous_netuid_backfill(monkeypatch):
     scores = {
         "oracle": {"confidence": 0.859},
         "echo": {"confidence": 0.84},
@@ -62,10 +62,29 @@ def test_attach_judge_scores_to_daily_pick_backfills_from_predictions(monkeypatc
         "pick": {"subnet": {"netuid": 29, "name": "Coldint"}, "final_confidence": 0.72},
     }
     out = attach_judge_scores_to_daily_pick(payload)
+    assert "judge_scores_at_creation" not in out["pick"]
+    assert build_tribunal_view(out, {"judge_weights": {"oracle": 0.4, "echo": 0.3, "pulse": 0.3}})["conviction_pct"] == 72.0
+
+
+def test_attach_judge_scores_preserves_exact_creation_scores():
+    scores = {
+        "oracle": {"confidence": 0.859},
+        "echo": {"confidence": 0.84},
+        "pulse": {"confidence": 0.45},
+    }
+    payload = {
+        "action": "long",
+        "pick": {
+            "subnet": {"netuid": 29, "name": "Coldint"},
+            "final_confidence": 0.72,
+            "judge_scores_at_creation": scores,
+        },
+    }
+    out = attach_judge_scores_to_daily_pick(payload)
     assert out["pick"]["judge_scores_at_creation"] == scores
 
 
-def test_daily_pick_lite_enrich_attaches_judge_scores(monkeypatch):
+def test_daily_pick_lite_enrich_does_not_attach_unmatched_judge_scores(monkeypatch):
     import server as srv
 
     scores = {"oracle": {"confidence": 0.8}, "echo": {"confidence": 0.7}, "pulse": {"confidence": 0.6}}
@@ -74,9 +93,15 @@ def test_daily_pick_lite_enrich_attaches_judge_scores(monkeypatch):
         lambda netuid: scores,
     )
     out = srv._enrich_daily_pick_payload_lite(
-        {"action": "long", "pick": {"subnet": {"netuid": 12, "name": "SN12"}}}
+        {
+            "action": "long",
+            "pick": {
+                "subnet": {"netuid": 12, "name": "SN12"},
+                "final_confidence": 0.68,
+            },
+        }
     )
-    assert out["pick"]["judge_scores_at_creation"] == scores
+    assert "judge_scores_at_creation" not in out["pick"]
 
 
 def test_build_tribunal_view_decision_log_from_judge_scores():
