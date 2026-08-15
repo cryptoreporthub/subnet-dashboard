@@ -30,6 +30,7 @@ from internal.council.price_reference import (
     hydrate_candles_for_netuid,
     hydrate_candles_for_netuid_historical,
     price_at_resolve_at,
+    resolver_hydration_budget,
 )
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import load_weights, nudge_impact_strength, nudge_signal_weight, save_weights
@@ -60,6 +61,9 @@ except Exception:  # pragma: no cover
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
+_RESOLVER_HYDRATION_MAX = max(
+    0, int(os.environ.get("CALIBRATION_RESOLVE_HYDRATION_MAX", "4"))
+)
 
 # Cold-cache alert: warn when price_data_unavailable / total_resolved exceeds this ratio.
 # Override with COLD_CACHE_ALERT_RATIO env var (float in [0, 1], e.g. "0.05" for 5%).
@@ -1028,6 +1032,21 @@ def _merge_regraded_resolved(resolved: List[Dict[str, Any]]) -> List[Dict[str, A
 
 
 def resolve_due_predictions(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    horizon_hours: float = 24.0,
+    tolerance: float = 0.5,
+) -> Dict[str, Any]:
+    """Resolve due predictions with bounded cache-miss hydration per cycle."""
+    with resolver_hydration_budget(_RESOLVER_HYDRATION_MAX):
+        return _resolve_due_predictions(
+            subnets,
+            horizon_hours=horizon_hours,
+            tolerance=tolerance,
+        )
+
+
+def _resolve_due_predictions(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
     horizon_hours: float = 24.0,

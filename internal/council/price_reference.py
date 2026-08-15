@@ -7,6 +7,8 @@ import logging
 import os
 import tempfile
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -349,6 +351,19 @@ def _resolve_at_inner(
 _hydrate_memo: Dict[str, float] = {}
 _hydrate_hist_memo: Dict[str, float] = {}
 _hydrate_min_interval = int(os.environ.get("CALIBRATION_HYDRATE_MIN_INTERVAL", "900"))
+_resolver_hydration_budget: ContextVar[Optional[int]] = ContextVar(
+    "resolver_hydration_budget", default=None
+)
+
+
+@contextmanager
+def resolver_hydration_budget(max_attempts: int):
+    """Bound cache-miss fetches for one resolver cycle without changing callers."""
+    token = _resolver_hydration_budget.set(max(0, int(max_attempts)))
+    try:
+        yield
+    finally:
+        _resolver_hydration_budget.reset(token)
 
 # Predictions whose resolve_at is older than this many hours need more than the
 # default 7-day lookback to reach the horizon candle.
@@ -366,6 +381,16 @@ def _hydrate_on_miss_enabled() -> bool:
     return os.environ.get("CALIBRATION_HYDRATE_ON_MISS", "").strip().lower() in (
         "1", "true", "yes", "on",
     )
+
+
+def _consume_resolver_hydration_budget() -> bool:
+    remaining = _resolver_hydration_budget.get()
+    if remaining is None:
+        return True
+    if remaining <= 0:
+        return False
+    _resolver_hydration_budget.set(remaining - 1)
+    return True
 
 
 def _bust_cache_ttl(netuid: Any, cache_path: str) -> None:
@@ -464,6 +489,8 @@ def hydrate_candles_for_netuid_historical(
 
     if now_ts - _hydrate_hist_memo.get(key, 0.0) < _hydrate_min_interval:
         return False
+    if not _consume_resolver_hydration_budget():
+        return False
     _hydrate_hist_memo[key] = now_ts
     try:
         _bust_cache_ttl(netuid, cache_path)
@@ -486,6 +513,8 @@ def _hydrate_once(netuid: Any, cache_path: str) -> bool:
     key = str(netuid)
     now = time.time()
     if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
+        return False
+    if not _consume_resolver_hydration_budget():
         return False
     _hydrate_memo[key] = now
     try:
