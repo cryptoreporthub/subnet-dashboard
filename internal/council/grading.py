@@ -126,6 +126,8 @@ def _gradeable_resolved_count(rows: Optional[List[Dict[str, Any]]] = None) -> in
             continue
         if row.get("actual_pct") is None:
             continue
+        if is_price_unit_mismatch(row.get("reference_price"), row.get("resolved_price")):
+            continue
         n += 1
     return n
 
@@ -172,3 +174,15 @@ def compute_actual_pct(reference_price: float, resolved_price: float) -> float:
     if reference_price <= 0 or resolved_price <= 0:
         return 0.0
     return round((resolved_price - reference_price) / reference_price * 100, 4)
+
+
+def is_price_unit_mismatch(reference_price: float, resolved_price: float) -> bool:
+    """Reject TAO/alpha references compared with USD/alpha candles."""
+    try:
+        reference = float(reference_price)
+        resolved = float(resolved_price)
+    except (TypeError, ValueError):
+        return False
+    # ponytail: 20x is a deliberately conservative ceiling; real moves above
+    # it need an explicit unit/source contract before entering learning.
+    return 0 < reference < 1 and resolved > 1 and resolved / reference >= 20
