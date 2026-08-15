@@ -21,11 +21,9 @@
       /* Critical paint — visible before /static CSS on cold Fly mobile loads */
       html, body { margin: 0; min-height: 100%; background: #080911; color: #f5f7fa; }
     </style>
-    <!-- Hydration preloads (perf 2026-08-11): start the two heaviest above-fold data
-         fetches during HTML parse. Exact-match URLs -> request coalescing once the
-         hydrate JS runs, so the data arrives ~1 RTT earlier with zero extra requests.
-         fetchpriority=high -> browser prioritizes them above other fetches. -->
-    <link rel="preload" as="fetch" href="/api/whales/flow-signals?hours=24&limit=10" crossorigin="use-credentials" fetchpriority="high">
+    <!-- Hydration preload (perf 2026-08-11): start the heaviest fetch-based
+         above-fold request during HTML parse. The whale-flow card uses a legacy
+         XHR transport, so it intentionally is not preloaded here. -->
     <link rel="preload" as="fetch" href="/api/pump-alerts" crossorigin="use-credentials" fetchpriority="high">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

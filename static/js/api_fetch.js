@@ -21,6 +21,7 @@
     var request = fetch(url, {
       headers: { Accept: 'application/json' },
       signal: ctrl.signal,
+      credentials: 'include',
     })
       .then(function (r) {
         clearTimeout(timer);

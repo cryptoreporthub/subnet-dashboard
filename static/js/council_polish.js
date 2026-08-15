@@ -73,6 +73,7 @@
   try {
     var xhr = new XMLHttpRequest();
     xhr.open("GET", api, true);
+    xhr.withCredentials = true;
     xhr.timeout = 6000;
     xhr.onload = function () {
       if (xhr.status >= 200 && xhr.status < 300) {

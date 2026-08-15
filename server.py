@@ -2050,6 +2050,11 @@ async def robots_txt():
     )
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon_ico():
+    return RedirectResponse(url="/static/favicon.svg", status_code=307)
+
+
 @app.get("/preview/tribunal")
 async def preview_tribunal(request: Request):
     """SSR preview for tribunal hero v3 — hydrate off for visual sign-off."""

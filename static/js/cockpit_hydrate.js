@@ -330,7 +330,11 @@
         ctrl.abort();
         reject(new Error('timeout'));
       }, ms);
-      fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
+      fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: ctrl.signal,
+        credentials: 'include',
+      })
         .then(function (r) {
           if (!r.ok) throw new Error(String(r.status));
           return r.json();
@@ -1307,13 +1311,15 @@
   function shouldApplyDailyPickPayload(payload) {
     if (!payload || typeof payload !== 'object') return false;
     var status = String(payload.status || 'ok').toLowerCase();
-    if (status === 'pending' || status === 'timeout' || status === 'error') return false;
+    if (status === 'timeout' || status === 'error') return false;
     var ssr = ssrDailyPickMeta();
     var incomingAt = parseIsoMs(dailyPickGeneratedAt(payload));
     var ssrAt = parseIsoMs(ssr.generatedAt);
     if (ssrAt && incomingAt && incomingAt < ssrAt) return false;
     var act = String(payload.action || 'HOLD').toUpperCase();
     if (act === 'BUY') act = 'LONG';
+    // Pending data may hydrate the forming shell, but must not displace a
+    // newer published LONG already rendered by the server.
     if (ssr.action === 'LONG' && act === 'HOLD' && !payload.pick && ssrAt && (!incomingAt || incomingAt <= ssrAt)) {
       return false;
     }

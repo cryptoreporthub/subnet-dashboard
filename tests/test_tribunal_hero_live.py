@@ -224,11 +224,12 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "patchTribunalPanels" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
-    assert "patchTribunalInstrument" in src
-    assert "patchTribunalEyeArcs" in src
     assert "convictionTemp" in src
     assert "syncCouncilTemp" in src
     assert "pickIsPublishable" in src
+    hero = open("templates/partials/premium/tribunal_hero.html", encoding="utf-8").read()
+    assert "var hero = document.getElementById('tribunal-hero')" in hero
+    assert "hero.querySelector('[data-metric=\"' + k + '\"]')" in hero
 
 
 def test_home_ssr_contains_tribunal_hero():
