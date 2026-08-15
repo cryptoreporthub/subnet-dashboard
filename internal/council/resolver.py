@@ -61,9 +61,6 @@ except Exception:  # pragma: no cover
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
-_RESOLVER_HYDRATION_MAX = max(
-    0, int(os.environ.get("CALIBRATION_RESOLVE_HYDRATION_MAX", "4"))
-)
 
 # Cold-cache alert: warn when price_data_unavailable / total_resolved exceeds this ratio.
 # Override with COLD_CACHE_ALERT_RATIO env var (float in [0, 1], e.g. "0.05" for 5%).
@@ -1037,8 +1034,10 @@ def resolve_due_predictions(
     horizon_hours: float = 24.0,
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
-    """Resolve due predictions with bounded cache-miss hydration per cycle."""
-    with resolver_hydration_budget(_RESOLVER_HYDRATION_MAX):
+    """Resolve due predictions without network hydration on cache misses."""
+    # The critical cycle must remain bounded by local cache work. Missing
+    # candles stay pending for the separately bounded recovery sweep.
+    with resolver_hydration_budget(0):
         return _resolve_due_predictions(
             subnets,
             horizon_hours=horizon_hours,
@@ -1103,10 +1102,10 @@ def _resolve_due_predictions(
                         grade_pump_lead_at_resolve_candle,
                     )
 
-                    # Hydrate OHLCV before candle grade so past-grace leads
-                    # are not expired solely because price_cache was cold.
+                    # Critical cycles do not hydrate; recovery handles cold
+                    # price-cache windows separately.
                     recovered = grade_pump_lead_at_resolve_candle(
-                        pred, now=now, hydrate=True
+                        pred, now=now, hydrate=False
                     )
                     if recovered.get("status") == "resolved":
                         resolved.append(recovered)
