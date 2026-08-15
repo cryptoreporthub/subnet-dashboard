@@ -273,18 +273,18 @@ def test_yesterday_summary_in_meta(client, monkeypatch):
         "message_count": 42,
         "high_conviction_count": 7,
         "narrative": (
-            "OfficialSubnetSummer logged 42 messages yesterday with a bullish tone. "
-            "Chat leaned into Market and Validator."
+            "Subnet Summer circled TaoHash yesterday, with Market taking most of the airtime, "
+            "and the room leaned bullish."
         ),
         "top_subnets": [{"netuid": 14, "name": "TaoHash", "mentions": 12}],
         "movers": [],
         "group_pulse": {"messages": 42, "high_conviction": 7, "sentiment": "Bullish", "group": "OfficialSubnetSummer"},
-        "stats": {"graded": 42, "high_conviction": 7, "active_subnets": 2, "topics": 3, "authors": 5},
+        "stats": {"graded": 42, "high_conviction": 7, "hot_subnets": 2, "topics": 3, "top_acc": 100.0, "recent_msgs": 42},
     }
     monkeypatch.setattr(rollup, "build_yesterday_chat_summary", lambda **kw: fake)
     listed = client.get("/api/message-intel").json()
     assert listed["meta"]["yesterday_summary"]["ready"] is True
-    assert "logged 42 messages" in listed["meta"]["yesterday_summary"]["narrative"]
+    assert "circled TaoHash" in listed["meta"]["yesterday_summary"]["narrative"]
 
 
 def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
@@ -344,11 +344,11 @@ def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
     assert summary["date"] == "2026-07-27"
     assert summary["message_count"] == 3
     assert summary["top_subnets"][0]["netuid"] == 14
-    assert "logged 3 messages" in summary["narrative"].lower()
+    assert "circled TaoHash" in summary["narrative"]
     assert summary["topics"]
     assert summary["hourly"]
     assert summary["stats"]["graded"] == 3
-    assert "Standout line" in summary["narrative"]
+    assert "line that stuck" in summary["narrative"]
 
 
 def test_week_top_comment_unit(monkeypatch):

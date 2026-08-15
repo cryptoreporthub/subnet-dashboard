@@ -64,6 +64,16 @@
   <div class="message-intel__bay">
 
     <div class="message-intel__mode" data-pulse-pane="listen" role="tabpanel" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
+      <div class="message-intel__tile message-intel__tile--recap">
+        <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" {% if not (mi_meta.yesterday_summary and mi_meta.yesterday_summary.ready) %}hidden{% endif %} aria-live="polite">
+          <div class="message-intel__summary-24h-top">
+            <p class="message-intel__summary-24h-label">Yesterday in summary</p>
+            <span class="message-intel__summary-24h-when">24h lens</span>
+          </div>
+          <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}<p class="message-intel__summary-24h-narrative">{{ mi_meta.yesterday_summary.narrative }}</p>{% endif %}</div>
+        </div>
+      </div>
+
       <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
         <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">{% if mi_meta.total_messages %}{{ mi_meta.total_messages }}{% else %}warming{% endif %}</b><span>Archived</span></div>
         <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">warming</b><span>Last 24h</span></div>
@@ -111,15 +121,6 @@
               <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
               <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
             </div>
-          </div>
-          <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" {% if not (mi_meta.yesterday_summary and mi_meta.yesterday_summary.ready) %}hidden{% endif %} aria-live="polite">
-            <div class="message-intel__summary-24h-top">
-              <p class="message-intel__summary-24h-label">Yesterday in summary</p>
-              {% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.date %}
-              <span class="message-intel__summary-24h-when">{{ mi_meta.yesterday_summary.date }}</span>
-              {% endif %}
-            </div>
-            <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}<p class="message-intel__summary-24h-narrative">{{ mi_meta.yesterday_summary.narrative }}</p>{% endif %}</div>
           </div>
         </div>
       </div>
