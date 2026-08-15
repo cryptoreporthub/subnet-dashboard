@@ -13,6 +13,9 @@ def test_message_intel_no_fontshare_link():
 def test_message_intel_phase2_js_hooks():
     js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
     css = open("static/css/ui.css", encoding="utf-8").read()
+    assert js.count("function pulseModeFromHash()") == 1
+    assert js.count("function setPulseMode(mode, opts)") == 1
+    assert js.count("function bindPulseModes()") == 1
     assert "renderSentimentGauge" in js
     assert "message-intel__sent-gauge" in js
     assert "message-intel__feed-row--enter" in js
