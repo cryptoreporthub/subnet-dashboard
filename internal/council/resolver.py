@@ -961,7 +961,7 @@ def _scenario_signals_for_subnet(subnet: Optional[Dict[str, Any]]) -> Dict[str, 
     out: Dict[str, Any] = {}
     try:
         from internal.council.state_vector import _compute_technical_indicators
-        indicators = _compute_technical_indicators(subnet)
+        indicators = _compute_technical_indicators(subnet, allow_hydration=False)
         rsi = indicators.get("rsi")
         if isinstance(rsi, dict) and rsi.get("signal"):
             out["rsi"] = rsi.get("signal")
