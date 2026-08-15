@@ -53,8 +53,12 @@
   {% set analysis = row.analysis if row.analysis is mapping else {} %}
   {% set conv = verdict.conviction if verdict.conviction is not none else none %}
   {% set label = analysis.sentiment|default(verdict.verdict|default('neutral'))|string|lower %}
-  <article class="message-intel__feed-row message-intel__feed-row--enter {% if label in ['bullish','positive','long','buy'] %}is-bull{% elif label in ['bearish','negative','short','sell'] %}is-bear{% else %}is-neu{% endif %}" style="--mi-i: {{ loop.index0 }}">
+  <article class="message-intel__feed-row message-intel__feed-row--enter {% if label in ['bullish','positive','long','buy'] %}is-bull{% elif label in ['bearish','negative','short','sell'] %}is-bear{% else %}is-neu{% endif %}{% if conv is not none and conv|float >= 60 %} message-intel__feed-row--hot{% endif %}" style="--mi-i: {{ loop.index0 }}{% if conv is not none %}; --pct: {{ '%.0f'|format(conv|float) }}{% endif %}">
+    {% if conv is not none %}
+    <div class="message-intel__conv-ring" style="--pct: {{ '%.0f'|format(conv|float) }}" aria-hidden="true"><i>{{ '%.0f'|format(conv|float) }}%</i></div>
+    {% else %}
     <div class="message-intel__rail-node" aria-hidden="true"></div>
+    {% endif %}
     <div class="message-intel__feed-body">
       <div class="message-intel__feed-top">
         <span class="message-intel__f-avatar" aria-hidden="true">{{ (row.author_name|default('?'))[0]|upper }}</span>
