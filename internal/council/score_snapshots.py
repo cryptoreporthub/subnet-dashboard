@@ -177,6 +177,7 @@ def build_full_universe_snapshot(
                         "netuid": netuid,
                         "total_score": float(h.get("total_score") or 0),
                         "name": sn.get("name"),
+                        "recovery_context": h.get("recovery_context"),
                     }
                 )
             except Exception:
@@ -188,6 +189,7 @@ def build_full_universe_snapshot(
                     "netuid": netuid,
                     "total_score": float(d.get("total_score") or 0),
                     "name": sn.get("name"),
+                    "recovery_context": d.get("recovery_context"),
                 }
             )
         except Exception:

@@ -15,6 +15,8 @@ from internal.integrations.desearch_http import desearch_request
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_OPENROUTER_LLM_BASE = "https://openrouter.ai/api/v1"
+_DEFAULT_OPENROUTER_MODEL = "openai/gpt-4o-mini"
 _DEFAULT_CHUTES_LLM_BASE = "https://llm.chutes.ai/v1"
 _DEFAULT_THIRTY_SPOKES_BASE = "https://api.thirtyspokes.ai/v1"
 _CACHE_TTL = 300
@@ -172,18 +174,58 @@ def chutes_llm_base_url() -> str:
     return base
 
 
-def chutes_configured() -> bool:
-    """True when council chat can use Chutes (SN64)."""
-    return bool(llm_api_key())
+def openrouter_base_url() -> str:
+    return (
+        os.environ.get("OPENROUTER_BASE_URL")
+        or _DEFAULT_OPENROUTER_LLM_BASE
+    ).rstrip("/")
 
 
-def llm_api_key() -> Optional[str]:
+def openrouter_api_key() -> Optional[str]:
+    return os.environ.get("OPENROUTER_API_KEY")
+
+
+def openrouter_chat_model() -> str:
+    return (
+        os.environ.get("OPENROUTER_MODEL")
+        or os.environ.get("LLM_MODEL")
+        or _DEFAULT_OPENROUTER_MODEL
+    )
+
+
+def openrouter_configured() -> bool:
+    """True when OpenRouter can serve the council chat."""
+    return bool(openrouter_api_key())
+
+
+def chutes_api_key() -> Optional[str]:
     return (
         os.environ.get("CHUTES_API_KEY")
         or os.environ.get("THIRTY_SPOKES_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
     )
+
+
+def chutes_configured() -> bool:
+    """True when council chat can use Chutes (SN64)."""
+    return bool(chutes_api_key())
+
+
+def llm_api_key() -> Optional[str]:
+    return openrouter_api_key() or chutes_api_key()
+
+
+def llm_api_key_for_provider(provider: str) -> Optional[str]:
+    if provider == "openrouter":
+        return openrouter_api_key()
+    if provider == "thirty_spokes":
+        return (
+            os.environ.get("THIRTY_SPOKES_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+            or os.environ.get("LLM_API_KEY")
+        )
+    return chutes_api_key()
 
 
 def thirty_spokes_base_url() -> str:
@@ -266,7 +308,7 @@ def _chutes_catalog_model_ids(base: str, api_key: str, limit: int = 4) -> List[s
     return val if isinstance(val, list) else []
 
 
-def chutes_completion_models(primary: str) -> List[str]:
+def chutes_completion_models(primary: str, *, api_key: Optional[str] = None) -> List[str]:
     """Ordered Chutes model ids for chat — env/default fallbacks then live catalog."""
     seen: set[str] = set()
     ordered: List[str] = []
@@ -274,9 +316,9 @@ def chutes_completion_models(primary: str) -> List[str]:
         if mid not in seen:
             seen.add(mid)
             ordered.append(mid)
-    api_key = llm_api_key()
-    if api_key:
-        for mid in _chutes_catalog_model_ids(chutes_llm_base_url(), api_key):
+    key = api_key or chutes_api_key()
+    if key:
+        for mid in _chutes_catalog_model_ids(chutes_llm_base_url(), key):
             if mid not in seen:
                 seen.add(mid)
                 ordered.append(mid)
@@ -285,23 +327,36 @@ def chutes_completion_models(primary: str) -> List[str]:
 
 def chat_llm_targets() -> List[Tuple[str, str, str]]:
     """Ordered (base_url, model, provider_slug) for chat completions — probe-aligned."""
-    api_key = llm_api_key()
-    if not api_key:
-        return []
-    chutes_base = chutes_llm_base_url()
-    chutes_model = chutes_chat_model()
-    ts_base = thirty_spokes_base_url()
-    ts_model = thirty_spokes_chat_model()
-    chutes_ok = _models_endpoint_ok(chutes_base, api_key)
-    ts_ok = _models_endpoint_ok(ts_base, api_key)
+    candidates = [
+        (
+            openrouter_base_url(),
+            openrouter_chat_model(),
+            "openrouter",
+            openrouter_api_key(),
+        ),
+        (
+            chutes_llm_base_url(),
+            chutes_chat_model(),
+            "chutes",
+            chutes_api_key(),
+        ),
+        (
+            thirty_spokes_base_url(),
+            thirty_spokes_chat_model(),
+            "thirty_spokes",
+            llm_api_key_for_provider("thirty_spokes"),
+        ),
+    ]
     targets: List[Tuple[str, str, str]] = []
-    if chutes_ok:
-        targets.append((chutes_base, chutes_model, "chutes"))
-    if ts_ok:
-        targets.append((ts_base, ts_model, "thirty_spokes"))
+    for base, model, provider, api_key in candidates:
+        if api_key and _models_endpoint_ok(base, api_key):
+            targets.append((base, model, provider))
     if not targets:
-        targets.append((chutes_base, chutes_model, "chutes"))
-        targets.append((ts_base, ts_model, "thirty_spokes"))
+        targets.extend(
+            (base, model, provider)
+            for base, model, provider, api_key in candidates
+            if api_key
+        )
     return targets
 
 

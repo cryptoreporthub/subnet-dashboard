@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,33 @@ def _default_data() -> Dict[str, Any]:
         "resolved": [],
         "stats": {"correct": 0, "wrong": 0, "pending": 0, "total": 0, "accuracy": 0.0},
     }
+
+
+def _normalize_prediction_timestamps(prediction: Dict[str, Any]) -> None:
+    """Store prediction timestamps in one canonical UTC ISO-8601 format.
+
+    Some older pick payloads contain ``...+00:00Z``.  It is readable once the
+    trailing marker is handled correctly, but is not valid input for parsers
+    that blindly replace ``Z`` with another offset.
+    """
+    for key in ("created_at", "resolve_at"):
+        value = prediction.get(key)
+        if value is None:
+            continue
+        raw = str(value).strip()
+        if raw[-1:].upper() == "Z":
+            raw = raw[:-1]
+        try:
+            parsed = datetime.fromisoformat(raw)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            prediction[key] = parsed.astimezone(timezone.utc).isoformat().replace(
+                "+00:00", "Z"
+            )
+        except (TypeError, ValueError):
+            # Preserve genuinely corrupt values so the resolver can retire
+            # them explicitly instead of silently changing their meaning.
+            continue
 
 
 def _migrate_expert_labels(data: Dict[str, Any]) -> bool:
@@ -118,6 +146,7 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
         return False
     from internal.learning.evidence import stamp_evidence
 
+    _normalize_prediction_timestamps(prediction)
     stamp_evidence(prediction)
     netuid = prediction.get("netuid")
     horizon_type = prediction.get("horizon_type", "hour")

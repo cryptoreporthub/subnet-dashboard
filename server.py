@@ -240,14 +240,53 @@ async def _lifespan(app: FastAPI):
             def _beat() -> None:
                 import time
 
+                # Zombie-loop guard: pause heartbeat when the background scheduler
+                # has no live jobs so the Fly supervisor sees a stale heartbeat and
+                # restarts the worker instead of serving a "healthy" signal while
+                # the learning loop is silently frozen (mirrors internal/worker.py).
                 while True:
                     time.sleep(30)
                     try:
+                        from internal.job_scheduler import state as _sched_state
+
+                        _st = _sched_state()
+                        if not _st.get("running") or int(_st.get("job_count", 0) or 0) <= 0:
+                            logger.warning(
+                                "background scheduler unhealthy (%s); heartbeat paused", _st
+                            )
+                            continue
                         touch_heartbeat()
                     except Exception as exc:
                         logger.debug("worker heartbeat tick failed: %s", exc)
 
             threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
+
+            # Loop stall guard: watches pump desk snapshot age and resolver tick
+            # age; exits the worker process when both stay stale so the Fly
+            # supervisor restarts it fresh (re-runs start_background_workers).
+            try:
+                from internal.loop_stall_guard import start_loop_stall_guard
+
+                start_loop_stall_guard()
+            except Exception as _lsg_exc:
+                logger.warning("loop stall guard failed to start: %s", _lsg_exc)
+
+            # Log resolver readiness for operator diagnosis on startup.
+            try:
+                from internal.council.resolver_scheduler import (
+                    get_prediction_resolver_scheduler_state,
+                )
+
+                _rs = get_prediction_resolver_scheduler_state()
+                logger.info(
+                    "resolver scheduler boot state: lifecycle=%s running=%s refresh_minutes=%s",
+                    _rs.get("lifecycle"),
+                    _rs.get("running"),
+                    _rs.get("refresh_minutes"),
+                )
+            except Exception as _rs_exc:
+                logger.warning("resolver scheduler state unavailable at boot: %s", _rs_exc)
+
             logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
         yield
         if background_boot_allowed():
@@ -2458,6 +2497,7 @@ def _build_hour_pick_payload(sn: Dict[str, Any], score: Dict[str, Any]) -> Dict[
         "scenario_tags": score["scenario_tags"],
         "signals": learning["signal_impact"] or metric_signals,
         "signal_impact": learning["signal_impact"],
+        "recovery_context": score.get("recovery_context"),
         "signal_contributions": learning["signal_contributions"],
         "active_signals": learning["active_signals"],
         "action": "long",
@@ -2679,6 +2719,7 @@ def _build_top_picks() -> Dict[str, Any]:
                 "volume": sn.get("volume"),
             },
             "scenario_tags": sc["scenario_tags"],
+            "recovery_context": sc.get("recovery_context"),
         }
 
     return {

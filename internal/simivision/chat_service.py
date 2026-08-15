@@ -18,6 +18,7 @@ from internal.integrations.clients import (
     chutes_completion_models,
     chat_llm_targets,
     llm_api_key,
+    llm_api_key_for_provider,
     thirty_spokes_base_url,
     thirty_spokes_chat_model,
 )
@@ -302,17 +303,23 @@ def call_llm(prompt: str, message: str, context: Dict[str, Any]) -> Tuple[str, b
 
     Returns (reply, llm_used, provider_slug).
     """
-    api_key = _llm_api_key()
-    if api_key:
+    if _llm_api_key():
         try:
             for base, model, provider in chat_llm_targets():
-                models = chutes_completion_models(model) if provider == "chutes" else [model]
+                provider_key = llm_api_key_for_provider(provider)
+                if not provider_key:
+                    continue
+                models = (
+                    chutes_completion_models(model, api_key=provider_key)
+                    if provider == "chutes"
+                    else [model]
+                )
                 seen: set[str] = set()
                 for model_id in models:
                     if model_id in seen:
                         continue
                     seen.add(model_id)
-                    reply = _post_chat_completion(base, api_key, model_id, prompt)
+                    reply = _post_chat_completion(base, provider_key, model_id, prompt)
                     if reply:
                         return reply, True, provider
         except Exception as exc:

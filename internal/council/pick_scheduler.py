@@ -188,6 +188,19 @@ def _record_hour_pick(pick: Dict[str, Any], subnets: Any, market_context: Dict[s
         logger.warning("hour pick learning record failed: %s", exc)
 
 
+def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: str) -> Optional[str]:
+    """Capture one dynamic-ranking observation without making it request-driven."""
+    try:
+        from internal.council.ab_benchmark import record_snapshot, settle_due_snapshots
+
+        settle_due_snapshots(subnets)
+        snapshot = record_snapshot(subnets, market_context, source=source)
+        return str(snapshot.get("observation_slot") or snapshot.get("captured_at") or "")
+    except Exception as exc:
+        logger.warning("A/B benchmark snapshot failed: %s", exc)
+        return None
+
+
 class DailyPickScheduler:
     def __init__(self) -> None:
         self._running = False
@@ -275,6 +288,9 @@ class DailyPickScheduler:
                 if isinstance(pick, dict):
                     sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
                     result["netuid"] = pick.get("netuid") or sn.get("netuid")
+                result["ab_benchmark"] = _record_ab_benchmark(
+                    subnets, ctx, "daily-pick-scheduler"
+                )
             today_ready = _today_pick_ready()
             if not today_ready and result.get("error"):
                 try:
@@ -367,6 +383,9 @@ class HourPickScheduler:
 
             subnets = _load_capped_subnets()
             ctx = _market_context(subnets)
+            result["ab_benchmark"] = _record_ab_benchmark(
+                subnets, ctx, "hour-pick-scheduler"
+            )
             pick = select_hourly_pick(subnets, ctx)
             _record_hour_pick(pick if isinstance(pick, dict) else {}, subnets, ctx)
             result["ok"] = True

@@ -129,18 +129,6 @@ def _judge_score_pct(raw: Any) -> Optional[float]:
 def judge_signals_from_pick(payload: Dict[str, Any]) -> Dict[str, Optional[float]]:
     active = payload.get("pick") or payload.get("candidate") or {}
     scores = active.get("judge_scores_at_creation")
-    if not isinstance(scores, dict):
-        netuid = None
-        sn = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
-        if isinstance(sn, dict):
-            netuid = sn.get("netuid")
-        if netuid is not None:
-            try:
-                from internal.council.conviction_bands import judge_scores_for_netuid
-
-                scores = judge_scores_for_netuid(netuid)
-            except Exception:
-                scores = None
     out: Dict[str, Optional[float]] = {k: None for k in _JUDGE_KEYS}
     if isinstance(scores, dict):
         for key in _JUDGE_KEYS:
@@ -149,7 +137,7 @@ def judge_signals_from_pick(payload: Dict[str, Any]) -> Dict[str, Optional[float
 
 
 def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Backfill judge_scores_at_creation on pick/candidate for API + hydrate SSR parity."""
+    """Preserve only scores linked to this pick's creation-time prediction."""
     if not isinstance(payload, dict):
         return {}
     out = dict(payload)
@@ -160,18 +148,6 @@ def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]
         existing = block.get("judge_scores_at_creation")
         if isinstance(existing, dict) and existing:
             continue
-        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
-        netuid = sn.get("netuid") if isinstance(sn, dict) else None
-        try:
-            from internal.council.conviction_bands import judge_scores_for_netuid
-
-            scores = judge_scores_for_netuid(netuid)
-        except Exception:
-            scores = None
-        if isinstance(scores, dict) and scores:
-            updated = dict(block)
-            updated["judge_scores_at_creation"] = scores
-            out[block_key] = updated
     return out
 
 

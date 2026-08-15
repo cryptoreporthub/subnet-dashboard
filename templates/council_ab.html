@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Council Research Comparison</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/static/css/smoke-tokens.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/ui.css?v={{ static_v }}">
+<style>
+  .ab-wrap { max-width: 1180px; margin: 0 auto; padding-bottom: 48px; }
+  .ab-note { color: var(--muted, #9aa4b2); max-width: 760px; line-height: 1.55; }
+  .ab-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 22px 0; }
+  .ab-stat { padding: 18px; border: 1px solid rgba(147, 170, 204, .18); border-radius: 16px; background: rgba(18, 26, 42, .72); }
+  .ab-stat h2 { margin: 0 0 12px; font-size: 15px; }
+  .ab-stat strong { display: block; font: 700 30px/1.1 "JetBrains Mono", monospace; }
+  .ab-stat p { margin: 8px 0 0; color: var(--muted, #9aa4b2); font-size: 13px; }
+  .ab-stat--daily strong { color: #83b7ff; }
+  .ab-stat--judge strong { color: #c39bff; }
+  .ab-table-wrap { overflow-x: auto; }
+  .ab-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  .ab-table th, .ab-table td { padding: 11px 12px; border-bottom: 1px solid rgba(147, 170, 204, .12); text-align: left; }
+  .ab-table th { color: var(--muted, #9aa4b2); font: 600 11px "JetBrains Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+  .ab-table td { font-size: 13px; }
+  .ab-table .mono { font-family: "JetBrains Mono", monospace; }
+  .ab-positive { color: #79dfae; }
+  .ab-negative { color: #ff8e9e; }
+  .ab-neutral { color: #b5bdc9; }
+  .ab-empty { padding: 26px; text-align: center; color: var(--muted, #9aa4b2); }
+  @media (max-width: 760px) { .ab-grid { grid-template-columns: 1fr; } .ab-wrap { padding: 0 14px 36px; } }
+</style>
+</head>
+<body class="wrap council-first-theme">
+<div class="cosmic-sky" aria-hidden="true"></div>
+<main class="ab-wrap">
+  <p class="pick-meta"><a href="/judge-council">← Judge Council</a></p>
+  <h1 class="section-title">Council Research Comparison</h1>
+  <p class="section-sub">Daily Model vs Judge Council · recurring immutable top-five observations · shared 24h horizon</p>
+  <p id="note" class="ab-note">Loading research ledger…</p>
+  <div id="stats" class="ab-grid"></div>
+  <section class="card">
+    <h2>Daily top-five vs Judge Council top-five</h2>
+    <div id="snapshots" class="ab-table-wrap"></div>
+  </section>
+</main>
+<script>
+(function () {
+  function esc(value) {
+    return String(value == null ? '—' : value).replace(/[&<>"']/g, function (c) {
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+    });
+  }
+  function pct(value, digits) {
+    return value == null ? '—' : Number(value).toFixed(digits == null ? 1 : digits) + '%';
+  }
+  function statCard(title, data, klass) {
+    var hit = data.hit_rate == null ? '—' : pct(data.hit_rate * 100, 1);
+    var ret = data.equal_weight_return_pct == null ? '—' : pct(data.equal_weight_return_pct, 2);
+    return '<article class="ab-stat ' + klass + '"><h2>' + title + '</h2>' +
+      '<strong>' + esc(hit) + '</strong><p>hit rate · ' + esc(data.directional_entries || 0) +
+      ' directional entries</p><p>Equal-weight return: <b>' + esc(ret) + '</b></p></article>';
+  }
+  function resultClass(result) {
+    return result === 'hit' ? 'ab-positive' : result === 'miss' ? 'ab-negative' : 'ab-neutral';
+  }
+  function rowHtml(row) {
+    var ret = row.return_pct == null ? 'open' : pct(row.return_pct, 2);
+    return '<tr><td class="mono">' + esc(row.rank) + '</td><td><b>' + esc(row.name) +
+      '</b><br><span class="pick-meta">SN' + esc(row.netuid) + '</span></td><td class="mono">' +
+      esc(row.score == null ? row.consensus_score : Number(row.score).toFixed(3)) +
+      '</td><td>' + esc(row.direction) + '</td><td class="' + resultClass(row.result) + '">' +
+      esc(row.result || 'open') + '</td><td class="mono">' + esc(ret) + '</td></tr>';
+  }
+  function modelTable(title, rows) {
+    return '<h3>' + title + '</h3><table class="ab-table"><thead><tr><th>#</th><th>Subnet</th><th>Score</th><th>Direction</th><th>Result</th><th>Return</th></tr></thead><tbody>' +
+      ((rows || []).length ? rows.map(rowHtml).join('') : '<tr><td colspan="6" class="ab-empty">No snapshot recorded yet.</td></tr>') +
+      '</tbody></table>';
+  }
+  fetch('/api/council-ab?limit=14').then(function (r) { return r.json(); }).then(function (data) {
+    document.getElementById('note').textContent = data.note || 'Research ledger loaded.';
+    document.getElementById('stats').innerHTML =
+      statCard('Daily Model', data.daily_model || {}, 'ab-stat--daily') +
+      statCard('Judge Council', data.judge_council || {}, 'ab-stat--judge');
+    var snapshots = data.snapshots || [];
+    document.getElementById('snapshots').innerHTML = snapshots.length ? snapshots.slice().reverse().map(function (snap) {
+      return '<div style="margin-bottom:28px"><p class="pick-meta">' + esc(snap.captured_at || snap.date) + ' · ' +
+        esc(snap.status) + ' · universe ' + esc(snap.universe_count) + '</p>' +
+        modelTable('Daily Model top five', snap.daily_model) +
+        modelTable('Judge Council top five', snap.judge_council) + '</div>';
+    }).join('') : '<div class="ab-empty">The first immutable observation will appear after the background refresh scheduler runs.</div>';
+  }).catch(function (error) {
+    document.getElementById('note').textContent = 'Research ledger unavailable: ' + error.message;
+  });
+})();
+</script>
+</body>
+</html>

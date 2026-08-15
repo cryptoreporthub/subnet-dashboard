@@ -3320,6 +3320,21 @@
     if (expRateEl) {
       expRateEl.textContent = expiredPct != null ? expiredPct + '% of ledger' : 'resolver backlog';
     }
+    var coldCacheCount = stats.price_data_unavailable != null ? Number(stats.price_data_unavailable) : null;
+    var ungradeableCount = stats.ungradeable != null ? Number(stats.ungradeable) : null;
+    var coldCacheEl = document.getElementById('kpi-cold-cache');
+    if (coldCacheEl) {
+      coldCacheEl.textContent = coldCacheCount != null ? String(coldCacheCount) : '—';
+      coldCacheEl.className = 'val' + (coldCacheCount != null && coldCacheCount > 0 ? ' neg' : '');
+    }
+    var coldCacheSubEl = document.getElementById('kpi-cold-cache-sub');
+    if (coldCacheSubEl) {
+      if (coldCacheCount != null && ungradeableCount != null && (coldCacheCount > 0 || ungradeableCount > 0)) {
+        coldCacheSubEl.textContent = coldCacheCount + ' cold-cache · ' + ungradeableCount + ' ungradeable';
+      } else {
+        coldCacheSubEl.textContent = 'missing price at horizon';
+      }
+    }
     var pendEl = document.getElementById('kpi-pending');
     if (pendEl) {
       pendEl.textContent = hasTrust && tb.pending != null ? String(tb.pending) : String(stats.pending || 0);
