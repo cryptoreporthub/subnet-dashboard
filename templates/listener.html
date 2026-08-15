@@ -12,10 +12,16 @@
 <meta property="og:url" content="{{ page_url or "" }}">
 <meta property="og:image" content="{{ og_image_url or "" }}">
 <meta name="theme-color" content="#05070f">
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
+<link rel="stylesheet" href="/static/css/smoke-tokens.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
+<link rel="stylesheet" href="/static/css/ui.css?v={{ static_v }}">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/static/css/listener.css?v={{ static_v }}">
 </head>
-<body class="lsn-body">
+<body class="lsn-body council-first-theme">
+  <div class="cosmic-sky" aria-hidden="true"></div>
   <div class="lsn-page">
 
     <!-- TRUST STRIP — static at top (never sticky) -->
@@ -58,6 +64,27 @@
       </div>
     </div>
 
+    <div class="lsn-intercept">
+      <div class="lsn-pulsar" aria-hidden="true">
+        <span class="lsn-ping"></span><span class="lsn-ping"></span><span class="lsn-ping"></span>
+        <span class="lsn-core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
+      <div class="lsn-identity">
+        <p class="lsn-eyebrow">SIGNAL DECK · t.me/{{ monitored_group or "OfficialSubnetSummer" }}</p>
+        <h1 class="lsn-title">Telegram pulse</h1>
+        <p class="lsn-sub">Shareable intercept of Subnet Summers — every call jury-scored the instant it lands.</p>
+      </div>
+    </div>
+
+    <a class="lsn-site" href="/">
+      <span class="lsn-site__orb" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="lsn-site__copy">
+        <span class="lsn-site__kicker">SimiVision · Subnet Summers</span>
+        <span class="lsn-site__label">Open the full website</span>
+      </span>
+      <span class="lsn-site__go">Enter<span aria-hidden="true"> →</span></span>
+    </a>
+
     <!-- COMMANDS — top strip (locked subset) -->
     <div class="lsn-glass lsn-cmds">
       <span class="clabel">Quick commands</span>
@@ -98,6 +125,34 @@
         <p class="lsn-hourly-empty">Hourly volume bars render once timestamps accumulate — waiting on live ingest.</p>
         {% endif %}
       </div>
+    </div>
+
+    <!-- TRENDING ORBIT -->
+    <div class="lsn-glass lsn-panel lsn-panel--trend">
+      <div class="lsn-sect"><span class="bar"></span><b>Trending orbit</b><span>60s refresh</span></div>
+      <div class="lsn-orbit" aria-label="Trending orbit">
+        <svg class="lsn-orbit__svg" viewBox="0 0 280 280" aria-hidden="true">
+          <ellipse class="lsn-orbit__track lsn-orbit__track--1" cx="140" cy="140" rx="60" ry="60"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--2" cx="140" cy="140" rx="92" ry="92"></ellipse>
+          <ellipse class="lsn-orbit__track lsn-orbit__track--3" cx="140" cy="140" rx="124" ry="124"></ellipse>
+        </svg>
+        <div class="lsn-orbit__hub"><span>ORBIT</span><b>{% if trending %}TOP 3{% else %}—{% endif %}</b></div>
+        {% for i in [1, 2, 3] %}
+        {% set t = trending[i - 1] if trending and trending|length >= i else none %}
+        <div class="lsn-orbit__carrier" data-rank="{{ i }}">
+          {% if t %}
+          <button type="button" class="lsn-orbit__node" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}" data-sent="{{ t["sent"] or "mix" }}">
+            <span class="lsn-orbit__dot"></span>
+            <span class="lsn-orbit__sn">{{ t["name"] or ("SN" ~ t["netuid"]) }}</span>
+            <span class="lsn-orbit__n">#{{ i }} · {{ t["sent"] or "mix" }}</span>
+          </button>
+          {% else %}
+          <span class="lsn-orbit__node is-ghost"><span class="lsn-orbit__dot"></span><span class="lsn-orbit__sn">#{{ i }}</span><span class="lsn-orbit__n">awaiting signal</span></span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <p class="lsn-orbit-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
     </div>
 
     <!-- MOST TALKED ABOUT -->
@@ -328,6 +383,30 @@
       <p class="lsn-crowns-empty">Reaction leaders surface once the listener grades emoji counts — nothing faked.</p>
     </div>
 
+    <!-- ACCOLADES -->
+    <div class="lsn-glass lsn-panel">
+      <div class="lsn-sect"><span class="bar"></span><b>Accolades</b><span>earned · N≥5</span></div>
+      {% set ns_acc = namespace(shown=false) %}
+      {% if authors %}
+      {% for a in authors[:4] %}
+        {% if a.get("caution") or (a.get("graded") and a["graded"] < 5) %}
+        {% elif a.get("hit_rate") and a["hit_rate"] >= 60 %}
+        {% set ns_acc.shown = true %}
+        <div class="lsn-champ">
+          <div class="av">{{ (a["author"] or "?")[1:2] or "?" }}</div>
+          <div class="nm">
+            <div class="h">{{ a["author"] or "warming" }}</div>
+            <div class="m">Early &amp; Right · {{ a["hit_rate"] }}% strike</div>
+          </div>
+        </div>
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+      {% if not ns_acc.shown %}
+      <p class="lsn-champ-empty">Early &amp; Right / On Fire / High Signal land once strike samples fill. Building samples stay unlabeled.</p>
+      {% endif %}
+    </div>
+
     <!-- HOT TOPICS -->
     <div class="lsn-glass lsn-panel">
       <div class="lsn-sect"><span class="bar"></span><b>Hot topics</b><span>recent tags</span></div>
@@ -452,6 +531,8 @@
       <div class="foot">One shared watchlist between bot and site · /track returns to chat when the call resolves · conviction ranks quality, not recency.</div>
     </div>
 
+    <p class="lsn-dock-note">Green /summary is live in chat. /rank /who /trending share the same Listen→Learn→Rank→Serve loop — marked until the bot ships them.</p>
+    <a class="lsn-site-quiet" href="/">← Back to the full website</a>
     <div class="lsn-disc">Conviction is <b>auto-scored</b>, not financial advice. Leaderboard measured from resolved qualifying calls — not engagement. Skin is belief, never edge.</div>
   </div>
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -114,6 +114,25 @@ def test_record_pick_prediction_persists_pending_row():
     assert row["subnet_snapshot"].get("price_change_24h") == 3.2
     assert isinstance(row.get("weights_at_creation"), dict)
     assert "quant" in row["weights_at_creation"]
+
+
+def test_append_prediction_normalizes_legacy_offset_plus_z_timestamps():
+    now = datetime.now(timezone.utc)
+    row = {
+        "id": "legacy-timestamp",
+        "netuid": 123,
+        "horizon_type": "hour",
+        "status": "pending",
+        "created_at": now.isoformat() + "Z",
+        "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+    }
+
+    assert predictions_store.append_prediction(row) is True
+    stored = predictions_store.load_predictions()["predictions"][0]
+    assert stored["created_at"].endswith("Z")
+    assert stored["resolve_at"].endswith("Z")
+    assert not stored["created_at"].endswith("+00:00Z")
+    assert not stored["resolve_at"].endswith("+00:00Z")
 
 
 def test_record_pick_prediction_stamps_pump_phase(monkeypatch):

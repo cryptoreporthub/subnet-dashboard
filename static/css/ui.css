@@ -10387,6 +10387,34 @@ body.wrap {
   background: transparent;
   flex-shrink: 0;
 }
+.message-intel--v2 .message-intel__top-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.message-intel--v2 .message-intel__full-desk {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid rgba(63, 201, 255, 0.35);
+  border-radius: 8px;
+  color: var(--mi-blue);
+  background: rgba(63, 201, 255, 0.08);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.message-intel--v2 .message-intel__full-desk:hover,
+.message-intel--v2 .message-intel__full-desk:focus-visible {
+  border-color: rgba(63, 201, 255, 0.55);
+  background: rgba(63, 201, 255, 0.16);
+}
 .message-intel--v2 .message-intel__dot {
   width: 6px;
   height: 6px;
@@ -11523,6 +11551,84 @@ body.wrap {
    3. Feed      — row slide-in cascade
    Plus board-breathe & spotlight-gleam animations (2 & 3 of 3).
    ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Listen → Learn → Rank → Serve loop ─────────────────────────────────── */
+.message-intel--v2 .message-intel__loop {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0 0 16px;
+  padding: 5px;
+  border: 1px solid var(--mi-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.message-intel--v2 .message-intel__loop [role="tab"] {
+  appearance: none;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--mi-text-faint);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease;
+}
+.message-intel--v2 .message-intel__loop [role="tab"] b {
+  color: var(--mi-text-dim);
+  font-family: var(--mi-font-display);
+  font-size: 0.88rem;
+  letter-spacing: .02em;
+}
+.message-intel--v2 .message-intel__loop [role="tab"] span {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.message-intel--v2 .message-intel__loop [role="tab"]:hover,
+.message-intel--v2 .message-intel__loop [role="tab"]:focus-visible {
+  outline: none;
+  color: var(--mi-blue);
+  border-color: rgba(63, 201, 255, .35);
+  background: rgba(63, 201, 255, .07);
+}
+.message-intel--v2 .message-intel__loop [role="tab"][aria-selected="true"] {
+  color: var(--mi-green);
+  border-color: rgba(31, 212, 124, .42);
+  background:
+    linear-gradient(135deg, rgba(31, 212, 124, .14), rgba(63, 201, 255, .06)),
+    rgba(4, 8, 6, .5);
+  box-shadow: 0 0 18px -10px var(--mi-green-glow), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.message-intel--v2 .message-intel__loop [role="tab"][aria-selected="true"] b {
+  color: var(--mi-text);
+}
+.message-intel--v2 [data-pulse-pane][hidden] {
+  display: none !important;
+}
+@media (max-width: 520px) {
+  .message-intel--v2 .message-intel__loop {
+    gap: 4px;
+  }
+  .message-intel--v2 .message-intel__loop [role="tab"] {
+    min-height: 48px;
+    padding: 7px 6px;
+  }
+  .message-intel--v2 .message-intel__loop [role="tab"] b {
+    font-size: .76rem;
+  }
+  .message-intel--v2 .message-intel__loop [role="tab"] span {
+    font-size: 7px;
+  }
+}
 
 /* ── Pulse stage: one command ribbon, not a stack of grey boxes ─────────── */
 .message-intel--v2 .message-intel__pulse-stage {

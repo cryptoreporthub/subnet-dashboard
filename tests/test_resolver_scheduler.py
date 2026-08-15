@@ -166,6 +166,59 @@ def test_expire_handles_corrupt_resolve_at():
     assert result["expired_now"][0]["status"] == "expired"
 
 
+def test_resolver_accepts_offset_plus_z_timestamp():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["pending"]) == 1
+    assert result["expired_now"] == []
+
+
+def test_resolve_due_restores_recently_expired_malformed_timestamp():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [],
+        "resolved": [
+            {
+                "id": "malformed-horizon",
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+                "status": "expired",
+                "outcome": "expired",
+                "correct": None,
+                "resolved_at": now.isoformat().replace("+00:00", "Z"),
+            },
+        ],
+    })
+
+    result = resolver.resolve_due_predictions(subnets=[])
+    assert [row["id"] for row in result["restored_now"]] == ["malformed-horizon"]
+    assert len(result["pending"]) == 1
+    assert result["pending"][0]["status"] == "pending"
+    assert result["pending"][0]["resolve_at"].endswith("Z")
+    assert not result["pending"][0]["resolve_at"].endswith("+00:00Z")
+    assert all(row.get("outcome") != "expired" for row in result["pending"])
+
+
 def test_expire_skips_non_dict_records():
     """A corrupt non-dict entry must not crash the loop."""
     now = datetime.now(timezone.utc)

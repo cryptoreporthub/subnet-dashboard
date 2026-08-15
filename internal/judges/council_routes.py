@@ -423,6 +423,39 @@ async def api_judge_postmortems(judge: str):
         return {"status": "stub", "judge": judge, "postmortems": [], "error": str(exc)}
 
 
+@council_router.get("/api/council-ab")
+async def api_council_ab(limit: int = 14):
+    """Research scorecard for Daily Model vs Judge Council top-five lists."""
+    try:
+        from internal.council.ab_benchmark import comparison
+
+        return comparison(limit=limit)
+    except Exception as exc:
+        logger.warning("A/B council comparison failed: %s", exc)
+        return {
+            "status": "degraded",
+            "research_ready": False,
+            "snapshot_count": 0,
+            "daily_model": {},
+            "judge_council": {},
+            "snapshots": [],
+            "error": str(exc),
+        }
+
+
+@council_router.get("/council-ab", response_class=HTMLResponse)
+async def council_ab_page():
+    """Serve the research comparison page."""
+    path = os.path.join(_TEMPLATES_DIR, "council_ab.html")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            html = f.read()
+        return HTMLResponse(content=html.replace("{{ static_v }}", STATIC_V))
+    except Exception as exc:
+        logger.warning("Council A/B template not found: %s", exc)
+        return HTMLResponse(content="<h1>Council comparison unavailable</h1>", status_code=503)
+
+
 @council_router.get("/api/paper-portfolio")
 async def api_paper_portfolio():
     """Return legacy judge portfolios plus the canonical ledger view."""

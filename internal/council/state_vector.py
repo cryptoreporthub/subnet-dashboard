@@ -1227,6 +1227,13 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
     reg = _registry_info_for(netuid, registry)
 
     indicators = _compute_technical_indicators(sn)
+    from internal.council.recovery_context import build_recovery_context
+
+    recovery_context = build_recovery_context(
+        sn,
+        indicators,
+        _get_price_history(sn.get("netuid"), sn),
+    )
     oversold = _detect_oversold_convergence(indicators)
     overbought = _detect_overbought_convergence(indicators)
     convergence = oversold if oversold.get("count", 0) >= overbought.get("count", 0) else overbought
@@ -1276,6 +1283,7 @@ def build_subnet_state_vector(netuid: int, subnets: List[dict], registry: Option
         "hot": hot,
         "sell": sell,
         "signal_impact": signal_impact,
+        "recovery_context": recovery_context,
         "prediction": prediction,
         "social_sentiment": social_sentiment,
         "consensus": {"action": consensus_action, "score": consensus_score},
@@ -1654,6 +1662,13 @@ def score_subnet_for_hour(
     """Short-horizon score (0-100) emphasizing momentum and immediate signals."""
     sn = subnet_data or {}
     indicators = _compute_technical_indicators(sn)
+    from internal.council.recovery_context import build_recovery_context
+
+    recovery_context = build_recovery_context(
+        sn,
+        indicators,
+        _get_price_history(sn.get("netuid"), sn),
+    )
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
@@ -1737,6 +1752,7 @@ def score_subnet_for_hour(
         "horizon_type": "hour",
         "weights_used": hour_weights,
         "signal_impact": signal_impact,
+        "recovery_context": recovery_context,
         "pump_overlay": pump_overlay,
     }
 
@@ -1748,6 +1764,13 @@ def score_subnet_for_day(
     """24h score (0-100) emphasizing yield, trend, and lower volatility."""
     sn = subnet_data or {}
     indicators = _compute_technical_indicators(sn)
+    from internal.council.recovery_context import build_recovery_context
+
+    recovery_context = build_recovery_context(
+        sn,
+        indicators,
+        _get_price_history(sn.get("netuid"), sn),
+    )
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     sell = _compute_sell_signals(sn, indicators, convergence)
@@ -1839,6 +1862,18 @@ def score_subnet_for_day(
         except Exception:
             pass
 
+    # Long-pick guard: distinguish recovery from correction.  A subnet with a
+    # prolonged downtrend, lower lows, bearish technicals, and no positive flow
+    # takes an explicit risk haircut; genuine mean-reversion candidates
+    # (>=2 recovery evidence cells) keep their full score.
+    from internal.council.recovery_context import recovery_risk_adjustment
+
+    risk_adjustment = recovery_risk_adjustment(recovery_context)
+    if risk_adjustment["applied"]:
+        risk_adjustment["score_before"] = total
+        total = round(max(0.0, total * (1.0 - risk_adjustment["haircut"])), 2)
+        risk_adjustment["score_after"] = total
+
     confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
@@ -1859,6 +1894,8 @@ def score_subnet_for_day(
         "horizon_type": "day",
         "weights_used": day_weights,
         "signal_impact": signal_impact,
+        "recovery_context": recovery_context,
+        "recovery_risk_adjustment": risk_adjustment,
         "pump_overlay": pump_overlay,
         "telegram_evidence_calibration": telegram_calibration,
     }
@@ -1879,6 +1916,7 @@ def format_top_pick(state_vector: Dict[str, Any], rank: int) -> Dict[str, Any]:
         "apy": metrics.get("apy"),
         "price_change_24h": metrics.get("price_change_24h"),
         "signal_impact": state_vector.get("signal_impact"),
+        "recovery_context": state_vector.get("recovery_context"),
         "hot": state_vector.get("hot"),
         "sell": state_vector.get("sell"),
         "technical_indicators": state_vector.get("technical_indicators"),

@@ -13,7 +13,10 @@
     <div class="message-intel__topbar">
       <span class="message-intel__brand">&gt;_ SUBNET SUMMERS · <em>SIMIVISION</em></span>
       <span class="message-intel__flagship-chip" title="Flagship desk">FLAGSHIP</span>
-      <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
+      <div class="message-intel__top-actions">
+        <span class="message-intel__live-pill" id="message-intel-pulse" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}><span class="message-intel__dot" aria-hidden="true"></span>Live</span>
+        <a class="message-intel__full-desk" href="/listener">Open full listener →</a>
+      </div>
     </div>
     <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
     <p class="section-sub message-intel__page-sub" id="message-intel-sub">
@@ -23,6 +26,14 @@
     </p>
   </div><!-- /.message-intel__masthead -->
 
+  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve">
+    <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span></button>
+    <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who&apos;s right</span></button>
+    <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span></button>
+    <button type="button" role="tab" id="pulse-tab-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve" aria-selected="false" tabindex="-1"><b>Serve</b><span>desk + bot</span></button>
+  </div>
+
+  <div class="message-intel__mode" data-pulse-pane="listen" role="tabpanel" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
   <!-- Pulse stage: source + 24h + proof + high-conviction as one command ribbon -->
   <div class="message-intel__pulse-stage">
     <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
@@ -85,7 +96,9 @@
       </div>
     </div>
   </div><!-- /.message-intel__spotlight -->
+  </div><!-- /.message-intel__mode listen -->
 
+  <div class="message-intel__mode" data-pulse-pane="rank" role="tabpanel" id="message-intel-pane-rank" aria-labelledby="pulse-tab-rank">
   <div class="message-intel__grid">
     <div class="message-intel__panel glass-flat" id="message-intel-trending-card">
       <div class="message-intel__sec-label">
@@ -119,25 +132,6 @@
     </div>
   </div>
 
-  <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">My Desk</h3>
-      <span class="message-intel__panel-unit">watchlist · thresholds</span>
-    </div>
-    <div class="message-intel__my-desk">
-      <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
-        <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
-      </div>
-      <div class="message-intel__desk-block">
-        <p class="message-intel__desk-label">Watchlist</p>
-        <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
-          <p class="empty">Loading your watchlist…</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
   <details class="message-intel__panel message-intel__crowns-drawer" id="message-intel-crowns-card">
     <summary class="message-intel__sec-label message-intel__crowns-summary">
       <span class="message-intel__sec-bar message-intel__sec-bar--lilac" aria-hidden="true"></span>
@@ -149,7 +143,9 @@
       <p class="empty">No reaction crowns yet.</p>
     </div>
   </details>
+  </div><!-- /.message-intel__mode rank -->
 
+  <div class="message-intel__mode" data-pulse-pane="learn" role="tabpanel" id="message-intel-pane-learn" aria-labelledby="pulse-tab-learn">
   <div class="message-intel__panel glass-card" id="message-intel-divergence-card">
     <div class="message-intel__sec-label">
       <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
@@ -214,6 +210,27 @@
     </div>
     <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
   </div>
+  </div><!-- /.message-intel__mode learn -->
+
+  <div class="message-intel__mode" data-pulse-pane="serve" role="tabpanel" id="message-intel-pane-serve" aria-labelledby="pulse-tab-serve">
+  <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
+    <div class="message-intel__sec-label">
+      <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+      <h3 class="message-intel__panel-title">My Desk</h3>
+      <span class="message-intel__panel-unit">watchlist · thresholds</span>
+    </div>
+    <div class="message-intel__my-desk">
+      <div class="message-intel__upgrade" id="message-intel-my-desk-upgrade" hidden>
+        <p class="empty">My Desk is open — pin subnets and set your alert thresholds.</p>
+      </div>
+      <div class="message-intel__desk-block">
+        <p class="message-intel__desk-label">Watchlist</p>
+        <div id="message-intel-watchlist-panel" class="message-intel__watchlist-panel" aria-live="polite">
+          <p class="empty">Loading your watchlist…</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="message-intel__panel glass-card" id="message-intel-pulse-card">
     <div class="message-intel__sec-label">
@@ -253,6 +270,7 @@
       <span>/who</span><span>/alerts</span><span>/link</span>
     </div>
   </div>
+  </div><!-- /.message-intel__mode serve -->
 
   <p class="message-intel__foot">Conviction is auto-scored from message text and author track record — not financial advice.</p>
 </div>
