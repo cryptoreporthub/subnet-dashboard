@@ -331,6 +331,30 @@ def _listener_engine():
     return engine
 
 
+def _listener_worker_json(path: str):
+    """Read worker-owned listener data on split_v2; stay local in dev/single-host mode."""
+    try:
+        from internal.data_volume import needs_worker_volume_proxy
+
+        if not needs_worker_volume_proxy():
+            return None
+        from internal.worker_proxy import fetch_worker_json_sync
+
+        payload = fetch_worker_json_sync(path, timeout=6)
+        return payload if isinstance(payload, dict) else None
+    except Exception as exc:
+        logger.debug("listener worker read failed %s: %s", path, exc)
+        return None
+
+
+def _listener_message_payload():
+    """Canonical listener feed, using the Fly worker volume when the web has no volume."""
+    remote = _listener_worker_json("/api/message-intel?limit=24&min_conviction=0")
+    if remote is not None:
+        return remote
+    return _listener_engine().list_messages(limit=24)
+
+
 def _listener_conviction():
     from internal.conviction_index import get_conviction_snapshot
 
@@ -366,6 +390,25 @@ async def _listener_page_context() -> Dict[str, Any]:
         "recap": {},
     }
 
+    # On Fly split_v2 the web machine has no SQLite volume. Use the same
+    # worker-backed response as /api/message-intel so the page does not render
+    # an honest-but-empty local archive while the live API has messages.
+    message_payload = await _listener_call(_listener_message_payload, {}, timeout=8)
+    message_meta = (
+        message_payload.get("meta")
+        if isinstance(message_payload, dict) and isinstance(message_payload.get("meta"), dict)
+        else {}
+    )
+    remote_listener = message_meta.get("listener")
+    if isinstance(remote_listener, dict):
+        ctx["listener"] = remote_listener
+    if message_meta:
+        ctx["store"] = {
+            "ok": bool(message_meta.get("ok", True)),
+            "total_messages": int(message_meta.get("total_messages") or 0),
+            "high_conviction_count": int(message_meta.get("high_conviction_count") or 0),
+        }
+
     store = ctx["store"] if isinstance(ctx["store"], dict) else {}
     ctx["graded_count"] = int(store.get("total_messages") or 0)
     ctx["high_conviction"] = int(store.get("high_conviction_count") or 0)
@@ -388,13 +431,7 @@ async def _listener_page_context() -> Dict[str, Any]:
             pass
 
     # messages (live feed) — safe_list/coerce discipline
-    try:
-        engine = _listener_engine()
-        msgs_payload = await _listener_call(
-            lambda: engine.list_messages(limit=24), None, timeout=6
-        )
-    except Exception:
-        msgs_payload = None
+    msgs_payload = message_payload
     msgs = []
     if isinstance(msgs_payload, dict):
         msgs = _as_list(msgs_payload.get("messages"))
@@ -433,14 +470,19 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["feed"] = feed_rows
 
     # trending — subnet telegram conviction (1h lens)
-    conv_payload = None
-    try:
-        engine = _listener_engine()
-        conv_payload = await _listener_call(
-            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
-        )
-    except Exception:
-        pass
+    conv_payload = (
+        {"items": message_meta.get("trending")}
+        if isinstance(message_meta.get("trending"), list)
+        else None
+    )
+    if not conv_payload or not conv_payload.get("items"):
+        try:
+            engine = _listener_engine()
+            conv_payload = await _listener_call(
+                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+            )
+        except Exception:
+            pass
     conv_rows = []
     if isinstance(conv_payload, dict):
         conv_rows = _as_list(
@@ -533,14 +575,19 @@ async def _listener_page_context() -> Dict[str, Any]:
             )
 
     # callers — resolved qualifying accuracy only
-    callers_payload = None
-    try:
-        build_board = _listener_caller_board()
-        callers_payload = await _listener_call(
-            lambda: build_board(days=30, limit=8), None, timeout=6
-        )
-    except Exception:
-        pass
+    callers_payload = await _listener_call(
+        lambda: _listener_worker_json("/api/message-intel/callers?days=30&limit=8"),
+        None,
+        timeout=7,
+    )
+    if callers_payload is None:
+        try:
+            build_board = _listener_caller_board()
+            callers_payload = await _listener_call(
+                lambda: build_board(days=30, limit=8), None, timeout=6
+            )
+        except Exception:
+            pass
     caller_rows = []
     if isinstance(callers_payload, dict):
         caller_rows = _as_list(callers_payload.get("callers") or callers_payload.get("authors"))
@@ -570,14 +617,19 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["callers"] = callers
 
     # authors — weekly champions
-    authors_payload = None
-    try:
-        engine = _listener_engine()
-        authors_payload = await _listener_call(
-            lambda: engine.list_authors(days=7, limit=5), None, timeout=6
-        )
-    except Exception:
-        pass
+    authors_payload = await _listener_call(
+        lambda: _listener_worker_json("/api/message-intel/authors?days=7&limit=5"),
+        None,
+        timeout=7,
+    )
+    if authors_payload is None:
+        try:
+            engine = _listener_engine()
+            authors_payload = await _listener_call(
+                lambda: engine.list_authors(days=7, limit=5), None, timeout=6
+            )
+        except Exception:
+            pass
     author_rows = []
     if isinstance(authors_payload, dict):
         author_rows = _as_list(authors_payload.get("authors") or authors_payload.get("rows"))
@@ -614,14 +666,19 @@ async def _listener_page_context() -> Dict[str, Any]:
             ]
 
     # hot topics
-    topics_payload = None
-    try:
-        engine = _listener_engine()
-        topics_payload = await _listener_call(
-            lambda: engine.list_topics(limit=8), None, timeout=5
-        )
-    except Exception:
-        pass
+    topics_payload = await _listener_call(
+        lambda: _listener_worker_json("/api/message-intel/topics?limit=8"),
+        None,
+        timeout=6,
+    )
+    if topics_payload is None:
+        try:
+            engine = _listener_engine()
+            topics_payload = await _listener_call(
+                lambda: engine.list_topics(limit=8), None, timeout=5
+            )
+        except Exception:
+            pass
     topics = []
     if isinstance(topics_payload, dict):
         t_rows = _as_list(topics_payload.get("topics") or topics_payload.get("rows"))
@@ -672,14 +729,23 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["divergence"] = divergence
 
     # summary text (plain-language recap)
-    try:
-        from internal.message_intel.summary import summarize_message_intel
+    summary_24h = message_meta.get("summary_24h")
+    group_pulse = summary_24h.get("group_pulse") if isinstance(summary_24h, dict) else {}
+    if isinstance(group_pulse, dict) and group_pulse.get("messages") is not None:
+        ctx["summary_text"] = (
+            f"{group_pulse.get('messages')} messages in the last 24 hours · "
+            f"{group_pulse.get('high_conviction', 0)} high conviction · "
+            f"{group_pulse.get('sentiment') or 'Mixed'} average pulse."
+        )
+    else:
+        try:
+            from internal.message_intel.summary import summarize_message_intel
 
-        summ = await _listener_call(summarize_message_intel, None, timeout=5)
-        if isinstance(summ, dict):
-            ctx["summary_text"] = summ.get("text") or ""
-    except Exception as exc:
-        logger.debug("listener summary failed: %s", exc)
+            summ = await _listener_call(summarize_message_intel, None, timeout=5)
+            if isinstance(summ, dict):
+                ctx["summary_text"] = summ.get("text") or ""
+        except Exception as exc:
+            logger.debug("listener summary failed: %s", exc)
 
     # hourly volume from recent messages timestamps (honest; empty until data)
     hourly = {}
