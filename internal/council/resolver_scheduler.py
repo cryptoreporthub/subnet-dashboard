@@ -548,24 +548,23 @@ class PredictionResolverScheduler:
 
 
 def _default_subnets() -> Any:
-    """Return subnet rows for resolver ticks — bounded live fetch, registry fallback.
+    """Return cached worker subnet rows for resolver ticks.
 
     Imported lazily so this module never creates a circular import with
     ``server`` (which imports the scheduler on startup).
     """
     try:
-        from server import _get_subnets_hydrate, _get_subnets_with_source
+        from internal.live_subnets import get_live_subnets
 
-        subnets, _ = _get_subnets_with_source(timeout=15)
-        if not subnets:
-            subnets, _ = _get_subnets_hydrate()
-        return subnets
+        # ``get_live_subnets`` reads the worker-owned JSON cache and falls back
+        # to the committed registry.  Resolver ticks must not enter the
+        # network-backed council feed or its TaoMarketCap overlay.
+        return get_live_subnets()
     except Exception:
         try:
-            from server import _get_subnets_hydrate
+            from internal.subnets.feed import registry_subnet_rows
 
-            subnets, _ = _get_subnets_hydrate()
-            return subnets
+            return registry_subnet_rows()
         except Exception:
             return []
 
