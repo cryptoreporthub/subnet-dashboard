@@ -488,16 +488,26 @@ def _hydrate_once(netuid: Any, cache_path: str) -> bool:
     if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
         return False
     _hydrate_memo[key] = now
+    # #region agent log
+    _debug_started = time.perf_counter()
+    open("/opt/cursor/logs/debug.log", "a").write(json.dumps({"hypothesisId": "A", "location": "internal/council/price_reference.py:493", "message": "resolver hydration fetch start", "data": {"netuid": key}, "timestamp": int(time.time() * 1000)}) + "\n")
+    # #endregion
     try:
         _bust_cache_ttl(netuid, cache_path)
 
         from internal.indicators.price_fetcher import fetch_ohlcv
-        fetch_ohlcv(
+        candles = fetch_ohlcv(
             str(netuid),
             use_cache=True,
             allow_synthetic=False,
             cache_path=cache_path,
         )
+        # #region agent log
+        open("/opt/cursor/logs/debug.log", "a").write(json.dumps({"hypothesisId": "A", "location": "internal/council/price_reference.py:507", "message": "resolver hydration fetch complete", "data": {"netuid": key, "candle_count": len(candles) if isinstance(candles, list) else 0, "elapsed_ms": round((time.perf_counter() - _debug_started) * 1000, 1)}, "timestamp": int(time.time() * 1000)}) + "\n")
+        # #endregion
         return True
-    except Exception:
+    except Exception as exc:
+        # #region agent log
+        open("/opt/cursor/logs/debug.log", "a").write(json.dumps({"hypothesisId": "D", "location": "internal/council/price_reference.py:512", "message": "resolver hydration fetch failed", "data": {"netuid": key, "error_type": type(exc).__name__, "elapsed_ms": round((time.perf_counter() - _debug_started) * 1000, 1)}, "timestamp": int(time.time() * 1000)}) + "\n")
+        # #endregion
         return False

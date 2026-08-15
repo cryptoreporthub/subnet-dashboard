@@ -1048,6 +1048,9 @@ def resolve_due_predictions(
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     pending, duplicate_rows = dedupe_predictions(raw_pending)
     resolved.extend(duplicate_rows)
+    # #region agent log
+    open("/opt/cursor/logs/debug.log", "a").write(json.dumps({"hypothesisId": "A", "location": "internal/council/resolver.py:1052", "message": "resolve_due_predictions pending snapshot", "data": {"pending_count": len(pending), "unique_netuid_count": len({str(row.get("netuid")) for row in pending if isinstance(row, dict)}), "hydrate_on_miss": os.environ.get("CALIBRATION_HYDRATE_ON_MISS", "").strip().lower() in ("1", "true", "yes", "on")}, "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000)}) + "\n")
+    # #endregion
 
     prices = fetch_prices(subnets)
     regraded_expired = regrade_expired_predictions(live_prices=prices)
@@ -1207,6 +1210,9 @@ def resolve_due_predictions(
         )
     except Exception:
         pass
+    # #region agent log
+    open("/opt/cursor/logs/debug.log", "a").write(json.dumps({"hypothesisId": "A", "location": "internal/council/resolver.py:1220", "message": "resolve_due_predictions completed", "data": {"resolved_now": len(resolved_now), "expired_now": len(expired_now), "pending": len(still_pending)}, "timestamp": int(datetime.now(timezone.utc).timestamp() * 1000)}) + "\n")
+    # #endregion
     return {
         "resolved_now": resolved_now,
         "expired_now": expired_now,
