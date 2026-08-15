@@ -116,6 +116,11 @@ def test_summers_template_has_w4_markers():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert 'id="message-intel-summary-24h"' in html
     assert "message-intel__summary-24h" in html
+    assert "Yesterday in summary" in html
+    assert "renderYesterdaySummary" in js
+    assert "yesterday_summary" in js
+    assert "message-intel__summary-24h-stats" in js
+    assert "message-intel__summary-24h-bars" in js
     assert "renderSummary24h" in js
-    assert "summary_24h" in js
     assert ".message-intel__summary-24h" in css
+    assert ".message-intel__summary-24h-stats" in css

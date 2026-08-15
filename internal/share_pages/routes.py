@@ -728,46 +728,58 @@ async def _listener_page_context() -> Dict[str, Any]:
         )
     ctx["divergence"] = divergence
 
-    # summary text (plain-language recap)
-    summary_24h = message_meta.get("summary_24h")
-    group_pulse = summary_24h.get("group_pulse") if isinstance(summary_24h, dict) else {}
-    if isinstance(group_pulse, dict) and group_pulse.get("messages") is not None:
-        ctx["summary_text"] = (
-            f"{group_pulse.get('messages')} messages in the last 24 hours · "
-            f"{group_pulse.get('high_conviction', 0)} high conviction · "
-            f"{group_pulse.get('sentiment') or 'Mixed'} average pulse."
-        )
+    # summary text (plain-language recap — prefer yesterday chat narrative)
+    yesterday_summary = message_meta.get("yesterday_summary")
+    if isinstance(yesterday_summary, dict) and yesterday_summary.get("ready"):
+        ctx["summary_text"] = yesterday_summary.get("narrative") or ""
+        if yesterday_summary.get("hourly"):
+            ctx["hourly"] = [
+                {"hour": h["hour"], "pct": h.get("pct", 0)}
+                for h in yesterday_summary["hourly"]
+            ]
+            if yesterday_summary.get("hourly_peak") is not None:
+                ctx["hourly_peak"] = yesterday_summary["hourly_peak"]
     else:
-        try:
-            from internal.message_intel.summary import summarize_message_intel
+        summary_24h = message_meta.get("summary_24h")
+        group_pulse = summary_24h.get("group_pulse") if isinstance(summary_24h, dict) else {}
+        if isinstance(group_pulse, dict) and group_pulse.get("messages") is not None:
+            ctx["summary_text"] = (
+                f"{group_pulse.get('messages')} messages in the last 24 hours · "
+                f"{group_pulse.get('high_conviction', 0)} high conviction · "
+                f"{group_pulse.get('sentiment') or 'Mixed'} average pulse."
+            )
+        else:
+            try:
+                from internal.message_intel.summary import summarize_message_intel
 
-            summ = await _listener_call(summarize_message_intel, None, timeout=5)
-            if isinstance(summ, dict):
-                ctx["summary_text"] = summ.get("text") or ""
-        except Exception as exc:
-            logger.debug("listener summary failed: %s", exc)
+                summ = await _listener_call(summarize_message_intel, None, timeout=5)
+                if isinstance(summ, dict):
+                    ctx["summary_text"] = summ.get("text") or ""
+            except Exception as exc:
+                logger.debug("listener summary failed: %s", exc)
 
-    # hourly volume from recent messages timestamps (honest; empty until data)
-    hourly = {}
-    for m in msgs[:200]:
-        if not isinstance(m, dict):
-            continue
-        ts = m.get("timestamp") or m.get("created_at") or m.get("last_message_at")
-        if not ts:
-            continue
-        try:
-            hour = int(str(ts)[11:13]) if len(str(ts)) >= 13 else None
-        except (TypeError, ValueError):
-            hour = None
-        if hour is not None:
-            hourly[hour] = hourly.get(hour, 0) + 1
-    if hourly:
-        peak = max(hourly.values())
-        ctx["hourly"] = [
-            {"hour": h, "pct": round(100 * c / peak) if peak else 0}
-            for h, c in sorted(hourly.items())
-        ]
-        ctx["hourly_peak"] = max(hourly.items(), key=lambda kv: kv[1])[0]
+    if not ctx.get("hourly"):
+        # hourly volume from recent messages timestamps (honest; empty until data)
+        hourly = {}
+        for m in msgs[:200]:
+            if not isinstance(m, dict):
+                continue
+            ts = m.get("timestamp") or m.get("created_at") or m.get("last_message_at")
+            if not ts:
+                continue
+            try:
+                hour = int(str(ts)[11:13]) if len(str(ts)) >= 13 else None
+            except (TypeError, ValueError):
+                hour = None
+            if hour is not None:
+                hourly[hour] = hourly.get(hour, 0) + 1
+        if hourly:
+            peak = max(hourly.values())
+            ctx["hourly"] = [
+                {"hour": h, "pct": round(100 * c / peak) if peak else 0}
+                for h, c in sorted(hourly.items())
+            ]
+            ctx["hourly_peak"] = max(hourly.items(), key=lambda kv: kv[1])[0]
 
     return ctx
 

@@ -269,6 +269,7 @@ def list_messages(
         build_telegram_proof_band,
         build_trending_subnets,
         build_week_top_comment,
+        build_yesterday_chat_summary,
         build_yesterday_leader,
     )
 
@@ -332,6 +333,17 @@ def list_messages(
             "message_count": 0,
             "window_hours": 24,
             "empty_reason": "Summary unavailable.",
+        }
+    try:
+        meta["yesterday_summary"] = build_yesterday_chat_summary(registry_names=names, db=db)
+    except Exception as exc:
+        logger.warning("message-intel yesterday summary failed: %s", exc)
+        meta["yesterday_summary"] = {
+            "ready": False,
+            "message_count": 0,
+            "window": "yesterday",
+            "empty_reason": "Yesterday recap unavailable.",
+            "narrative": "Yesterday recap unavailable.",
         }
     try:
         # Side feature — per-emoji weekly leaders; not call grading.

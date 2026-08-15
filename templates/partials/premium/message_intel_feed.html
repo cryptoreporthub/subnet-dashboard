@@ -112,9 +112,14 @@
               <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
             </div>
           </div>
-          <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" hidden aria-live="polite">
-            <p class="message-intel__summary-24h-label">Last 24 hours</p>
-            <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body"></div>
+          <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" {% if not (mi_meta.yesterday_summary and mi_meta.yesterday_summary.ready) %}hidden{% endif %} aria-live="polite">
+            <div class="message-intel__summary-24h-top">
+              <p class="message-intel__summary-24h-label">Yesterday in summary</p>
+              {% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.date %}
+              <span class="message-intel__summary-24h-when">{{ mi_meta.yesterday_summary.date }}</span>
+              {% endif %}
+            </div>
+            <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}<p class="message-intel__summary-24h-narrative">{{ mi_meta.yesterday_summary.narrative }}</p>{% endif %}</div>
           </div>
         </div>
       </div>

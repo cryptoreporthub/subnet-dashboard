@@ -10515,7 +10515,7 @@ body.wrap {
 .message-intel--v2 .message-intel__summary-24h-label,
 .message-intel--v2 .message-intel__proof-label,
 .message-intel--v2 .message-intel__hc-label {
-  margin: 0 0 8px;
+  margin: 0;
   font-family: var(--font-mono, monospace);
   font-size: 10px;
   font-weight: 700;
@@ -10581,6 +10581,79 @@ body.wrap {
   font-size: 0.82rem;
   color: var(--mi-text-faint);
   font-style: italic;
+}
+.message-intel--v2 .message-intel__summary-24h-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.message-intel--v2 .message-intel__summary-24h-when {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--mi-text-faint);
+  white-space: nowrap;
+}
+.message-intel--v2 .message-intel__summary-24h-narrative {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--mi-text);
+}
+.message-intel--v2 .message-intel__summary-24h-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.message-intel--v2 .message-intel__summary-24h-stat {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 8px 6px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+.message-intel--v2 .message-intel__summary-24h-stat-v {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--mi-text);
+  line-height: 1.1;
+}
+.message-intel--v2 .message-intel__summary-24h-stat-l {
+  margin-top: 3px;
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--mi-text-faint);
+}
+.message-intel--v2 .message-intel__summary-24h-hourly {
+  margin-top: 4px;
+}
+.message-intel--v2 .message-intel__summary-24h-hourly-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--mi-text-faint);
+  margin-bottom: 6px;
+}
+.message-intel--v2 .message-intel__summary-24h-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 34px;
+}
+.message-intel--v2 .message-intel__summary-24h-bars i {
+  flex: 1;
+  min-height: 2px;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, rgba(110, 231, 255, 0.85), rgba(110, 231, 255, 0.15));
+}
+.message-intel--v2 .message-intel__summary-24h-bars i.hot {
+  background: linear-gradient(180deg, rgba(255, 207, 110, 0.95), rgba(255, 207, 110, 0.18));
 }
 @media (max-width: 390px) {
   .message-intel--v2 .message-intel__summary-24h-row {
