@@ -84,6 +84,40 @@ def test_attach_judge_scores_preserves_exact_creation_scores():
     assert out["pick"]["judge_scores_at_creation"] == scores
 
 
+def test_daily_pick_lite_enrich_attaches_matching_day_judge_scores(monkeypatch):
+    import server as srv
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).date().isoformat()
+    scores = {"oracle": {"confidence": 0.8}, "echo": {"confidence": 0.7}, "pulse": {"confidence": 0.6}}
+
+    def _fake_load():
+        return {
+            "predictions": [
+                {
+                    "netuid": 12,
+                    "horizon_type": "day",
+                    "created_at": f"{today}T12:00:00Z",
+                    "judge_scores_at_creation": scores,
+                }
+            ],
+            "resolved": [],
+        }
+
+    monkeypatch.setattr("internal.learning.predictions_store.load_predictions", _fake_load)
+    out = srv._enrich_daily_pick_payload_lite(
+        {
+            "date": today,
+            "action": "long",
+            "pick": {
+                "subnet": {"netuid": 12, "name": "SN12"},
+                "final_confidence": 0.68,
+            },
+        }
+    )
+    assert out["pick"]["judge_scores_at_creation"] == scores
+
+
 def test_daily_pick_lite_enrich_does_not_attach_unmatched_judge_scores(monkeypatch):
     import server as srv
 
@@ -247,6 +281,7 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "formatSyncedAge" in src
     assert "weightedVerdictPct" in src
     assert "patchTribunalPanels" in src
+    assert "patchTribunalInstrument" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
     assert "convictionTemp" in src

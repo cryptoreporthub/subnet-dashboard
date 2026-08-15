@@ -136,11 +136,81 @@ def judge_signals_from_pick(payload: Dict[str, Any]) -> Dict[str, Optional[float
     return out
 
 
+def _pick_utc_date(payload: Dict[str, Any]) -> Optional[str]:
+    """UTC calendar date for the daily-pick row (YYYY-MM-DD)."""
+    if not isinstance(payload, dict):
+        return None
+    raw = payload.get("date")
+    if raw:
+        return str(raw)[:10]
+    ts = _pick_timestamp(payload)
+    return ts.date().isoformat() if ts else None
+
+
+def judge_scores_for_daily_pick(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Judge scores from the prediction row that matches this daily pick."""
+    if not isinstance(payload, dict):
+        return None
+    active = payload.get("pick") or payload.get("candidate")
+    if not isinstance(active, dict):
+        return None
+    sn = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
+    netuid = sn.get("netuid") or active.get("netuid")
+    if netuid is None:
+        return None
+    try:
+        netuid_i = int(netuid)
+    except (TypeError, ValueError):
+        return None
+    pick_date = _pick_utc_date(payload)
+    try:
+        from internal.learning.predictions_store import load_predictions
+    except Exception:
+        return None
+
+    def _created_date(row: Dict[str, Any]) -> Optional[str]:
+        raw = row.get("created_at") or row.get("timestamp_utc")
+        if not raw:
+            return None
+        try:
+            return (
+                datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                .astimezone(timezone.utc)
+                .date()
+                .isoformat()
+            )
+        except (TypeError, ValueError):
+            return str(raw)[:10] if raw else None
+
+    try:
+        data = load_predictions()
+        for bucket in ("predictions", "resolved"):
+            rows = list(data.get(bucket) or [])
+            for pred in reversed(rows):
+                if not isinstance(pred, dict):
+                    continue
+                if pred.get("netuid") != netuid_i:
+                    continue
+                if str(pred.get("horizon_type") or "hour") != "day":
+                    continue
+                if pick_date and _created_date(pred) != pick_date:
+                    continue
+                scores = pred.get("judge_scores_at_creation")
+                if isinstance(scores, dict) and scores:
+                    return scores
+    except Exception:
+        return None
+    return None
+
+
 def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Preserve only scores linked to this pick's creation-time prediction."""
+    """Attach creation-time judge scores from the matching day prediction."""
     if not isinstance(payload, dict):
         return {}
     out = dict(payload)
+    linked = judge_scores_for_daily_pick(out)
+    if not linked:
+        return out
     for block_key in ("pick", "candidate"):
         block = out.get(block_key)
         if not isinstance(block, dict):
@@ -148,6 +218,7 @@ def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]
         existing = block.get("judge_scores_at_creation")
         if isinstance(existing, dict) and existing:
             continue
+        out[block_key] = {**block, "judge_scores_at_creation": dict(linked)}
     return out
 
 
