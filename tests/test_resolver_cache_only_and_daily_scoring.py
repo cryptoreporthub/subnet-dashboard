@@ -83,7 +83,8 @@ def test_resolver_scenario_signals_does_not_hydrate_cold_price_cache(monkeypatch
 
     monkeypatch.setattr(price_fetcher, "fetch_ohlcv", _unexpected_fetch)
 
-    assert _scenario_signals_for_subnet({"netuid": 7, "volume": 10.0}) == {"volume": "low"}
+    result = _scenario_signals_for_subnet({"netuid": 7, "volume": 10.0})
+    assert result["volume"] == "low"
     assert calls == []
 
 
