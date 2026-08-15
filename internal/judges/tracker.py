@@ -49,7 +49,11 @@ def on_prediction_created(
     return scores
 
 
-def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
+def on_prediction_resolved(
+    prediction: Dict[str, Any],
+    *,
+    apply_judge_nudge: bool = True,
+) -> Dict[str, Any]:
     """Close judge positions and record postmortems for wrong picks.
 
     Returns a summary of judge outcomes for this prediction.
@@ -68,7 +72,7 @@ def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
 
     for judge in all_judges():
         closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
-        if closed:
+        if closed and apply_judge_nudge:
             try:
                 from internal.judges.grading import (
                     judge_nudge_correct,
@@ -85,7 +89,13 @@ def on_prediction_resolved(prediction: Dict[str, Any]) -> Dict[str, Any]:
                 nudge_judge(
                     judge.name,
                     correct=correct,
-                    scale=judge_nudge_magnitude_scale(prediction, actual_pct, correct),
+                    scale=judge_nudge_magnitude_scale(
+                        prediction,
+                        actual_pct,
+                        correct,
+                        judge.name,
+                        pnl_pct=closed.get("pnl_pct"),
+                    ),
                     actual_pct=actual_pct,
                 )
             except Exception:

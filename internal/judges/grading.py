@@ -19,6 +19,7 @@ JUDGE_THRESHOLDS: Dict[str, float] = {
 
 _MIN_PRED_PCT = 0.5
 _MAX_MOVE_SCALE = 3.0
+_MIN_CONVICTION_SCALE = 0.25
 
 
 def judge_threshold(judge: str) -> float:
@@ -65,8 +66,17 @@ def judge_nudge_magnitude_scale(
     prediction: Dict[str, Any],
     actual_pct: float,
     correct: bool,
+    judge: Optional[str] = None,
+    *,
+    pnl_pct: Optional[float] = None,
 ) -> float:
-    """Horizon-relative market move scale for nudge size (not persona PnL)."""
+    """Scale a nudge by market move and, when available, judge conviction.
+
+    Rows created before judge scores were persisted retain the shared market
+    move scale. New rows use the judge's distance from its endorsement
+    threshold so a confident wrong judge receives a larger penalty than a
+    near-threshold abstention.
+    """
     actual = abs(float(actual_pct or 0))
     predicted = abs(float(prediction.get("predicted_pct") or 0))
     ratio = actual / max(predicted, _MIN_PRED_PCT)
@@ -75,4 +85,14 @@ def judge_nudge_magnitude_scale(
         ratio = 1.0 + math.log(ratio)
     if not correct:
         ratio = max(1.0, ratio)
+    if judge:
+        score = judge_score_at_creation(prediction, judge)
+        if score is not None:
+            conviction = abs(score - judge_threshold(judge)) * 2.0
+            ratio *= max(_MIN_CONVICTION_SCALE, min(1.0, conviction))
+        elif pnl_pct is not None:
+            # Legacy rows have no score; preserve their move scale while
+            # preventing a zero-PnL position from creating a zero nudge.
+            conviction = abs(float(pnl_pct)) / max(actual, 1.0)
+            ratio *= max(_MIN_CONVICTION_SCALE, min(1.0, conviction))
     return round(ratio, 4)

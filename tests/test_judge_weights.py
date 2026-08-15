@@ -315,6 +315,34 @@ def test_tracker_same_pnl_diverges_on_selective_grading(monkeypatch, tmp_path):
     assert after["pulse"] > before["pulse"]
 
 
+def test_tracker_can_skip_historical_judge_nudges(monkeypatch):
+    from internal.judges import judges as judges_mod
+    from internal.judges import weights as weights_mod
+    from internal.judges.tracker import on_prediction_resolved
+
+    calls = []
+    monkeypatch.setattr(weights_mod, "nudge_judge", lambda *args, **kwargs: calls.append(args))
+    for judge in (judges_mod.ORACLE, judges_mod.ECHO, judges_mod.PULSE):
+        monkeypatch.setattr(
+            judge,
+            "close_position",
+            lambda _prediction, actual_pct=None, outcome=None: {"pnl_pct": 1.0},
+        )
+        monkeypatch.setattr(judge, "record_postmortem", lambda *a, **k: None)
+
+    on_prediction_resolved(
+        {
+            "direction": "up",
+            "correct": True,
+            "outcome": "hit",
+            "reference_price": 100.0,
+            "resolved_price": 101.0,
+        },
+        apply_judge_nudge=False,
+    )
+    assert calls == []
+
+
 def test_learning_stats_exposes_judge_weights():
     from fastapi.testclient import TestClient
 

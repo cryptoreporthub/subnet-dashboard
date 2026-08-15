@@ -117,6 +117,7 @@ def recover_expired_predictions(
             resolved_price=price,
             resolved_at=resolve_at.isoformat().replace("+00:00", "Z"),
             price_meta=meta,
+            apply_judge_nudge=False,
         )
         if not resolver._skip_council_learning(row):
             resolver._record_scenario_outcome(

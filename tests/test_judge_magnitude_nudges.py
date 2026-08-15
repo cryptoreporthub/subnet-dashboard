@@ -22,6 +22,20 @@ def test_magnitude_scale_miss_floors_at_one():
     assert judge_nudge_magnitude_scale(pred, actual_pct=0.1, correct=False) == 1.0
 
 
+def test_magnitude_scale_uses_judge_conviction():
+    pred = {
+        "direction": "up",
+        "predicted_pct": 2.0,
+        "judge_scores_at_creation": {
+            "oracle": {"score": 0.56},
+            "pulse": {"score": 0.95},
+        },
+    }
+    near_threshold = judge_nudge_magnitude_scale(pred, 8.0, True, "oracle")
+    high_conviction = judge_nudge_magnitude_scale(pred, 8.0, True, "pulse")
+    assert high_conviction > near_threshold
+
+
 def test_nudge_judge_applies_magnitude_scale(tmp_path):
     soul_path = tmp_path / "soul_map.json"
     before = load_judge_weights(path=str(soul_path))["oracle"]
