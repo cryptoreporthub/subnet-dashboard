@@ -44,6 +44,7 @@ def test_api_learning_stats_timeout_returns_degraded(monkeypatch):
     assert body.get("status") == "degraded"
     assert body.get("meta", {}).get("source") == "timeout"
     assert body["data"]["trust_banner"]["ready"] is False
+    assert body["data"]["judge_weights"].get("oracle") is not None
 
 
 def test_api_learning_stats_timeout_returns_stale_cache(monkeypatch):

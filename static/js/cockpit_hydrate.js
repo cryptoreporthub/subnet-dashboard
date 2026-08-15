@@ -307,7 +307,12 @@
 
   async function loadLearningStats() {
     var cached = window.SimiLearning && window.SimiLearning.stats;
-    if (cached && (cached.trust_banner || cached.correct != null || cached.wrong != null)) {
+    var needsJudgeWeights = !!document.getElementById('tribunal-hero');
+    var cacheOk =
+      cached &&
+      (cached.trust_banner || cached.correct != null || cached.wrong != null) &&
+      (!needsJudgeWeights || (cached.judge_weights && cached.judge_weights.oracle != null));
+    if (cacheOk) {
       return cached;
     }
     try {
@@ -4139,6 +4144,7 @@
             renderTribunalHero(lastDailyPickPayload, stats);
           } else {
             patchTribunalJudges(stats, {});
+            patchTribunalInstrument({}, stats);
             patchTribunalPanels({}, stats);
           }
         }
@@ -4704,21 +4710,278 @@
     renderTribunalLast5Ticks(el, stats && stats.council_last5);
   }
 
+  function setTribunalInstrumentMetric(hero, key, value, arrow, meterPct) {
+    if (!hero || value == null || value === '') return;
+    var el = hero.querySelector('[data-metric="' + key + '"]');
+    if (!el) return;
+    var cur = (el.textContent || '').trim();
+    if (value === '—' && cur && cur !== '—') return;
+    el.textContent = value;
+    if (arrow) el.setAttribute('data-arrow', arrow);
+    else el.removeAttribute('data-arrow');
+    if (typeof meterPct === 'number' && isFinite(meterPct)) {
+      var bar = el.parentNode && el.parentNode.querySelector('.tribunal-hero__cell-meter i');
+      if (bar) bar.style.width = Math.max(0, Math.min(100, meterPct)) + '%';
+    }
+  }
+
+  function tribunalInstrumentPickFields(dailyPick) {
+    var active = (dailyPick && (dailyPick.pick || dailyPick.candidate)) || {};
+    var sn = (active && active.subnet) || {};
+    var tags = active.scenario_tags && typeof active.scenario_tags === 'object' ? active.scenario_tags : {};
+    var contrib =
+      active.signal_contributions && typeof active.signal_contributions === 'object'
+        ? active.signal_contributions
+        : {};
+    var out = { rsi: null, stoch: null, d7: null };
+
+    var rsiCandidates = [sn.rsi, active.rsi];
+    for (var i = 0; i < rsiCandidates.length; i++) {
+      if (rsiCandidates[i] == null || isNaN(Number(rsiCandidates[i]))) continue;
+      out.rsi = Number(rsiCandidates[i]);
+      break;
+    }
+    if (out.rsi == null && tags.rsi) {
+      out.rsi = String(tags.rsi).replace(/_/g, ' ').toUpperCase();
+    }
+
+    var stochN = null;
+    var stochC = contrib.stochastic_reversal;
+    if (stochC && typeof stochC === 'object' && stochC.score != null && !isNaN(Number(stochC.score))) {
+      stochN = Number(stochC.score);
+      if (stochN <= 1) stochN *= 100;
+    }
+    var stochCandidates = [sn.stochastic_k, sn.stoch, stochN];
+    for (var j = 0; j < stochCandidates.length; j++) {
+      if (stochCandidates[j] == null || isNaN(Number(stochCandidates[j]))) continue;
+      out.stoch = Number(stochCandidates[j]);
+      break;
+    }
+
+    var hv =
+      dailyPick && dailyPick.horizon_views && typeof dailyPick.horizon_views === 'object'
+        ? dailyPick.horizon_views
+        : {};
+    var views = hv.views && typeof hv.views === 'object' ? hv.views : {};
+    var view7 = views['7d'] && typeof views['7d'] === 'object' ? views['7d'] : {};
+    var d7Candidates = [sn.price_change_7d, sn.change_7d, active.price_change_7d, view7.pct_7d];
+    for (var k = 0; k < d7Candidates.length; k++) {
+      if (d7Candidates[k] == null || isNaN(Number(d7Candidates[k]))) continue;
+      out.d7 = Number(d7Candidates[k]);
+      break;
+    }
+    return out;
+  }
+
+  function patchTribunalInstrument(dailyPick, stats) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero || !stats) return;
+    var tb = stats.trust_banner || {};
+    var graded = Number(tb.graded != null ? tb.graded : stats.graded) || 0;
+    var correct = Number(tb.correct != null ? tb.correct : stats.correct) || 0;
+    var wrong = Number(tb.wrong != null ? tb.wrong : stats.wrong) || 0;
+    var acc = null;
+    if (tb.ready && tb.accuracy != null && !isNaN(Number(tb.accuracy))) acc = Number(tb.accuracy) * 100;
+    else if (graded > 0 && correct + wrong > 0) acc = (correct / (correct + wrong)) * 100;
+    if (acc != null) {
+      var accTxt =
+        Math.abs(acc - Math.round(acc)) < 0.05
+          ? Math.round(acc) + '%'
+          : (Math.round(acc * 10) / 10) + '%';
+      var accArrow = acc >= 50 ? 'up' : 'down';
+      setTribunalInstrumentMetric(hero, 'avg-acc', accTxt, accArrow, acc);
+      setTribunalInstrumentMetric(hero, 'win-rate', accTxt, accArrow, acc);
+    }
+
+    var dw = stats.judge_weight_deltas;
+    if (dw && typeof dw === 'object') {
+      var signed = ['oracle', 'echo', 'pulse'].reduce(function (s, key) {
+        return s + (typeof dw[key] === 'number' ? dw[key] : 0);
+      }, 0);
+      if (Math.abs(signed) >= 0.0005) {
+        setTribunalInstrumentMetric(
+          hero,
+          'signal',
+          (signed >= 0 ? '+' : '') + signed.toFixed(2),
+          signed >= 0 ? 'up' : 'down'
+        );
+      } else {
+        setTribunalInstrumentMetric(hero, 'signal', '·');
+      }
+    }
+
+    var pickFields = tribunalInstrumentPickFields(dailyPick || {});
+    if (typeof pickFields.rsi === 'number') {
+      setTribunalInstrumentMetric(
+        hero,
+        'rsi',
+        Math.round(pickFields.rsi).toFixed(0),
+        pickFields.rsi >= 50 ? 'up' : 'down'
+      );
+    } else if (typeof pickFields.rsi === 'string') {
+      setTribunalInstrumentMetric(hero, 'rsi', pickFields.rsi);
+    } else if (typeof stats.rsi === 'number') {
+      setTribunalInstrumentMetric(
+        hero,
+        'rsi',
+        Math.round(stats.rsi).toFixed(0),
+        stats.rsi >= 50 ? 'up' : 'down'
+      );
+    }
+
+    var stVal = pickFields.stoch != null ? pickFields.stoch : stats.stoch;
+    if (typeof stVal === 'number') {
+      setTribunalInstrumentMetric(
+        hero,
+        'stoch',
+        Math.round(stVal).toFixed(0),
+        stVal >= 50 ? 'up' : 'down'
+      );
+    }
+
+    var d7Val = pickFields.d7 != null ? pickFields.d7 : stats.last7;
+    if (typeof d7Val === 'number') {
+      setTribunalInstrumentMetric(
+        hero,
+        'd7',
+        (d7Val >= 0 ? '+' : '') + d7Val.toFixed(1) + '%',
+        d7Val >= 0 ? 'up' : 'down'
+      );
+    }
+
+    var signals = judgeSignalsFromPick(dailyPick || {});
+    var sigVals = ['oracle', 'echo', 'pulse']
+      .map(function (key) {
+        return signals[key];
+      })
+      .filter(function (v) {
+        return v != null && !isNaN(Number(v));
+      })
+      .map(Number);
+    if (sigVals.length >= 2) {
+      var spread = Math.max.apply(null, sigVals) - Math.min.apply(null, sigVals);
+      var varTxt = Math.round(spread) + ' pt';
+      var varPct = Math.max(0, Math.min(100, 100 - spread));
+      var varVal = hero.querySelector('.tribunal-hero__variance-value');
+      if (varVal) setTribunalPanelField(varVal, varTxt);
+      var varFill = hero.querySelector('.tribunal-hero__variance-fill');
+      if (varFill) varFill.style.width = varPct + '%';
+    }
+  }
+
+  function parseTribunalWeightsAttr(hero) {
+    if (!hero) return null;
+    var raw = hero.getAttribute('data-weights');
+    if (!raw) return null;
+    var parts = raw.trim().split(/\s+/).map(Number);
+    if (parts.length !== 3 || parts.some(function (x) {
+      return !isFinite(x);
+    })) {
+      return null;
+    }
+    return { oracle: parts[0], echo: parts[1], pulse: parts[2] };
+  }
+
+  function patchTribunalJudgeRing(weights) {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var outer = hero.querySelector('[data-eye-path]');
+    var inner = hero.querySelector('[data-conviction-arc]');
+    var p = parseFloat(hero.getAttribute('data-hero-conviction'));
+    function placeOnPath(el, path, frac) {
+      if (!el) return;
+      if (path && path.getTotalLength) {
+        var len = path.getTotalLength();
+        if (len) {
+          var t = ((frac % 1) + 1) % 1;
+          var pt = path.getPointAtLength(t * len);
+          el.setAttribute('cx', pt.x.toFixed(2));
+          el.setAttribute('cy', pt.y.toFixed(2));
+          return;
+        }
+      }
+    }
+    function setArc(el, start, frac) {
+      if (!el) return;
+      var len = Math.max(0, Math.min(100, frac * 100));
+      el.setAttribute('stroke-dasharray', len.toFixed(1) + ' ' + (100 - len).toFixed(1));
+      el.setAttribute('stroke-dashoffset', (-start * 100).toFixed(1));
+    }
+    if (inner && isFinite(p)) {
+      var c = Math.max(0, Math.min(100, p));
+      inner.setAttribute('stroke-dasharray', c.toFixed(1) + ' ' + (100 - c).toFixed(1));
+    }
+    var present =
+      weights &&
+      ['oracle', 'echo', 'pulse'].every(function (k) {
+        return typeof weights[k] === 'number' && isFinite(weights[k]);
+      });
+    if (!present) {
+      hero.classList.add('tribunal-hero--consensus');
+      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
+      return;
+    }
+    var total = weights.oracle + weights.echo + weights.pulse;
+    if (!total) return;
+    var fracs = ['oracle', 'echo', 'pulse'].map(function (k) {
+      return weights[k] / total;
+    });
+    var maxF = Math.max.apply(null, fracs);
+    if (maxF - Math.min.apply(null, fracs) < 0.02) {
+      hero.classList.add('tribunal-hero--consensus');
+      placeOnPath(hero.querySelector('[data-comet]'), inner || outer, 0.25);
+      return;
+    }
+    hero.classList.remove('tribunal-hero--consensus');
+    var started = 0;
+    ['oracle', 'echo', 'pulse'].forEach(function (k, i) {
+      var f = fracs[i];
+      setArc(hero.querySelector('[data-judge-arc="' + k + '"]'), started, f);
+      placeOnPath(hero.querySelector('[data-rim-marker="' + k + '"]'), outer, started + f / 2);
+      started += f;
+      var badge = hero.querySelector('[data-judge="' + k + '"] [data-dissent]');
+      if (badge) badge.hidden = Math.abs(f - maxF) < 0.001;
+    });
+    placeOnPath(hero.querySelector('[data-comet]'), inner || outer, Math.min(0.99, (p || 0) / 100));
+    hero.setAttribute(
+      'data-weights',
+      weights.oracle + ' ' + weights.echo + ' ' + weights.pulse
+    );
+    hero.setAttribute('data-consensus-delta', ((maxF - 1 / 3) * 100).toFixed(1) + '%');
+  }
+
+  function effectiveJudgeWeights(stats, hero) {
+    var weights = (stats && stats.judge_weights) || {};
+    var has =
+      weights.oracle != null && weights.echo != null && weights.pulse != null;
+    if (has) return weights;
+    return parseTribunalWeightsAttr(hero) || weights;
+  }
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return;
+    var el = hero.querySelector('[data-council-last5]');
+    if (!el) return;
+    renderTribunalLast5Ticks(el, stats && stats.council_last5);
+  }
+
   function patchTribunalJudges(stats, dailyPick) {
     var hero = document.getElementById('tribunal-hero');
     if (!hero || !stats) return;
-    var weights = stats.judge_weights || {};
+    var weights = effectiveJudgeWeights(stats, hero);
     var signals = judgeSignalsFromPick(dailyPick || {});
     var last5Map = stats.judge_last5 || {};
     hero.querySelectorAll('[data-judge]').forEach(function (seat) {
       var key = seat.getAttribute('data-judge');
       var weightEl = seat.querySelector('[data-judge-weight]');
-      if (weightEl) weightEl.textContent = formatJudgeWeightPct(weights[key], weights);
+      if (weightEl) {
+        setTribunalPanelField(weightEl, formatJudgeWeightPct(weights[key], weights));
+      }
       var signalEl = seat.querySelector('[data-judge-signal]');
-      if (signalEl) signalEl.textContent = formatGaugePct(signals[key]);
+      if (signalEl) setTribunalPanelField(signalEl, formatGaugePct(signals[key]));
       var last5El = seat.querySelector('[data-last5]');
       if (last5El) renderTribunalLast5Ticks(last5El, last5Map[key]);
     });
+    patchTribunalJudgeRing(weights);
   }
 
   function setTribunalPanelField(el, next) {
@@ -4863,6 +5126,7 @@
     }
     if (learningStats) {
       patchTribunalJudges(learningStats, dailyPick);
+      patchTribunalInstrument(dailyPick, learningStats);
       patchTribunalPanels(dailyPick, learningStats);
     }
     return true;
