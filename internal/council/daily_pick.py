@@ -91,7 +91,11 @@ def select_daily_pick(
     prediction = attach_council_prediction(
         candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
     )
-    reasons = pick_reasons(candidate, learning["signal_impact"])
+    reasons = pick_reasons(
+        candidate,
+        learning["signal_impact"],
+        allow_hydration=False,
+    )
     try:
         from internal.subnets.impact import impact_profile
 

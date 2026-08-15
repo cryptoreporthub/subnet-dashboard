@@ -564,28 +564,23 @@ def test_default_subnets_fallback_returns_list():
     assert isinstance(result, list)
 
 
-def test_default_subnets_uses_bounded_live_fetch(monkeypatch):
-    seen_timeout = None
-
-    def _with_source(timeout=None):
-        nonlocal seen_timeout
-        seen_timeout = timeout
-        return [{"netuid": 7, "price": 1.0}], "live"
-
-    monkeypatch.setattr("server._get_subnets_with_source", _with_source)
+def test_default_subnets_uses_worker_cache(monkeypatch):
+    monkeypatch.setattr(
+        "internal.live_subnets.get_live_subnets",
+        lambda: [{"netuid": 7, "price": 1.0}],
+    )
     result = resolver_scheduler._default_subnets()
-    assert seen_timeout == 15
     assert result[0]["netuid"] == 7
 
 
-def test_default_subnets_hydrate_when_live_empty(monkeypatch):
+def test_default_subnets_falls_back_to_registry_when_cache_read_fails(monkeypatch):
     monkeypatch.setattr(
-        "server._get_subnets_with_source",
-        lambda timeout=None: ([], "none"),
+        "internal.live_subnets.get_live_subnets",
+        lambda: (_ for _ in ()).throw(RuntimeError("cache unavailable")),
     )
     monkeypatch.setattr(
-        "server._get_subnets_hydrate",
-        lambda: ([{"netuid": 3, "price": 1.0}], "registry-fallback"),
+        "internal.subnets.feed.registry_subnet_rows",
+        lambda: [{"netuid": 3, "price": 1.0}],
     )
     result = resolver_scheduler._default_subnets()
     assert result[0]["netuid"] == 3

@@ -120,7 +120,12 @@ def _lazy_fill_price_candles(netuid: Any) -> List[Dict[str, Any]]:
         return []
 
 
-def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
+def _get_price_history(
+    netuid: Any,
+    sn: Dict[str, Any],
+    *,
+    allow_hydration: bool = True,
+) -> Dict[str, Any]:
     """Return {closes, highs, lows, volumes, timestamps, source} for a subnet."""
     if isinstance(netuid, dict):
         netuid = netuid.get("id") or netuid.get("netuid") or netuid.get("subnet") or 0
@@ -140,6 +145,9 @@ def _get_price_history(netuid: Any, sn: Dict[str, Any]) -> Dict[str, Any]:
         hist = _history_from_candles(raw.get("candles") or [], source)
         if hist["closes"]:
             return hist
+
+    if not allow_hydration:
+        return _empty_price_history()
 
     candles = _lazy_fill_price_candles(netuid_key)
     if candles:
@@ -551,9 +559,17 @@ def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _compute_technical_indicators(sn: Dict[str, Any]) -> Dict[str, Any]:
+def _compute_technical_indicators(
+    sn: Dict[str, Any],
+    *,
+    allow_hydration: bool = True,
+) -> Dict[str, Any]:
     """Compute all 8 indicators and return per-signal scores."""
-    hist = _get_price_history(sn.get("netuid"), sn)
+    hist = _get_price_history(
+        sn.get("netuid"),
+        sn,
+        allow_hydration=allow_hydration,
+    )
     closes = hist.get("closes", [])
     if hist.get("source") in ("synthetic", "unavailable") or len(closes) < 30:
         return _degraded_technical_indicators(hist)
@@ -1763,13 +1779,21 @@ def score_subnet_for_day(
 ) -> Dict[str, Any]:
     """24h score (0-100) emphasizing yield, trend, and lower volatility."""
     sn = subnet_data or {}
-    indicators = _compute_technical_indicators(sn)
+    # Daily picks run on the request/scheduler critical path.  Technical
+    # history is cache-only here; the recovery worker may hydrate cold rows
+    # separately without holding up pick publication.
+    indicators = _compute_technical_indicators(sn, allow_hydration=False)
     from internal.council.recovery_context import build_recovery_context
 
+    price_history = _get_price_history(
+        sn.get("netuid"),
+        sn,
+        allow_hydration=False,
+    )
     recovery_context = build_recovery_context(
         sn,
         indicators,
-        _get_price_history(sn.get("netuid"), sn),
+        price_history,
     )
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
@@ -2049,10 +2073,12 @@ def _compute_simivision_reasons(
 def pick_reasons(
     sn: Dict[str, Any],
     signal_impact: Optional[Dict[str, Any]] = None,
+    *,
+    allow_hydration: bool = True,
 ) -> List[str]:
     """Public helper: compute display reasons for a subnet row."""
     sn = sn or {}
-    indicators = _compute_technical_indicators(sn)
+    indicators = _compute_technical_indicators(sn, allow_hydration=allow_hydration)
     convergence = _detect_oversold_convergence(indicators)
     hot = _compute_hot_signals(sn, indicators, convergence)
     if signal_impact is None:
