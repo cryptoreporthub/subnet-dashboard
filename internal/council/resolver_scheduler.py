@@ -142,6 +142,7 @@ class PredictionResolverScheduler:
         self._subnet_provider = subnet_provider or _default_subnets
 
         self._lock = threading.Lock()
+        self._cycle_lock = threading.Lock()
         self._running = False
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
@@ -390,16 +391,40 @@ class PredictionResolverScheduler:
             pass
 
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
+        if not self._cycle_lock.acquire(blocking=False):
+            result = {
+                "ok": True,
+                "run_at": _now_iso(),
+                "resolved_now": 0,
+                "expired_now": 0,
+                "pending": 0,
+                "skipped": "cycle_in_flight",
+            }
+            self._persist_cycle_summary(result)
+            return result
+
         timeout = (
             RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
             if self._first_tick_pending
             else RESOLVER_CYCLE_TIMEOUT_SECONDS
         )
         if timeout <= 0:
-            return self._run_refresh_cycle()
+            try:
+                return self._run_refresh_cycle()
+            finally:
+                self._cycle_lock.release()
         pool = ThreadPoolExecutor(max_workers=1)
+        submitted = False
+
+        def _run_cycle() -> Dict[str, Any]:
+            try:
+                return self._run_refresh_cycle()
+            finally:
+                self._cycle_lock.release()
+
         try:
-            fut = pool.submit(self._run_refresh_cycle)
+            fut = pool.submit(_run_cycle)
+            submitted = True
             try:
                 return fut.result(timeout=timeout)
             except FuturesTimeoutError:
@@ -413,6 +438,10 @@ class PredictionResolverScheduler:
                 }
                 self._persist_cycle_summary(result)
                 return result
+        except BaseException:
+            if not submitted:
+                self._cycle_lock.release()
+            raise
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
 

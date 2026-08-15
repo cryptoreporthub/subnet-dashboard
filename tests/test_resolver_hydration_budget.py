@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timedelta, timezone
 
 import internal.council.price_reference as price_reference
@@ -29,13 +30,12 @@ def _due_prediction(netuid: int, now: datetime) -> dict:
     }
 
 
-def test_resolve_due_caps_unique_cache_miss_hydration(monkeypatch, tmp_path):
+def test_critical_resolve_leaves_large_cache_miss_batch_pending(monkeypatch, tmp_path):
     predictions_path = tmp_path / "predictions.json"
     price_cache_path = tmp_path / "price_cache.json"
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(predictions_path))
     monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(price_cache_path))
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
-    monkeypatch.setattr(resolver, "_RESOLVER_HYDRATION_MAX", 4)
     monkeypatch.setenv("CALIBRATION_HYDRATE_ON_MISS", "true")
     price_reference._hydrate_memo.clear()
     calls = []
@@ -48,13 +48,16 @@ def test_resolve_due_caps_unique_cache_miss_hydration(monkeypatch, tmp_path):
     now = datetime.now(timezone.utc)
     _write_predictions(
         predictions_path,
-        [_due_prediction(netuid, now) for netuid in range(700, 706)],
+        [_due_prediction(netuid, now) for netuid in range(700, 900)],
     )
 
+    started = time.perf_counter()
     result = resolver.resolve_due_predictions(subnets=[])
+    elapsed = time.perf_counter() - started
 
-    assert calls == ["700", "701", "702", "703"]
-    assert len(result["pending"]) == 6
+    assert elapsed < 1.0
+    assert calls == []
+    assert len(result["pending"]) == 200
     assert result["resolved_now"] == []
 
 
@@ -64,7 +67,6 @@ def test_resolve_budget_does_not_block_existing_candle(monkeypatch, tmp_path):
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(predictions_path))
     monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(price_cache_path))
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
-    monkeypatch.setattr(resolver, "_RESOLVER_HYDRATION_MAX", 0)
     monkeypatch.setenv("CALIBRATION_HYDRATE_ON_MISS", "true")
     price_reference._hydrate_memo.clear()
     monkeypatch.setattr(resolver, "_stamp_and_nudge_expert", lambda *_a, **_k: (None, None))
@@ -105,8 +107,15 @@ def test_resolve_budget_does_not_block_existing_candle(monkeypatch, tmp_path):
         encoding="utf-8",
     )
 
+    calls = []
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher.fetch_ohlcv",
+        lambda netuid, **_kwargs: calls.append(str(netuid)) or [],
+    )
+
     result = resolver.resolve_due_predictions(subnets=[])
 
+    assert calls == []
     assert len(result["resolved_now"]) == 1
     assert result["pending"] == []
 
