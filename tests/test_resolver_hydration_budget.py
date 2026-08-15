@@ -71,7 +71,20 @@ def test_resolve_budget_does_not_block_existing_candle(monkeypatch, tmp_path):
     monkeypatch.setattr(resolver, "_nudge_impact_strength", lambda *_a, **_k: None)
     monkeypatch.setattr(resolver, "_record_scenario_outcome", lambda *_a, **_k: None)
     monkeypatch.setattr(resolver, "_nudge_signal_weights", lambda *_a, **_k: None)
-    monkeypatch.setattr(resolver, "atomic_finalize_resolution", lambda prediction, **_k: prediction)
+
+    def _fake_finalize(prediction, **kwargs):
+        prediction.update(
+            {
+                "status": "resolved",
+                "outcome": kwargs["outcome"],
+                "correct": kwargs["correct"],
+                "resolved_price": kwargs["resolved_price"],
+                "resolved_at": kwargs["resolved_at"],
+            }
+        )
+        return prediction
+
+    monkeypatch.setattr(resolver, "atomic_finalize_resolution", _fake_finalize)
     now = datetime.now(timezone.utc)
     resolve_at = now - timedelta(hours=1)
     _write_predictions(predictions_path, [_due_prediction(706, now)])
