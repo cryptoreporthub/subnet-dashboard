@@ -169,19 +169,20 @@ body.lsn-body{
   border:1px solid rgba(59,255,184,.35); color:var(--lsn-pos); background:rgba(59,255,184,.07)}
 .lsn-cal.drift{color:var(--lsn-gold); border-color:rgba(255,207,110,.45); background:rgba(255,207,110,.09)}
 
-/* HEADER */
-.lsn-hdr{display:flex; align-items:center; gap:8px; padding:2px 2px 0; flex-wrap:wrap}
+/* HEADER — keep the identity block centered; controls get their own centered row
+   so their variable width cannot pull the Telegram title off-axis. */
+.lsn-hdr{display:grid; grid-template-columns:34px minmax(0,1fr); align-items:center; gap:8px; padding:2px 2px 0}
 .lsn-logo{width:34px;height:34px;border-radius:12px;flex:0 0 34px;
   background:conic-gradient(from 210deg, #ffcf6e, #ff9e6e, #6ee7ff, #b78bff, #ffcf6e);
   display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#0a0f1e;
   box-shadow:0 0 18px rgba(110,231,255,.35)}
-.lsn-hdr .t{flex:1; min-width:0}
+.lsn-hdr .t{min-width:0; text-align:center}
 .lsn-hdr .t .app{font-weight:800; font-size:15px; letter-spacing:.02em}
 .lsn-hdr .t .app em{color:var(--lsn-gold); font-style:normal}
 .lsn-hdr .t .grp{font-size:11px; color:var(--lsn-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lsn-graded{margin-top:5px; font-size:10.5px; color:var(--lsn-muted)}
 .lsn-graded b{color:var(--lsn-ink)}
-.lsn-hdr-actions{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-left:auto}
+.lsn-hdr-actions{grid-column:1 / -1; display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px}
 .lsn-live{display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; letter-spacing:.12em;
   color:var(--lsn-pos); border:1px solid rgba(59,255,184,.35); background:rgba(59,255,184,.08);
   padding:3px 9px; border-radius:99px; white-space:nowrap}

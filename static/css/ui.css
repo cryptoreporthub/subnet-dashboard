@@ -10334,7 +10334,7 @@ body.wrap {
 .message-intel--v2 .message-intel__topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 16px;
@@ -10350,7 +10350,7 @@ body.wrap {
   padding: 0;
   border-radius: 0;
   min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
 }
 .message-intel--v2 .message-intel__brand em {
   color: var(--mi-green);
@@ -11982,10 +11982,12 @@ body.wrap {
   padding: clamp(6px, 1.5vw, 16px) clamp(2px, 0.8vw, 10px) 16px;
   margin-bottom: 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: center;
 }
 
 .message-intel--v2 .message-intel__topbar {
   align-items: center;
+  justify-content: center;
   gap: 10px;
 }
 
@@ -12004,7 +12006,7 @@ body.wrap {
 
 .message-intel--v2 .message-intel__page-sub {
   max-width: 58ch;
-  margin-top: 10px;
+  margin: 10px auto 0;
   color: rgba(199, 215, 222, 0.72);
   font-size: clamp(0.9rem, 1.5vw, 1rem);
 }
