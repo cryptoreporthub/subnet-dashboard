@@ -409,6 +409,149 @@
     );
   }
 
+  function renderYesterdaySummary(summary) {
+    if (!summary24hCard || !summary24hBody) return;
+    summary = summary || {};
+    summary24hCard.hidden = false;
+    if (!summary.ready) {
+      summary24hBody.innerHTML =
+        '<p class="message-intel__summary-24h-empty">' +
+        esc(
+          summary.narrative ||
+            summary.empty_reason ||
+            "Yesterday's chat recap fills in once the listener logs a full UTC day."
+        ) +
+        "</p>";
+      return;
+    }
+
+    var stats = summary.stats || {};
+    var html = "";
+    if (summary.narrative) {
+      html +=
+        '<p class="message-intel__summary-24h-narrative">' + esc(summary.narrative) + "</p>";
+    }
+
+    function statChip(value, label) {
+      return (
+        '<div class="message-intel__summary-24h-stat">' +
+        '<div class="message-intel__summary-24h-stat-v">' +
+        esc(value != null ? value : "—") +
+        "</div>" +
+        '<div class="message-intel__summary-24h-stat-l">' +
+        esc(label) +
+        "</div></div>"
+      );
+    }
+
+    html +=
+      '<div class="message-intel__summary-24h-stats">' +
+      statChip(stats.graded != null ? stats.graded : summary.message_count, "graded") +
+      statChip(
+        stats.high_conviction != null ? stats.high_conviction : summary.high_conviction_count,
+        "high conv"
+      ) +
+      statChip(stats.active_subnets, "act. subnets") +
+      statChip(stats.topics, "topics") +
+      statChip(stats.authors, "authors") +
+      statChip(
+        stats.peak_hour != null ? String(stats.peak_hour).padStart(2, "0") + ":00" : "—",
+        "peak"
+      ) +
+      "</div>";
+
+    function chipRow(label, rows, kind) {
+      if (!rows || !rows.length) return "";
+      var chips = rows
+        .map(function (row) {
+          var netuid = row.netuid;
+          var name = row.name || row.label || (netuid != null ? "SN" + netuid : "—");
+          var deltaVal = row.change != null ? row.change : row.delta;
+          var extra =
+            kind === "mover" && deltaVal != null
+              ? " " + (deltaVal > 0 ? "+" : "") + esc(deltaVal)
+              : row.mentions != null
+                ? " ×" + esc(row.mentions)
+                : row.count != null
+                  ? " ×" + esc(row.count)
+                  : "";
+          var cls =
+            kind === "mover"
+              ? deltaVal > 0
+                ? " message-intel__summary-24h-chip--up"
+                : deltaVal < 0
+                  ? " message-intel__summary-24h-chip--down"
+                  : ""
+              : "";
+          if (netuid == null) {
+            return (
+              '<span class="message-intel__summary-24h-chip' +
+              cls +
+              '">' +
+              esc(name) +
+              extra +
+              "</span>"
+            );
+          }
+          return (
+            '<a class="message-intel__summary-24h-chip' +
+            cls +
+            '" href="/subnet/' +
+            encodeURIComponent(String(netuid)) +
+            '">' +
+            esc(name) +
+            extra +
+            "</a>"
+          );
+        })
+        .join("");
+      return (
+        '<div class="message-intel__summary-24h-row">' +
+        '<span class="message-intel__summary-24h-kicker">' +
+        esc(label) +
+        "</span>" +
+        '<div class="message-intel__summary-24h-chips">' +
+        chips +
+        "</div></div>"
+      );
+    }
+
+    html += chipRow("Top", summary.top_subnets || [], "top");
+    html += chipRow("Movers", summary.movers || [], "mover");
+    if (summary.topics && summary.topics.length) {
+      html += chipRow("Themes", summary.topics, "topic");
+    }
+
+    var hourly = summary.hourly || [];
+    if (hourly.length) {
+      var peakLabel =
+        summary.hourly_peak != null
+          ? "peak " + String(summary.hourly_peak).padStart(2, "0") + ":00"
+          : "";
+      html +=
+        '<div class="message-intel__summary-24h-hourly">' +
+        '<div class="message-intel__summary-24h-hourly-head">' +
+        "<span>Message volume by hour</span>" +
+        (peakLabel ? "<span>" + esc(peakLabel) + "</span>" : "") +
+        "</div>" +
+        '<div class="message-intel__summary-24h-bars" aria-hidden="true">';
+      hourly.forEach(function (bar) {
+        var hot = bar.pct >= 100 ? ' class="hot"' : "";
+        html +=
+          "<i" +
+          hot +
+          ' title="' +
+          esc(String(bar.hour).padStart(2, "0") + ":00") +
+          '" style="height:' +
+          esc(bar.pct || 0) +
+          '%"></i>';
+      });
+      html += "</div></div>";
+    }
+
+    summary24hBody.innerHTML = html;
+  }
+
   function renderSummary24h(summary) {
     if (!summary24hCard || !summary24hBody) return;
     summary = summary || {};
@@ -1032,7 +1175,24 @@
   function renderYesterdayLeader(row) {
     if (!yesterdayCard) return;
     if (!row || row.netuid == null) {
-      yesterdayCard.hidden = true;
+      yesterdayCard.hidden = false;
+      if (yesterdayLink) {
+        yesterdayLink.removeAttribute("href");
+        yesterdayLink.textContent = "Quiet yesterday";
+      }
+      if (yesterdayStats) {
+        yesterdayStats.textContent =
+          "No subnet dominated chat yesterday — recap still builds from the full day log.";
+      }
+      if (yesterdayIcon) yesterdayIcon.textContent = "—";
+      if (yesterdayChips) {
+        yesterdayChips.hidden = true;
+        yesterdayChips.innerHTML = "";
+      }
+      if (yesterdayRunner) {
+        yesterdayRunner.hidden = true;
+        yesterdayRunner.innerHTML = "";
+      }
       return;
     }
     yesterdayCard.hidden = false;
@@ -2056,7 +2216,7 @@
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
       renderYesterdayLeader((payload.meta && payload.meta.yesterday_leader) || null);
       renderWeekTopComment((payload.meta && payload.meta.week_top_comment) || null);
-      renderSummary24h((payload.meta && payload.meta.summary_24h) || null);
+      renderYesterdaySummary((payload.meta && payload.meta.yesterday_summary) || null);
       renderTelegramProof((payload.meta && payload.meta.telegram_proof) || null);
       hydrateCallerLeaderboard();
       hydrateConsensus();
