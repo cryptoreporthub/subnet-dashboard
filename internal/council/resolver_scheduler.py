@@ -474,16 +474,6 @@ class PredictionResolverScheduler:
             result["pending"] = expired.get("stats", {}).get("pending", 0)
             result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
 
-            # Recover rows retired only because the price feed was unavailable.
-            # Keep this bounded so essential workers can heal evidence without
-            # turning the resolver tick into a full-universe job.
-            try:
-                from internal.learning.expired_recovery import recover_expired_predictions
-
-                result["recovery"] = recover_expired_predictions(max_rows=20)
-            except Exception as recovery_exc:
-                result["recovery"] = {"ok": False, "error": str(recovery_exc)}
-
             result["ok"] = True
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
