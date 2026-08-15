@@ -226,7 +226,6 @@ def _message_intel_outcomes_enabled() -> bool:
 
 def _maybe_start_message_intel() -> None:
     """Telegram ingest on essential worker — deferred so HTTP wins boot (ponytail)."""
-
     def _outcomes() -> None:
         from internal.message_intel.outcome_loop import start_price_outcome_loop
 
@@ -251,7 +250,14 @@ def _maybe_start_message_intel() -> None:
         start_message_intel_listeners()
 
     # After pump first scan window — full heavy mode wedged prod with live subnets + Telegram.
-    listener_delay = int(os.environ.get("MESSAGE_INTEL_LISTENER_DEFER_SECONDS", str(max(BOOT_DEFER_SECONDS + 60, 120))))
+    from internal.run_mode import is_worker_mode
+
+    listener_delay = int(
+        os.environ.get(
+            "MESSAGE_INTEL_LISTENER_DEFER_SECONDS",
+            "0" if is_worker_mode() else str(max(BOOT_DEFER_SECONDS + 60, 120)),
+        )
+    )
     defer_boot("message-intel-listeners", _listeners, delay=listener_delay)
 
 
