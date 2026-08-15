@@ -516,6 +516,7 @@ def atomic_finalize_resolution(
     resolved_price: float,
     resolved_at: str,
     price_meta: Optional[Dict[str, Any]] = None,
+    apply_judge_nudge: bool = True,
 ) -> Dict[str, Any]:
     """J3: one event updates prediction, judges, and trace."""
     prediction["actual_pct"] = actual_pct
@@ -533,7 +534,7 @@ def atomic_finalize_resolution(
     warnings: List[str] = []
 
     try:
-        on_prediction_resolved(prediction)
+        on_prediction_resolved(prediction, apply_judge_nudge=apply_judge_nudge)
     except Exception:
         logger.exception("atomic_finalize: on_prediction_resolved failed")
         warnings.append("on_prediction_resolved")
@@ -633,6 +634,7 @@ def resolve_prediction_at_horizon(
     live_prices: Optional[Dict[Any, float]] = None,
     grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
     subnet_row: Optional[Dict[str, Any]] = None,
+    apply_judge_nudge: bool = True,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
     now = now or datetime.now(timezone.utc)
@@ -677,6 +679,7 @@ def resolve_prediction_at_horizon(
         resolved_price=price,
         resolved_at=resolved_at,
         price_meta=meta,
+        apply_judge_nudge=apply_judge_nudge,
     )
     if not _skip_council_learning(prediction):
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
@@ -1034,6 +1037,7 @@ def regrade_expired_predictions(
             copy,
             now=attempt_now,
             live_prices=live_prices,
+            apply_judge_nudge=False,
         )
         if result.get("outcome") in {"duplicate", "expired", "ungradeable"}:
             continue
