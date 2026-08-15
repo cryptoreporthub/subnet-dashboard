@@ -59,67 +59,6 @@
 
   var pulseRoot = document.querySelector(".message-intel--v2");
 
-  function pulseModeFromHash() {
-    var match = window.location.hash && window.location.hash.match(/^#pulse-(listen|learn|rank|serve)$/);
-    return match ? match[1] : "listen";
-  }
-
-  function setPulseMode(mode, opts) {
-    mode = /^(listen|learn|rank|serve)$/.test(mode) ? mode : "listen";
-    opts = opts || {};
-    if (!pulseRoot) return;
-    pulseRoot.setAttribute("data-pulse-mode", mode);
-    pulseRoot.querySelectorAll(".message-intel__loop [role='tab']").forEach(function (tab) {
-      var active = tab.getAttribute("data-pulse-mode") === mode;
-      tab.setAttribute("aria-selected", active ? "true" : "false");
-      tab.setAttribute("tabindex", active ? "0" : "-1");
-    });
-    pulseRoot.querySelectorAll("[data-pulse-pane]").forEach(function (pane) {
-      pane.hidden = pane.getAttribute("data-pulse-pane") !== mode;
-    });
-    if (!opts.hash) {
-      try {
-        window.history.replaceState(null, "", "#pulse-" + mode);
-      } catch (e) {
-        /* Hash navigation is progressive enhancement only. */
-      }
-    }
-  }
-
-  function bindPulseModes() {
-    if (!pulseRoot) return;
-    var tabs = Array.prototype.slice.call(pulseRoot.querySelectorAll(".message-intel__loop [role='tab']"));
-    tabs.forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        setPulseMode(tab.getAttribute("data-pulse-mode") || "listen");
-      });
-    });
-    var loop = pulseRoot.querySelector(".message-intel__loop");
-    if (loop) {
-      loop.addEventListener("keydown", function (event) {
-        var direction = { ArrowLeft: -1, ArrowRight: 1, Home: "first", End: "last" }[event.key];
-        if (direction == null || !tabs.length) return;
-        var index = tabs.indexOf(document.activeElement);
-        if (index < 0) index = tabs.findIndex(function (tab) {
-          return tab.getAttribute("aria-selected") === "true";
-        });
-        var next = direction === "first"
-          ? tabs[0]
-          : direction === "last"
-            ? tabs[tabs.length - 1]
-            : tabs[(index + direction + tabs.length) % tabs.length];
-        if (!next) return;
-        event.preventDefault();
-        next.focus();
-        setPulseMode(next.getAttribute("data-pulse-mode") || "listen");
-      });
-    }
-    setPulseMode(pulseModeFromHash(), { hash: true });
-    window.addEventListener("hashchange", function () {
-      setPulseMode(pulseModeFromHash(), { hash: true });
-    });
-  }
-
   var FILTER_KEY = "message-intel-filters";
   var WATCHLIST_KEY = "message-intel-watchlist";
   var filters = loadFilters();
