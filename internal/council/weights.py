@@ -158,6 +158,7 @@ def _load_predictions_blob(path: str) -> Dict[str, Any]:
 
 def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
     from internal.council.grading import is_pump_desk_claim
+    from internal.council.grading import is_price_unit_mismatch
 
     rows = [
         row
@@ -166,6 +167,9 @@ def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         and row.get("correct") is not None
         and row.get("outcome") not in _SKIP_OUTCOMES
         and not is_pump_desk_claim(row)
+        and not is_price_unit_mismatch(
+            row.get("reference_price"), row.get("resolved_price")
+        )
     ]
     rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
     return rows

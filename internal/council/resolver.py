@@ -22,6 +22,7 @@ from internal.council.grading import (
     classify_outcome_direction_only,
     compute_actual_pct,
     grade_prediction,
+    is_price_unit_mismatch,
     is_pump_desk_claim,
     is_pump_lead,
 )
@@ -689,6 +690,9 @@ def resolve_prediction(
     now = datetime.now(timezone.utc)
     if current_price is not None and current_price > 0:
         ref = float(prediction.get("reference_price", 0) or 0)
+        if is_price_unit_mismatch(ref, current_price):
+            prediction["retirement_reason"] = "price_unit_mismatch"
+            return _mark_ungradeable(prediction, now)
         actual_pct = compute_actual_pct(ref, current_price)
         correct, outcome = grade_prediction(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
@@ -777,6 +781,9 @@ def resolve_prediction_at_horizon(
         return prediction
 
     ref = float(prediction.get("reference_price", 0) or 0)
+    if is_price_unit_mismatch(ref, price):
+        prediction["retirement_reason"] = "price_unit_mismatch"
+        return _mark_ungradeable(prediction, now)
     actual_pct = compute_actual_pct(ref, price)
     correct, outcome = grade_prediction(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
@@ -848,6 +855,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         and r.get("correct") is not None
         and not is_pump_desk_claim(r)
         and not _is_shadow(r)
+        and r.get("retirement_reason") != "price_unit_mismatch"
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
     wrong = sum(1 for r in gradable if r.get("correct") is False)
@@ -858,6 +866,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         and r.get("correct") is not None
         and _is_shadow(r)
         and not is_pump_desk_claim(r)
+        and r.get("retirement_reason") != "price_unit_mismatch"
     ]
     expired = sum(
         1
