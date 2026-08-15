@@ -109,3 +109,22 @@ def test_resolve_budget_does_not_block_existing_candle(monkeypatch, tmp_path):
 
     assert len(result["resolved_now"]) == 1
     assert result["pending"] == []
+
+
+def test_resolver_budget_covers_historical_hydration(monkeypatch, tmp_path):
+    price_reference._hydrate_hist_memo.clear()
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher.fetch_ohlcv",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("historical hydration should be deferred")
+        ),
+    )
+
+    with price_reference.resolver_hydration_budget(0):
+        result = price_reference.hydrate_candles_for_netuid_historical(
+            707,
+            datetime.now(timezone.utc) - timedelta(hours=48),
+            cache_path=str(tmp_path / "price_cache.json"),
+        )
+
+    assert result is False

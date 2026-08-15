@@ -383,6 +383,16 @@ def _hydrate_on_miss_enabled() -> bool:
     )
 
 
+def _consume_resolver_hydration_budget() -> bool:
+    remaining = _resolver_hydration_budget.get()
+    if remaining is None:
+        return True
+    if remaining <= 0:
+        return False
+    _resolver_hydration_budget.set(remaining - 1)
+    return True
+
+
 def _bust_cache_ttl(netuid: Any, cache_path: str) -> None:
     """Set cached_at=0 for a netuid block so the next fetch_ohlcv bypasses the TTL.
 
@@ -479,6 +489,8 @@ def hydrate_candles_for_netuid_historical(
 
     if now_ts - _hydrate_hist_memo.get(key, 0.0) < _hydrate_min_interval:
         return False
+    if not _consume_resolver_hydration_budget():
+        return False
     _hydrate_hist_memo[key] = now_ts
     try:
         _bust_cache_ttl(netuid, cache_path)
@@ -502,11 +514,8 @@ def _hydrate_once(netuid: Any, cache_path: str) -> bool:
     now = time.time()
     if now - _hydrate_memo.get(key, 0.0) < _hydrate_min_interval:
         return False
-    remaining = _resolver_hydration_budget.get()
-    if remaining is not None:
-        if remaining <= 0:
-            return False
-        _resolver_hydration_budget.set(remaining - 1)
+    if not _consume_resolver_hydration_budget():
+        return False
     _hydrate_memo[key] = now
     try:
         _bust_cache_ttl(netuid, cache_path)
