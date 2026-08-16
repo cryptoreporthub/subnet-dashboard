@@ -25,11 +25,19 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; background: var(--void); color: var(--text); }
-  body {
-    font-family: var(--sans);
-    display: flex;
-    justify-content: center;
-    padding: 24px 0 64px;
+  body{
+    margin:0;
+    background: var(--void);
+    color:var(--text);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    display:flex;
+    justify-content:center;
+    padding:24px 0 64px;
+  }
+  @media (max-width: 400px) {
+    body { padding: 0; }
+    .device { border-radius: 0; min-height: 100vh; }
   }
   /* Cosmic substrate clone of .cosmic-sky — mock-only so file:// works.
      Sealed /preview/listening-post uses the live site sky instead. */
@@ -193,12 +201,12 @@
   .lp-station[data-deck="traffic"] .lp-storm { opacity: 1; transform: scale(1); }
 
   .lp-nightlog {
-    position: absolute; left: 10px; right: 10px; bottom: 10px;
+    display: none;
+    margin: 0 4px 12px;
     border-radius: 10px; padding: 7px 9px;
     border: 1px solid var(--glass-border); background: transparent;
-    opacity: 0; pointer-events: none; transition: opacity .25s ease;
   }
-  .lp-station[data-deck="comms"] .lp-nightlog { opacity: 1; }
+  .lp-station[data-deck="comms"] .lp-nightlog { display: block; }
   .lp-nightlog kbd {
     font-family: var(--mono); font-size: 8px; letter-spacing: .14em; color: var(--amber);
     font-weight: 600;
@@ -302,12 +310,12 @@
           <div class="lp-storm" style="--x:58%;--y:28%;--s:48px"><span>SN18</span></div>
           <div class="lp-storm" style="--x:34%;--y:52%;--s:30px"><span>SN25</span></div>
         </div>
-        <aside class="lp-nightlog">
-          <kbd>LAST WATCH</kbd>
-          <p>Pipeline warming. 0 graded. Two storms on the limb. No radio this watch.</p>
-        </aside>
       </div>
     </div>
+    <aside class="lp-nightlog">
+      <kbd>LAST WATCH</kbd>
+      <p>Pipeline warming. 0 graded. Two storms on the limb. No radio this watch.</p>
+    </aside>
 
     <div class="lp-deck">
       <section class="lp-pane" data-pane="comms">

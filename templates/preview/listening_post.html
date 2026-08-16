@@ -9,10 +9,17 @@
     border-bottom: 1px solid var(--glass-border, rgba(255,255,255,.14));
   }
   .lp-preview-banner a { color: #3fc9ff; }
+  .lp-preview-banner,
+  .lp-preview-frame {
+    position: relative;
+    z-index: 1;
+  }
   .lp-preview-frame {
     max-width: 390px; margin: 0 auto;
     min-height: 100vh; background: transparent;
   }
+  /* Sealed 390px review: hide live-site chrome that is not the blister. */
+  .thumb-dock, .site-nfa { display: none !important; }
   .lp-station { padding: 8px 12px 18px; color: #f8fafc; }
   .lp-stencil {
     display: flex; justify-content: space-between; align-items: baseline;
@@ -80,7 +87,11 @@
       radial-gradient(circle at 32% 28%, rgba(180,230,255,.55) 0 12%, transparent 28%),
       radial-gradient(circle at 22% 62%, rgba(31,120,110,.45) 0 18%, transparent 40%),
       linear-gradient(118deg, #2a7a9a 0%, #16384c 38%, #071018 56%, #0a1a22 100%);
-    box-shadow: inset -22px -14px 36px rgba(0,0,0,.7), inset 10px 8px 18px rgba(160,220,255,.18), 0 0 28px rgba(63,201,255,.22);
+    box-shadow:
+      inset -22px -14px 36px rgba(0,0,0,.7),
+      inset 10px 8px 18px rgba(160,220,255,.18),
+      0 0 0 1px rgba(160,220,255,.35),
+      0 0 28px rgba(63,201,255,.22);
     transition: transform .45s ease;
   }
   .lp-station[data-deck="traffic"] .lp-planet { transform: scale(1.08); }
@@ -108,12 +119,12 @@
   }
   .lp-station[data-deck="traffic"] .lp-storm { opacity: 1; transform: scale(1); }
   .lp-nightlog {
-    position: absolute; left: 10px; right: 10px; bottom: 10px;
+    display: none;
+    margin: 0 4px 12px;
     border-radius: 10px; padding: 7px 9px;
     border: 1px solid var(--glass-border, rgba(255,255,255,.14)); background: transparent;
-    opacity: 0; pointer-events: none; transition: opacity .25s ease;
   }
-  .lp-station[data-deck="comms"] .lp-nightlog { opacity: 1; }
+  .lp-station[data-deck="comms"] .lp-nightlog { display: block; }
   .lp-nightlog kbd { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 8px; letter-spacing: .14em; color: #ff9f3f; font-weight: 600; }
   .lp-nightlog p { margin: 3px 0 0; font-size: 11px; line-height: 1.35; color: #b6c1cc; }
   .lp-deck { min-height: 280px; padding: 0 4px; }
@@ -187,12 +198,12 @@
           <div class="lp-storm" style="--x:58%;--y:28%;--s:48px"><span>SN18</span></div>
           <div class="lp-storm" style="--x:34%;--y:52%;--s:30px"><span>SN25</span></div>
         </div>
-        <aside class="lp-nightlog">
-          <kbd>LAST WATCH</kbd>
-          <p>Pipeline warming. 0 graded. Two storms on the limb. No radio this watch.</p>
-        </aside>
       </div>
     </div>
+    <aside class="lp-nightlog">
+      <kbd>LAST WATCH</kbd>
+      <p>Pipeline warming. 0 graded. Two storms on the limb. No radio this watch.</p>
+    </aside>
     <div class="lp-deck">
       <section class="lp-pane" data-pane="comms">
         <p class="lp-kicker">Incoming radio · punched tape</p>
