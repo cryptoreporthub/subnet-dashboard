@@ -261,6 +261,8 @@ def test_learn_proof_and_conviction_are_honest_when_empty():
     assert "var defaultProof" not in js
     assert "var defaultHc" not in js
     assert "hit_rate: 60.9" not in js
+    assert "var defaultCallers" not in js
+    assert "No callers with enough graded calls yet" in js
     assert "No graded Telegram calls yet" in js
     assert "No ≥70% conviction messages yet" in js
 

@@ -764,29 +764,30 @@
     var rankCallersBody = document.getElementById("message-intel-callers-body-rank");
     if (!callersBody && !rankCallersBody) return;
     payload = payload || {};
-    var defaultCallers = [
-      { author_username: "alphatrader_x", author_name: "Alpha Trader", author_id: "1", accuracy: 95.0, hits: 11, misses: 1, neutral: 0, sample_size: 12, alpha_gain: "+34.1%", qualified: true, streak: "5W", subnets: 4, initials: "AT" },
-      { author_username: "taosatoshiv1", author_name: "Tao Satoshi", author_id: "2", accuracy: 91.0, hits: 8, misses: 1, neutral: 0, sample_size: 9, alpha_gain: "+28.4%", qualified: true, streak: "4W", subnets: 3, initials: "TS" },
-      { author_username: "deep_quantum", author_name: "Deep Quantum", author_id: "3", accuracy: 86.0, hits: 13, misses: 2, neutral: 0, sample_size: 15, alpha_gain: "+19.7%", qualified: true, streak: "3W", subnets: 5, initials: "DQ" },
-      { author_username: "chatterqueen4", author_name: "Chatter Queen", author_id: "4", accuracy: 75.0, hits: 6, misses: 2, neutral: 0, sample_size: 8, alpha_gain: "+14.2%", qualified: true, streak: "2W", subnets: 3, initials: "CQ" },
-      { author_username: "nova_calls", author_name: "Nova Calls", author_id: "5", accuracy: 66.7, hits: 4, misses: 2, neutral: 1, sample_size: 7, alpha_gain: "+9.8%", qualified: true, streak: "2W", subnets: 2, initials: "NC" }
-    ];
-    var callers = (payload.callers && payload.callers.length) ? payload.callers : defaultCallers;
+    var callers = (payload.callers && payload.callers.length) ? payload.callers : [];
+    if (!callers.length) {
+      var empty = '<p class="empty">No callers with enough graded calls yet. Strike rate appears after N≥5 resolved qualifying calls — never a fake rank.</p>';
+      if (callersBody) callersBody.innerHTML = empty;
+      if (rankCallersBody) rankCallersBody.innerHTML = empty;
+      return;
+    }
 
     var html = '<div class="message-intel__caller-cards-list">';
     callers.forEach(function (row, index) {
       var rank = index + 1;
       var rawName = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : (row.author_name || "Unknown");
       var cleanHandle = String(rawName).replace(/^@/, "");
-      var accuracy = row.accuracy != null ? Number(row.accuracy).toFixed(0) + "%" : "95%";
-      var hits = row.hits != null ? row.hits : Math.round(row.sample_size * 0.8);
-      var misses = row.misses != null ? row.misses : Math.round(row.sample_size * 0.2);
-      var sample = row.sample_size || (hits + misses);
-      var alphaGain = row.alpha_gain || (rank === 1 ? "+34.1% Alpha" : (rank === 2 ? "+28.4% Alpha" : "+19.7% Alpha"));
-      var streak = row.streak || (5 - index > 0 ? (5 - index) + "W" : "2W");
+      var accuracy = row.accuracy != null ? Number(row.accuracy).toFixed(0) + "%" : "—";
+      var hits = row.hits;
+      var misses = row.misses;
+      var sample = row.sample_size != null ? row.sample_size : ((hits != null && misses != null) ? hits + misses : null);
+      var alphaGain = row.alpha_gain || "";
       var qualified = row.qualified !== false;
       var caution = !qualified ? '<span class="message-intel__caution">too few graded calls to trust</span>' : '';
-      var initials = row.initials || initialLetter(row.author_name || rawName);
+      var subBits = [];
+      if (alphaGain) subBits.push(esc(alphaGain));
+      if (sample != null) subBits.push(esc(sample) + " graded calls");
+      var sub = subBits.join(", ") + caution;
 
       html +=
         '<div class="message-intel__caller-card-v2' + (rank === 1 ? ' message-intel__caller-card-v2--gold' : '') + '">' +
@@ -795,7 +796,7 @@
         '<span class="message-intel__caller-rank-pill">' + rank + '</span>' +
         '<div class="message-intel__caller-user-info">' +
         '<b class="message-intel__caller-name">' + esc(rawName) + '</b>' +
-        '<span class="message-intel__caller-sub">' + esc(alphaGain) + ', ' + esc(sample) + ' graded calls' + caution + '</span>' +
+        '<span class="message-intel__caller-sub">' + sub + '</span>' +
         '</div>' +
         '</div>' +
         '<div class="message-intel__caller-rate-box">' +
