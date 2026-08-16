@@ -107,6 +107,12 @@ def test_summers_flagship_css_tokens():
     learn_grid = css.split(".message-intel__learn-dual-grid {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: 1fr" in learn_grid
     assert "1fr 1fr" not in learn_grid
+    # Shared site sky — do not retint .cosmic-sky for a listener mock
+    sky = css.split(".cosmic-sky {", 1)[1].split("}", 1)[0]
+    assert "background-color: var(--ds-void)" in sky
+    assert "#060814" not in sky
+    aurora = css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
+    assert "var(--aurora-cyan)" in aurora
 
 
 def test_summers_flagship_composition_hooks():

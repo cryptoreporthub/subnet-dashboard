@@ -74,16 +74,26 @@ body.council-first-theme::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(ellipse at 15% 25%, rgba(56, 189, 248, 0.22), transparent 60%),
-    radial-gradient(ellipse at 85% 30%, rgba(168, 85, 247, 0.22), transparent 60%),
-    radial-gradient(ellipse at 50% 75%, rgba(236, 72, 153, 0.18), transparent 65%);
-  opacity: 0.85;
+    var(--aurora-cyan),
+    var(--aurora-green),
+    var(--aurora-violet);
+  opacity: 0.59;
   transform-origin: center center;
 }
 
-/* Soft smoke wash — subtle depth without washing out cosmic starfield */
+/* Soft smoke wash — no grain/dot screen (user: smoke effect grey, not grainy) */
 body.council-first-theme::after {
-  display: none !important;
+  content: "";
+  position: fixed;
+  inset: -15%;
+  pointer-events: none;
+  opacity: 0.85;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(200, 206, 216, 0.28), transparent 68%),
+    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(170, 176, 186, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(140, 146, 156, 0.18), transparent 65%);
+  filter: blur(56px);
 }
 
 body.council-first-theme .app-shell,
@@ -16709,25 +16719,23 @@ body.council-first-theme .footer-card__lbl {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    /* Deep cosmic celestial void base with rich indigo undertones */
-    background-color: #060814;
+    /* Opaque deep-space void base (DS bridge token) */
+    background-color: var(--ds-void);
     background-image:
-        /* Top cosmic star clusters & blooms */
-        radial-gradient(700px 550px at 8% 12%, rgba(56, 189, 248, 0.45), transparent 70%),
-        radial-gradient(350px 280px at 4% 8%, rgba(6, 182, 212, 0.35), transparent 60%),
-        radial-gradient(720px 560px at 92% 14%, rgba(168, 85, 247, 0.45), transparent 70%),
-        radial-gradient(360px 300px at 96% 7%, rgba(139, 92, 246, 0.35), transparent 55%),
-        /* Mid-page vibrant nebulae across entire scroll height */
-        radial-gradient(750px 600px at 15% 35%, rgba(236, 72, 153, 0.35), transparent 65%),
-        radial-gradient(700px 550px at 85% 42%, rgba(56, 189, 248, 0.38), transparent 65%),
-        radial-gradient(850px 650px at 50% 50%, rgba(99, 102, 241, 0.32), transparent 70%),
-        radial-gradient(750px 600px at 20% 65%, rgba(168, 85, 247, 0.38), transparent 65%),
-        radial-gradient(720px 580px at 80% 72%, rgba(236, 72, 153, 0.35), transparent 65%),
-        /* Lower section glowing nebulas */
-        radial-gradient(750px 600px at 10% 86%, rgba(217, 70, 239, 0.40), transparent 70%),
-        radial-gradient(400px 320px at 3% 94%, rgba(168, 85, 247, 0.35), transparent 55%),
-        radial-gradient(700px 550px at 90% 88%, rgba(245, 158, 11, 0.40), transparent 70%),
-        radial-gradient(380px 300px at 96% 95%, rgba(249, 115, 22, 0.32), transparent 55%);
+        /* cyan star cluster — top-left (DS signal cyan) */
+        radial-gradient(520px 420px at 6% 10%, color-mix(in srgb, var(--ds-signal-cyan) 30%, transparent), transparent 65%),
+        radial-gradient(260px 200px at 3% 6%,  color-mix(in srgb, var(--ds-signal-cyan) 24%, transparent), transparent 55%),
+        /* violet/purple bloom — top-right (DS cosmic violet) */
+        radial-gradient(540px 440px at 94% 12%, color-mix(in srgb, var(--ds-nebula) 34%, transparent), transparent 65%),
+        radial-gradient(280px 220px at 97% 5%,  color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 50%),
+        /* pink-magenta streak — bottom-left (DS rose) */
+        radial-gradient(480px 380px at 8% 82%,  color-mix(in srgb, var(--ds-rose) 30%, transparent), transparent 65%),
+        radial-gradient(220px 180px at 2% 92%,  color-mix(in srgb, var(--ds-rose) 24%, transparent), transparent 50%),
+        /* amber/gold warmth — bottom-right (DS ember amber) */
+        radial-gradient(420px 340px at 92% 88%, color-mix(in srgb, var(--ds-amber) 30%, transparent), transparent 65%),
+        radial-gradient(200px 160px at 98% 96%, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 50%),
+        /* deep-space void gradient — keeps the centre near-black */
+        radial-gradient(ellipse 80% 70% at 50% 50%, color-mix(in srgb, var(--ds-void) 92%, transparent), transparent 80%);
 }
 
 /* CSS-only starfield (no canvas) — dense multi-layer pattern tiles to cover the viewport */
