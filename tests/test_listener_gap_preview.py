@@ -16,5 +16,4 @@ def test_listener_gap_preview_is_sample_layout():
     assert "Signature proof receipt" in html
     assert "Net-flow pool" in html
     assert "Multi-horizon projection" in html
-    assert "not live" in html.lower() or "sample numbers, not live" in html.lower()
-    assert 'data-hydrate' in html
+    assert "sample numbers, not live" in html.lower()
