@@ -2160,6 +2160,18 @@ async def preview_pump_desk_full(request: Request):
     )
 
 
+@app.get("/preview/listening-post")
+async def preview_listening_post(request: Request):
+    """Sealed Listening Post concept — hydrate off for 390px visual sign-off."""
+    deck = (request.query_params.get("deck") or "comms").lower()
+    if deck not in {"comms", "crew", "traffic", "locker"}:
+        deck = "comms"
+    return templates.TemplateResponse(
+        "preview/listening_post.html",
+        {"request": request, "deck": deck},
+    )
+
+
 @app.get("/pump")
 async def pump_desk_page(request: Request):
     """Flagship pump desk — reuse cached pump-alerts payload (no extra subnet wedge)."""

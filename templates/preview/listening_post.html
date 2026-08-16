@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .lp-preview-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: transparent; color: #b6c1cc; text-align: center;
+    font: 11px/1.4 "JetBrains Mono", monospace; padding: 8px 12px;
+    border-bottom: 1px solid var(--glass-border, rgba(255,255,255,.14));
+  }
+  .lp-preview-banner a { color: #3fc9ff; }
+  .lp-preview-frame {
+    max-width: 390px; margin: 0 auto;
+    min-height: 100vh; background: transparent;
+  }
+  .lp-station { padding: 8px 12px 18px; color: #f8fafc; }
+  .lp-stencil {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 9px; letter-spacing: .16em; color: #b6c1cc;
+    padding: 4px 4px 10px;
+  }
+  .lp-stencil b {
+    font-family: Syne, sans-serif; font-size: 13px; letter-spacing: .04em;
+    color: #f8fafc; font-weight: 800;
+  }
+  .lp-viewport { position: relative; width: 366px; height: 300px; margin: 0 auto 12px; }
+  .lp-track {
+    position: absolute; left: 50%; top: 50%;
+    width: 268px; height: 268px; margin: -134px 0 0 -134px;
+    border-radius: 50%; border: 1px dashed rgba(255,255,255,.16); pointer-events: none;
+  }
+  .lp-arc {
+    position: absolute; left: 50%; top: 50%;
+    width: 268px; height: 268px; margin: -134px 0 0 -134px;
+    border-radius: 50%; border: 2px solid transparent; border-top-color: #3fc9ff;
+    box-shadow: 0 -8px 18px rgba(63,201,255,.25);
+    transform: rotate(var(--ring-rot, 0deg));
+    transition: transform .45s cubic-bezier(.2,.8,.2,1); pointer-events: none;
+  }
+  .lp-station[data-deck="comms"] { --ring-rot: 0deg; }
+  .lp-station[data-deck="crew"] { --ring-rot: 90deg; }
+  .lp-station[data-deck="traffic"] { --ring-rot: 180deg; }
+  .lp-station[data-deck="locker"] { --ring-rot: 270deg; }
+  .lp-tick {
+    position: absolute; left: 50%; top: 50%;
+    width: 72px; margin: -18px 0 0 -36px;
+    transform: rotate(var(--a)) translate(134px) rotate(calc(var(--a) * -1));
+    background: transparent; border: 1px solid var(--glass-border, rgba(255,255,255,.14));
+    border-radius: 999px; color: #b6c1cc; cursor: pointer;
+    padding: 5px 0 4px; font-family: Syne, sans-serif;
+    font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.1;
+  }
+  .lp-tick small {
+    display: block; font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 7px; font-weight: 500; letter-spacing: .08em; opacity: .8;
+  }
+  .lp-tick[aria-pressed="true"] {
+    color: #f8fafc;
+    border-color: color-mix(in srgb, #3fc9ff 55%, white);
+    box-shadow: 0 0 16px rgba(63,201,255,.28);
+  }
+  .lp-port {
+    position: absolute; left: 50%; top: 50%;
+    width: 196px; height: 196px; margin: -98px 0 0 -98px;
+    border-radius: 50%; overflow: hidden;
+    border: 8px solid rgba(190,198,214,.22);
+    box-shadow: 0 0 0 1px rgba(255,255,255,.18), inset 0 0 28px rgba(0,0,0,.55), 0 0 32px rgba(63,201,255,.12);
+    background: transparent;
+  }
+  .lp-bolt {
+    position: absolute; width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(210,216,228,.45); box-shadow: inset 0 1px 1px rgba(255,255,255,.4);
+  }
+  .lp-planet {
+    position: absolute; left: 50%; top: 54%;
+    width: 168px; height: 168px; margin: -84px 0 0 -84px;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 32% 28%, rgba(180,230,255,.55) 0 12%, transparent 28%),
+      radial-gradient(circle at 22% 62%, rgba(31,120,110,.45) 0 18%, transparent 40%),
+      linear-gradient(118deg, #2a7a9a 0%, #16384c 38%, #071018 56%, #0a1a22 100%);
+    box-shadow: inset -22px -14px 36px rgba(0,0,0,.7), inset 10px 8px 18px rgba(160,220,255,.18), 0 0 28px rgba(63,201,255,.22);
+    transition: transform .45s ease;
+  }
+  .lp-station[data-deck="traffic"] .lp-planet { transform: scale(1.08); }
+  .lp-term { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(108deg, transparent 44%, rgba(0,0,0,.58) 62%); }
+  .lp-lights {
+    position: absolute; inset: 0; border-radius: 50%;
+    background-image:
+      radial-gradient(1.4px 1.4px at 62% 48%, #ffd27a 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 68% 56%, #ffe7a8 50%, transparent 51%),
+      radial-gradient(1px 1px at 74% 52%, #ffc56a 50%, transparent 51%),
+      radial-gradient(1.3px 1.3px at 71% 63%, #ffd27a 50%, transparent 51%),
+      radial-gradient(1px 1px at 58% 61%, #ffe7a8 50%, transparent 51%);
+  }
+  .lp-storm {
+    position: absolute; width: var(--s, 36px); height: var(--s, 36px);
+    left: var(--x); top: var(--y); border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,159,63,.85) 0 28%, rgba(255,93,122,.35) 42%, transparent 70%);
+    box-shadow: 0 0 18px rgba(255,159,63,.55);
+    opacity: 0; transform: scale(.6); transition: opacity .35s ease, transform .35s ease; pointer-events: none;
+  }
+  .lp-storm span {
+    position: absolute; left: 50%; top: -14px; transform: translateX(-50%);
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 8px; color: #ffe7a8; white-space: nowrap;
+    text-shadow: 0 1px 4px #000;
+  }
+  .lp-station[data-deck="traffic"] .lp-storm { opacity: 1; transform: scale(1); }
+  .lp-nightlog {
+    position: absolute; left: 10px; right: 10px; bottom: 10px;
+    border-radius: 10px; padding: 7px 9px;
+    border: 1px solid var(--glass-border, rgba(255,255,255,.14)); background: transparent;
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  }
+  .lp-station[data-deck="comms"] .lp-nightlog { opacity: 1; }
+  .lp-nightlog kbd { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 8px; letter-spacing: .14em; color: #ff9f3f; font-weight: 600; }
+  .lp-nightlog p { margin: 3px 0 0; font-size: 11px; line-height: 1.35; color: #b6c1cc; }
+  .lp-deck { min-height: 280px; padding: 0 4px; }
+  .lp-pane { display: none; }
+  .lp-station[data-deck="comms"] .lp-pane[data-pane="comms"],
+  .lp-station[data-deck="crew"] .lp-pane[data-pane="crew"],
+  .lp-station[data-deck="traffic"] .lp-pane[data-pane="traffic"],
+  .lp-station[data-deck="locker"] .lp-pane[data-pane="locker"] { display: block; }
+  .lp-kicker {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 9px;
+    letter-spacing: .14em; text-transform: uppercase; color: #b6c1cc; margin: 0 0 8px;
+  }
+  .lp-tape { list-style: none; margin: 0; padding: 0; }
+  .lp-punch {
+    display: grid; grid-template-columns: 44px 1fr auto; gap: 8px; align-items: center;
+    padding: 9px 4px; border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .lp-punch time { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; color: #b6c1cc; }
+  .lp-call { font-family: Syne, sans-serif; font-size: 13px; font-weight: 700; }
+  .lp-call em { font-style: normal; color: #b6c1cc; font-family: "Space Grotesk", sans-serif; font-size: 11px; font-weight: 500; display: block; }
+  .lp-bars { display: flex; gap: 2px; align-items: flex-end; height: 16px; }
+  .lp-bars i { width: 3px; background: #3fc9ff; opacity: .25; border-radius: 1px; display: block; }
+  .lp-quiet { text-align: center; padding: 18px 8px; color: #b6c1cc; font-size: 13px; line-height: 1.45; }
+  .lp-quiet b { display: block; color: #f8fafc; font-family: Syne, sans-serif; font-size: 15px; margin-bottom: 4px; }
+  .lp-crew { list-style: none; margin: 0; padding: 0; }
+  .lp-crew li {
+    display: grid; grid-template-columns: 14px 1fr; gap: 10px; align-items: start;
+    padding: 10px 4px; border-top: 1px solid rgba(255,255,255,.08);
+  }
+  .lamp { width: 10px; height: 10px; border-radius: 50%; margin-top: 4px; border: 1px solid var(--glass-border, rgba(255,255,255,.14)); background: transparent; }
+  .lp-crew strong { display: block; font-family: Syne, sans-serif; font-size: 14px; }
+  .lp-crew span { font-size: 12px; color: #b6c1cc; }
+  .lp-legend { font-size: 12px; color: #b6c1cc; line-height: 1.45; margin: 0 0 10px; }
+  .lp-alt {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 8px 2px; border-top: 1px solid rgba(255,255,255,.08);
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px;
+  }
+  .lp-alt b { font-family: Syne, sans-serif; font-size: 16px; }
+  .lp-alt em { font-style: normal; color: #ff9f3f; }
+  .lp-door { border: 1px solid var(--glass-border, rgba(255,255,255,.14)); border-radius: 16px; padding: 14px 12px; background: transparent; }
+  .lp-pins { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+  .lp-pin { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; padding: 5px 9px; border-radius: 999px; border: 1px solid rgba(31,212,124,.35); color: #1fd47c; }
+  .lp-pin.add { color: #b6c1cc; border-color: var(--glass-border, rgba(255,255,255,.14)); }
+  .lp-cmds { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lp-cmd { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--glass-border, rgba(255,255,255,.14)); color: #b6c1cc; }
+  .lp-foot { margin-top: 16px; text-align: center; font-size: 10px; color: #b6c1cc; line-height: 1.5; }
+</style>
+<p class="lp-preview-banner" role="status">
+  Listening Post sealed concept · hydrate off · 390px ·
+  <a href="/">live home</a> · not wired to pulse
+</p>
+<div class="lp-preview-frame">
+  <div class="lp-station" data-deck="{{ deck }}" id="lp-station">
+    <div class="lp-stencil"><b>Listening Post</b><span>POST 7 · NIGHT SIDE</span></div>
+    <div class="lp-viewport">
+      <div class="lp-track" aria-hidden="true"></div>
+      <div class="lp-arc" aria-hidden="true"></div>
+      <button type="button" class="lp-tick" data-deck="comms" style="--a:-90deg" aria-pressed="{% if deck == 'comms' %}true{% else %}false{% endif %}">Comms<small>listen</small></button>
+      <button type="button" class="lp-tick" data-deck="crew" style="--a:0deg" aria-pressed="{% if deck == 'crew' %}true{% else %}false{% endif %}">Crew<small>learn</small></button>
+      <button type="button" class="lp-tick" data-deck="traffic" style="--a:90deg" aria-pressed="{% if deck == 'traffic' %}true{% else %}false{% endif %}">Traffic<small>rank</small></button>
+      <button type="button" class="lp-tick" data-deck="locker" style="--a:180deg" aria-pressed="{% if deck == 'locker' %}true{% else %}false{% endif %}">Locker<small>serve</small></button>
+      <span class="lp-bolt" style="left:50%;top:18px;margin-left:-3px"></span>
+      <span class="lp-bolt" style="right:48px;top:50%;margin-top:-3px"></span>
+      <span class="lp-bolt" style="left:50%;bottom:18px;margin-left:-3px"></span>
+      <span class="lp-bolt" style="left:48px;top:50%;margin-top:-3px"></span>
+      <div class="lp-port">
+        <div class="lp-planet">
+          <div class="lp-term"></div>
+          <div class="lp-lights"></div>
+          <div class="lp-storm" style="--x:58%;--y:28%;--s:48px"><span>SN18</span></div>
+          <div class="lp-storm" style="--x:34%;--y:52%;--s:30px"><span>SN25</span></div>
+        </div>
+        <aside class="lp-nightlog">
+          <kbd>LAST WATCH</kbd>
+          <p>Pipeline warming. 0 graded. Two storms on the limb. No radio this watch.</p>
+        </aside>
+      </div>
+    </div>
+    <div class="lp-deck">
+      <section class="lp-pane" data-pane="comms">
+        <p class="lp-kicker">Incoming radio · punched tape</p>
+        <ol class="lp-tape">
+          <li class="lp-punch">
+            <time>03:11</time>
+            <div class="lp-call">—<em>slot empty</em></div>
+            <span class="lp-bars" data-n="0" aria-hidden="true"><i style="height:4px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:16px"></i></span>
+          </li>
+          <li class="lp-punch">
+            <time>03:08</time>
+            <div class="lp-call">—<em>slot empty</em></div>
+            <span class="lp-bars" data-n="0" aria-hidden="true"><i style="height:4px"></i><i style="height:8px"></i><i style="height:12px"></i><i style="height:16px"></i></span>
+          </li>
+        </ol>
+        <p class="lp-quiet"><b>No radio this watch.</b>New graded punches land here the moment the listener scores them.</p>
+      </section>
+      <section class="lp-pane" data-pane="crew">
+        <p class="lp-kicker">Who was right on last watch</p>
+        <ul class="lp-crew">
+          <li><i class="lamp"></i><div><strong>Strike board</strong><span>No graded calls — lamps stay dark until someone is scored.</span></div></li>
+          <li><i class="lamp"></i><div><strong>Proof slips</strong><span>Receipts appear the moment the listener scores its first messages.</span></div></li>
+          <li><i class="lamp"></i><div><strong>High-conviction flares</strong><span>0 flares this watch. Empty is honest.</span></div></li>
+        </ul>
+      </section>
+      <section class="lp-pane" data-pane="traffic">
+        <p class="lp-kicker">Planet Subnet Summers · chatter weather</p>
+        <p class="lp-legend">Louder subnets are storms closer to the limb. Chatter power is altitude — not a pie chart.</p>
+        <div class="lp-alt"><span>SN18</span><b>limb</b><em>59.0</em></div>
+        <div class="lp-alt"><span>SN25</span><b>inland</b><em>53.3</em></div>
+        <p class="lp-quiet" style="padding-top:12px">No divergence this watch — chatter and price agree.</p>
+      </section>
+      <section class="lp-pane" data-pane="locker">
+        <p class="lp-kicker">Personal kit · not a CMS</p>
+        <div class="lp-door">
+          <div class="lp-kicker">Pinned</div>
+          <div class="lp-pins"><span class="lp-pin">SN18</span><span class="lp-pin">SN25</span><span class="lp-pin add">+ pin</span></div>
+          <div class="lp-kicker">Command stencils</div>
+          <div class="lp-cmds">
+            <span class="lp-cmd">/summary</span><span class="lp-cmd">/trending</span>
+            <span class="lp-cmd">/track</span><span class="lp-cmd">/rank</span>
+            <span class="lp-cmd">/who</span><span class="lp-cmd">/alerts</span>
+          </div>
+        </div>
+      </section>
+    </div>
+    <p class="lp-foot">Telegram is radio from the surface. Conviction is scored output, not financial advice.</p>
+  </div>
+</div>
+<script>
+(function () {
+  var station = document.getElementById("lp-station");
+  var ticks = document.querySelectorAll(".lp-tick");
+  function setDeck(name) {
+    station.setAttribute("data-deck", name);
+    ticks.forEach(function (t) {
+      t.setAttribute("aria-pressed", t.getAttribute("data-deck") === name ? "true" : "false");
+    });
+  }
+  ticks.forEach(function (t) {
+    t.addEventListener("click", function () { setDeck(t.getAttribute("data-deck")); });
+  });
+})();
+</script>
+{% endblock %}
