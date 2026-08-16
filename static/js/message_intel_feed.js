@@ -706,6 +706,7 @@
     var callers = payload.callers || [];
     if (!callers.length) {
       callersBody.innerHTML = '<p class="empty">No resolved qualifying Telegram calls in this window yet. A caller needs explicit direction, 60%+ conviction, and a tracked price snapshot.</p>';
+      setPeek("pulse-peek-learn", "—");
       return;
     }
     var html = '<p class="message-intel__caller-note">Accuracy excludes neutral moves and all engagement data. Minimum sample: ' + esc(payload.minimum_sample || 5) + ' resolved calls.</p><div class="message-intel__caller-list">';
@@ -722,6 +723,8 @@
     });
     html += "</div><p class=\"message-intel__caller-disclaimer\">" + esc(payload.disclaimer || "Not financial advice.") + "</p>";
     callersBody.innerHTML = html;
+    var top = callers.find(function (row) { return row.qualified && row.accuracy != null; }) || callers[0];
+    if (top && top.accuracy != null) setPeek("pulse-peek-learn", top.accuracy + "%");
     callersBody.querySelectorAll("[data-caller-id]").forEach(function (button) {
       button.addEventListener("click", function () {
         loadCallerReceipts(button.getAttribute("data-caller-id"), button.getAttribute("data-caller-name"));
@@ -1320,11 +1323,13 @@
       renderTrendingSky([]);
       renderChatterPower([]);
       renderNarrative([]);
+      setPeek("pulse-peek-rank", "—");
       return;
     }
     if (trendingTitle) trendingTitle.textContent = "Trending orbit";
     renderTrendingSky(list);
     if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
+    if (list[0] && list[0].netuid != null) setPeek("pulse-peek-rank", "SN" + list[0].netuid);
     trendingEl.innerHTML =
       '<div class="message-intel__trend-rows">' +
        list.slice(0, 6).map(function (row, idx) {
@@ -1522,6 +1527,12 @@
     } catch (e) { flowWarming(); }
   }
 
+  function setPeek(id, value) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value == null || value === "" ? "—" : String(value);
+  }
+
   function setStat(id, value) {
     var el = document.getElementById(id);
     if (el) el.textContent = value == null || value === "" ? "warming" : String(value);
@@ -1543,6 +1554,7 @@
       avgConv != null && !isNaN(Number(avgConv)) ? Math.round(Number(avgConv)) + "%" : "warming"
     );
     setStat("message-intel-stat-active", trending.length || "warming");
+    setPeek("pulse-peek-listen", last24 != null ? last24 : total || "—");
   }
 
   function renderInterceptWave(messages) {
@@ -1681,6 +1693,8 @@
         '</div>';
     }).join("") : '<p class="empty">No pinned subnets yet. Add one from trending cards or subnet rows.</p>');
     bindWatchlistInteractions();
+    var pins = (watchlistState.netuids || []).length;
+    setPeek("pulse-peek-serve", pins ? pins + " pin" + (pins === 1 ? "" : "s") : "0");
   }
 
   function renderMyPulse(trending) {
@@ -1960,7 +1974,7 @@
         esc(fmtTime(row.timestamp)) +
         "</span></div>" +
         '<p class="message-intel__f-text">' +
-        esc(snippet(row.content, 280));
+        esc(snippet(row.content, 220));
       if (netuids.length) {
         html += '<span class="message-intel__sn-inline">SN' + esc(netuids[0]) + '</span>';
         html += watchlistToggleButton(netuids[0]);

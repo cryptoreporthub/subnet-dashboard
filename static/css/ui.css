@@ -15885,17 +15885,55 @@ section.desk-zone,
     .sr-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
-/* Homepage pulse: compact folder desk, same site glass (transparent fill). */
+/* Homepage pulse: Pocket Starlight interceptor — 70% data / 30% atmosphere.
+   Compact intercept on site glass; /subnetsummer stays the full desk. */
 .message-intel--home-compact {
     margin-top: 0.5rem;
     margin-bottom: 0.75rem;
-    padding: 8px 12px 12px;
+    padding: 8px 10px 12px;
+}
+
+.message-intel--home-compact .message-intel__heartbeat {
+    min-height: 28px;
+    margin-bottom: 8px;
+    padding: 4px 8px;
+    font-size: 9px;
+}
+
+.message-intel--home-compact .message-intel__ekg {
+    height: 18px;
+}
+
+.message-intel--home-compact .message-intel__masthead {
+    margin-bottom: 8px;
+}
+
+.message-intel--home-compact .message-intel__instrument {
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 8px 10px;
+    align-items: center;
+}
+
+.message-intel--home-compact .message-intel__pulsar {
+    width: 40px;
+    height: 40px;
+}
+
+.message-intel--home-compact .message-intel__core {
+    width: 26px;
+    height: 26px;
+}
+
+.message-intel--home-compact .message-intel__page-sub,
+.message-intel--home-compact .message-intel__wavestrip,
+.message-intel--home-compact .message-intel__source-strip {
+    display: none;
 }
 
 .message-intel--home-compact .message-intel__topbar {
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 8px;
+    margin-bottom: 2px;
 }
 
 .message-intel--home-compact .message-intel__flagship-chip {
@@ -15923,74 +15961,109 @@ section.desk-zone,
     font-size: 9px;
 }
 
-.message-intel--home-compact .message-intel__page-title {
-    margin-bottom: 4px;
-    font-size: clamp(1.35rem, 4vw, 1.7rem) !important;
+.message-intel--home-compact .message-intel__eyebrow {
+    margin: 0 0 2px;
+    font-size: 9px;
 }
 
-.message-intel--home-compact .message-intel__page-sub {
-    max-width: 60ch;
-    margin-bottom: 10px;
-    font-size: 0.75rem;
+.message-intel--home-compact .message-intel__page-title {
+    margin: 0;
+    font-size: clamp(1.15rem, 4vw, 1.4rem) !important;
+    line-height: 1.1;
 }
 
 .message-intel--home-compact .message-intel__loop {
-    margin: 0;
-    padding: 0 6px 0;
-    gap: 4px;
-    border: 0;
-    border-radius: 0;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin: 0 0 8px;
+    padding: 3px;
+    gap: 3px;
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
     background: transparent;
-    align-items: end;
 }
 
 .message-intel--home-compact .message-intel__loop [role="tab"] {
-    min-height: 44px;
-    padding: 7px 8px 10px;
-    border: 1px solid var(--glass-border);
-    border-bottom: 0;
-    border-radius: 10px 10px 0 0;
+    min-height: 52px;
+    padding: 6px 4px 5px;
+    border: 0;
+    border-radius: 11px;
     background: transparent;
-    position: relative;
-    bottom: -1px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
 }
 
 .message-intel--home-compact .message-intel__loop [role="tab"] b {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
 }
 
 .message-intel--home-compact .message-intel__loop [role="tab"] span {
-    font-size: 8px;
+    font-size: 7px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--mi-text-faint);
+}
+
+.message-intel--home-compact .message-intel__peek {
+    font-style: normal;
+    font-family: var(--font-mono, monospace);
+    font-size: 9px;
+    font-weight: 700;
+    color: #f8fafc;
+    line-height: 1.1;
 }
 
 .message-intel--home-compact .message-intel__loop [role="tab"][aria-selected="true"] {
     background: transparent;
-    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 70%);
-    border-color: var(--glass-border);
-    box-shadow: none;
-    z-index: 1;
+    background-image: linear-gradient(180deg, rgba(63, 201, 255, 0.16) 0%, rgba(157, 140, 255, 0.08) 100%);
+    box-shadow: inset 0 0 0 1px rgba(63, 201, 255, 0.35), 0 0 18px -10px rgba(63, 201, 255, 0.8);
 }
 
 .message-intel--home-compact .message-intel__bay {
     margin: 0;
-    padding: 10px;
+    padding: 8px;
+    max-height: min(58vh, 640px);
+    overflow: auto;
     border: 1px solid var(--glass-border);
-    border-radius: 0 12px 12px 12px;
+    border-radius: 14px;
     background: transparent;
 }
 
 .message-intel--home-compact .message-intel__feed,
 .message-intel--home-compact .message-intel__callers,
 .message-intel--home-compact .message-intel__hall {
-    max-height: 280px;
-    overflow: auto;
+    max-height: none;
 }
 
-.message-intel--home-compact .message-intel__source-strip {
-    margin-bottom: 8px;
-    padding: 8px 10px;
-    border-radius: 8px;
-    font-size: 10px;
+.message-intel--home-compact .message-intel__sky {
+    width: min(100%, 220px);
+    height: 180px;
+    margin-inline: auto;
+}
+
+.message-intel--home-compact .message-intel__feed-row {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.message-intel--home-compact .message-intel__feed-row:not(:last-of-type)::before {
+    display: none;
+}
+
+.message-intel--home-compact .message-intel__f-text {
+    font-size: 0.88rem;
+    line-height: 1.35;
+    color: #f8fafc;
 }
 
 .message-intel--home-compact .message-intel__summary-24h,
@@ -16015,6 +16088,14 @@ section.desk-zone,
         padding: 6px 0 8px;
     }
 
+    .message-intel--home-compact .message-intel__instrument {
+        grid-template-columns: 1fr;
+    }
+
+    .message-intel--home-compact .message-intel__pulsar {
+        display: none;
+    }
+
     .message-intel--home-compact .message-intel__topbar {
         align-items: flex-start;
     }
@@ -16028,18 +16109,16 @@ section.desk-zone,
     }
 
     .message-intel--home-compact .message-intel__loop [role="tab"] {
-        min-height: 40px;
-        padding: 6px 4px 9px;
-        border-radius: 8px 8px 0 0;
+        min-height: 50px;
+        padding: 5px 2px 4px;
     }
 
     .message-intel--home-compact .message-intel__loop [role="tab"] b {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
     }
 
     .message-intel--home-compact .message-intel__loop [role="tab"] span {
-        font-size: 7px;
-        letter-spacing: 0.04em;
+        font-size: 6.5px;
     }
 }
 
