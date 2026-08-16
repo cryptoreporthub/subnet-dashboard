@@ -8,8 +8,8 @@
   --glass-fill-section: transparent;
   --glass-fill-subtle: transparent;
   --glass-fill: var(--glass-fill-card);
-  --glass-blur: 12px;
-  --glass-blur-secondary: 6px;
+  --glass-blur: 16px;
+  --glass-blur-secondary: 8px;
   --glass-border: rgba(255, 255, 255, 0.14);
   --glass-radius: 12px;
 
@@ -66,34 +66,16 @@ body.council-first-theme {
   background-position: center;
 }
 
-/* Page atmosphere aurora overlay — drift gated in Quiet motion below */
-body.council-first-theme::before {
-  content: "";
-  position: fixed;
-  inset: -20% -10%;
-  pointer-events: none;
-  z-index: 0;
-  background:
-    var(--aurora-cyan),
-    var(--aurora-green),
-    var(--aurora-violet);
-  opacity: 0.59;
-  transform-origin: center center;
-}
-
-/* Soft smoke wash — no grain/dot screen (user: smoke effect grey, not grainy) */
+/* Atmosphere lives on .cosmic-sky. These body layers used to paint a grey
+   smoke wash ON TOP of the sky (same z-index, later in tree) and flattened
+   every nebula into pewter. Cleared so the cosmic substrate is the design. */
+body.council-first-theme::before,
 body.council-first-theme::after {
-  content: "";
-  position: fixed;
-  inset: -15%;
-  pointer-events: none;
-  opacity: 0.85;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(200, 206, 216, 0.28), transparent 68%),
-    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(170, 176, 186, 0.22), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(140, 146, 156, 0.18), transparent 65%);
-  filter: blur(56px);
+  content: none;
+  background: none;
+  filter: none;
+  animation: none;
+  opacity: 0;
 }
 
 body.council-first-theme .app-shell,
@@ -621,18 +603,13 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 
 /* ---------- Quiet motion (mist-drift LOCK) ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  body.council-first-theme::before {
-    animation: mistDrift 28s ease-in-out infinite alternate;
+  .cosmic-sky__nebula {
+    animation: cosmicNebulaDrift 36s ease-in-out infinite alternate;
   }
 
-  body.council-first-theme {
-    animation: page-smoke-drift 40s ease-in-out infinite alternate;
-  }
-
-  @keyframes page-smoke-drift {
-    0% { background-position: 48% 42%; }
-    50% { background-position: 52% 48%; }
-    100% { background-position: 47% 55%; }
+  @keyframes cosmicNebulaDrift {
+    from { transform: translate3d(-4%, -2%, 0) rotate(-6deg) scale(1.04); }
+    to { transform: translate3d(5%, 3%, 0) rotate(7deg) scale(1.14); }
   }
 
   @keyframes mistDrift {
@@ -676,8 +653,8 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.council-first-theme::before { animation: none; transform: none; }
-  body.council-first-theme { animation: none; }
+  .cosmic-sky__nebula { animation: none; transform: none; }
+  .cosmic-sky::after { animation: none; }
   nav.top-nav a:active,
   .home-cta--primary:active,
   .btn-primary:active { transform: none; filter: none; }
@@ -1291,7 +1268,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   align-items: flex-start;
   padding: 8px 10px;
   border-left: 2px solid rgba(140, 60, 80, 0.55);
-  background: rgba(80, 30, 45, 0.18);
+  background: transparent;
   border-radius: 0 8px 8px 0;
 }
 .caution-cell__tag {
@@ -6803,7 +6780,7 @@ button.home-cta {
 .living-focus__weight-bar::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--pct, 50) * 1%); background: rgba(0, 200, 255, 0.45); }
 .living-focus__empty, .living-focus__learn-empty { color: var(--stage-muted); font-size: 13px; }
 .living-focus__contention--detail { font-size: 12px; color: #ffb347; margin: 0 0 10px; }
-.living-focus__why-not { margin: 10px 0 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
+.living-focus__why-not { margin: 10px 0 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: transparent; }
 .living-focus__why-not-title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }
 .living-focus__why-not-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
 .living-focus__evidence { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(138,154,142,0.25); }
@@ -6811,7 +6788,7 @@ button.home-cta {
 .living-focus__trail-title { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--stage-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .living-focus__evidence-list,
 .living-focus__trail-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.living-focus__evidence-row { display: grid; grid-template-columns: 108px 1fr; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.22); border: 1px solid rgba(138,154,142,0.2); }
+.living-focus__evidence-row { display: grid; grid-template-columns: 108px 1fr; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 8px; background: transparent; border: 1px solid rgba(138,154,142,0.2); }
 .living-focus__evidence-row--warn { border-color: rgba(255,179,71,0.4); }
 .living-focus__evidence-label { font-weight: 600; color: #c8d4cc; }
 .living-focus__evidence-detail { color: var(--stage-muted); }
@@ -6941,7 +6918,7 @@ button.home-cta {
   margin: 4px 0 0;
 }
 
-.home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
+.home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: transparent; }
 .home-stage-why-not__title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }
 .home-stage-why-not__list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
 
@@ -7007,7 +6984,7 @@ button.home-cta {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0,0,0,0.25);
+  background: transparent;
   color: #a7f3d0;
 }
 .backtest-method__cov { font-size: 11px; font-style: italic; }
@@ -7038,7 +7015,7 @@ button.home-cta {
   font-size: 12px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(0,0,0,0.25);
+  background: transparent;
   color: #a7f3d0;
   margin-bottom: 6px;
 }
@@ -7078,7 +7055,7 @@ button.home-cta {
   padding: 4px 6px;
   margin: 4px 0;
   border-radius: 4px;
-  background: rgba(0,0,0,0.2);
+  background: transparent;
   color: #a7f3d0;
 }
 .formula-evolution__subnets { margin: 6px 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
@@ -7336,8 +7313,8 @@ body.wrap {
     padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
     gap: 6px;
     box-sizing: border-box;
-    background-color: color-mix(in srgb, var(--ds-void) 30%, transparent);
-    background-image: var(--card-smoke);
+    background-color: transparent;
+    background-image: none;
     background-size: cover;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -7421,7 +7398,7 @@ body.wrap {
 /* ---------- Council Hero HUD (smoky control room + glass sections) ---------- */
 .tribunal-hero {
   --hero-void: #1e2128;
-  --hero-glass: rgba(12, 18, 28, 0.28);
+  --hero-glass: rgba(255, 255, 255, 0.04);
   --hero-glass-blur: 16px;
   --hero-cyan: #6bc5f0;
   --hero-cyan-bright: #9fd8f5;
@@ -7559,10 +7536,9 @@ body.wrap {
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   /* Glassmorphism over soft smoke — no film-grain layer */
-  background-color: rgba(12, 18, 28, 0.22);
+  background-color: rgba(255, 255, 255, 0.03);
   background-image:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 34%, transparent 58%),
-    linear-gradient(180deg, rgba(12, 18, 28, 0.18) 0%, rgba(10, 14, 22, 0.32) 100%);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 34%, transparent 58%);
   backdrop-filter: blur(var(--hero-glass-blur, 16px)) saturate(1.4) brightness(1.08);
   -webkit-backdrop-filter: blur(var(--hero-glass-blur, 16px)) saturate(1.4) brightness(1.08);
   box-shadow:
@@ -7974,7 +7950,7 @@ body.wrap {
 
 .tribunal-hero__verdict-label--hold {
   color: var(--hero-steel);
-  background: rgba(30, 36, 48, 0.92);
+  background: transparent;
   border-color: rgba(148, 163, 184, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -8007,7 +7983,7 @@ body.wrap {
 
 .tribunal-hero__judge:hover {
   transform: translateY(-2px);
-  background: rgba(8, 11, 14, 0.82) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   border-color: rgba(107, 197, 240, 0.18);
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.4),
@@ -8586,7 +8562,7 @@ body.wrap {
 .proof-band,
 .living-focus,
 .trust-banner {
-  background: var(--zone-light-card);
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--zone-light-card-border);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -9835,7 +9811,7 @@ body.wrap {
   margin-bottom: 14px;
   padding: 14px 16px;
   border: 1px solid rgba(52, 211, 153, 0.22);
-  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(0, 0, 0, 0.2));
+  background: rgba(52, 211, 153, 0.08);
 }
 .message-intel__yesterday-kicker {
   margin: 0 0 6px;
@@ -9893,7 +9869,7 @@ body.wrap {
   padding: 12px 14px;
   border: 1px solid rgba(126, 200, 227, 0.12);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.18);
+  background: transparent;
 }
 .message-intel__panel--feed {
   margin-bottom: 0;
@@ -9953,7 +9929,7 @@ body.wrap {
   padding: 10px 12px;
   border: 1px solid rgba(126, 200, 227, 0.1);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.15);
+  background: transparent;
 }
 .message-intel__rank {
   font-family: var(--font-mono, monospace);
@@ -10068,7 +10044,7 @@ body.wrap {
   padding: 12px 14px;
   border: 1px solid rgba(126, 200, 227, 0.1);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.15);
+  background: transparent;
 }
 .message-intel__item-head {
   display: flex;
@@ -10180,7 +10156,7 @@ body.wrap {
 .message-intel__proof-miss { color: #fb7185; font-weight: 700; }
 .message-intel__callers {
   margin: 12px 0 16px; padding: 12px 14px; border: 1px solid rgba(52, 211, 153, .24);
-  border-radius: 8px; background: rgba(0,0,0,.18);
+  border-radius: 8px; background: transparent;
 }
 .message-intel__periods { display: flex; gap: 6px; margin: 8px 0; }
 .message-intel__periods button, .message-intel__receipt-toggle {
@@ -13084,7 +13060,7 @@ body.wrap {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   color: rgba(197, 215, 222, 0.60);
-  background: rgba(0, 0, 0, 0.16);
+  background: transparent;
 }
 
 .message-intel--v2 .message-intel__panel--feed {
@@ -13727,7 +13703,7 @@ body.wrap {
     --pd-sub: #94a3b8;
     --pd-dim: #64748b;
     --pd-line: rgba(148, 163, 184, 0.14);
-    --pd-panel: rgba(10, 14, 24, 0.82);
+    --pd-panel: transparent;
     --pd-lead: #fbbf24;
     --pd-live: #fb7185;
     --pd-exit: #34d399;
@@ -14617,9 +14593,9 @@ body.wrap {
 .pump-alert__meter-fill { display: block; height: 100%; background: #fbbf24; }
 .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-sub); margin: 0 0 4px; }
 
-/* Pump desk legibility — denser glass + brighter body/muted text (transparency tune) */
+/* Pump desk — same clear glass as the rest of the page (no 72% dark fill). */
 .pump-alert {
-  --pd-panel: rgba(10, 15, 26, 0.9);
+  --pd-panel: transparent;
   --pd-sub: #b6c2d1;
   --pd-dim: #8b9bab;
 }
@@ -14629,7 +14605,7 @@ body.wrap {
 .pump-alert__card,
 .pds-hero,
 .pds-ladder {
-  background-color: rgba(9, 14, 24, 0.72) !important;
+  background-color: transparent !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .pd-lead .pd-metrics-bar__line b,
@@ -15489,7 +15465,7 @@ body.council-first-theme .footer-card__lbl {
   padding: 7px;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 6px;
-  background: rgba(0,0,0,.18);
+  background: transparent;
   color: var(--text-secondary);
   text-align: left;
   font-size: 12px;
@@ -15537,7 +15513,7 @@ body.council-first-theme .footer-card__lbl {
 .message-intel__divergence-receipt {
   display: grid; gap: 4px; width: 100%; min-height: 40px; padding: 7px;
   border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
-  background: rgba(0,0,0,.18); color: var(--text-secondary); text-align: left;
+  background: transparent; color: var(--text-secondary); text-align: left;
   font-size: 12px; cursor: pointer;
 }
 .message-intel__divergence-receipt:hover { border-color: rgba(196, 181, 253, .5); }
@@ -15551,101 +15527,187 @@ body.council-first-theme .footer-card__lbl {
 }
 
 
-/* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============ */
+/* ============ COSMIC GLASS (mobile-first, cosmetic-only) ============
+   Grey body smoke used to paint ON TOP of this layer and flatten it.
+   The sky is now the only atmosphere: saturated nebulae + milky-way ribbon
+   + dense prime-tiled stars. Glass stays transparent so the sky reads through. */
 
-/* -- Cosmic substrate: deep-space nebula matching reference image palette --
-   Near-black void centre; cyan cluster top-left; violet/purple top-right;
-   pink-magenta bloom bottom-left; amber/gold warmth bottom-right.
-   Base is fully opaque so the body's dark fallback doesn't bleed through. */
 .cosmic-sky {
     position: fixed;
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    /* Opaque deep-space void base (DS bridge token) */
-    background-color: var(--ds-void);
+    overflow: hidden;
+    isolation: isolate;
+    background-color: #05070c;
     background-image:
-        /* cyan star cluster — top-left (DS signal cyan) */
-        radial-gradient(520px 420px at 6% 10%, color-mix(in srgb, var(--ds-signal-cyan) 30%, transparent), transparent 65%),
-        radial-gradient(260px 200px at 3% 6%,  color-mix(in srgb, var(--ds-signal-cyan) 24%, transparent), transparent 55%),
-        /* violet/purple bloom — top-right (DS cosmic violet) */
-        radial-gradient(540px 440px at 94% 12%, color-mix(in srgb, var(--ds-nebula) 34%, transparent), transparent 65%),
-        radial-gradient(280px 220px at 97% 5%,  color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 50%),
-        /* pink-magenta streak — bottom-left (DS rose) */
-        radial-gradient(480px 380px at 8% 82%,  color-mix(in srgb, var(--ds-rose) 30%, transparent), transparent 65%),
-        radial-gradient(220px 180px at 2% 92%,  color-mix(in srgb, var(--ds-rose) 24%, transparent), transparent 50%),
-        /* amber/gold warmth — bottom-right (DS ember amber) */
-        radial-gradient(420px 340px at 92% 88%, color-mix(in srgb, var(--ds-amber) 30%, transparent), transparent 65%),
-        radial-gradient(200px 160px at 98% 96%, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 50%),
-        /* deep-space void gradient — keeps the centre near-black */
-        radial-gradient(ellipse 80% 70% at 50% 50%, color-mix(in srgb, var(--ds-void) 92%, transparent), transparent 80%);
+        /* Corner nebulae sit on the sky itself so they always paint */
+        radial-gradient(ellipse 70vw 58vh at 8% 10%, color-mix(in srgb, var(--ds-signal-cyan) 58%, transparent), transparent 70%),
+        radial-gradient(ellipse 36vw 30vh at 4% 6%, color-mix(in srgb, var(--ds-signal-cyan) 40%, transparent), transparent 58%),
+        radial-gradient(ellipse 68vw 56vh at 92% 10%, color-mix(in srgb, var(--ds-nebula) 56%, transparent), transparent 72%),
+        radial-gradient(ellipse 34vw 28vh at 97% 5%, color-mix(in srgb, var(--ds-nebula) 38%, transparent), transparent 55%),
+        radial-gradient(ellipse 62vw 52vh at 8% 90%, color-mix(in srgb, var(--ds-rose) 50%, transparent), transparent 70%),
+        radial-gradient(ellipse 32vw 26vh at 3% 96%, color-mix(in srgb, var(--ds-rose) 34%, transparent), transparent 52%),
+        radial-gradient(ellipse 60vw 48vh at 94% 92%, color-mix(in srgb, var(--ds-amber) 48%, transparent), transparent 70%),
+        radial-gradient(ellipse 30vw 24vh at 98% 97%, color-mix(in srgb, var(--ds-amber) 32%, transparent), transparent 50%),
+        /* Milky-way ion ribbon */
+        linear-gradient(118deg,
+            transparent 20%,
+            color-mix(in srgb, var(--ds-signal-cyan) 18%, transparent) 36%,
+            color-mix(in srgb, var(--ds-nebula) 28%, transparent) 50%,
+            color-mix(in srgb, var(--ds-rose) 16%, transparent) 64%,
+            transparent 80%),
+        linear-gradient(118deg,
+            transparent 47%,
+            color-mix(in srgb, var(--ds-signal-cyan) 32%, transparent) 49.5%,
+            color-mix(in srgb, var(--ds-nebula) 30%, transparent) 50.5%,
+            transparent 53%),
+        /* Centre vignette — council numbers stay readable */
+        radial-gradient(ellipse 70% 58% at 50% 42%, transparent 0%, rgba(5, 7, 12, 0.38) 100%);
 }
 
-/* CSS-only starfield (no canvas) — dense multi-layer pattern tiles to cover the viewport */
+/* Living nebula — child layer so transform drift never tiles the stars */
+.cosmic-sky__nebula {
+    position: absolute;
+    inset: -28%;
+    z-index: 0;
+    pointer-events: none;
+    will-change: transform;
+    background:
+        radial-gradient(ellipse 58vw 48vh at 18% 20%, color-mix(in srgb, var(--ds-signal-cyan) 42%, transparent), transparent 68%),
+        radial-gradient(ellipse 56vw 50vh at 82% 18%, color-mix(in srgb, var(--ds-nebula) 40%, transparent), transparent 70%),
+        radial-gradient(ellipse 52vw 46vh at 16% 82%, color-mix(in srgb, var(--ds-rose) 36%, transparent), transparent 68%),
+        radial-gradient(ellipse 50vw 42vh at 86% 84%, color-mix(in srgb, var(--ds-amber) 34%, transparent), transparent 68%),
+        radial-gradient(ellipse 40vw 28vh at 50% 68%, color-mix(in srgb, var(--ds-nebula) 18%, transparent), transparent 70%);
+}
+
+/* Dense distant + mid-field stars. Prime tiles (337 / 563) so the grid never rhymes. */
+.cosmic-sky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background-image:
+        radial-gradient(1.1px 1.1px at 18px 42px, #fff 70%, transparent),
+        radial-gradient(1.4px 1.4px at 91px 14px, #e8f6ff 70%, transparent),
+        radial-gradient(0.9px 0.9px at 154px 88px, hsl(var(--chart-1) / 0.95) 70%, transparent),
+        radial-gradient(1.2px 1.2px at 221px 51px, #fff 70%, transparent),
+        radial-gradient(1.0px 1.0px at 288px 119px, hsl(var(--nebula) / 0.9) 70%, transparent),
+        radial-gradient(1.6px 1.6px at 47px 171px, #fff 65%, transparent),
+        radial-gradient(0.8px 0.8px at 129px 203px, rgba(255,255,255,0.7) 70%, transparent),
+        radial-gradient(1.3px 1.3px at 196px 246px, hsl(var(--chart-1) / 0.85) 70%, transparent),
+        radial-gradient(1.0px 1.0px at 263px 188px, #fff 70%, transparent),
+        radial-gradient(1.5px 1.5px at 312px 274px, hsl(var(--accent) / 0.8) 70%, transparent),
+        radial-gradient(0.9px 0.9px at 74px 301px, rgba(255,255,255,0.65) 70%, transparent),
+        radial-gradient(1.2px 1.2px at 168px 322px, hsl(var(--nebula) / 0.85) 70%, transparent),
+        radial-gradient(1.8px 1.8px at 62px 96px, #fff 45%, rgba(200,230,255,0.7) 70%, transparent),
+        radial-gradient(2.1px 2.1px at 241px 318px, #fff 40%, hsl(var(--chart-1) / 0.7) 72%, transparent),
+        radial-gradient(1.4px 1.4px at 118px 410px, #fff 55%, transparent),
+        radial-gradient(1.1px 1.1px at 307px 38px, hsl(var(--chart-5) / 0.8) 70%, transparent),
+        radial-gradient(2.2px 2.2px at 84px 148px, #fff 40%, rgba(255,245,220,0.75) 70%, transparent),
+        radial-gradient(1.3px 1.3px at 274px 392px, hsl(var(--chart-1) / 0.9) 70%, transparent),
+        radial-gradient(1.7px 1.7px at 431px 67px, #fff 50%, transparent),
+        radial-gradient(1.0px 1.0px at 512px 221px, hsl(var(--nebula) / 0.85) 70%, transparent),
+        radial-gradient(2.4px 2.4px at 198px 489px, #fff 35%, hsl(var(--accent) / 0.65) 70%, transparent),
+        radial-gradient(1.2px 1.2px at 356px 301px, rgba(255,255,255,0.8) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 478px 544px, hsl(var(--chart-5) / 0.75) 70%, transparent),
+        radial-gradient(1.9px 1.9px at 41px 528px, #fff 45%, transparent);
+    background-size:
+        337px 337px, 337px 337px, 337px 337px, 337px 337px, 337px 337px, 337px 337px,
+        337px 337px, 337px 337px, 337px 337px, 337px 337px, 337px 337px, 337px 337px,
+        337px 337px, 337px 337px, 337px 337px, 337px 337px,
+        563px 563px, 563px 563px, 563px 563px, 563px 563px, 563px 563px, 563px 563px,
+        563px 563px, 563px 563px;
+    opacity: 0.92;
+}
+
+/* Bright anchor stars + coronas. Twinkle is opacity-only (composite). */
 .cosmic-sky::after {
     content: '';
     position: absolute;
     inset: 0;
-    /* Two tiling layers at different scales give depth without GPU cost */
+    z-index: 2;
+    pointer-events: none;
     background-image:
-        /* Layer A — fine distant stars (white + cyan) */
-        radial-gradient(1.2px 1.2px at 4%  3%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 9%  8%,  color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.4px 1.4px at 14% 2%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 19% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 24% 5%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 29% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 34% 3%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 39% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.8px 1.8px at 44% 6%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 49% 13%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 54% 4%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 59% 10%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 64% 2%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 69% 12%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.4px 1.4px at 74% 5%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 79% 9%,  color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 84% 3%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 89% 14%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 50%, transparent 51%),
-        radial-gradient(1.8px 1.8px at 94% 6%,  #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 98% 11%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 50%, transparent 51%),
-        /* Layer B — slightly larger mid-field stars, offset phase */
-        radial-gradient(1.4px 1.4px at 7%  17%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 12% 22%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(2px   2px   at 17% 18%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 22% 25%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 27% 19%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 32% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 37% 16%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 42% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(2px   2px   at 47% 18%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 52% 24%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(1.4px 1.4px at 57% 17%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 62% 22%, color-mix(in srgb, var(--ds-amber) 70%, transparent) 50%, transparent 51%),
-        radial-gradient(1.8px 1.8px at 67% 19%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 72% 25%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(1.2px 1.2px at 77% 16%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 82% 21%, color-mix(in srgb, var(--ds-nebula) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(1.6px 1.6px at 87% 18%, #ffffff 50%, transparent 51%),
-        radial-gradient(1px   1px   at 92% 23%, color-mix(in srgb, var(--ds-signal-cyan) 80%, transparent) 50%, transparent 51%),
-        radial-gradient(2px   2px   at 96% 20%, #ffffff 50%, transparent 51%);
-    /* Two tile sizes: fine layer at 180px, mid layer at 280px */
+        radial-gradient(2.8px 2.8px at 118px 196px, #fff 28%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 58%, transparent),
+        radial-gradient(14px 14px at 118px 196px, color-mix(in srgb, var(--ds-signal-cyan) 28%, transparent), transparent 72%),
+        radial-gradient(2.4px 2.4px at 604px 462px, #fff 28%, color-mix(in srgb, var(--ds-amber) 90%, transparent) 58%, transparent),
+        radial-gradient(12px 12px at 604px 462px, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 72%),
+        radial-gradient(3.0px 3.0px at 748px 128px, #fff 32%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 62%, transparent),
+        radial-gradient(16px 16px at 748px 128px, color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 75%),
+        radial-gradient(2.2px 2.2px at 276px 704px, #fff 28%, color-mix(in srgb, var(--ds-rose) 90%, transparent) 58%, transparent),
+        radial-gradient(11px 11px at 276px 704px, color-mix(in srgb, var(--ds-rose) 22%, transparent), transparent 72%),
+        radial-gradient(2.6px 2.6px at 512px 318px, #fff 30%, rgba(220,240,255,0.9) 60%, transparent),
+        radial-gradient(13px 13px at 512px 318px, rgba(255,255,255,0.18), transparent 74%),
+        radial-gradient(2.0px 2.0px at 812px 640px, #fff 30%, color-mix(in srgb, var(--ds-signal-cyan) 85%, transparent) 60%, transparent),
+        radial-gradient(10px 10px at 812px 640px, color-mix(in srgb, var(--ds-signal-cyan) 20%, transparent), transparent 72%),
+        /* Cluster — cyan nebula (top-left), once per viewport */
+        radial-gradient(2.4px 2.4px at 8% 11%, #fff 70%, transparent),
+        radial-gradient(1.6px 1.6px at 9.6% 13.4%, #fff 70%, transparent),
+        radial-gradient(3.2px 3.2px at 11.2% 10.2%, #fff 50%, transparent),
+        radial-gradient(1.4px 1.4px at 12.6% 14.8%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.0px 2.0px at 7.0% 16.2%, color-mix(in srgb, var(--ds-signal-cyan) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 11.8% 17.0%, #fff 70%, transparent),
+        radial-gradient(2.6px 2.6px at 13.8% 12.4%, #fff 55%, transparent),
+        radial-gradient(1.2px 1.2px at 6.2% 12.8%, rgba(255,255,255,0.75) 70%, transparent),
+        radial-gradient(8px 8px at 11.2% 10.2%, color-mix(in srgb, var(--ds-signal-cyan) 22%, transparent), transparent 70%),
+        /* Cluster — violet nebula (top-right) */
+        radial-gradient(2.5px 2.5px at 90% 9%, #fff 70%, transparent),
+        radial-gradient(1.7px 1.7px at 92.4% 11.6%, #fff 70%, transparent),
+        radial-gradient(3.4px 3.4px at 88.2% 12.8%, #fff 48%, transparent),
+        radial-gradient(1.4px 1.4px at 93.8% 8.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.1px 2.1px at 91.6% 15.2%, color-mix(in srgb, var(--ds-nebula) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 87.0% 10.6%, #fff 70%, transparent),
+        radial-gradient(2.6px 2.6px at 94.6% 13.4%, #fff 55%, transparent),
+        radial-gradient(9px 9px at 88.2% 12.8%, color-mix(in srgb, var(--ds-nebula) 20%, transparent), transparent 70%),
+        /* Cluster — rose nebula (bottom-left) */
+        radial-gradient(2.4px 2.4px at 9% 84%, #fff 70%, transparent),
+        radial-gradient(1.7px 1.7px at 11.0% 86.6%, #fff 70%, transparent),
+        radial-gradient(3.1px 3.1px at 7.4% 87.4%, #fff 50%, transparent),
+        radial-gradient(1.4px 1.4px at 12.8% 83.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.0px 2.0px at 8.2% 89.8%, color-mix(in srgb, var(--ds-rose) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 11.4% 90.6%, #fff 70%, transparent),
+        radial-gradient(8px 8px at 7.4% 87.4%, color-mix(in srgb, var(--ds-rose) 20%, transparent), transparent 70%),
+        /* Cluster — amber nebula (bottom-right) */
+        radial-gradient(2.5px 2.5px at 91% 86%, #fff 70%, transparent),
+        radial-gradient(1.6px 1.6px at 93.4% 88.4%, #fff 70%, transparent),
+        radial-gradient(3.3px 3.3px at 89.2% 89.6%, #fff 48%, transparent),
+        radial-gradient(1.4px 1.4px at 94.8% 85.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.1px 2.1px at 92.6% 91.8%, color-mix(in srgb, var(--ds-amber) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 88.0% 87.2%, #fff 70%, transparent),
+        radial-gradient(8px 8px at 89.2% 89.6%, color-mix(in srgb, var(--ds-amber) 20%, transparent), transparent 70%),
+        /* Cluster — milky-way ribbon */
+        radial-gradient(2.0px 2.0px at 48% 32%, #fff 70%, transparent),
+        radial-gradient(1.4px 1.4px at 50.6% 34.4%, rgba(255,255,255,0.8) 70%, transparent),
+        radial-gradient(2.8px 2.8px at 52.4% 31.2%, #fff 50%, transparent),
+        radial-gradient(1.6px 1.6px at 54.0% 35.8%, #fff 70%, transparent),
+        radial-gradient(1.2px 1.2px at 46.4% 33.6%, rgba(255,255,255,0.75) 70%, transparent);
     background-size:
-        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
-        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
-        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
-        180px 180px, 180px 180px, 180px 180px, 180px 180px, 180px 180px,
-        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
-        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
-        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
-        280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px;
-    opacity: 0.85;
+        881px 881px, 881px 881px, 881px 881px, 881px 881px,
+        881px 881px, 881px 881px, 881px 881px, 881px 881px,
+        881px 881px, 881px 881px, 881px 881px, 881px 881px,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
+    opacity: 0.95;
+    animation: cosmic-star-twinkle 7s ease-in-out infinite alternate;
 }
 
-/* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
+@keyframes cosmic-star-twinkle {
+    0%   { opacity: 0.62; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.78; }
+}
+
+/* -- Prismatic glass — light enough that the sky shows through the cards -- */
 .glass-shell {
     background: var(--glass-fill-section);
     border: 1px solid var(--glass-border);
+    border-top-color: rgba(255, 255, 255, 0.32);
+    border-bottom-color: rgba(0, 0, 0, 0.45);
     border-radius: var(--glass-radius);
     position: relative;
     z-index: 1;
@@ -15654,14 +15716,44 @@ body.council-first-theme .footer-card__lbl {
 
 .glass-card {
     background: var(--glass-fill-card);
-    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 36%, transparent 70%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
     border: 1px solid var(--glass-border);
+    border-top: 1px solid rgba(255, 255, 255, 0.46);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.50);
     border-radius: var(--glass-radius);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.08), var(--shadow-card);
+    box-shadow:
+        0 14px 34px -4px rgba(0, 0, 0, 0.62),
+        0 4px 10px -2px rgba(0, 0, 0, 0.36),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.32),
+        inset 0 -1px 2px 0 rgba(0, 0, 0, 0.40),
+        var(--shadow-card);
     position: relative;
     z-index: 2;
     -webkit-tap-highlight-color: transparent;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
     /* NO backdrop-filter here — mobile default */
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .glass-card:hover {
+        border-top-color: rgba(255, 255, 255, 0.68);
+        border-left-color: rgba(255, 255, 255, 0.22);
+        border-right-color: rgba(255, 255, 255, 0.22);
+        box-shadow:
+            0 18px 40px -4px rgba(0, 0, 0, 0.72),
+            0 0 24px -4px hsl(var(--chart-1) / 0.18),
+            inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.42),
+            inset 0 -1px 2px 0 rgba(0, 0, 0, 0.50),
+            var(--shadow-card);
+    }
+}
+
+/* Instrument cells (WIN RATE / AVG ACC / SIGNAL…) used a 55% dark --glass fill. */
+.tribunal-hero { --glass: transparent; }
+.tribunal-hero__cell {
+    background: transparent !important;
 }
 
 /* ── Cosmic-glass blur gate (authoritative, global) ──────────────────────
@@ -15693,17 +15785,8 @@ body.council-first-theme .footer-card__lbl {
         .brain-letter,
         .proof-band,
         .proof-band__subpanel,
-        .pump-alert__card,
-        .pump-hero__card,
-        #pump-desk-hero,
         .pds-angles__section,
         .pd-angles__section,
-        .pds-ladder,
-        .pds--polish .pds-ladder,
-        .pd-lead,
-        .pds-hero,
-        .pd-metrics-bar,
-        .pds-metrics-bar,
         .kpi-cell,
         .council-stage .k3-signal,
         .council-stage .k3-judge,
@@ -15719,12 +15802,9 @@ body.council-first-theme .footer-card__lbl {
         .top-nav,
         .share-page__header,
         .driver-popover,
-        .message-intel--v2,
-        .message-intel--v2 .message-intel__panel,
-        .message-intel--v2 .message-intel__stat-chip,
-        .message-intel--v2 .message-intel__pulse-stage {
-            backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
-            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.2) !important;
+        .message-intel--v2 .message-intel__stat-chip {
+            backdrop-filter: blur(var(--glass-blur)) saturate(1.45) !important;
+            -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.45) !important;
         }
         /* Pseudo-element blur restored on desktop */
         .tribunal-hero__ring-center::before {
@@ -15735,6 +15815,28 @@ body.council-first-theme .footer-card__lbl {
         .tribunal-hero__card {
             backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
             -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+        }
+        /* Pump desk + Telegram pulse sit over the dark sky center. 16px blur
+           there frosts into a pewter slab (same reason instrument cells skip
+           blur). Hairline + sky, no stacked frost. */
+        .pd-lead,
+        .pump-hero__card,
+        #pump-desk-hero,
+        .pump-alert__card,
+        .pds-hero,
+        .pds-ladder,
+        .pds--polish .pds-ladder,
+        .pd-metrics-bar,
+        .pds-metrics-bar,
+        .message-intel--v2.glass-card,
+        .message-intel--v2 .glass-card,
+        .message-intel--v2 .message-intel__panel,
+        .message-intel--v2 .message-intel__pulse-stage,
+        .message-intel--v2 .message-intel__hero,
+        .message-intel--v2 .message-intel__week-top,
+        .message-intel--v2 .message-intel__crowns-drawer {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
         }
     }
 }
@@ -15845,12 +15947,26 @@ section.desk-zone,
     border-color: var(--glass-border);
 }
 
+/* Pump ladder rows used --pd-panel (82–90% dark). Same clear glass as cards. */
+.pd-r {
+    background: var(--glass-fill-subtle);
+}
+
 /* Cockpit cards → glass-card fill (base .card paints an opaque smoke gradient; defer to glass) */
 .cockpit-card,
 .cockpit-card.card {
     background: var(--glass-fill-card);
-    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
+    background-image:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 36%, transparent 70%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.02) 100%);
     border-color: var(--glass-border);
+    border-top: 1px solid rgba(255, 255, 255, 0.46);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.50);
+    box-shadow:
+        0 14px 34px -4px rgba(0, 0, 0, 0.62),
+        0 4px 10px -2px rgba(0, 0, 0, 0.36),
+        inset 0 1px 1px 0 rgba(255, 255, 255, 0.32),
+        inset 0 -1px 2px 0 rgba(0, 0, 0, 0.40);
 }
 
 /* Desktop / mouse: full glass upgrade for all glass-fill panels (matches .glass-card gate) */
