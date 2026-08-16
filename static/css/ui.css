@@ -1268,7 +1268,7 @@ html[data-hydrate="0"] .hydrate-skel .skel-only { display: none !important; }
   align-items: flex-start;
   padding: 8px 10px;
   border-left: 2px solid rgba(140, 60, 80, 0.55);
-  background: rgba(80, 30, 45, 0.18);
+  background: transparent;
   border-radius: 0 8px 8px 0;
 }
 .caution-cell__tag {
@@ -6918,7 +6918,7 @@ button.home-cta {
   margin: 4px 0 0;
 }
 
-.home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
+.home-stage-why-not { margin: 12px 0; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: transparent; }
 .home-stage-why-not__title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }
 .home-stage-why-not__list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
 
@@ -6984,7 +6984,7 @@ button.home-cta {
   font-size: 11px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: rgba(0,0,0,0.25);
+  background: transparent;
   color: #a7f3d0;
 }
 .backtest-method__cov { font-size: 11px; font-style: italic; }
@@ -7015,7 +7015,7 @@ button.home-cta {
   font-size: 12px;
   padding: 6px 8px;
   border-radius: 6px;
-  background: rgba(0,0,0,0.25);
+  background: transparent;
   color: #a7f3d0;
   margin-bottom: 6px;
 }
@@ -7055,7 +7055,7 @@ button.home-cta {
   padding: 4px 6px;
   margin: 4px 0;
   border-radius: 4px;
-  background: rgba(0,0,0,0.2);
+  background: transparent;
   color: #a7f3d0;
 }
 .formula-evolution__subnets { margin: 6px 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
