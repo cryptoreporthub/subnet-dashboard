@@ -7,7 +7,7 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2 glass-card" data-pulse-mode="listen">
+<div class="message-intel message-intel--v2 message-intel--home-compact glass-card" data-pulse-mode="listen">
 
   <div class="message-intel__heartbeat" id="message-intel-heartbeat" data-mode="warming" aria-live="polite">
     <svg class="message-intel__ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
@@ -54,7 +54,7 @@
     </div>
   </div>
 
-  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve">
+  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve folders">
     <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span></button>
     <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who's right</span></button>
     <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span></button>
