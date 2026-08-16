@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
 from internal.message_intel.store import get_db
+from internal.message_intel.topic_tags import classify_message_topics
 from internal.message_intel.proof import (
     MIN_LEADERBOARD_SAMPLE,
     classify_call,
@@ -182,8 +183,9 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
-                      m.timestamp, m.created_at, a.sentiment, a.influence_score, a.entities_json,
-                      mm.reactions, ps.netuid AS snap_netuid, v.conviction
+                      m.content, m.timestamp, m.created_at, a.sentiment, a.influence_score,
+                      a.entities_json, mm.reactions, ps.netuid AS snap_netuid,
+                      v.conviction, v.predicted_direction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_metrics mm ON mm.message_id = m.id
@@ -1542,6 +1544,368 @@ def build_24h_summary(
         "group_pulse": group_pulse,
         "generated_at": now.isoformat().replace("+00:00", "Z"),
     }
+
+
+_MIN_YESTERDAY_SUMMARY_MESSAGES = 3
+
+
+def _clip_snippet(text: Optional[str], *, max_len: int = 120) -> str:
+    raw = re.sub(r"\s+", " ", str(text or "").strip())
+    if not raw:
+        return ""
+    if len(raw) <= max_len:
+        return raw
+    return raw[: max_len - 1].rstrip() + "…"
+
+
+def _join_phrase(items: List[str]) -> str:
+    clean = [s for s in items if s]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} and {clean[1]}"
+    return ", ".join(clean[:-1]) + f", and {clean[-1]}"
+
+
+def _topic_label(tag: str) -> str:
+    return str(tag or "").replace("_", " ").strip().title()
+
+
+def _display_group_name(name: Optional[str]) -> str:
+    raw = str(name or "").strip()
+    if not raw:
+        return "The group"
+    lowered = raw.lower()
+    if lowered in {"officialsubnetsummer", "subnet summer", "subnetsummer"}:
+        return "Subnet Summer"
+    if " " in raw:
+        return raw
+    spaced = re.sub(r"([a-z])([A-Z])", r"\1 \2", raw)
+    return spaced or raw
+
+
+def _subnet_names_phrase(rows: List[Dict[str, Any]], *, limit: int = 3) -> str:
+    names: List[str] = []
+    for row in rows[:limit]:
+        netuid = row.get("netuid")
+        names.append(str(row.get("name") or (f"SN{netuid}" if netuid is not None else "—")))
+    return _join_phrase(names)
+
+
+def _yesterday_top_accuracy(
+    author_counts: Dict[str, int],
+    author_names: Dict[str, str],
+    reliability_rows: Dict[str, Dict[str, Any]],
+    *,
+    min_graded: int = 5,
+) -> Optional[Dict[str, Any]]:
+    best_name: Optional[str] = None
+    best_score = -1.0
+    for key in author_counts:
+        rel = reliability_rows.get(key) or reliability_rows.get(f"id:{key}")
+        if not rel:
+            continue
+        graded = int(rel.get("total_messages") or 0)
+        if graded < min_graded:
+            continue
+        score = float(rel.get("accuracy_score") or 0.0)
+        if score > best_score:
+            best_score = score
+            best_name = author_names.get(key) or rel.get("author_name") or key
+    if best_name is None or best_score < 0:
+        return None
+    return {"name": best_name, "accuracy": round(best_score * 100.0, 1)}
+
+
+def _yesterday_narrative(summary: Dict[str, Any]) -> str:
+    if not summary.get("ready"):
+        return str(
+            summary.get("empty_reason")
+            or "Yesterday's chat recap fills in once the listener logs a full UTC day."
+        )
+
+    pulse = summary.get("group_pulse") or {}
+    group = _display_group_name(pulse.get("group"))
+    sentiment = str(pulse.get("sentiment") or "Mixed").lower()
+    top_subnets = summary.get("top_subnets") or []
+    topics = summary.get("topics") or []
+    topic_labels = [_topic_label(t.get("topic")) for t in topics[:4] if t.get("topic")]
+    movers = summary.get("movers") or []
+    highlight = summary.get("highlight") or {}
+    top_author = summary.get("top_author") or {}
+    top_accuracy = summary.get("top_accuracy") or {}
+
+    sentences: List[str] = []
+
+    if top_subnets:
+        opener = f"{group} circled {_subnet_names_phrase(top_subnets, limit=2)} yesterday"
+    else:
+        opener = f"{group} kept {summary.get('message_count', 0)} messages moving yesterday"
+
+    if topic_labels:
+        opener += f", with {_join_phrase(topic_labels).lower()} taking most of the airtime"
+
+    if sentiment == "bullish":
+        opener += ", and the room leaned bullish"
+    elif sentiment == "bearish":
+        opener += ", with bearish calls carrying the thread"
+    elif sentiment == "cautious":
+        opener += ", in a cautious wait-and-see mood"
+    sentences.append(opener + ".")
+
+    if top_subnets:
+        lead = top_subnets[0]
+        lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
+        detail = f"{lead_name} drew the most attention ({lead.get('mentions', 0)} mentions)"
+        if len(top_subnets) > 1:
+            runner = top_subnets[1]
+            runner_name = runner.get("name") or f"SN{runner.get('netuid')}"
+            detail += f", ahead of {runner_name} ({runner.get('mentions', 0)})"
+        sentences.append(detail + ".")
+
+    lead_netuid = top_subnets[0].get("netuid") if top_subnets else None
+    rising = [
+        m
+        for m in movers
+        if int(m.get("change") or 0) >= 2 and m.get("netuid") != lead_netuid
+    ]
+    if rising:
+        mover = rising[0]
+        mover_name = mover.get("name") or f"SN{mover.get('netuid')}"
+        sentences.append(
+            f"{mover_name} heated up late (+{mover.get('change')} mentions vs the day before)."
+        )
+
+    snippet = _clip_snippet(highlight.get("content"))
+    if snippet:
+        author = highlight.get("author_name") or "A caller"
+        conv = highlight.get("conviction")
+        direction = str(highlight.get("direction") or "").lower()
+        dir_word = {"up": "bullish", "down": "bearish"}.get(direction, "")
+        conv_bit = f" ({conv:.0f}% conviction)" if conv is not None else ""
+        mood = f" — a {dir_word} read" if dir_word else ""
+        sentences.append(f'The line that stuck came from {author}{conv_bit}: "{snippet}"{mood}.')
+    elif top_author.get("name"):
+        if top_accuracy.get("name") == top_author.get("name") and top_accuracy.get("accuracy") is not None:
+            sentences.append(
+                f"{top_author['name']} drove the thread "
+                f"({top_author.get('messages', 0)} messages) with "
+                f"{top_accuracy['accuracy']:.1f}% strike on graded calls."
+            )
+        else:
+            sentences.append(
+                f"{top_author['name']} posted the most ({top_author.get('messages', 0)} messages)."
+            )
+    elif top_accuracy.get("name") and top_accuracy.get("accuracy") is not None:
+        sentences.append(
+            f"{top_accuracy['name']} led strike rate at {top_accuracy['accuracy']:.1f}% "
+            f"on graded calls."
+        )
+
+    peak = summary.get("hourly_peak")
+    if peak is not None:
+        sentences.append(f"Traffic peaked near {int(peak):02d}:00 UTC.")
+
+    return " ".join(sentences)
+
+
+def build_yesterday_chat_summary(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    limit: int = 5,
+    min_conviction: float = 60.0,
+    db=None,
+) -> Dict[str, Any]:
+    """Prior UTC calendar day rollup — what happened in chat yesterday."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+    day_before_start = yesterday_start - timedelta(days=1)
+    registry_names = registry_names or {}
+
+    message_count = 0
+    hc_count = 0
+    sentiment_sum = 0.0
+    sentiment_n = 0
+    conviction_sum = 0.0
+    subnet_counts: Dict[int, int] = defaultdict(int)
+    prev_subnet_counts: Dict[int, int] = defaultdict(int)
+    group_counts: Dict[str, int] = defaultdict(int)
+    topic_counts: Dict[str, int] = defaultdict(int)
+    author_counts: Dict[str, int] = defaultdict(int)
+    author_names: Dict[str, str] = {}
+    hourly_counts: Dict[int, int] = defaultdict(int)
+    highlight: Dict[str, Any] = {}
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < day_before_start:
+            continue
+        in_yesterday = yesterday_start <= ts < today_start
+        in_prev = day_before_start <= ts < yesterday_start
+        if not in_yesterday and not in_prev:
+            continue
+
+        if in_yesterday:
+            message_count += 1
+            s_val = _sentiment_value(row.get("sentiment"))
+            sentiment_sum += s_val
+            sentiment_n += 1
+            try:
+                conviction = float(row.get("conviction") or 0)
+            except (TypeError, ValueError):
+                conviction = 0.0
+            conviction_sum += conviction
+            if conviction >= min_conviction:
+                hc_count += 1
+            group = str(row.get("group_name") or "").strip()
+            if group:
+                group_counts[group] += 1
+            content = str(row.get("content") or "")
+            for tag in classify_message_topics(content):
+                topic_counts[tag] += 1
+            author_key = str(
+                row.get("author_username") or row.get("author_name") or row.get("author_id") or ""
+            ).strip()
+            if author_key:
+                author_counts[author_key] += 1
+                author_names[author_key] = str(
+                    row.get("author_name") or row.get("author_username") or author_key
+                )
+            hourly_counts[ts.hour] += 1
+            if content and conviction >= min_conviction and conviction > float(
+                highlight.get("conviction") or 0
+            ):
+                netuids = _netuids_from_row(row)
+                netuid = min(netuids) if netuids else None
+                highlight = {
+                    "author_name": author_names.get(author_key) or author_key or None,
+                    "content": content,
+                    "conviction": conviction,
+                    "direction": row.get("predicted_direction"),
+                    "netuid": netuid,
+                }
+            for netuid in _netuids_from_row(row):
+                subnet_counts[netuid] += 1
+
+        if in_prev:
+            for netuid in _netuids_from_row(row):
+                prev_subnet_counts[netuid] += 1
+
+    base: Dict[str, Any] = {
+        "window": "yesterday",
+        "date": yesterday_start.date().isoformat(),
+        "message_count": message_count,
+        "ready": message_count >= _MIN_YESTERDAY_SUMMARY_MESSAGES,
+    }
+    if message_count < _MIN_YESTERDAY_SUMMARY_MESSAGES:
+        base["empty_reason"] = (
+            f"Only {message_count} message{'s' if message_count != 1 else ''} logged for "
+            f"{yesterday_start.date().isoformat()} — recap needs at least "
+            f"{_MIN_YESTERDAY_SUMMARY_MESSAGES}."
+        )
+        base["min_messages"] = _MIN_YESTERDAY_SUMMARY_MESSAGES
+        base["narrative"] = _yesterday_narrative(base)
+        return base
+
+    avg_sent = (sentiment_sum / sentiment_n) if sentiment_n else 0.0
+    avg_conv = (conviction_sum / message_count) if message_count else 0.0
+
+    top_subnets: List[Dict[str, Any]] = []
+    for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
+        top_subnets.append(
+            {
+                "netuid": netuid,
+                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "mentions": int(mentions),
+            }
+        )
+
+    movers: List[Dict[str, Any]] = []
+    for netuid in set(subnet_counts) | set(prev_subnet_counts):
+        cur = int(subnet_counts.get(netuid, 0))
+        prev = int(prev_subnet_counts.get(netuid, 0))
+        if cur <= 0:
+            continue
+        movers.append(
+            {
+                "netuid": netuid,
+                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "mentions": cur,
+                "prev_mentions": prev,
+                "change": cur - prev,
+            }
+        )
+    movers.sort(key=lambda r: (r["change"], r["mentions"]), reverse=True)
+
+    group_pulse: Dict[str, Any] = {
+        "messages": message_count,
+        "high_conviction": hc_count,
+        "sentiment": _sentiment_tag(avg_sent),
+        "avg_conviction": round(avg_conv, 1),
+    }
+    if group_counts:
+        top_group, top_count = max(group_counts.items(), key=lambda kv: kv[1])
+        group_pulse["group"] = top_group
+        group_pulse["top_group_messages"] = int(top_count)
+        group_pulse["groups_active"] = len(group_counts)
+
+    topics: List[Dict[str, Any]] = []
+    for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
+        topics.append({"topic": tag, "label": _topic_label(tag), "count": int(count)})
+
+    top_author: Optional[Dict[str, Any]] = None
+    if author_counts:
+        top_key, top_msgs = max(author_counts.items(), key=lambda kv: kv[1])
+        top_author = {"name": author_names.get(top_key) or top_key, "messages": int(top_msgs)}
+
+    hourly_peak: Optional[int] = None
+    hourly: List[Dict[str, Any]] = []
+    if hourly_counts:
+        hourly_peak = max(hourly_counts.items(), key=lambda kv: kv[1])[0]
+        peak_count = hourly_counts[hourly_peak]
+        hourly = [
+            {
+                "hour": int(hour),
+                "count": int(count),
+                "pct": round(100 * count / peak_count) if peak_count else 0,
+            }
+            for hour, count in sorted(hourly_counts.items())
+        ]
+
+    if highlight.get("content"):
+        highlight = {**highlight, "content": _clip_snippet(highlight.get("content"))}
+
+    reliability_rows = _author_reliability_rows(db)
+    top_accuracy = _yesterday_top_accuracy(author_counts, author_names, reliability_rows)
+
+    out = {
+        **base,
+        "top_subnets": top_subnets,
+        "movers": movers[:limit],
+        "high_conviction_count": hc_count,
+        "group_pulse": group_pulse,
+        "topics": topics,
+        "top_author": top_author,
+        "top_accuracy": top_accuracy,
+        "highlight": highlight or None,
+        "hourly": hourly,
+        "hourly_peak": hourly_peak,
+        "stats": {
+            "graded": message_count,
+            "high_conviction": hc_count,
+            "hot_subnets": len(subnet_counts),
+            "topics": len(topic_counts),
+            "top_acc": top_accuracy.get("accuracy") if top_accuracy else None,
+            "recent_msgs": message_count,
+            "peak_hour": hourly_peak,
+        },
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+    }
+    out["narrative"] = _yesterday_narrative(out)
+    return out
 
 
 def build_high_conviction_strip(

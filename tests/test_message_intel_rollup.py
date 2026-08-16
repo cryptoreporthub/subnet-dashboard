@@ -263,6 +263,94 @@ def test_yesterday_leader_in_meta(client, monkeypatch):
     assert listed["meta"]["yesterday_leader"]["netuid"] == 14
 
 
+def test_yesterday_summary_in_meta(client, monkeypatch):
+    from internal.message_intel import rollup
+
+    fake = {
+        "window": "yesterday",
+        "date": "2026-07-26",
+        "ready": True,
+        "message_count": 42,
+        "high_conviction_count": 7,
+        "narrative": (
+            "Subnet Summer circled TaoHash yesterday, with Market taking most of the airtime, "
+            "and the room leaned bullish."
+        ),
+        "top_subnets": [{"netuid": 14, "name": "TaoHash", "mentions": 12}],
+        "movers": [],
+        "group_pulse": {"messages": 42, "high_conviction": 7, "sentiment": "Bullish", "group": "OfficialSubnetSummer"},
+        "stats": {"graded": 42, "high_conviction": 7, "hot_subnets": 2, "topics": 3, "top_acc": 100.0, "recent_msgs": 42},
+    }
+    monkeypatch.setattr(rollup, "build_yesterday_chat_summary", lambda **kw: fake)
+    listed = client.get("/api/message-intel").json()
+    assert listed["meta"]["yesterday_summary"]["ready"] is True
+    assert "circled TaoHash" in listed["meta"]["yesterday_summary"]["narrative"]
+
+
+def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 7, 28, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    rows = [
+        {
+            "timestamp": "2026-07-27T10:00:00Z",
+            "conviction": 72,
+            "sentiment": "bullish",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Alpha",
+            "content": "SN14 validator staking looks strong — bullish on TaoHash emissions",
+            "entities_json": '{"netuids":[14]}',
+        },
+        {
+            "timestamp": "2026-07-27T11:00:00Z",
+            "conviction": 55,
+            "sentiment": "neutral",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Beta",
+            "content": "TAO price action is choppy but SN14 still trending",
+            "entities_json": '{"netuids":[14]}',
+        },
+        {
+            "timestamp": "2026-07-27T12:00:00Z",
+            "conviction": 80,
+            "sentiment": "bullish",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Gamma",
+            "content": "Apex subnet printing alpha returns on SN78",
+            "entities_json": '{"netuids":[78]}',
+            "predicted_direction": "up",
+        },
+        {
+            "timestamp": "2026-07-28T09:00:00Z",
+            "conviction": 90,
+            "sentiment": "bullish",
+            "group_name": "OfficialSubnetSummer",
+            "content": "today only",
+            "entities_json": '{"netuids":[99]}',
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    summary = rollup.build_yesterday_chat_summary(registry_names={14: "TaoHash", 78: "Apex"})
+    assert summary["ready"] is True
+    assert summary["date"] == "2026-07-27"
+    assert summary["message_count"] == 3
+    assert summary["top_subnets"][0]["netuid"] == 14
+    assert "circled TaoHash" in summary["narrative"]
+    assert summary["topics"]
+    assert summary["hourly"]
+    assert summary["stats"]["graded"] == 3
+    assert "line that stuck" in summary["narrative"]
+
+
 def test_week_top_comment_unit(monkeypatch):
     """Most engaged message wins; why names the dominant signal."""
     from datetime import datetime, timezone

@@ -35,6 +35,21 @@ def test_message_intel_ssr_populates_from_context():
     assert 'aria-busy="{{ \'false\' if mi_messages else \'true\' }}"' in html
 
 
+def test_homepage_pulse_uses_compact_folder_cabinet():
+    html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    css = open("static/css/ui.css", encoding="utf-8").read()
+    assert "message-intel--home-compact" in html
+    assert "Listen Learn Rank Serve folders" in html
+    assert ".message-intel--home-compact .message-intel__bay" in css
+    assert "background: transparent" in css.split(".message-intel--home-compact .message-intel__bay")[1].split("}")[0]
+    compact = css.split(".message-intel--home-compact {")[1].split("}")[0]
+    assert "background: transparent !important" not in compact
+    assert "border: 0 !important" not in compact
+    assert ".message-intel--home-compact .message-intel__loop [role=\"tab\"][aria-selected=\"true\"]" in css
+    listener = open("templates/listener.html", encoding="utf-8").read()
+    assert "message-intel--home-compact" not in listener
+
+
 def test_message_intel_home_loop_has_accessible_listen_learn_rank_serve_panes():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
     js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
