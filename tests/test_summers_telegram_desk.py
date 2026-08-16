@@ -9,6 +9,19 @@ from server import app
 client = TestClient(app)
 
 
+def test_hud_unsticks_before_telegram():
+    """Council/Weighing/Lead/Focus/Proof stick only through the front, then peel off."""
+    html = open("templates/partials/premium_cockpit.html", encoding="utf-8").read()
+    start = html.find('<div class="sr-front">')
+    telegram = html.find('include "partials/premium/message_intel_feed.html"')
+    assert start != -1 and telegram != -1 and start < telegram
+    inner, rest = html[start:].split("</div>", 1)
+    assert 'include "partials/premium/header.html"' in inner
+    assert 'include "partials/premium/pump_alert_scan.html"' in inner
+    assert 'include "partials/premium/message_intel_feed.html"' not in inner
+    assert 'include "partials/premium/message_intel_feed.html"' in rest
+
+
 def test_summers_desk_first_class_on_home():
     import server as srv
 
