@@ -2100,6 +2100,7 @@ async def preview_tribunal(request: Request):
     from internal.preview.tribunal_hero import build_tribunal_hero_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/tribunal.html",
         build_tribunal_hero_preview_context(request),
     )
@@ -2111,6 +2112,7 @@ async def preview_k3_hold(request: Request):
     from internal.preview.k3_hold import build_k3_hold_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/k3_hold.html",
         build_k3_hold_preview_context(request),
     )
@@ -2122,6 +2124,7 @@ async def preview_k3_pump_alert(request: Request):
     from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/k3_pump_alert.html",
         build_k3_pump_alert_preview_context(request),
     )
@@ -2133,6 +2136,7 @@ async def preview_k3_pump_alert_scan(request: Request):
     from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/k3_pump_alert_scan.html",
         build_k3_pump_alert_preview_context(request),
     )
@@ -2144,6 +2148,7 @@ async def preview_pump_desk_polish(request: Request):
     from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/pump_desk_polish.html",
         build_k3_pump_alert_preview_context(request),
     )
@@ -2155,6 +2160,7 @@ async def preview_pump_desk_full(request: Request):
     from internal.preview.k3_pump_alert import build_k3_pump_alert_preview_context
 
     return templates.TemplateResponse(
+        request,
         "preview/pump_desk_full.html",
         build_k3_pump_alert_preview_context(request),
     )
@@ -2169,7 +2175,7 @@ async def pump_desk_page(request: Request):
         "public_base_url": _public_base_url(request),
         "pump_alerts": payload,
     }
-    return templates.TemplateResponse("pump.html", context)
+    return templates.TemplateResponse(request, "pump.html", context)
 
 
 @app.get("/Pump", include_in_schema=False)
