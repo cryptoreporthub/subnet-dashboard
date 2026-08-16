@@ -2154,6 +2154,16 @@ async def preview_pump_desk_polish(request: Request):
     )
 
 
+@app.get("/preview/listener-gaps")
+async def preview_listener_gaps(request: Request):
+    """Layout preview — listener ideas from the reference photos that are not on the live desk."""
+    return templates.TemplateResponse(
+        request,
+        "preview/listener_gaps.html",
+        {"public_base_url": _public_base_url(request)},
+    )
+
+
 @app.get("/preview/pump-desk-full")
 async def preview_pump_desk_full(request: Request):
     """SSR preview — flagship deep-dive (proposed /pump route)."""

@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block content %}
+<script>document.documentElement.dataset.hydrate = '0';</script>
+<style>
+  .lgap-banner {
+    position: sticky; top: 0; z-index: 9999;
+    background: rgba(8,9,17,.92); color: #7dd3fc; text-align: center;
+    font: 12px/1.45 'JetBrains Mono', monospace; padding: 10px 14px;
+    border-bottom: 1px solid rgba(56,189,248,.35);
+  }
+  .lgap-banner a { color: #34d399; margin: 0 6px; }
+  .lgap-banner b { color: #f8fafc; }
+  .lgap-note {
+    max-width: 720px; margin: 14px auto 0; padding: 0 16px;
+    font: 12px/1.5 'Space Grotesk', sans-serif; color: #94a3b8;
+  }
+  .lgap-note code { color: #e2e8f0; }
+  .lgap-phone { width: min(390px, 100%); margin: 18px auto 40px; padding: 0 10px; }
+  .lgap-desk { width: min(920px, 100%); margin: 0 auto 48px; padding: 0 12px; }
+  .lgap-kicker {
+    font: 700 10px/1 'JetBrains Mono', monospace; letter-spacing: .14em;
+    color: #38bdf8; margin: 22px 0 8px;
+  }
+  .lgap-card {
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 16px; padding: 12px 12px 14px;
+    background: rgba(8,9,17,.35);
+  }
+  .lgap-card + .lgap-card { margin-top: 10px; }
+  .lgap-h {
+    margin: 0 0 2px; font: 700 13px/1.2 'Space Grotesk', sans-serif; color: #f8fafc;
+  }
+  .lgap-sub { margin: 0 0 10px; font: 11px/1.35 'Space Grotesk', sans-serif; color: #94a3b8; }
+  .lgap-sample {
+    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+    font: 700 9px/1.4 'JetBrains Mono', monospace; letter-spacing: .06em;
+    color: #fbbf24; border: 1px solid rgba(251,191,36,.35);
+  }
+  .lgap-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .lgap-stat b { display: block; font: 700 16px/1.1 'Syne', sans-serif; color: #f8fafc; }
+  .lgap-stat span { font: 10px/1.3 'Space Grotesk', sans-serif; color: #94a3b8; }
+  .lgap-delta { color: #34d399; font-size: 10px; }
+  .lgap-delta.is-down { color: #fb7185; }
+  .lgap-quad { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lgap-quad .lgap-stat b { font-size: 15px; }
+  .lgap-arc { display: block; width: 100%; height: 118px; }
+  .lgap-arc-meta { display: flex; justify-content: space-between; font: 11px/1.3 'JetBrains Mono', monospace; color: #cbd5e1; }
+  .lgap-sig { display: grid; gap: 8px; }
+  .lgap-sig-row { display: flex; justify-content: space-between; gap: 10px; font: 12px/1.35 'Space Grotesk', sans-serif; }
+  .lgap-sig-row span { color: #94a3b8; }
+  .lgap-sig-row b { color: #e2e8f0; font-weight: 600; text-align: right; }
+  .lgap-quote {
+    margin: 0; padding: 8px 10px; border-left: 2px solid #38bdf8;
+    color: #e2e8f0; font: 12px/1.4 'Space Grotesk', sans-serif;
+  }
+  .lgap-hit {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 8px;
+    background: rgba(52,211,153,.12); color: #34d399; font: 700 12px/1 'JetBrains Mono', monospace;
+  }
+  .lgap-feed { display: grid; gap: 8px; }
+  .lgap-call {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 8px;
+    padding: 8px 0; border-top: 1px solid rgba(255,255,255,.06);
+  }
+  .lgap-call:first-child { border-top: 0; padding-top: 0; }
+  .lgap-call b { color: #f8fafc; font-size: 12px; }
+  .lgap-call p { margin: 0; color: #cbd5e1; font-size: 12px; }
+  .lgap-call small { color: #94a3b8; }
+  .lgap-row {
+    display: grid; grid-template-columns: 22px 1fr auto auto; gap: 8px; align-items: center;
+    padding: 8px 0; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px;
+  }
+  .lgap-row:first-of-type { border-top: 0; }
+  .lgap-rank { color: #94a3b8; font-family: 'JetBrains Mono', monospace; }
+  .lgap-skin { font: 700 9px/1.4 'JetBrains Mono', monospace; color: #fbbf24; }
+  .lgap-skin.is-ape { color: #fb7185; }
+  .lgap-spark { width: 56px; height: 18px; display: block; }
+  .lgap-acc { display: grid; gap: 8px; }
+  .lgap-acc-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .lgap-faces { display: flex; }
+  .lgap-face {
+    width: 22px; height: 22px; border-radius: 50%; margin-left: -6px;
+    background: #1e293b; border: 1px solid rgba(255,255,255,.2);
+    font: 700 9px/22px 'Syne', sans-serif; text-align: center; color: #e2e8f0;
+  }
+  .lgap-faces .lgap-face:first-child { margin-left: 0; }
+  .lgap-crowns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lgap-crown { font-size: 12px; color: #e2e8f0; }
+  .lgap-crown b { display: block; font-size: 11px; color: #94a3b8; font-weight: 500; }
+  .lgap-wl { display: grid; gap: 6px; }
+  .lgap-wl-row { display: grid; grid-template-columns: 48px 1fr auto; align-items: center; font-size: 12px; }
+  .lgap-cmds { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .lgap-cmd {
+    border: 1px solid rgba(56,189,248,.28); border-radius: 10px; padding: 8px;
+    font: 700 12px/1.2 'JetBrains Mono', monospace; color: #7dd3fc;
+  }
+  .lgap-cmd span { display: block; margin-top: 4px; font: 11px/1.3 'Space Grotesk', sans-serif; color: #94a3b8; font-weight: 500; }
+  .lgap-desk-grid { display: grid; gap: 12px; }
+  @media (min-width: 760px) {
+    .lgap-desk-grid { grid-template-columns: 1fr 1fr; }
+    .lgap-desk-grid .lgap-span { grid-column: 1 / -1; }
+  }
+  .lgap-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; }
+  .lgap-metrics b { float: right; color: #f8fafc; }
+  .lgap-hz { width: 100%; border-collapse: collapse; font-size: 11px; color: #cbd5e1; }
+  .lgap-hz th, .lgap-hz td { padding: 6px 4px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .lgap-bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; min-width: 72px; }
+  .lgap-bar i { display: block; height: 100%; background: linear-gradient(90deg, #38bdf8, #34d399); }
+  .lgap-topics { margin: 0; padding: 0; list-style: none; }
+  .lgap-topics li { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid rgba(255,255,255,.06); font-size: 12px; }
+  .lgap-topics li:first-child { border-top: 0; }
+</style>
+
+<p class="lgap-banner" role="status">
+  <b>LAYOUT PREVIEW</b> · missing listener ideas from the reference photos · sample numbers, not live ·
+  <a href="/">live home</a> ·
+  <a href="/subnetsummer">full desk</a>
+</p>
+<p class="lgap-note">
+  These blocks are the info you liked in the photos that the live desk still does not show as their own glance.
+  Same cosmic language as the site — not a copy of the neon mock.
+  Already on live: orbit, LISTEN/LEARN/RANK/SERVE tabs, strike-rate list, hit/miss cards, high-conviction strip, net-flow meter, comment of the week, bot chips, wallet lock.
+</p>
+
+<div class="lgap-phone">
+  <p class="lgap-kicker">LISTEN · missing glances</p>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Pulse at a glance <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Mentions, unique callers, and graded hit rate with 24h change.</p>
+    <div class="lgap-trio">
+      <div class="lgap-stat"><b>24.3k</b><span>Mentions</span><div class="lgap-delta">+28.6%</div></div>
+      <div class="lgap-stat"><b>5,164</b><span>Unique callers</span><div class="lgap-delta">+17.3%</div></div>
+      <div class="lgap-stat"><b>68.7%</b><span>Hit rate</span><div class="lgap-delta">+9.8pp</div></div>
+    </div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">24h tape <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Calls / hits / volume / top subnet — four numbers, no essay.</p>
+    <div class="lgap-quad">
+      <div class="lgap-stat"><b>12,842</b><span>Calls</span></div>
+      <div class="lgap-stat"><b>8,831</b><span>Hits</span></div>
+      <div class="lgap-stat"><b>$187M</b><span>Volume</span></div>
+      <div class="lgap-stat"><b>SN127</b><span>Top subnet +18.4%</span></div>
+    </div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Net-flow pool <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">In vs out on one arc. Live desk only has a linear τ meter today.</p>
+    <svg class="lgap-arc" viewBox="0 0 260 120" aria-hidden="true">
+      <path d="M30 100 A100 100 0 0 1 230 100" fill="none" stroke="rgba(251,113,133,.35)" stroke-width="12" stroke-linecap="round"/>
+      <path d="M30 100 A100 100 0 0 1 168 22" fill="none" stroke="#34d399" stroke-width="12" stroke-linecap="round"/>
+      <text x="130" y="78" text-anchor="middle" fill="#f8fafc" font-size="16" font-family="Syne,sans-serif" font-weight="700">+$3.42M</text>
+      <text x="130" y="96" text-anchor="middle" fill="#94a3b8" font-size="10">net inflow · 24h</text>
+    </svg>
+    <div class="lgap-arc-meta"><span>out −$2.51M</span><span>in +$5.93M</span></div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Decoded calls <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Caller, one-line thesis, subnet + direction, HIT/MISS with move.</p>
+    <div class="lgap-feed">
+      <div class="lgap-call">
+        <div>
+          <b>@caller_one</b>
+          <p>TAO breaking out of the range — follow SN127 compute.</p>
+          <small>SN127 · LONG</small>
+        </div>
+        <span class="lgap-hit">HIT +18.4%</span>
+      </div>
+      <div class="lgap-call">
+        <div>
+          <b>@caller_two</b>
+          <p>Emissions pivot looks early; wait for validator queue.</p>
+          <small>SN19 · LONG</small>
+        </div>
+        <span class="lgap-hit" style="background:rgba(251,113,133,.12);color:#fb7185">MISS −4.2%</span>
+      </div>
+    </div>
+  </div>
+
+  <p class="lgap-kicker">LEARN · missing glances</p>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Strike-rate with skin + spark <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Live LEARN has the list. Photo also wanted hits/calls, sparkline, STAKED/APE.</p>
+    <div class="lgap-row">
+      <span class="lgap-rank">1</span>
+      <div><b>@caller_one</b><div class="lgap-skin">STAKED</div></div>
+      <svg class="lgap-spark" viewBox="0 0 56 18" aria-hidden="true"><polyline fill="none" stroke="#34d399" stroke-width="1.6" points="1,14 10,12 18,13 28,7 38,8 48,3 55,5"/></svg>
+      <b>48/48</b>
+    </div>
+    <div class="lgap-row">
+      <span class="lgap-rank">2</span>
+      <div><b>@caller_two</b><div class="lgap-skin is-ape">APE</div></div>
+      <svg class="lgap-spark" viewBox="0 0 56 18" aria-hidden="true"><polyline fill="none" stroke="#38bdf8" stroke-width="1.6" points="1,10 12,9 20,11 30,8 40,9 50,6 55,7"/></svg>
+      <b>46/50</b>
+    </div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Signature proof receipt <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">One graded call opened as a receipt: original, thesis, target, outcome. Not a stack of tiny cards.</p>
+    <blockquote class="lgap-quote">“SN127 compute bench just dropped — 3.4× on the top ten validators.”</blockquote>
+    <div class="lgap-sig">
+      <div class="lgap-sig-row"><span>Caller</span><b>@caller_one · 12:04 UTC</b></div>
+      <div class="lgap-sig-row"><span>Subnet</span><b>SN127</b></div>
+      <div class="lgap-sig-row"><span>Target</span><b>break + hold above range</b></div>
+      <div class="lgap-sig-row"><span>Proof</span><b>price snapshot + Telegram permalink</b></div>
+      <div class="lgap-sig-row"><span>Outcome</span><span class="lgap-hit">HIT +18.4%</span></div>
+    </div>
+  </div>
+
+  <p class="lgap-kicker">RANK · missing glances</p>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Accolade rows <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Live RANK has the pane. Photo wanted named boards with faces, not an empty card.</p>
+    <div class="lgap-acc">
+      <div class="lgap-acc-row"><span>Early &amp; right</span><div class="lgap-faces"><span class="lgap-face">C</span><span class="lgap-face">T</span><span class="lgap-face">N</span></div></div>
+      <div class="lgap-acc-row"><span>On fire</span><div class="lgap-faces"><span class="lgap-face">A</span><span class="lgap-face">M</span></div></div>
+      <div class="lgap-acc-row"><span>Lone bull</span><div class="lgap-faces"><span class="lgap-face">Q</span></div></div>
+    </div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Named reaction crowns <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Emoji + person + count, not just a crown icon.</p>
+    <div class="lgap-crowns">
+      <div class="lgap-crown">🔥 1,284<b>Demon child</b></div>
+      <div class="lgap-crown">❤️ 982<b>Heart eater</b></div>
+      <div class="lgap-crown">👍 869<b>Thumb war</b></div>
+      <div class="lgap-crown">🚀 621<b>Ape launch</b></div>
+    </div>
+  </div>
+
+  <p class="lgap-kicker">SERVE · missing glances</p>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Watchlist with tape <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Live SERVE has pin/watchlist copy. Photo wanted price + spark on each row.</p>
+    <div class="lgap-wl">
+      <div class="lgap-wl-row"><b>TAO</b><svg class="lgap-spark" viewBox="0 0 56 18"><polyline fill="none" stroke="#34d399" stroke-width="1.6" points="1,12 14,11 24,8 36,9 55,5"/></svg><span class="lgap-delta">+2.1%</span></div>
+      <div class="lgap-wl-row"><b>SN127</b><svg class="lgap-spark" viewBox="0 0 56 18"><polyline fill="none" stroke="#34d399" stroke-width="1.6" points="1,14 16,10 28,11 40,6 55,4"/></svg><span class="lgap-delta">+18.4%</span></div>
+      <div class="lgap-wl-row"><b>SN19</b><svg class="lgap-spark" viewBox="0 0 56 18"><polyline fill="none" stroke="#fb7185" stroke-width="1.6" points="1,6 18,8 30,7 42,12 55,14"/></svg><span class="lgap-delta is-down">−3.2%</span></div>
+    </div>
+  </div>
+
+  <div class="lgap-card">
+    <h2 class="lgap-h">Bot command tiles <span class="lgap-sample">SAMPLE</span></h2>
+    <p class="lgap-sub">Live SERVE is a chip dock. Photo wanted tap-tiles you can send.</p>
+    <div class="lgap-cmds">
+      <div class="lgap-cmd">/summary<span>24h recap in chat</span></div>
+      <div class="lgap-cmd">/trending<span>orbit names, ranked</span></div>
+      <div class="lgap-cmd">/track<span>pin a subnet</span></div>
+      <div class="lgap-cmd">/who<span>one caller’s receipts</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="lgap-desk">
+  <p class="lgap-kicker">DESK OBSERVATORY · missing glances</p>
+  <div class="lgap-desk-grid">
+    <div class="lgap-card">
+      <h2 class="lgap-h">Chatter-power gauge <span class="lgap-sample">SAMPLE</span></h2>
+      <p class="lgap-sub">One score plus volume / velocity / sentiment / conviction.</p>
+      <svg class="lgap-arc" viewBox="0 0 260 120" aria-hidden="true">
+        <path d="M30 100 A100 100 0 0 1 230 100" fill="none" stroke="rgba(56,189,248,.2)" stroke-width="12" stroke-linecap="round"/>
+        <path d="M30 100 A100 100 0 0 1 200 38" fill="none" stroke="#38bdf8" stroke-width="12" stroke-linecap="round"/>
+        <text x="130" y="78" text-anchor="middle" fill="#f8fafc" font-size="18" font-family="Syne,sans-serif" font-weight="700">87.6</text>
+        <text x="130" y="96" text-anchor="middle" fill="#94a3b8" font-size="10">/100 · very high</text>
+      </svg>
+      <div class="lgap-metrics">
+        <div>Volume <b>92.1</b></div>
+        <div>Velocity <b>83.4</b></div>
+        <div>Sentiment <b>81.2</b></div>
+        <div>Conviction <b>91.6</b></div>
+      </div>
+    </div>
+
+    <div class="lgap-card">
+      <h2 class="lgap-h">Narrative lifecycle <span class="lgap-sample">SAMPLE</span></h2>
+      <p class="lgap-sub">Rising / peaking / decaying — live RANK pane is still empty copy.</p>
+      <svg viewBox="0 0 280 90" width="100%" height="90" aria-hidden="true">
+        <path d="M8 72 C 70 72, 90 18, 140 18 C 190 18, 210 72, 272 72" fill="none" stroke="#a78bfa" stroke-width="2"/>
+        <circle cx="140" cy="18" r="5" fill="#34d399"/>
+        <text x="8" y="86" fill="#94a3b8" font-size="10">rising</text>
+        <text x="118" y="12" fill="#34d399" font-size="10">SN127 peaking</text>
+        <text x="232" y="86" fill="#94a3b8" font-size="10">decaying</text>
+      </svg>
+    </div>
+
+    <div class="lgap-card lgap-span">
+      <h2 class="lgap-h">Multi-horizon projection <span class="lgap-sample">SAMPLE</span></h2>
+      <p class="lgap-sub">Bull / base / bear across +1h +4h +24h +7d. Not on the live desk at all.</p>
+      <table class="lgap-hz">
+        <thead><tr><th>SN</th><th>+1h</th><th>+4h</th><th>+24h</th><th>+7d</th></tr></thead>
+        <tbody>
+          <tr><td>127</td><td><div class="lgap-bar"><i style="width:42%"></i></div></td><td><div class="lgap-bar"><i style="width:58%"></i></div></td><td><div class="lgap-bar"><i style="width:71%"></i></div></td><td><div class="lgap-bar"><i style="width:64%"></i></div></td></tr>
+          <tr><td>1</td><td><div class="lgap-bar"><i style="width:33%"></i></div></td><td><div class="lgap-bar"><i style="width:40%"></i></div></td><td><div class="lgap-bar"><i style="width:36%"></i></div></td><td><div class="lgap-bar"><i style="width:29%"></i></div></td></tr>
+          <tr><td>19</td><td><div class="lgap-bar"><i style="width:22%"></i></div></td><td><div class="lgap-bar"><i style="width:18%"></i></div></td><td><div class="lgap-bar"><i style="width:27%"></i></div></td><td><div class="lgap-bar"><i style="width:31%"></i></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="lgap-card lgap-span">
+      <h2 class="lgap-h">Spotlight topics <span class="lgap-sample">SAMPLE</span></h2>
+      <p class="lgap-sub">Most talked-about narratives with mention counts. Live has a single “yesterday” hero.</p>
+      <ul class="lgap-topics">
+        <li><span>SN127 restaking narrative</span><b>12.4k</b></li>
+        <li><span>SN1 emissions queue</span><b>8.1k</b></li>
+        <li><span>SN19 compute bench</span><b>6.6k</b></li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}
