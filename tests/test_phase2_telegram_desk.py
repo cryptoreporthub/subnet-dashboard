@@ -35,19 +35,19 @@ def test_message_intel_ssr_populates_from_context():
     assert 'aria-busy="{{ \'false\' if mi_messages else \'true\' }}"' in html
 
 
-def test_homepage_pulse_uses_compact_folder_cabinet():
+def test_homepage_pulse_uses_scan_board():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
     css = open("static/css/ui.css", encoding="utf-8").read()
-    assert "message-intel--home-compact" in html
-    assert "Listen Learn Rank Serve folders" in html
-    assert ".message-intel--home-compact .message-intel__bay" in css
-    assert "background: transparent" in css.split(".message-intel--home-compact .message-intel__bay")[1].split("}")[0]
-    compact = css.split(".message-intel--home-compact {")[1].split("}")[0]
-    assert "background: transparent !important" not in compact
-    assert "border: 0 !important" not in compact
-    assert ".message-intel--home-compact .message-intel__loop [role=\"tab\"][aria-selected=\"true\"]" in css
+    js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
+    assert "message-intel--scan" in html
+    assert "message-intel--home-compact" not in html
+    assert "One scan of Subnet Summers" in html
+    assert ".message-intel--scan .message-intel__mode" in css
+    assert "display: grid" in css.split(".message-intel--scan .message-intel__mode")[1].split("}")[0]
+    assert "display: contents" not in css.split(".message-intel--scan .message-intel__mode")[1].split("}")[0]
+    assert "classList.contains(\"message-intel--scan\")" in js
     listener = open("templates/listener.html", encoding="utf-8").read()
-    assert "message-intel--home-compact" not in listener
+    assert "message-intel--scan" not in listener
 
 
 def test_message_intel_home_loop_has_accessible_listen_learn_rank_serve_panes():
@@ -61,10 +61,14 @@ def test_message_intel_home_loop_has_accessible_listen_learn_rank_serve_panes():
         assert html.count(f'aria-controls="{pane_id}"') == 1
         pane = re.search(rf'<[^>]+id="{pane_id}"[^>]*>', html)
         assert pane is not None
-        assert 'role="tabpanel"' in pane.group(0)
+        assert 'role="region"' in pane.group(0)
         assert f'aria-labelledby="pulse-tab-{mode}"' in pane.group(0)
-    assert 'role="tablist"' in html
-    assert html.count('role="tabpanel"') == 4
+    assert 'role="tablist"' not in html
+    assert html.count('role="region"') >= 4
+    assert "hidden" not in html.split('id="message-intel-pane-learn"', 1)[1].split(">", 1)[0]
+    assert "hidden" not in html.split('id="message-intel-pane-rank"', 1)[1].split(">", 1)[0]
+    assert "hidden" not in html.split('id="message-intel-pane-serve"', 1)[1].split(">", 1)[0]
+    assert "aria-current" in html
     assert "bindPulseModes" in js
     assert "pulseModeFromHash" in js
 

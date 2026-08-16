@@ -1,4 +1,4 @@
-<!-- SS-TG — Subnet Summers Telegram pulse (mobile-first cosmic glass desk) -->
+<!-- SS-TG — homepage scan board (all beats visible; hydrate IDs unchanged) -->
 {% from "partials/premium/message_intel_ssr_macros.html" import trend_rows, champion_rows, feed_rows %}
 {% set mi = message_intel or {} %}
 {% set mi_meta = mi.meta if mi.meta is mapping else {} %}
@@ -7,7 +7,7 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2 message-intel--home-compact glass-card" data-pulse-mode="listen">
+<div class="message-intel message-intel--v2 message-intel--scan glass-card" data-pulse-mode="listen">
 
   <div class="message-intel__heartbeat" id="message-intel-heartbeat" data-mode="warming" aria-live="polite">
     <svg class="message-intel__ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
@@ -39,7 +39,7 @@
         </p>
         <h2 class="section-title message-intel__page-title" id="message-intel-title">Telegram pulse</h2>
         <p class="section-sub message-intel__page-sub" id="message-intel-sub">
-          Telegram supercharger for Subnet Summers — scan here, open the full listener when you want the whole desk.
+          One scan of Subnet Summers — recap, tape, orbit, callers, and your desk. Full listener is the deep page.
         </p>
         <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
           <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
@@ -54,16 +54,16 @@
     </div>
   </div>
 
-  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve folders">
-    <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span></button>
-    <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who's right</span></button>
-    <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span></button>
-    <button type="button" role="tab" id="pulse-tab-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve" aria-selected="false" tabindex="-1"><b>Serve</b><span>desk + bot</span></button>
-  </div>
+  <nav class="message-intel__loop" aria-label="Listen Learn Rank Serve">
+    <a class="message-intel__beat" id="pulse-tab-listen" href="#message-intel-pane-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-current="true"><b>Listen</b><span>tape</span></a>
+    <a class="message-intel__beat" id="pulse-tab-learn" href="#message-intel-pane-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn"><b>Learn</b><span>who</span></a>
+    <a class="message-intel__beat" id="pulse-tab-rank" href="#message-intel-pane-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank"><b>Rank</b><span>orbit</span></a>
+    <a class="message-intel__beat" id="pulse-tab-serve" href="#message-intel-pane-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve"><b>Serve</b><span>desk</span></a>
+  </nav>
 
   <div class="message-intel__bay">
 
-    <div class="message-intel__mode" data-pulse-pane="listen" role="tabpanel" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
+    <div class="message-intel__mode" data-pulse-pane="listen" role="region" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
       <div class="message-intel__tile message-intel__tile--recap">
         <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" {% if not (mi_meta.yesterday_summary and mi_meta.yesterday_summary.ready) %}hidden{% endif %} aria-live="polite">
           <div class="message-intel__summary-24h-top">
@@ -177,7 +177,7 @@
       </div>
     </div>
 
-    <div class="message-intel__mode" data-pulse-pane="learn" role="tabpanel" id="message-intel-pane-learn" aria-labelledby="pulse-tab-learn" hidden>
+    <div class="message-intel__mode" data-pulse-pane="learn" role="region" id="message-intel-pane-learn" aria-labelledby="pulse-tab-learn">
       <div class="message-intel__tile message-intel__tile--callers">
         <div class="message-intel__panel glass-card" id="message-intel-callers">
           <div class="message-intel__sec-label">
@@ -213,7 +213,7 @@
       <p class="message-intel__skinline">Skin is proof of belief, never proof of edge. STAKED = verified on-chain · APE = aligned · words only shown honestly, never penalized.</p>
     </div>
 
-    <div class="message-intel__mode" data-pulse-pane="rank" role="tabpanel" id="message-intel-pane-rank" aria-labelledby="pulse-tab-rank" hidden>
+    <div class="message-intel__mode" data-pulse-pane="rank" role="region" id="message-intel-pane-rank" aria-labelledby="pulse-tab-rank">
       <div class="message-intel__tile message-intel__tile--orbit">
         <div class="message-intel__panel glass-card" id="message-intel-trending-card">
           <div class="message-intel__sec-label">
@@ -336,7 +336,7 @@
       </div>
     </div>
 
-    <div class="message-intel__mode" data-pulse-pane="serve" role="tabpanel" id="message-intel-pane-serve" aria-labelledby="pulse-tab-serve" hidden>
+    <div class="message-intel__mode" data-pulse-pane="serve" role="region" id="message-intel-pane-serve" aria-labelledby="pulse-tab-serve">
       <div class="message-intel__tile message-intel__tile--desk">
         <div class="message-intel__panel glass-card" id="message-intel-my-desk-card">
           <div class="message-intel__sec-label">

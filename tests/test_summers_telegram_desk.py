@@ -135,7 +135,7 @@ def test_summers_flagship_composition_hooks():
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
-    assert 'role="tablist"' in html
+    assert 'role="tablist"' not in html
     assert 'href="/subnetsummer"' in html
     assert "Open full listener" in html
     assert 'data-pulse-pane="listen"' in html

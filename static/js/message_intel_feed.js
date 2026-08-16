@@ -2294,16 +2294,32 @@
     if (!root) return;
     if (mode !== "listen" && mode !== "learn" && mode !== "rank" && mode !== "serve") mode = "listen";
     root.setAttribute("data-pulse-mode", mode);
-    var tabs = root.querySelectorAll(".message-intel__loop [role='tab']");
+    var scan = root.classList.contains("message-intel--scan");
+    var tabs = root.querySelectorAll(".message-intel__loop [data-pulse-mode]");
     tabs.forEach(function (tab) {
       var on = tab.getAttribute("data-pulse-mode") === mode;
-      tab.setAttribute("aria-selected", on ? "true" : "false");
-      tab.tabIndex = on ? 0 : -1;
+      if (tab.hasAttribute("aria-selected")) tab.setAttribute("aria-selected", on ? "true" : "false");
+      if (tab.hasAttribute("aria-current") || scan) {
+        if (on) tab.setAttribute("aria-current", "true");
+        else tab.removeAttribute("aria-current");
+      }
+      if (tab.getAttribute("role") === "tab") tab.tabIndex = on ? 0 : -1;
     });
     root.querySelectorAll(".message-intel__mode").forEach(function (pane) {
       var on = pane.getAttribute("data-pulse-pane") === mode;
-      pane.hidden = !on;
+      if (scan) {
+        pane.hidden = false;
+        pane.removeAttribute("hidden");
+      } else {
+        pane.hidden = !on;
+      }
     });
+    if (scan && opts && opts.scroll) {
+      var target = root.querySelector("[data-pulse-pane='" + mode + "']");
+      if (target && target.scrollIntoView) {
+        target.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+    }
     if (!opts || opts.hash !== false) {
       try {
         history.replaceState(null, "", "#pulse-" + mode);
@@ -2314,10 +2330,11 @@
   function bindPulseModes() {
     var root = document.querySelector(".message-intel--v2");
     if (!root) return;
-    var tabs = root.querySelectorAll(".message-intel__loop [role='tab']");
+    var tabs = root.querySelectorAll(".message-intel__loop [data-pulse-mode]");
     tabs.forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        setPulseMode(tab.getAttribute("data-pulse-mode") || "listen");
+      tab.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        setPulseMode(tab.getAttribute("data-pulse-mode") || "listen", { scroll: true });
       });
     });
     var list = root.querySelector(".message-intel__loop");
@@ -2328,7 +2345,9 @@
         if (dir == null) return;
         var items = Array.prototype.slice.call(tabs);
         var i = items.indexOf(document.activeElement);
-        if (i < 0) i = items.findIndex(function (t) { return t.getAttribute("aria-selected") === "true"; });
+        if (i < 0) i = items.findIndex(function (t) {
+          return t.getAttribute("aria-current") === "true" || t.getAttribute("aria-selected") === "true";
+        });
         var next;
         if (dir === "first") next = items[0];
         else if (dir === "last") next = items[items.length - 1];
@@ -2336,7 +2355,7 @@
         if (!next) return;
         ev.preventDefault();
         next.focus();
-        setPulseMode(next.getAttribute("data-pulse-mode") || "listen");
+        setPulseMode(next.getAttribute("data-pulse-mode") || "listen", { scroll: true });
       });
     }
     setPulseMode(pulseModeFromHash(), { hash: false });
