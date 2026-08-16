@@ -102,6 +102,11 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__cell { display: none; }" not in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
+    assert "minmax(0, 1.55fr) minmax(260px, 0.95fr)" not in css
+    assert "grid-template-columns: 1.15fr 1fr" not in css
+    learn_grid = css.split(".message-intel__learn-dual-grid {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: 1fr" in learn_grid
+    assert "1fr 1fr" not in learn_grid
 
 
 def test_summers_flagship_composition_hooks():
@@ -184,6 +189,13 @@ def test_listener_share_page_composition():
     assert ".lsn-hall" in css
     assert "@media (max-width: 520px)" in css
     assert ".lsn-tile--desk,.lsn-hall{grid-template-columns:1fr}" in css.replace(" ", "")
+    page_rule = css.split(".lsn-page{", 1)[1].split("}", 1)[0].replace(" ", "")
+    assert "max-width:430px" in page_rule, "full desk stays a phone column, even on a wide browser"
+    assert "max-width:980px" not in css
+    assert "1.2fr 1fr" not in css
+    assert 'grid-template-areas:"orbit feed"' not in css
+    site_rule = css.split(".lsn-site{", 1)[1].split("}", 1)[0].replace(" ", "")
+    assert "flex-wrap:wrap" in site_rule
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html

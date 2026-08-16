@@ -9863,14 +9863,9 @@ body.wrap {
 }
 .message-intel__grid {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 12px;
-}
-@media (min-width: 860px) {
-  .message-intel__grid {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
 }
 .message-intel__head {
   margin-bottom: 10px;
@@ -11051,14 +11046,9 @@ body.wrap {
 
 .message-intel--v2 .message-intel__grid {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 12px;
-}
-@media (min-width: 740px) {
-  .message-intel--v2 .message-intel__grid {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
 }
 .message-intel--v2 .message-intel__panel {
   margin-bottom: 12px;
@@ -11245,12 +11235,6 @@ body.wrap {
   display: grid;
   gap: 0;
   grid-template-columns: 1fr;
-}
-@media (min-width: 560px) {
-  .message-intel--v2 .message-intel__crown-rows {
-    grid-template-columns: 1fr 1fr;
-    gap: 0 16px;
-  }
 }
 .message-intel--v2 .message-intel__crown-row {
   display: flex;
@@ -11709,7 +11693,7 @@ body.wrap {
 }
 @media (min-width: 740px) {
   .message-intel--v2 .message-intel__pulse-stage {
-    grid-template-columns: 1.15fr 1fr;
+    grid-template-columns: 1fr;
     align-items: start;
   }
   .message-intel--v2 .message-intel__pulse-stage .message-intel__source-strip {
@@ -13438,7 +13422,7 @@ body.wrap {
 }
 .message-intel--v2 .message-intel__mode[data-pulse-pane="learn"],
 .message-intel--v2 .message-intel__mode[data-pulse-pane="serve"] {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
 }
 .message-intel--v2 .message-intel__mode[data-pulse-pane="listen"],
 .message-intel--v2 .message-intel__mode[data-pulse-pane="rank"] {
@@ -13536,7 +13520,7 @@ body.wrap {
 .message-intel--v2 .message-intel__hall {
   grid-area: hall;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
   align-items: start;
 }
@@ -13796,15 +13780,11 @@ body.wrap {
   }
   .message-intel--v2 .message-intel__hall { display: contents; }
   .message-intel--v2 .message-intel__mode[data-pulse-pane="listen"] {
-    grid-template-columns: minmax(0, 1.55fr) minmax(260px, 0.95fr);
+    grid-template-columns: 1fr;
   }
   .message-intel--v2 .message-intel__mode[data-pulse-pane="listen"] .message-intel__tile--recap,
   .message-intel--v2 .message-intel__mode[data-pulse-pane="listen"] .message-intel__hero-stats {
     grid-column: 1 / -1;
-  }
-  .message-intel--v2 .message-intel__mode[data-pulse-pane="listen"] .message-intel__tile--feed {
-    grid-column: 1;
-    grid-row: 4 / span 2;
   }
   .message-intel--v2 .message-intel__mode[data-pulse-pane="rank"] {
     grid-template-columns: 1fr;
@@ -13867,16 +13847,11 @@ body.wrap {
 /* ── 2b. Spotlight zone: hero + week-top ─────────────────────────────────── */
 .message-intel--v2 .message-intel__spotlight {
   display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 14px;
   position: relative;
   overflow: hidden;
-}
-@media (min-width: 740px) {
-  .message-intel--v2 .message-intel__spotlight {
-    grid-template-columns: 1fr 1fr;
-    align-items: start;
-  }
 }
 /* Grid gap replaces individual bottom margins inside spotlight */
 .message-intel--v2 .message-intel__spotlight .message-intel__hero,
@@ -14359,7 +14334,7 @@ body.wrap {
 
 @media (min-width: 740px) {
   .message-intel--v2 .message-intel__pulse-stage {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .message-intel--v2 .message-intel__proof,
@@ -17389,10 +17364,10 @@ section.desk-zone,
     border-radius: 8px;
 }
 
-/* Learn Dual Grid (Side by side on desktop, stacked on mobile) */
+/* Learn Dual Grid — phone column at every viewport, including the full desk. */
 .message-intel__learn-dual-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 16px;
     width: 100%;
 }
@@ -17400,12 +17375,6 @@ section.desk-zone,
 .message-intel__learn-dual-grid > .message-intel__learn-card {
     min-width: 0;
     overflow: visible;
-}
-
-@media (max-width: 840px) {
-    .message-intel__learn-dual-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 /* Telegram Proof Section */
