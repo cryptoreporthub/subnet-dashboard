@@ -12,7 +12,9 @@ When spawning a Cursor **Task / subagent**, use only this pool:
 |------|-----|-------------------|
 | Build / implement / docs | **Composer slow** | `composer-2.5` |
 | Design / audit / explore | **Cursor Grok 4.6 medium** | `inherit` when the parent run is already Grok 4.6; never Grok 4.5 |
-| Review / second opinion | **GPT-4.6 Luna high** | `gpt-5.6-luna-high` |
+| Review / second opinion | **GPT-4.6 Luna high** — **over** Cursor Grok | `gpt-5.6-luna-high` |
+
+**Review:** Luna high, not Grok. Do not spawn a Grok 4.6 subagent to review a diff, LOCK, or PR. Grok 4.6 medium is design / audit / explore only.
 
 **Do not use Claude Sonnet 4.5 or Sonnet 4.6** (any thinking effort, fast/slow, or “Sonnet gate” leftover in old plans). Do not pick `claude-sonnet-*` 4.x slugs.
 

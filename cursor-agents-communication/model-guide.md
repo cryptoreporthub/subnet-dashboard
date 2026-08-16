@@ -13,7 +13,7 @@
 |-------|----------------------|----------|
 | **Composer 2.5 (slow)** | `composer-2.5` | **Default subagent build** — routes, tests, docs, UI from a locked plan |
 | **Cursor Grok 4.6 medium** | `inherit` (parent is Grok 4.6) | Design, audit, explore — not Grok 4.5 |
-| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | Read-only review / second opinion (replaces old Sonnet gates) |
+| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | **Review** — over Cursor Grok; read-only (replaces old Sonnet *and* Grok review gates) |
 
 **Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
 
@@ -37,9 +37,7 @@ Grok may still return a structured LOCK when that is the useful shape; it is **n
    ESCALATE_HIGH?: no | yes (why)
    ```
 
-**Review gate (2026-08-16):** use **GPT-4.6 Luna high** (`gpt-5.6-luna-high`) for a read-only pass on LOCK or diff — **not** Sonnet 4.5/4.6. Luna does not edit. One review pass per slice unless that pass FAILs. Historical “Sonnet gate” tables in old sprint plans are superseded.
-
-**Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
+**Review gate (2026-08-16):** **GPT-4.6 Luna high over Cursor Grok.** Spawn `gpt-5.6-luna-high` for a read-only pass on LOCK, diff, or PR — not Grok 4.6, not Sonnet 4.5/4.6. Luna does not edit. One review pass per slice unless that pass FAILs. Save conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment. Historical “Sonnet gate” / “Grok as reviewer” tables in old sprint plans are superseded.
 **Context hygiene (not brevity):** skip `data/*.json` / `.venv`; prefer `main` + open PR diffs over re-auditing merged work. Billing watch: `token-budget-rules.md`.
 
 ---
