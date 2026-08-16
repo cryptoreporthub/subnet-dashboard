@@ -168,6 +168,31 @@ def _classify_status(direction: Optional[str], outcome: str, pump_pct: Optional[
     return OC_UNQUALIFIED
 
 
+def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
+    """Subnet identity: structured netuid first, then stored entities / text.
+
+    Some read paths (e.g. rollup conviction rows) alias the snapshot column to
+    ``snap_netuid``; without this fallback their rows lose subnet identity and
+    every subnet-basis call classifies as ineligible.
+    """
+    netuid = row.get("netuid")
+    if netuid is not None:
+        try:
+            return int(netuid)
+        except (TypeError, ValueError):
+            return None
+    raw_entities = row.get("entities_json")
+    try:
+        entities = json.loads(raw_entities) if isinstance(raw_entities, str) else raw_entities
+        for token in (entities or {}).get("subnets") or []:
+            for num in re.findall(r"\d+", str(token)):
+                return int(num)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        pass
+    match = re.search(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", str(row.get("content") or ""), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
 def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -> Dict[str, Any]:
     """
     Compute eligibility, resolution, and grade for one message row.
@@ -187,7 +212,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     baseline = _to_float(row.get("tao_usd_price"))
     outcome = (row.get("outcome") or "").strip()
     pump_pct = _to_float(row.get("pump_pct_max"))
-    netuid = row.get("netuid")
+    netuid = _row_netuid(row)
     subnet_name = str(row.get("subnet_name") or (f"SN{netuid}" if netuid is not None else "")).strip()
     has_subnet_identity = netuid is not None or bool(subnet_name)
     price_basis = "subnet" if has_subnet_identity else ("tao" if _about_tao(row) else None)
