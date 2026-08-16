@@ -186,6 +186,9 @@ def test_listener_share_page_composition():
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html
     assert "Trending orbit" in html
+    assert "message-intel-feed" in html
+    assert "message-intel-conv-filters" in html
+    assert "feed_rows(mi_messages)" in html
     assert "Syne" in html
     assert "Space+Grotesk" in html
     assert "wallet" not in html.lower()
