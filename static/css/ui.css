@@ -10598,30 +10598,80 @@ body.wrap {
 .message-intel--v2 .message-intel__summary-24h-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
+  margin: 6px 0 10px;
 }
 .message-intel--v2 .message-intel__summary-24h-stat {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
-  padding: 8px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 8px;
   text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.025);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .message-intel--v2 .message-intel__summary-24h-stat-v {
-  font-size: 1rem;
+  font-size: 1.25rem;
   font-weight: 800;
-  color: var(--mi-text);
+  color: #ffffff;
   line-height: 1.1;
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
 }
 .message-intel--v2 .message-intel__summary-24h-stat-l {
-  margin-top: 3px;
+  margin-top: 5px;
   font-family: var(--font-mono, monospace);
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--mi-text-faint);
+  color: rgba(255, 255, 255, 0.65);
 }
+.message-intel--v2 .message-intel__summary-24h-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  margin: 4px 0;
+}
+.message-intel--v2 .message-intel__summary-24h-kicker {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.6);
+  min-width: 4.2rem;
+}
+.message-intel--v2 .message-intel__summary-24h-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.message-intel--v2 .message-intel__summary-24h-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  text-decoration: none;
+  max-width: 100%;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.message-intel--v2 a.message-intel__summary-24h-chip:hover {
+  border-color: rgba(63, 201, 255, 0.6);
+  background: rgba(63, 201, 255, 0.1);
+  color: var(--mi-blue);
+}
+.message-intel--v2 .message-intel__summary-24h-chip--up { border-color: rgba(31, 212, 124, 0.45); color: #34d399; }
+.message-intel--v2 .message-intel__summary-24h-chip--down { border-color: rgba(255, 159, 63, 0.45); color: #fb923c; }
 .message-intel--v2 .message-intel__summary-24h-hourly {
   margin-top: 4px;
 }
@@ -10901,6 +10951,7 @@ body.wrap {
 }
 .message-intel--v2 .message-intel__sent--bull { color: var(--mi-green); font-weight: 600; }
 .message-intel--v2 .message-intel__sent--bear { color: var(--mi-orange); font-weight: 600; }
+.message-intel--v2 .message-intel__sent--cautious { color: #38bdf8; font-weight: 600; }
 .message-intel--v2 .message-intel__hero-why {
   position: relative;
   display: flex;
@@ -11868,25 +11919,31 @@ body.wrap {
   margin: 14px 0 8px;
 }
 .message-intel--v2 .message-intel__stat-chip {
-  background: var(--glass-fill-subtle);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
-  padding: 10px 6px;
+  padding: 12px 8px;
   text-align: center;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .message-intel--v2 .message-intel__stat-chip b {
   display: block;
   font-family: var(--font-brand, var(--font-display), sans-serif);
-  font-size: 1.15rem;
-  color: var(--mi-text);
-  margin-bottom: 2px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 3px;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
 }
 .message-intel--v2 .message-intel__stat-chip span {
   font-family: var(--font-mono, monospace);
-  font-size: 8px;
-  color: var(--mi-text-faint);
+  font-size: 9px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   overflow-wrap: anywhere;
 }
 @media (max-width: 420px) {
@@ -13108,7 +13165,7 @@ body.wrap {
 
 .message-intel--v2 .message-intel__loop {
   position: sticky;
-  top: 56px;
+  top: 10px;
   z-index: 45;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -13116,12 +13173,12 @@ body.wrap {
   list-style: none;
   margin: 0 0 14px;
   padding: 6px;
-  background: rgba(255, 255, 255, 0.035);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(6, 8, 20, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .message-intel--v2 .message-intel__loop [role="tab"] {

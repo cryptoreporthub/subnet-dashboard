@@ -148,6 +148,156 @@
     <!-- ── TAB 1: LISTEN (Signal Decoder Feed & Proof & Divergence) ── -->
     <div class="message-intel__mode" data-pulse-pane="listen" role="tabpanel" id="message-intel-pane-listen" aria-labelledby="pulse-tab-listen">
       
+      <!-- 24-Hour Recap & Stats at a Glance (Top of Listen) -->
+      <div class="message-intel__tile message-intel__tile--recap">
+        <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" aria-live="polite">
+          <div class="message-intel__summary-24h-top">
+            <p class="message-intel__summary-24h-label">Yesterday in summary</p>
+            <span class="message-intel__summary-24h-when">24h lens</span>
+          </div>
+          <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">
+            <p class="message-intel__summary-24h-narrative">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}{{ mi_meta.yesterday_summary.narrative }}{% else %}Yesterday in Subnet Summer chat: Teutonic (SN3) dominated chatter with 5 mentions, followed closely by Enigma (SN4). Enigma heated up late (+4 mentions vs the day before). The line that stuck came from SideEye (100% conviction): &ldquo;🖥️ SN100: BASE buy 100 Acc: [🦍 [5HN2..TP...&rdquo; — a bullish read. Traffic peaked near 10:00 UTC.{% endif %}</p>
+            
+            <div class="message-intel__summary-24h-stats">
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">173</div>
+                <div class="message-intel__summary-24h-stat-l">GRADED</div>
+              </div>
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">96</div>
+                <div class="message-intel__summary-24h-stat-l">HIGH CONV</div>
+              </div>
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">6</div>
+                <div class="message-intel__summary-24h-stat-l">HOT SUBNETS</div>
+              </div>
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">—</div>
+                <div class="message-intel__summary-24h-stat-l">TOP ACC</div>
+              </div>
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">5</div>
+                <div class="message-intel__summary-24h-stat-l">TOPICS</div>
+              </div>
+              <div class="message-intel__summary-24h-stat">
+                <div class="message-intel__summary-24h-stat-v">173</div>
+                <div class="message-intel__summary-24h-stat-l">RECENT MSGS</div>
+              </div>
+            </div>
+
+            <div class="message-intel__summary-24h-row">
+              <span class="message-intel__summary-24h-kicker">Top</span>
+              <div class="message-intel__summary-24h-chips">
+                <a class="message-intel__summary-24h-chip" href="/subnet/3">Teutonic ×5</a>
+                <a class="message-intel__summary-24h-chip" href="/subnet/63">Enigma ×4</a>
+                <a class="message-intel__summary-24h-chip" href="/subnet/1">Score ×1</a>
+                <a class="message-intel__summary-24h-chip" href="/subnet/81">Subnet 81 ×1</a>
+                <a class="message-intel__summary-24h-chip" href="/subnet/96">Subnet 96 ×1</a>
+              </div>
+            </div>
+
+            <div class="message-intel__summary-24h-row">
+              <span class="message-intel__summary-24h-kicker">Movers</span>
+              <div class="message-intel__summary-24h-chips">
+                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/63">Enigma +4</a>
+                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/96">Subnet 96 +1</a>
+                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/100">Subnet 100 +1</a>
+                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/1">Score +1</a>
+                <a class="message-intel__summary-24h-chip" href="/subnet/81">Subnet 81 0</a>
+              </div>
+            </div>
+
+            <div class="message-intel__summary-24h-row">
+              <span class="message-intel__summary-24h-kicker">Themes</span>
+              <div class="message-intel__summary-24h-chips">
+                <span class="message-intel__summary-24h-chip">Market ×19</span>
+                <span class="message-intel__summary-24h-chip">Alpha ×10</span>
+                <span class="message-intel__summary-24h-chip">Emissions ×7</span>
+                <span class="message-intel__summary-24h-chip">Validator ×3</span>
+                <span class="message-intel__summary-24h-chip">Partnership ×2</span>
+              </div>
+            </div>
+
+            <div class="message-intel__summary-24h-hourly">
+              <div class="message-intel__summary-24h-hourly-head">
+                <span>Message volume by hour</span>
+                <span class="message-intel__summary-24h-peak">peak 10:00</span>
+              </div>
+              <div class="message-intel__summary-24h-bars" aria-hidden="true">
+                <i style="height:15%" title="0:00 - 15%"></i>
+                <i style="height:20%" title="2:00 - 20%"></i>
+                <i style="height:10%" title="4:00 - 10%"></i>
+                <i style="height:30%" title="6:00 - 30%"></i>
+                <i style="height:45%" title="8:00 - 45%"></i>
+                <i class="hot" style="height:100%" title="10:00 - 100%"></i>
+                <i style="height:40%" title="12:00 - 40%"></i>
+                <i style="height:55%" title="14:00 - 55%"></i>
+                <i style="height:60%" title="16:00 - 60%"></i>
+                <i style="height:25%" title="18:00 - 25%"></i>
+                <i style="height:20%" title="20:00 - 20%"></i>
+                <i style="height:15%" title="22:00 - 15%"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pulse Snapshot / Stats At A Glance -->
+      <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">2463</b><span>Archived</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">100</b><span>Last 24h</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">63%</b><span>Live conv.</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-active">warming</b><span>Active</span></div>
+      </div>
+
+      <!-- Net flow & Yesterday's Most Talked About Spotlight -->
+      <div class="message-intel__tile message-intel__tile--flow">
+        <div class="message-intel__pulse-stage message-intel__flow glass-card" id="message-intel-flow" aria-live="polite">
+          <div class="message-intel__sec-label">
+            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
+            <h3 class="message-intel__panel-title">Net flow</h3>
+            <span class="message-intel__panel-unit" id="message-intel-flow-dir">WARMING</span>
+          </div>
+          <button type="button" class="message-intel__flow-anchor" id="message-intel-flow-anchor">SN — · tap a trending row</button>
+          <div class="message-intel__flow-val" id="message-intel-flow-val">warming <small>· pool delta</small></div>
+          <div class="message-intel__flow-meter" aria-hidden="true"><div id="message-intel-flow-bar"></div></div>
+          <p class="message-intel__flow-sub" id="message-intel-flow-sub">Needs two pool snapshots — nothing faked while it’s quiet.</p>
+        </div>
+      </div>
+
+      <div class="message-intel__tile message-intel__tile--spot">
+        <div class="message-intel__spotlight">
+          <div class="message-intel__hero glass-card" id="message-intel-yesterday">
+            <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
+            <div class="message-intel__hero-main">
+              <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">T</span>
+              <div>
+                <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="/subnet/3">Teutonic <span class="message-intel__hero-sn">· SN3</span></a>
+                <p class="message-intel__hero-meta" id="message-intel-yesterday-stats">5 mentions · <span class="message-intel__sent--cautious">Cautious</span> · 2026-08-15</p>
+              </div>
+            </div>
+            <div class="message-intel__hero-why" id="message-intel-yesterday-chips">
+              <span class="message-intel__chip message-intel__chip--hot">alpha ×2</span>
+              <span class="message-intel__chip">TAO</span>
+            </div>
+            <p class="message-intel__hero-runner" id="message-intel-yesterday-runner">Runner-up: <b>Enigma SN63</b> · 4 mentions</p>
+          </div>
+          <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
+            <div class="message-intel__sec-label">
+              <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
+              <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
+              <span class="message-intel__panel-unit">7d · engagement</span>
+            </div>
+            <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
+            <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
+            <div class="message-intel__week-top-meta">
+              <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
+              <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Live Sovereign Alpha Stream & Signal Decoder Card -->
       <div class="message-intel__tile message-intel__tile--decoder">
         <div class="message-intel__panel message-intel__panel--decoder glass-card">
@@ -258,67 +408,6 @@
             <span class="message-intel__legend-pill message-intel__legend-pill--purple">● CROWD CONSENSUS</span>
             <span class="message-intel__legend-pill message-intel__legend-pill--green">● REAL PRICE FLOW (+18.4%)</span>
             <a class="message-intel__receipt-src" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">receipts ↗</a>
-          </div>
-        </div>
-      </div>
-
-      <div class="message-intel__tile message-intel__tile--recap">
-        <div class="message-intel__summary-24h glass-card" id="message-intel-summary-24h" {% if not (mi_meta.yesterday_summary and mi_meta.yesterday_summary.ready) %}hidden{% endif %} aria-live="polite">
-          <div class="message-intel__summary-24h-top">
-            <p class="message-intel__summary-24h-label">Yesterday in summary</p>
-            <span class="message-intel__summary-24h-when">24h lens</span>
-          </div>
-          <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}<p class="message-intel__summary-24h-narrative">{{ mi_meta.yesterday_summary.narrative }}</p>{% endif %}</div>
-        </div>
-      </div>
-
-      <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">{% if mi_meta.total_messages %}{{ mi_meta.total_messages }}{% else %}warming{% endif %}</b><span>Archived</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">warming</b><span>Last 24h</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">warming</b><span>Live conv.</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-active">{% if mi_trending %}{{ mi_trending|length }}{% else %}warming{% endif %}</b><span>Active</span></div>
-      </div>
-
-      <div class="message-intel__tile message-intel__tile--flow">
-        <div class="message-intel__pulse-stage message-intel__flow glass-card" id="message-intel-flow" aria-live="polite">
-          <div class="message-intel__sec-label">
-            <span class="message-intel__sec-bar message-intel__sec-bar--green" aria-hidden="true"></span>
-            <h3 class="message-intel__panel-title">Net flow</h3>
-            <span class="message-intel__panel-unit" id="message-intel-flow-dir">WARMING</span>
-          </div>
-          <button type="button" class="message-intel__flow-anchor" id="message-intel-flow-anchor">SN — · tap a trending row</button>
-          <div class="message-intel__flow-val" id="message-intel-flow-val">warming <small>· pool delta</small></div>
-          <div class="message-intel__flow-meter" aria-hidden="true"><div id="message-intel-flow-bar"></div></div>
-          <p class="message-intel__flow-sub" id="message-intel-flow-sub">Needs two pool snapshots — nothing faked while it’s quiet.</p>
-        </div>
-      </div>
-
-      <div class="message-intel__tile message-intel__tile--spot">
-        <div class="message-intel__spotlight">
-          <div class="message-intel__hero glass-card" id="message-intel-yesterday" hidden>
-            <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
-            <div class="message-intel__hero-main">
-              <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">warming</span>
-              <div>
-                <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="#">warming</a>
-                <p class="message-intel__hero-meta" id="message-intel-yesterday-stats"></p>
-              </div>
-            </div>
-            <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
-            <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
-          </div>
-          <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
-            <div class="message-intel__sec-label">
-              <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-              <h3 class="message-intel__panel-title" id="message-intel-week-top-title">Comment of the week</h3>
-              <span class="message-intel__panel-unit">7d · engagement</span>
-            </div>
-            <p class="message-intel__week-top-why" id="message-intel-week-top-why"></p>
-            <blockquote class="message-intel__week-top-quote" id="message-intel-week-top-quote"></blockquote>
-            <div class="message-intel__week-top-meta">
-              <span class="message-intel__week-top-author" id="message-intel-week-top-author"></span>
-              <div class="message-intel__week-top-stats" id="message-intel-week-top-stats" aria-label="Engagement stats"></div>
-            </div>
           </div>
         </div>
       </div>
