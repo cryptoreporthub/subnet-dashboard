@@ -162,6 +162,8 @@ def test_listener_share_page_composition():
     assert "lsn-site" in html
     assert 'href="/"' in html
     assert "Open the full website" in html
+    assert html.find("lsn-site") < html.find("lsn-hdr"), "full-site CTA must sit at the top of the listener, before the header"
+    assert html.find("Open the full website") < html.find("Telegram pulse")
     assert ".lsn-site" in css
     assert "lsn-title" in html
     assert "lsn-bay" in html
@@ -199,6 +201,7 @@ def test_listener_share_page_composition():
     assert "Trending orbit" in body
     assert "Open the full website" in body
     assert 'href="/"' in body
+    assert body.find("Open the full website") < body.find("Telegram pulse")
     bounced = client.get("/listener", follow_redirects=False)
     assert bounced.status_code == 308
     assert bounced.headers.get("location") == "/subnetsummer"
