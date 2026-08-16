@@ -60,6 +60,8 @@
 {% set mi_top_gainer = sn_list|sort(attribute='price_change_24h', reverse=true)|first if sn_list else none %}
 {% set mi_top_loser = sn_list|sort(attribute='price_change_24h')|first if sn_list else none %}
 
+{# Sticky HUD (Council/Weighing/Lead/Focus/Proof) is limited to this block so it peels off at Telegram and does not steal clicks. Do not overflow:hidden here — that would kill sticky inside the front. #}
+<div class="sr-front">
 {% include "partials/premium/header.html" %}
 {% include "partials/premium/council_stage.html" %}
 {# Market pulse + integrations ribbon — below hero (K3-7) #}
@@ -67,6 +69,7 @@
 {% with pump_compact=true %}
 {% include "partials/premium/pump_alert_scan.html" %}
 {% endwith %}
+</div>
 
 {# SS-TG W0 — Subnet Summers Telegram desk first-class (not buried in More intel) #}
 {% include "partials/premium/message_intel_feed.html" %}
