@@ -17528,12 +17528,16 @@ section.desk-zone,
     line-height: 1.35;
     margin: 0;
     font-style: italic;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .message-intel__proof-item-footer {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
     padding-top: 4px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -17580,8 +17584,10 @@ section.desk-zone,
 
 .message-intel__hc-card-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .message-intel__hc-card-badge-group {
@@ -17641,12 +17647,16 @@ section.desk-zone,
     line-height: 1.4;
     margin: 0;
     font-style: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .message-intel__hc-card-footer {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
     padding-top: 4px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -17660,6 +17670,7 @@ section.desk-zone,
 .message-intel__hc-card-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
 }
 
