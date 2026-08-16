@@ -74,26 +74,16 @@ body.council-first-theme::before {
   pointer-events: none;
   z-index: 0;
   background:
-    var(--aurora-cyan),
-    var(--aurora-green),
-    var(--aurora-violet);
-  opacity: 0.59;
+    radial-gradient(ellipse at 15% 25%, rgba(56, 189, 248, 0.22), transparent 60%),
+    radial-gradient(ellipse at 85% 30%, rgba(168, 85, 247, 0.22), transparent 60%),
+    radial-gradient(ellipse at 50% 75%, rgba(236, 72, 153, 0.18), transparent 65%);
+  opacity: 0.85;
   transform-origin: center center;
 }
 
-/* Soft smoke wash — no grain/dot screen (user: smoke effect grey, not grainy) */
+/* Soft smoke wash — subtle depth without washing out cosmic starfield */
 body.council-first-theme::after {
-  content: "";
-  position: fixed;
-  inset: -15%;
-  pointer-events: none;
-  opacity: 0.85;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 55% 45% at 22% 28%, rgba(200, 206, 216, 0.28), transparent 68%),
-    radial-gradient(ellipse 50% 50% at 78% 62%, rgba(170, 176, 186, 0.22), transparent 70%),
-    radial-gradient(ellipse 60% 40% at 48% 88%, rgba(140, 146, 156, 0.18), transparent 65%);
-  filter: blur(56px);
+  display: none !important;
 }
 
 body.council-first-theme .app-shell,
@@ -10286,8 +10276,8 @@ body.wrap {
   --mi-blue: #3fc9ff;
   --mi-blue-dim: #16577a;
   --mi-blue-glow: rgba(63, 201, 255, 0.4);
-  --mi-panel: var(--glass-fill-section);
-  --mi-card: var(--glass-fill-card);
+  --mi-panel: transparent;
+  --mi-card: transparent;
   --mi-orange: #ff9f3f;
   --mi-orange-dim: #7a4315;
   --mi-orange-glow: rgba(255, 159, 63, 0.4);
@@ -10300,20 +10290,20 @@ body.wrap {
   --mi-pink-glow: var(--mi-violet-glow);
   --mi-yellow: var(--warm-gold, #f0c56f);
   --mi-yellow-glow: var(--warm-glow, rgba(255, 170, 100, 0.38));
-  --mi-line: rgba(255, 255, 255, 0.14);
-  --mi-line-soft: rgba(255, 255, 255, 0.08);
+  --mi-line: rgba(255, 255, 255, 0.1);
+  --mi-line-soft: rgba(255, 255, 255, 0.05);
   --mi-text: var(--zone-dark-text, #f8fafc);
   --mi-text-dim: var(--zone-dark-muted, #b8c2d2);
   --mi-text-faint: #94a3b8;
   --mi-bg-card: transparent;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+  border: none !important;
   border-radius: var(--glass-radius, 12px);
-  padding: 20px clamp(14px, 3vw, 22px) 22px;
+  padding: 0;
   margin-top: 1.25rem;
   margin-bottom: 1.75rem;
-  background: var(--glass-fill-card);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.08), var(--shadow-card, 0 8px 32px rgba(0, 0, 0, 0.32));
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
 }
 .message-intel--v2 .message-intel__group-link {
   color: var(--mi-blue);
@@ -10506,11 +10496,11 @@ body.wrap {
 .message-intel--v2 .message-intel__summary-24h,
 .message-intel--v2 .message-intel__proof,
 .message-intel--v2 .message-intel__hc-strip {
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 11px;
   padding: 12px 13px;
   margin-bottom: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(0, 0, 0, 0.18));
+  background: rgba(255, 255, 255, 0.015);
 }
 .message-intel--v2 .message-intel__tile--recap .message-intel__summary-24h {
   border-color: rgba(110, 231, 255, 0.14);
@@ -11633,8 +11623,8 @@ body.wrap {
   border-radius: 16px;
   border: 1px solid rgba(31, 212, 124, 0.18);
   background:
-    linear-gradient(165deg, rgba(31, 212, 124, 0.07), rgba(63, 201, 255, 0.03) 55%, transparent 85%),
-    rgba(4, 8, 6, 0.55);
+    linear-gradient(165deg, rgba(31, 212, 124, 0.05), rgba(63, 201, 255, 0.02) 55%, transparent 85%),
+    rgba(255, 255, 255, 0.01);
   box-shadow: 0 0 28px -18px var(--mi-green-glow);
   overflow: hidden;
 }
@@ -12046,15 +12036,13 @@ body.wrap {
   border-radius: 28px;
   padding: 16px 14px 20px;
   margin-bottom: 14px;
-  background:
-    radial-gradient(ellipse at 50% 50%, rgba(30, 27, 75, 0.45) 0%, rgba(15, 23, 42, 0.8) 50%, rgba(3, 7, 18, 0.98) 100%);
-  border: 1px solid rgba(56, 189, 248, 0.32);
+  background: rgba(255, 255, 255, 0.015) !important;
+  border: 1px solid rgba(56, 189, 248, 0.22) !important;
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.9),
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 0 40px rgba(56, 189, 248, 0.15);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 25px rgba(56, 189, 248, 0.1) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .message-intel--v2 .message-intel__vis-top-pill {
@@ -12066,9 +12054,9 @@ body.wrap {
   margin: 0 auto 10px;
   padding: 5px 16px;
   border-radius: 999px;
-  background: rgba(14, 20, 44, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   color: #f8fafc;
@@ -12458,11 +12446,11 @@ body.wrap {
   gap: 6px;
   padding: 4px 10px 4px 8px;
   border-radius: 9999px;
-  background: rgba(8, 14, 32, 0.88);
+  background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(56, 189, 248, 0.45);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7), 0 0 12px rgba(56, 189, 248, 0.25);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 12px rgba(56, 189, 248, 0.25);
   white-space: nowrap;
 }
 
@@ -12549,13 +12537,15 @@ body.wrap {
 
 /* ── Pure Clear Glassmorphism Across Message Intel Cards ── */
 .message-intel--v2 .glass-card,
-.message-intel--v2 .message-intel__panel {
-  background: rgba(14, 18, 38, 0.45) !important;
-  backdrop-filter: blur(16px) !important;
-  -webkit-backdrop-filter: blur(16px) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 20px !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+.message-intel--v2 .message-intel__panel,
+.message-intel--v2 .message-intel__rank-panel,
+.message-intel--v2 .message-intel__visualizer-card {
+  background: rgba(255, 255, 255, 0.015) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 /* ── Live Decoder Signal Feed Card Styles ── */
@@ -12596,9 +12586,9 @@ body.wrap {
   padding: 12px;
   margin: 10px 0 12px;
   border-radius: 14px;
-  background: rgba(24, 20, 50, 0.55);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(245, 158, 11, 0.35);
-  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .message-intel--v2 .message-intel__sovereign-star {
@@ -12703,8 +12693,8 @@ body.wrap {
   margin-bottom: 12px;
   padding: 8px 12px;
   border-radius: 12px;
-  background: rgba(10, 16, 36, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .message-intel--v2 .message-intel__decoder-vol {
@@ -12749,8 +12739,8 @@ body.wrap {
 .message-intel--v2 .message-intel__signal-hud {
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(8, 12, 28, 0.7);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(56, 189, 248, 0.2);
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
@@ -12786,7 +12776,7 @@ body.wrap {
 .message-intel--v2 .message-intel__hud-bar-track {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 99px;
   overflow: hidden;
 }
@@ -12817,7 +12807,7 @@ body.wrap {
   line-height: 1.4;
   font-style: italic;
   padding-top: 6px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .message-intel--v2 .message-intel__signal-hud-thesis p {
@@ -12837,8 +12827,8 @@ body.wrap {
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: #e2e8f0;
   text-decoration: none;
   display: inline-flex;
@@ -12848,32 +12838,32 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__dec-tag--cyan {
-  background: rgba(56, 189, 248, 0.12);
-  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.1);
+  border-color: rgba(56, 189, 248, 0.35);
   color: #38bdf8;
 }
 
 .message-intel--v2 .message-intel__dec-tag--purple {
-  background: rgba(168, 85, 247, 0.12);
-  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.35);
   color: #c084fc;
 }
 
 .message-intel--v2 .message-intel__dec-tag--green {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.35);
   color: #34d399;
 }
 
 .message-intel--v2 .message-intel__dec-tag--receipt {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
   color: #cbd5e1;
 }
 
 .message-intel--v2 .message-intel__dec-tag--receipt:hover {
-  background: rgba(56, 189, 248, 0.2);
-  border-color: rgba(56, 189, 248, 0.6);
+  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(56, 189, 248, 0.5);
   color: #38bdf8;
 }
 
@@ -12892,9 +12882,9 @@ body.wrap {
   height: 110px;
   margin: 12px 0 8px;
   border-radius: 14px;
-  background: rgba(6, 10, 24, 0.75);
-  border: 1px solid rgba(56, 189, 248, 0.18);
-  box-shadow: inset 0 2px 12px rgba(0, 0, 0, 0.6);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid rgba(56, 189, 248, 0.16);
+  box-shadow: inset 0 1px 8px rgba(0, 0, 0, 0.15);
   overflow: hidden;
 }
 
@@ -12913,10 +12903,10 @@ body.wrap {
   letter-spacing: 0.1em;
   padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.18);
   border: 1px solid #f59e0b;
   color: #fbbf24;
-  box-shadow: 0 0 12px rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
   animation: message-intel-dot-pulse 2.5s ease-in-out infinite;
 }
 
@@ -12954,14 +12944,14 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__legend-pill--purple {
-  background: rgba(168, 85, 247, 0.15);
-  border: 1px solid rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.35);
   color: #c084fc;
 }
 
 .message-intel--v2 .message-intel__legend-pill--green {
-  background: rgba(16, 185, 129, 0.15);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
   color: #34d399;
 }
 
@@ -12972,10 +12962,10 @@ body.wrap {
   gap: 10px;
   padding: 14px;
   margin-top: 14px;
-  border-radius: 20px;
-  background: rgba(14, 20, 44, 0.65) !important;
-  border: 1px solid rgba(56, 189, 248, 0.3) !important;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.018) !important;
+  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
 }
 
 .message-intel--v2 .message-intel__quick-cmds-header {
@@ -13035,9 +13025,11 @@ body.wrap {
   justify-content: center;
   padding: 10px 16px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.85), rgba(217, 119, 6, 0.95));
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.4), rgba(217, 119, 6, 0.5));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
   font-family: var(--font-mono, monospace);
   font-size: 10.5px;
   font-weight: 800;
@@ -13124,12 +13116,12 @@ body.wrap {
   list-style: none;
   margin: 0 0 14px;
   padding: 6px;
-  background: rgba(14, 18, 38, 0.55);
+  background: rgba(255, 255, 255, 0.035);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
 }
 
 .message-intel--v2 .message-intel__loop [role="tab"] {
@@ -13137,7 +13129,7 @@ body.wrap {
   padding: 8px 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.03);
   color: inherit;
   display: flex;
   flex-direction: column;
@@ -13150,14 +13142,14 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__loop [role="tab"]:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
 .message-intel--v2 .message-intel__loop [aria-selected="true"] {
   border-color: rgba(56, 189, 248, 0.6);
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(14, 22, 48, 0.6) 100%);
-  box-shadow: 0 0 20px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%);
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .message-intel--v2 .message-intel__loop [aria-selected="true"]::after {
@@ -14023,9 +14015,9 @@ body.wrap {
 .message-intel--v2 .message-intel__consensus,
 .message-intel--v2 .message-intel__divergence {
   border-radius: 14px;
-  border-color: rgba(255, 255, 255, 0.10);
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.018));
-  box-shadow: 0 14px 30px -28px rgba(0, 0, 0, 0.95);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.015);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .message-intel--v2 .message-intel__legend {
@@ -14064,18 +14056,17 @@ body.wrap {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   color: rgba(197, 215, 222, 0.60);
-  background: rgba(0, 0, 0, 0.16);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .message-intel--v2 .message-intel__panel--feed {
   margin-top: 0;
   margin-bottom: 16px;
   padding: clamp(14px, 2vw, 22px);
-  border-color: var(--glass-border, rgba(255, 255, 255, 0.14));
+  border-color: rgba(255, 255, 255, 0.08);
   border-radius: var(--glass-radius, 12px);
-  background: var(--glass-fill-card);
-  background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 40%, transparent 72%);
-  box-shadow: 0 1px 0 rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.015);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
 .message-intel--v2 .message-intel__filter-bar {
@@ -14155,8 +14146,7 @@ body.wrap {
 
 .message-intel--v2 .message-intel__feed-row--hot {
   border-color: var(--warm-hairline, rgba(255, 170, 100, 0.40));
-  background: var(--glass-fill-subtle);
-  background-image: linear-gradient(100deg, rgba(255, 170, 100, 0.10), transparent);
+  background: rgba(255, 170, 100, 0.05);
   box-shadow: inset 3px 0 0 rgba(255, 170, 100, 0.70);
 }
 
@@ -16542,23 +16532,25 @@ body.council-first-theme .footer-card__lbl {
     inset: 0;
     z-index: 0;
     pointer-events: none;
-    /* Opaque deep-space void base (DS bridge token) */
-    background-color: var(--ds-void);
+    /* Deep cosmic celestial void base with rich indigo undertones */
+    background-color: #060814;
     background-image:
-        /* cyan star cluster — top-left (DS signal cyan) */
-        radial-gradient(520px 420px at 6% 10%, color-mix(in srgb, var(--ds-signal-cyan) 30%, transparent), transparent 65%),
-        radial-gradient(260px 200px at 3% 6%,  color-mix(in srgb, var(--ds-signal-cyan) 24%, transparent), transparent 55%),
-        /* violet/purple bloom — top-right (DS cosmic violet) */
-        radial-gradient(540px 440px at 94% 12%, color-mix(in srgb, var(--ds-nebula) 34%, transparent), transparent 65%),
-        radial-gradient(280px 220px at 97% 5%,  color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 50%),
-        /* pink-magenta streak — bottom-left (DS rose) */
-        radial-gradient(480px 380px at 8% 82%,  color-mix(in srgb, var(--ds-rose) 30%, transparent), transparent 65%),
-        radial-gradient(220px 180px at 2% 92%,  color-mix(in srgb, var(--ds-rose) 24%, transparent), transparent 50%),
-        /* amber/gold warmth — bottom-right (DS ember amber) */
-        radial-gradient(420px 340px at 92% 88%, color-mix(in srgb, var(--ds-amber) 30%, transparent), transparent 65%),
-        radial-gradient(200px 160px at 98% 96%, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 50%),
-        /* deep-space void gradient — keeps the centre near-black */
-        radial-gradient(ellipse 80% 70% at 50% 50%, color-mix(in srgb, var(--ds-void) 92%, transparent), transparent 80%);
+        /* Top cosmic star clusters & blooms */
+        radial-gradient(700px 550px at 8% 12%, rgba(56, 189, 248, 0.45), transparent 70%),
+        radial-gradient(350px 280px at 4% 8%, rgba(6, 182, 212, 0.35), transparent 60%),
+        radial-gradient(720px 560px at 92% 14%, rgba(168, 85, 247, 0.45), transparent 70%),
+        radial-gradient(360px 300px at 96% 7%, rgba(139, 92, 246, 0.35), transparent 55%),
+        /* Mid-page vibrant nebulae across entire scroll height */
+        radial-gradient(750px 600px at 15% 35%, rgba(236, 72, 153, 0.35), transparent 65%),
+        radial-gradient(700px 550px at 85% 42%, rgba(56, 189, 248, 0.38), transparent 65%),
+        radial-gradient(850px 650px at 50% 50%, rgba(99, 102, 241, 0.32), transparent 70%),
+        radial-gradient(750px 600px at 20% 65%, rgba(168, 85, 247, 0.38), transparent 65%),
+        radial-gradient(720px 580px at 80% 72%, rgba(236, 72, 153, 0.35), transparent 65%),
+        /* Lower section glowing nebulas */
+        radial-gradient(750px 600px at 10% 86%, rgba(217, 70, 239, 0.40), transparent 70%),
+        radial-gradient(400px 320px at 3% 94%, rgba(168, 85, 247, 0.35), transparent 55%),
+        radial-gradient(700px 550px at 90% 88%, rgba(245, 158, 11, 0.40), transparent 70%),
+        radial-gradient(380px 300px at 96% 95%, rgba(249, 115, 22, 0.32), transparent 55%);
 }
 
 /* CSS-only starfield (no canvas) — dense multi-layer pattern tiles to cover the viewport */
@@ -16619,7 +16611,7 @@ body.council-first-theme .footer-card__lbl {
         280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
         280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px,
         280px 280px, 280px 280px, 280px 280px, 280px 280px, 280px 280px;
-    opacity: 0.85;
+    opacity: 1;
 }
 
 /* -- Glass tiers (MOBILE-FIRST: default = zero backdrop-filter cost) -- */
@@ -16988,13 +16980,13 @@ section.desk-zone,
 }
 
 .message-intel__learn-card {
-    background: var(--glass-fill-card);
-    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.015) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 14px;
     padding: 16px;
-    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -17009,8 +17001,8 @@ section.desk-zone,
 }
 
 .message-intel__caller-card-v2 {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.018);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     padding: 12px 14px;
     display: flex;
@@ -17020,15 +17012,15 @@ section.desk-zone,
 }
 
 .message-intel__caller-card-v2:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.14);
     transform: translateY(-1px);
 }
 
 .message-intel__caller-card-v2--gold {
     border-color: rgba(245, 158, 11, 0.35);
-    background: linear-gradient(180deg, rgba(245, 158, 11, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
-    box-shadow: inset 0 0 16px -4px rgba(245, 158, 11, 0.15);
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.05) 0%, rgba(255, 255, 255, 0.015) 100%);
+    box-shadow: inset 0 0 16px -4px rgba(245, 158, 11, 0.12);
 }
 
 .message-intel__caller-card-top {
@@ -17214,8 +17206,8 @@ section.desk-zone,
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(56, 189, 248, 0.08) 100%);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(56, 189, 248, 0.05) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25);
     border-radius: 10px;
     padding: 10px 14px;
 }
@@ -17253,8 +17245,8 @@ section.desk-zone,
 }
 
 .message-intel__proof-item-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.018);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 10px;
     padding: 10px 12px;
     display: flex;
@@ -17353,8 +17345,8 @@ section.desk-zone,
 }
 
 .message-intel__hc-card-v2 {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.018);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 10px;
     padding: 10px 12px;
     display: flex;
@@ -17396,13 +17388,13 @@ section.desk-zone,
 
 .message-intel__skin-pill--staked {
     color: #34d399;
-    background: rgba(6, 78, 59, 0.7);
+    background: rgba(16, 185, 129, 0.15);
     border: 1px solid rgba(52, 211, 153, 0.4);
 }
 
 .message-intel__skin-pill--ape {
     color: #fb923c;
-    background: rgba(69, 26, 3, 0.7);
+    background: rgba(249, 115, 22, 0.15);
     border: 1px solid rgba(251, 146, 60, 0.4);
 }
 
@@ -17453,10 +17445,13 @@ section.desk-zone,
 
 /* Skin Guarantee Footer */
 .message-intel__skin-card {
-    background: var(--glass-fill-card);
-    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.015) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 12px;
     padding: 12px 16px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -17494,8 +17489,8 @@ section.desk-zone,
     gap: 6px;
     overflow-x: auto;
     padding: 6px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -17523,7 +17518,7 @@ section.desk-zone,
 }
 
 .message-intel__rank-subtab:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.04);
     color: #f1f5f9;
 }
 
@@ -17571,13 +17566,13 @@ section.desk-zone,
 }
 
 .message-intel__rank-panel {
-    background: var(--glass-fill-card);
-    border: 1px solid var(--glass-border);
+    background: rgba(255, 255, 255, 0.015) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
     border-radius: 14px;
     padding: 16px;
-    box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 20px rgba(0, 0, 0, 0.08) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     display: flex;
     flex-direction: column;
     gap: 14px;
@@ -17591,8 +17586,8 @@ section.desk-zone,
 }
 
 .message-intel__podium-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     padding: 14px;
     display: flex;
@@ -17603,18 +17598,20 @@ section.desk-zone,
 
 .message-intel__podium-card--gold {
     border-color: rgba(245, 158, 11, 0.35);
-    background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
-    box-shadow: inset 0 0 20px -4px rgba(245, 158, 11, 0.15);
+    background: linear-gradient(180deg, rgba(245, 158, 11, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    box-shadow: inset 0 0 20px -4px rgba(245, 158, 11, 0.1);
 }
 
 .message-intel__podium-card--silver {
     border-color: rgba(148, 163, 184, 0.35);
-    background: linear-gradient(180deg, rgba(148, 163, 184, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(180deg, rgba(148, 163, 184, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    box-shadow: inset 0 0 20px -4px rgba(148, 163, 184, 0.1);
 }
 
 .message-intel__podium-card--bronze {
     border-color: rgba(217, 119, 6, 0.35);
-    background: linear-gradient(180deg, rgba(217, 119, 6, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+    background: linear-gradient(180deg, rgba(217, 119, 6, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+    box-shadow: inset 0 0 20px -4px rgba(217, 119, 6, 0.1);
 }
 
 .message-intel__podium-rank-pill {
@@ -17690,7 +17687,9 @@ section.desk-zone,
     font-size: 9px;
     font-weight: 800;
     font-family: var(--font-mono);
-    background: #0f172a;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     width: 15px;
@@ -17811,7 +17810,7 @@ section.desk-zone,
 }
 
 .message-intel__dossier-row {
-    background: rgba(255, 255, 255, 0.025);
+    background: rgba(255, 255, 255, 0.015);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 10px;
     padding: 10px 12px;
@@ -18047,7 +18046,7 @@ section.desk-zone,
 .message-intel__power-why-box {
     font-size: 11px;
     color: #cbd5e1;
-    background: rgba(255, 255, 255, 0.02);
+    background: rgba(255, 255, 255, 0.015);
     border-radius: 6px;
     padding: 8px;
     margin: 0;
@@ -18087,8 +18086,8 @@ section.desk-zone,
 }
 
 .message-intel__accolade-card-v2 {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     padding: 14px;
     display: flex;
@@ -18176,8 +18175,8 @@ section.desk-zone,
 }
 
 .message-intel__crown-card-v2 {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     padding: 14px;
     display: flex;
@@ -18255,4 +18254,35 @@ section.desk-zone,
 .message-intel--v2 .message-intel__heartbeat,
 .message-intel--v2 .message-intel__masthead {
     display: none !important;
+}
+
+/* Global desk enforcement: Make all message-intel panels and cards clear glassmorphic */
+.message-intel--v2 .message-intel__yesterday,
+.message-intel--v2 .message-intel__week-top,
+.message-intel--v2 .message-intel__hero,
+.message-intel--v2 .message-intel__summary-24h,
+.message-intel--v2 .message-intel__proof,
+.message-intel--v2 .message-intel__hc-strip,
+.message-intel--v2 .message-intel__callers,
+.message-intel--v2 .message-intel__consensus,
+.message-intel--v2 .message-intel__divergence,
+.message-intel--v2 .message-intel__quick-dock,
+.message-intel--v2 .message-intel__panel {
+    background: rgba(255, 255, 255, 0.015) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
+}
+
+.message-intel--v2 .message-intel__q-btn {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    box-shadow: none !important;
+}
+
+.message-intel--v2 .message-intel__q-btn:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(255, 255, 255, 0.18) !important;
 }

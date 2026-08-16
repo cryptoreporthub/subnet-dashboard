@@ -7,7 +7,7 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2 message-intel--home-compact glass-card" data-pulse-mode="listen">
+<div class="message-intel message-intel--v2 message-intel--home-compact" data-pulse-mode="listen">
 
   <div class="message-intel__heartbeat" id="message-intel-heartbeat" data-mode="warming" aria-live="polite" style="display: none;">
     <svg class="message-intel__ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
