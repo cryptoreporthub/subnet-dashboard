@@ -15885,17 +15885,11 @@ section.desk-zone,
     .sr-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
 }
 
-/* Homepage pulse: a compact folder desk, not a second full-page listener.
-   The standalone /listener route keeps the complete signal deck. */
+/* Homepage pulse: compact folder desk, same site glass (transparent fill). */
 .message-intel--home-compact {
     margin-top: 0.5rem;
     margin-bottom: 0.75rem;
-    padding: 8px 0 10px;
-    border: 0 !important;
-    border-radius: 0;
-    background: transparent !important;
-    box-shadow: none;
-    animation: none;
+    padding: 8px 12px 12px;
 }
 
 .message-intel--home-compact .message-intel__topbar {
@@ -15953,10 +15947,10 @@ section.desk-zone,
 .message-intel--home-compact .message-intel__loop [role="tab"] {
     min-height: 44px;
     padding: 7px 8px 10px;
-    border: 1px solid var(--mi-line);
+    border: 1px solid var(--glass-border);
     border-bottom: 0;
     border-radius: 10px 10px 0 0;
-    background: rgba(255, 255, 255, 0.03);
+    background: transparent;
     position: relative;
     bottom: -1px;
 }
@@ -15970,7 +15964,8 @@ section.desk-zone,
 }
 
 .message-intel--home-compact .message-intel__loop [role="tab"][aria-selected="true"] {
-    background: var(--glass-fill-card);
+    background: transparent;
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.06) 0%, transparent 70%);
     border-color: var(--glass-border);
     box-shadow: none;
     z-index: 1;
@@ -15981,7 +15976,7 @@ section.desk-zone,
     padding: 10px;
     border: 1px solid var(--glass-border);
     border-radius: 0 12px 12px 12px;
-    background: var(--glass-fill-subtle);
+    background: transparent;
 }
 
 .message-intel--home-compact .message-intel__feed,

@@ -41,6 +41,10 @@ def test_homepage_pulse_uses_compact_folder_cabinet():
     assert "message-intel--home-compact" in html
     assert "Listen Learn Rank Serve folders" in html
     assert ".message-intel--home-compact .message-intel__bay" in css
+    assert "background: transparent" in css.split(".message-intel--home-compact .message-intel__bay")[1].split("}")[0]
+    compact = css.split(".message-intel--home-compact {")[1].split("}")[0]
+    assert "background: transparent !important" not in compact
+    assert "border: 0 !important" not in compact
     assert ".message-intel--home-compact .message-intel__loop [role=\"tab\"][aria-selected=\"true\"]" in css
     listener = open("templates/listener.html", encoding="utf-8").read()
     assert "message-intel--home-compact" not in listener
