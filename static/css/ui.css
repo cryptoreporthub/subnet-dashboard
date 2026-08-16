@@ -6780,7 +6780,7 @@ button.home-cta {
 .living-focus__weight-bar::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--pct, 50) * 1%); background: rgba(0, 200, 255, 0.45); }
 .living-focus__empty, .living-focus__learn-empty { color: var(--stage-muted); font-size: 13px; }
 .living-focus__contention--detail { font-size: 12px; color: #ffb347; margin: 0 0 10px; }
-.living-focus__why-not { margin: 10px 0 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: rgba(20,12,0,0.25); }
+.living-focus__why-not { margin: 10px 0 12px; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,179,71,0.35); background: transparent; }
 .living-focus__why-not-title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: #ffb347; }
 .living-focus__why-not-list { margin: 0; padding-left: 18px; font-size: 12px; color: var(--stage-muted); }
 .living-focus__evidence { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(138,154,142,0.25); }
@@ -6788,7 +6788,7 @@ button.home-cta {
 .living-focus__trail-title { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--stage-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .living-focus__evidence-list,
 .living-focus__trail-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.living-focus__evidence-row { display: grid; grid-template-columns: 108px 1fr; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,0.22); border: 1px solid rgba(138,154,142,0.2); }
+.living-focus__evidence-row { display: grid; grid-template-columns: 108px 1fr; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 8px; background: transparent; border: 1px solid rgba(138,154,142,0.2); }
 .living-focus__evidence-row--warn { border-color: rgba(255,179,71,0.4); }
 .living-focus__evidence-label { font-weight: 600; color: #c8d4cc; }
 .living-focus__evidence-detail { color: var(--stage-muted); }
@@ -7313,8 +7313,8 @@ body.wrap {
     padding: 6px max(12px, env(safe-area-inset-right, 0px)) calc(6px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
     gap: 6px;
     box-sizing: border-box;
-    background-color: color-mix(in srgb, var(--ds-void) 30%, transparent);
-    background-image: var(--card-smoke);
+    background-color: transparent;
+    background-image: none;
     background-size: cover;
     border-top: 1px solid rgba(255, 255, 255, 0.14);
     box-shadow: 0 -10px 32px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
@@ -7950,7 +7950,7 @@ body.wrap {
 
 .tribunal-hero__verdict-label--hold {
   color: var(--hero-steel);
-  background: rgba(30, 36, 48, 0.92);
+  background: transparent;
   border-color: rgba(148, 163, 184, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
@@ -9811,7 +9811,7 @@ body.wrap {
   margin-bottom: 14px;
   padding: 14px 16px;
   border: 1px solid rgba(52, 211, 153, 0.22);
-  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), rgba(0, 0, 0, 0.2));
+  background: rgba(52, 211, 153, 0.08);
 }
 .message-intel__yesterday-kicker {
   margin: 0 0 6px;
@@ -9869,7 +9869,7 @@ body.wrap {
   padding: 12px 14px;
   border: 1px solid rgba(126, 200, 227, 0.12);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.18);
+  background: transparent;
 }
 .message-intel__panel--feed {
   margin-bottom: 0;
@@ -9929,7 +9929,7 @@ body.wrap {
   padding: 10px 12px;
   border: 1px solid rgba(126, 200, 227, 0.1);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.15);
+  background: transparent;
 }
 .message-intel__rank {
   font-family: var(--font-mono, monospace);
@@ -10044,7 +10044,7 @@ body.wrap {
   padding: 12px 14px;
   border: 1px solid rgba(126, 200, 227, 0.1);
   border-radius: 2px;
-  background: rgba(0, 0, 0, 0.15);
+  background: transparent;
 }
 .message-intel__item-head {
   display: flex;
@@ -10156,7 +10156,7 @@ body.wrap {
 .message-intel__proof-miss { color: #fb7185; font-weight: 700; }
 .message-intel__callers {
   margin: 12px 0 16px; padding: 12px 14px; border: 1px solid rgba(52, 211, 153, .24);
-  border-radius: 8px; background: rgba(0,0,0,.18);
+  border-radius: 8px; background: transparent;
 }
 .message-intel__periods { display: flex; gap: 6px; margin: 8px 0; }
 .message-intel__periods button, .message-intel__receipt-toggle {
@@ -13060,7 +13060,7 @@ body.wrap {
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 999px;
   color: rgba(197, 215, 222, 0.60);
-  background: rgba(0, 0, 0, 0.16);
+  background: transparent;
 }
 
 .message-intel--v2 .message-intel__panel--feed {
@@ -13703,7 +13703,7 @@ body.wrap {
     --pd-sub: #94a3b8;
     --pd-dim: #64748b;
     --pd-line: rgba(148, 163, 184, 0.14);
-    --pd-panel: rgba(10, 14, 24, 0.82);
+    --pd-panel: transparent;
     --pd-lead: #fbbf24;
     --pd-live: #fb7185;
     --pd-exit: #34d399;
@@ -14593,9 +14593,9 @@ body.wrap {
 .pump-alert__meter-fill { display: block; height: 100%; background: #fbbf24; }
 .pump-alert__size, .pump-alert__wallet-chip { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--pd-sub); margin: 0 0 4px; }
 
-/* Pump desk legibility — denser glass + brighter body/muted text (transparency tune) */
+/* Pump desk — same clear glass as the rest of the page (no 72% dark fill). */
 .pump-alert {
-  --pd-panel: rgba(10, 15, 26, 0.9);
+  --pd-panel: transparent;
   --pd-sub: #b6c2d1;
   --pd-dim: #8b9bab;
 }
@@ -14605,7 +14605,7 @@ body.wrap {
 .pump-alert__card,
 .pds-hero,
 .pds-ladder {
-  background-color: rgba(9, 14, 24, 0.72) !important;
+  background-color: transparent !important;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 .pd-lead .pd-metrics-bar__line b,
@@ -15465,7 +15465,7 @@ body.council-first-theme .footer-card__lbl {
   padding: 7px;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 6px;
-  background: rgba(0,0,0,.18);
+  background: transparent;
   color: var(--text-secondary);
   text-align: left;
   font-size: 12px;
@@ -15513,7 +15513,7 @@ body.council-first-theme .footer-card__lbl {
 .message-intel__divergence-receipt {
   display: grid; gap: 4px; width: 100%; min-height: 40px; padding: 7px;
   border: 1px solid rgba(255,255,255,.09); border-radius: 6px;
-  background: rgba(0,0,0,.18); color: var(--text-secondary); text-align: left;
+  background: transparent; color: var(--text-secondary); text-align: left;
   font-size: 12px; cursor: pointer;
 }
 .message-intel__divergence-receipt:hover { border-color: rgba(196, 181, 253, .5); }
@@ -15751,9 +15751,9 @@ body.council-first-theme .footer-card__lbl {
 }
 
 /* Instrument cells (WIN RATE / AVG ACC / SIGNAL…) used a 55% dark --glass fill. */
-.tribunal-hero { --glass: rgba(255, 255, 255, 0.04); }
+.tribunal-hero { --glass: transparent; }
 .tribunal-hero__cell {
-    background: rgba(255, 255, 255, 0.035) !important;
+    background: transparent !important;
 }
 
 /* ── Cosmic-glass blur gate (authoritative, global) ──────────────────────
@@ -15935,6 +15935,11 @@ section.desk-zone,
     background: var(--glass-fill-subtle);
     background-image: none;
     border-color: var(--glass-border);
+}
+
+/* Pump ladder rows used --pd-panel (82–90% dark). Same clear glass as cards. */
+.pd-r {
+    background: var(--glass-fill-subtle);
 }
 
 /* Cockpit cards → glass-card fill (base .card paints an opaque smoke gradient; defer to glass) */
