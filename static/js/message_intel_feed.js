@@ -2285,6 +2285,7 @@
   function pulseModeFromHash() {
     var h = (location.hash || "").replace(/^#/, "").toLowerCase();
     if (h.indexOf("pulse-") === 0) h = h.slice(6);
+    if (h.indexOf("message-intel-pane-") === 0) h = h.slice("message-intel-pane-".length);
     if (h === "listen" || h === "learn" || h === "rank" || h === "serve") return h;
     return "listen";
   }
@@ -2322,7 +2323,7 @@
     }
     if (!opts || opts.hash !== false) {
       try {
-        history.replaceState(null, "", "#pulse-" + mode);
+        history.replaceState(null, "", scan ? ("#message-intel-pane-" + mode) : ("#pulse-" + mode));
       } catch (e) { /* ignore */ }
     }
   }
