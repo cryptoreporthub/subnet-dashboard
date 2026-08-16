@@ -4,25 +4,14 @@ This guide is for Cursor (Composer + Grok) to pick up the visual/iterative UI ta
 
 ## Tool Assignment
 
-- **Composer 2.5** — default build; prefer **`composer-2.5-fast`** pool for mechanical slices
-- **Grok slow + low/medium** — short design LOCKs / audits only (see `model-guide.md`)
-- Composer expands Grok LOCKs into plan markdown, then builds (`grok-lock-composer-write-rule.md`)
-- Obey `.cursorignore` + `token-budget-rules.md` for billing-cycle token budget
+- **Composer 2.5** — default build
+- **Grok** — design / audits when the path is ambiguous (see `model-guide.md`)
+- Short Grok LOCK → Composer write is **retired** as a hard rule (`grok-lock-composer-write-rule.md`, `token-budget-rules.md`)
+- Obey `.cursorignore` (skip `data/*.json`). Billing watch only in `token-budget-rules.md`.
 
-## Grok Token-Saving Precautions
+## Context hygiene (token-save brevity retired 2026-08-16)
 
-Grok burns tokens on context + long output. Follow these rules:
-
-1. **Slow + low/medium** — never default to high/xhigh. Escalate high only after medium FAIL/unsatisfactory.
-2. **Short LOCK only** — Grok returns VERDICT/DECISIONS/FILES/AC (~1 screen); Composer writes the plan file.
-3. **Cache the stable prefix** — unchanged spec first, slice question last.
-4. **Batch** — one Grok pass per related group, not one-liner spam.
-5. **Scope context** — owned paths only; `.cursorignore` excludes `data/` and superseded designs.
-6. **Avoid re-runs** — clear AC first; no “try again” without new evidence.
-7. **Skip Grok for trivial changes** — Composer directly for one-line CSS/text/contract adds.
-8. **Read binding docs once** — `STATUS.md`, `board.md`, one plan path; cite instead of re-paste.
-
-> **Note:** Prefer **Composer 2.5-fast** for routine implementation. Do **not** use Plan mode every slice when an approved auto-plan exists.
+Agents write at natural length. Still skip bulky paths and do not re-run without new evidence. `.cursorignore` excludes `data/` and superseded designs.
 
 ## Phased Plan (Sequential — Most Tasks Cannot Run in Parallel)
 

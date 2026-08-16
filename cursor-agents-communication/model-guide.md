@@ -1,9 +1,9 @@
 # Model Guide — Composer vs Grok
 
-**Last updated:** 2026-08-01  
+**Last updated:** 2026-08-16  
 **Applies to:** **One primary Cloud Agent** (Pro+) + Grok / Composer / Sonnet **subagents** by role. Agent A (`-843d`) **retired** — do not spawn.
 
-> **Mode:** One quarterback per session. Queue and plans cite this file — they must **not** invent a competing model pipeline. See `token-budget-rules.md` + `STATUS.md` / `board.md`.
+> **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies. See `board.md` / `STATUS.md` for queue state.
 
 ## Models
 
@@ -22,13 +22,10 @@
 2. **Tiny / path-already-clear chores:** **slow + low** is fine.
 3. Do **not** open `xhigh` or `fast-xhigh` “just in case.” Fast Grok variant only for light chores when able.
 4. Prefer a scoped read-only Grok **Task subagent** over switching the whole Cloud Agent run to Grok.
-5. Obey `.cursorignore` / `token-budget-rules.md` — do not pull `data/*.json` or superseded design dumps into context.
+5. Obey `.cursorignore` — do not pull `data/*.json` or superseded design dumps into context.
 
-**HARD RULE — Grok lock → Composer write (token-save on output) — user 2026-07-15:**
-1. When a slice needs design/thinking, **Grok** (medium; high if stuck) does the reasoning and returns a **short structured LOCK only** (not a long markdown plan). Cap ~1 screen.
-2. **Composer** expands that lock into the plan file / PR body / board lines, then **builds**.
-3. Grok must **not** author long prose plans. Composer must **not** invent design details missing from the lock.
-4. Lock template (Grok output shape):
+**Grok lock → Composer write — retired as a hard token-save (2026-08-16):**
+Grok may still return a structured LOCK when that is the useful shape; it is **not** required to stay ~1 screen or to refuse long plans. Composer may write plans and code without waiting on a short LOCK. Historical lock template (optional):
    ```
    VERDICT: PASS | CONDITIONAL | FAIL
    DECISIONS: (3–7 bullets)
@@ -37,7 +34,6 @@
    RISKS / NON-GOALS: ...
    ESCALATE_HIGH?: no | yes (why)
    ```
-5. If an approved auto-plan already names the slice (e.g. `s16-s17-automated-build-plan.md`), **skip a new Grok lock** unless the plan marks DESIGN or the path is ambiguous — Composer builds from the locked plan.
 
 **HARD RULE — Exactly ONE Sonnet gate per slice (user 2026-08-01):**
 
@@ -67,15 +63,7 @@ Grok LOCK (medium → high if stuck)
 4. Sprint plans cite this section — they must not invent a competing “always Sonnet before Composer” or “always Sonnet after Composer” rule.
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
-**Build caching (token discipline) — try during every slice:**
-1. **Read binding docs once per session** — `board.md`, `STATUS.md`, locked spec (`phase-*-step0-spec.md`, `gameplan-*.md`). After that, cite paths; do not re-paste full spec bodies into prompts or Ditto posts.
-2. **Stable prefix, variable tail** — when invoking Grok, put unchanged architecture/spec at the top and the slice-specific question at the end so provider prompt-cache can reuse the prefix across calls in the same build.
-3. **Scope tools** — `grep`/`read` only owned paths + conflict surface (`server.py`, contract test). No whole-repo exploration when the gameplan already names files.
-4. **Batch before Grok** — group related visual/behavioral questions into one slow-medium pass; escalate to high only if that pass fails (see §4 triggers).
-5. **Git is the cache of record** — prefer `main` + open PR diff over re-auditing merged reality; update `board.md`/`STATUS.md` once per merge, not every turn.
-6. **Skip redundant passes** — if Step 0 / a design note is LOCKED on `main`, Composer builds without a second Grok kickoff unless the slice is novel or medium review failed.
-
-Full token rules: `docs/cursor-implementation-guide.md` § Grok Token-Saving Precautions.
+**Context hygiene (not brevity):** skip `data/*.json` / `.venv`; prefer `main` + open PR diffs over re-auditing merged work. Billing watch: `token-budget-rules.md`.
 
 ---
 
@@ -89,7 +77,7 @@ Full token rules: `docs/cursor-implementation-guide.md` § Grok Token-Saving Pre
 | Board/docs/merge chores | Pre-merge review of >500-line **behavioral** change |
 | | Second-opinion audit on merged work (§3) |
 
-**Workflow:** Grok slow-medium **LOCK** (short) → Composer **writes plan/docs if needed** → Composer **implements** → Grok slow-medium sign-off only if behavioral risk. Escalate to **high** only if medium fails or is unsatisfactory.
+**Workflow:** Grok for ambiguous design when useful → Composer implements → Grok sign-off only if behavioral risk. Escalate thinking effort when medium is unsatisfactory. Short LOCK is optional, not required.
 
 ---
 
