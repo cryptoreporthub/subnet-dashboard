@@ -20,8 +20,15 @@
 
   <div class="message-intel__masthead" style="display: none;">
     <div class="message-intel__instrument">
+      <div class="message-intel__pulsar" aria-hidden="true">
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__ping"></span>
+        <span class="message-intel__core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+      </div>
       <div class="message-intel__identity">
         <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
+          <span class="message-intel__brand">SUBNET SUMMERS · <em>SIMIVISION</em></span>
           <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
           <span id="message-intel-meta">{% if message_intel and message_intel.meta and message_intel.meta.total_messages %}<b>OfficialSubnetSummer</b> · {{ message_intel.meta.total_messages }} messages graded{% else %}Desk warming — first beat lands with the listener.{% endif %}</span>
         </div>
@@ -31,12 +38,18 @@
 
   <!-- Cosmic Resonance Core Visualizer (3D cosmic plasma orb, planetary orbits & telemetry) -->
   <div class="message-intel__visualizer-card glass-card" id="message-intel-trending-card">
-    <div class="message-intel__vis-top-pill">
-      <span class="message-intel__vis-tg-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/></svg>
-      </span>
-      <span class="message-intel__vis-handle">@officialSubnetSummer</span>
-      <span class="message-intel__vis-members"><i class="message-intel__vis-pulse-dot" aria-hidden="true"></i> 3.7K</span>
+    <div class="message-intel__vis-top-row">
+      <a class="message-intel__vis-full-desk-btn" href="/subnetsummer" title="Open full listener">
+        <span>OPEN FULL DESK</span>
+        <span class="message-intel__vis-full-desk-arrow">↗</span>
+      </a>
+      <div class="message-intel__vis-top-pill">
+        <span class="message-intel__vis-tg-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/></svg>
+        </span>
+        <span class="message-intel__vis-handle">@officialSubnetSummer</span>
+        <span class="message-intel__vis-members"><i class="message-intel__vis-pulse-dot" aria-hidden="true"></i> 3.7K</span>
+      </div>
     </div>
 
     <div class="message-intel__visualizer-header">
@@ -71,10 +84,9 @@
             <stop offset="45%" stop-color="#38bdf8" stop-opacity="0.5" />
             <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.85" />
           </linearGradient>
-          <filter id="mi-glow" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="3.5" result="blur" />
+          <filter id="mi-glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
             <feMerge>
-              <feMergeNode in="blur" />
               <feMergeNode in="blur" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
@@ -95,25 +107,32 @@
         <div class="message-intel__sky-hub-starburst"></div>
         <div class="message-intel__sky-hub-plasma"></div>
       </div>
-      <div class="message-intel__sky-carrier message-intel__sky-carrier--1" data-rank="1">
-        <button type="button" class="message-intel__sky-node" data-netuid="127" data-sent="bull" data-sn="127" data-name="SN127" aria-label="SN127 - 1st trending subnet">
-          <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN127</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+15.8%</span></span>
-          <span class="message-intel__sky-dot message-intel__sky-dot--cyan" style="width:18px;height:18px"></span>
-        </button>
+      <div class="message-intel__sky-orbit message-intel__sky-orbit--1">
+        <div class="message-intel__sky-carrier message-intel__sky-carrier--1" data-rank="1">
+          <button type="button" class="message-intel__sky-node" data-netuid="127" data-sent="bull" data-sn="127" data-name="SN127" aria-label="SN127 - 1st trending subnet">
+            <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN127</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+15.8%</span></span>
+            <span class="message-intel__sky-dot message-intel__sky-dot--cyan" style="width:18px;height:18px"></span>
+          </button>
+        </div>
       </div>
-      <div class="message-intel__sky-carrier message-intel__sky-carrier--2" data-rank="2">
-        <button type="button" class="message-intel__sky-node" data-netuid="19" data-sent="bull" data-sn="19" data-name="SN19" aria-label="SN19 - 2nd trending subnet">
-          <span class="message-intel__sky-dot message-intel__sky-dot--violet" style="width:16px;height:16px"></span>
-          <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN19</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+12.1%</span></span>
-        </button>
+      <div class="message-intel__sky-orbit message-intel__sky-orbit--2">
+        <div class="message-intel__sky-carrier message-intel__sky-carrier--2" data-rank="2">
+          <button type="button" class="message-intel__sky-node" data-netuid="19" data-sent="bull" data-sn="19" data-name="SN19" aria-label="SN19 - 2nd trending subnet">
+            <span class="message-intel__sky-dot message-intel__sky-dot--violet" style="width:16px;height:16px"></span>
+            <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN19</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+12.1%</span></span>
+          </button>
+        </div>
       </div>
-      <div class="message-intel__sky-carrier message-intel__sky-carrier--3" data-rank="3">
-        <button type="button" class="message-intel__sky-node" data-netuid="1" data-sent="bull" data-sn="1" data-name="SN1" aria-label="SN1 - 3rd trending subnet">
-          <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN1</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+4.2%</span></span>
-          <span class="message-intel__sky-dot message-intel__sky-dot--emerald" style="width:14px;height:14px"></span>
-        </button>
+      <div class="message-intel__sky-orbit message-intel__sky-orbit--3">
+        <div class="message-intel__sky-carrier message-intel__sky-carrier--3" data-rank="3">
+          <button type="button" class="message-intel__sky-node" data-netuid="1" data-sent="bull" data-sn="1" data-name="SN1" aria-label="SN1 - 3rd trending subnet">
+            <span class="message-intel__sky-badge"><b class="message-intel__sky-sn">SN1</b><span class="message-intel__sky-pct message-intel__sky-pct--up">+4.2%</span></span>
+            <span class="message-intel__sky-dot message-intel__sky-dot--emerald" style="width:14px;height:14px"></span>
+          </button>
+        </div>
       </div>
     </div>
+    <p class="message-intel__sky-legend"><span>closer = higher rank</span><span>size = chatter power</span><span>color = sentiment</span></p>
   </div>
 
   <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve folders">
@@ -491,7 +510,6 @@
             </span>
             <small>Top Callers</small>
           </a>
-          <a class="message-intel__q-btn" href="/subnetsummer">ENTER FULL LISTENER →</a>
         </div>
       </div>
 
@@ -567,6 +585,12 @@
           <p class="message-intel__skin-disclaimer">Skin is proof of intent, never proof of edge. Staked = verified on-chain • APE = degen alerts only (more honesty, less veracity)</p>
         </div>
       </div>
+
+      <!-- Preserved Hydration Anchor for Divergence & Consensus -->
+      <div id="message-intel-divergence" class="message-intel__divergence" style="display: none;">
+        <p class="message-intel__panel-hint">Telegram outcome stories compare recorded calls with later outcomes.</p>
+        <div id="message-intel-divergence-body" aria-live="polite"></div>
+      </div>
     </div>
 
     <!-- ── TAB 3: RANK (All 5 Leaderboards + Deep User Dossiers & Receipts Everywhere) ── -->
@@ -602,6 +626,7 @@
       </div>
 
       <!-- Sub-Pane 1: Weekly Champions -->
+      <div class="message-intel__hall">
       <div class="message-intel__rank-pane is-active" data-rank-pane="champions" id="message-intel-rank-pane-champions" role="tabpanel">
         <div class="message-intel__panel glass-card message-intel__rank-panel" id="message-intel-champions-card">
           <div class="message-intel__rank-header">
@@ -626,6 +651,7 @@
           </div>
         </div>
       </div>
+      </div><!-- /.message-intel__hall -->
 
       <!-- Sub-Pane 2: Chatter Power -->
       <div class="message-intel__rank-pane" data-rank-pane="power" id="message-intel-rank-pane-power" role="tabpanel" hidden>
@@ -683,7 +709,7 @@
       </div>
 
       <!-- Sub-Pane 4: Reaction Crowns -->
-      <div class="message-intel__rank-pane" data-rank-pane="crowns" id="message-intel-rank-pane-crowns" role="tabpanel" hidden>
+      <div class="message-intel__rank-pane message-intel__crowns-drawer" data-rank-pane="crowns" id="message-intel-rank-pane-crowns" role="tabpanel" hidden>
         <div class="message-intel__panel glass-card message-intel__rank-panel" id="message-intel-crowns-card">
           <div class="message-intel__rank-header">
             <div class="message-intel__rank-title-group">

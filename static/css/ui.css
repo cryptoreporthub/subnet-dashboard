@@ -12090,33 +12090,101 @@ body.wrap {
 .message-intel--v2 .message-intel__visualizer-card {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   border-radius: 28px;
   padding: 16px 14px 20px;
   margin-bottom: 14px;
-  background: rgba(255, 255, 255, 0.015) !important;
-  border: 1px solid rgba(56, 189, 248, 0.22) !important;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(56, 189, 248, 0.18) 0%, transparent 42%),
+    radial-gradient(ellipse at 50% 50%, rgba(30, 27, 75, 0.55) 0%, rgba(8, 12, 28, 0.92) 58%, rgba(3, 6, 16, 0.98) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.38);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    0 0 25px rgba(56, 189, 248, 0.1) !important;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 40px rgba(56, 189, 248, 0.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.message-intel--v2 .message-intel__vis-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 520px) {
+  .message-intel--v2 .message-intel__vis-full-desk-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .message-intel--v2 .message-intel__vis-top-pill {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .message-intel--v2 .message-intel__vis-top-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: fit-content;
-  margin: 0 auto 10px;
-  padding: 5px 16px;
+  margin: 0;
+  padding: 6px 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 10px rgba(0, 0, 0, 0.25);
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   color: #f8fafc;
+}
+
+.message-intel--v2 .message-intel__vis-full-desk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 0;
+  padding: 8px 16px;
+  min-height: 36px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(168, 85, 247, 0.2) 100%);
+  border: 1px solid rgba(56, 189, 248, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 0 18px rgba(56, 189, 248, 0.28);
+  color: #7dd3fc;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.message-intel--v2 .message-intel__vis-full-desk-btn:hover {
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.32) 0%, rgba(168, 85, 247, 0.28) 100%);
+  border-color: rgba(56, 189, 248, 0.8);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 0 24px rgba(56, 189, 248, 0.45);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.message-intel--v2 .message-intel__vis-full-desk-arrow {
+  font-size: 12px;
+  font-weight: 900;
+  color: #a855f7;
+  transition: transform 0.2s ease;
+}
+
+.message-intel--v2 .message-intel__vis-full-desk-btn:hover .message-intel__vis-full-desk-arrow {
+  transform: translate(2px, -2px);
+  color: #38bdf8;
 }
 
 .message-intel--v2 .message-intel__vis-tg-icon {
@@ -12183,6 +12251,8 @@ body.wrap {
   height: 280px;
   margin: 0 auto;
   overflow: visible;
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 /* Starfield with twinkling cosmic stars */
@@ -12204,7 +12274,8 @@ body.wrap {
     radial-gradient(1px 1px at 42% 90%, #38bdf8 100%, transparent),
     radial-gradient(1.2px 1.2px at 94% 85%, #ffffff 100%, transparent);
   opacity: 0.95;
-  animation: message-intel-star-twinkle 5s ease-in-out infinite alternate;
+  will-change: opacity, transform;
+  animation: message-intel-star-twinkle 6s ease-in-out infinite alternate;
 }
 
 /* Faint background celestial bodies */
@@ -12212,8 +12283,8 @@ body.wrap {
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
-  opacity: 0.6;
-  filter: blur(0.4px);
+  opacity: 0.65;
+  will-change: transform;
 }
 
 .message-intel--v2 .message-intel__sky-bg-moon--1 {
@@ -12223,6 +12294,7 @@ body.wrap {
   height: 16px;
   background: radial-gradient(circle at 35% 30%, #c084fc, #3b0764 80%);
   box-shadow: 0 0 14px rgba(192, 132, 252, 0.5);
+  animation: message-intel-planet-float-2 7s ease-in-out infinite alternate;
 }
 
 .message-intel--v2 .message-intel__sky-bg-moon--2 {
@@ -12232,6 +12304,7 @@ body.wrap {
   height: 12px;
   background: radial-gradient(circle at 35% 30%, #67e8f9, #083344 80%);
   box-shadow: 0 0 12px rgba(103, 232, 249, 0.5);
+  animation: message-intel-planet-float-3 8s ease-in-out infinite alternate;
 }
 
 /* Ambient Radial Aura Bloom */
@@ -12241,13 +12314,14 @@ body.wrap {
   left: 50%;
   width: 220px;
   height: 220px;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(56, 189, 248, 0.6) 0%, rgba(129, 140, 248, 0.35) 42%, transparent 72%);
-  filter: blur(28px);
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.5) 0%, rgba(129, 140, 248, 0.28) 42%, transparent 70%);
+  filter: blur(24px);
   pointer-events: none;
   z-index: 0;
-  animation: message-intel-core-breathe 4s ease-in-out infinite;
+  will-change: transform, opacity;
+  animation: message-intel-core-breathe 4.5s ease-in-out infinite;
 }
 
 /* Rotating Plasma Rings */
@@ -12258,6 +12332,7 @@ body.wrap {
   border-radius: 50%;
   pointer-events: none;
   z-index: 1;
+  will-change: transform;
 }
 
 .message-intel--v2 .message-intel__sky-plasma-ring--1 {
@@ -12265,8 +12340,8 @@ body.wrap {
   height: 154px;
   margin: -77px 0 0 -77px;
   border: 1px dashed rgba(56, 189, 248, 0.65);
-  box-shadow: 0 0 26px rgba(56, 189, 248, 0.45);
-  animation: message-intel-spin-slow 22s linear infinite;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.4);
+  animation: message-intel-spin-slow 24s linear infinite;
 }
 
 .message-intel--v2 .message-intel__sky-plasma-ring--2 {
@@ -12274,8 +12349,8 @@ body.wrap {
   height: 184px;
   margin: -92px 0 0 -92px;
   border: 1px solid rgba(168, 85, 247, 0.45);
-  box-shadow: 0 0 32px rgba(168, 85, 247, 0.35);
-  animation: message-intel-spin-rev 30s linear infinite;
+  box-shadow: 0 0 28px rgba(168, 85, 247, 0.3);
+  animation: message-intel-spin-rev 32s linear infinite;
 }
 
 /* SVG 3D Orbital Tracks */
@@ -12293,13 +12368,14 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__sky-track--glow {
-  stroke-width: 3.8;
+  stroke-width: 3.5;
   opacity: 0.92;
 }
 
 .message-intel--v2 .message-intel__sky-track--line {
   stroke-width: 1.8;
   opacity: 0.95;
+  animation: message-intel-orbit-dash 18s linear infinite;
 }
 
 .message-intel--v2 .message-intel__sky-track--equator {
@@ -12316,7 +12392,7 @@ body.wrap {
   left: 50%;
   width: 124px;
   height: 124px;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   border-radius: 50%;
   z-index: 3;
   pointer-events: none;
@@ -12332,11 +12408,12 @@ body.wrap {
   border-radius: 50%;
   background: radial-gradient(circle at 48% 46%, #ffffff 0%, #38bdf8 26%, #6366f1 54%, #1e1b4b 82%, #040714 100%);
   box-shadow:
-    0 0 45px rgba(56, 189, 248, 0.95),
-    0 0 90px rgba(129, 140, 248, 0.75),
-    inset 0 0 28px rgba(255, 255, 255, 0.9),
-    inset 0 0 45px rgba(56, 189, 248, 0.7);
-  animation: message-intel-hub-pulse 3.5s ease-in-out infinite;
+    0 0 40px rgba(56, 189, 248, 0.9),
+    0 0 80px rgba(129, 140, 248, 0.65),
+    inset 0 0 24px rgba(255, 255, 255, 0.85),
+    inset 0 0 40px rgba(56, 189, 248, 0.65);
+  will-change: box-shadow;
+  animation: message-intel-hub-pulse 3.8s ease-in-out infinite;
 }
 
 .message-intel--v2 .message-intel__sky-hub-plasma {
@@ -12344,9 +12421,9 @@ body.wrap {
   width: 114px;
   height: 114px;
   border-radius: 50%;
-  border: 1.6px solid rgba(255, 255, 255, 0.75);
-  box-shadow: 0 0 36px rgba(56, 189, 248, 0.85), inset 0 0 22px rgba(255, 255, 255, 0.5);
-  filter: blur(0.4px);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 30px rgba(56, 189, 248, 0.75), inset 0 0 18px rgba(255, 255, 255, 0.45);
+  will-change: transform, border-radius;
   animation: message-intel-plasma-warp 5s ease-in-out infinite alternate;
 }
 
@@ -12356,11 +12433,12 @@ body.wrap {
   height: 96px;
   border-radius: 50%;
   background:
-    radial-gradient(circle at 30% 70%, rgba(236, 72, 153, 0.5) 0%, transparent 50%),
-    radial-gradient(circle at 70% 30%, rgba(56, 189, 248, 0.6) 0%, transparent 50%);
+    radial-gradient(circle at 30% 70%, rgba(236, 72, 153, 0.45) 0%, transparent 50%),
+    radial-gradient(circle at 70% 30%, rgba(56, 189, 248, 0.55) 0%, transparent 50%);
   mix-blend-mode: screen;
-  filter: blur(2px);
-  animation: message-intel-spin-slow 16s linear infinite;
+  filter: blur(1.5px);
+  will-change: transform;
+  animation: message-intel-spin-slow 18s linear infinite;
 }
 
 .message-intel--v2 .message-intel__sky-hub-starburst {
@@ -12369,9 +12447,9 @@ body.wrap {
   height: 48px;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   background: radial-gradient(circle, #ffffff 45%, #e0f2fe 60%, rgba(56, 189, 248, 0.95) 75%, transparent 100%);
-  box-shadow: 0 0 32px #ffffff, 0 0 60px #38bdf8, 0 0 90px #818cf8;
+  box-shadow: 0 0 28px #ffffff, 0 0 52px #38bdf8, 0 0 80px #818cf8;
   border-radius: 50%;
   z-index: 4;
 }
@@ -12382,52 +12460,72 @@ body.wrap {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translate3d(-50%, -50%, 0);
   background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.4), #ffffff, #38bdf8, #ffffff, rgba(56, 189, 248, 0.4), transparent);
-  box-shadow: 0 0 16px #ffffff, 0 0 30px #38bdf8;
+  box-shadow: 0 0 14px #ffffff, 0 0 26px #38bdf8;
 }
 
 .message-intel--v2 .message-intel__sky-hub-starburst::before {
-  width: 150px;
-  height: 2.4px;
+  width: 140px;
+  height: 2.2px;
 }
 
 .message-intel--v2 .message-intel__sky-hub-starburst::after {
-  width: 2.4px;
-  height: 150px;
+  width: 2.2px;
+  height: 140px;
   background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.4), #ffffff, #38bdf8, #ffffff, rgba(56, 189, 248, 0.4), transparent);
 }
 
-/* 3D Orbiting Carriers & Badges */
-.message-intel--v2 .message-intel__sky-carrier {
+/* 3D Orbiting Carriers — travel the tilted ellipses (offset-path, compositor-friendly) */
+.message-intel--v2 .message-intel__sky-orbit {
   position: absolute;
+  inset: 0;
   pointer-events: none;
   z-index: 4;
 }
 
+.message-intel--v2 .message-intel__sky-orbit--1 { transform: rotate(-18deg); }
+.message-intel--v2 .message-intel__sky-orbit--2 { transform: rotate(22deg); }
+.message-intel--v2 .message-intel__sky-orbit--3 { transform: none; }
+
+.message-intel--v2 .message-intel__sky-carrier {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
+  offset-rotate: 0deg;
+}
+
+.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] { --spin: 26s; --r: 21.43%; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] { --spin: 42s; --r: 32.86%; }
+.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] { --spin: 60s; --r: 44.3%; }
+
 .message-intel--v2 .message-intel__sky-carrier--1,
-.message-intel--v2 .message-intel__sky-carrier[data-rank="1"] {
-  top: 26%;
-  left: 82%;
-  transform: translate(-50%, -50%);
-  animation: message-intel-planet-float-1 4s ease-in-out infinite alternate;
+.message-intel--v2 .message-intel__sky-carrier[data-rank="1"],
+.message-intel--v2 .message-intel__sky-track--1 {
+  offset-path: ellipse(42.6% 16.4% at 50% 50%);
+  animation: message-intel-orbit-travel var(--spin, 26s) linear infinite;
 }
 
 .message-intel--v2 .message-intel__sky-carrier--2,
-.message-intel--v2 .message-intel__sky-carrier[data-rank="2"] {
-  top: 48%;
-  left: 17%;
-  transform: translate(-50%, -50%);
-  animation: message-intel-planet-float-2 4.5s ease-in-out infinite alternate;
+.message-intel--v2 .message-intel__sky-carrier[data-rank="2"],
+.message-intel--v2 .message-intel__sky-track--2 {
+  offset-path: ellipse(36.3% 13.6% at 50% 50%);
+  animation: message-intel-orbit-travel var(--spin, 42s) linear infinite reverse;
+  animation-delay: -12s;
 }
 
 .message-intel--v2 .message-intel__sky-carrier--3,
-.message-intel--v2 .message-intel__sky-carrier[data-rank="3"] {
-  top: 72%;
-  left: 77%;
-  transform: translate(-50%, -50%);
-  animation: message-intel-planet-float-3 5s ease-in-out infinite alternate;
+.message-intel--v2 .message-intel__sky-carrier[data-rank="3"],
+.message-intel--v2 .message-intel__sky-track--3 {
+  offset-path: ellipse(21% 28.5% at 50% 50%);
+  animation: message-intel-orbit-travel var(--spin, 60s) linear infinite;
+  animation-delay: -22s;
 }
+
+.message-intel--v2 .message-intel__sky-orbit--1 .message-intel__sky-node { transform: rotate(18deg); }
+.message-intel--v2 .message-intel__sky-orbit--2 .message-intel__sky-node { transform: rotate(-22deg); }
 
 .message-intel--v2 .message-intel__sky-node {
   display: inline-flex;
@@ -12443,8 +12541,7 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__sky-node:hover {
-  transform: scale(1.12);
-  filter: brightness(1.3);
+  filter: brightness(1.28) drop-shadow(0 0 10px rgba(56, 189, 248, 0.55));
 }
 
 .message-intel--v2 .message-intel__sky-node.is-ghost {
@@ -12533,24 +12630,46 @@ body.wrap {
   color: #ef4444;
 }
 
+.message-intel--v2 .message-intel__sky-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  margin: 8px 0 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 8.5px;
+  color: var(--mi-text-faint, rgba(226, 232, 240, 0.62));
+  letter-spacing: 0.04em;
+}
+.message-intel--v2 .message-intel__sky-legend span { display: inline-flex; align-items: center; gap: 4px; }
+
+@keyframes message-intel-orbit-travel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+@keyframes message-intel-orbit-dash {
+  to { stroke-dashoffset: -240; }
+}
+
 @keyframes message-intel-core-breathe {
-  0%, 100% { transform: translate(-50%, -50%) scale(0.94); opacity: 0.75; }
-  50% { transform: translate(-50%, -50%) scale(1.06); opacity: 1; }
+  0%, 100% { transform: translate3d(-50%, -50%, 0) scale(0.95); opacity: 0.78; }
+  50% { transform: translate3d(-50%, -50%, 0) scale(1.05); opacity: 0.98; }
 }
 
 @keyframes message-intel-star-twinkle {
-  0% { opacity: 0.6; transform: scale(0.98); }
-  100% { opacity: 1; transform: scale(1.02); }
+  0% { opacity: 0.65; transform: scale(0.99); }
+  100% { opacity: 0.95; transform: scale(1.01); }
 }
 
 @keyframes message-intel-dot-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.8; }
-  50% { transform: scale(1.25); opacity: 1; }
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.18); opacity: 1; }
 }
 
 @keyframes message-intel-plasma-warp {
-  0% { border-radius: 50% 50% 50% 50%; }
-  50% { border-radius: 48% 52% 50% 50%; transform: rotate(4deg); }
+  0% { border-radius: 50%; transform: rotate(0deg); }
+  50% { border-radius: 48% 52% 49% 51%; transform: rotate(4deg); }
   100% { border-radius: 52% 48% 51% 49%; transform: rotate(-3deg); }
 }
 
@@ -12565,8 +12684,8 @@ body.wrap {
 }
 
 @keyframes message-intel-hub-pulse {
-  0%, 100% { box-shadow: 0 0 35px rgba(56, 189, 248, 0.95), 0 0 70px rgba(129, 140, 248, 0.65); }
-  50% { box-shadow: 0 0 50px rgba(56, 189, 248, 1), 0 0 95px rgba(129, 140, 248, 0.85); }
+  0%, 100% { box-shadow: 0 0 35px rgba(56, 189, 248, 0.9), 0 0 70px rgba(129, 140, 248, 0.6); }
+  50% { box-shadow: 0 0 48px rgba(56, 189, 248, 1), 0 0 90px rgba(129, 140, 248, 0.8); }
 }
 
 @keyframes message-intel-wave-pulse {
@@ -12575,34 +12694,47 @@ body.wrap {
 }
 
 @keyframes message-intel-planet-float-1 {
-  0% { transform: translate(-50%, -50%) translateY(0px); }
-  50% { transform: translate(-50%, -50%) translateY(-5px); }
-  100% { transform: translate(-50%, -50%) translateY(3px); }
+  0% { transform: translate3d(-50%, -50%, 0) translateY(0px); }
+  50% { transform: translate3d(-50%, -50%, 0) translateY(-4px); }
+  100% { transform: translate3d(-50%, -50%, 0) translateY(2px); }
 }
 
 @keyframes message-intel-planet-float-2 {
-  0% { transform: translate(-50%, -50%) translateY(0px); }
-  50% { transform: translate(-50%, -50%) translateY(4px); }
-  100% { transform: translate(-50%, -50%) translateY(-4px); }
+  0% { transform: translate3d(-50%, -50%, 0) translateY(0px); }
+  50% { transform: translate3d(-50%, -50%, 0) translateY(3px); }
+  100% { transform: translate3d(-50%, -50%, 0) translateY(-3px); }
 }
 
 @keyframes message-intel-planet-float-3 {
-  0% { transform: translate(-50%, -50%) translateY(0px); }
-  50% { transform: translate(-50%, -50%) translateY(-4px); }
-  100% { transform: translate(-50%, -50%) translateY(5px); }
+  0% { transform: translate3d(-50%, -50%, 0) translateY(0px); }
+  50% { transform: translate3d(-50%, -50%, 0) translateY(-3px); }
+  100% { transform: translate3d(-50%, -50%, 0) translateY(4px); }
 }
 
 /* ── Pure Clear Glassmorphism Across Message Intel Cards ── */
 .message-intel--v2 .glass-card,
 .message-intel--v2 .message-intel__panel,
-.message-intel--v2 .message-intel__rank-panel,
-.message-intel--v2 .message-intel__visualizer-card {
+.message-intel--v2 .message-intel__rank-panel {
   background: rgba(255, 255, 255, 0.015) !important;
   backdrop-filter: blur(14px) !important;
   -webkit-backdrop-filter: blur(14px) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 18px !important;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+.message-intel--v2 .message-intel__visualizer-card.glass-card {
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(56, 189, 248, 0.18) 0%, transparent 42%),
+    radial-gradient(ellipse at 50% 50%, rgba(30, 27, 75, 0.55) 0%, rgba(8, 12, 28, 0.92) 58%, rgba(3, 6, 16, 0.98) 100%) !important;
+  border: 1px solid rgba(56, 189, 248, 0.38) !important;
+  border-radius: 28px !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 0 40px rgba(56, 189, 248, 0.16) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
 }
 
 /* ── Live Decoder Signal Feed Card Styles ── */
@@ -13408,6 +13540,9 @@ body.wrap {
   gap: 10px;
   align-items: start;
 }
+.message-intel--v2 .message-intel__mode--rank > .message-intel__hall {
+  display: contents;
+}
 .message-intel--v2 .message-intel__hall > .message-intel__tile { grid-area: auto; }
 .message-intel--v2 .message-intel__tile { min-width: 0; }
 .message-intel--v2 .message-intel__tile .message-intel__panel,
@@ -13710,7 +13845,16 @@ body.wrap {
   .message-intel--v2 .message-intel__ekg path,
   .message-intel--v2 .message-intel__sky-carrier,
   .message-intel--v2 .message-intel__sky-carrier .message-intel__sky-node,
-  .message-intel--v2 .message-intel__sky-hub { animation: none !important; }
+  .message-intel--v2 .message-intel__sky-hub,
+  .message-intel--v2 .message-intel__sky-hub-core,
+  .message-intel--v2 .message-intel__sky-hub-plasma,
+  .message-intel--v2 .message-intel__sky-hub-filaments,
+  .message-intel--v2 .message-intel__sky-plasma-ring,
+  .message-intel--v2 .message-intel__sky-core-glow,
+  .message-intel--v2 .message-intel__sky-starfield,
+  .message-intel--v2 .message-intel__sky-track--line,
+  .message-intel--v2 .message-intel__vis-pulse-dot,
+  .message-intel--v2 .message-intel__sky-dot::before { animation: none !important; }
 }
 
 /* Kept for Quiet-motion / test hooks — root no longer breathes an opaque board. */

@@ -785,6 +785,7 @@
       var alphaGain = row.alpha_gain || (rank === 1 ? "+34.1% Alpha" : (rank === 2 ? "+28.4% Alpha" : "+19.7% Alpha"));
       var streak = row.streak || (5 - index > 0 ? (5 - index) + "W" : "2W");
       var qualified = row.qualified !== false;
+      var caution = !qualified ? '<span class="message-intel__caution">too few graded calls to trust</span>' : '';
       var initials = row.initials || initialLetter(row.author_name || rawName);
 
       html +=
@@ -794,7 +795,7 @@
         '<span class="message-intel__caller-rank-pill">' + rank + '</span>' +
         '<div class="message-intel__caller-user-info">' +
         '<b class="message-intel__caller-name">' + esc(rawName) + '</b>' +
-        '<span class="message-intel__caller-sub">' + esc(alphaGain) + ', ' + esc(sample) + ' graded calls</span>' +
+        '<span class="message-intel__caller-sub">' + esc(alphaGain) + ', ' + esc(sample) + ' graded calls' + caution + '</span>' +
         '</div>' +
         '</div>' +
         '<div class="message-intel__caller-rate-box">' +
@@ -1728,6 +1729,10 @@
 
   function renderInterceptWave(messages) {
     if (!wavestripEl) return;
+    if (!messages || !messages.length) {
+      wavestripEl.innerHTML = '<span class="message-intel__wave-waiting">awaiting signal…</span>';
+      return;
+    }
     var buckets = new Array(24).fill(0);
     var now = Date.now();
     (messages || []).forEach(function (m) {
@@ -1801,9 +1806,9 @@ function renderTrendingSky(rows) {
     '<stop offset="45%" stop-color="#38bdf8" stop-opacity="0.5"/>' +
     '<stop offset="100%" stop-color="#06b6d4" stop-opacity="0.85"/>' +
     '</linearGradient>' +
-    '<filter id="mi-glow" x="-40%" y="-40%" width="180%" height="180%">' +
-    '<feGaussianBlur stdDeviation="3.5" result="blur"/>' +
-    '<feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
+    '<filter id="mi-glow" x="-20%" y="-20%" width="140%" height="140%">' +
+    '<feGaussianBlur stdDeviation="2" result="blur"/>' +
+    '<feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>' +
     '</filter>' +
     '</defs>' +
       '<ellipse class="message-intel__sky-track message-intel__sky-track--glow message-intel__sky-track--3d-main" cx="190" cy="140" rx="162" ry="46" transform="rotate(-18 190 140)" stroke="url(#mi-orbit-main)" filter="url(#mi-glow)" stroke-width="3.5" opacity="0.95"></ellipse>' +
@@ -1835,6 +1840,7 @@ function renderTrendingSky(rows) {
     var dotHtml = '<span class="message-intel__sky-dot ' + dotColorClass + '" style="width:' + size + 'px;height:' + size + 'px"></span>';
     var innerNode = rank === 2 ? (dotHtml + badgeHtml) : (badgeHtml + dotHtml);
     html +=
+      '<div class="message-intel__sky-orbit message-intel__sky-orbit--' + rank + '">' +
       '<div class="message-intel__sky-carrier message-intel__sky-carrier--' + rank + '" data-rank="' +
       rank +
       '"><button type="button" class="message-intel__sky-node" data-netuid="' +
@@ -1847,7 +1853,7 @@ function renderTrendingSky(rows) {
       esc(row.name || "") +
       '">' +
       innerNode +
-      '</button></div>';
+      '</button></div></div>';
   }
   skyEl.innerHTML = html;
   skyEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
