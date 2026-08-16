@@ -15785,17 +15785,8 @@ body.council-first-theme .footer-card__lbl {
         .brain-letter,
         .proof-band,
         .proof-band__subpanel,
-        .pump-alert__card,
-        .pump-hero__card,
-        #pump-desk-hero,
         .pds-angles__section,
         .pd-angles__section,
-        .pds-ladder,
-        .pds--polish .pds-ladder,
-        .pd-lead,
-        .pds-hero,
-        .pd-metrics-bar,
-        .pds-metrics-bar,
         .kpi-cell,
         .council-stage .k3-signal,
         .council-stage .k3-judge,
@@ -15811,10 +15802,7 @@ body.council-first-theme .footer-card__lbl {
         .top-nav,
         .share-page__header,
         .driver-popover,
-        .message-intel--v2,
-        .message-intel--v2 .message-intel__panel,
-        .message-intel--v2 .message-intel__stat-chip,
-        .message-intel--v2 .message-intel__pulse-stage {
+        .message-intel--v2 .message-intel__stat-chip {
             backdrop-filter: blur(var(--glass-blur)) saturate(1.45) !important;
             -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.45) !important;
         }
@@ -15827,6 +15815,28 @@ body.council-first-theme .footer-card__lbl {
         .tribunal-hero__card {
             backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
             -webkit-backdrop-filter: blur(var(--hero-glass-blur, 24px)) saturate(1.5) brightness(1.12) !important;
+        }
+        /* Pump desk + Telegram pulse sit over the dark sky center. 16px blur
+           there frosts into a pewter slab (same reason instrument cells skip
+           blur). Hairline + sky, no stacked frost. */
+        .pd-lead,
+        .pump-hero__card,
+        #pump-desk-hero,
+        .pump-alert__card,
+        .pds-hero,
+        .pds-ladder,
+        .pds--polish .pds-ladder,
+        .pd-metrics-bar,
+        .pds-metrics-bar,
+        .message-intel--v2.glass-card,
+        .message-intel--v2 .glass-card,
+        .message-intel--v2 .message-intel__panel,
+        .message-intel--v2 .message-intel__pulse-stage,
+        .message-intel--v2 .message-intel__hero,
+        .message-intel--v2 .message-intel__week-top,
+        .message-intel--v2 .message-intel__crowns-drawer {
+            backdrop-filter: none !important;
+            -webkit-backdrop-filter: none !important;
         }
     }
 }
