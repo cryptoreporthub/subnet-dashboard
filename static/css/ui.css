@@ -7983,7 +7983,7 @@ body.wrap {
 
 .tribunal-hero__judge:hover {
   transform: translateY(-2px);
-  background: rgba(8, 11, 14, 0.82) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
   border-color: rgba(107, 197, 240, 0.18);
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.4),
@@ -8562,7 +8562,7 @@ body.wrap {
 .proof-band,
 .living-focus,
 .trust-banner {
-  background: var(--zone-light-card);
+  background: rgba(255, 255, 255, 0.035);
   border: 1px solid var(--zone-light-card-border);
   backdrop-filter: blur(var(--glass-blur));
   -webkit-backdrop-filter: blur(var(--glass-blur));
@@ -15630,22 +15630,68 @@ body.council-first-theme .footer-card__lbl {
     z-index: 2;
     pointer-events: none;
     background-image:
-        radial-gradient(2.8px 2.8px at 118px 196px, #fff 28%, hsl(var(--chart-1) / 0.95) 58%, transparent),
-        radial-gradient(14px 14px at 118px 196px, hsl(var(--chart-1) / 0.28), transparent 72%),
-        radial-gradient(2.4px 2.4px at 604px 462px, #fff 28%, hsl(var(--accent) / 0.95) 58%, transparent),
-        radial-gradient(12px 12px at 604px 462px, hsl(var(--accent) / 0.24), transparent 72%),
-        radial-gradient(3.0px 3.0px at 748px 128px, #fff 32%, hsl(var(--nebula) / 0.9) 62%, transparent),
-        radial-gradient(16px 16px at 748px 128px, hsl(var(--nebula) / 0.26), transparent 75%),
-        radial-gradient(2.2px 2.2px at 276px 704px, #fff 28%, hsl(var(--chart-5) / 0.95) 58%, transparent),
-        radial-gradient(11px 11px at 276px 704px, hsl(var(--chart-5) / 0.22), transparent 72%),
+        radial-gradient(2.8px 2.8px at 118px 196px, #fff 28%, color-mix(in srgb, var(--ds-signal-cyan) 90%, transparent) 58%, transparent),
+        radial-gradient(14px 14px at 118px 196px, color-mix(in srgb, var(--ds-signal-cyan) 28%, transparent), transparent 72%),
+        radial-gradient(2.4px 2.4px at 604px 462px, #fff 28%, color-mix(in srgb, var(--ds-amber) 90%, transparent) 58%, transparent),
+        radial-gradient(12px 12px at 604px 462px, color-mix(in srgb, var(--ds-amber) 24%, transparent), transparent 72%),
+        radial-gradient(3.0px 3.0px at 748px 128px, #fff 32%, color-mix(in srgb, var(--ds-nebula) 90%, transparent) 62%, transparent),
+        radial-gradient(16px 16px at 748px 128px, color-mix(in srgb, var(--ds-nebula) 26%, transparent), transparent 75%),
+        radial-gradient(2.2px 2.2px at 276px 704px, #fff 28%, color-mix(in srgb, var(--ds-rose) 90%, transparent) 58%, transparent),
+        radial-gradient(11px 11px at 276px 704px, color-mix(in srgb, var(--ds-rose) 22%, transparent), transparent 72%),
         radial-gradient(2.6px 2.6px at 512px 318px, #fff 30%, rgba(220,240,255,0.9) 60%, transparent),
         radial-gradient(13px 13px at 512px 318px, rgba(255,255,255,0.18), transparent 74%),
-        radial-gradient(2.0px 2.0px at 812px 640px, #fff 30%, hsl(var(--chart-1) / 0.85) 60%, transparent),
-        radial-gradient(10px 10px at 812px 640px, hsl(var(--chart-1) / 0.20), transparent 72%);
+        radial-gradient(2.0px 2.0px at 812px 640px, #fff 30%, color-mix(in srgb, var(--ds-signal-cyan) 85%, transparent) 60%, transparent),
+        radial-gradient(10px 10px at 812px 640px, color-mix(in srgb, var(--ds-signal-cyan) 20%, transparent), transparent 72%),
+        /* Cluster — cyan nebula (top-left), once per viewport */
+        radial-gradient(2.4px 2.4px at 8% 11%, #fff 70%, transparent),
+        radial-gradient(1.6px 1.6px at 9.6% 13.4%, #fff 70%, transparent),
+        radial-gradient(3.2px 3.2px at 11.2% 10.2%, #fff 50%, transparent),
+        radial-gradient(1.4px 1.4px at 12.6% 14.8%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.0px 2.0px at 7.0% 16.2%, color-mix(in srgb, var(--ds-signal-cyan) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 11.8% 17.0%, #fff 70%, transparent),
+        radial-gradient(2.6px 2.6px at 13.8% 12.4%, #fff 55%, transparent),
+        radial-gradient(1.2px 1.2px at 6.2% 12.8%, rgba(255,255,255,0.75) 70%, transparent),
+        radial-gradient(8px 8px at 11.2% 10.2%, color-mix(in srgb, var(--ds-signal-cyan) 22%, transparent), transparent 70%),
+        /* Cluster — violet nebula (top-right) */
+        radial-gradient(2.5px 2.5px at 90% 9%, #fff 70%, transparent),
+        radial-gradient(1.7px 1.7px at 92.4% 11.6%, #fff 70%, transparent),
+        radial-gradient(3.4px 3.4px at 88.2% 12.8%, #fff 48%, transparent),
+        radial-gradient(1.4px 1.4px at 93.8% 8.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.1px 2.1px at 91.6% 15.2%, color-mix(in srgb, var(--ds-nebula) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 87.0% 10.6%, #fff 70%, transparent),
+        radial-gradient(2.6px 2.6px at 94.6% 13.4%, #fff 55%, transparent),
+        radial-gradient(9px 9px at 88.2% 12.8%, color-mix(in srgb, var(--ds-nebula) 20%, transparent), transparent 70%),
+        /* Cluster — rose nebula (bottom-left) */
+        radial-gradient(2.4px 2.4px at 9% 84%, #fff 70%, transparent),
+        radial-gradient(1.7px 1.7px at 11.0% 86.6%, #fff 70%, transparent),
+        radial-gradient(3.1px 3.1px at 7.4% 87.4%, #fff 50%, transparent),
+        radial-gradient(1.4px 1.4px at 12.8% 83.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.0px 2.0px at 8.2% 89.8%, color-mix(in srgb, var(--ds-rose) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 11.4% 90.6%, #fff 70%, transparent),
+        radial-gradient(8px 8px at 7.4% 87.4%, color-mix(in srgb, var(--ds-rose) 20%, transparent), transparent 70%),
+        /* Cluster — amber nebula (bottom-right) */
+        radial-gradient(2.5px 2.5px at 91% 86%, #fff 70%, transparent),
+        radial-gradient(1.6px 1.6px at 93.4% 88.4%, #fff 70%, transparent),
+        radial-gradient(3.3px 3.3px at 89.2% 89.6%, #fff 48%, transparent),
+        radial-gradient(1.4px 1.4px at 94.8% 85.0%, rgba(255,255,255,0.85) 70%, transparent),
+        radial-gradient(2.1px 2.1px at 92.6% 91.8%, color-mix(in srgb, var(--ds-amber) 80%, #fff) 70%, transparent),
+        radial-gradient(1.5px 1.5px at 88.0% 87.2%, #fff 70%, transparent),
+        radial-gradient(8px 8px at 89.2% 89.6%, color-mix(in srgb, var(--ds-amber) 20%, transparent), transparent 70%),
+        /* Cluster — milky-way ribbon */
+        radial-gradient(2.0px 2.0px at 48% 32%, #fff 70%, transparent),
+        radial-gradient(1.4px 1.4px at 50.6% 34.4%, rgba(255,255,255,0.8) 70%, transparent),
+        radial-gradient(2.8px 2.8px at 52.4% 31.2%, #fff 50%, transparent),
+        radial-gradient(1.6px 1.6px at 54.0% 35.8%, #fff 70%, transparent),
+        radial-gradient(1.2px 1.2px at 46.4% 33.6%, rgba(255,255,255,0.75) 70%, transparent);
     background-size:
         881px 881px, 881px 881px, 881px 881px, 881px 881px,
         881px 881px, 881px 881px, 881px 881px, 881px 881px,
-        881px 881px, 881px 881px, 881px 881px, 881px 881px;
+        881px 881px, 881px 881px, 881px 881px, 881px 881px,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%,
+        100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
     opacity: 0.95;
     animation: cosmic-star-twinkle 7s ease-in-out infinite alternate;
 }
@@ -15702,6 +15748,12 @@ body.council-first-theme .footer-card__lbl {
             inset 0 -1px 2px 0 rgba(0, 0, 0, 0.50),
             var(--shadow-card);
     }
+}
+
+/* Instrument cells (WIN RATE / AVG ACC / SIGNAL…) used a 55% dark --glass fill. */
+.tribunal-hero { --glass: rgba(255, 255, 255, 0.04); }
+.tribunal-hero__cell {
+    background: rgba(255, 255, 255, 0.035) !important;
 }
 
 /* ── Cosmic-glass blur gate (authoritative, global) ──────────────────────

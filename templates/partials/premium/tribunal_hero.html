@@ -4,7 +4,7 @@
 {% set inst = t.instrument if t.instrument is defined else {} %}
 {% set wf = t.weight_fracs if t.weight_fracs is defined else {} %}
 <style>
-  .tribunal-hero { --glass: rgba(16,22,34,.55); --glass-border: rgba(148,178,255,.16); position: relative; }
+  .tribunal-hero { --glass: rgba(255,255,255,.04); --glass-border: rgba(148,178,255,.16); position: relative; }
   .tribunal-hero__eye-track { fill: none; stroke: rgba(255,255,255,.2); stroke-width: 11; stroke-linejoin: round; }
   .tribunal-hero__arc { fill: none; stroke-width: 11; stroke-linecap: round; stroke-linejoin: round; opacity: .85; transition: stroke-dasharray .9s ease, stroke-dashoffset .9s ease, opacity .5s ease; }
   .tribunal-hero__arc--oracle { stroke: url(#cgOracle); }
