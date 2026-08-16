@@ -1,0 +1,23 @@
+---
+description: Allowed subagent models — Composer slow, Grok 4.6 medium, Luna high. No Sonnet 4.5/4.6.
+globs:
+alwaysApply: true
+---
+
+# Subagent models (human 2026-08-16)
+
+When spawning a Cursor **Task / subagent**, use only this pool:
+
+| Role | Use | Task `model` slug |
+|------|-----|-------------------|
+| Build / implement / docs | **Composer slow** | `composer-2.5` |
+| Design / audit / explore | **Cursor Grok 4.6 medium** | `inherit` when the parent run is already Grok 4.6; never Grok 4.5 |
+| Review / second opinion | **GPT-4.6 Luna high** | `gpt-5.6-luna-high` |
+
+**Do not use Claude Sonnet 4.5 or Sonnet 4.6** (any thinking effort, fast/slow, or “Sonnet gate” leftover in old plans). Do not pick `claude-sonnet-*` 4.x slugs.
+
+Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable, Sonnet 5.
+
+If a Task catalog has no Grok 4.6 **medium** slug, inherit from this Grok 4.6 parent rather than substituting Sonnet or Grok 4.5.
+
+Binding copy: `cursor-agents-communication/model-guide.md`

@@ -4,8 +4,10 @@ This guide is for Cursor (Composer + Grok) to pick up the visual/iterative UI ta
 
 ## Tool Assignment
 
-- **Composer 2.5** — default build
-- **Grok** — design / audits when the path is ambiguous (see `model-guide.md`)
+- **Composer 2.5 slow** (`composer-2.5`) — default build subagent
+- **Cursor Grok 4.6 medium** — design / audits (`inherit` on a Grok 4.6 parent)
+- **GPT-4.6 Luna high** (`gpt-5.6-luna-high`) — read-only review
+- **Never Sonnet 4.5 or 4.6** — `.cursor/rules/subagent-models.mdc`
 - Short Grok LOCK → Composer write is **retired** as a hard rule (`grok-lock-composer-write-rule.md`, `token-budget-rules.md`)
 - Obey `.cursorignore` (skip `data/*.json`). Billing watch only in `token-budget-rules.md`.
 

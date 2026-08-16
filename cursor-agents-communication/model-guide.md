@@ -1,21 +1,23 @@
 # Model Guide — Composer vs Grok
 
 **Last updated:** 2026-08-16  
-**Applies to:** **One primary Cloud Agent** (Pro+) + Grok / Composer / Sonnet **subagents** by role. Agent A (`-843d`) **retired** — do not spawn.
+**Applies to:** **One primary Cloud Agent** + subagents from the allowlist below. Agent A (`-843d`) **retired** — do not spawn.
 
-> **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies. See `board.md` / `STATUS.md` for queue state.
+> **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies.
+>
+> **Subagent pool (human 2026-08-16):** Composer **slow** (`composer-2.5`), Cursor **Grok 4.6 medium** (`inherit` on a Grok 4.6 parent), **GPT-4.6 Luna high** (`gpt-5.6-luna-high`). **Never Sonnet 4.5 or Sonnet 4.6.** Always-on rule: `.cursor/rules/subagent-models.mdc`.
 
 ## Models
 
 | Model | Cursor slug / setting | Best for |
 |-------|----------------------|----------|
-| **Composer 2.5 (fast pool)** | `composer-2.5-fast` | **Secondary** — mechanical builds (routes, tests, docs, board, UI wiring from a locked plan) only when the fast pool is clearly sufficient |
-| **Composer 2.5** | `composer-2.5` | **Default build** — preferred for all builds; Grok-locked plans, multi-file, and behavioral work |
-| **Grok slow + low** | Grok 4.5 slow · thinking **low** | Narrow audits / tiny locks when path is already clear |
-| **Grok slow + medium** | Grok 4.5 slow · thinking **medium** | Default design LOCK when plan marks DESIGN or path is ambiguous |
-| **Grok slow + high** | Grok 4.5 slow · thinking **high** | Escalate only after medium FAIL/CONDITIONAL or unsatisfactory |
+| **Composer 2.5 (slow)** | `composer-2.5` | **Default subagent build** — routes, tests, docs, UI from a locked plan |
+| **Cursor Grok 4.6 medium** | `inherit` (parent is Grok 4.6) | Design, audit, explore — not Grok 4.5 |
+| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | Read-only review / second opinion (replaces old Sonnet gates) |
 
-**Default build:** **Composer 2.5 (slow, `composer-2.5`)** preferred; use **`composer-2.5-fast`** only for mechanical builds where the fast pool is clearly sufficient.
+**Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
+
+**Default build:** **Composer 2.5 slow** (`composer-2.5`).
 
 **Grok thinking policy (mandatory) — user 2026-07-15; updated 2026-08-01:**
 1. **Design / audit LOCKs:** start **slow + medium**; escalate to **high** only if medium FAIL / stuck / unsatisfactory. Never default to high / xhigh / fast-xhigh.
@@ -35,32 +37,7 @@ Grok may still return a structured LOCK when that is the useful shape; it is **n
    ESCALATE_HIGH?: no | yes (why)
    ```
 
-**HARD RULE — Exactly ONE Sonnet gate per slice (user 2026-08-01):**
-
-Sonnet is read-only (diffs / LOCK / risks / missing tests / lock drift). **Sonnet does not edit.** Sonnet effort: **low** first; **medium** only if low is unclear / incomplete / stuck. Never default Sonnet to high.
-
-**Do not “double-dip”:** never run Sonnet on both the LOCK *and* the post-Composer diff by default. Pick **one** gate per slice:
-
-| Slice type | Sonnet runs once on… | Who covers the other artifact |
-|------------|----------------------|-------------------------------|
-| **DESIGN-HEAVY** (ambiguous UI/architecture LOCK — e.g. hero/mindmap ground-up) | The **LOCK, before Composer** | Post-build review = **Grok** only (unless Grok escalates residual risk to a Sonnet spot-check — rare) |
-| **MECHANICAL** (clear files/AC — e.g. Phase C wiring, locked learning-loop patches) | The **diff, before push** | Pre-build LOCK = **Grok** only — skip Sonnet on the LOCK |
-
-```text
-Grok LOCK (medium → high if stuck)
-  → DESIGN-HEAVY: Sonnet (low→medium) on LOCK once → Composer
-  → MECHANICAL:     Composer directly
-  → orchestrator smoke-check (diff scope, rerun new tests)
-  → MECHANICAL (or Grok escalates residual risk): Sonnet (low→medium) on diff once before push
-  → Sonnet FAIL / must-fix CONDITIONAL:
-       Grok fix LOCK → Composer patch → Sonnet re-checks THAT SAME gate only
-  → push
-```
-
-1. Sonnet finds → **Grok** writes the fix LOCK → **Composer** patches → Sonnet re-reviews **the same gate**. Never let Sonnet implement.
-2. Re-review after FAIL is not double-dipping; running Sonnet on LOCK *and* code in the same slice by default is.
-3. Do not use Sonnet as the long primary babysitter or implementer (usage limit).
-4. Sprint plans cite this section — they must not invent a competing “always Sonnet before Composer” or “always Sonnet after Composer” rule.
+**Review gate (2026-08-16):** use **GPT-4.6 Luna high** (`gpt-5.6-luna-high`) for a read-only pass on LOCK or diff — **not** Sonnet 4.5/4.6. Luna does not edit. One review pass per slice unless that pass FAILs. Historical “Sonnet gate” tables in old sprint plans are superseded.
 
 **Grok as reviewer:** Read-only pass — no edits unless findings require a follow-up Composer task. Save review conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment.
 **Context hygiene (not brevity):** skip `data/*.json` / `.venv`; prefer `main` + open PR diffs over re-auditing merged work. Billing watch: `token-budget-rules.md`.

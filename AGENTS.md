@@ -49,6 +49,10 @@ access are required to run it locally.
 
 Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](https://github.com/DietrichGebert/ponytail)): YAGNI, minimal diff, reuse existing patterns before adding files or dependencies. Do not cut validation, security, error handling, or contract-test coverage.
 
+### Subagent models
+
+Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Subagents: **Composer slow** (`composer-2.5`), **Cursor Grok 4.6 medium** (`inherit` on a Grok 4.6 parent), **GPT-4.6 Luna high** (`gpt-5.6-luna-high`). Binding: [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md).
+
 ### Agent coordination (two Cursor agents)
 
 **Concurrent J/H sprint (2026-07-11):** Read **`cursor-agents-communication/concurrent-protocol.md`** and **`cursor-agents-communication/board.md`** from git first. Do **not** use `fetch_memories(["f93f7202"])` for board STATUS this sprint.

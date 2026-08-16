@@ -19,3 +19,5 @@ Still useful, unrelated to brevity:
 - `.cursorignore` — do not force-read `data/*.json`.
 
 See `token-budget-rules.md` (retired + billing watch).
+
+Subagent pool (2026-08-16): Composer slow (`composer-2.5`), Grok 4.6 medium, GPT-4.6 Luna high. Never Sonnet 4.5 or 4.6 — `.cursor/rules/subagent-models.mdc`.
