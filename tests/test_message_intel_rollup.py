@@ -668,3 +668,49 @@ def test_telegram_divergence_rejects_unmatured_24h_record(monkeypatch):
     story = rollup.build_telegram_divergence_stories()["stories"][0]
     assert story["ready"] is False
     assert story["pending_qualifying_call_count"] == 2
+
+
+def test_conviction_rows_keep_subnet_basis_and_receipt_source_links(intel_env):
+    """Regression: _conviction_rows aliases ps.netuid AS snap_netuid — without the
+    classifier's entity fallback, every subnet-basis call was ineligible, leaving
+    consensus/divergence permanently empty. Also locks receipt source permalinks
+    and crown top-message receipts."""
+    from internal.message_intel.proof import classify_call
+    from internal.message_intel import rollup
+    from internal.message_intel.store import Database
+
+    db = Database(intel_env["db_path"])
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    mid, _ = db.save_message({
+        "source": "telegram",
+        "group_id": "g1",
+        "group_name": "Subnet Summers",
+        "author_id": "a1",
+        "author_name": "Nova Quinn",
+        "author_username": "nova_calls",
+        "content": "SN64 Chutes revenue growing — bullish, accumulate.",
+        "message_id": "424242",
+        "timestamp": ts,
+        "metrics": {"views": 10, "reactions": {"🔥": 7}},
+    })
+    db.save_analysis(mid, {"sentiment": "bullish", "entities": {"subnets": ["SN64"]}})
+    db.save_verdict(mid, {"verdict": "bullish", "conviction": 88.0, "predicted_direction": "up"})
+    db.save_price_snapshot(mid, 0.05, netuid=64)
+    db.save_price_outcome(mid, {"price_1h": 0.051, "price_4h": 0.053, "price_24h": 0.055,
+                                "pump_pct_max": 9.5, "outcome": "pump"})
+
+    rows = rollup._conviction_rows(db)
+    proof = classify_call(rows[0])
+    assert proof["eligible"] is True
+    assert proof["price_basis"] == "subnet"
+    assert proof["status"] == "hit"
+
+    receipts = rollup.list_telegram_caller_receipts(author_id="id:a1", days=30, db=db)
+    assert receipts["total"] == 1
+    assert receipts["receipts"][0]["source_url"] == "https://t.me/officialsubnetsummer/424242"
+
+    crowns = rollup.build_reaction_crowns(days=7, db=db)
+    fire = next(c for c in crowns if c["key"] == "fire")
+    assert fire["top_message_id"] == mid
+    assert "Chutes" in fire["top_snippet"]
+    assert fire["source_url"] == "https://t.me/officialsubnetsummer/424242"

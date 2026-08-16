@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -183,7 +184,8 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
-                      m.content, m.timestamp, m.created_at, a.sentiment, a.influence_score,
+                      m.content, m.timestamp, m.created_at, m.external_message_id,
+                      a.sentiment, a.influence_score,
                       a.entities_json, mm.reactions, ps.netuid AS snap_netuid,
                       v.conviction, v.predicted_direction
                FROM messages m
@@ -682,12 +684,21 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
                     "author_name": name,
                     "author_username": username,
                     "count": 0,
+                    "top_message_id": None,
+                    "top_message_count": 0,
+                    "top_snippet": "",
+                    "top_source_url": None,
                 },
             )
             entry["count"] += n
             entry["author_name"] = name or entry["author_name"]
             if username:
                 entry["author_username"] = username
+            if n > int(entry["top_message_count"]):
+                entry["top_message_id"] = row.get("id")
+                entry["top_message_count"] = n
+                entry["top_snippet"] = str(row.get("content") or "")[:140]
+                entry["top_source_url"] = telegram_message_url(row)
 
     crowns: List[Dict[str, Any]] = []
     for key, emoji, label in _REACTION_KEYS:
@@ -710,6 +721,10 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
                 "display_name": display,
                 "count": int(winner["count"]),
                 "days": days,
+                "top_message_id": winner.get("top_message_id"),
+                "top_snippet": winner.get("top_snippet") or "",
+                "top_message_count": int(winner.get("top_message_count") or 0),
+                "source_url": winner.get("top_source_url"),
             }
         )
     return crowns
@@ -855,7 +870,8 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
     with database._connect() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
-                      m.content, m.timestamp, m.created_at, v.predicted_direction, v.conviction,
+                      m.content, m.timestamp, m.created_at, m.external_message_id,
+                      v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
                       po.price_1h, po.price_4h, po.price_24h
                FROM messages m
@@ -883,8 +899,9 @@ def _conviction_rows(db=None) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, a.entities_json,
+                      m.external_message_id,
                       v.verdict, v.predicted_direction, v.conviction,
-                      ps.tao_usd_price, ps.netuid AS snap_netuid,
+                      ps.tao_usd_price, ps.netuid AS snap_netuid, ps.netuid AS netuid,
                       po.outcome, po.pump_pct_max, po.price_24h, po.price_24h_recorded_at
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
@@ -942,6 +959,7 @@ def _current_call_receipt(row: Dict[str, Any], direction: str, reliability: Dict
         "author_username": row.get("author_username") or "",
         "content": str(row.get("content") or "")[:280],
         "timestamp": row.get("timestamp") or row.get("created_at"),
+        "source_url": telegram_message_url(row),
         "direction": direction,
         "jury_conviction": round(float(row.get("conviction") or 0.0), 1),
         "age_hours": round(age_hours, 1),
@@ -1406,11 +1424,26 @@ def build_telegram_caller_leaderboard(*, days: int = 30, limit: int = 25, db=Non
 
 
 def _receipt(row: Dict[str, Any], proof: Dict[str, Any]) -> Dict[str, Any]:
-    return {
+    receipt = {
         "message_id": int(row["id"]), "content": str(row.get("content") or "")[:280],
         "timestamp": row.get("timestamp") or row.get("created_at"), "netuid": row.get("netuid"),
         "proof": proof_for_message(row),
     }
+    source_link = telegram_message_url(row)
+    if source_link:
+        receipt["source_url"] = source_link
+    return receipt
+
+
+def telegram_message_url(row: Dict[str, Any]) -> Optional[str]:
+    """Public t.me permalink for a Telegram receipt; None when the group is private/unknown."""
+    ext = str(row.get("external_message_id") or "").strip()
+    if not ext or not ext.isdigit():
+        return None
+    group = str(os.environ.get("TELEGRAM_GROUP") or "officialsubnetsummer").strip().lstrip("@")
+    if not group:
+        return None
+    return f"https://t.me/{group}/{ext}"
 
 
 def list_telegram_caller_receipts(*, author_id: str, days: int = 30, limit: int = 20, offset: int = 0, db=None) -> Dict[str, Any]:
