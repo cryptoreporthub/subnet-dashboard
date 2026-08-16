@@ -44,6 +44,7 @@
   var powerEl = document.getElementById("message-intel-power");
   var narrativeEl = document.getElementById("message-intel-narrative");
   var accoladesEl = document.getElementById("message-intel-accolades");
+  var fullDeskLink = document.getElementById("message-intel-full-desk");
   var flowAnchorBtn = document.getElementById("message-intel-flow-anchor");
   var flowValEl = document.getElementById("message-intel-flow-val");
   var flowDirEl = document.getElementById("message-intel-flow-dir");
@@ -713,8 +714,11 @@
       var name = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name || "Unknown";
       var accuracy = row.accuracy != null ? row.accuracy + "%" : "warming";
       var caution = !row.qualified ? '<span class="message-intel__caution">too few graded calls to trust</span>' : "";
+      var fullName = row.author_name && row.author_username && row.author_name !== row.author_username
+        ? '<span class="message-intel__caller-fullname">' + esc(row.author_name) + '</span>'
+        : "";
       html += '<article class="message-intel__caller-row' + (row.qualified ? "" : " is-provisional") + '">' +
-        '<span class="message-intel__caller-rank">' + esc(index + 1) + '</span><div class="message-intel__caller-main"><b>' + esc(name) + '</b>' +
+        '<span class="message-intel__caller-rank">' + esc(index + 1) + '</span><div class="message-intel__caller-main"><b>' + esc(name) + '</b>' + fullName +
         '<span>' + esc(row.hits) + ' hit · ' + esc(row.misses) + ' miss · ' + esc(row.neutral) + ' neutral · n=' + esc(row.sample_size) + '</span>' +
         caution + '</div>' +
         '<strong>' + esc(accuracy) + '</strong>' +
@@ -722,17 +726,20 @@
     });
     html += "</div><p class=\"message-intel__caller-disclaimer\">" + esc(payload.disclaimer || "Not financial advice.") + "</p>";
     callersBody.innerHTML = html;
-    callersBody.querySelectorAll("[data-caller-id]").forEach(function (button) {
-      button.addEventListener("click", function () {
-        loadCallerReceipts(button.getAttribute("data-caller-id"), button.getAttribute("data-caller-name"));
-      });
-    });
+    bindReceiptToggles(callersBody, callersBody, "data-caller-id");
   }
 
-  async function loadCallerReceipts(authorId, name) {
-    if (!callersBody) return;
-    callersBody.insertAdjacentHTML("beforeend", '<div class="message-intel__receipts" id="message-intel-receipts"><p class="empty">Loading proof receipts for ' + esc(name) + "…</p></div>");
-    var target = document.getElementById("message-intel-receipts");
+  async function loadCallerReceipts(authorId, name, hostEl) {
+    var host = hostEl || callersBody;
+    if (!host) return;
+    var target = host.querySelector(".message-intel__receipts");
+    if (!target) {
+      host.insertAdjacentHTML("beforeend", '<div class="message-intel__receipts"><p class="empty">Loading proof receipts for ' + esc(name) + "…</p></div>");
+      target = host.querySelector(".message-intel__receipts");
+    } else {
+      target.innerHTML = '<p class="empty">Loading proof receipts for ' + esc(name) + "…</p>";
+    }
+    target.scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       var data = await fetchJsonWithRetry("/api/message-intel/callers/" + encodeURIComponent(authorId) + "/receipts?days=" + callerDays + "&limit=20");
       var receipts = data.receipts || [];
@@ -742,15 +749,33 @@
       }
       target.innerHTML = '<h4>Proof receipts · ' + esc(name) + '</h4>' + receipts.map(function (r) {
         var proof = r.proof || {};
-        return '<button type="button" class="message-intel__receipt" data-receipt-id="' + esc(r.message_id) + '">' +
-          proofPill(proof) + '<span>' + esc(snippet(r.content, 110)) + '</span><small>' + esc(fmtTime(r.timestamp)) + (r.netuid != null ? " · SN" + esc(r.netuid) : "") + "</small></button>";
+        return '<div class="message-intel__receipt" data-receipt-id="' + esc(r.message_id) + '" role="button" tabindex="0">' +
+          proofPill(proof) + '<span>' + esc(snippet(r.content, 110)) + '</span><small>' + esc(fmtTime(r.timestamp)) + (r.netuid != null ? " · SN" + esc(r.netuid) : "") + "</small>" +
+          (r.source_url ? '<a class="message-intel__receipt-src" href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer" title="View the original Telegram message">source ↗</a>' : "") +
+          "</div>";
       }).join("");
       target.querySelectorAll("[data-receipt-id]").forEach(function (button) {
-        button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+        button.addEventListener("click", function (ev) {
+          if (ev.target.closest("a")) return;
+          toggleMessageDetail(button.getAttribute("data-receipt-id"));
+        });
       });
     } catch (e) {
       target.innerHTML = '<p class="empty">Could not load these proof receipts.</p>';
     }
+  }
+
+  function bindReceiptToggles(scopeEl, hostEl, attr) {
+    if (!scopeEl) return;
+    scopeEl.querySelectorAll("[" + attr + "]").forEach(function (button) {
+      if (button.getAttribute("data-receipt-bound") === "1") return;
+      button.setAttribute("data-receipt-bound", "1");
+      button.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        loadCallerReceipts(button.getAttribute(attr), button.getAttribute("data-caller-name") || "caller", hostEl);
+      });
+    });
   }
 
   async function hydrateCallerLeaderboard() {
@@ -784,11 +809,15 @@
       var receipts = row.resolved_receipts || [];
       var current = calls.map(function (call) {
         var who = call.author_username ? "@" + String(call.author_username).replace(/^@/, "") : call.author_name;
-        return '<button type="button" class="message-intel__consensus-receipt" data-receipt-id="' + esc(call.message_id) + '">' +
-          '<b>' + esc(String(call.direction).toUpperCase()) + '</b> ' + esc(who) + ' · ' + esc(call.jury_conviction) + '% jury · ' + esc(call.author_accuracy) + '% proven</button>';
+        return '<div class="message-intel__consensus-receipt" data-receipt-id="' + esc(call.message_id) + '" role="button" tabindex="0">' +
+          '<b>' + esc(String(call.direction).toUpperCase()) + '</b> ' + esc(who) + ' · ' + esc(call.jury_conviction) + '% jury · ' + esc(call.author_accuracy) + '% proven' +
+          (call.source_url ? ' <a class="message-intel__receipt-src" href="' + esc(call.source_url) + '" target="_blank" rel="noopener noreferrer">source ↗</a>' : "") +
+          '</div>';
       }).join("");
       var resolved = receipts.map(function (receipt) {
-        return '<button type="button" class="message-intel__consensus-receipt" data-receipt-id="' + esc(receipt.message_id) + '">' + proofPill(receipt.proof) + esc(snippet(receipt.content, 74)) + '</button>';
+        return '<div class="message-intel__consensus-receipt" data-receipt-id="' + esc(receipt.message_id) + '" role="button" tabindex="0">' + proofPill(receipt.proof) + esc(snippet(receipt.content, 74)) +
+          (receipt.source_url ? ' <a class="message-intel__receipt-src" href="' + esc(receipt.source_url) + '" target="_blank" rel="noopener noreferrer">source ↗</a>' : "") +
+          '</div>';
       }).join("");
       return '<article class="message-intel__consensus-row message-intel__consensus-row--' + esc(state) + '">' +
         '<div class="message-intel__consensus-head"><a href="/subnet/' + esc(row.netuid) + '"><b>' + esc(row.name) + '</b> <span>SN' + esc(row.netuid) + '</span></a>' +
@@ -800,7 +829,10 @@
         '<p>Resolved-call receipts</p>' + (resolved || '<span>No matching resolved receipts available.</span>') + '</div></details></article>';
     }).join("") + '</div><p class="message-intel__caller-disclaimer">Telegram consensus is evidence-qualified community commentary, not investment advice.</p>';
     consensusBody.querySelectorAll("[data-receipt-id]").forEach(function (button) {
-      button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+      button.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        toggleMessageDetail(button.getAttribute("data-receipt-id"));
+      });
     });
   }
 
@@ -832,8 +864,10 @@
       var receipts = story.receipts || [];
       var receiptHtml = receipts.map(function (receipt) {
         var proof = receipt.proof || {};
-        return '<button type="button" class="message-intel__divergence-receipt" data-receipt-id="' + esc(receipt.message_id) + '">' +
-          proofPill(proof) + '<span>' + esc(String(receipt.direction || "—").toUpperCase()) + ' → ' + esc(String(receipt.outcome_direction || "—").toUpperCase()) + ' · ' + esc(snippet(receipt.content, 86)) + '</span></button>';
+        return '<div class="message-intel__divergence-receipt" data-receipt-id="' + esc(receipt.message_id) + '" role="button" tabindex="0">' +
+          proofPill(proof) + '<span>' + esc(String(receipt.direction || "—").toUpperCase()) + ' → ' + esc(String(receipt.outcome_direction || "—").toUpperCase()) + ' · ' + esc(snippet(receipt.content, 86)) + '</span>' +
+          (receipt.source_url ? '<a class="message-intel__receipt-src" href="' + esc(receipt.source_url) + '" target="_blank" rel="noopener noreferrer">source ↗</a>' : "") +
+          '</div>';
       }).join("");
       var facts = story.ready
         ? 'Consensus <b>' + esc(String(story.consensus_direction || "mixed").toUpperCase()) + '</b> · observed <b>' + esc(String(story.observed_direction || "unavailable").toUpperCase()) + '</b> · ' + esc(move)
@@ -845,7 +879,10 @@
         '<p class="message-intel__divergence-caveat">' + esc(story.caveat || "Observed outcomes are not causal evidence.") + '</p></article>';
     }).join("") + '</div>';
     divergenceBody.querySelectorAll("[data-receipt-id]").forEach(function (button) {
-      button.addEventListener("click", function () { toggleMessageDetail(button.getAttribute("data-receipt-id")); });
+      button.addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        toggleMessageDetail(button.getAttribute("data-receipt-id"));
+      });
     });
   }
 
@@ -948,6 +985,10 @@
       html += '<p class="message-intel__detail-outcome message-intel__detail-outcome--pending">Outcome pending — grading runs every ~5 min.</p>';
     }
     if (proof.eligible) html += '<p class="message-intel__detail-proof">Proof: ' + proofPill(proof) + ' · resolved qualifying calls only; not financial advice.</p>';
+    var extId = String(message.external_message_id || "").trim();
+    if (/^\d+$/.test(extId)) {
+      html += '<p class="message-intel__detail-source"><a class="message-intel__receipt-src" href="https://t.me/officialsubnetsummer/' + esc(extId) + '" target="_blank" rel="noopener noreferrer">View original message on Telegram ↗</a></p>';
+    }
     if (detail.netuid != null) {
       html +=
         '<div class="message-intel__detail-actions">' +
@@ -1383,7 +1424,9 @@
         '<div class="message-intel__factor"><span>velocity</span><i style="width:' + Math.round((vel / maxV) * 100) + '%"></i><em>' + vel.toFixed(1) + "</em></div>" +
         '<div class="message-intel__factor"><span>conviction</span><i data-axis="conviction" style="width:' + Math.max(4, Math.round(conv)) + '%"></i><em>' + (conv ? Math.round(conv) : "—") + "</em></div>" +
         '<div class="message-intel__factor"><span>quality</span><i data-axis="quality" style="width:' + qPct + '%"></i><em>' + (qPct ? qPct : "—") + "</em></div>" +
-        '<div class="message-intel__power-why">' + esc(why) + "</div></div></div>";
+        '<div class="message-intel__power-why">' + esc(why) + "</div>" +
+        '<button type="button" class="message-intel__power-calls" data-power-sn="' + esc(row.netuid) + '" title="Open the graded calls behind this score">calls ↗</button>' +
+        "</div></div>";
     }).join("");
     var slot;
     for (slot = list.length + 1; slot <= 3; slot++) {
@@ -1391,6 +1434,20 @@
         slot + " awaiting a fresh directional call with resolved caller history.</p></div>";
     }
     powerEl.innerHTML = html;
+    powerEl.querySelectorAll("[data-power-sn]").forEach(function (btn) {
+      btn.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var n = Number(btn.getAttribute("data-power-sn"));
+        if (!n) return;
+        filters.netuid = n;
+        saveFilters();
+        syncFilterChipStates();
+        setPulseMode("listen");
+        hydrate();
+        if (feed) feed.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    });
   }
 
   function narrativeStage(row) {
@@ -1427,10 +1484,11 @@
       var hits = Number(row.hits) || 0;
       var hit = Number(row.hit_rate);
       if (row.caution || graded < 5) return;
-      if (hit >= 60 && hits >= 3) earned.push({ handle: handle, badge: "Early & Right", why: hit + "% strike · n=" + graded });
-      else if (hits >= 3 && hit >= 50) earned.push({ handle: handle, badge: "On Fire", why: hits + " hits this window" });
+      var base = { handle: handle, author_id: row.author_id };
+      if (hit >= 60 && hits >= 3) earned.push(Object.assign(base, { badge: "Early & Right", why: hit + "% strike · n=" + graded }));
+      else if (hits >= 3 && hit >= 50) earned.push(Object.assign(base, { badge: "On Fire", why: hits + " hits this window" }));
       else if ((Number(row.influence_score) || 0) >= 20 && (Number(row.message_count) || 0) >= 8) {
-        earned.push({ handle: handle, badge: "High Signal", why: "low fluff, high substance this week" });
+        earned.push(Object.assign(base, { badge: "High Signal", why: "low fluff, high substance this week" }));
       }
     });
     if (!earned.length) {
@@ -1438,10 +1496,12 @@
       return;
     }
     accoladesEl.innerHTML = earned.slice(0, 4).map(function (row) {
-      return '<div class="message-intel__accolade-row"><span aria-hidden="true">★</span><div><b>' +
+      return '<div class="message-intel__accolade-row"><span class="message-intel__accolade-star" aria-hidden="true">★</span><div><b>' +
         esc(row.handle || "Unknown") + '</b> · ' + esc(row.badge) +
-        '<div class="message-intel__power-why">' + esc(row.why) + '</div></div></div>';
+        '<div class="message-intel__power-why">' + esc(row.why) + '</div></div>' +
+        '<button type="button" class="message-intel__receipt-toggle" data-accolade-receipts="' + esc(row.author_id) + '" data-caller-name="' + esc(row.handle || "Unknown") + '">Receipts</button></div>';
     }).join("");
+    bindReceiptToggles(accoladesEl, accoladesEl, "data-accolade-receipts");
   }
 
   function ekgPathFor(mode) {
@@ -1730,6 +1790,9 @@
       var caution = row.caution || (Number(row.graded) > 0 && Number(row.graded) < 5)
         ? '<span class="message-intel__caution">too few graded calls to trust</span>'
         : "";
+      var receiptBtn = Number(row.graded) > 0
+        ? '<button type="button" class="message-intel__receipt-toggle" data-champ-receipts="' + esc(row.author_id) + '" data-caller-name="' + esc(handle || "Unknown") + '">Receipts</button>'
+        : "";
       html +=
         '<div class="message-intel__champ-row">' +
         '<span class="message-intel__rank ' +
@@ -1744,6 +1807,7 @@
         '<div class="message-intel__champ-body">' +
         '<div class="message-intel__champ-name">' +
         esc(handle || "Unknown") +
+        receiptBtn +
         "</div>" +
         '<div class="message-intel__champ-basis">' +
         basis +
@@ -1772,6 +1836,13 @@
           ? "@" + String(row.author_username).replace(/^@/, "")
           : row.author_name) ||
         "Unknown";
+      var actions = "";
+      if (row.source_url) {
+        actions += '<a class="message-intel__receipt-src" href="' + esc(row.source_url) + '" target="_blank" rel="noopener noreferrer" title="Top ' + esc(row.label || row.key || "") + ' message on Telegram">source ↗</a>';
+      }
+      if (row.top_message_id) {
+        actions += '<button type="button" class="message-intel__receipt-toggle" data-crown-receipt="' + esc(row.top_message_id) + '" title="Open the top message as a receipt">receipt</button>';
+      }
       html +=
         '<div class="message-intel__crown-row">' +
         '<span class="message-intel__crown-emoji" aria-hidden="true">' +
@@ -1786,10 +1857,29 @@
         "</div></div>" +
         '<div class="message-intel__crown-count">' +
         esc(row.count) +
-        "</div></div>";
+        "</div>" +
+        (actions ? '<div class="message-intel__crown-actions">' + actions + "</div>" : "") +
+        "</div>";
     });
     html += "</div>";
     return html;
+  }
+
+  function bindCrownReceipts() {
+    if (!crownsEl) return;
+    crownsEl.querySelectorAll("[data-crown-receipt]").forEach(function (button) {
+      if (button.getAttribute("data-crown-bound") === "1") return;
+      button.setAttribute("data-crown-bound", "1");
+      button.addEventListener("click", function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var mid = button.getAttribute("data-crown-receipt");
+        setPulseMode("listen");
+        openDetailId = null;
+        toggleMessageDetail(mid);
+        if (feed) feed.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    });
   }
 
   function formatCompactCount(n) {
@@ -2099,7 +2189,15 @@
         liveTag.hidden = true;
       }
     }
-    if (pulse) pulse.hidden = mode !== "live";
+    if (pulse) {
+      pulse.hidden = mode === "warming" || mode === "reconnecting";
+      if (!pulse.hidden) {
+        pulse.lastChild.textContent = mode === "live" ? "Live" : "Archive";
+      }
+    }
+    if (fullDeskLink) {
+      fullDeskLink.textContent = mode === "live" ? "Open full listener →" : "Open full listener (archive) →";
+    }
 
     if (sub) {
       if (mode === "live") {
@@ -2248,10 +2346,12 @@
       }
       if (championsEl) {
         championsEl.innerHTML = renderChampions(authors, authorsUnavailable);
+        bindReceiptToggles(championsEl, championsEl, "data-champ-receipts");
       }
       renderAccolades(authors);
       if (crownsEl) {
         crownsEl.innerHTML = renderReactionCrowns(crowns);
+        bindCrownReceipts();
       }
 
       if (payload.filtered_empty) {
