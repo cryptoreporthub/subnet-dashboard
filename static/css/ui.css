@@ -13852,6 +13852,7 @@ body.wrap {
   .message-intel--v2 .message-intel__sky-plasma-ring,
   .message-intel--v2 .message-intel__sky-core-glow,
   .message-intel--v2 .message-intel__sky-starfield,
+  .message-intel--v2 .message-intel__sky-bg-moon,
   .message-intel--v2 .message-intel__sky-track--line,
   .message-intel--v2 .message-intel__vis-pulse-dot,
   .message-intel--v2 .message-intel__sky-dot::before { animation: none !important; }
@@ -17396,6 +17397,11 @@ section.desk-zone,
     width: 100%;
 }
 
+.message-intel__learn-dual-grid > .message-intel__learn-card {
+    min-width: 0;
+    overflow: visible;
+}
+
 @media (max-width: 840px) {
     .message-intel__learn-dual-grid {
         grid-template-columns: 1fr;
@@ -17472,8 +17478,10 @@ section.desk-zone,
 
 .message-intel__proof-item-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
 .message-intel__proof-item-status-badge {
@@ -17508,6 +17516,7 @@ section.desk-zone,
     font-size: 12px;
     font-weight: 700;
     color: #f1f5f9;
+    overflow-wrap: anywhere;
 }
 
 .message-intel__proof-item-meta {
