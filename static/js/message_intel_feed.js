@@ -2192,11 +2192,9 @@
     if (pulse) {
       pulse.hidden = mode === "warming" || mode === "reconnecting";
       if (!pulse.hidden) {
-        pulse.lastChild.textContent = mode === "live" ? "Live" : "Archive";
+        var labelEl = pulse.querySelector(".message-intel__live-label");
+        if (labelEl) labelEl.textContent = mode === "live" ? "Live" : "Archive";
       }
-    }
-    if (fullDeskLink) {
-      fullDeskLink.textContent = mode === "live" ? "Open full listener →" : "Open full listener (archive) →";
     }
 
     if (sub) {
