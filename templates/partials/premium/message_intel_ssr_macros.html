@@ -67,7 +67,11 @@
         {% if conv is not none %}<span class="message-intel__f-conv{% if conv|float >= 60 %} message-intel__f-conv--high{% endif %}">{{ '%.0f'|format(conv|float) }}% conv</span>{% endif %}
         {% if row.timestamp %}<span class="message-intel__f-time">{{ row.timestamp }}</span>{% endif %}
       </div>
-      <p class="message-intel__f-text">{{ (row.content|default(''))[:280] }}{% if (row.content|default(''))|length > 280 %}…{% endif %}</p>
+      <p class="message-intel__f-text">{{ (row.content|default(''))[:220] }}{% if (row.content|default(''))|length > 220 %}…{% endif %}</p>
+      {% if row.netuid %}<span class="message-intel__sn-inline">SN{{ row.netuid }}</span>{% endif %}
+      {% if row.proof and row.proof.eligible %}
+      <span class="message-intel__outcome message-intel__outcome--{{ row.proof.status|default('pending') }}">{{ (row.proof.status or 'pending')|upper }}{% if row.proof.move_pct is not none %} · {{ '%.1f'|format(row.proof.move_pct|float) }}%{% endif %}</span>
+      {% endif %}
     </div>
   </article>
   {% endfor %}

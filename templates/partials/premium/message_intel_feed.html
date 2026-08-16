@@ -7,7 +7,7 @@
 {% set mi_messages = mi.messages if mi.messages is iterable and mi.messages is not string else [] %}
 {% set mi_window = mi_meta.trending_window|default('1h') %}
 <section class="row wrap-pad desk-zone" id="section-message-intel" aria-labelledby="message-intel-title" data-home-live>
-<div class="message-intel message-intel--v2 message-intel--home-compact glass-card" data-pulse-mode="listen">
+<div class="message-intel message-intel--v2 message-intel--home-compact message-intel--starlight glass-card" data-pulse-mode="listen">
 
   <div class="message-intel__heartbeat" id="message-intel-heartbeat" data-mode="warming" aria-live="polite">
     <svg class="message-intel__ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
@@ -54,11 +54,11 @@
     </div>
   </div>
 
-  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve folders">
-    <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span></button>
-    <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who's right</span></button>
-    <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span></button>
-    <button type="button" role="tab" id="pulse-tab-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve" aria-selected="false" tabindex="-1"><b>Serve</b><span>desk + bot</span></button>
+  <div class="message-intel__loop" role="tablist" aria-label="Listen Learn Rank Serve">
+    <button type="button" role="tab" id="pulse-tab-listen" data-beat="listen" data-pulse-mode="listen" aria-controls="message-intel-pane-listen" aria-selected="true" tabindex="0"><b>Listen</b><span>ingest</span><em class="message-intel__peek" id="pulse-peek-listen">—</em></button>
+    <button type="button" role="tab" id="pulse-tab-learn" data-beat="learn" data-pulse-mode="learn" aria-controls="message-intel-pane-learn" aria-selected="false" tabindex="-1"><b>Learn</b><span>who's right</span><em class="message-intel__peek" id="pulse-peek-learn">—</em></button>
+    <button type="button" role="tab" id="pulse-tab-rank" data-beat="rank" data-pulse-mode="rank" aria-controls="message-intel-pane-rank" aria-selected="false" tabindex="-1"><b>Rank</b><span>chatter power</span><em class="message-intel__peek" id="pulse-peek-rank">—</em></button>
+    <button type="button" role="tab" id="pulse-tab-serve" data-beat="serve" data-pulse-mode="serve" aria-controls="message-intel-pane-serve" aria-selected="false" tabindex="-1"><b>Serve</b><span>desk + bot</span><em class="message-intel__peek" id="pulse-peek-serve">—</em></button>
   </div>
 
   <div class="message-intel__bay">
@@ -390,24 +390,24 @@
           <span class="message-intel__legend-item"><span class="message-intel__sw message-intel__sw--lilac" aria-hidden="true"></span><b>Crowns</b> weekly emoji leaders</span>
         </div>
       </div>
+
+      <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-wallet-card" aria-label="Wallet connector coming soon">
+        <div class="message-intel__sec-label">
+          <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
+          <h3 class="message-intel__panel-title">Skin in the game</h3>
+          <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
+        </div>
+        <div class="message-intel__locked-body">
+          <div>
+            <p><b>Wallet connector</b> will let you track calls alongside on-chain positions and surface your own record.</p>
+            <p class="message-intel__panel-hint">No wallet connection is active yet. Your address will stay hidden until you choose to connect.</p>
+          </div>
+          <button type="button" class="message-intel__locked-button" disabled aria-disabled="true">Connect wallet</button>
+        </div>
+      </div>
     </div>
 
   </div><!-- /.message-intel__bay -->
-
-  <div class="message-intel__panel glass-card message-intel__locked-surface" id="message-intel-wallet-card" aria-label="Wallet connector coming soon">
-    <div class="message-intel__sec-label">
-      <span class="message-intel__sec-bar message-intel__sec-bar--orange" aria-hidden="true"></span>
-      <h3 class="message-intel__panel-title">Skin in the game</h3>
-      <span class="message-intel__panel-unit">LOCKED · COMING SOON</span>
-    </div>
-    <div class="message-intel__locked-body">
-      <div>
-        <p><b>Wallet connector</b> will let you track calls alongside on-chain positions and surface your own record.</p>
-        <p class="message-intel__panel-hint">No wallet connection is active yet. Your address will stay hidden until you choose to connect.</p>
-      </div>
-      <button type="button" class="message-intel__locked-button" disabled aria-disabled="true">Connect wallet</button>
-    </div>
-  </div>
 
   <p class="message-intel__foot">Conviction is auto-scored from message text and author track record — not financial advice.</p>
 </div>
