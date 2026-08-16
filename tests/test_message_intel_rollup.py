@@ -714,3 +714,50 @@ def test_conviction_rows_keep_subnet_basis_and_receipt_source_links(intel_env):
     assert fire["top_message_id"] == mid
     assert "Chutes" in fire["top_snippet"]
     assert fire["source_url"] == "https://t.me/officialsubnetsummer/424242"
+
+
+def test_telegram_proof_band_and_high_conviction_strip(intel_env):
+    """Verify proof band and high conviction strip populate rich metadata,
+    permalinks, author handles, and accurate hit/miss statuses."""
+    from internal.message_intel import rollup
+    from internal.message_intel.store import Database
+
+    db = Database(intel_env["db_path"])
+    ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    mid, _ = db.save_message({
+        "source": "telegram",
+        "group_id": "g1",
+        "group_name": "Subnet Summers",
+        "author_id": "u100",
+        "author_name": "SideEye",
+        "author_username": "sideeye_sn",
+        "content": "🖥️ SN100: BASE buy 100 Acc: [🦍 [5HN2..TP...] — conviction lock confirmed.",
+        "message_id": "10042",
+        "timestamp": ts,
+        "metrics": {"views": 100, "reactions": {"🔥": 12}},
+    })
+    db.save_analysis(mid, {"sentiment": "bullish", "entities": {"subnets": ["SN100"]}})
+    db.save_verdict(mid, {"verdict": "bullish", "conviction": 100.0, "predicted_direction": "up"})
+    db.save_price_snapshot(mid, 1.25, netuid=100)
+    db.save_price_outcome(mid, {"price_1h": 1.35, "price_4h": 1.45, "price_24h": 1.50,
+                                "pump_pct_max": 20.0, "outcome": "pump"})
+
+    proof_band = rollup.build_telegram_proof_band(db=db)
+    assert proof_band["graded"] == 1
+    assert proof_band["hits"] == 1
+    assert proof_band["hit_rate"] == 100.0
+    assert len(proof_band["recent"]) == 1
+    recent_item = proof_band["recent"][0]
+    assert recent_item["author_handle"] == "@sideeye_sn"
+    assert recent_item["status"] == "hit"
+    assert recent_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
+
+    hc_strip = rollup.build_high_conviction_strip(min_conviction=70.0, db=db, registry_names={100: "Base Alpha"})
+    assert len(hc_strip) == 1
+    hc_item = hc_strip[0]
+    assert hc_item["author_name"] == "SideEye"
+    assert hc_item["conviction"] == 100.0
+    assert hc_item["netuid"] == 100
+    assert hc_item["subnet_name"] == "Base Alpha"
+    assert hc_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
+

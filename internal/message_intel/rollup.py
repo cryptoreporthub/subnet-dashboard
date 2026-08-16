@@ -1371,13 +1371,27 @@ def build_telegram_proof_band(*, db=None) -> Dict[str, Any]:
             misses += 1
         else:
             neutral += 1
-        if len(recent) < 4:
+        if len(recent) < 6:
+            author_handle = row.get("author_username")
+            if author_handle:
+                author_handle = "@" + author_handle.lstrip("@")
+            else:
+                author_handle = row.get("author_name") or "Unknown"
             recent.append(
                 {
-                    "id": int(row["id"]), "author_name": row.get("author_name"),
-                    "netuid": row.get("netuid"), "move_pct": proof["move_pct"],
-                    "pump_pct_max": proof["move_pct"], "status": proof["status"],
+                    "id": int(row["id"]),
+                    "message_id": int(row["id"]),
+                    "author_name": row.get("author_name"),
+                    "author_handle": author_handle,
+                    "netuid": row.get("netuid"),
+                    "subnet_name": row.get("subnet_name"),
+                    "move_pct": proof["move_pct"],
+                    "pump_pct_max": proof["move_pct"],
+                    "status": proof["status"],
                     "hit": proof["status"] == "hit",
+                    "content": row.get("content"),
+                    "timestamp": row.get("timestamp") or row.get("created_at"),
+                    "source_url": telegram_message_url(row),
                 }
             )
 
@@ -1964,15 +1978,24 @@ def build_high_conviction_strip(
         direction = verdict.get("predicted_direction") if verdict else row.get("predicted_direction")
         netuids = _netuids_from_row(row)
         netuid = min(netuids) if netuids else None
+        skin_type = row.get("skin_type")
+        skin_amount = row.get("skin_amount")
+        if not skin_type:
+            skin_type = "staked" if (conviction and float(conviction) >= 80.0) else "ape"
         out.append(
             {
                 "id": row.get("id"),
                 "author_name": row.get("author_name"),
+                "author_username": row.get("author_username"),
                 "content": row.get("content"),
                 "conviction": conviction,
                 "direction": direction,
                 "netuid": netuid,
                 "subnet_name": names.get(netuid) if netuid is not None else None,
+                "timestamp": row.get("timestamp") or row.get("created_at"),
+                "skin_type": skin_type,
+                "skin_amount": skin_amount,
+                "source_url": telegram_message_url(row),
             }
         )
     return out
