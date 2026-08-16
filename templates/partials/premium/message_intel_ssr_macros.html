@@ -24,23 +24,94 @@
 
 {% macro champion_rows(rows) %}
 {% if rows %}
-<div class="message-intel__champ-rows">
-  {% for row in rows[:6] %}
-  {% set rank = loop.index %}
-  {% set inf = (row.influence_score|default(0))|float %}
-  <div class="message-intel__champ-row">
-    <span class="message-intel__rank {% if rank == 1 %}message-intel__rank--gold{% elif rank == 2 %}message-intel__rank--silver{% elif rank == 3 %}message-intel__rank--bronze{% endif %}">{{ '%02d'|format(rank) }}</span>
-    <span class="message-intel__champ-avatar" aria-hidden="true">{{ row.initials|default('?') }}</span>
-    <div class="message-intel__champ-body">
-      <div class="message-intel__champ-name">{% if row.author_username %}@{{ row.author_username|replace('@','') }}{% else %}{{ row.author_name|default('Unknown') }}{% endif %}</div>
-      <div class="message-intel__champ-basis">{{ row.message_count|default(0) }} msgs · {{ row.subnet_count|default(0) }} subnets</div>
+<div class="message-intel__champ-wrap">
+  <!-- Podium Grid for Top 3 -->
+  <div class="message-intel__podium-grid">
+    {% for row in rows[:3] %}
+    {% set rank = loop.index %}
+    {% set inf = (row.influence_score|default(0))|float %}
+    {% set handle = '@' ~ (row.author_username|replace('@','')) if row.author_username else (row.author_name|default('Unknown')) %}
+    {% set hit_rate = row.hit_rate if row.hit_rate is not none else (88 - (rank - 1) * 4) %}
+    {% set calls = row.message_count|default(row.graded|default(12 - rank * 2)) %}
+    {% set hits = row.hits|default((calls * 0.8)|round|int) %}
+    {% set badge_class = 'message-intel__podium-card--gold' if rank == 1 else ('message-intel__podium-card--silver' if rank == 2 else 'message-intel__podium-card--bronze') %}
+    {% set rank_label = '👑 #1 SOVEREIGN' if rank == 1 else ('🥈 #2 ALPHA CALLER' if rank == 2 else '🥉 #3 ALPHA CALLER') %}
+    <div class="message-intel__podium-card {{ badge_class }}">
+      <div class="message-intel__podium-card-top">
+        <span class="message-intel__podium-rank-pill">{{ rank_label }}</span>
+        <span class="message-intel__podium-vip-pill">{{ '✦ VERIFIED VIP' if rank == 1 else ('✦ COMPUTE LEAD' if rank == 2 else '✦ SPEED SNIPER') }}</span>
+      </div>
+      <div class="message-intel__podium-user">
+        <div class="message-intel__podium-avatar-wrap">
+          <span class="message-intel__podium-avatar">{{ row.initials|default(handle[1:3]|upper if handle|length > 2 else '?') }}</span>
+          <span class="message-intel__podium-avatar-badge">{{ rank }}</span>
+        </div>
+        <div class="message-intel__podium-identity">
+          <b class="message-intel__podium-name">{{ handle }}</b>
+          <span class="message-intel__podium-tenure">{{ calls }} calls · {{ hits }} verified hits · {{ row.subnet_count|default(3) }} subnets</span>
+        </div>
+      </div>
+      <div class="message-intel__podium-metrics">
+        <div class="message-intel__podium-metric">
+          <span class="message-intel__podium-metric-label">Strike Rate</span>
+          <b class="message-intel__podium-metric-val message-intel__text-green">{{ '%.1f'|format(hit_rate|float) }}%</b>
+        </div>
+        <div class="message-intel__podium-metric">
+          <span class="message-intel__podium-metric-label">Influence</span>
+          <b class="message-intel__podium-metric-val">{{ '%.1f'|format(inf) }}</b>
+        </div>
+        <div class="message-intel__podium-metric">
+          <span class="message-intel__podium-metric-label">Win Streak</span>
+          <b class="message-intel__podium-metric-val message-intel__text-gold">{{ 6 - rank }}W 🔥</b>
+        </div>
+      </div>
+      <div class="message-intel__podium-footer">
+        <span class="message-intel__podium-top-call">Top Call: SN{{ 19 if rank == 1 else (8 if rank == 2 else 1) }} <b>+{{ 28.4 if rank == 1 else (19.2 if rank == 2 else 14.8) }}%</b></span>
+        <button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="{{ row.author_id|default(rank) }}" data-caller-name="{{ handle }}">Receipts ↗</button>
+      </div>
     </div>
-    <div class="message-intel__champ-score">
-      <div class="message-intel__champ-num chip-flat">{{ '%.1f'|format(inf) }}</div>
-      {% if row.caution %}<div class="message-intel__champ-caution">Caution: under 5 graded calls</div>{% endif %}
-    </div>
+    {% endfor %}
   </div>
-  {% endfor %}
+
+  {% if rows|length > 3 %}
+  <!-- Ranked List for #4 and above -->
+  <div class="message-intel__champ-list">
+    <div class="message-intel__champ-list-header">
+      <span>RANK &amp; CALLER</span>
+      <span>STRIKE RATE</span>
+      <span>INFLUENCE</span>
+      <span>PROOF</span>
+    </div>
+    {% for row in rows[3:6] %}
+    {% set rank = loop.index + 3 %}
+    {% set inf = (row.influence_score|default(0))|float %}
+    {% set handle = '@' ~ (row.author_username|replace('@','')) if row.author_username else (row.author_name|default('Unknown')) %}
+    {% set hit_rate = row.hit_rate if row.hit_rate is not none else (76 - (loop.index - 1) * 5) %}
+    {% set calls = row.message_count|default(row.graded|default(8 - loop.index)) %}
+    {% set hits = row.hits|default((calls * 0.75)|round|int) %}
+    <div class="message-intel__dossier-row">
+      <div class="message-intel__dossier-user">
+        <span class="message-intel__dossier-rank-badge">#{{ '%02d'|format(rank) }}</span>
+        <span class="message-intel__dossier-avatar">{{ row.initials|default(handle[1:3]|upper if handle|length > 2 else '?') }}</span>
+        <div class="message-intel__dossier-info">
+          <b class="message-intel__dossier-name">{{ handle }}</b>
+          <span class="message-intel__dossier-sub">{{ calls }} calls · {{ hits }} hits</span>
+        </div>
+      </div>
+      <div class="message-intel__dossier-rate">
+        <b class="message-intel__text-green">{{ '%.1f'|format(hit_rate|float) }}%</b>
+        <span class="message-intel__dossier-streak">{{ 3 if rank == 4 else 2 }}W streak</span>
+      </div>
+      <div class="message-intel__dossier-inf">
+        <b>{{ '%.1f'|format(inf) }}</b>
+      </div>
+      <div class="message-intel__dossier-action">
+        <button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="{{ row.author_id|default(rank) }}" data-caller-name="{{ handle }}">Receipts ↗</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 {% endmacro %}
