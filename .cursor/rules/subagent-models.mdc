@@ -1,25 +1,25 @@
 ---
-description: Allowed subagent models — Composer slow, Grok 4.6 medium, Luna high. No Sonnet 4.5/4.6.
+description: Composer slow, Grok 4.6 medium, Luna high. Complementary review — not a hard lane. No Sonnet 4.5/4.6.
 globs:
 alwaysApply: true
 ---
 
 # Subagent models (human 2026-08-16)
 
-When spawning a Cursor **Task / subagent**, use only this pool:
+Parent is **usually Composer slow**. This pool is not a hard lane (not “Grok always designs, Luna always reviews”).
 
-| Role | Use | Task `model` slug |
-|------|-----|-------------------|
-| Build / implement / docs | **Composer slow** | `composer-2.5` |
-| Design / audit / explore | **Cursor Grok 4.6 medium** | `inherit` when the parent run is already Grok 4.6; never Grok 4.5 |
-| Review / second opinion | **GPT-4.6 Luna high** — **over** Cursor Grok | `gpt-5.6-luna-high` |
+| Model | Task `model` slug | Best at |
+|-------|-------------------|---------|
+| **Composer slow** | `composer-2.5` | Default parent / build — routes, tests, docs, UI from a decision |
+| **Cursor Grok 4.6 medium** | `inherit` if parent is already Grok 4.6; never Grok 4.5 | Why / design / root-cause / temporal-logic / competing approaches |
+| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | AC match, honesty/empty, contract, line-by-line “did we ship the ask” |
 
-**Review:** Luna high, not Grok. Do not spawn a Grok 4.6 subagent to review a diff, LOCK, or PR. Grok 4.6 medium is design / audit / explore only.
+**Review (not a hard set):** first pass = whoever is better at *this* question. **Final pass = the other one.** If Grok did design or first review, Luna is final. If Luna did first review, Grok is final. Do not skip the complementary final on hydration, contract, grading, or honesty diffs. Skip both extras on a one-liner.
 
-**Do not use Claude Sonnet 4.5 or Sonnet 4.6** (any thinking effort, fast/slow, or “Sonnet gate” leftover in old plans). Do not pick `claude-sonnet-*` 4.x slugs.
+**Do not use Claude Sonnet 4.5 or Sonnet 4.6** (any thinking effort, fast/slow, or leftover “Sonnet gate”). Do not pick `claude-sonnet-*` 4.x slugs.
 
 Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable, Sonnet 5.
 
-If a Task catalog has no Grok 4.6 **medium** slug, inherit from this Grok 4.6 parent rather than substituting Sonnet or Grok 4.5.
+If a Task catalog has no Grok 4.6 **medium** slug, inherit from a Grok 4.6 parent rather than substituting Sonnet or Grok 4.5. Bump Grok to high only when medium is stuck.
 
 Binding copy: `cursor-agents-communication/model-guide.md`

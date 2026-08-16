@@ -5,15 +5,15 @@
 
 > **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies.
 >
-> **Subagent pool (human 2026-08-16):** Composer **slow** (`composer-2.5`), Cursor **Grok 4.6 medium** (`inherit` on a Grok 4.6 parent), **GPT-4.6 Luna high** (`gpt-5.6-luna-high`). **Never Sonnet 4.5 or Sonnet 4.6.** Always-on rule: `.cursor/rules/subagent-models.mdc`.
+> **Subagent pool (human 2026-08-16):** Composer **slow** (usual parent/build), Cursor **Grok 4.6 medium**, **GPT-4.6 Luna high**. **Not a hard lane** — each reviews what they are best at; **the other is the final pass**. **Never Sonnet 4.5 or Sonnet 4.6.** Always-on: `.cursor/rules/subagent-models.mdc`.
 
 ## Models
 
 | Model | Cursor slug / setting | Best for |
 |-------|----------------------|----------|
-| **Composer 2.5 (slow)** | `composer-2.5` | **Default subagent build** — routes, tests, docs, UI from a locked plan |
-| **Cursor Grok 4.6 medium** | `inherit` (parent is Grok 4.6) | Design, audit, explore — not Grok 4.5 |
-| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | **Review** — over Cursor Grok; read-only (replaces old Sonnet *and* Grok review gates) |
+| **Composer 2.5 (slow)** | `composer-2.5` | **Usual parent / build** |
+| **Cursor Grok 4.6 medium** | `inherit` (when parent is Grok 4.6) | Why, design, root-cause — not Grok 4.5 |
+| **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | AC / honesty / contract / line-by-line match |
 
 **Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.
 
@@ -37,7 +37,7 @@ Grok may still return a structured LOCK when that is the useful shape; it is **n
    ESCALATE_HIGH?: no | yes (why)
    ```
 
-**Review gate (2026-08-16):** **GPT-4.6 Luna high over Cursor Grok.** Spawn `gpt-5.6-luna-high` for a read-only pass on LOCK, diff, or PR — not Grok 4.6, not Sonnet 4.5/4.6. Luna does not edit. One review pass per slice unless that pass FAILs. Save conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment. Historical “Sonnet gate” / “Grok as reviewer” tables in old sprint plans are superseded.
+**Review (2026-08-16, not a hard set):** first pass = the model better at *this* question (Grok for why/design/logic; Luna for AC/honesty/contract). **Final pass = the other model.** Do not make Luna the only reviewer or ban Grok from reviewing Composer diffs. Skip the extra passes on one-liners. Neither Grok nor Luna edits in a review seat — findings go back to Composer (or the parent) to patch. Save conclusions to Ditto (`source: cursor-agents-communication`) or a PR comment. Historical “always Sonnet” / “always Luna over Grok” gates are superseded.
 **Context hygiene (not brevity):** skip `data/*.json` / `.venv`; prefer `main` + open PR diffs over re-auditing merged work. Billing watch: `token-budget-rules.md`.
 
 ---

@@ -51,7 +51,7 @@ Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](ht
 
 ### Subagent models
 
-Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Subagents: **Composer slow** (`composer-2.5`) for build, **Cursor Grok 4.6 medium** for design/explore, **GPT-4.6 Luna high** (`gpt-5.6-luna-high`) **over Grok for review**. Binding: [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md).
+Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slow**. **Grok 4.6 medium** and **Luna high** each review what they are best at; **the other is the final pass** (not a hard Luna-only or Grok-only review lane). Binding: [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md).
 
 ### Agent coordination (two Cursor agents)
 

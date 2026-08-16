@@ -13,8 +13,10 @@ def test_subagent_models_rule_bans_sonnet_4_and_names_allowlist():
     assert "Grok 4.6 medium" in rule
     assert "Sonnet 4.5" in rule and "Sonnet 4.6" in rule
     assert "Do not use Claude Sonnet 4.5 or Sonnet 4.6" in rule
-    assert "Luna high, not Grok" in rule
-    assert "Do not spawn a Grok 4.6 subagent to review" in rule
+    assert "not a hard lane" in rule
+    assert "Final pass = the other one" in rule
+    assert "Do not spawn a Grok 4.6 subagent to review" not in rule
+    assert "Luna high, not Grok" not in rule
     guide = (ROOT / "cursor-agents-communication/model-guide.md").read_text(encoding="utf-8")
     assert "Never Sonnet 4.5 or Sonnet 4.6" in guide
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
