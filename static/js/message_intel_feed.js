@@ -690,24 +690,17 @@
   function renderTelegramProof(proof) {
     if (!proofBody) return;
     if (proofCard) proofCard.hidden = false;
-    var defaultProof = {
-      ready: true,
-      hit_rate: 60.9,
-      hits: 79,
-      graded: 130,
-      recent: [
-        { status: "hit", author_name: "nardiel", author_handle: "@nardiel", netuid: 1, subnet_name: "Text Prompting", move_pct: 14.8, date: "12h ago", thesis: "SN1 validator yield expansion confirmed with on-chain volume breakout", source_url: "https://t.me/OfficialSubnetSummer/1" },
-        { status: "miss", author_name: "Matrix", author_handle: "Matrix · SN5", netuid: 5, subnet_name: "OpenKaito", move_pct: -4.2, date: "18h ago", thesis: "SN5 emission pivot expected to frontrun validator distribution shift", source_url: "https://t.me/OfficialSubnetSummer/5" },
-        { status: "hit", author_name: "Blindleak123", author_handle: "@Blindleak123", netuid: 19, subnet_name: "BitAds / Compute", move_pct: 19.3, date: "22h ago", thesis: "SN19 compute benchmark disclosures confirming network acceleration", source_url: "https://t.me/OfficialSubnetSummer/19" },
-        { status: "miss", author_name: "Cryptal", author_handle: "Cryptal · SN5", netuid: 5, subnet_name: "OpenKaito", move_pct: -2.8, date: "1d ago", thesis: "Accumulating SN5 stake ahead of validator queue flip", source_url: "https://t.me/OfficialSubnetSummer/5" },
-        { status: "hit", author_name: "Alpha Hunter", author_handle: "@alphahunt", netuid: 4, subnet_name: "Targon / Hub", move_pct: 11.5, date: "1d ago", thesis: "SN4 secondary market liquidity surge and cross-subnet volume spike", source_url: "https://t.me/OfficialSubnetSummer/4" }
-      ]
-    };
-    var data = (proof && (proof.ready || proof.graded > 0)) ? proof : defaultProof;
-    var rate = data.hit_rate != null ? Number(data.hit_rate).toFixed(1) + "%" : "60.9%";
-    var hits = data.hits != null ? (data.hits >= 1000 ? data.hits.toLocaleString() : data.hits) : "79";
-    var graded = data.graded != null ? (data.graded >= 1000 ? data.graded.toLocaleString() : data.graded) : "130";
-    var list = (data.recent && data.recent.length) ? data.recent : defaultProof.recent;
+    var data = proof || {};
+    var list = (data.recent && data.recent.length) ? data.recent : [];
+    var gradedNum = Number(data.graded) || 0;
+    var ready = !!(data.ready || gradedNum > 0);
+    if (!ready || !list.length) {
+      proofBody.innerHTML = '<p class="empty">No graded Telegram calls yet. Hit/miss cards show after qualifying calls resolve.</p>';
+      return;
+    }
+    var rate = data.hit_rate != null ? Number(data.hit_rate).toFixed(1) + "%" : "—";
+    var hits = data.hits != null ? (data.hits >= 1000 ? data.hits.toLocaleString() : data.hits) : "—";
+    var graded = gradedNum >= 1000 ? gradedNum.toLocaleString() : gradedNum;
 
     var html = '<div class="message-intel__proof-stat-banner">' +
       '<div class="message-intel__proof-stat-main">' +
@@ -723,13 +716,14 @@
     list.forEach(function (r, idx) {
       var status = String(r.status || (r.hit ? "hit" : "miss")).toLowerCase();
       var isHit = status === "hit" || status === "win";
-      var move = r.move_pct != null ? (Number(r.move_pct) > 0 ? "+" : "") + Number(r.move_pct).toFixed(1) + "%" : (r.pump_pct_max != null ? "+" + Number(r.pump_pct_max).toFixed(1) + "%" : "+11.2%");
-      var author = r.author_handle || r.author_name || (idx === 0 ? "@nardiel" : (idx === 1 ? "Matrix · SN5" : (idx === 2 ? "@Blindleak123" : "Cryptal · SN5")));
-      var date = r.date || (r.timestamp ? fmtTime(r.timestamp) : "12h ago");
-      var netuid = r.netuid != null ? r.netuid : (idx === 0 ? 1 : (idx === 1 ? 5 : (idx === 2 ? 19 : 5)));
-      var snName = r.subnet_name || ("SN" + netuid);
-      var thesis = r.thesis || (r.content ? snippet(r.content, 90) : "High-conviction directional call confirmed with price snapshot");
-      var srcUrl = r.source_url || "https://t.me/OfficialSubnetSummer";
+      var move = r.move_pct != null
+        ? (Number(r.move_pct) > 0 ? "+" : "") + Number(r.move_pct).toFixed(1) + "%"
+        : (r.pump_pct_max != null ? "+" + Number(r.pump_pct_max).toFixed(1) + "%" : "—");
+      var author = r.author_handle || r.author_name || "Unknown";
+      var date = r.date || (r.timestamp ? fmtTime(r.timestamp) : "");
+      var netuid = r.netuid;
+      var thesis = r.thesis || (r.content ? snippet(r.content, 90) : "");
+      var srcUrl = r.source_url || "";
 
       html +=
         '<div class="message-intel__proof-item-card ' + (isHit ? 'message-intel__proof-item-card--hit' : 'message-intel__proof-item-card--miss') + '">' +
@@ -739,15 +733,15 @@
         '<span class="message-intel__proof-item-name">' + esc(author) + '</span>' +
         '</div>' +
         '<div class="message-intel__proof-item-meta">' +
-        '<span class="message-intel__sn-pill">SN' + esc(netuid) + '</span>' +
+        (netuid != null ? '<span class="message-intel__sn-pill">SN' + esc(netuid) + '</span>' : '') +
         '<b class="message-intel__proof-item-move ' + (isHit ? 'message-intel__text-green' : 'message-intel__text-red') + '">' + esc(move) + '</b>' +
         '</div>' +
         '</div>' +
-        '<p class="message-intel__proof-item-thesis">“' + esc(thesis) + '”</p>' +
+        (thesis ? '<p class="message-intel__proof-item-thesis">“' + esc(thesis) + '”</p>' : '') +
         '<div class="message-intel__proof-item-footer">' +
-        '<span class="message-intel__proof-item-date">' + esc(date) + '</span>' +
+        (date ? '<span class="message-intel__proof-item-date">' + esc(date) + '</span>' : '') +
         '<div class="message-intel__proof-item-actions">' +
-        '<a class="message-intel__receipt-src" href="' + esc(srcUrl) + '" target="_blank" rel="noopener noreferrer">Source ↗</a>' +
+        (srcUrl ? '<a class="message-intel__receipt-src" href="' + esc(srcUrl) + '" target="_blank" rel="noopener noreferrer">Source ↗</a>' : '') +
         '<button type="button" class="message-intel__receipt-toggle message-intel__proof-item-receipt-btn" data-receipt-id="' + esc(r.message_id || r.id || idx + 1) + '">Receipts ↗</button>' +
         '</div>' +
         '</div>' +
@@ -1000,47 +994,49 @@
   function renderHighConvictionStrip(rows) {
     if (!hcRows) return;
     if (hcStrip) hcStrip.hidden = false;
-    var defaultHc = [
-      { id: "1", date: "20m ago", netuid: 100, subnet_name: "Base / Alpha", author_name: "SideEye", author_username: "sideeye_sn", conviction: 100, skin_type: "staked", skin_amount: "100 TAO", content: "🖥️ SN100: BASE buy 100 Acc: [🦍 [5HN2..TP...] — conviction lock confirmed on base subnet deployment.", source_url: "https://t.me/OfficialSubnetSummer/100" },
-      { id: "2", date: "1h ago", netuid: 1, subnet_name: "Text Prompting", author_name: "The Machine", author_username: "the_machine", conviction: 99, skin_type: "staked", skin_amount: "150 TAO", content: "https://x.com/taodx_official — validator volume breakout and on-chain liquidity depth expanding rapidly.", source_url: "https://t.me/OfficialSubnetSummer/1" },
-      { id: "3", date: "2h ago", netuid: 19, subnet_name: "BitAds / Compute", author_name: "Nova Quirk", author_username: "novaq", conviction: 97, skin_type: "staked", skin_amount: "80 TAO", content: "That's the beauty of Bittensor, you catch the bottom before the validator queue flips green.", source_url: "https://t.me/OfficialSubnetSummer/19" },
-      { id: "4", date: "3h ago", netuid: 4, subnet_name: "Targon / Hub", author_name: "Alpha Hunter", author_username: "alphahunt", conviction: 94, skin_type: "ape", skin_amount: "50 TAO", content: "SN4 mainnet migration liquidity influx — accumulation confirmed across multi-sig treasury wallets.", source_url: "https://t.me/OfficialSubnetSummer/4" }
-    ];
-    var list = (rows && rows.length) ? rows : defaultHc;
+    var list = (rows && rows.length) ? rows : [];
+    if (!list.length) {
+      hcRows.innerHTML = '<p class="empty">No ≥70% conviction messages yet.</p>';
+      return;
+    }
     var html = '<div class="message-intel__hc-cards-list">';
     list.forEach(function (row) {
-      var conv = row.conviction != null ? Math.round(Number(row.conviction)) : 95;
-      var netuid = row.netuid != null ? row.netuid : 1;
-      var snName = row.subnet_name || ("SN" + netuid);
-      var skinType = String(row.skin_type || (conv >= 80 ? "staked" : "ape")).toLowerCase();
+      var conv = row.conviction != null ? Math.round(Number(row.conviction)) : null;
+      var netuid = row.netuid;
+      var snName = row.subnet_name || (netuid != null ? ("SN" + netuid) : "");
+      var skinType = String(row.skin_type || "").toLowerCase();
       var isStaked = skinType === "staked";
-      var skinAmt = row.skin_amount || (isStaked ? "100 TAO" : "50 TAO");
-      var date = row.date || (row.timestamp ? fmtTime(row.timestamp) : "1h ago");
-      var text = row.content || "High conviction directional signal with verified on-chain skin.";
-      var srcUrl = row.source_url || "https://t.me/OfficialSubnetSummer";
-      var author = row.author_name || (row.author_username ? "@" + row.author_username.replace(/^@/, "") : "High Conviction Caller");
+      var skinAmt = row.skin_amount || "";
+      var date = row.date || (row.timestamp ? fmtTime(row.timestamp) : "");
+      var text = row.content || "";
+      var srcUrl = row.source_url || "";
+      var author = row.author_name || (row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : "Unknown");
 
       html +=
         '<div class="message-intel__hc-card-v2">' +
         '<div class="message-intel__hc-card-top">' +
         '<div class="message-intel__hc-card-badge-group">' +
-        '<span class="message-intel__hc-conv-pill">' + esc(conv) + '% CONVICTION</span>' +
-        '<span class="message-intel__skin-pill ' + (isStaked ? 'message-intel__skin-pill--staked' : 'message-intel__skin-pill--ape') + '">' +
-        (isStaked ? 'Staked: ' : 'APE: ') + esc(skinAmt) +
-        '</span>' +
+        (conv != null ? '<span class="message-intel__hc-conv-pill">' + esc(conv) + '% CONVICTION</span>' : '') +
+        (skinAmt
+          ? '<span class="message-intel__skin-pill ' + (isStaked ? 'message-intel__skin-pill--staked' : 'message-intel__skin-pill--ape') + '">' +
+            (isStaked ? 'Staked: ' : 'APE: ') + esc(skinAmt) +
+            '</span>'
+          : '') +
         '</div>' +
         '<span class="message-intel__hc-card-author-tag">' + esc(author) + '</span>' +
         '</div>' +
-        '<div class="message-intel__hc-card-sn-band">' +
-        '<a class="message-intel__hc-card-sn-link" href="/subnet/' + encodeURIComponent(String(netuid)) + '">SN' + esc(netuid) + (snName !== ("SN" + netuid) ? ' · ' + esc(snName) : '') + '</a>' +
-        '</div>' +
-        '<p class="message-intel__hc-card-quote">“' + esc(snippet(text, 130)) + '”</p>' +
+        (netuid != null
+          ? '<div class="message-intel__hc-card-sn-band">' +
+            '<a class="message-intel__hc-card-sn-link" href="/subnet/' + encodeURIComponent(String(netuid)) + '">SN' + esc(netuid) + (snName && snName !== ("SN" + netuid) ? ' · ' + esc(snName) : '') + '</a>' +
+            '</div>'
+          : '') +
+        (text ? '<p class="message-intel__hc-card-quote">“' + esc(snippet(text, 130)) + '”</p>' : '') +
         '<div class="message-intel__hc-card-footer">' +
-        '<span class="message-intel__hc-card-date">' + esc(date) + '</span>' +
+        (date ? '<span class="message-intel__hc-card-date">' + esc(date) + '</span>' : '') +
         '<div class="message-intel__hc-card-actions">' +
-        '<a class="message-intel__hc-cta" href="/subnet/' + encodeURIComponent(String(netuid)) + '">Open SN' + esc(netuid) + '</a>' +
-        '<button type="button" class="message-intel__hc-cta message-intel__hc-cta--lf" onclick="openLivingFocus(' + esc(netuid) + ')">Living Focus</button>' +
-        '<a class="message-intel__receipt-src" href="' + esc(srcUrl) + '" target="_blank" rel="noopener noreferrer">Source ↗</a>' +
+        (netuid != null ? '<a class="message-intel__hc-cta" href="/subnet/' + encodeURIComponent(String(netuid)) + '">Open SN' + esc(netuid) + '</a>' : '') +
+        (netuid != null ? '<button type="button" class="message-intel__hc-cta message-intel__hc-cta--lf" onclick="openLivingFocus(' + esc(netuid) + ')">Living Focus</button>' : '') +
+        (srcUrl ? '<a class="message-intel__receipt-src" href="' + esc(srcUrl) + '" target="_blank" rel="noopener noreferrer">Source ↗</a>' : '') +
         '<button type="button" class="message-intel__receipt-toggle message-intel__proof-item-receipt-btn" data-receipt-id="' + esc(row.id || 1) + '">Receipts ↗</button>' +
         '</div>' +
         '</div>' +
