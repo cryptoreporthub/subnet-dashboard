@@ -103,7 +103,10 @@
     var ctrl = new AbortController();
     var t = setTimeout(function () { ctrl.abort(); }, ms || 12000);
     return fetch(url, { headers: { Accept: 'application/json' }, signal: ctrl.signal })
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .finally(function () { clearTimeout(t); });
   }
 

@@ -62,20 +62,27 @@
     }
   }
 
+  var searchSeq = 0;
   function search(q) {
     if (!q || q.length < 1) {
       results = [];
       render();
       return;
     }
+    var currentSeq = ++searchSeq;
     fetch('/api/search?q=' + encodeURIComponent(q) + '&limit=8')
-      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
       .then(function (d) {
+        if (currentSeq !== searchSeq) return;
         results = d.results || [];
         activeIdx = 0;
         render();
       })
       .catch(function () {
+        if (currentSeq !== searchSeq) return;
         results = [];
         render();
       });

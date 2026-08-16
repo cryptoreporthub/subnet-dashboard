@@ -114,7 +114,10 @@
   }
 
   function load() {
-    fetch('/api/subnets').then(function (r) { return r.json(); }).then(function (data) {
+    fetch('/api/subnets').then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    }).then(function (data) {
       var list = Array.isArray(data.subnets) ? data.subnets : data;
       if (Array.isArray(list)) {
         state.rows = list.map(function (item) {

@@ -316,6 +316,8 @@
   function bindFilterClicks() {
     if (convFiltersEl) {
       convFiltersEl.querySelectorAll("[data-min-conv]").forEach(function (btn) {
+        if (btn.dataset.filterBound === "1") return;
+        btn.dataset.filterBound = "1";
         btn.addEventListener("click", function () {
           var val = btn.getAttribute("data-min-conv");
           filters.minConviction = val === "" ? null : Number(val);
@@ -327,6 +329,8 @@
     }
     if (subnetFiltersEl) {
       subnetFiltersEl.querySelectorAll("[data-netuid]").forEach(function (btn) {
+        if (btn.dataset.filterBound === "1") return;
+        btn.dataset.filterBound = "1";
         btn.addEventListener("click", function () {
           var val = btn.getAttribute("data-netuid");
           filters.netuid = val === "" ? null : Number(val);
@@ -338,6 +342,8 @@
     }
     if (topicFiltersEl) {
       topicFiltersEl.querySelectorAll("[data-topic]").forEach(function (btn) {
+        if (btn.dataset.filterBound === "1") return;
+        btn.dataset.filterBound = "1";
         btn.addEventListener("click", function () {
           var val = btn.getAttribute("data-topic");
           filters.topic = val === "" ? null : val;

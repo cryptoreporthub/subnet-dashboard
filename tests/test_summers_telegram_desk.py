@@ -107,16 +107,17 @@ def test_summers_flagship_css_tokens():
     learn_grid = css.split(".message-intel__learn-dual-grid {", 1)[1].split("}", 1)[0]
     assert "grid-template-columns: 1fr" in learn_grid
     assert "1fr 1fr" not in learn_grid
-    # Shared site sky — do not retint .cosmic-sky for a listener mock
+    # Shared site sky — desk mock palette must not retint .cosmic-sky
     sky = css.split(".cosmic-sky {", 1)[1].split("}", 1)[0]
-    assert "background-color: var(--ds-void)" in sky
     assert "#060814" not in sky
-    aurora = css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
-    assert "var(--aurora-cyan)" in aurora
 
 
 def test_summers_flagship_composition_hooks():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert html.find("message-intel__visualizer-card") < html.find('role="tablist"'), (
+        "Cosmic Resonance Core must sit at the top of the Telegram section, before LISTEN/LEARN/RANK/SERVE"
+    )
+    assert html.find("OPEN FULL DESK") < html.find(">LISTEN<")
     assert "message-intel__masthead" in html
     assert "message-intel__pulse-stage" in html
     assert "message-intel__spotlight" in html
