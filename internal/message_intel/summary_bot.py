@@ -200,27 +200,30 @@ def _telegram_watchlist_owner(message: Optional[Dict[str, Any]]) -> Optional[str
     return linked_owner(telegram_owner) or telegram_owner
 
 
-def _format_subnet_summary_line(row: Dict[str, Any]) -> str:
-    name = row.get("name") or f"SN{row.get('netuid')}"
+def _format_subnet_chip(row: Dict[str, Any]) -> str:
+    netuid = row.get("netuid")
+    raw_name = str(row.get("name") or "").strip()
+    sn = f"SN{netuid}"
+    if not raw_name or raw_name.upper() == sn.upper() or raw_name.upper().startswith(f"{sn} "):
+        label = html.escape(raw_name or sn)
+    else:
+        label = f"{sn} {html.escape(raw_name)}"
     mentions = int(row.get("mentions") or 0)
-    price_bit = ""
+    mention_word = "mention" if mentions == 1 else "mentions"
+    bits = [f"{mentions} {mention_word}"]
     price = row.get("price_change_1h")
     if price is not None:
         try:
             p = float(price)
             sign = "+" if p > 0 else ""
-            price_bit = f", {sign}{p:.1f}% 1h"
+            bits.append(f"{sign}{p:.1f}% 1h")
         except (TypeError, ValueError):
             pass
-    line = f"• SN{row.get('netuid')} {name} ({mentions} mentions{price_bit})"
-    context = str(row.get("mention_context") or "").strip()
-    if context:
-        line += f"\n  {context}"
-    return line
+    return f"{label} ({', '.join(bits)})"
 
 
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
-    """Render build_24h_summary dict as Telegram HTML."""
+    """Compact Telegram recap: 24h pulse + today's conversation in a few lines."""
     desk = desk_url or _desk_url()
     if not summary.get("ready"):
         count = int(summary.get("message_count") or 0)
@@ -244,16 +247,30 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
 
     top = summary.get("top_subnets") or []
     if top:
-        lines.append("<b>Top subnets</b>")
-        for row in top[:5]:
-            lines.append(_format_subnet_summary_line(row))
+        lines.append("<b>Top</b> " + " · ".join(_format_subnet_chip(row) for row in top[:5]))
 
-    topics = summary.get("today_topics") or []
-    if topics:
-        topic_bits = ", ".join(
-            f"{t.get('label') or t.get('topic')} ({t.get('count', 0)})" for t in topics[:4]
-        )
-        lines.append(f"<b>Trending today</b> — {topic_bits}")
+    today = str(summary.get("today_narrative") or "").strip()
+    if not today:
+        topics = summary.get("today_topics") or []
+        labels = [str(t.get("label") or t.get("topic") or "").strip() for t in topics]
+        labels = [x for x in labels if x]
+        if labels:
+            if len(labels) == 1:
+                joined = labels[0]
+            elif len(labels) == 2:
+                joined = f"{labels[0]} and {labels[1]}"
+            else:
+                joined = ", ".join(labels[:-1]) + f", and {labels[-1]}"
+            today = f"{joined.lower()} took most of the airtime."
+            today = today[:1].upper() + today[1:]
+        if top:
+            ctx = str(top[0].get("mention_context") or "").strip()
+            if ctx:
+                lead = top[0].get("name") or f"SN{top[0].get('netuid')}"
+                extra = f"{lead} led chatter — {ctx}."
+                today = f"{today} {extra}".strip()
+    if today:
+        lines.append(f"<b>Today</b> {html.escape(today)}")
 
     movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
     if movers:
@@ -261,15 +278,9 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
         for row in movers:
             delta = int(row.get("change") or 0)
             arrow = "↑" if delta > 0 else "↓"
-            name = row.get("name") or f"SN{row.get('netuid')}"
+            name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
             mover_bits.append(f"SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
         lines.append("<b>Movers</b> " + " · ".join(mover_bits))
-
-    if pulse.get("group"):
-        lines.append(
-            f"<b>Group:</b> {pulse['group']} "
-            f"({pulse.get('top_group_messages', pulse.get('messages', 0))} msgs)"
-        )
 
     lines.append(f'<a href="{desk}">Open the Subnet Summers desk</a>')
     return "\n".join(lines)
@@ -355,11 +366,16 @@ def build_subnetsummers_text(*, db=None) -> str:
 
 
 def build_summary_text(*, db=None) -> str:
-    from internal.message_intel.rollup import build_24h_summary, build_today_topic_summary
+    from internal.message_intel.rollup import (
+        build_24h_summary,
+        build_today_conversation_summary,
+    )
 
     names = _registry_subnet_names()
     summary = build_24h_summary(registry_names=names, db=db)
-    summary["today_topics"] = build_today_topic_summary(db=db)
+    today = build_today_conversation_summary(registry_names=names, db=db)
+    summary["today_narrative"] = today.get("narrative") or ""
+    summary["today_topics"] = today.get("topics") or []
     return format_summary_message(summary)
 
 

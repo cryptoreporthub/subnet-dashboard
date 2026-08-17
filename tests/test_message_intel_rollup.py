@@ -441,10 +441,12 @@ def test_build_today_topic_summary_calendar_day(monkeypatch):
         },
     ]
     monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
-    topics = rollup.build_today_topic_summary()
-    labels = [t["label"] for t in topics]
+    today = rollup.build_today_conversation_summary()
+    labels = [t["label"] for t in today["topics"]]
     assert "Market" in labels
     assert "Alpha" in labels
+    assert "took most of the airtime" in today["narrative"]
+    assert "market" in today["narrative"].lower()
 
 
 def test_week_top_comment_unit(monkeypatch):

@@ -1762,21 +1762,117 @@ def build_24h_summary(
     }
 
 
-def build_today_topic_summary(*, db=None, limit: int = 4) -> List[Dict[str, Any]]:
-    """Top conversation topics since UTC midnight — for /summary trending lens."""
+def build_today_conversation_summary(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    db=None,
+    limit: int = 3,
+) -> Dict[str, Any]:
+    """UTC-calendar-day recap of what the group is talking about so far."""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    registry_names = registry_names or {}
+    message_count = 0
+    sentiment_sum = 0.0
+    sentiment_n = 0
+    subnet_counts: Dict[int, int] = defaultdict(int)
+    subnet_snippets: Dict[int, tuple[float, str]] = {}
     topic_counts: Dict[str, int] = defaultdict(int)
+
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if ts is None or ts < today_start:
             continue
-        for tag in classify_message_topics(str(row.get("content") or "")):
+        message_count += 1
+        sentiment_sum += _sentiment_value(row.get("sentiment"))
+        sentiment_n += 1
+        try:
+            conviction = float(row.get("conviction") or 0)
+        except (TypeError, ValueError):
+            conviction = 0.0
+        content = str(row.get("content") or "").strip()
+        for tag in classify_message_topics(content):
             topic_counts[tag] += 1
-    return [
+        for netuid in _netuids_from_row(row):
+            subnet_counts[netuid] += 1
+            if content:
+                prev = subnet_snippets.get(netuid)
+                if prev is None or conviction >= prev[0]:
+                    snippet = _clip_snippet(content, max_len=80)
+                    if snippet:
+                        subnet_snippets[netuid] = (conviction, snippet)
+
+    top_subnets: List[Dict[str, Any]] = []
+    for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
+        snippet = subnet_snippets.get(netuid, (0.0, ""))[1]
+        row_out: Dict[str, Any] = {
+            "netuid": netuid,
+            "name": _rollup_subnet_name(netuid, registry_names),
+            "mentions": int(mentions),
+        }
+        if snippet:
+            row_out["mention_context"] = snippet
+        top_subnets.append(row_out)
+
+    topics = [
         {"topic": tag, "label": _topic_label(tag), "count": int(count)}
-        for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+        for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:4]
     ]
+    sentiment = _sentiment_tag((sentiment_sum / sentiment_n) if sentiment_n else 0.0)
+    payload = {
+        "message_count": message_count,
+        "top_subnets": top_subnets,
+        "topics": topics,
+        "sentiment": sentiment,
+    }
+    payload["narrative"] = _today_narrative(payload)
+    return payload
+
+
+def build_today_topic_summary(*, db=None, limit: int = 4) -> List[Dict[str, Any]]:
+    """Top conversation topics since UTC midnight — used by /summary tests."""
+    return (build_today_conversation_summary(db=db, limit=limit).get("topics") or [])[:limit]
+
+
+def _today_narrative(payload: Dict[str, Any]) -> str:
+    n = int(payload.get("message_count") or 0)
+    if n <= 0:
+        return "Quiet so far today — no graded chatter yet."
+    topics = payload.get("topics") or []
+    topic_labels = [
+        _topic_label(t.get("topic") or t.get("label"))
+        for t in topics[:3]
+        if t.get("topic") or t.get("label")
+    ]
+    sentiment = str(payload.get("sentiment") or "mixed").lower()
+    opener = ""
+    if topic_labels:
+        opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
+    else:
+        opener = f"{n} messages landed"
+    if sentiment == "bullish":
+        opener += ", and the room leaned bullish"
+    elif sentiment == "bearish":
+        opener += ", with bearish calls carrying the thread"
+    elif sentiment == "cautious":
+        opener += ", in a cautious wait-and-see mood"
+    sentences = [opener + "."]
+
+    top = payload.get("top_subnets") or []
+    if top:
+        lead = top[0]
+        lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
+        detail = f"{lead_name} led chatter"
+        if len(top) > 1:
+            runner = top[1]
+            runner_name = runner.get("name") or f"SN{runner.get('netuid')}"
+            detail += f", ahead of {runner_name}"
+        ctx = str(lead.get("mention_context") or "").strip()
+        if ctx:
+            detail += f" — {ctx}"
+        sentences.append(detail + ".")
+    text = " ".join(sentences)
+    return text[:1].upper() + text[1:] if text else text
 
 
 _MIN_YESTERDAY_SUMMARY_MESSAGES = 3
