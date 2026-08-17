@@ -238,7 +238,7 @@
   }
 
   /* ── re-anchor on row / feed clicks ── */
-  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-drow, .lsn-orbit__node, .message-intel__hc-cta[data-netuid], .message-intel__feed-row[data-netuid]").forEach(function (el) {
+  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-drow, .message-intel__sky-node, .message-intel__hc-cta[data-netuid], .message-intel__feed-row[data-netuid]").forEach(function (el) {
     el.addEventListener("click", function () {
       var sn = el.getAttribute("data-sn") || el.getAttribute("data-netuid");
       var nm = el.getAttribute("data-name");

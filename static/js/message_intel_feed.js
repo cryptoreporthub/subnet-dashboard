@@ -1442,17 +1442,27 @@
   }
 
   function renderTrendingV2(rows, windowLabel) {
-    if (!trendingEl) return;
     var list = sortedTrending(rows);
+    if (skyEl) {
+      renderTrendingSky(list);
+    }
+    if (!trendingEl) {
+      if (list.length) {
+        renderChatterPower(list);
+        renderNarrative(list);
+      } else {
+        renderChatterPower([]);
+        renderNarrative([]);
+      }
+      return;
+    }
     if (!list.length) {
       trendingEl.innerHTML = '<p class="empty">No subnet chatter in the last hour yet — orbit stays honest while the group is quiet.</p>';
-      renderTrendingSky([]);
       renderChatterPower([]);
       renderNarrative([]);
       return;
     }
     if (trendingTitle) trendingTitle.textContent = "Trending orbit";
-    renderTrendingSky(list);
     if (trendingUnit) trendingUnit.textContent = windowLabel || "1h";
     trendingEl.innerHTML =
       '<div class="message-intel__trend-rows">' +
