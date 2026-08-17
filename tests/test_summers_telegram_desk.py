@@ -9,6 +9,19 @@ from server import app
 client = TestClient(app)
 
 
+def test_hud_unsticks_before_telegram():
+    """Council/Weighing/Lead/Focus/Proof stick only through the front, then peel off."""
+    html = open("templates/partials/premium_cockpit.html", encoding="utf-8").read()
+    start = html.find('<div class="sr-front">')
+    telegram = html.find('include "partials/premium/message_intel_feed.html"')
+    assert start != -1 and telegram != -1 and start < telegram
+    inner, rest = html[start:].split("</div>", 1)
+    assert 'include "partials/premium/header.html"' in inner
+    assert 'include "partials/premium/pump_alert_scan.html"' in inner
+    assert 'include "partials/premium/message_intel_feed.html"' not in inner
+    assert 'include "partials/premium/message_intel_feed.html"' in rest
+
+
 def test_summers_desk_first_class_on_home():
     import server as srv
 
@@ -102,10 +115,22 @@ def test_summers_flagship_css_tokens():
     assert ".message-intel__cell { display: none; }" not in css
     # Cosmic glass: desk must stay transparent so the site sky reads through
     assert "rgba(6,10,8,0.96)" not in css.split(".message-intel--v2 {", 1)[-1].split("}", 1)[0]
+    assert "minmax(0, 1.55fr) minmax(260px, 0.95fr)" not in css
+    assert "grid-template-columns: 1.15fr 1fr" not in css
+    learn_grid = css.split(".message-intel__learn-dual-grid {", 1)[1].split("}", 1)[0]
+    assert "grid-template-columns: 1fr" in learn_grid
+    assert "1fr 1fr" not in learn_grid
+    # Shared site sky — desk mock palette must not retint .cosmic-sky
+    sky = css.split(".cosmic-sky {", 1)[1].split("}", 1)[0]
+    assert "#060814" not in sky
 
 
 def test_summers_flagship_composition_hooks():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
+    assert html.find("message-intel__visualizer-card") < html.find('role="tablist"'), (
+        "Cosmic Resonance Core must sit at the top of the Telegram section, before LISTEN/LEARN/RANK/SERVE"
+    )
+    assert html.find("OPEN FULL DESK") < html.find(">LISTEN<")
     assert "message-intel__masthead" in html
     assert "message-intel__pulse-stage" in html
     assert "message-intel__spotlight" in html
@@ -162,6 +187,8 @@ def test_listener_share_page_composition():
     assert "lsn-site" in html
     assert 'href="/"' in html
     assert "Open the full website" in html
+    assert html.find("lsn-site") < html.find("lsn-hdr"), "full-site CTA must sit at the top of the listener, before the header"
+    assert html.find("Open the full website") < html.find("Telegram pulse")
     assert ".lsn-site" in css
     assert "lsn-title" in html
     assert "lsn-bay" in html
@@ -182,6 +209,13 @@ def test_listener_share_page_composition():
     assert ".lsn-hall" in css
     assert "@media (max-width: 520px)" in css
     assert ".lsn-tile--desk,.lsn-hall{grid-template-columns:1fr}" in css.replace(" ", "")
+    page_rule = css.split(".lsn-page{", 1)[1].split("}", 1)[0].replace(" ", "")
+    assert "max-width:430px" in page_rule, "full desk stays a phone column, even on a wide browser"
+    assert "max-width:980px" not in css
+    assert "1.2fr 1fr" not in css
+    assert 'grid-template-areas:"orbit feed"' not in css
+    site_rule = css.split(".lsn-site{", 1)[1].split("}", 1)[0].replace(" ", "")
+    assert "flex-wrap:wrap" in site_rule
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html
@@ -202,6 +236,7 @@ def test_listener_share_page_composition():
     assert "Trending orbit" in body
     assert "Open the full website" in body
     assert 'href="/"' in body
+    assert body.find("Open the full website") < body.find("Telegram pulse")
     bounced = client.get("/listener", follow_redirects=False)
     assert bounced.status_code == 308
     assert bounced.headers.get("location") == "/subnetsummer"

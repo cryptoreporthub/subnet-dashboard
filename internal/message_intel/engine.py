@@ -315,7 +315,9 @@ def list_messages(
         logger.warning("message-intel yesterday leader failed: %s", exc)
         meta["yesterday_leader"] = None
     try:
-        meta["high_conviction_strip"] = build_high_conviction_strip(limit=5, db=db, registry_names=names)
+        meta["high_conviction_strip"] = build_high_conviction_strip(
+            limit=5, min_conviction=70.0, db=db, registry_names=names
+        )
     except Exception as exc:
         logger.warning("message-intel high conviction strip failed: %s", exc)
         meta["high_conviction_strip"] = []
