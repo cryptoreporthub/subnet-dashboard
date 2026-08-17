@@ -472,19 +472,30 @@ def lookup_horizon_price(
         cache=cache,
         cache_path=cache_path or PRICE_CACHE_PATH,
     )
+    ref = float(prediction.get("reference_price", 0) or 0)
     if status == "ok" and price > 0:
-        return status, price, meta
+        if ref <= 0 or not is_price_unit_mismatch(ref, price):
+            return status, price, meta
+        meta = {
+            **meta,
+            "rejected_price_source": meta.get("price_source"),
+            "rejected_price": price,
+        }
 
     live_prices = live_prices or {}
     uid = prediction.get("netuid")
-    live = float(live_prices.get(uid, 0) or 0)
+    live = float(live_prices.get(uid, 0) or live_prices.get(str(uid), 0) or 0)
     # ponytail: widen live fallback to 60m + 2m — hour picks miss 15m candles; +120s covers tick lag
     live_window_sec = max(CANDLE_LOOKUP_MINUTES * 60, 3600) + 120
     if live > 0 and abs((now - resolve_at).total_seconds()) <= live_window_sec:
+        if ref > 0 and is_price_unit_mismatch(ref, live):
+            return "ungradeable", 0.0, meta
         meta = {
             "price_source": "live_oracle",
             "price_lag_seconds": int(abs((now - resolve_at).total_seconds())),
             "candles_in_window": meta.get("candles_in_window", 0),
+            "rejected_price_source": meta.get("rejected_price_source"),
+            "rejected_price": meta.get("rejected_price"),
         }
         return "ok", live, meta
 
@@ -1142,6 +1153,10 @@ def _resolve_due_predictions(
                     )
                     if p_status == "ok" and p_price > 0:
                         ref = float(pred.get("reference_price", 0) or 0)
+                        if is_price_unit_mismatch(ref, p_price):
+                            pred["retirement_reason"] = "price_unit_mismatch"
+                            resolved.append(_mark_ungradeable(pred, now))
+                            continue
                         actual_pct = compute_actual_pct(ref, p_price)
                         correct, outcome = grade_prediction(pred, actual_pct)
                         resolved_at_str = resolve_at.isoformat().replace("+00:00", "Z")
