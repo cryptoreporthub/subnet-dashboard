@@ -728,7 +728,7 @@ async def _listener_page_context() -> Dict[str, Any]:
         elif isinstance(t, dict):
             topics.append(
                 {
-                    "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
+                    "topic": t.get("topic") or t.get("tag") or t.get("name") or t.get("label") or "—",
                     "count": t.get("count") or t.get("mentions"),
                 }
             )
