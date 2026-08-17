@@ -105,3 +105,24 @@ def test_sub_one_vwap_mismatch_is_ungradeable_when_live_unavailable(monkeypatch)
     assert resolved["outcome"] == "ungradeable"
     assert resolved["retirement_reason"] == "price_unit_mismatch"
 
+
+def test_pump_recover_finalize_rejects_unit_mismatch():
+    from internal.learning.pump_lead_recover import _finalize_grade
+
+    now = datetime.now(timezone.utc)
+    out = _finalize_grade(
+        {
+            "id": "pump-mismatch",
+            "pick_source": "pump_lead",
+            "reference_price": 0.00311,
+            "predicted_pct": 2.0,
+            "direction": "up",
+        },
+        price=0.63078,
+        meta={"price_source": "vwap"},
+        resolve_at=now,
+    )
+    assert out["outcome"] == "ungradeable"
+    assert out.get("ungradeable_reason") == "price_unit_mismatch"
+    assert out["correct"] is None
+
