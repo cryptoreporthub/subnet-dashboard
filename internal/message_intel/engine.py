@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from internal.message_intel.soul_sync import apply_batch_to_soul_map
 from internal.message_intel.sources import source_status
 from internal.message_intel.store import get_db, live_stats
+from internal.message_intel.proof import stable_author_id
 
 logger = logging.getLogger(__name__)
 
@@ -242,6 +243,7 @@ def _message_matches_filters(
     min_conviction: Optional[float],
     netuid: Optional[int],
     topic: Optional[str] = None,
+    author_id: Optional[str] = None,
 ) -> bool:
     if min_conviction is not None:
         verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
@@ -256,6 +258,8 @@ def _message_matches_filters(
         topics = row.get("topics") if isinstance(row.get("topics"), list) else []
         if topic not in topics:
             return False
+    if author_id and stable_author_id(row) != str(author_id):
+        return False
     return True
 
 
@@ -266,6 +270,7 @@ def list_messages(
     min_conviction: Optional[float] = None,
     netuid: Optional[int] = None,
     topic: Optional[str] = None,
+    author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
@@ -281,7 +286,12 @@ def list_messages(
 
     db = get_db()
     names = _registry_subnet_names()
-    filters_active = min_conviction is not None or netuid is not None or bool(topic)
+    filters_active = (
+        min_conviction is not None
+        or netuid is not None
+        or bool(topic)
+        or bool(author_id)
+    )
     # ponytail: filtered queries scan recent 200 rows max — enough for desk feed, not full archive search
     fetch_limit = min(200, max(limit + offset, limit)) if filters_active else limit
     fetch_offset = 0 if filters_active else offset
@@ -292,7 +302,11 @@ def list_messages(
             m
             for m in messages
             if _message_matches_filters(
-                m, min_conviction=min_conviction, netuid=netuid, topic=topic
+                m,
+                min_conviction=min_conviction,
+                netuid=netuid,
+                topic=topic,
+                author_id=author_id,
             )
         ]
         messages = messages[offset : offset + limit]
@@ -373,6 +387,8 @@ def list_messages(
             applied["netuid"] = netuid
         if topic:
             applied["topic"] = topic
+        if author_id:
+            applied["author_id"] = author_id
         meta["filters"] = applied
     store_total = int(meta.get("total_messages") or 0)
     filtered_empty = filters_active and len(messages) == 0 and store_total > 0
