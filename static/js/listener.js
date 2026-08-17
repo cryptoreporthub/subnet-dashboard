@@ -304,6 +304,34 @@
     });
   });
 
+
+  /* ── share-page reaction crowns + hot-topic controls ──────────────── */
+  function applyShareFeedFilter(next) {
+    if (typeof window.__messageIntelSetFilter !== "function") return;
+    window.__messageIntelSetFilter(next);
+    var feed = document.getElementById("message-intel-feed");
+    if (feed) feed.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+  document.querySelectorAll(".lsn-topic").forEach(function (button) {
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", function () {
+      var topic = button.getAttribute("data-topic") || "";
+      if (!topic) return;
+      document.querySelectorAll(".lsn-topic").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+      button.setAttribute("aria-pressed", "true");
+      applyShareFeedFilter({ topic: topic });
+    });
+  });
+  document.querySelectorAll(".lsn-crow[data-author-id]").forEach(function (button) {
+    button.setAttribute("aria-pressed", "false");
+    button.addEventListener("click", function () {
+      var authorId = button.getAttribute("data-author-id") || "";
+      if (!authorId) return;
+      document.querySelectorAll(".lsn-crow[data-author-id]").forEach(function (x) { x.setAttribute("aria-pressed", "false"); });
+      button.setAttribute("aria-pressed", "true");
+      applyShareFeedFilter({ authorId: authorId });
+    });
+  });
   /* ── boot + 60s poll ── */
   pickAnchor();
   pollSubnets();
