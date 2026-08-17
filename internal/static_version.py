@@ -42,6 +42,7 @@ _ASSETS = (
     ("js", "pump_map.js"),
     ("js", "cockpit_hydrate.js"),
     ("js", "message_intel_feed.js"),
+    ("js", "listener.js"),
     ("js", "home_live_refresh.js"),
     ("js", "living_focus.js"),
     ("js", "home_deferred.js"),

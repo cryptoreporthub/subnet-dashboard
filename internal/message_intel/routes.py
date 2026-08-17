@@ -65,6 +65,7 @@ async def api_message_intel(
     min_conviction: Optional[float] = Query(default=None, ge=0),
     netuid: Optional[int] = Query(default=None, ge=0),
     topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
+    author_id: Optional[str] = Query(default=None, min_length=1, max_length=128),
 ):
     """Primary message-intel list endpoint (honest-empty when no messages)."""
     ent = entitlement_from_request(request)
@@ -81,6 +82,7 @@ async def api_message_intel(
             min_conviction=min_conviction,
             netuid=netuid,
             topic=topic,
+            author_id=author_id,
         )
         payload["entitlement"] = entitlement_payload(ent)
         return payload
@@ -129,6 +131,7 @@ async def api_message_intel_list(
     min_conviction: Optional[float] = Query(default=None, ge=0),
     netuid: Optional[int] = Query(default=None, ge=0),
     topic: Optional[str] = Query(default=None, min_length=1, max_length=32),
+    author_id: Optional[str] = Query(default=None, min_length=1, max_length=128),
 ):
     try:
         return await run_in_threadpool(
@@ -138,6 +141,7 @@ async def api_message_intel_list(
             min_conviction=min_conviction,
             netuid=netuid,
             topic=topic,
+            author_id=author_id,
         )
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)

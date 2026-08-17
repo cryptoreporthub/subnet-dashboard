@@ -81,12 +81,13 @@
           minConviction: parsed.minConviction != null ? Number(parsed.minConviction) : null,
           netuid: parsed.netuid != null ? Number(parsed.netuid) : null,
           topic: parsed.topic ? String(parsed.topic) : null,
+          authorId: parsed.authorId ? String(parsed.authorId) : null,
         };
       }
     } catch (e) {
       /* ignore */
     }
-    return { minConviction: 60, netuid: null, topic: null };
+    return { minConviction: 60, netuid: null, topic: null, authorId: null };
   }
 
   function saveFilters() {
@@ -168,6 +169,9 @@
     }
     if (filters.topic) {
       url += "&topic=" + encodeURIComponent(filters.topic);
+    }
+    if (filters.authorId) {
+      url += "&author_id=" + encodeURIComponent(filters.authorId);
     }
     return url;
   }
@@ -355,11 +359,21 @@
     }
   }
 
+  window.__messageIntelSetFilter = function (next) {
+    next = next || {};
+    if (Object.prototype.hasOwnProperty.call(next, "topic")) { filters.topic = next.topic ? String(next.topic) : null; filters.authorId = null; }
+    if (Object.prototype.hasOwnProperty.call(next, "authorId")) { filters.authorId = next.authorId ? String(next.authorId) : null; filters.topic = null; }
+    saveFilters();
+    syncFilterChipStates();
+    hydrate();
+  };
+
   function renderFilterEmpty() {
     var parts = [];
     if (filters.minConviction != null) parts.push(filters.minConviction + "%+ conviction");
     if (filters.netuid != null) parts.push("SN" + filters.netuid);
     if (filters.topic) parts.push(filters.topic);
+    if (filters.authorId) parts.push("reaction leader");
     var label = parts.length ? parts.join(" · ") : "current filters";
     return (
       '<p class="empty">No messages match ' +
@@ -2563,14 +2577,26 @@ function renderTrendingSky(rows) {
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
-       try {
-         var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
-         if (trendingV2 && Array.isArray(trendingV2.items)) trending = trendingV2.items;
-       } catch (trendingErr) {
-         /* Keep the server-rendered compatibility rollup. */
-       }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
-       latestTrendingRows = trending;
+      try {
+        var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
+        if (trendingV2 && Array.isArray(trendingV2.items) && trendingV2.items.length) {
+          trending = trendingV2.items;
+          trendingWindow = trendingV2.window || "1h";
+        } else if (!trending.length) {
+          // A quiet one-hour rank should not hide a populated 24-hour desk.
+          var archiveTrending = await fetchJsonWithRetry(
+            "/api/message-intel/trending-v2?limit=12&rank_hours=24&window_hours=24"
+          );
+          if (archiveTrending && Array.isArray(archiveTrending.items) && archiveTrending.items.length) {
+            trending = archiveTrending.items;
+            trendingWindow = archiveTrending.window || "24h";
+          }
+        }
+      } catch (trendingErr) {
+        /* Keep the server-rendered compatibility rollup. */
+      }
+      latestTrendingRows = trending;
       setStat("message-intel-stat-active", trending.length || "warming");
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;

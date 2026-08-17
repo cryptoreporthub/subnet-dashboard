@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from internal.message_intel.soul_sync import apply_batch_to_soul_map
 from internal.message_intel.sources import source_status
 from internal.message_intel.store import get_db, live_stats
+from internal.message_intel.proof import stable_author_id
 
 logger = logging.getLogger(__name__)
 
@@ -247,6 +248,7 @@ def _message_matches_filters(
     min_conviction: Optional[float],
     netuid: Optional[int],
     topic: Optional[str] = None,
+    author_id: Optional[str] = None,
 ) -> bool:
     if min_conviction is not None:
         verdict = row.get("verdict") if isinstance(row.get("verdict"), dict) else {}
@@ -258,11 +260,25 @@ def _message_matches_filters(
         if row_netuid is None or int(row_netuid) != int(netuid):
             return False
     if topic:
+        needle = str(topic).strip().lower()
         topics = row.get("topics") if isinstance(row.get("topics"), list) else []
-        if topic not in topics:
+        topic_hit = any(str(item).strip().lower() == needle for item in topics)
+        if not topic_hit:
+            group_name = str(row.get("group_name") or "").strip().lower()
+            topic_hit = group_name == needle
+        if not topic_hit:
+            subnet_match = re.fullmatch(r"(?:sn|subnet)\s*#?(\d+)", needle)
+            if subnet_match:
+                row_netuid = row.get("netuid") or _primary_netuid_from_message(row)
+                try:
+                    topic_hit = row_netuid is not None and int(row_netuid) == int(subnet_match.group(1))
+                except (TypeError, ValueError):
+                    topic_hit = False
+        if not topic_hit:
             return False
+    if author_id and stable_author_id(row) != str(author_id):
+        return False
     return True
-
 
 def list_messages(
     limit: int = 50,
@@ -271,6 +287,7 @@ def list_messages(
     min_conviction: Optional[float] = None,
     netuid: Optional[int] = None,
     topic: Optional[str] = None,
+    author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
@@ -286,9 +303,17 @@ def list_messages(
 
     db = get_db()
     names = _registry_subnet_names()
-    filters_active = min_conviction is not None or netuid is not None or bool(topic)
+    filters_active = (
+        min_conviction is not None
+        or netuid is not None
+        or bool(topic)
+        or bool(author_id)
+    )
     # ponytail: filtered queries scan recent 200 rows max — enough for desk feed, not full archive search
-    fetch_limit = min(200, max(limit + offset, limit)) if filters_active else limit
+    # Author crowns and topic chips must search the complete bounded archive;
+    # limiting them to the newest 200 rows makes valid weekly leaders appear
+    # empty whenever their latest message is just outside that window.
+    fetch_limit = min(5000, max(limit + offset, 5000 if (author_id or topic) else limit)) if filters_active else limit
     fetch_offset = 0 if filters_active else offset
     raw = db.list_messages(limit=fetch_limit, offset=fetch_offset)
     messages = [_enrich_message_row(m, names) for m in raw]
@@ -297,7 +322,11 @@ def list_messages(
             m
             for m in messages
             if _message_matches_filters(
-                m, min_conviction=min_conviction, netuid=netuid, topic=topic
+                m,
+                min_conviction=min_conviction,
+                netuid=netuid,
+                topic=topic,
+                author_id=author_id,
             )
         ]
         messages = messages[offset : offset + limit]
@@ -378,6 +407,8 @@ def list_messages(
             applied["netuid"] = netuid
         if topic:
             applied["topic"] = topic
+        if author_id:
+            applied["author_id"] = author_id
         meta["filters"] = applied
     store_total = int(meta.get("total_messages") or 0)
     filtered_empty = filters_active and len(messages) == 0 and store_total > 0
