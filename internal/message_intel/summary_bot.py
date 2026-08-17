@@ -281,25 +281,6 @@ def _format_bonus_line(summary: Dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
-def _format_topic_list(summary: Dict[str, Any]) -> str:
-    topics = summary.get("today_topics") or []
-    labels: list[str] = []
-    for row in topics:
-        label = str(row.get("label") or row.get("topic") or "").strip()
-        if not label:
-            continue
-        titled = label.replace("_", " ").strip().title()
-        if titled not in labels:
-            labels.append(titled)
-        if len(labels) == 3:
-            break
-    if not labels:
-        return ""
-    lines = ["<b>Topics</b>"]
-    lines.extend(f"• {html.escape(label)}" for label in labels)
-    return "\n".join(lines)
-
-
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
     """Conversation recap first; 24h counts/top/movers are a compact bonus line."""
     desk = desk_url or _desk_url()
@@ -313,15 +294,18 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
             f'<a href="{desk}">Open the Subnet Summers desk</a>'
         )
 
-    narrative = html.escape(_compose_today_narrative(summary))
-    topics_block = _format_topic_list(summary)
+    today_lines = [str(x).strip() for x in (summary.get("today_lines") or []) if str(x).strip()]
+    if today_lines:
+        narrative = "\n".join(html.escape(line) for line in today_lines[:3])
+    else:
+        narrative = html.escape(_compose_today_narrative(summary))
     bonus = _format_bonus_line(summary)
-    parts = [f"<b>Subnet Summers</b>", narrative]
-    if topics_block:
-        parts.append(topics_block)
-    parts.append(f"<i>{bonus}</i>")
-    parts.append(f'<a href="{desk}">Open the Subnet Summers desk</a>')
-    return "\n".join(parts)
+    return (
+        f"<b>Subnet Summers</b>\n"
+        f"{narrative}\n"
+        f"<i>{bonus}</i>\n"
+        f'<a href="{desk}">Open the Subnet Summers desk</a>'
+    )
 
 
 def build_subnetsummers_text(*, db=None) -> str:
@@ -414,6 +398,7 @@ def build_summary_text(*, db=None) -> str:
     today = build_today_conversation_summary(registry_names=names, db=db)
     summary["today_narrative"] = today.get("narrative") or ""
     summary["today_topics"] = today.get("topics") or []
+    summary["today_lines"] = today.get("lines") or []
     return format_summary_message(summary)
 
 

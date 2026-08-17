@@ -445,7 +445,6 @@ def test_build_today_topic_summary_calendar_day(monkeypatch):
     labels = [t["label"] for t in today["topics"]]
     assert "Market" in labels
     assert "Alpha" in labels
-    assert "took most of the airtime" in today["narrative"]
     assert "market" in today["narrative"].lower()
 
 
@@ -489,6 +488,24 @@ def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
             "reply_to_message_id": "100",
             "reply_parent_content": "SN3 validator rotation is free money",
         },
+        {
+            "timestamp": "2026-08-17T11:00:00Z",
+            "author_name": "Dee",
+            "content": "TAO market looks choppy, dip still has a bid though",
+            "sentiment": "bullish",
+        },
+        {
+            "timestamp": "2026-08-17T11:02:00Z",
+            "author_name": "Ed",
+            "content": "nah this dump has no bid, wait for a real market reclaim",
+            "sentiment": "bearish",
+        },
+        {
+            "timestamp": "2026-08-17T12:00:00Z",
+            "author_name": "Fay",
+            "content": "alpha yield still printing after the last rotation",
+            "sentiment": "bullish",
+        },
     ]
     monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
     monkeypatch.setattr(
@@ -497,8 +514,13 @@ def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
     )
     today = rollup.build_today_conversation_summary(registry_names={3: "Teutonic"})
     narrative = today["narrative"]
-    assert "argued" in narrative.lower() or "split" in narrative.lower()
-    assert "priced in" in narrative.lower() or "validator rotation" in narrative.lower()
+    lines = today["lines"]
+    assert len(lines) == 3
+    assert "argued" in lines[0].lower() or "split" in lines[0].lower()
+    assert "priced in" in lines[0].lower() or "validator rotation" in lines[0].lower()
+    joined = " ".join(lines[1:])
+    assert "market" in joined.lower()
+    assert "alpha" in joined.lower()
     assert "Alice" not in narrative
     assert "Bob" not in narrative
     assert "Cara" not in narrative

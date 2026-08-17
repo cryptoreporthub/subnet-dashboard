@@ -1895,6 +1895,16 @@ def build_today_conversation_summary(
         lambda: {"replies": [], "parent": "", "sentiments": set(), "netuids": set(), "pushback": False}
     )
     split_sides: Dict[int, Dict[str, str]] = defaultdict(dict)
+    topic_buckets: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "count": 0,
+            "buy": "",
+            "fade": "",
+            "push": "",
+            "snip": "",
+            "netuids": set(),
+        }
+    )
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1908,9 +1918,30 @@ def build_today_conversation_summary(
         except (TypeError, ValueError):
             conviction = 0.0
         content = str(row.get("content") or "").strip()
-        for tag in classify_message_topics(content):
+        tags = classify_message_topics(content)
+        exclusive = len(tags) == 1
+        pri = 1 if exclusive else 0
+        for tag in tags:
             topic_counts[tag] += 1
+            bucket = topic_buckets[tag]
+            bucket["count"] += 1
+            if content and pri >= int(bucket.get("snip_pri", -1)):
+                if pri > int(bucket.get("snip_pri", -1)) or not bucket["snip"]:
+                    bucket["snip"] = content
+                    bucket["snip_pri"] = pri
+            side = _direction_side(row)
+            if side and content and pri >= int(bucket.get(f"{side}_pri", -1)):
+                if pri > int(bucket.get(f"{side}_pri", -1)) or not bucket[side]:
+                    bucket[side] = content
+                    bucket[f"{side}_pri"] = pri
+            if _has_pushback(content) and pri >= int(bucket.get("push_pri", -1)):
+                if pri > int(bucket.get("push_pri", -1)) or not bucket["push"]:
+                    bucket["push"] = content
+                    bucket["push_pri"] = pri
         netuids = _netuids_from_row(row)
+        if exclusive:
+            for tag in tags:
+                topic_buckets[tag]["netuids"].update(netuids)
         side = _direction_side(row)
         for netuid in netuids:
             subnet_counts[netuid] += 1
@@ -1965,8 +1996,11 @@ def build_today_conversation_summary(
         "topics": topics,
         "sentiment": sentiment,
         "contention": contention,
+        "topic_buckets": dict(topic_buckets),
+        "registry_names": registry_names,
     }
-    payload["narrative"] = _today_narrative(payload)
+    payload["lines"] = _today_lines(payload)
+    payload["narrative"] = " ".join(payload["lines"])
     return payload
 
 
@@ -1975,13 +2009,24 @@ def build_today_topic_summary(*, db=None, limit: int = 4) -> List[Dict[str, Any]
     return (build_today_conversation_summary(db=db, limit=limit).get("topics") or [])[:limit]
 
 
-def _today_narrative(payload: Dict[str, Any]) -> str:
-    n = int(payload.get("message_count") or 0)
-    if n <= 0:
-        return "Quiet so far today — no graded chatter yet."
+def _cap_sentence(text: str) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    if not raw.endswith("."):
+        raw += "."
+    return raw[:1].upper() + raw[1:]
 
-    contention = payload.get("contention") or {}
-    sentences: List[str] = []
+
+def _texts_overlap(left: str, right: str) -> bool:
+    a = re.sub(r"\s+", " ", str(left or "").lower())[:48]
+    b = re.sub(r"\s+", " ", str(right or "").lower())[:48]
+    if not a or not b:
+        return False
+    return a in str(right or "").lower() or b in str(left or "").lower()
+
+
+def _contention_line(contention: Dict[str, Any]) -> str:
     if contention.get("kind") == "thread":
         subject = contention.get("subject") or ""
         pushback = contention.get("pushback") or ""
@@ -1991,55 +2036,129 @@ def _today_narrative(payload: Dict[str, Any]) -> str:
         elif subject:
             lead = f"People argued over {subject}"
         else:
-            lead = ""
-        if lead and names:
+            return ""
+        if names:
             lead += f" ({_join_phrase(names)})"
-        if lead:
-            sentences.append(lead + ".")
-    elif contention.get("kind") == "split":
+        return _cap_sentence(lead)
+    if contention.get("kind") == "split":
         names = [str(x) for x in (contention.get("names") or []) if x]
         name = names[0] if names else "a subnet"
         buy = contention.get("buy") or ""
         fade = contention.get("fade") or ""
         lead = f"Calls split on {name}"
         if buy and fade:
-            lead += f": {buy} vs {fade}"
+            lead += f": whether {buy}, or {fade}"
         elif buy or fade:
             lead += f" — {buy or fade}"
-        sentences.append(lead + ".")
+        return _cap_sentence(lead)
+    return ""
 
-    if not sentences:
-        topics = payload.get("topics") or []
-        topic_labels = [
-            _topic_label(t.get("topic") or t.get("label"))
-            for t in topics[:3]
-            if t.get("topic") or t.get("label")
+
+def _topic_recap_line(
+    tag: str,
+    bucket: Dict[str, Any],
+    *,
+    registry_names: Dict[int, str],
+) -> str:
+    label = _topic_label(tag)
+    buy = _anon_clip(_strip_pushback_prefix(bucket.get("buy") or ""), max_len=70)
+    fade = _anon_clip(_strip_pushback_prefix(bucket.get("fade") or ""), max_len=70)
+    push = _anon_clip(_strip_pushback_prefix(bucket.get("push") or ""), max_len=70)
+    snip = _anon_clip(_strip_pushback_prefix(bucket.get("snip") or ""), max_len=70)
+    names = [
+        _rollup_subnet_name(int(n), registry_names)
+        for n in list(bucket.get("netuids") or [])[:1]
+    ]
+    name_bit = f" ({names[0]})" if names else ""
+    if buy and fade and not _texts_overlap(buy, fade):
+        return _cap_sentence(f"{label} talk split on whether {buy}, or {fade}{name_bit}")
+    if snip and push and not _texts_overlap(snip, push):
+        return _cap_sentence(f"People argued over whether {snip}, or {push}{name_bit}")
+    if snip:
+        return _cap_sentence(f"{label} chatter stuck on {snip}{name_bit}")
+    return ""
+
+
+def _repeats_used(story: str, used: List[str], extra: List[str] | None = None) -> bool:
+    hay = story.lower()
+    for prev in list(used) + list(extra or []):
+        clip = re.sub(r"\s+", " ", str(prev or "")).strip()
+        if len(clip) < 18:
+            continue
+        needle = clip.lower()[:36]
+        if needle and needle in hay:
+            return True
+        if _texts_overlap(story, clip):
+            return True
+    return False
+
+
+def _today_lines(payload: Dict[str, Any]) -> List[str]:
+    n = int(payload.get("message_count") or 0)
+    if n <= 0:
+        return ["Quiet so far today — no graded chatter yet."]
+
+    registry_names = payload.get("registry_names") or {}
+    lines: List[str] = []
+    used: List[str] = []
+    contention = payload.get("contention") or {}
+    lead = _contention_line(contention)
+    if lead:
+        lines.append(lead)
+        used.append(lead)
+
+    topics = payload.get("topics") or []
+    buckets = payload.get("topic_buckets") or {}
+    for row in topics:
+        if len(lines) >= 3:
+            break
+        tag = str(row.get("topic") or "").strip()
+        if not tag:
+            continue
+        story = _topic_recap_line(tag, buckets.get(tag) or {}, registry_names=registry_names)
+        if not story:
+            continue
+        extra = [
+            str(contention.get(k) or "")
+            for k in ("subject", "pushback", "buy", "fade")
         ]
-        sentiment = str(payload.get("sentiment") or "mixed").lower()
-        opener = ""
-        if topic_labels:
-            opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
-        else:
-            opener = f"{n} messages landed"
-        if sentiment == "bullish":
-            opener += ", and the room leaned bullish"
-        elif sentiment == "bearish":
-            opener += ", with bearish calls carrying the thread"
-        elif sentiment == "cautious":
-            opener += ", in a cautious wait-and-see mood"
-        sentences.append(opener + ".")
-        top = payload.get("top_subnets") or []
-        if top:
-            lead = top[0]
-            lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
-            detail = f"{lead_name} led chatter"
-            ctx = str(lead.get("mention_context") or "").strip()
-            if ctx:
-                detail += f" — {ctx}"
-            sentences.append(detail + ".")
+        if _repeats_used(story, used, extra):
+            continue
+        lines.append(story)
+        used.append(story)
 
-    text = " ".join(sentences)
-    return text[:1].upper() + text[1:] if text else text
+    if lines:
+        return lines[:3]
+
+    topic_labels = [
+        _topic_label(t.get("topic") or t.get("label"))
+        for t in topics[:3]
+        if t.get("topic") or t.get("label")
+    ]
+    sentiment = str(payload.get("sentiment") or "mixed").lower()
+    opener = f"{n} messages landed"
+    if topic_labels:
+        opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
+    if sentiment == "bullish":
+        opener += ", and the room leaned bullish"
+    elif sentiment == "bearish":
+        opener += ", with bearish calls carrying the thread"
+    elif sentiment == "cautious":
+        opener += ", in a cautious wait-and-see mood"
+    fallback = [_cap_sentence(opener)]
+    top = payload.get("top_subnets") or []
+    if top:
+        name = top[0].get("name") or f"SN{top[0].get('netuid')}"
+        ctx = str(top[0].get("mention_context") or "").strip()
+        detail = f"{name} led chatter"
+        if ctx:
+            detail += f" — {ctx}"
+        fallback.append(_cap_sentence(detail))
+    return fallback
+
+
+def _today_narrative(payload: Dict[str, Any]) -> str:
+    return " ".join(_today_lines(payload))
 
 
 _MIN_YESTERDAY_SUMMARY_MESSAGES = 3

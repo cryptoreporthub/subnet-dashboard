@@ -152,22 +152,21 @@ def test_format_summary_includes_trending_topics_today():
             "high_conviction_count": 4,
             "group_pulse": {"sentiment": "Cautious"},
             "top_subnets": [{"netuid": 3, "name": "Teutonic", "mentions": 5}],
-            "today_topics": [
-                {"label": "Market", "count": 19},
-                {"label": "Alpha", "count": 10},
-                {"label": "Emissions", "count": 7},
+            "today_lines": [
+                "People argued over whether SN3 validator rotation is free money, or emissions already priced in (Teutonic).",
+                "Market talk split on whether TAO looks choppy, or this dip still has a bid.",
+                "Alpha chatter stuck on yield still printing after the last rotation.",
             ],
         }
     )
 
-    assert "took most of the airtime" in text
-    assert "<b>Topics</b>" in text
-    assert "• Market" in text
-    assert "• Alpha" in text
-    assert "• Emissions" in text
-    assert "Market (19)" not in text
-    assert text.find("took most of the airtime") < text.find("<b>Topics</b>")
-    assert text.find("<b>Topics</b>") < text.find("<i>")
+    assert "People argued over whether SN3 validator rotation is free money" in text
+    assert "Market talk split on whether TAO looks choppy" in text
+    assert "Alpha chatter stuck on yield still printing" in text
+    assert "<b>Topics</b>" not in text
+    assert "• Market" not in text
+    lines = [ln for ln in text.split("\n") if ln and not ln.startswith("<")]
+    assert len(lines) >= 3
 
 
 def test_rate_limit_per_chat(intel_env):
