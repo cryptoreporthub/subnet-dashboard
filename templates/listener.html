@@ -394,11 +394,19 @@
     <div class="lsn-glass lsn-panel">
       <div class="lsn-sect"><span class="bar"></span><b>Reaction crowns</b><span>weekly emoji leaders</span></div>
       <div class="lsn-crowns">
-        {% for em in [["🔥","—"],["💎","—"],["🚀","—"],["🧠","—"],["✅","—"],["👑","—"]] %}
-        <div class="lsn-crow"><div class="emoji">{{ em[0] }}</div><div class="who">{{ em[1] }}</div><div class="cnt">—</div></div>
-        {% endfor %}
-      </div>
-      <p class="lsn-crowns-empty">Reaction leaders surface once the listener grades emoji counts — nothing faked.</p>
+            {% if reaction_crowns %}
+            {% for em in reaction_crowns[:6] %}
+            <button type="button" class="lsn-crow" data-author-id="{{ em["author_id"] or "" }}" data-author="{{ em["author"] or "" }}" aria-label="Show messages from {{ em["author"] or "this reaction leader" }}">
+              <div class="emoji">{{ em["emoji"] }}</div><div class="who">{{ em["author"] }}</div><div class="cnt">{{ em["count"] }}</div>
+            </button>
+            {% endfor %}
+            {% else %}
+            {% for em in [["🔥","—"],["💎","—"],["🚀","—"],["🧠","—"],["✅","—"],["👑","—"]] %}
+            <div class="lsn-crow lsn-crow--empty"><div class="emoji">{{ em[0] }}</div><div class="who">{{ em[1] }}</div><div class="cnt">—</div></div>
+            {% endfor %}
+            {% endif %}
+          </div>
+          <p class="lsn-crowns-empty">Reaction leaders surface once the listener grades emoji counts — nothing faked.</p>
     </div>
 
     <!-- HOT TOPICS -->
@@ -407,7 +415,11 @@
       {% if topics %}
       <div class="lsn-topics">
         {% for t in topics[:6] %}
-        <span class="lsn-topic{% if loop.index <= 2 %} hot{% endif %}">{{ t["topic"] or "—" }}{% if t["count"] is not none %} <span class="n">{{ t["count"] }}</span>{% endif %}</span>
+        {% if t["topic"] and t["topic"] != "—" %}
+        <button type="button" class="lsn-topic{% if loop.index <= 2 %} hot{% endif %}" data-topic="{{ t["topic"] }}" aria-label="Show messages tagged {{ t["topic"] }}">
+          {{ t["topic"] }}{% if t["count"] is not none %} <span class="n">{{ t["count"] }}</span>{% endif %}
+        </button>
+        {% endif %}
         {% endfor %}
       </div>
       {% else %}
