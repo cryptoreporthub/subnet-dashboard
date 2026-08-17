@@ -11,7 +11,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -158,15 +158,63 @@ def _format_rank(item: Dict[str, Any]) -> str:
     )
 
 
-def _format_author(item: Dict[str, Any]) -> str:
+def _format_accuracy_pct(rate: Any) -> str:
+    if rate is None:
+        return "n/a"
+    try:
+        value = float(rate)
+    except (TypeError, ValueError):
+        return "n/a"
+    if value == int(value):
+        return f"{int(value)}%"
+    return f"{value:.1f}%"
+
+
+def _author_display_name(item: Dict[str, Any]) -> str:
+    name = str(item.get("author_name") or "").strip()
+    if name:
+        return html.escape(name)
+    username = str(item.get("author_username") or "").strip().lstrip("@")
+    if username:
+        return f"@{html.escape(username)}"
+    author_id = str(item.get("author_id") or "").strip()
+    return html.escape(author_id or "Unknown")
+
+
+def _format_author_line(item: Dict[str, Any], rank: int) -> str:
+    calls = int(item.get("total_graded_calls") or item.get("graded") or 0)
+    return (
+        f"{rank}. {_author_display_name(item)} – "
+        f"{calls} calls, {_format_accuracy_pct(item.get('accuracy_pct'))} accuracy"
+    )
+
+
+def _format_author_leaderboard(rows: List[Dict[str, Any]], *, limit: int = 3) -> str:
+    qualified = [
+        row
+        for row in rows
+        if int(row.get("total_graded_calls") or row.get("graded") or 0) > 0
+    ]
+    qualified.sort(
+        key=lambda row: (
+            int(row.get("total_graded_calls") or row.get("graded") or 0),
+            float(row.get("accuracy_pct") or 0.0),
+        ),
+        reverse=True,
+    )
+    top = qualified[:limit]
+    if not top:
+        return _format_error("No graded callers yet — leaderboard fills as calls resolve.")
+    lines = ["<b>Author Leaderboard</b>", ""]
+    for index, row in enumerate(top, 1):
+        lines.append(_format_author_line(row, index))
+    return "\n".join(lines)
+
+
+def _format_author(item: Dict[str, Any], *, rank: int = 1) -> str:
     if not item:
         return _format_error("No matching author found.")
-    return (
-        f"<b>Author Leaderboard</b>\n\n"
-        f"{item.get('author_name') or item.get('author_id')}\n"
-        f"Messages: {item.get('message_count', 0)}\n"
-        f"Accuracy: {item.get('accuracy_pct') if item.get('accuracy_pct') is not None else 'n/a'}"
-    )
+    return f"<b>Author Leaderboard</b>\n\n{_format_author_line(item, rank)}"
 
 
 def _watchlist_load(owner=None):
@@ -512,10 +560,12 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
         row = next((r for r in items if subnet is not None and int(r.get("netuid") or 0) == subnet), {})
         return _format_rank(row)
     if cmd == "/who":
-        author = arg.strip().lstrip("@")
         from internal.message_intel.rollup import build_author_reliability_rows
 
         rows = build_author_reliability_rows(days=30, limit=25)
+        author = arg.strip().lstrip("@")
+        if not author:
+            return _format_author_leaderboard(rows, limit=3)
         row = next(
             (
                 r
@@ -527,9 +577,9 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
                     str(r.get("author_id") or "").lower(),
                 }
             ),
-            {},
+            None,
         )
-        return _format_author(row)
+        return _format_author(row or {})
     if cmd == "/alerts" and message is not None:
         parts = arg.lower().split()
         if not parts or parts[0] not in {"on", "off"}:
@@ -552,11 +602,28 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
     return None
 
 
-def send_message(chat_id: int, text: str, *, parse_mode: str = "HTML") -> Dict[str, Any]:
-    return _telegram_api(
-        "sendMessage",
-        {"chat_id": chat_id, "text": text, "parse_mode": parse_mode, "disable_web_page_preview": False},
-    )
+def _message_has_desk_link(text: str) -> bool:
+    lowered = text.lower()
+    return "subnetsummer" in lowered and "<a href=" in lowered
+
+
+def send_message(
+    chat_id: int,
+    text: str,
+    *,
+    parse_mode: str = "HTML",
+    link_preview: bool = True,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": parse_mode,
+    }
+    if link_preview:
+        payload["disable_web_page_preview"] = False
+    else:
+        payload["link_preview_options"] = {"is_disabled": True}
+    return _telegram_api("sendMessage", payload)
 
 
 def _process_update(update: Dict[str, Any]) -> None:
@@ -584,7 +651,7 @@ def _process_update(update: Dict[str, Any]) -> None:
         reply = handle_command(text, message=message)
     if reply is None:
         return
-    resp = send_message(chat_id, reply)
+    resp = send_message(chat_id, reply, link_preview=not _message_has_desk_link(reply))
     if not resp.get("ok"):
         logger.warning("summary bot send failed chat=%s: %s", chat_id, resp.get("error") or resp)
 

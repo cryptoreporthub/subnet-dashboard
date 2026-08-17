@@ -266,6 +266,12 @@ def test_summers_divergence_mobile_and_keyboard_hooks():
     assert ".message-intel__divergence" in css
     assert ".message-intel__divergence-receipt:focus-visible" in css
     assert ".message-intel__divergence-head" in css
+    assert ".message-intel__rank-header" in css
+    assert ".message-intel__crowns-grid-v2" in css
+    assert "minmax(0,1fr)" in css.replace(" ", "")
+    listener_css = open("static/css/listener.css", encoding="utf-8").read()
+    assert ".lsn-bay" in listener_css
+    assert "overflow-x:clip" in listener_css.replace(" ", "")
 
 
 def test_learn_proof_and_conviction_are_honest_when_empty():

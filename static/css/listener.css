@@ -18,7 +18,9 @@ body.lsn-body{
   position:relative; overflow-x:clip;
 }
 
-.lsn-page{position:relative; z-index:1; width:100%; max-width:430px; min-width:0; display:flex; flex-direction:column; gap:16px}
+.lsn-page{position:relative; z-index:1; width:100%; max-width:430px; min-width:0; display:flex; flex-direction:column; gap:16px; margin:0 auto; overflow-x:clip}
+.lsn-bay{width:100%;min-width:0;display:flex;flex-direction:column;gap:16px}
+.lsn-glass,.lsn-panel,.lsn-feed{min-width:0;max-width:100%;box-sizing:border-box}
 .lsn-site{
   position:relative;
   display:flex; align-items:center; flex-wrap:wrap; gap:12px;
