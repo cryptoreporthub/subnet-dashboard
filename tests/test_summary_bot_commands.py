@@ -108,7 +108,17 @@ def test_summary_subnet_uses_current_qualified_calls(monkeypatch):
 def test_handle_command_who_and_alerts(monkeypatch):
     monkeypatch.setattr(
         "internal.message_intel.rollup.build_author_reliability_rows",
-        lambda **kw: [{"author_id": "id:u1", "author_name": "Alpha", "author_username": "alpha", "message_count": 2, "accuracy_pct": 80.0}],
+        lambda **kw: [
+            {
+                "author_id": "id:u1",
+                "author_name": "Alpha",
+                "author_username": "alpha",
+                "message_count": 2,
+                "total_graded_calls": 2,
+                "graded": 2,
+                "accuracy_pct": 80.0,
+            }
+        ],
     )
     state = {"alerts": {}}
     monkeypatch.setattr(summary_bot, "_watchlist_load", lambda owner=None: {"netuids": [7], "thresholds": {}, "alerts": state["alerts"]})
@@ -120,9 +130,70 @@ def test_handle_command_who_and_alerts(monkeypatch):
     msg = {"author_id": "42", "author_username": "alpha", "author_name": "Alpha", "chat": {"id": 1}}
     who = summary_bot.handle_command("/who alpha")
     assert "Author Leaderboard" in who
+    assert "Alpha – 2 calls, 80% accuracy" in who
     alerts = summary_bot.handle_command("/alerts on", message=msg)
     assert "Alerts turned on" in alerts
     assert state["alerts"]["id:42"]["enabled"] is True
+
+
+def test_who_without_arg_shows_top_three_graded_callers(monkeypatch):
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_author_reliability_rows",
+        lambda **kw: [
+            {
+                "author_id": "id:u1",
+                "author_name": "τaoSτacker ☯️",
+                "total_graded_calls": 11,
+                "graded": 11,
+                "accuracy_pct": 100.0,
+            },
+            {
+                "author_id": "id:u2",
+                "author_name": "Es",
+                "total_graded_calls": 6,
+                "graded": 6,
+                "accuracy_pct": 80.0,
+            },
+            {
+                "author_id": "id:u3",
+                "author_name": "KaWis",
+                "total_graded_calls": 5,
+                "graded": 5,
+                "accuracy_pct": 66.7,
+            },
+            {
+                "author_id": "id:u4",
+                "author_name": "Dr.dre",
+                "message_count": 198,
+                "total_graded_calls": 0,
+                "graded": 0,
+                "accuracy_pct": 87.5,
+            },
+        ],
+    )
+    who = summary_bot.handle_command("/who")
+    assert "1. τaoSτacker ☯️ – 11 calls, 100% accuracy" in who
+    assert "2. Es – 6 calls, 80% accuracy" in who
+    assert "3. KaWis – 5 calls, 66.7% accuracy" in who
+    assert "Dr.dre" not in who
+
+
+def test_send_message_disables_link_preview_for_desk_links(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    captured = {}
+
+    def fake_api(method, payload):
+        captured["method"] = method
+        captured["payload"] = payload
+        return {"ok": True}
+
+    monkeypatch.setattr(summary_bot, "_telegram_api", fake_api)
+    summary_bot.send_message(
+        7,
+        '<a href="https://subnet-dashboard.fly.dev/subnetsummer">Open the Subnet Summers desk</a>',
+        link_preview=False,
+    )
+    assert captured["payload"]["link_preview_options"] == {"is_disabled": True}
 
 
 def test_process_update_ignores_unrelated_commands(monkeypatch):
