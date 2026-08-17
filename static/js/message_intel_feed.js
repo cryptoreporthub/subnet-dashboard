@@ -2563,14 +2563,26 @@ function renderTrendingSky(rows) {
 
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
-       try {
-         var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
-         if (trendingV2 && Array.isArray(trendingV2.items)) trending = trendingV2.items;
-       } catch (trendingErr) {
-         /* Keep the server-rendered compatibility rollup. */
-       }
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";
-       latestTrendingRows = trending;
+      try {
+        var trendingV2 = await fetchJsonWithRetry("/api/message-intel/trending-v2?limit=12&rank_hours=1&window_hours=24");
+        if (trendingV2 && Array.isArray(trendingV2.items) && trendingV2.items.length) {
+          trending = trendingV2.items;
+          trendingWindow = trendingV2.window || "1h";
+        } else if (!trending.length) {
+          // A quiet one-hour rank should not hide a populated 24-hour desk.
+          var archiveTrending = await fetchJsonWithRetry(
+            "/api/message-intel/trending-v2?limit=12&rank_hours=24&window_hours=24"
+          );
+          if (archiveTrending && Array.isArray(archiveTrending.items) && archiveTrending.items.length) {
+            trending = archiveTrending.items;
+            trendingWindow = archiveTrending.window || "24h";
+          }
+        }
+      } catch (trendingErr) {
+        /* Keep the server-rendered compatibility rollup. */
+      }
+      latestTrendingRows = trending;
       setStat("message-intel-stat-active", trending.length || "warming");
       var trendingUnit = document.querySelector("#message-intel-trending-card .message-intel__panel-unit");
       if (trendingUnit) trendingUnit.textContent = trendingWindow;
