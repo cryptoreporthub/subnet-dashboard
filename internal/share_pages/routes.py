@@ -470,20 +470,45 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["feed"] = feed_rows
     ctx["mi_messages"] = [m for m in msgs[:12] if isinstance(m, dict)]
 
-    # trending — subnet telegram conviction (1h lens)
-    conv_payload = (
-        {"items": message_meta.get("trending")}
-        if isinstance(message_meta.get("trending"), list)
-        else None
-    )
-    if not conv_payload or not conv_payload.get("items"):
-        try:
-            engine = _listener_engine()
-            conv_payload = await _listener_call(
-                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
-            )
-        except Exception:
-            pass
+    # trending — 1h ChatterPower (matches homepage Cosmic Resonance Core)
+    trending = []
+    try:
+        from internal.message_intel.rollup import build_trending_subnets
+
+        rank_rows = await _listener_call(
+            lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
+            [],
+            timeout=6,
+        )
+    except Exception:
+        rank_rows = []
+    for r in _as_list(rank_rows):
+        if not isinstance(r, dict):
+            continue
+        netuid = _safe_int(r.get("netuid"))
+        sent_raw = str(r.get("sentiment") or "mixed").lower()
+        sent_tag = "bull" if "bull" in sent_raw else ("bear" if "bear" in sent_raw else "mix")
+        trending.append(
+            {
+                "netuid": netuid,
+                "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                "conviction": r.get("avg_conviction") or r.get("conviction"),
+                "sent": sent_tag,
+                "mentions": r.get("mentions"),
+                "chatter_power": r.get("chatter_power") or r.get("heat"),
+                "why": r.get("why"),
+            }
+        )
+    ctx["trending"] = trending
+
+    conv_payload = None
+    try:
+        engine = _listener_engine()
+        conv_payload = await _listener_call(
+            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+        )
+    except Exception:
+        pass
     conv_rows = []
     if isinstance(conv_payload, dict):
         conv_rows = _as_list(
@@ -494,56 +519,22 @@ async def _listener_page_context() -> Dict[str, Any]:
         )
     elif isinstance(conv_payload, list):
         conv_rows = conv_payload
-    trending = []
-    for r in conv_rows[:8]:
-        if not isinstance(r, dict):
-            continue
-        netuid = _safe_int(r.get("netuid"))
-        sent = str(r.get("sentiment") or r.get("verdict") or "mixed").lower()
-        sent_tag = "bull" if "bull" in sent else ("bear" if "bear" in sent else "mix")
-        conv = r.get("conviction") or r.get("index") or r.get("score")
-        trending.append(
-            {
-                "netuid": netuid,
-                "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                "conviction": conv,
-                "sent": sent_tag,
-                "mentions": (
-                    r.get("mentions")
-                    or r.get("call_count")
-                    or r.get("count")
-                    or r.get("messages")
-                ),
-            }
-        )
-    ctx["trending"] = trending
     ctx["subnet_conviction"] = conv_rows
 
-    # The evidence-qualified conviction rollup can be empty while the
-    # broader chatter rank still has useful subnet mentions. Keep the desk
-    # populated from the canonical ChatterPower rollup in that case.
-    if not ctx["trending"]:
-        try:
-            from internal.message_intel.rollup import build_trending_subnets
-
-            rank_rows = await _listener_call(
-                lambda: build_trending_subnets(limit=8, rank_hours=24, window_hours=24),
-                [],
-                timeout=6,
-            )
-        except Exception:
-            rank_rows = []
-        for r in _as_list(rank_rows):
+    if not ctx["trending"] and conv_rows:
+        for r in conv_rows[:8]:
             if not isinstance(r, dict):
                 continue
             netuid = _safe_int(r.get("netuid"))
+            label = str(r.get("label") or r.get("sentiment") or "mixed").lower()
+            sent_tag = "bull" if "bull" in label else ("bear" if "bear" in label else "mix")
             ctx["trending"].append(
                 {
                     "netuid": netuid,
                     "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                    "conviction": r.get("avg_conviction") or r.get("conviction"),
-                    "sent": str(r.get("sentiment") or "mixed").lower()[:4],
-                    "mentions": r.get("mentions"),
+                    "conviction": r.get("score") or r.get("conviction"),
+                    "sent": sent_tag,
+                    "mentions": r.get("call_count") or r.get("mentions"),
                 }
             )
 

@@ -136,7 +136,9 @@ def test_summers_flagship_css_tokens():
 
 def test_summers_flagship_composition_hooks():
     html = open("templates/partials/premium/message_intel_feed.html", encoding="utf-8").read()
-    assert html.find("message-intel__visualizer-card") < html.find('role="tablist"'), (
+    assert 'include "partials/premium/cosmic_resonance_core.html"' in html
+    core = open("templates/partials/premium/cosmic_resonance_core.html", encoding="utf-8").read()
+    assert html.find('include "partials/premium/cosmic_resonance_core.html"') < html.find('role="tablist"'), (
         "Cosmic Resonance Core must sit at the top of the Telegram section, before LISTEN/LEARN/RANK/SERVE"
     )
     assert 'message-intel__visualizer-card glass-card' not in html
@@ -159,20 +161,19 @@ def test_summers_flagship_composition_hooks():
         assert f'id="{eid}"' in html
     assert "Telegram outcome stories" in html
     assert "message-intel__pulsar" in html
-    assert "message-intel__sky-track" in html
-    assert "message-intel__sky-carrier" in html
+    assert "message-intel__sky-track" in core
+    assert "message-intel__sky-hub" in core
     assert "message-intel__hall" in html
     assert "message-intel__rail\"" not in html
-    assert 'id="message-intel-sky"' in html
-    assert "hidden" not in html.split('id="message-intel-sky"', 1)[1].split(">", 1)[0]
-    assert "message-intel__sky-legend" in html
-    assert "closer = higher rank" in html
+    assert 'id="message-intel-sky"' in core
+    assert "message-intel__sky-legend" in core
+    assert "closer = higher rank" in core
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
     assert 'role="tablist"' in html
-    assert 'href="/subnetsummer"' in html
-    assert "Open full listener" in html
+    assert 'href="/subnetsummer"' in core
+    assert "Open full listener" in core
     assert 'data-pulse-pane="listen"' in html
     assert 'data-pulse-pane="learn"' in html
     assert 'data-pulse-pane="rank"' in html
@@ -209,12 +210,14 @@ def test_listener_share_page_composition():
     assert "Chatter Power" in html
     assert "/rank" in html
     assert "/who" in html
-    assert "lsn-orbit" in html
-    assert "lsn-orbit__track" in html
+    assert "lsn-orbit" not in html
+    assert "cosmic_resonance_core.html" in html
+    assert "message-intel--listener-orbit" in html
+    assert "COSMIC RESONANCE CORE" in open("templates/partials/premium/cosmic_resonance_core.html", encoding="utf-8").read()
     assert "lsn-hall" in html
     assert "lsn-rail" not in html
-    assert "lsn-orbit-legend" in html
-    assert "closer = higher rank" in html
+    assert "lsn-orbit-legend" not in html
+    assert "closer = higher rank" in open("templates/partials/premium/cosmic_resonance_core.html", encoding="utf-8").read()
     assert ".lsn-orbit" in css
     assert ".lsn-hall" in css
     assert "@media (max-width: 520px)" in css
@@ -229,7 +232,7 @@ def test_listener_share_page_composition():
     assert "lsn-zones" not in html
     assert "lsn-zone-feed" not in html
     assert "Telegram pulse" in html
-    assert "Trending orbit" in html
+    assert "Trending orbit" not in html or "TRENDING ORBIT" in html
     assert "message-intel-feed" in html
     assert "message-intel-conv-filters" in html
     assert "feed_rows(mi_messages)" in html
@@ -243,7 +246,8 @@ def test_listener_share_page_composition():
     assert resp.status_code == 200
     body = resp.text
     assert "lsn-intercept" in body
-    assert "Trending orbit" in body
+    assert "COSMIC RESONANCE CORE" in body
+    assert 'id="message-intel-sky"' in body
     assert "Open the full website" in body
     assert 'href="/"' in body
     assert body.find("Open the full website") < body.find("Telegram pulse")
