@@ -12,6 +12,7 @@ from internal.preview.tribunal_hero import (
     attach_judge_scores_to_daily_pick,
     build_tribunal_view,
     conviction_temp,
+    hold_reason_line,
     verdict_kind,
     weighted_verdict_pct,
 )
@@ -283,6 +284,41 @@ def test_build_tribunal_view_gated_hold():
     assert view["conviction_temp"] == "cool"
 
 
+def test_hold_reason_line_directional_conflict_with_signal_net():
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 51, "name": "lium.io"},
+            "signal_impact": {"net_predicted_pct": -2.45},
+        },
+    }
+    line = hold_reason_line(payload)
+    assert "Directional conflict" in line
+    assert "council signal net -2.45%" in line
+    view = build_tribunal_view(payload, {})
+    assert view["hold_reason"] == line
+
+
+def test_hold_reason_line_degraded_worker_volume():
+    payload = {
+        "action": "HOLD",
+        "status": "degraded",
+        "detail": "Worker volume temporarily unavailable",
+    }
+    assert hold_reason_line(payload) == "Worker volume temporarily unavailable"
+
+
+def test_hold_reason_line_none_when_published_long():
+    payload = {
+        "action": "LONG",
+        "pick": {"subnet": {"netuid": 29, "name": "Coldint"}},
+        "reason": "Published",
+    }
+    assert hold_reason_line(payload) is None
+
+
 def test_build_tribunal_view_gated_warm_when_high_conviction():
     payload = {
         "action": "HOLD",
@@ -349,12 +385,16 @@ def test_cockpit_hydrate_tribunal_sync_helpers():
     assert "weightedVerdictPct" in src
     assert "patchTribunalPanels" in src
     assert "patchTribunalInstrument" in src
+    assert "patchTribunalHoldReason" in src
+    assert "tribunalHoldReasonLine" in src
     assert "judgeAgreementLabels" in src
     assert "judgeSignalsFromDom" in src
     assert "convictionTemp" in src
     assert "syncCouncilTemp" in src
     assert "pickIsPublishable" in src
     hero = open("templates/partials/premium/tribunal_hero.html", encoding="utf-8").read()
+    assert "id=\"tribunal-hero-hold-reason\"" in hero
+    assert "tribunal-hero__hold-reason" in hero
     assert "var hero = document.getElementById('tribunal-hero')" in hero
     assert "hero.querySelector('[data-metric=\"' + k + '\"]')" in hero
 

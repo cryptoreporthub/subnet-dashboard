@@ -62,6 +62,7 @@
       <span class="tribunal-hero__meta-pill">3 VOTERS</span>
       <span class="tribunal-hero__meta-pill">AUDIT GATE {{ publish_gate_label() }}</span>
     </div>
+    <p id="tribunal-hero-hold-reason" class="tribunal-hero__hold-reason" role="status"{% if not t.hold_reason %} hidden{% endif %}>{{ t.hold_reason }}</p>
   </header>
 
   <div class="tribunal-hero__card">

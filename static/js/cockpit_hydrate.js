@@ -4679,6 +4679,46 @@
     return '';
   }
 
+  function tribunalHoldReasonLine(dailyPick) {
+    if (!dailyPick || dailyPick.pick) return '';
+    var act = String(dailyPick.action || 'HOLD').toUpperCase();
+    if (act !== 'HOLD' && act !== 'NONE' && act !== '') return '';
+    var line = '';
+    if (dailyPick.reason) line = String(dailyPick.reason).trim();
+    if (!line && dailyPick.brief && dailyPick.brief.trigger) {
+      line = String(dailyPick.brief.trigger).trim();
+    }
+    if (!line && String(dailyPick.status || '').toLowerCase() === 'degraded') {
+      line = String(dailyPick.detail || 'Worker volume temporarily unavailable').trim();
+    }
+    if (!line) return '';
+    if (line.toLowerCase().indexOf('directional') >= 0) {
+      var cand = dailyPick.candidate;
+      var si =
+        cand && cand.signal_impact && typeof cand.signal_impact === 'object'
+          ? cand.signal_impact
+          : null;
+      if (si && si.net_predicted_pct != null && !isNaN(Number(si.net_predicted_pct))) {
+        var net = Number(si.net_predicted_pct);
+        line += ' · council signal net ' + (net >= 0 ? '+' : '') + net.toFixed(2) + '%';
+      }
+    }
+    return line;
+  }
+
+  function patchTribunalHoldReason(dailyPick) {
+    var el = document.getElementById('tribunal-hero-hold-reason');
+    if (!el) return;
+    var line = tribunalHoldReasonLine(dailyPick);
+    if (line) {
+      el.textContent = line;
+      el.hidden = false;
+    } else {
+      el.textContent = '';
+      el.hidden = true;
+    }
+  }
+
   function formatJudgeWeightPct(weight, weights) {
     if (weight == null || isNaN(Number(weight))) return '—';
     var fracs = normalizeJudgeWeightFracs(weights || {});
@@ -5273,6 +5313,7 @@
       patchTribunalInstrument(dailyPick, learningStats);
       patchTribunalPanels(dailyPick, learningStats);
     }
+    patchTribunalHoldReason(dailyPick);
     return true;
   }
 

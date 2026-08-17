@@ -440,6 +440,40 @@ def subnet_label_title(payload: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def hold_reason_line(payload: Dict[str, Any]) -> Optional[str]:
+    """Plain-English publish blocker for HOLD / degraded (shown under council hero)."""
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("pick"):
+        return None
+    act = str(payload.get("action") or "HOLD").upper()
+    if act not in ("HOLD", "NONE", ""):
+        return None
+    line: Optional[str] = None
+    raw_reason = payload.get("reason")
+    if raw_reason:
+        line = str(raw_reason).strip()
+    if not line:
+        brief = payload.get("brief")
+        if isinstance(brief, dict) and brief.get("trigger"):
+            line = str(brief["trigger"]).strip()
+    if not line and str(payload.get("status") or "").lower() == "degraded":
+        line = str(payload.get("detail") or "Worker volume temporarily unavailable").strip()
+    if not line:
+        return None
+    # When directional guard fired, show the weighted signal net so users can audit the block.
+    if "directional" in line.lower():
+        active = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+        si = active.get("signal_impact") if isinstance(active.get("signal_impact"), dict) else {}
+        net = si.get("net_predicted_pct")
+        if net is not None:
+            try:
+                line = f"{line} · council signal net {float(net):+.2f}%"
+            except (TypeError, ValueError):
+                pass
+    return line
+
+
 _EQUAL_WEIGHT_SPREAD = 0.015  # normalized fractions (~1.5pp)
 
 
@@ -900,6 +934,7 @@ def build_tribunal_view(
         "conviction_temp": conviction_temp(kind, gauge),
         "subnet_label": subnet_label(pick),
         "subnet_label_title": subnet_label_title(pick),
+        "hold_reason": hold_reason_line(pick),
         "center_label": center_label(pick, kind),
         "gate_label": gate_label,
         "action_label": action_label,
