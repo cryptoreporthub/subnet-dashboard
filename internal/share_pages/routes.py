@@ -470,45 +470,69 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["feed"] = feed_rows
     ctx["mi_messages"] = [m for m in msgs[:12] if isinstance(m, dict)]
 
-    # trending — 1h ChatterPower (matches homepage Cosmic Resonance Core)
-    trending = []
-    try:
-        from internal.message_intel.rollup import build_trending_subnets
+    # Trending and evidence-qualified conviction are separate worker-backed
+    # rollups. On split_v2 the web process may have the feed payload but not
+    # the worker's SQLite volume, so do not rebuild either rollup locally when
+    # the worker can provide it.
+    trend_payload = await _listener_call(
+        lambda: _listener_worker_json(
+            "/api/message-intel/trending-v2?limit=8&rank_hours=1&window_hours=24"
+        ),
+        None,
+        timeout=7,
+    )
+    trend_rows = []
+    if isinstance(trend_payload, dict):
+        trend_rows = _as_list(trend_payload.get("items") or trend_payload.get("trending"))
+    elif isinstance(trend_payload, list):
+        trend_rows = trend_payload
 
-        rank_rows = await _listener_call(
-            lambda: build_trending_subnets(limit=8, rank_hours=1, window_hours=24),
-            [],
-            timeout=6,
+    if not trend_rows:
+        archive_trend_payload = await _listener_call(
+            lambda: _listener_worker_json(
+                "/api/message-intel/trending-v2?limit=8&rank_hours=24&window_hours=24"
+            ),
+            None,
+            timeout=7,
         )
-    except Exception:
-        rank_rows = []
-    for r in _as_list(rank_rows):
-        if not isinstance(r, dict):
-            continue
-        netuid = _safe_int(r.get("netuid"))
-        sent_raw = str(r.get("sentiment") or "mixed").lower()
-        sent_tag = "bull" if "bull" in sent_raw else ("bear" if "bear" in sent_raw else "mix")
-        trending.append(
-            {
-                "netuid": netuid,
-                "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                "conviction": r.get("avg_conviction") or r.get("conviction"),
-                "sent": sent_tag,
-                "mentions": r.get("mentions"),
-                "chatter_power": r.get("chatter_power") or r.get("heat"),
-                "why": r.get("why"),
-            }
-        )
-    ctx["trending"] = trending
+        if isinstance(archive_trend_payload, dict):
+            trend_rows = _as_list(
+                archive_trend_payload.get("items") or archive_trend_payload.get("trending")
+            )
+        elif isinstance(archive_trend_payload, list):
+            trend_rows = archive_trend_payload
 
-    conv_payload = None
-    try:
-        engine = _listener_engine()
-        conv_payload = await _listener_call(
-            lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
-        )
-    except Exception:
-        pass
+    if not trend_rows and isinstance(message_meta.get("trending"), list):
+        trend_rows = message_meta.get("trending") or []
+
+    # Single-host/dev fallback: retain the local rollup when no worker proxy
+    # is configured. This is deliberately last so split_v2 never reads a
+    # stale empty web-machine store instead of the live worker store.
+    if not trend_rows:
+        try:
+            from internal.message_intel.rollup import build_trending_subnets
+
+            trend_rows = await _listener_call(
+                lambda: build_trending_subnets(limit=8, rank_hours=24, window_hours=24),
+                [],
+                timeout=6,
+            )
+        except Exception:
+            trend_rows = []
+
+    conv_payload = await _listener_call(
+        lambda: _listener_worker_json("/api/message-intel/subnet-conviction?limit=8"),
+        None,
+        timeout=7,
+    )
+    if conv_payload is None:
+        try:
+            engine = _listener_engine()
+            conv_payload = await _listener_call(
+                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+            )
+        except Exception:
+            pass
     conv_rows = []
     if isinstance(conv_payload, dict):
         conv_rows = _as_list(
@@ -519,24 +543,27 @@ async def _listener_page_context() -> Dict[str, Any]:
         )
     elif isinstance(conv_payload, list):
         conv_rows = conv_payload
+    trending = []
+    for r in trend_rows[:8]:
+        if not isinstance(r, dict):
+            continue
+        netuid = _safe_int(r.get("netuid"))
+        sent_raw = str(r.get("sentiment") or "mixed").lower()
+        sent_tag = "bull" if "bull" in sent_raw else ("bear" if "bear" in sent_raw else "mix")
+        conv = r.get("avg_conviction") or r.get("conviction")
+        trending.append(
+            {
+                "netuid": netuid,
+                "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
+                "conviction": conv,
+                "sent": sent_tag,
+                "mentions": r.get("mentions"),
+                "chatter_power": r.get("chatter_power") or r.get("heat"),
+                "why": r.get("why"),
+            }
+        )
+    ctx["trending"] = trending
     ctx["subnet_conviction"] = conv_rows
-
-    if not ctx["trending"] and conv_rows:
-        for r in conv_rows[:8]:
-            if not isinstance(r, dict):
-                continue
-            netuid = _safe_int(r.get("netuid"))
-            label = str(r.get("label") or r.get("sentiment") or "mixed").lower()
-            sent_tag = "bull" if "bull" in label else ("bear" if "bear" in label else "mix")
-            ctx["trending"].append(
-                {
-                    "netuid": netuid,
-                    "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                    "conviction": r.get("score") or r.get("conviction"),
-                    "sent": sent_tag,
-                    "mentions": r.get("call_count") or r.get("mentions"),
-                }
-            )
 
     # conviction index top5
     ci_payload = None
@@ -690,15 +717,21 @@ async def _listener_page_context() -> Dict[str, Any]:
             )
     ctx["topics"] = topics
 
-    # divergence stories
-    div_payload = None
-    try:
-        engine = _listener_engine()
-        div_payload = await _listener_call(
-            lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
-        )
-    except Exception:
-        pass
+    # Divergence is also worker-owned on split_v2; otherwise the web process
+    # can show a live feed while incorrectly rendering an empty story panel.
+    div_payload = await _listener_call(
+        lambda: _listener_worker_json("/api/message-intel/divergence?days=7&limit=3"),
+        None,
+        timeout=7,
+    )
+    if div_payload is None:
+        try:
+            engine = _listener_engine()
+            div_payload = await _listener_call(
+                lambda: engine.list_telegram_divergence_stories(days=7, limit=3), None, timeout=6
+            )
+        except Exception:
+            pass
     div_rows = []
     if isinstance(div_payload, dict):
         div_rows = _as_list(
