@@ -34,17 +34,15 @@ def _bot_token() -> str:
 
 
 def _desk_url() -> str:
+    """Canonical Telegram desk URL — OG tags live on /subnetsummer (not homepage hash)."""
     base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
     if base:
-        return f"{base}/#section-message-intel"
-    return "https://subnet-dashboard.fly.dev/#section-message-intel"
+        return f"{base}/subnetsummer"
+    return "https://subnet-dashboard.fly.dev/subnetsummer"
 
 
 def _full_desk_url() -> str:
-    base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
-    if base:
-        return f"{base}/listener"
-    return "https://subnet-dashboard.fly.dev/listener"
+    return _desk_url()
 
 
 def _telegram_api(method: str, payload: Dict[str, Any], *, timeout: float = 35.0) -> Dict[str, Any]:

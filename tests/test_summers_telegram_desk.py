@@ -248,6 +248,8 @@ def test_listener_share_page_composition():
     resp = client.get("/subnetsummer")
     assert resp.status_code == 200
     body = resp.text
+    assert "og-subnet-summer.png" in body
+    assert "Subnet Summer Bot" in body
     assert "lsn-intercept" in body
     assert "COSMIC RESONANCE CORE" in body
     assert 'id="message-intel-sky"' in body
