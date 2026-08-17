@@ -4137,7 +4137,7 @@
       // waterfall; one slow council scorer could leave the whole page below
       // the Telegram desk looking frozen.
       // Tier 1a — daily call first (parallel request; legacy marker)
-      var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3, 0)
+      var dailyPickRequest = fetchDailyPickForHero()
         .then(function (dpResult) {
           renderDailyPick(dpResult);
           // Make the Daily Call immediately reusable by SSE / hot-refresh
@@ -4224,6 +4224,7 @@
             patchTribunalInstrument({}, stats);
             patchTribunalPanels({}, stats);
           }
+          scheduleCouncilHeroRetry();
         }
         if (stats.trust_banner && window.SimiTrustBanner && window.SimiTrustBanner.render) {
           window.SimiTrustBanner.render(stats.trust_banner);
@@ -5343,6 +5344,73 @@
     verdictKind: verdictKind,
   };
 
+  function invalidateDailyPickFetch() {
+    if (window.apiFetchInvalidate) window.apiFetchInvalidate('/api/daily-pick');
+  }
+
+  function dailyPickNeedsHeroRetry(payload) {
+    if (!payload || typeof payload !== 'object') return true;
+    var status = String(payload.status || 'ok').toLowerCase();
+    var hasCall = !!(payload.pick || payload.candidate);
+    return status === 'timeout' || status === 'error' || status === 'degraded' || !hasCall;
+  }
+
+  function fetchDailyPickForHero(opts) {
+    opts = opts || {};
+    if (opts.force || tribunalHeroNeedsHydrate()) invalidateDailyPickFetch();
+    return fetchJsonRetry('/api/daily-pick', 35000, 3, 0).then(function (dp) {
+      if (!dp) return dp;
+      var best = dp;
+      if (!tribunalHeroNeedsHydrate() || !dailyPickNeedsHeroRetry(best)) return best;
+      var attempts = 0;
+      function retryLoop() {
+        invalidateDailyPickFetch();
+        return fetchJsonRetry('/api/daily-pick', 35000, 1, 0).then(function (retry) {
+          best = richerDailyPickPayload(retry, best) || best;
+          attempts += 1;
+          if (attempts >= 2) return best;
+          if (tribunalHeroNeedsHydrate() && dailyPickNeedsHeroRetry(best)) return retryLoop();
+          return best;
+        });
+      }
+      return retryLoop();
+    });
+  }
+
+  var councilHeroRetryAttempt = 0;
+  var councilHeroRetryTimer = null;
+  var COUNCIL_HERO_RETRY_MS = [2000, 8000, 20000];
+
+  function scheduleCouncilHeroRetry() {
+    if (!document.getElementById('tribunal-hero')) return;
+    if (!tribunalHeroNeedsHydrate()) {
+      councilHeroRetryAttempt = 0;
+      return;
+    }
+    if (councilHeroRetryAttempt >= COUNCIL_HERO_RETRY_MS.length) return;
+    var delay = COUNCIL_HERO_RETRY_MS[councilHeroRetryAttempt];
+    councilHeroRetryAttempt += 1;
+    if (councilHeroRetryTimer) clearTimeout(councilHeroRetryTimer);
+    councilHeroRetryTimer = setTimeout(function () {
+      councilHeroRetryTimer = null;
+      if (!tribunalHeroNeedsHydrate()) {
+        councilHeroRetryAttempt = 0;
+        return;
+      }
+      Promise.all([
+        fetchDailyPickForHero({ force: true }).catch(function (err) {
+          console.warn('[cockpit_hydrate] tribunal hero retry daily-pick failed', err);
+          return null;
+        }),
+        loadLearningStats(),
+      ]).then(function (results) {
+        hydrateCouncilHeroShell(results[1], results[0]);
+        if (tribunalHeroNeedsHydrate()) scheduleCouncilHeroRetry();
+        else councilHeroRetryAttempt = 0;
+      });
+    }, delay);
+  }
+
   function hydrateCouncilHeroShell(stats, dailyPick) {
     if (!document.getElementById('tribunal-hero')) return;
     var dp = dailyPick;
@@ -5354,26 +5422,13 @@
       dp &&
       dailyPickPayloadRank(dp) > dailyPickPayloadRank(lastDailyPickPayload || {})
     ) {
+      lastDailyPickPayload = dp;
       renderTribunalHero(dp, stats);
       return;
     }
     if (stats) {
       renderTribunalHero(lastDailyPickPayload || dp || {}, stats);
     }
-  }
-
-  function fetchDailyPickForHero() {
-    return fetchJsonRetry('/api/daily-pick', 35000, 3, 0).then(function (dp) {
-      if (!dp) return dp;
-      var status = String(dp.status || 'ok').toLowerCase();
-      var hasCall = !!(dp.pick || dp.candidate);
-      if ((status === 'timeout' || status === 'error' || !hasCall) && tribunalHeroNeedsHydrate()) {
-        return fetchJsonRetry('/api/daily-pick', 35000, 1, 0).then(function (retry) {
-          return richerDailyPickPayload(retry, dp) || dp;
-        });
-      }
-      return dp;
-    });
   }
 
   function bootstrapCouncilHeroHydrate() {
@@ -5386,6 +5441,7 @@
       loadLearningStats(),
     ]).then(function (results) {
       hydrateCouncilHeroShell(results[1], results[0]);
+      scheduleCouncilHeroRetry();
     });
   }
 

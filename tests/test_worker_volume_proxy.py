@@ -254,6 +254,45 @@ def test_payload_cache_served_for_pump_and_message_intel(monkeypatch):
     assert json.loads(data)["count"] == 2
 
 
+def test_daily_pick_cache_served_when_degraded(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(
+        wp,
+        "_LAST_GOOD_PAYLOADS",
+        {
+            "/api/daily-pick": {
+                "status": "ok",
+                "action": "HOLD",
+                "candidate": {"subnet": {"netuid": 4, "name": "Targon"}},
+            }
+        },
+    )
+    response = wp._proxy_degraded_response("/api/daily-pick")
+    import json
+
+    data = json.loads(response.body)
+    assert data["status"] == "cached"
+    assert data["candidate"]["subnet"]["netuid"] == 4
+
+
+def test_daily_pick_cache_stores_candidate_payload(monkeypatch):
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_PAYLOADS.clear()
+    wp._store_payload_cache(
+        "/api/daily-pick",
+        {
+            "status": "ok",
+            "action": "HOLD",
+            "candidate": {"subnet": {"netuid": 8, "name": "Vanta"}},
+        },
+    )
+    assert wp._LAST_GOOD_PAYLOADS["/api/daily-pick"]["candidate"]["subnet"]["netuid"] == 8
+    wp._store_payload_cache("/api/daily-pick", {"status": "degraded", "pick": None})
+    assert wp._LAST_GOOD_PAYLOADS["/api/daily-pick"]["candidate"]["subnet"]["netuid"] == 8
+
+
 def test_candidate_bases_flycast_before_process(monkeypatch):
     monkeypatch.setenv("FLY_APP_NAME", "subnet-dashboard")
     monkeypatch.delenv("FLY_REGION", raising=False)

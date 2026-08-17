@@ -345,8 +345,15 @@ def _store_mindmap_cache(payload: Dict[str, Any]) -> None:
 
 
 def _store_payload_cache(path: str, payload: Dict[str, Any]) -> None:
+    status = str(payload.get("status") or "").lower()
+    if path == "/api/daily-pick":
+        if status in {"success", "ok", "cached"} and (
+            payload.get("pick") or payload.get("candidate")
+        ):
+            _LAST_GOOD_PAYLOADS[path] = dict(payload)
+        return
     if path == "/api/pump-alerts" or path.startswith("/api/message-intel"):
-        if str(payload.get("status") or "").lower() in {"success", "ok"}:
+        if status in {"success", "ok"}:
             _LAST_GOOD_PAYLOADS[path] = dict(payload)
 
 
