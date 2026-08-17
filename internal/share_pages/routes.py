@@ -695,7 +695,7 @@ async def _listener_page_context() -> Dict[str, Any]:
     if topics_payload is None or (
         isinstance(topics_payload, dict)
         and not ("topics" in topics_payload or "rows" in topics_payload)
-    ): 
+    ):
         try:
             engine = _listener_engine()
             topics_payload = await _listener_call(
@@ -711,28 +711,28 @@ async def _listener_page_context() -> Dict[str, Any]:
     else:
         t_rows = []
     if not t_rows:
-            try:
-                engine = _listener_engine()
-                fallback_topics = await _listener_call(
-                    lambda: engine.list_topics(limit=8), None, timeout=5
-                )
-                if isinstance(fallback_topics, dict):
-                    t_rows = _as_list(fallback_topics.get("topics") or fallback_topics.get("rows"))
-                elif isinstance(fallback_topics, list):
-                    t_rows = fallback_topics
-            except Exception:
-                t_rows = []
-        for t in t_rows[:8]:
-            if isinstance(t, str):
-                topics.append({"topic": t, "count": None})
-            elif isinstance(t, dict):
-                topics.append(
-                    {
-                        "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
-                        "count": t.get("count") or t.get("mentions"),
-                    }
-                )
-        ctx["topics"] = topics
+        try:
+            engine = _listener_engine()
+            fallback_topics = await _listener_call(
+                lambda: engine.list_topics(limit=8), None, timeout=5
+            )
+            if isinstance(fallback_topics, dict):
+                t_rows = _as_list(fallback_topics.get("topics") or fallback_topics.get("rows"))
+            elif isinstance(fallback_topics, list):
+                t_rows = fallback_topics
+        except Exception:
+            t_rows = []
+    for t in t_rows[:8]:
+        if isinstance(t, str):
+            topics.append({"topic": t, "count": None})
+        elif isinstance(t, dict):
+            topics.append(
+                {
+                    "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
+                    "count": t.get("count") or t.get("mentions"),
+                }
+            )
+    ctx["topics"] = topics
 
     # Divergence is also worker-owned on split_v2; otherwise the web process
     # can show a live feed while incorrectly rendering an empty story panel.
