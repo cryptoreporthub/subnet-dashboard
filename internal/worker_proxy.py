@@ -409,6 +409,8 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             },
         )
     if path == "/api/learning/stats" or path == "/api/learning-metrics":
+        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
+
         return JSONResponse(
             status_code=200,
             content={
@@ -418,6 +420,7 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                     "pending": 0,
                     "accuracy": None,
                     "brain_ui_ready": False,
+                    "judge_weights": dict(DEFAULT_JUDGE_WEIGHTS),
                     "trust_banner": {
                         "ready": False,
                         "message": "Learning stats warming up",
@@ -432,6 +435,7 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             status_code=200,
             content={
                 "status": "degraded",
+                "action": "HOLD",
                 "pick": None,
                 "detail": "Worker volume temporarily unavailable",
             },

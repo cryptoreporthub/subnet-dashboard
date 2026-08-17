@@ -186,6 +186,22 @@ def test_proxy_daily_pick_degraded_on_failure(monkeypatch):
         r = client.get("/api/daily-pick")
     assert r.status_code == 200
     assert r.json().get("status") == "degraded"
+    assert r.json().get("action") == "HOLD"
+
+
+def test_proxy_learning_stats_degraded_includes_default_judge_weights():
+    import internal.worker_proxy as wp
+
+    resp = wp._proxy_degraded_response("/api/learning/stats")
+    import json
+
+    body = json.loads(resp.body)
+    assert body["status"] == "degraded"
+    assert body["data"]["judge_weights"] == {
+        "oracle": 0.35,
+        "echo": 0.30,
+        "pulse": 0.35,
+    }
 
 
 def test_worker_internal_bases_includes_regional_dns(monkeypatch):

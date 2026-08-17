@@ -1344,11 +1344,27 @@
     return !!(title && String(title.textContent || '').trim() === 'Awaiting subnet');
   }
 
+  function dailyPickPayloadRank(payload) {
+    if (!payload || typeof payload !== 'object') return 0;
+    var status = String(payload.status || 'ok').toLowerCase();
+    if (status === 'timeout' || status === 'error') return 0;
+    if (payload.pick) return 4;
+    if (payload.candidate) return 3;
+    if (status === 'degraded' || status === 'cached') return 1;
+    return 2;
+  }
+
+  function richerDailyPickPayload(incoming, existing) {
+    return dailyPickPayloadRank(incoming) >= dailyPickPayloadRank(existing) ? incoming : existing;
+  }
+
   function shouldApplyDailyPickPayload(payload) {
     if (!payload || typeof payload !== 'object') return false;
     var status = String(payload.status || 'ok').toLowerCase();
     if (status === 'timeout' || status === 'error') return false;
+    if (lastDailyPickPayload && dailyPickPayloadRank(payload) < dailyPickPayloadRank(lastDailyPickPayload)) return false;
     if (tribunalHeroNeedsHydrate() && (payload.pick || payload.candidate)) return true;
+    if (tribunalHeroNeedsHydrate() && (status === 'degraded' || status === 'cached')) return true;
     var ssr = ssrDailyPickMeta();
     var incomingAt = parseIsoMs(dailyPickGeneratedAt(payload));
     var ssrAt = parseIsoMs(ssr.generatedAt);
@@ -4200,7 +4216,7 @@
           stats.expert_graded_counts || {}
         );
         if (document.getElementById('tribunal-hero')) {
-          var heroDailyPick = lastDailyPickPayload || dpResult;
+          var heroDailyPick = richerDailyPickPayload(dpResult, lastDailyPickPayload) || dpResult || lastDailyPickPayload;
           if (heroDailyPick) {
             renderTribunalHero(heroDailyPick, stats);
           } else {
@@ -5327,13 +5343,34 @@
     verdictKind: verdictKind,
   };
 
+  function hydrateCouncilHeroShell(stats, dailyPick) {
+    if (!document.getElementById('tribunal-hero')) return;
+    var dp = dailyPick;
+    if (dp && shouldApplyDailyPickPayload(dp)) {
+      renderDailyPick(dp);
+      return;
+    }
+    if (
+      dp &&
+      dailyPickPayloadRank(dp) > dailyPickPayloadRank(lastDailyPickPayload || {})
+    ) {
+      renderTribunalHero(dp, stats);
+      return;
+    }
+    if (stats) {
+      renderTribunalHero(lastDailyPickPayload || dp || {}, stats);
+    }
+  }
+
   function fetchDailyPickForHero() {
     return fetchJsonRetry('/api/daily-pick', 35000, 3, 0).then(function (dp) {
       if (!dp) return dp;
       var status = String(dp.status || 'ok').toLowerCase();
       var hasCall = !!(dp.pick || dp.candidate);
       if ((status === 'timeout' || status === 'error' || !hasCall) && tribunalHeroNeedsHydrate()) {
-        return fetchJsonRetry('/api/daily-pick', 35000, 1, 0);
+        return fetchJsonRetry('/api/daily-pick', 35000, 1, 0).then(function (retry) {
+          return richerDailyPickPayload(retry, dp) || dp;
+        });
       }
       return dp;
     });
@@ -5341,7 +5378,6 @@
 
   function bootstrapCouncilHeroHydrate() {
     if (!document.getElementById('tribunal-hero')) return;
-    if (document.documentElement.dataset.hydrate !== '1') return;
     Promise.all([
       fetchDailyPickForHero().catch(function (err) {
         console.warn('[cockpit_hydrate] tribunal bootstrap daily-pick failed', err);
@@ -5349,13 +5385,7 @@
       }),
       loadLearningStats(),
     ]).then(function (results) {
-      var dp = results[0];
-      var stats = results[1];
-      if (dp) {
-        renderDailyPick(dp);
-      } else if (stats) {
-        renderTribunalHero(lastDailyPickPayload || {}, stats);
-      }
+      hydrateCouncilHeroShell(results[1], results[0]);
     });
   }
 

@@ -114,6 +114,10 @@ def test_tribunal_hero_bootstrap_hydrates_cold_shell():
     source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function bootstrapCouncilHeroHydrate()" in source
     assert "function tribunalHeroNeedsHydrate()" in source
+    assert "function dailyPickPayloadRank(" in source
+    assert "function richerDailyPickPayload(" in source
+    assert "function hydrateCouncilHeroShell(" in source
+    assert "dataset.hydrate !== '1'" not in source.split("function bootstrapCouncilHeroHydrate()")[1].split("function ")[0]
     run_idx = source.index("run();")
     bootstrap_idx = source.index("bootstrapCouncilHeroHydrate();")
     home_idx = source.index("window.__cockpitHome = {")
