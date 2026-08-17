@@ -317,6 +317,23 @@ async def _lifespan(app: FastAPI):
         name="council-weight-rebalance",
     ).start()
 
+    if not is_worker_mode():
+
+        def _cache_coverage_audit_boot() -> None:
+            try:
+                from internal.council.price_reference import run_startup_cache_coverage_audit
+
+                run_startup_cache_coverage_audit()
+            except Exception as exc:
+                logger.warning("cache coverage audit (web) failed: %s", exc)
+
+        if not (background_on_web() and background_boot_allowed()):
+            threading.Thread(
+                target=_cache_coverage_audit_boot,
+                daemon=True,
+                name="cache-coverage-audit",
+            ).start()
+
     try:
         from internal.data_volume import needs_worker_volume_proxy
 

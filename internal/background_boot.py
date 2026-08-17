@@ -412,6 +412,23 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
 
     from internal.run_mode import background_heavy_on_web, is_worker_mode, worker_heavy_feeds_enabled
 
+    if is_worker_mode():
+        try:
+            from internal.council.price_reference import run_startup_cache_coverage_audit
+
+            run_startup_cache_coverage_audit()
+        except Exception as exc:
+            logger.error("startup cache coverage audit failed: %s", exc)
+            raise
+    else:
+
+        def _cache_coverage_audit() -> None:
+            from internal.council.price_reference import run_startup_cache_coverage_audit
+
+            run_startup_cache_coverage_audit()
+
+        defer_boot("cache-coverage-audit", _cache_coverage_audit, delay=0)
+
     if heavy is None:
         heavy = worker_heavy_feeds_enabled() if is_worker_mode() else background_heavy_on_web()
 
