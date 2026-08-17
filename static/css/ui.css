@@ -13519,12 +13519,20 @@ body.wrap {
   display: grid;
   gap: 10px;
   align-items: start;
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
 }
 #section-message-intel,
 .message-intel--v2 .message-intel__tile--orbit,
 .message-intel--v2 .message-intel__hall {
   scroll-margin-top: 72px;
   overflow: visible;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
 }
 .message-intel--v2 .message-intel__hall {
   grid-area: hall;
@@ -17192,6 +17200,12 @@ section.desk-zone,
     margin-top: 0.5rem;
     margin-bottom: 0.75rem;
     padding: 8px 12px 12px;
+    width: 100%;
+    max-width: min(100%, 430px);
+    margin-left: auto;
+    margin-right: auto;
+    overflow-x: clip;
+    box-sizing: border-box;
 }
 
 .message-intel--home-compact .message-intel__topbar {
@@ -18632,8 +18646,10 @@ section.desk-zone,
 /* Reaction Crowns Cards */
 .message-intel__crowns-grid-v2 {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
 }
 
 .message-intel__crown-card-v2 {
@@ -18644,33 +18660,50 @@ section.desk-zone,
     display: flex;
     flex-direction: column;
     gap: 10px;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .message-intel__crown-header-v2 {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
 }
 
 .message-intel__crown-info-v2 {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    flex: 1 1 140px;
 }
 
 .message-intel__crown-icon-v2 {
     font-size: 18px;
     line-height: 1;
+    flex: 0 0 auto;
 }
 
 .message-intel__crown-author-v2 {
     font-size: 12.5px;
     font-weight: 700;
     color: #f1f5f9;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .message-intel__crown-badge-v2 {
     font-size: 11px;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .message-intel__crown-count-pill {
@@ -18682,6 +18715,8 @@ section.desk-zone,
     border: 1px solid rgba(249, 115, 22, 0.35);
     padding: 2px 7px;
     border-radius: 5px;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .message-intel__crown-quote-v2 {
@@ -18690,12 +18725,16 @@ section.desk-zone,
     line-height: 1.45;
     margin: 0;
     font-style: italic;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .message-intel__crown-footer-v2 {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
     padding-top: 6px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -18704,12 +18743,146 @@ section.desk-zone,
     font-size: 10px;
     color: var(--muted);
     font-family: var(--font-mono);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .message-intel__crown-links-v2 {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Rank panel headers (Crowns / Champions / Strike-rate tabs) */
+.message-intel--v2 .message-intel__rank-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px 8px;
+    min-width: 0;
+}
+
+.message-intel--v2 .message-intel__rank-title-group {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1 1 180px;
+}
+
+.message-intel--v2 .message-intel__rank-header-icon {
+    flex: 0 0 auto;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.message-intel--v2 .message-intel__rank-panel-title {
+    margin: 0;
+    font-size: clamp(0.78rem, 3.2vw, 0.95rem);
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+    text-wrap: balance;
+}
+
+.message-intel--v2 .message-intel__rank-panel-sub {
+    margin: 4px 0 0;
+    font-size: 10.5px;
+    line-height: 1.45;
+    color: var(--muted);
+    max-width: 42ch;
+}
+
+.message-intel--v2 .message-intel__rank-header-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    align-items: center;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.message-intel--v2 .message-intel__rank-pill {
+    font-size: 9px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 6px;
+    white-space: nowrap;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.message-intel--v2 .message-intel__rank-pill--gold {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.35);
+    background: rgba(251, 191, 36, 0.1);
+}
+
+.message-intel--v2 .message-intel__rank-pill--green {
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.35);
+    background: rgba(52, 211, 153, 0.1);
+}
+
+.message-intel--v2 .message-intel__rank-pill--cyan {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.35);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.message-intel--v2 .message-intel__rank-pill--pink {
+    color: #f472b6;
+    border-color: rgba(244, 114, 182, 0.35);
+    background: rgba(244, 114, 182, 0.1);
+}
+
+.message-intel--v2 .message-intel__rank-pill--purple {
+    color: #c084fc;
+    border-color: rgba(192, 132, 252, 0.35);
+    background: rgba(192, 132, 252, 0.1);
+}
+
+@media (min-width: 520px) {
+    .message-intel__crowns-grid-v2 {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+}
+
+@media (max-width: 639px) {
+    .message-intel__podium-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .message-intel__rank-panel {
+        padding: 12px;
+    }
+
+    .message-intel--v2 .message-intel__rank-header-tags {
+        justify-content: flex-start;
+        width: 100%;
+    }
+
+    .message-intel--v2 .message-intel__loop span {
+        font-size: 7.5px;
+    }
+}
+
+@media (max-width: 360px) {
+    .message-intel--v2 .message-intel__loop span {
+        display: none;
+    }
+
+    .message-intel--v2 .message-intel__loop [role="tab"] {
+        min-height: 44px;
+        padding: 6px 4px;
+    }
 }
 
 /* Hide legacy desktop headers and heartbeat inside compact mobile desk */
