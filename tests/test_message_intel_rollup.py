@@ -339,7 +339,12 @@ def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
         },
     ]
     monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
-    summary = rollup.build_yesterday_chat_summary(registry_names={14: "TaoHash", 78: "Apex"})
+    registry_names = {14: "TaoHash", 78: "Apex"}
+    monkeypatch.setattr(
+        "internal.subnet_names.display_name_for_netuid",
+        lambda netuid, **kw: registry_names.get(int(netuid), f"SN{netuid}"),
+    )
+    summary = rollup.build_yesterday_chat_summary(registry_names=registry_names)
     assert summary["ready"] is True
     assert summary["date"] == "2026-07-27"
     assert summary["message_count"] == 3
@@ -349,6 +354,67 @@ def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
     assert summary["hourly"]
     assert summary["stats"]["graded"] == 3
     assert "line that stuck" in summary["narrative"]
+
+
+def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
+    """Stale registry_names must not leak EdgeMaxxing into yesterday recap."""
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {"39": "deprecated"},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {39: "EdgeMaxxing"},
+    )
+    rows = [
+        {
+            "timestamp": "2026-08-16T10:00:00Z",
+            "conviction": 72,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Alpha",
+            "content": "SN3 Teutonic looks interesting today",
+            "entities_json": '{"subnets": [3]}',
+        },
+        {
+            "timestamp": "2026-08-16T11:00:00Z",
+            "conviction": 65,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Beta",
+            "content": "Watching SN39 closely",
+            "entities_json": '{"subnets": [39]}',
+        },
+        {
+            "timestamp": "2026-08-16T12:00:00Z",
+            "conviction": 80,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Gamma",
+            "content": "Market and alpha chatter on SN3",
+            "entities_json": '{"subnets": [3]}',
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    stale_names = {3: "Teutonic", 39: "EdgeMaxxing"}
+    summary = rollup.build_yesterday_chat_summary(registry_names=stale_names)
+    assert summary["ready"] is True
+    assert "EdgeMaxxing" not in summary["narrative"]
+    assert "deprecated" in summary["narrative"]
+    assert summary["top_subnets"][0]["name"] == "Teutonic"
+    assert summary["top_subnets"][1]["name"] == "deprecated"
 
 
 def test_week_top_comment_unit(monkeypatch):

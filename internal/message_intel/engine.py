@@ -210,13 +210,18 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
         netuid = _primary_netuid_from_message(out)
         if netuid is not None:
             out["netuid"] = netuid
-    if names and netuid is not None:
+    if netuid is not None:
         try:
-            canonical = names.get(int(netuid))
+            from internal.subnet_names import display_name_for_netuid
+
+            out["subnet_name"] = display_name_for_netuid(
+                int(netuid), use_taostats_fallback=False
+            )
         except (TypeError, ValueError):
-            canonical = None
-        if canonical:
-            out["subnet_name"] = canonical
+            if names:
+                canonical = names.get(int(netuid))
+                if canonical:
+                    out["subnet_name"] = canonical
     content = out.get("content")
     if content and not out.get("topics"):
         out["topics"] = classify_message_topics(str(content))

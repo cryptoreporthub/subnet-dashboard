@@ -356,7 +356,7 @@ def build_trending_subnets(
         out.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": mentions,
                 "velocity": round(velocity, 3),
                 "conviction": round(avg_conv, 1),
@@ -439,7 +439,7 @@ def build_yesterday_leader(
 
     out: Dict[str, Any] = {
         "netuid": top_netuid,
-        "name": registry_names.get(top_netuid) or f"Subnet {top_netuid}",
+        "name": _rollup_subnet_name(top_netuid, registry_names),
         "mentions": int(top["mentions"]),
         "sentiment": _sentiment_tag(avg),
         "date": yesterday_start.date().isoformat(),
@@ -449,7 +449,7 @@ def build_yesterday_leader(
         ru_netuid, ru = ranked[1]
         out["runner_up"] = {
             "netuid": ru_netuid,
-            "name": registry_names.get(ru_netuid) or f"Subnet {ru_netuid}",
+            "name": _rollup_subnet_name(ru_netuid, registry_names),
             "mentions": int(ru["mentions"]),
         }
     return out
@@ -1708,7 +1708,7 @@ def build_24h_summary(
         top_subnets.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": int(mentions),
             }
         )
@@ -1722,7 +1722,7 @@ def build_24h_summary(
         movers.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": cur,
                 "prev_mentions": prev,
                 "change": cur - prev,
@@ -1777,6 +1777,21 @@ def _join_phrase(items: List[str]) -> str:
 
 def _topic_label(tag: str) -> str:
     return str(tag or "").replace("_", " ").strip().title()
+
+
+def _rollup_subnet_name(netuid: int, registry_names: Optional[Dict[int, str]] = None) -> str:
+    """Canonical subnet label for rollups — re-resolve overrides on every read."""
+    try:
+        from internal.subnet_names import display_name_for_netuid
+
+        return display_name_for_netuid(int(netuid), use_taostats_fallback=False)
+    except (TypeError, ValueError):
+        pass
+    if registry_names:
+        hit = registry_names.get(netuid)
+        if hit:
+            return str(hit)
+    return f"Subnet {netuid}"
 
 
 def _display_group_name(name: Optional[str]) -> str:
@@ -2024,7 +2039,7 @@ def build_yesterday_chat_summary(
         top_subnets.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": int(mentions),
             }
         )
@@ -2038,7 +2053,7 @@ def build_yesterday_chat_summary(
         movers.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": cur,
                 "prev_mentions": prev,
                 "change": cur - prev,
@@ -2148,7 +2163,7 @@ def build_high_conviction_strip(
                 "conviction": conviction,
                 "direction": direction,
                 "netuid": netuid,
-                "subnet_name": names.get(netuid) if netuid is not None else None,
+                "subnet_name": _rollup_subnet_name(netuid, names) if netuid is not None else None,
                 "timestamp": row.get("timestamp") or row.get("created_at"),
                 "skin_type": skin_type,
                 "skin_amount": skin_amount,
