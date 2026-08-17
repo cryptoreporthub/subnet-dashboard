@@ -5,6 +5,13 @@
 {% endif %}
 {% if dstrip and row.timing != 'exit' %}
 <div class="pump-pattern-rail">
-  <p class="pump-pattern-line{% if class_extra %} {{ class_extra }}{% endif %}" title="{{ row.pattern_class|default('Direction path') }}">{{ dstrip }}{% if row.re_pump_prob is not none and row.re_pump_prob > 0 %} · {{ (row.re_pump_prob * 100)|round(0)|int }}%{% elif row.pattern_confidence is not none and row.pattern_confidence >= 0.5 %} · {{ (row.pattern_confidence * 100)|round(0)|int }}%{% endif %}</p>
+  <p class="pump-pattern-line{% if class_extra %} {{ class_extra }}{% endif %}" title="Recent price legs — each arrow shows direction, percent move, and time window.">
+    {{ dstrip }}
+    {% if row.re_pump_prob is not none and row.re_pump_prob > 0 %}
+     · <span class="pump-pattern-tip" title="Chance this name pumps again soon based on similar past moves. Not council conviction or a trade call.">{{ (row.re_pump_prob * 100)|round(0)|int }}%</span>
+    {% elif row.pattern_confidence is not none and row.pattern_confidence >= 0.5 %}
+     · <span class="pump-pattern-tip" title="How closely this price path matches a known pattern type. Not council conviction.">{{ (row.pattern_confidence * 100)|round(0)|int }}%</span>
+    {% endif %}
+  </p>
 </div>
 {% endif %}

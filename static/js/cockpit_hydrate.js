@@ -1754,35 +1754,55 @@
   }
 
   /** One cyan line: last ≤5 legs (↑ +4% (2h) → …) plus optional match %. */
+  var PUMP_STRIP_TIP =
+    'Recent price legs — each arrow shows direction, percent move, and time window.';
+  var PUMP_RE_PUMP_TIP =
+    'Chance this name pumps again soon based on similar past moves. Not council conviction or a trade call.';
+  var PUMP_PATTERN_CONF_TIP =
+    'How closely this price path matches a known pattern type. Not council conviction.';
+  var PUMP_FLOW_TIP =
+    'Early-move score (0–100). Higher means more flow building before price runs.';
+  var PUMP_GAP_TIP =
+    'Distance to the desk trigger line — lower usually means closer to firing.';
+
   function pumpPatternLineHtml(row, classExtra) {
     if (!row || row.timing === 'exit') return '';
     var strip = row.direction_strip || row.pattern_label;
     if (!strip) return '';
     if (!row.direction_strip && row.pattern_class === 'insufficient_data') return '';
-    var suffix = '';
+    var suffixHtml = '';
     var prob =
       row.re_pump_prob != null && !isNaN(Number(row.re_pump_prob))
         ? Number(row.re_pump_prob)
         : null;
     if (prob != null && prob > 0) {
-      suffix = ' · ' + Math.round(prob * 100) + '%';
+      suffixHtml =
+        ' · <span class="pump-pattern-tip" title="' +
+        esc(PUMP_RE_PUMP_TIP) +
+        '">' +
+        Math.round(prob * 100) +
+        '%</span>';
     } else if (
       row.pattern_confidence != null &&
       !isNaN(Number(row.pattern_confidence)) &&
       Number(row.pattern_confidence) >= 0.5
     ) {
-      suffix = ' · ' + Math.round(Number(row.pattern_confidence) * 100) + '%';
+      suffixHtml =
+        ' · <span class="pump-pattern-tip" title="' +
+        esc(PUMP_PATTERN_CONF_TIP) +
+        '">' +
+        Math.round(Number(row.pattern_confidence) * 100) +
+        '%</span>';
     }
-    var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
     var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
     return (
       '<div class="pump-pattern-rail"><p class="' +
       cls +
       '" title="' +
-      title +
+      esc(PUMP_STRIP_TIP) +
       '">' +
       esc(strip) +
-      suffix +
+      suffixHtml +
       '</p></div>'
     );
   }
@@ -2341,9 +2361,13 @@
       ' <b>SN' +
       esc(row.netuid) +
       '</b></span>' +
-      '<span class="pds-ladder__nums"><span class="pds-ladder__num"><i>Flow</i>' +
+      '<span class="pds-ladder__nums"><span class="pds-ladder__num" title="' +
+      esc(PUMP_FLOW_TIP) +
+      '"><i>Flow</i>' +
       (formPct != null ? formPct : '—') +
-      '</span><span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>' +
+      '</span><span class="pds-ladder__num pds-ladder__num--gap" title="' +
+      esc(PUMP_GAP_TIP) +
+      '"><i>Gap</i>' +
       esc(row.distance != null ? row.distance : '—') +
       '</span></span></div>' +
       pumpPatternLineHtml(row) +
@@ -2618,10 +2642,13 @@
       esc(row.netuid) +
       '</b></span></div>' +
       '<div class="pd-r__nums" aria-label="Flow and gap">' +
-      '<span class="pd-r__num"><i>Flow</i> ' +
+      '<span class="pd-r__num" title="' +
+      esc(PUMP_FLOW_TIP) +
+      '"><i>Flow</i> ' +
       (formPct != null ? formPct : '—') +
-      '</span>' +
-      '<span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
+      '</span><span class="pd-r__num pd-r__num--gap" title="' +
+      esc(PUMP_GAP_TIP) +
+      '"><i>Gap</i> ' +
       esc(row.distance != null ? row.distance : '—') +
       '</span></div></div>' +
       pumpPatternLineHtml(row) +
@@ -4620,12 +4647,76 @@
     if (!sn) return 'Awaiting subnet';
     var name = String(sn.name || '').trim();
     var netuid = sn.netuid;
-    if (netuid == null) return name || '—';
-    var snPrefix = 'SN' + netuid;
-    if (!name || name.toUpperCase() === snPrefix.toUpperCase() || /^SN\d+$/i.test(name)) {
-      return snPrefix;
+    var base;
+    if (netuid == null) base = name || '—';
+    else {
+      var snPrefix = 'SN' + netuid;
+      if (!name || name.toUpperCase() === snPrefix.toUpperCase() || /^SN\d+$/i.test(name)) {
+        base = snPrefix;
+      } else {
+        base = snPrefix + ' · ' + name;
+      }
     }
-    return snPrefix + ' · ' + name;
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (!payload.pick && payload.candidate && act === 'HOLD') {
+      return 'Closest · ' + base;
+    }
+    return base;
+  }
+
+  function tribunalSubnetLabelTitle(payload) {
+    if (!payload || typeof payload !== 'object') return '';
+    var act = String(payload.action || 'HOLD').toUpperCase();
+    if (payload.pick) {
+      return "Today's published council long call.";
+    }
+    if (!payload.pick && payload.candidate && act === 'HOLD') {
+      return (
+        "Closest name on today's desk — not a published long. " +
+        'Council held because conviction or direction did not clear the gate.'
+      );
+    }
+    return '';
+  }
+
+  function tribunalHoldReasonLine(dailyPick) {
+    if (!dailyPick || dailyPick.pick) return '';
+    var act = String(dailyPick.action || 'HOLD').toUpperCase();
+    if (act !== 'HOLD' && act !== 'NONE' && act !== '') return '';
+    var line = '';
+    if (dailyPick.reason) line = String(dailyPick.reason).trim();
+    if (!line && dailyPick.brief && dailyPick.brief.trigger) {
+      line = String(dailyPick.brief.trigger).trim();
+    }
+    if (!line && String(dailyPick.status || '').toLowerCase() === 'degraded') {
+      line = String(dailyPick.detail || 'Worker volume temporarily unavailable').trim();
+    }
+    if (!line) return '';
+    if (line.toLowerCase().indexOf('directional') >= 0) {
+      var cand = dailyPick.candidate;
+      var si =
+        cand && cand.signal_impact && typeof cand.signal_impact === 'object'
+          ? cand.signal_impact
+          : null;
+      if (si && si.net_predicted_pct != null && !isNaN(Number(si.net_predicted_pct))) {
+        var net = Number(si.net_predicted_pct);
+        line += ' · council signal net ' + (net >= 0 ? '+' : '') + net.toFixed(2) + '%';
+      }
+    }
+    return line;
+  }
+
+  function patchTribunalHoldReason(dailyPick) {
+    var el = document.getElementById('tribunal-hero-hold-reason');
+    if (!el) return;
+    var line = tribunalHoldReasonLine(dailyPick);
+    if (line) {
+      el.textContent = line;
+      el.hidden = false;
+    } else {
+      el.textContent = '';
+      el.hidden = true;
+    }
   }
 
   function formatJudgeWeightPct(weight, weights) {
@@ -5181,7 +5272,12 @@
     hero.setAttribute('data-temp', temp);
     syncCouncilTemp(temp);
     var title = document.getElementById('tribunal-hero-title');
-    if (title) title.textContent = tribunalSubnetLabel(dailyPick);
+    if (title) {
+      title.textContent = tribunalSubnetLabel(dailyPick);
+      var tip = tribunalSubnetLabelTitle(dailyPick);
+      if (tip) title.setAttribute('title', tip);
+      else title.removeAttribute('title');
+    }
     var badge = document.getElementById('k3-action-badge');
     var pills = tribunalVerdictPills(dailyPick, kind);
     if (badge) badge.textContent = pills.gate;
@@ -5217,6 +5313,7 @@
       patchTribunalInstrument(dailyPick, learningStats);
       patchTribunalPanels(dailyPick, learningStats);
     }
+    patchTribunalHoldReason(dailyPick);
     return true;
   }
 

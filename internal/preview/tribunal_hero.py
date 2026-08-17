@@ -412,11 +412,66 @@ def subnet_label(payload: Dict[str, Any]) -> str:
     name = str(subnet.get("name") or "").strip()
     netuid = subnet.get("netuid")
     if netuid is None:
-        return name or "—"
-    sn_prefix = f"SN{netuid}"
-    if not name or name.upper() == sn_prefix.upper() or re.match(r"^SN\d+$", name, re.I):
-        return sn_prefix
-    return f"{sn_prefix} · {name}"
+        base = name or "—"
+    else:
+        sn_prefix = f"SN{netuid}"
+        if not name or name.upper() == sn_prefix.upper() or re.match(r"^SN\d+$", name, re.I):
+            base = sn_prefix
+        else:
+            base = f"{sn_prefix} · {name}"
+    act = str(payload.get("action") or "HOLD").upper()
+    if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
+        return f"Closest · {base}"
+    return base
+
+
+def subnet_label_title(payload: Dict[str, Any]) -> Optional[str]:
+    """Plain-English tooltip for hero masthead — closest vs published call."""
+    if not isinstance(payload, dict):
+        return None
+    act = str(payload.get("action") or "HOLD").upper()
+    if payload.get("pick"):
+        return "Today's published council long call."
+    if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
+        return (
+            "Closest name on today's desk — not a published long. "
+            "Council held because conviction or direction did not clear the gate."
+        )
+    return None
+
+
+def hold_reason_line(payload: Dict[str, Any]) -> Optional[str]:
+    """Plain-English publish blocker for HOLD / degraded (shown under council hero)."""
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("pick"):
+        return None
+    act = str(payload.get("action") or "HOLD").upper()
+    if act not in ("HOLD", "NONE", ""):
+        return None
+    line: Optional[str] = None
+    raw_reason = payload.get("reason")
+    if raw_reason:
+        line = str(raw_reason).strip()
+    if not line:
+        brief = payload.get("brief")
+        if isinstance(brief, dict) and brief.get("trigger"):
+            line = str(brief["trigger"]).strip()
+    if not line and str(payload.get("status") or "").lower() == "degraded":
+        line = str(payload.get("detail") or "Worker volume temporarily unavailable").strip()
+    if not line:
+        return None
+    # When directional guard fired, show the weighted signal net so users can audit the block.
+    if "directional" in line.lower():
+        active = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+        si = active.get("signal_impact") if isinstance(active.get("signal_impact"), dict) else {}
+        net = si.get("net_predicted_pct")
+        if net is not None:
+            try:
+                line = f"{line} · council signal net {float(net):+.2f}%"
+            except (TypeError, ValueError):
+                pass
+    return line
 
 
 _EQUAL_WEIGHT_SPREAD = 0.015  # normalized fractions (~1.5pp)
@@ -878,6 +933,8 @@ def build_tribunal_view(
         "verdict_kind": kind,
         "conviction_temp": conviction_temp(kind, gauge),
         "subnet_label": subnet_label(pick),
+        "subnet_label_title": subnet_label_title(pick),
+        "hold_reason": hold_reason_line(pick),
         "center_label": center_label(pick, kind),
         "gate_label": gate_label,
         "action_label": action_label,

@@ -7501,6 +7501,18 @@ body.wrap {
   color: var(--text-secondary);
 }
 
+.tribunal-hero__hold-reason {
+  margin: 10px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  max-width: 42rem;
+}
+
+.tribunal-hero__hold-reason[hidden] {
+  display: none;
+}
+
 .tribunal-hero__kicker {
   display: none;
 }
@@ -15147,6 +15159,12 @@ body.wrap {
 }
 .pump-pattern-line--hero {
   margin: 0;
+}
+.pump-pattern-tip,
+.pd-r__num[title],
+.pds-ladder__num[title],
+.tribunal-hero__brand[title] {
+  cursor: help;
 }
 .pump-pattern-rail + .pd-r__why,
 .pump-pattern-rail + .pds-ladder__why {
