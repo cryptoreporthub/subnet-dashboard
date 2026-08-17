@@ -176,13 +176,25 @@ def compute_actual_pct(reference_price: float, resolved_price: float) -> float:
     return round((resolved_price - reference_price) / reference_price * 100, 4)
 
 
+# ponytail: 20x in a grading window is units, not a subnet move. Real 20x+
+# pumps need an explicit same-source contract before they enter learning.
+PRICE_UNIT_RATIO_CEILING = 20.0
+
+
 def is_price_unit_mismatch(reference_price: float, resolved_price: float) -> bool:
-    """Reject TAO/alpha references compared with USD/alpha candles."""
+    """Reject TAO/alpha references compared with USD/alpha candles.
+
+    Catches both 0.006 vs 1.3 (old hole: required resolved > 1) and
+    0.003 vs 0.63 (~200x, both sides < 1 — the production 88% phantom hits).
+    """
     try:
         reference = float(reference_price)
         resolved = float(resolved_price)
     except (TypeError, ValueError):
         return False
-    # ponytail: 20x is a deliberately conservative ceiling; real moves above
-    # it need an explicit unit/source contract before entering learning.
-    return 0 < reference < 1 and resolved > 1 and resolved / reference >= 20
+    if reference <= 0 or resolved <= 0:
+        return False
+    ratio = max(reference, resolved) / min(reference, resolved)
+    if min(reference, resolved) >= 1:
+        return False
+    return ratio >= PRICE_UNIT_RATIO_CEILING

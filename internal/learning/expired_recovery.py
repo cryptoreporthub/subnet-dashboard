@@ -37,7 +37,7 @@ def recover_expired_predictions(
     from internal.learning.predictions_store import load_predictions, save_predictions, update_stats
     from internal.council.price_reference import price_at_resolve_at
     from internal.council import resolver
-    from internal.council.grading import compute_actual_pct, grade_prediction
+    from internal.council.grading import compute_actual_pct, grade_prediction, is_price_unit_mismatch
 
     data = load_predictions()
     resolved = data.get("resolved", []) or []
@@ -89,6 +89,9 @@ def recover_expired_predictions(
         except (TypeError, ValueError):
             reference = 0.0
         if reference <= 0:
+            skipped += 1
+            continue
+        if is_price_unit_mismatch(reference, price):
             skipped += 1
             continue
 
