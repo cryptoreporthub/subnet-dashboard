@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader
 
 
 def _render_champion_rows(rows):
-    env = Environment(loader=FileSystemLoader("templates"))
+    env = Environment(loader=FileSystemLoader("templates"), autoescape=True)
     macro = env.get_template("partials/premium/message_intel_ssr_macros.html").module
     return macro.champion_rows(rows)
 

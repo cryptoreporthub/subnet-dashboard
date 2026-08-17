@@ -98,6 +98,11 @@ def _netuids_from_row(row: Dict[str, Any]) -> Set[int]:
             found.add(int(match))
         except (TypeError, ValueError):
             continue
+    for match in re.findall(r"subnet[/\s#:]+(\d{1,4})\b", content, re.IGNORECASE):
+        try:
+            found.add(int(match))
+        except (TypeError, ValueError):
+            continue
 
     if row.get("reply_to_message_id") or row.get("reply_parent_content"):
         parent = {

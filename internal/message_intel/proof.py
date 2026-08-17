@@ -196,7 +196,11 @@ def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
     except (TypeError, ValueError, json.JSONDecodeError):
         pass
     match = re.search(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", str(row.get("content") or ""), re.IGNORECASE)
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1))
+    for url_match in re.findall(r"subnet[/\s#:]+(\d{1,4})\b", str(row.get("content") or ""), re.IGNORECASE):
+        return int(url_match)
+    return None
 
 
 def _resolve_subnet_identity(row: Dict[str, Any]) -> tuple[Optional[int], str, Optional[str]]:

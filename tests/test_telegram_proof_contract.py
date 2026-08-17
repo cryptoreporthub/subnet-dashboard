@@ -151,6 +151,19 @@ def test_price_basis_requires_subnet_or_reply_parent():
     assert reply_subnet["subnet_source"] == "reply"
     assert reply_subnet["subnet_name"] == "SN127"
 
+    url_subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "content": "https://www.tao.app/subnet/100",
+            "outcome": "pump",
+        }
+    )
+    assert url_subnet["eligible"] is True
+    assert url_subnet["price_basis"] == "subnet"
+
     tao = classify_call(
         {
             "source": "telegram",
