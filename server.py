@@ -907,6 +907,22 @@ def _read_shell_daily_pick() -> Dict[str, Any]:
         return {}
 
 
+def _today_daily_pick_for_board() -> Optional[Dict[str, Any]]:
+    """Today's pick for weighing/hero context — local file, then worker cache."""
+    pick = _read_shell_daily_pick()
+    if isinstance(pick, dict) and (pick.get("candidate") or pick.get("pick")):
+        return pick
+    try:
+        from internal.worker_proxy import get_last_good_payload
+
+        cached = get_last_good_payload("/api/daily-pick")
+        if isinstance(cached, dict) and cached:
+            return _enrich_daily_pick_payload_lite(dict(cached))
+    except Exception as exc:
+        logger.warning("daily pick board context cache skipped: %s", exc)
+    return pick if pick else None
+
+
 def _registry_shell_subnets() -> List[Dict[str, Any]]:
     """Registry-only rows for fast homepage shell — no live feed, no blocking network.
 
@@ -1049,6 +1065,7 @@ def _enrich_daily_pick_payload_lite(
         return {}
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
+    from internal.learning.dpick_spotlight import attach_hero_spotlight_candidate
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
 
@@ -1062,6 +1079,7 @@ def _enrich_daily_pick_payload_lite(
     )
 
     out = enrich_active_subnet_fields(out)
+    out = attach_hero_spotlight_candidate(out)
     out = attach_judge_scores_to_daily_pick(out)
     out = attach_focus_judge_scores_to_daily_pick(out)
     if "shortlist" not in out:
@@ -1110,6 +1128,9 @@ def _enrich_daily_pick_payload(
     out = attach_temporal_to_daily_pick(out)
     out = attach_horizon_views_to_daily_pick(out, subnets, market_context)
     out = attach_brief_to_daily_pick(out)
+    from internal.learning.dpick_spotlight import attach_hero_spotlight_candidate
+
+    out = attach_hero_spotlight_candidate(out, subnets)
     return attach_pump_chip_to_daily_pick(out, subnets)
 
 
@@ -2640,10 +2661,7 @@ def _simivision_build_inner():
     try:
         if _PICKS_ENGINE:
             market_context = _market_context_with_weights(subnets)
-            from internal.council.daily_pick_engine import _find_today, _load
-
-            existing = _find_today(_load())
-            daily_pick = existing if existing is not None else None
+            daily_pick = _today_daily_pick_for_board()
     except Exception as exc:
         logger.warning("simivision daily-pick context skipped: %s", exc)
     return _safe_simivision_payload(

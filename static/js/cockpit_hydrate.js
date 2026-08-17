@@ -435,9 +435,11 @@
         : delta < 0
           ? '<p class="wr-delta wr-delta--down">▼ ' + delta + '</p>'
           : '<p class="wr-delta wr-delta--flat">· steady</p>';
-    var stitch = pick.closest_to_call
-      ? '<p class="wr-stitch">≈ today&apos;s call</p>'
-      : '';
+    var stitch = pick.primary_call
+      ? '<p class="wr-stitch">today&apos;s call</p>'
+      : pick.closest_to_call && pick.gap_whisper
+        ? '<p class="wr-stitch">≈ today&apos;s call</p>'
+        : '';
     var gapWhisper = pick.gap_whisper
       ? '<p class="wr-gap-whisper">' + esc(pick.gap_whisper) + '</p>'
       : '';
@@ -4687,7 +4689,11 @@
     }
     var act = String(payload.action || 'HOLD').toUpperCase();
     if (!payload.pick && payload.candidate && act === 'HOLD') {
-      return 'Closest · ' + base;
+      var prefix =
+        String(payload.hero_spotlight_source || '').toLowerCase() === 'judge_long'
+          ? 'Near call · '
+          : 'Closest · ';
+      return prefix + base;
     }
     return base;
   }
@@ -4699,6 +4705,12 @@
       return "Today's published council long call.";
     }
     if (!payload.pick && payload.candidate && act === 'HOLD') {
+      if (String(payload.hero_spotlight_source || '').toLowerCase() === 'judge_long') {
+        return (
+          "Top judge-aligned name on today's desk — not a published long. " +
+          'Council held because the expert tail had a directional conflict.'
+        );
+      }
       return (
         "Closest name on today's desk — not a published long. " +
         'Council held because conviction or direction did not clear the gate.'

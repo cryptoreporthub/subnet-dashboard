@@ -20,6 +20,12 @@ _LAST_PROBE_ERROR: Optional[str] = None
 _LAST_FAIL_MONO: float = 0.0
 _LAST_GOOD_MINDMAP: Optional[Dict[str, Any]] = None
 _LAST_GOOD_PAYLOADS: Dict[str, Dict[str, Any]] = {}
+
+
+def get_last_good_payload(path: str) -> Optional[Dict[str, Any]]:
+    """Return a copy of the last successful worker-proxy payload for ``path``."""
+    payload = _LAST_GOOD_PAYLOADS.get(str(path))
+    return dict(payload) if isinstance(payload, dict) else None
 _DISCOVER_STARTED: bool = False
 
 
