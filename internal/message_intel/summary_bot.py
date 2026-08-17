@@ -258,7 +258,37 @@ def _compose_today_narrative(summary: Dict[str, Any]) -> str:
     return f"Quiet recap — {summary.get('message_count', 0)} messages, {sentiment} mood."
 
 
+def _format_pulse_line(summary: Dict[str, Any]) -> str:
+    pulse = summary.get("group_pulse") or {}
+    sentiment = pulse.get("sentiment") or "Mixed"
+    return (
+        f"{summary.get('message_count', 0)} msgs · "
+        f"{summary.get('high_conviction_count', 0)} high conv · "
+        f"{sentiment}"
+    )
+
+
+def _format_stats_block(summary: Dict[str, Any]) -> str:
+    """Scan-friendly stats: pulse on one line, top subnets and movers as bullets."""
+    lines = [f"<i>{html.escape(_format_pulse_line(summary), quote=False)}</i>"]
+    top = summary.get("top_subnets") or []
+    if top:
+        lines.extend(["", "<b>Top</b>"])
+        for row in top[:5]:
+            lines.append(f"• {_format_subnet_chip(row)}")
+    movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
+    if movers:
+        lines.extend(["", "<b>Movers</b>"])
+        for row in movers:
+            delta = int(row.get("change") or 0)
+            arrow = "↑" if delta > 0 else "↓"
+            name = html.escape(str(row.get("name") or f"SN{row.get('netuid')}"))
+            lines.append(f"• SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
+    return "\n".join(lines)
+
+
 def _format_bonus_line(summary: Dict[str, Any]) -> str:
+    """Legacy single-line stats — prefer _format_stats_block for Telegram."""
     pulse = summary.get("group_pulse") or {}
     sentiment = pulse.get("sentiment") or "Mixed"
     parts = [
@@ -282,7 +312,7 @@ def _format_bonus_line(summary: Dict[str, Any]) -> str:
 
 
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
-    """Conversation recap first; 24h counts/top/movers are a compact bonus line."""
+    """Conversation recap first; stats in labeled sections below."""
     desk = desk_url or _desk_url()
     if not summary.get("ready"):
         count = int(summary.get("message_count") or 0)
@@ -296,23 +326,24 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
 
     today_lines = [str(x).strip() for x in (summary.get("today_lines") or []) if str(x).strip()]
     if today_lines:
-        narrative = "\n".join(html.escape(line, quote=False) for line in today_lines[:3])
+        narrative = "\n\n".join(html.escape(line, quote=False) for line in today_lines[:3])
     else:
         narrative = html.escape(_compose_today_narrative(summary), quote=False)
     leaders = [str(x).strip() for x in (summary.get("reaction_leaders") or []) if str(x).strip()]
     leader_block = ""
     if leaders:
         leader_block = (
-            "\nLeading in reactions\n"
-            + "\n".join(html.escape(line, quote=False) for line in leaders[:3])
-            + "\n"
+            "\n\n<b>Leading in reactions</b>\n"
+            + "\n".join(
+                f"• {html.escape(line, quote=False)}" for line in leaders[:3]
+            )
         )
-    bonus = _format_bonus_line(summary)
+    stats = _format_stats_block(summary)
     return (
-        f"<b>Subnet Summers</b>\n"
-        f"{narrative}\n"
-        f"{leader_block}"
-        f"<i>{bonus}</i>\n"
+        f"<b>Subnet Summers</b>\n\n"
+        f"{narrative}"
+        f"{leader_block}\n\n"
+        f"{stats}\n\n"
         f'<a href="{desk}">Open the Subnet Summers desk</a>'
     )
 
