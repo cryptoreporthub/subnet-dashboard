@@ -15148,6 +15148,12 @@ body.wrap {
 .pump-pattern-line--hero {
   margin: 0;
 }
+.pump-pattern-tip,
+.pd-r__num[title],
+.pds-ladder__num[title],
+.tribunal-hero__brand[title] {
+  cursor: help;
+}
 .pump-pattern-rail + .pd-r__why,
 .pump-pattern-rail + .pds-ladder__why {
   margin-top: 5px;

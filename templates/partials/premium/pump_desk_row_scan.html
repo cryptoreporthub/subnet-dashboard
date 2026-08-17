@@ -11,8 +11,8 @@
     <span class="pds-ladder__badge pds-ladder__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>
     <span class="pds-ladder__name">{{ row.name|default('SN' ~ row.netuid) }} <b>SN{{ row.netuid }}</b></span>
     <span class="pds-ladder__nums">
-      <span class="pds-ladder__num"><i>Flow</i>{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
-      <span class="pds-ladder__num pds-ladder__num--gap"><i>Gap</i>{% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
+      <span class="pds-ladder__num" title="Early-move score (0–100). Higher means more flow building before price runs."><i>Flow</i>{% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
+      <span class="pds-ladder__num pds-ladder__num--gap" title="Distance to the desk trigger line — lower usually means closer to firing."><i>Gap</i>{% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
     </span>
   </div>
   {% include "partials/premium/pump_pattern_line.html" %}

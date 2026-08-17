@@ -54,30 +54,45 @@
     var strip = row.direction_strip || row.pattern_label;
     if (!strip) return '';
     if (!row.direction_strip && row.pattern_class === 'insufficient_data') return '';
-    var suffix = '';
+    var suffixHtml = '';
+    var PUMP_STRIP_TIP =
+      'Recent price legs — each arrow shows direction, percent move, and time window.';
+    var PUMP_RE_PUMP_TIP =
+      'Chance this name pumps again soon based on similar past moves. Not council conviction or a trade call.';
+    var PUMP_PATTERN_CONF_TIP =
+      'How closely this price path matches a known pattern type. Not council conviction.';
     var prob =
       row.re_pump_prob != null && !isNaN(Number(row.re_pump_prob))
         ? Number(row.re_pump_prob)
         : null;
     if (prob != null && prob > 0) {
-      suffix = ' · ' + Math.round(prob * 100) + '%';
+      suffixHtml =
+        ' · <span class="pump-pattern-tip" title="' +
+        esc(PUMP_RE_PUMP_TIP) +
+        '">' +
+        Math.round(prob * 100) +
+        '%</span>';
     } else if (
       row.pattern_confidence != null &&
       !isNaN(Number(row.pattern_confidence)) &&
       Number(row.pattern_confidence) >= 0.5
     ) {
-      suffix = ' · ' + Math.round(Number(row.pattern_confidence) * 100) + '%';
+      suffixHtml =
+        ' · <span class="pump-pattern-tip" title="' +
+        esc(PUMP_PATTERN_CONF_TIP) +
+        '">' +
+        Math.round(Number(row.pattern_confidence) * 100) +
+        '%</span>';
     }
-    var title = row.pattern_class ? esc(row.pattern_class) : 'Direction path';
     var cls = 'pump-pattern-line' + (classExtra ? ' ' + classExtra : '');
     return (
       '<div class="pump-pattern-rail"><p class="' +
       cls +
       '" title="' +
-      title +
+      esc(PUMP_STRIP_TIP) +
       '">' +
       esc(strip) +
-      suffix +
+      suffixHtml +
       '</p></div>'
     );
   }
@@ -113,9 +128,9 @@
       ' <b class="pd-r__sn">' +
       esc(sn) +
       '</b></span></div>' +
-      '<div class="pd-r__nums"><span class="pd-r__num"><i>Flow</i> ' +
+      '<div class="pd-r__nums"><span class="pd-r__num" title="Early-move score (0–100). Higher means more flow building before price runs."><i>Flow</i> ' +
       (pct != null ? pct : '—') +
-      '</span><span class="pd-r__num pd-r__num--gap"><i>Gap</i> ' +
+      '</span><span class="pd-r__num pd-r__num--gap" title="Distance to the desk trigger line — lower usually means closer to firing."><i>Gap</i> ' +
       (row.distance != null ? esc(row.distance) : '—') +
       '</span></div></div>' +
       pumpPatternLineHtml(row) +

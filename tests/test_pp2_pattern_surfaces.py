@@ -25,7 +25,8 @@ def test_pump_desk_row_template_has_pattern_chip():
     assert "pd-r__top" in html
     partial = Path("templates/partials/premium/pump_pattern_line.html").read_text(encoding="utf-8")
     assert "pump-pattern-rail" in partial
-    assert "pump-pattern-line" in partial
+    assert "pump-pattern-tip" in partial
+    assert "Not council conviction" in partial
 
 
 def test_hydrate_js_renders_pattern_chip():

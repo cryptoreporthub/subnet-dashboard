@@ -50,7 +50,7 @@
 >
   <header class="tribunal-hero__masthead">
     <div class="tribunal-hero__masthead-row">
-      <h2 class="tribunal-hero__brand" id="tribunal-hero-title">{{ t.subnet_label }}</h2>
+      <h2 class="tribunal-hero__brand" id="tribunal-hero-title"{% if t.subnet_label_title %} title="{{ t.subnet_label_title }}"{% endif %}>{{ t.subnet_label }}</h2>
       <p class="tribunal-hero__live" role="status">
         <span class="tribunal-hero__kicker-dot" aria-hidden="true"></span>LIVE
       </p>

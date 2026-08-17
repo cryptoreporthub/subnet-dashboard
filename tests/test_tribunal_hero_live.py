@@ -275,7 +275,8 @@ def test_build_tribunal_view_gated_hold():
     )
     assert view["center_label"] == "GATED · HOLD"
     assert view["verdict_kind"] == "gated"
-    assert view["subnet_label"] == "SN99"
+    assert view["subnet_label"] == "Closest · SN99"
+    assert "not a published long" in view["subnet_label_title"]
     assert view["synced_at"] == "2026-08-04T12:00:00Z"
     assert view["gauge_display"] == "33.6%"
     assert view["conviction_pct"] == 33.6
