@@ -723,16 +723,16 @@ async def _listener_page_context() -> Dict[str, Any]:
             except Exception:
                 t_rows = []
         for t in t_rows[:8]:
-        if isinstance(t, str):
-            topics.append({"topic": t, "count": None})
-        elif isinstance(t, dict):
-            topics.append(
-                {
-                    "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
-                    "count": t.get("count") or t.get("mentions"),
-                }
-            )
-    ctx["topics"] = topics
+            if isinstance(t, str):
+                topics.append({"topic": t, "count": None})
+            elif isinstance(t, dict):
+                topics.append(
+                    {
+                        "topic": t.get("topic") or t.get("tag") or t.get("name") or "—",
+                        "count": t.get("count") or t.get("mentions"),
+                    }
+                )
+        ctx["topics"] = topics
 
     # Divergence is also worker-owned on split_v2; otherwise the web process
     # can show a live feed while incorrectly rendering an empty story panel.
