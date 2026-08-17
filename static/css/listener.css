@@ -415,7 +415,10 @@ body.lsn-body{
 /* REACTION CROWNS */
 .lsn-crowns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .lsn-crow{min-width:0;text-align:center;padding:8px 4px;border-radius:12px;
-  border:1px solid var(--lsn-glass-brd); background:rgba(255,255,255,.03)}
+  border:1px solid var(--lsn-glass-brd); background:rgba(255,255,255,.03); color:inherit; font:inherit; cursor:pointer; transition:.12s}
+.lsn-crow:hover,.lsn-crow:focus-visible{border-color:rgba(110,231,255,.55); background:rgba(110,231,255,.09); outline:none}
+.lsn-crow--empty{cursor:default}
+.lsn-crow--empty:hover{border-color:var(--lsn-glass-brd);background:rgba(255,255,255,.03)}
 .lsn-crow .emoji{font-size:20px}
 .lsn-crow .who{font-size:11.5px; font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .lsn-crow .cnt{font-size:10px; color:var(--lsn-muted)}
@@ -424,7 +427,8 @@ body.lsn-body{
 /* TOPICS */
 .lsn-topics{display:flex; gap:8px; flex-wrap:wrap}
 .lsn-topic{display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; padding:7px 12px; border-radius:99px;
-  border:1px solid var(--lsn-glass-brd); background:rgba(255,255,255,.03); color:#dbe4f7}
+  border:1px solid var(--lsn-glass-brd); background:rgba(255,255,255,.03); color:#dbe4f7; font-family:inherit; cursor:pointer; transition:.12s}
+.lsn-topic:hover,.lsn-topic:focus-visible{border-color:rgba(110,231,255,.55); background:rgba(110,231,255,.09); outline:none}
 .lsn-topic .n{color:var(--lsn-muted); font-weight:600}
 .lsn-topic.hot{border-color:rgba(255,207,110,.4); color:var(--lsn-gold)}
 .lsn-topics-empty{font-size:10.5px; color:var(--lsn-muted); line-height:1.5; padding:6px 4px 2px}
