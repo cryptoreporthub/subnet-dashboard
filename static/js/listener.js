@@ -94,9 +94,9 @@
   /* ── net flow gauge: 60s pool-delta wiring ─────────────────────────────
      Honest contract: first poll establishes a baseline; the delta populates
      once a second sample exists. Pool taoLiquidity diffed between polls,
-     converted TAO→USD (× tao rate), signed. Until two samples: "—" warming.
-     If /api/subnets is unreachable (known degraded 422 class), the gauge
-     stays in its SSR warming state — never fabricates numbers. */
+     signed. A TAO/USD rate is optional; without one, the gauge reports TAO
+     flow rather than treating the subnet alpha price as a USD rate. Until
+     two samples: "—" warming. */
   var anchorBtn = document.getElementById("lsnAnchorBtn");
   var anchorLabel = document.getElementById("lsnAnchorLabel");
   var picker = document.getElementById("lsnPicker");
@@ -121,9 +121,9 @@
   }
 
   function pickAnchor() {
-    var msg = document.querySelector(".message-intel__feed-row[data-netuid]");
-    if (msg && msg.getAttribute("data-netuid")) {
-      setAnchor(msg.getAttribute("data-netuid"), null);
+    var msg = document.querySelector(".lsn-msg.focused");
+    if (msg && msg.getAttribute("data-sn")) {
+      setAnchor(msg.getAttribute("data-sn"), msg.getAttribute("data-name"));
       return;
     }
     var first = document.querySelector(".lsn-trow[data-sn], .lsn-crow2[data-sn], .lsn-ylead[data-sn]");
@@ -150,6 +150,23 @@
     return (neg ? "−" : "+") + s;
   }
 
+  function fmtTao(n) {
+    if (n == null || isNaN(n)) return "—";
+    var abs = Math.abs(n);
+    var digits = abs >= 100 ? 0 : (abs >= 10 ? 1 : 2);
+    return (n < 0 ? "−" : "+") + abs.toFixed(digits) + " TAO";
+  }
+
+  function poolChip(s) {
+    if (!gpool || !s || s.tao == null || isNaN(s.tao)) return;
+    if (s.rate) {
+      var poolUsd = s.tao * s.rate;
+      gpool.textContent = "$" + (poolUsd >= 1000 ? (poolUsd / 1000).toFixed(2) + "M" : poolUsd.toFixed(0)) + " pool";
+    } else {
+      gpool.textContent = s.tao.toLocaleString("en-US", { maximumFractionDigits: 1 }) + " TAO pool";
+    }
+  }
+
   function warming(note) {
     gval.innerHTML = "— <small>· net flow</small>";
     gdir.textContent = "WARMING";
@@ -160,20 +177,20 @@
   }
 
   function applySample(s) {
-    if (!anchor || !s || !s.tao) { warming(); return; }
+    if (!anchor || !s || s.tao == null || isNaN(s.tao)) { warming(); return; }
     if (!prevSample) {
       prevSample = s;
       gsub.innerHTML = "<b>baseline set</b> · next poll computes the delta";
-      if (gpool && s.rate) gpool.textContent = "$" + Math.round(s.tao * s.rate).toLocaleString("en-US") + " pool";
+      poolChip(s);
       return;
     }
     var dTao = s.tao - prevSample.tao;
     var rate = s.rate || prevSample.rate || 0;
     var flow = dTao * rate;
     var dHold = (s.holders != null && prevSample.holders != null) ? s.holders - prevSample.holders : null;
-    var pos = flow >= 0;
+    var pos = rate ? flow >= 0 : dTao >= 0;
     var label = pos ? "MONEY IN" : "MONEY OUT";
-    var flowTxt = (pos ? "+" : "−") + "$" + (Math.abs(flow) >= 1000 ? (Math.abs(flow) / 1000).toFixed(1) + "K" : Math.abs(flow).toFixed(0));
+    var flowTxt = rate ? fmtUsd(flow) : fmtTao(dTao);
     gval.innerHTML = flowTxt + " <small>· 60s</small>";
     gdir.textContent = label;
     gdir.className = "dir " + (pos ? "pos" : "neg");
@@ -182,58 +199,72 @@
     gbar.className = pos ? "" : "neg";
     var holdTxt = dHold == null ? "— holders" : (dHold >= 0 ? "+" + dHold : dHold) + " holders";
     gsub.innerHTML = "<b>" + holdTxt + "</b> · " + (s.holders != null ? s.holders.toLocaleString("en-US") + " total" : "");
-    if (gpool && s.rate) {
-      var poolUsd = s.tao * s.rate;
-      gpool.textContent = "$" + (poolUsd >= 1000 ? (poolUsd / 1000).toFixed(2) + "M" : poolUsd.toFixed(0)) + " pool";
-    }
+     poolChip(s);
     prevSample = s;
+  }
+
+  function rowFromPayload(j) {
+    if (Array.isArray(j)) return j[0] || null;
+    if (!j || typeof j !== "object") return null;
+    if (j.pool && typeof j.pool === "object") return j.pool;
+    if (j.data && typeof j.data === "object") return j.data;
+    if (Array.isArray(j.subnets)) return j.subnets[0] || null;
+    if (Array.isArray(j.results)) return j.results[0] || null;
+    return j;
+  }
+
+  function snapshotFromRow(row) {
+    if (!row || typeof row !== "object") return null;
+    var tao = parseFloat(
+      row.taoLiquidity != null
+        ? row.taoLiquidity
+        : row.tao_liquidity != null
+          ? row.tao_liquidity
+          : row.pool_tao != null
+            ? row.pool_tao
+            : row.liquidity_tao != null
+              ? row.liquidity_tao
+              : row.total_tao != null
+                ? row.total_tao
+                : row.tao_reserve != null
+                  ? row.tao_reserve
+                  : NaN
+    );
+    var holders = parseInt(row.subnet_holders != null ? row.subnet_holders : row.holders, 10);
+    var rate = parseFloat(
+      /* row.price is the subnet alpha price, not a TAO/USD rate. */
+      row.taoPriceUsd != null
+        ? row.taoPriceUsd
+        : row.tao_price_usd != null
+          ? row.tao_price_usd
+          : row.tao_usd_price != null
+            ? row.tao_usd_price
+            : row.taoUsd != null
+              ? row.taoUsd
+              : NaN
+    );
+    if (isNaN(tao)) return null;
+    return { tao: tao, holders: isNaN(holders) ? null : holders, rate: isNaN(rate) ? 0 : rate };
   }
 
   function pollSubnets() {
     try {
-      fetch("/api/subnets?limit=16", { headers: { "Accept": "application/json" } })
+      if (!anchor) pickAnchor();
+      var endpoint = anchor && anchor.netuid
+        ? "/api/subnet/" + encodeURIComponent(anchor.netuid) + "/pool"
+        : "/api/subnets?limit=16";
+      fetch(endpoint, { headers: { "Accept": "application/json" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
-          var subs = j && j.subnets ? j.subnets : (j && j.results ? j.results : (Array.isArray(j) ? j : null));
-          if (!subs || !subs.length) { warming(); return; }
-          if (!anchor) pickAnchor();
-          var row = null;
-          if (anchor && anchor.netuid) {
-            row = subs.find(function (x) { return String(x.netuid || x.id) === String(anchor.netuid); }) || subs[0];
-          } else {
-            row = subs[0];
-          }
-          var tao = parseFloat(
-            row.taoLiquidity != null
-              ? row.taoLiquidity
-              : row.tao_liquidity != null
-                ? row.tao_liquidity
-                : row.pool_tao != null
-                  ? row.pool_tao
-                  : row.liquidity_tao != null
-                    ? row.liquidity_tao
-                    : row.total_tao != null
-                      ? row.total_tao
-                      : NaN
-          );
-          var holders = parseInt(row.subnet_holders != null ? row.subnet_holders : row.holders, 10);
-          var rate = parseFloat(
-            row.taoPriceUsd != null
-              ? row.taoPriceUsd
-              : row.tao_price_usd != null
-                ? row.tao_price_usd
-                : row.price_usd != null
-                  ? row.price_usd
-                  : row.price != null
-                    ? row.price
-                    : NaN
-          );
-          if (isNaN(tao)) { warming(); return; }
-          var netuid = row.netuid || row.id;
-          if (!anchor || String(anchor.netuid) !== String(netuid)) setAnchor(netuid, row.name);
-          applySample({ tao: tao, holders: isNaN(holders) ? null : holders, rate: isNaN(rate) ? 0 : rate });
+          var row = rowFromPayload(j);
+          if (!row && !anchor) { warming("pool snapshot unavailable — retrying"); return; }
+          if (!row && anchor) { warming("pool snapshot unavailable — retrying"); return; }
+          if (!anchor && row) setAnchor(row.netuid || row.id, row.name);
+          var sample = snapshotFromRow(row);
+          if (!sample) { warming("pool snapshot unavailable — retrying"); return; }
+          applySample(sample);
         })
-        .catch(function () { warming("live feed unreachable — SSR state kept"); });
+        .catch(function () { warming("pool feed unreachable — SSR state kept"); });
     } catch (e) { warming(); }
   }
 
