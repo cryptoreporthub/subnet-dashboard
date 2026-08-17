@@ -372,7 +372,7 @@ def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
     monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
     monkeypatch.setattr(
         "internal.subnet_names._load_name_overrides",
-        lambda: {"39": "deprecated"},
+        lambda: {"39": "SN39 (deprecated)"},
     )
     monkeypatch.setattr(
         "internal.subnet_names._tmc_display_names",
@@ -412,9 +412,39 @@ def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
     summary = rollup.build_yesterday_chat_summary(registry_names=stale_names)
     assert summary["ready"] is True
     assert "EdgeMaxxing" not in summary["narrative"]
-    assert "deprecated" in summary["narrative"]
+    assert "SN39 (deprecated)" in summary["narrative"]
     assert summary["top_subnets"][0]["name"] == "Teutonic"
-    assert summary["top_subnets"][1]["name"] == "deprecated"
+    assert summary["top_subnets"][1]["name"] == "SN39 (deprecated)"
+
+
+def test_build_today_topic_summary_calendar_day(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    rows = [
+        {
+            "timestamp": "2026-08-17T10:00:00Z",
+            "content": "TAO market looks choppy but alpha calls still printing",
+        },
+        {
+            "timestamp": "2026-08-16T23:00:00Z",
+            "content": "old market chatter should not count",
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    topics = rollup.build_today_topic_summary()
+    labels = [t["label"] for t in topics]
+    assert "Market" in labels
+    assert "Alpha" in labels
 
 
 def test_week_top_comment_unit(monkeypatch):

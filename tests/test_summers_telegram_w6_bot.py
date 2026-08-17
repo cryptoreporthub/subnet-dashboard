@@ -141,6 +141,26 @@ def test_format_summary_includes_hour_price_change():
     assert "SN28 gm (2 mentions, +4.8% 1h)" in text
 
 
+def test_format_summary_includes_trending_topics_today():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "group_pulse": {"sentiment": "Cautious"},
+            "top_subnets": [{"netuid": 3, "name": "Teutonic", "mentions": 5}],
+            "today_topics": [
+                {"label": "Market", "count": 19},
+                {"label": "Alpha", "count": 10},
+            ],
+        }
+    )
+
+    assert "Trending today" in text
+    assert "Market (19)" in text
+    assert "Alpha (10)" in text
+
+
 def test_rate_limit_per_chat(intel_env):
     chat_id = 999001
     first, limited1 = summary_bot.handle_summary_command(chat_id, db=intel_env)

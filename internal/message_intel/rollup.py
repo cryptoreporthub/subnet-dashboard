@@ -1655,6 +1655,7 @@ def build_24h_summary(
     subnet_counts: Dict[int, int] = defaultdict(int)
     prev_subnet_counts: Dict[int, int] = defaultdict(int)
     group_counts: Dict[str, int] = defaultdict(int)
+    subnet_snippets: Dict[int, tuple[float, str]] = {}
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1680,8 +1681,15 @@ def build_24h_summary(
             group = str(row.get("group_name") or "").strip()
             if group:
                 group_counts[group] += 1
+            content = str(row.get("content") or "").strip()
             for netuid in _netuids_from_row(row):
                 subnet_counts[netuid] += 1
+                if content:
+                    prev = subnet_snippets.get(netuid)
+                    if prev is None or conviction >= prev[0]:
+                        snippet = _clip_snippet(content, max_len=80)
+                        if snippet:
+                            subnet_snippets[netuid] = (conviction, snippet)
 
         if in_prev:
             for netuid in _netuids_from_row(row):
@@ -1705,13 +1713,15 @@ def build_24h_summary(
 
     top_subnets: List[Dict[str, Any]] = []
     for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
-        top_subnets.append(
-            {
-                "netuid": netuid,
-                "name": _rollup_subnet_name(netuid, registry_names),
-                "mentions": int(mentions),
-            }
-        )
+        snippet = subnet_snippets.get(netuid, (0.0, ""))[1]
+        row_out: Dict[str, Any] = {
+            "netuid": netuid,
+            "name": _rollup_subnet_name(netuid, registry_names),
+            "mentions": int(mentions),
+        }
+        if snippet:
+            row_out["mention_context"] = snippet
+        top_subnets.append(row_out)
 
     movers: List[Dict[str, Any]] = []
     for netuid in set(subnet_counts) | set(prev_subnet_counts):
@@ -1750,6 +1760,23 @@ def build_24h_summary(
         "group_pulse": group_pulse,
         "generated_at": now.isoformat().replace("+00:00", "Z"),
     }
+
+
+def build_today_topic_summary(*, db=None, limit: int = 4) -> List[Dict[str, Any]]:
+    """Top conversation topics since UTC midnight — for /summary trending lens."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    topic_counts: Dict[str, int] = defaultdict(int)
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < today_start:
+            continue
+        for tag in classify_message_topics(str(row.get("content") or "")):
+            topic_counts[tag] += 1
+    return [
+        {"topic": tag, "label": _topic_label(tag), "count": int(count)}
+        for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    ]
 
 
 _MIN_YESTERDAY_SUMMARY_MESSAGES = 3

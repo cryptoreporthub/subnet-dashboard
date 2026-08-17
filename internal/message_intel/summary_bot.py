@@ -200,6 +200,25 @@ def _telegram_watchlist_owner(message: Optional[Dict[str, Any]]) -> Optional[str
     return linked_owner(telegram_owner) or telegram_owner
 
 
+def _format_subnet_summary_line(row: Dict[str, Any]) -> str:
+    name = row.get("name") or f"SN{row.get('netuid')}"
+    mentions = int(row.get("mentions") or 0)
+    price_bit = ""
+    price = row.get("price_change_1h")
+    if price is not None:
+        try:
+            p = float(price)
+            sign = "+" if p > 0 else ""
+            price_bit = f", {sign}{p:.1f}% 1h"
+        except (TypeError, ValueError):
+            pass
+    line = f"• SN{row.get('netuid')} {name} ({mentions} mentions{price_bit})"
+    context = str(row.get("mention_context") or "").strip()
+    if context:
+        line += f"\n  {context}"
+    return line
+
+
 def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] = None) -> str:
     """Render build_24h_summary dict as Telegram HTML."""
     desk = desk_url or _desk_url()
@@ -207,51 +226,52 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
         count = int(summary.get("message_count") or 0)
         need = int(summary.get("min_messages") or 10)
         return (
-            f"<b>Subnet Summers — 24h pulse</b>\n\n"
-            f"Not enough chatter yet ({count}/{need} messages in 24h).\n"
-            f"Check back when the group is active.\n\n"
+            f"<b>Subnet Summers — 24h pulse</b>\n"
+            f"Not enough chatter yet ({count}/{need} messages in 24h). "
+            f"Check back when the group is active.\n"
             f'<a href="{desk}">Open the Subnet Summers desk</a>'
         )
 
+    pulse = summary.get("group_pulse") or {}
+    sentiment = pulse.get("sentiment") or "Mixed"
     lines = [
         "<b>Subnet Summers — 24h pulse</b>",
-        "",
-        f"Messages: {summary.get('message_count', 0)} · "
-        f"High conviction: {summary.get('high_conviction_count', 0)}",
+        (
+            f"{summary.get('message_count', 0)} msgs · "
+            f"{summary.get('high_conviction_count', 0)} high conv · {sentiment}"
+        ),
     ]
+
     top = summary.get("top_subnets") or []
     if top:
-        lines.append("")
         lines.append("<b>Top subnets</b>")
         for row in top[:5]:
-            name = row.get("name") or f"SN{row.get('netuid')}"
-            lines.append(f"• SN{row.get('netuid')} {name} ({row.get('mentions', 0)} mentions)")
+            lines.append(_format_subnet_summary_line(row))
+
+    topics = summary.get("today_topics") or []
+    if topics:
+        topic_bits = ", ".join(
+            f"{t.get('label') or t.get('topic')} ({t.get('count', 0)})" for t in topics[:4]
+        )
+        lines.append(f"<b>Trending today</b> — {topic_bits}")
 
     movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
     if movers:
-        lines.append("")
-        lines.append("<b>Movers</b> (24h vs prior 24h)")
+        mover_bits = []
         for row in movers:
             delta = int(row.get("change") or 0)
             arrow = "↑" if delta > 0 else "↓"
             name = row.get("name") or f"SN{row.get('netuid')}"
-            lines.append(f"• SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
+            mover_bits.append(f"SN{row.get('netuid')} {name} {arrow}{abs(delta)}")
+        lines.append("<b>Movers</b> " + " · ".join(mover_bits))
 
-    pulse = summary.get("group_pulse") or {}
     if pulse.get("group"):
-        lines.append("")
         lines.append(
-            f"<b>Group pulse:</b> {pulse['group']} ({pulse.get('top_group_messages', pulse.get('messages', 0))} msgs, "
-            f"{pulse.get('groups_active', 1)} active)"
-        )
-    elif pulse.get("messages"):
-        lines.append("")
-        lines.append(
-            f"<b>Group pulse:</b> {pulse.get('messages', 0)} msgs · "
-            f"{pulse.get('sentiment', 'Cautious')} · avg conv {pulse.get('avg_conviction', 0)}%"
+            f"<b>Group:</b> {pulse['group']} "
+            f"({pulse.get('top_group_messages', pulse.get('messages', 0))} msgs)"
         )
 
-    lines.extend(["", f'<a href="{desk}">Open the Subnet Summers desk</a>'])
+    lines.append(f'<a href="{desk}">Open the Subnet Summers desk</a>')
     return "\n".join(lines)
 
 
@@ -335,9 +355,11 @@ def build_subnetsummers_text(*, db=None) -> str:
 
 
 def build_summary_text(*, db=None) -> str:
-    from internal.message_intel.rollup import build_24h_summary
+    from internal.message_intel.rollup import build_24h_summary, build_today_topic_summary
 
-    summary = build_24h_summary(registry_names=_registry_subnet_names(), db=db)
+    names = _registry_subnet_names()
+    summary = build_24h_summary(registry_names=names, db=db)
+    summary["today_topics"] = build_today_topic_summary(db=db)
     return format_summary_message(summary)
 
 
