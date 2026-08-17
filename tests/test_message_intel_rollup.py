@@ -449,6 +449,62 @@ def test_build_today_topic_summary_calendar_day(monkeypatch):
     assert "market" in today["narrative"].lower()
 
 
+def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    rows = [
+        {
+            "timestamp": "2026-08-17T10:00:00Z",
+            "author_name": "Alice",
+            "content": "SN3 validator rotation is free money",
+            "sentiment": "bullish",
+            "entities_json": '{"subnets": [3]}',
+            "external_message_id": "100",
+        },
+        {
+            "timestamp": "2026-08-17T10:05:00Z",
+            "author_name": "Bob",
+            "content": "nah emissions already priced in",
+            "sentiment": "bearish",
+            "entities_json": '{"subnets": [3]}',
+            "reply_to_message_id": "100",
+            "reply_parent_content": "SN3 validator rotation is free money",
+        },
+        {
+            "timestamp": "2026-08-17T10:08:00Z",
+            "author_name": "Cara",
+            "content": "wrong, wait for the next emission cut",
+            "sentiment": "bullish",
+            "entities_json": '{"subnets": [3]}',
+            "reply_to_message_id": "100",
+            "reply_parent_content": "SN3 validator rotation is free money",
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(
+        "internal.subnet_names.display_name_for_netuid",
+        lambda netuid, **kw: "Teutonic" if int(netuid) == 3 else f"SN{netuid}",
+    )
+    today = rollup.build_today_conversation_summary(registry_names={3: "Teutonic"})
+    narrative = today["narrative"]
+    assert "argued" in narrative.lower() or "split" in narrative.lower()
+    assert "priced in" in narrative.lower() or "validator rotation" in narrative.lower()
+    assert "Alice" not in narrative
+    assert "Bob" not in narrative
+    assert "Cara" not in narrative
+    assert "took most of the airtime" not in narrative
+
+
 def test_week_top_comment_unit(monkeypatch):
     """Most engaged message wins; why names the dominant signal."""
     from datetime import datetime, timezone

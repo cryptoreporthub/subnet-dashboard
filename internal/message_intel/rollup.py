@@ -1762,6 +1762,119 @@ def build_24h_summary(
     }
 
 
+_PUSHBACK_CUES = (
+    "nah",
+    "nope",
+    "wrong",
+    "cope",
+    "disagree",
+    "scam",
+    "rug",
+    "overvalued",
+    "undervalued",
+    "don't buy",
+    "dont buy",
+    "trap",
+    "fud",
+    "shill",
+    "priced in",
+    "already priced",
+    "that's not",
+    "is not",
+    "isn't",
+    "not even",
+)
+
+
+def _anon_clip(text: Optional[str], *, max_len: int = 90) -> str:
+    raw = re.sub(r"https?://\S+", "", str(text or ""))
+    raw = re.sub(r"@\w+", "", raw)
+    return _clip_snippet(raw, max_len=max_len)
+
+
+def _strip_pushback_prefix(text: Optional[str]) -> str:
+    raw = str(text or "").strip()
+    lowered = raw.lower()
+    for cue in ("nah,", "nah ", "nope,", "nope ", "wrong,", "wrong ", "cope,", "cope "):
+        if lowered.startswith(cue):
+            return raw[len(cue) :].lstrip(" ,:-")
+    return raw
+
+
+def _has_pushback(text: Optional[str]) -> bool:
+    hay = str(text or "").lower()
+    return any(cue in hay for cue in _PUSHBACK_CUES)
+
+
+def _direction_side(row: Dict[str, Any]) -> Optional[str]:
+    sent = str(row.get("sentiment") or "").lower()
+    pred = str(row.get("predicted_direction") or "").lower()
+    if sent in ("bullish", "positive") or pred in ("up", "bullish"):
+        return "buy"
+    if sent in ("bearish", "negative") or pred in ("down", "bearish"):
+        return "fade"
+    return None
+
+
+def _pick_today_contention(
+    *,
+    threads: Dict[str, Dict[str, Any]],
+    split_sides: Dict[int, Dict[str, str]],
+    registry_names: Dict[int, str],
+    subnet_counts: Dict[int, int],
+) -> Optional[Dict[str, Any]]:
+    ranked: List[tuple[int, Dict[str, Any]]] = []
+    for thread in threads.values():
+        replies = [r for r in (thread.get("replies") or []) if r]
+        if len(replies) < 1:
+            continue
+        sentiments = thread.get("sentiments") or set()
+        mixed = len(sentiments) >= 2
+        pushback = bool(thread.get("pushback"))
+        if len(replies) < 2 and not pushback and not mixed:
+            continue
+        score = len(replies) + (3 if mixed else 0) + (2 if pushback else 0)
+        parent = _anon_clip(thread.get("parent") or "", max_len=90)
+        push = ""
+        for reply in replies:
+            if _has_pushback(reply):
+                push = _anon_clip(_strip_pushback_prefix(reply), max_len=80)
+                break
+        if not push and replies:
+            push = _anon_clip(max(replies, key=len), max_len=80)
+        names = [
+            _rollup_subnet_name(n, registry_names)
+            for n in sorted(thread.get("netuids") or [])[:2]
+        ]
+        ranked.append(
+            (
+                score,
+                {
+                    "kind": "thread",
+                    "subject": parent or push,
+                    "pushback": push if parent else "",
+                    "names": names,
+                },
+            )
+        )
+    if ranked:
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return ranked[0][1]
+
+    mixed_netuids = [n for n, sides in split_sides.items() if "buy" in sides and "fade" in sides]
+    if not mixed_netuids:
+        return None
+    mixed_netuids.sort(key=lambda n: (-int(subnet_counts.get(n, 0)), n))
+    netuid = mixed_netuids[0]
+    sides = split_sides[netuid]
+    return {
+        "kind": "split",
+        "names": [_rollup_subnet_name(netuid, registry_names)],
+        "buy": _anon_clip(sides.get("buy") or "", max_len=80),
+        "fade": _anon_clip(sides.get("fade") or "", max_len=80),
+    }
+
+
 def build_today_conversation_summary(
     *,
     registry_names: Optional[Dict[int, str]] = None,
@@ -1778,6 +1891,10 @@ def build_today_conversation_summary(
     subnet_counts: Dict[int, int] = defaultdict(int)
     subnet_snippets: Dict[int, tuple[float, str]] = {}
     topic_counts: Dict[str, int] = defaultdict(int)
+    threads: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"replies": [], "parent": "", "sentiments": set(), "netuids": set(), "pushback": False}
+    )
+    split_sides: Dict[int, Dict[str, str]] = defaultdict(dict)
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1793,7 +1910,9 @@ def build_today_conversation_summary(
         content = str(row.get("content") or "").strip()
         for tag in classify_message_topics(content):
             topic_counts[tag] += 1
-        for netuid in _netuids_from_row(row):
+        netuids = _netuids_from_row(row)
+        side = _direction_side(row)
+        for netuid in netuids:
             subnet_counts[netuid] += 1
             if content:
                 prev = subnet_snippets.get(netuid)
@@ -1801,6 +1920,21 @@ def build_today_conversation_summary(
                     snippet = _clip_snippet(content, max_len=80)
                     if snippet:
                         subnet_snippets[netuid] = (conviction, snippet)
+            if side and content and side not in split_sides[netuid]:
+                split_sides[netuid][side] = content
+        reply_id = row.get("reply_to_message_id")
+        if reply_id and content:
+            thread = threads[str(reply_id)]
+            thread["replies"].append(content)
+            parent = str(row.get("reply_parent_content") or "").strip()
+            if parent:
+                thread["parent"] = parent
+            sent = str(row.get("sentiment") or "").strip().lower()
+            if sent:
+                thread["sentiments"].add(sent)
+            thread["netuids"].update(netuids)
+            if _has_pushback(content):
+                thread["pushback"] = True
 
     top_subnets: List[Dict[str, Any]] = []
     for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
@@ -1819,11 +1953,18 @@ def build_today_conversation_summary(
         for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:4]
     ]
     sentiment = _sentiment_tag((sentiment_sum / sentiment_n) if sentiment_n else 0.0)
+    contention = _pick_today_contention(
+        threads=threads,
+        split_sides=split_sides,
+        registry_names=registry_names,
+        subnet_counts=subnet_counts,
+    )
     payload = {
         "message_count": message_count,
         "top_subnets": top_subnets,
         "topics": topics,
         "sentiment": sentiment,
+        "contention": contention,
     }
     payload["narrative"] = _today_narrative(payload)
     return payload
@@ -1838,39 +1979,65 @@ def _today_narrative(payload: Dict[str, Any]) -> str:
     n = int(payload.get("message_count") or 0)
     if n <= 0:
         return "Quiet so far today — no graded chatter yet."
-    topics = payload.get("topics") or []
-    topic_labels = [
-        _topic_label(t.get("topic") or t.get("label"))
-        for t in topics[:3]
-        if t.get("topic") or t.get("label")
-    ]
-    sentiment = str(payload.get("sentiment") or "mixed").lower()
-    opener = ""
-    if topic_labels:
-        opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
-    else:
-        opener = f"{n} messages landed"
-    if sentiment == "bullish":
-        opener += ", and the room leaned bullish"
-    elif sentiment == "bearish":
-        opener += ", with bearish calls carrying the thread"
-    elif sentiment == "cautious":
-        opener += ", in a cautious wait-and-see mood"
-    sentences = [opener + "."]
 
-    top = payload.get("top_subnets") or []
-    if top:
-        lead = top[0]
-        lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
-        detail = f"{lead_name} led chatter"
-        if len(top) > 1:
-            runner = top[1]
-            runner_name = runner.get("name") or f"SN{runner.get('netuid')}"
-            detail += f", ahead of {runner_name}"
-        ctx = str(lead.get("mention_context") or "").strip()
-        if ctx:
-            detail += f" — {ctx}"
-        sentences.append(detail + ".")
+    contention = payload.get("contention") or {}
+    sentences: List[str] = []
+    if contention.get("kind") == "thread":
+        subject = contention.get("subject") or ""
+        pushback = contention.get("pushback") or ""
+        names = [str(x) for x in (contention.get("names") or []) if x]
+        if subject and pushback and pushback != subject:
+            lead = f"People argued over whether {subject}, or {pushback}"
+        elif subject:
+            lead = f"People argued over {subject}"
+        else:
+            lead = ""
+        if lead and names:
+            lead += f" ({_join_phrase(names)})"
+        if lead:
+            sentences.append(lead + ".")
+    elif contention.get("kind") == "split":
+        names = [str(x) for x in (contention.get("names") or []) if x]
+        name = names[0] if names else "a subnet"
+        buy = contention.get("buy") or ""
+        fade = contention.get("fade") or ""
+        lead = f"Calls split on {name}"
+        if buy and fade:
+            lead += f": {buy} vs {fade}"
+        elif buy or fade:
+            lead += f" — {buy or fade}"
+        sentences.append(lead + ".")
+
+    if not sentences:
+        topics = payload.get("topics") or []
+        topic_labels = [
+            _topic_label(t.get("topic") or t.get("label"))
+            for t in topics[:3]
+            if t.get("topic") or t.get("label")
+        ]
+        sentiment = str(payload.get("sentiment") or "mixed").lower()
+        opener = ""
+        if topic_labels:
+            opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
+        else:
+            opener = f"{n} messages landed"
+        if sentiment == "bullish":
+            opener += ", and the room leaned bullish"
+        elif sentiment == "bearish":
+            opener += ", with bearish calls carrying the thread"
+        elif sentiment == "cautious":
+            opener += ", in a cautious wait-and-see mood"
+        sentences.append(opener + ".")
+        top = payload.get("top_subnets") or []
+        if top:
+            lead = top[0]
+            lead_name = lead.get("name") or f"SN{lead.get('netuid')}"
+            detail = f"{lead_name} led chatter"
+            ctx = str(lead.get("mention_context") or "").strip()
+            if ctx:
+                detail += f" — {ctx}"
+            sentences.append(detail + ".")
+
     text = " ".join(sentences)
     return text[:1].upper() + text[1:] if text else text
 
