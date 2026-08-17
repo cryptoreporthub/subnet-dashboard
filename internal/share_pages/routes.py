@@ -692,7 +692,10 @@ async def _listener_page_context() -> Dict[str, Any]:
         None,
         timeout=6,
     )
-    if topics_payload is None:
+    if topics_payload is None or (
+        isinstance(topics_payload, dict)
+        and not ("topics" in topics_payload or "rows" in topics_payload)
+    ): 
         try:
             engine = _listener_engine()
             topics_payload = await _listener_call(
@@ -707,7 +710,19 @@ async def _listener_page_context() -> Dict[str, Any]:
         t_rows = topics_payload
     else:
         t_rows = []
-    for t in t_rows[:8]:
+    if not t_rows:
+            try:
+                engine = _listener_engine()
+                fallback_topics = await _listener_call(
+                    lambda: engine.list_topics(limit=8), None, timeout=5
+                )
+                if isinstance(fallback_topics, dict):
+                    t_rows = _as_list(fallback_topics.get("topics") or fallback_topics.get("rows"))
+                elif isinstance(fallback_topics, list):
+                    t_rows = fallback_topics
+            except Exception:
+                t_rows = []
+        for t in t_rows[:8]:
         if isinstance(t, str):
             topics.append({"topic": t, "count": None})
         elif isinstance(t, dict):
