@@ -101,13 +101,18 @@ def test_hydration_keeps_daily_pick_available_before_deferred_secondary_batch():
 def test_hydration_awaits_daily_pick_before_tribunal_stats_render():
     source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     await_idx = source.index("var dpResult = await dailyPickRequest;")
-    hero_idx = source.index("var heroDailyPick = lastDailyPickPayload || dpResult;")
+    hero_idx = source.index(
+        "var heroDailyPick = richerDailyPickPayload(dpResult, lastDailyPickPayload)"
+    )
     assert await_idx < hero_idx
 
 
 def test_daily_pick_hydrate_bypasses_api_fetch_cache():
     source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
-    assert "fetchJsonRetry('/api/daily-pick', 35000, 3, 0)" in source
+    assert "function fetchDailyPickForHero(" in source
+    assert "invalidateDailyPickFetch()" in source
+    api_fetch = Path("static/js/api_fetch.js").read_text(encoding="utf-8")
+    assert "delete inFlight[key]" in api_fetch
 
 
 def test_tribunal_hero_bootstrap_hydrates_cold_shell():
@@ -117,6 +122,8 @@ def test_tribunal_hero_bootstrap_hydrates_cold_shell():
     assert "function dailyPickPayloadRank(" in source
     assert "function richerDailyPickPayload(" in source
     assert "function hydrateCouncilHeroShell(" in source
+    assert "function scheduleCouncilHeroRetry(" in source
+    assert "function dailyPickNeedsHeroRetry(" in source
     assert "dataset.hydrate !== '1'" not in source.split("function bootstrapCouncilHeroHydrate()")[1].split("function ")[0]
     run_idx = source.index("run();")
     bootstrap_idx = source.index("bootstrapCouncilHeroHydrate();")

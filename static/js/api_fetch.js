@@ -69,8 +69,11 @@
   global.apiFetchInvalidate = function (url) {
     if (url == null) {
       responseCache = {};
+      inFlight = {};
       return;
     }
-    delete responseCache[String(url)];
+    var key = String(url);
+    delete responseCache[key];
+    delete inFlight[key];
   };
 })(typeof window !== 'undefined' ? window : this);
