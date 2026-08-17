@@ -168,6 +168,41 @@ def test_format_summary_includes_trending_topics_today():
     assert "<b>Topics</b>" not in text
 
 
+def test_format_summary_stats_use_labeled_sections():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 358,
+            "high_conviction_count": 288,
+            "group_pulse": {"sentiment": "Cautious"},
+            "top_subnets": [
+                {"netuid": 35, "name": "OxMarkets", "mentions": 9},
+                {"netuid": 91, "name": "cascade", "mentions": 4},
+            ],
+            "movers": [
+                {"netuid": 35, "name": "OxMarkets", "change": 9},
+                {"netuid": 91, "name": "cascade", "change": 4},
+            ],
+            "today_lines": [
+                "People argued over NIOME (SN55) validators.",
+                "People split on whether OxMarkets (SN35) price still has a dip bid.",
+            ],
+        }
+    )
+
+    assert "<b>Top</b>" in text
+    assert "<b>Movers</b>" in text
+    assert "• SN35 OxMarkets (9 mentions)" in text
+    assert "• SN91 cascade (4 mentions)" in text
+    assert "• SN35 OxMarkets ↑9" in text
+    assert "Top SN35" not in text
+    assert "Movers SN35" not in text
+    pulse_at = text.find("358 msgs")
+    top_at = text.find("<b>Top</b>")
+    movers_at = text.find("<b>Movers</b>")
+    assert pulse_at != -1 and pulse_at < top_at < movers_at
+
+
 def test_format_summary_includes_reaction_leaders_in_usage_order():
     text = summary_bot.format_summary_message(
         {
@@ -184,6 +219,8 @@ def test_format_summary_includes_reaction_leaders_in_usage_order():
     )
 
     assert "Leading in reactions" in text
+    assert "<b>Leading in reactions</b>" in text
+    assert "• Fire Queen leads Firestarter" in text
     fire_at = text.find("Fire Queen leads Firestarter")
     thumb_at = text.find("Papichi leads ThumbWar god")
     heart_at = text.find("Jane doe leads Hearteater")
