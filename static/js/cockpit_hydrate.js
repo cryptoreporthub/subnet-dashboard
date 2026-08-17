@@ -285,9 +285,14 @@
       });
   }
 
-  async function fetchJsonRetry(url, ms, retries) {
+  async function fetchJsonRetry(url, ms, retries, cacheMs) {
     if (window.apiFetchJsonRetry) {
-      return window.apiFetchJsonRetry(url, ms, retries == null ? 1 : retries);
+      return window.apiFetchJsonRetry(
+        url,
+        ms,
+        retries == null ? 1 : retries,
+        cacheMs
+      );
     }
     retries = retries == null ? 1 : retries;
     var lastErr;
@@ -316,12 +321,24 @@
       return cached;
     }
     try {
-      var payload = await fetchJsonRetry('/api/learning/stats', 28000, 2);
-      return normalizeLearningStats(payload);
+      var payload = await fetchJsonRetry('/api/learning/stats', 28000, 2, 0);
+      var stats = normalizeLearningStats(payload);
+      if (stats) {
+        window.SimiLearning = window.SimiLearning || { stats: null, trust_banner: null };
+        window.SimiLearning.stats = stats;
+        window.SimiLearning.trust_banner = stats.trust_banner || null;
+      }
+      return stats;
     } catch (e) {
       try {
-        var metrics = await fetchJsonRetry('/api/learning-metrics', 20000, 1);
-        return normalizeLearningStats(metrics);
+        var metrics = await fetchJsonRetry('/api/learning-metrics', 20000, 1, 0);
+        var fallbackStats = normalizeLearningStats(metrics);
+        if (fallbackStats) {
+          window.SimiLearning = window.SimiLearning || { stats: null, trust_banner: null };
+          window.SimiLearning.stats = fallbackStats;
+          window.SimiLearning.trust_banner = fallbackStats.trust_banner || null;
+        }
+        return fallbackStats;
       } catch (e2) {
         return null;
       }
@@ -4062,7 +4079,7 @@
       // waterfall; one slow council scorer could leave the whole page below
       // the Telegram desk looking frozen.
       // Tier 1a — daily call first (parallel request; legacy marker)
-      var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3)
+      var dailyPickRequest = fetchJsonRetry('/api/daily-pick', 35000, 3, 0)
         .then(function (dpResult) {
           renderDailyPick(dpResult);
           // Make the Daily Call immediately reusable by SSE / hot-refresh
@@ -4115,10 +4132,11 @@
         })
       ]);
       var tierBatch = await tierBatchPromise;
+      var dpResult = await dailyPickRequest;
 
       // Keep promise rejections observed even when a slow hero request
       // resolves after the rest of the homepage has already painted.
-      Promise.allSettled([dailyPickRequest, pumpAlertsRequest]).catch(function () {});
+      Promise.allSettled([pumpAlertsRequest]).catch(function () {});
 
       if (tierBatch[0].status === 'fulfilled') {
         var subPayload = safePayload(tierBatch[0].value);
@@ -4140,8 +4158,9 @@
           stats.expert_graded_counts || {}
         );
         if (document.getElementById('tribunal-hero')) {
-          if (lastDailyPickPayload) {
-            renderTribunalHero(lastDailyPickPayload, stats);
+          var heroDailyPick = lastDailyPickPayload || dpResult;
+          if (heroDailyPick) {
+            renderTribunalHero(heroDailyPick, stats);
           } else {
             patchTribunalJudges(stats, {});
             patchTribunalInstrument({}, stats);

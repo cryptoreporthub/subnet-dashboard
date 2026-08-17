@@ -96,3 +96,15 @@ def test_hydration_keeps_daily_pick_available_before_deferred_secondary_batch():
     daily_index = source.index("window.HomeHydrateCache.dailyPick = lastDailyPickPayload")
     secondary_index = source.index("// Tier 2 — secondary panels")
     assert daily_index < secondary_index
+
+
+def test_hydration_awaits_daily_pick_before_tribunal_stats_render():
+    source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
+    await_idx = source.index("var dpResult = await dailyPickRequest;")
+    hero_idx = source.index("var heroDailyPick = lastDailyPickPayload || dpResult;")
+    assert await_idx < hero_idx
+
+
+def test_daily_pick_hydrate_bypasses_api_fetch_cache():
+    source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
+    assert "fetchJsonRetry('/api/daily-pick', 35000, 3, 0)" in source
