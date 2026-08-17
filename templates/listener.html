@@ -18,6 +18,7 @@
 <link rel="stylesheet" href="/static/css/base.css?v={{ static_v }}">
 <link rel="stylesheet" href="/static/css/ui.css?v={{ static_v }}">
 <link rel="stylesheet" href="/static/css/listener.css?v={{ static_v }}">
+{% from "partials/premium/message_intel_ssr_macros.html" import feed_rows %}
 </head>
 <body class="lsn-body council-first-theme">
   <div class="cosmic-sky" aria-hidden="true"><span class="cosmic-sky__nebula"></span></div>
@@ -260,27 +261,46 @@
       </div>
     </div>
 
-    <!-- LIVE FEED -->
-    <div class="lsn-glass lsn-feed">
-      <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span>newest first · drives gauge ↑</span></div>
-      {% if feed %}
-      {% for m in feed[:6] %}
-      <div class="lsn-msg{% if loop.first %} focused{% endif %}" data-sn="{{ m["netuid"] or "" }}" data-name="{{ m["name"] or "" }}">
-        <div class="av">{{ (m["author"] or "?")[1:2] or "?" }}</div>
-        <div class="body">
-          <div class="meta"><span class="h">{{ m["author"] or "—" }}</span>{% if m["netuid"] %}<span class="subchip">SN{{ m["netuid"] }}</span>{% endif %}{% if m["verdict"] %}<span class="dirchip {{ "long" if "bull" in (m["verdict"]|lower) else ("short" if "bear" in (m["verdict"]|lower) else "neutral") }}">{{ "▲ LONG" if "bull" in (m["verdict"]|lower) else ("▼ SHORT" if "bear" in (m["verdict"]|lower) else "NEUTRAL") }}</span>{% endif %}{% if m["topic"] %}<span class="topic">{{ m["topic"] }}</span>{% endif %}</div>
-          <div class="quote"><div class="txt">“{{ m["text"] or "" }}”</div></div>
-          <div class="ftr">
-            <div class="lsn-conv-meter"><div style="width:{{ m["conviction"] if m["conviction"] is not none else 0 }}%"></div></div>
-            <div class="lsn-conv-lbl">{{ m["conviction"] if m["conviction"] is not none else "—" }}</div>
-            {% if m["base"] is not none %}<span class="lsn-base">base {{ m["base"] }}</span>{% endif %}
+    <!-- LIVE FEED — desk parity (filters, WHY chips, detail panel) -->
+    <div class="lsn-glass lsn-feed message-intel--v2 lsn-feed-desk">
+      <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span id="message-intel-feed-hint">newest first · tap a row for detail</span></div>
+
+      <div class="message-intel__proof lsn-proof-strip" id="message-intel-proof" hidden aria-live="polite">
+        <p class="message-intel__proof-label">Telegram call proof</p>
+        <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
+      </div>
+
+      <div class="message-intel__hc-strip lsn-hc-strip" id="message-intel-hc-strip" hidden aria-label="High conviction calls">
+        <p class="message-intel__hc-label">High conviction</p>
+        <div class="message-intel__hc-rows" id="message-intel-hc-rows"></div>
+      </div>
+
+      <div id="message-intel-feed" class="message-intel__feed" aria-live="polite" aria-busy="{{ 'false' if mi_messages else 'true' }}">
+        {% if mi_messages %}
+        {{ feed_rows(mi_messages) }}
+        {% else %}
+        <div class="lsn-qstate" style="display:block"><b>Quiet — the listener is warming up.</b><div class="tiny">New graded messages appear here the moment the listener scores them.</div></div>
+        {% endif %}
+      </div>
+      <div id="message-intel-detail" class="message-intel__detail" hidden aria-live="polite"></div>
+
+      <div class="message-intel__filter-bar lsn-filter-bar" id="message-intel-filter-bar" aria-label="Feed filters">
+        <div class="message-intel__filter-group">
+          <span class="message-intel__filter-label">Min conviction</span>
+          <div class="message-intel__filter-chips" id="message-intel-conv-filters" role="group" aria-label="Minimum conviction">
+            <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-min-conv="">All</button>
+            <button type="button" class="message-intel__filter-chip" data-min-conv="60">60%+</button>
+            <button type="button" class="message-intel__filter-chip" data-min-conv="70">70%+</button>
+            <button type="button" class="message-intel__filter-chip" data-min-conv="80">80%+</button>
+          </div>
+        </div>
+        <div class="message-intel__filter-group">
+          <span class="message-intel__filter-label">Subnet</span>
+          <div class="message-intel__filter-chips" id="message-intel-subnet-filters" role="group" aria-label="Subnet filter">
+            <button type="button" class="message-intel__filter-chip message-intel__filter-chip--active" data-netuid="">All</button>
           </div>
         </div>
       </div>
-      {% endfor %}
-      {% else %}
-      <div class="lsn-qstate" style="display:block"><b>Quiet — the listener is warming up.</b><div class="tiny">New graded messages appear here the moment the listener scores them.</div></div>
-      {% endif %}
     </div>
 
     <!-- TELEGRAM PROOF -->
@@ -446,6 +466,7 @@
     <div class="lsn-disc">Conviction is <b>auto-scored</b>, not financial advice. Leaderboard measured from resolved qualifying calls — not engagement. Skin is belief, never edge.</div>
   </div>
 
+<script src="/static/js/message_intel_feed.js?v={{ static_v }}" defer></script>
 <script src="/static/js/listener.js?v={{ static_v }}"></script>
 </body>
 </html>

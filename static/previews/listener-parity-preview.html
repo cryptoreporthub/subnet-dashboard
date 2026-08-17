@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Listener parity preview — proposed UX</title>
+<link rel="stylesheet" href="/static/css/smoke-tokens.css">
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/ui.css">
+<link rel="stylesheet" href="/static/css/listener.css">
+<style>
+  /* Preview-only additions — proposed parity pass */
+  .preview-banner{
+    font-family:var(--lsn-font-mono); font-size:10px; letter-spacing:.06em;
+    color:var(--lsn-gold); border:1px dashed rgba(240,197,111,.45); border-radius:10px;
+    padding:10px 12px; line-height:1.55; text-align:center;
+    background:rgba(240,197,111,.06);
+  }
+  .preview-banner b{color:#fff}
+
+  .lsn-flagship{
+    border:2px solid rgba(240,197,111,.55); border-radius:18px; padding:16px 14px 18px;
+    background:linear-gradient(180deg, rgba(240,197,111,.06) 0%, transparent 28%);
+    box-shadow:0 0 42px -16px rgba(240,197,111,.25), inset 0 1px 0 rgba(255,255,255,.1);
+  }
+  .lsn-flag-chip{
+    font-family:var(--lsn-font-mono); font-size:9px; font-weight:700; letter-spacing:.12em;
+    color:var(--lsn-gold); border:1px solid rgba(240,197,111,.5);
+    background:rgba(240,197,111,.1); padding:4px 9px; border-radius:4px;
+  }
+
+  .lsn-source{
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    padding:11px 13px; margin-top:4px;
+    font-family:var(--lsn-font-mono); font-size:11.5px; color:var(--lsn-muted);
+  }
+  .lsn-mini-wave{display:flex; align-items:flex-end; gap:1.5px; height:12px}
+  .lsn-mini-wave i{width:2px; background:var(--lsn-pos); border-radius:1px; display:block}
+  .lsn-live-tag{background:rgba(31,212,124,.12); color:var(--lsn-pos); padding:2px 7px; border-radius:4px; font-size:9.5px; font-weight:700}
+  .lsn-source b{color:var(--lsn-ink)}
+
+  .lsn-legend{
+    display:flex; gap:14px; flex-wrap:wrap; font-family:var(--lsn-font-mono);
+    font-size:10px; color:var(--lsn-muted); padding:2px 4px 12px;
+  }
+  .lsn-legend i{width:7px; height:7px; border-radius:2px; display:inline-block}
+  .lsn-legend b{color:var(--lsn-ink); font-weight:600}
+
+  .lsn-proof-strip, .lsn-hc-strip{
+    padding:12px 13px; margin-bottom:10px;
+  }
+  .lsn-proof-strip .hit{color:var(--lsn-pos); font-weight:700; font-size:15px}
+  .lsn-hc-row{
+    display:flex; gap:8px; align-items:center; padding:8px 0;
+    border-bottom:1px solid rgba(255,255,255,.06); font-size:12.5px;
+  }
+  .lsn-hc-row:last-child{border-bottom:0; padding-bottom:0}
+  .lsn-hc-conv{font-family:var(--lsn-font-mono); font-size:11px; color:var(--lsn-violet); min-width:42px}
+  .lsn-hc-snip{flex:1; color:var(--lsn-muted); min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .lsn-hc-cta{
+    font-family:var(--lsn-font-mono); font-size:10px; color:var(--lsn-cyan);
+    background:none; border:none; cursor:pointer; padding:0;
+  }
+  .lsn-hc-cta:hover{color:var(--lsn-gold)}
+
+  .lsn-hero-yday{
+    position:relative; overflow:hidden; padding:20px 18px; margin-bottom:10px;
+    border:1px solid rgba(31,212,124,.28); border-radius:16px;
+    background:linear-gradient(155deg, rgba(31,212,124,.1), rgba(63,201,255,.04) 60%);
+    box-shadow:0 0 50px -24px rgba(31,212,124,.35);
+  }
+  .lsn-hero-yday .eyebrow{
+    font-family:var(--lsn-font-mono); font-size:10px; letter-spacing:.16em;
+    color:var(--lsn-pos); margin-bottom:14px;
+  }
+  .lsn-hero-main{display:flex; align-items:center; gap:14px; margin-bottom:14px}
+  .lsn-hero-icon{
+    width:52px; height:52px; border-radius:14px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--lsn-font-mono); font-weight:800; font-size:22px;
+    background:linear-gradient(155deg, rgba(31,212,124,.28), rgba(63,201,255,.12));
+    border:1px solid rgba(31,212,124,.4); box-shadow:0 0 20px -6px rgba(31,212,124,.4);
+  }
+  .lsn-hero-name{font-family:var(--lsn-font-mono); font-weight:700; font-size:24px; line-height:1.15}
+  .lsn-hero-name span{color:var(--lsn-muted); font-weight:500; font-size:15px}
+  .lsn-hero-meta{font-size:12.5px; color:var(--lsn-muted); margin-top:4px}
+  .lsn-hero-meta .bull{color:var(--lsn-pos); font-weight:600}
+  .lsn-hero-chips{display:flex; flex-wrap:wrap; gap:6px; padding-top:12px; border-top:1px solid rgba(255,255,255,.08)}
+  .lsn-hero-chip{
+    font-family:var(--lsn-font-mono); font-size:10px; color:var(--lsn-muted);
+    border:1px solid rgba(255,255,255,.1); border-radius:6px; padding:4px 9px;
+    background:rgba(255,255,255,.03);
+  }
+  .lsn-hero-chip.hot{color:var(--lsn-violet); border-color:rgba(157,140,255,.35); background:rgba(157,140,255,.08)}
+  .lsn-hero-run{font-size:12px; color:var(--lsn-muted); margin-top:12px}
+  .lsn-hero-run b{color:var(--lsn-ink)}
+
+  .lsn-feed-shell{padding:14px 14px 8px}
+  .lsn-filter-bar{margin:4px 0 14px; padding-top:8px; border-top:1px solid rgba(255,255,255,.08)}
+  .lsn-filter-label{display:block; font-family:var(--lsn-font-mono); font-size:9.5px; color:var(--lsn-muted); letter-spacing:.06em; margin-bottom:6px; text-transform:uppercase}
+  .lsn-filter-chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px}
+  .lsn-filter-chip{
+    font-family:var(--lsn-font-mono); font-size:10.5px; color:var(--lsn-muted);
+    border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:5px 10px;
+    background:rgba(255,255,255,.03); cursor:pointer;
+  }
+  .lsn-filter-chip.active{
+    color:var(--lsn-pos); border-color:rgba(31,212,124,.4);
+    background:rgba(31,212,124,.08); box-shadow:0 0 14px -8px rgba(31,212,124,.4);
+  }
+
+  .lsn-feed-row{
+    display:flex; gap:12px; padding:0 0 16px; position:relative; cursor:pointer;
+    border-radius:8px; transition:background .15s;
+  }
+  .lsn-feed-row:hover{background:rgba(255,255,255,.02)}
+  .lsn-feed-row:not(:last-of-type)::before{
+    content:""; position:absolute; left:5px; top:22px; bottom:-2px; width:2px;
+    background:var(--rail-color, var(--lsn-pos)); opacity:.22; border-radius:2px;
+  }
+  .lsn-rail-node{
+    flex-shrink:0; width:12px; height:12px; border-radius:50%; margin-top:4px;
+    background:transparent; border:2px solid var(--rail-color, var(--lsn-pos));
+    box-shadow:0 0 10px -2px var(--rail-glow, rgba(31,212,124,.4));
+  }
+  .lsn-feed-row.is-bear{--rail-color:var(--lsn-neg); --rail-glow:rgba(255,93,122,.4)}
+  .lsn-feed-row.is-neu{--rail-color:var(--lsn-cyan); --rail-glow:rgba(63,201,255,.4)}
+  .lsn-feed-row.is-bull{--rail-color:var(--lsn-pos); --rail-glow:rgba(31,212,124,.4)}
+  .lsn-feed-body{flex:1; min-width:0}
+  .lsn-feed-top{display:flex; align-items:center; gap:8px; margin-bottom:7px; flex-wrap:wrap}
+  .lsn-f-avatar{
+    width:24px; height:24px; border-radius:50%; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--lsn-font-mono); font-size:10px; font-weight:700;
+    background:rgba(255,255,255,.06); color:var(--lsn-muted);
+  }
+  .lsn-f-handle{font-size:12px; font-weight:600; color:var(--lsn-muted)}
+  .lsn-f-tag{font-family:var(--lsn-font-mono); font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:5px; border:1px solid}
+  .lsn-f-tag.bull{color:var(--lsn-pos); border-color:rgba(31,212,124,.35); background:rgba(31,212,124,.06)}
+  .lsn-f-tag.bear{color:#ff9f3f; border-color:rgba(255,159,63,.35); background:rgba(255,159,63,.07)}
+  .lsn-f-conv{font-family:var(--lsn-font-mono); font-size:10.5px; color:var(--lsn-muted)}
+  .lsn-f-conv.high{color:var(--lsn-violet)}
+  .lsn-f-time{margin-left:auto; font-family:var(--lsn-font-mono); font-size:10px; color:var(--lsn-muted)}
+  .lsn-f-text{font-size:13px; line-height:1.5; margin:0 0 8px}
+  .lsn-sn-inline{font-family:var(--lsn-font-mono); font-size:10px; color:var(--lsn-cyan); background:rgba(63,201,255,.09); padding:1px 6px; border-radius:4px; margin-left:4px}
+  .lsn-signal-strip{display:flex; align-items:center; gap:6px; flex-wrap:wrap}
+  .lsn-why-label{font-family:var(--lsn-font-mono); font-size:9px; color:var(--lsn-muted); letter-spacing:.05em}
+  .lsn-sig-chip{font-family:var(--lsn-font-mono); font-size:9px; color:var(--lsn-muted); border:1px solid rgba(255,255,255,.08); border-radius:5px; padding:2px 6px; background:rgba(255,255,255,.02)}
+  .lsn-sig-chip.orange{color:#ff9f3f; border-color:rgba(255,159,63,.25); background:rgba(255,159,63,.06)}
+  .lsn-sig-chip.blue{color:var(--lsn-cyan); border-color:rgba(63,201,255,.25); background:rgba(63,201,255,.06)}
+  .lsn-detail{
+    margin:10px 0 4px; padding:12px 12px 12px 14px; border-radius:10px;
+    border:1px solid rgba(63,201,255,.22); border-left:3px solid rgba(31,212,124,.55);
+    background:rgba(63,201,255,.05); font-size:12.5px; color:#c8d9cf; line-height:1.55;
+    display:none;
+  }
+  .lsn-detail.open{display:block}
+  .lsn-detail b{color:var(--lsn-ink)}
+  .lsn-detail-actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:12px}
+  .lsn-detail-btn{
+    font-family:var(--lsn-font-mono); font-size:11px; min-height:38px; padding:8px 12px; border-radius:8px; cursor:pointer;
+    border:1px solid rgba(63,201,255,.35); color:var(--lsn-cyan); background:transparent;
+  }
+  .lsn-detail-btn.solid{background:rgba(31,212,124,.12); border-color:rgba(31,212,124,.35); color:var(--lsn-pos)}
+  .lsn-feed-empty{font-size:12px; color:var(--lsn-muted); font-style:italic; padding:12px 4px; display:none; text-align:center}
+  .lsn-feed-empty.show{display:block}
+
+  .preview-toast{
+    position:fixed; left:50%; bottom:24px; transform:translateX(-50%) translateY(20px);
+    background:rgba(8,9,17,.92); border:1px solid rgba(31,212,124,.35); color:var(--lsn-ink);
+    font-family:var(--lsn-font-mono); font-size:11px; padding:10px 14px; border-radius:10px;
+    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; z-index:50;
+  }
+  .preview-toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body class="lsn-body council-first-theme">
+  <div class="cosmic-sky" aria-hidden="true"><span class="cosmic-sky__nebula"></span></div>
+  <div class="lsn-page">
+
+    <div class="preview-banner">
+      <b>PREVIEW</b> — proposed listener parity pass on cosmic glass · tap feed rows &amp; filters
+    </div>
+
+    <div class="lsn-trust" data-mode="live">
+      <svg class="ekg" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0,13 L20,13 L24,9 L28,17 L32,13 L55,13 L59,9 L63,17 L67,13 L90,13 L94,9 L98,17 L102,13 L120,13"></path>
+      </svg>
+      <span class="lsn-mode"><span class="dot"></span><span>LIVE</span></span>
+      <span class="lsn-last">last msg 12s ago</span>
+      <span class="lsn-sep"></span>
+      <span class="lsn-cal"><span>cal ✓</span></span>
+    </div>
+
+    <div class="lsn-flagship lsn-glass">
+      <div class="lsn-hdr" style="margin-bottom:12px">
+        <div class="lsn-logo">S</div>
+        <div class="t">
+          <div class="app">SIMI <em>·</em> LISTENER</div>
+          <div class="grp">@officialsubnetsummer</div>
+        </div>
+        <span class="lsn-flag-chip">FLAGSHIP</span>
+        <span class="lsn-live" style="margin-left:auto"><span class="dot"></span>LIVE</span>
+      </div>
+
+      <div class="lsn-intercept" style="padding:0 4px 8px">
+        <div class="lsn-pulsar" aria-hidden="true">
+          <span class="lsn-ping"></span><span class="lsn-ping"></span><span class="lsn-ping"></span>
+          <span class="lsn-core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+        </div>
+        <div class="lsn-identity">
+          <p class="lsn-eyebrow">SIGNAL DECK · t.me/OfficialSubnetSummer</p>
+          <h1 class="lsn-title">Telegram pulse</h1>
+          <p class="lsn-sub">Real-time read — what's said, how sure we are, and why.</p>
+        </div>
+      </div>
+
+      <div class="lsn-glass lsn-source">
+        <div class="lsn-mini-wave" aria-hidden="true">
+          <i style="height:4px"></i><i style="height:8px"></i><i style="height:5px"></i><i style="height:11px"></i><i style="height:6px"></i><i style="height:9px"></i><i style="height:4px"></i>
+        </div>
+        <span class="lsn-live-tag">LIVE</span>
+        <span><b>OfficialSubnetSummer</b></span>
+        <span>·</span><span>91 msgs</span>
+        <span>·</span><span>18 high conviction</span>
+      </div>
+
+      <div class="lsn-legend">
+        <span><i style="background:var(--lsn-cyan)"></i> <b>Conv.</b> keyword + reaction</span>
+        <span><i style="background:var(--lsn-violet)"></i> <b>High</b> ≥ 60%</span>
+        <span><i style="background:#ff9f3f"></i> <b>Influence</b> hit-rate × reach</span>
+      </div>
+
+      <div class="lsn-glass lsn-proof-strip">
+        <div class="lsn-sect" style="margin-bottom:8px"><span class="bar"></span><b>Telegram call proof</b><span>aggregate</span></div>
+        <p><span class="hit">61%</span> hit rate · <b>11 / 18</b> graded calls</p>
+      </div>
+
+      <div class="lsn-glass lsn-hc-strip">
+        <div class="lsn-sect" style="margin-bottom:4px"><span class="bar"></span><b>High conviction</b><span>quick open</span></div>
+        <div class="lsn-hc-row">
+          <span class="lsn-hc-conv">82%</span>
+          <span class="lsn-hc-snip">SN18 emissions look sticky into next epoch</span>
+          <button type="button" class="lsn-hc-cta" data-toast="Open Living Focus · SN18">Open SN18 →</button>
+        </div>
+        <div class="lsn-hc-row">
+          <span class="lsn-hc-conv">74%</span>
+          <span class="lsn-hc-snip">SN14 cut rumor gaining reactions</span>
+          <button type="button" class="lsn-hc-cta" data-toast="Open Living Focus · SN14">Open SN14 →</button>
+        </div>
+      </div>
+
+      <div class="lsn-hero-yday">
+        <div class="eyebrow">YESTERDAY'S MOST TALKED ABOUT</div>
+        <div class="lsn-hero-main">
+          <div class="lsn-hero-icon">T</div>
+          <div>
+            <div class="lsn-hero-name">TaoHash <span>· SN14</span></div>
+            <div class="lsn-hero-meta">47 mentions · <span class="bull">Bullish</span> · Aug 15</div>
+          </div>
+        </div>
+        <div class="lsn-hero-chips">
+          <span class="lsn-hero-chip hot">emission cut rumor</span>
+          <span class="lsn-hero-chip">validator growth</span>
+          <span class="lsn-hero-chip">"too high" ×6</span>
+        </div>
+        <div class="lsn-hero-run">Runner-up: <b>Apex SN78</b> · 31 mentions</div>
+      </div>
+
+      <div class="lsn-glass lsn-feed-shell">
+        <div class="lsn-sect"><span class="bar"></span><b>Live feed</b><span>newest first</span></div>
+
+        <div class="lsn-filter-bar" aria-label="Feed filters">
+          <span class="lsn-filter-label">Min conviction</span>
+          <div class="lsn-filter-chips" id="convFilters">
+            <button type="button" class="lsn-filter-chip active" data-min="">All</button>
+            <button type="button" class="lsn-filter-chip" data-min="60">60%+</button>
+            <button type="button" class="lsn-filter-chip" data-min="70">70%+</button>
+            <button type="button" class="lsn-filter-chip" data-min="80">80%+</button>
+          </div>
+          <span class="lsn-filter-label">Subnet</span>
+          <div class="lsn-filter-chips" id="subnetFilters">
+            <button type="button" class="lsn-filter-chip active" data-netuid="">All</button>
+            <button type="button" class="lsn-filter-chip" data-netuid="14">SN14</button>
+            <button type="button" class="lsn-filter-chip" data-netuid="78">SN78</button>
+            <button type="button" class="lsn-filter-chip" data-netuid="18">SN18</button>
+          </div>
+        </div>
+
+        <div id="feed"></div>
+        <p class="lsn-feed-empty" id="feedEmpty">No messages match these filters.</p>
+      </div>
+    </div>
+
+    <p class="lsn-disc" style="text-align:center;font-size:11px;color:var(--lsn-muted);padding:8px">
+      Preview only — existing deck panels (orbit, net flow, watchlist) stay below the fold on the real page.
+    </p>
+  </div>
+
+  <div class="preview-toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  var MESSAGES = [
+    { id:1, dir:"bear", handle:"@cryptomage", initial:"C", tag:"BEARISH", conv:71, time:"14:32:11", netuid:14,
+      text:"SN14 emissions are still way too high. Watch out.",
+      why:[["orange","\"too high\" ×1"],["orange","caution phrasing"],["","64% hist. accuracy"]],
+      detail:"Verdict: bearish lean on emission overshoot. Price snapshot at post: α −1.2% / 1h. Outcome: pending grade." },
+    { id:2, dir:"bull", handle:"@taobro", initial:"T", tag:"BULLISH", conv:81, time:"14:27:01", netuid:18,
+      text:"SN18 emissions look sticky into next epoch — watching entries.",
+      why:[["blue","\"sticky\" ×1"],["","author 64% hit-rate"]],
+      detail:"Verdict: bullish conviction on emission stickiness. Snapshot: α +1.8% / 1h. Outcome: hit (+)." },
+    { id:3, dir:"neu", handle:"@rektresearch", initial:"R", tag:"NEUTRAL", conv:42, time:"14:31:47", netuid:78,
+      text:"Apex SN78 validator set is centralizing fast.",
+      why:[["blue","\"centralizing\" ×1"],["","no price reaction yet"]],
+      detail:"Verdict: structure risk, no price call. Snapshot: flat. Outcome: not graded." }
+  ];
+  var filters = { min: null, netuid: null };
+  var openId = 2;
+  var feed = document.getElementById("feed");
+  var empty = document.getElementById("feedEmpty");
+  var toastEl = document.getElementById("toast");
+  var toastTimer = null;
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 2200);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  }
+
+  function render() {
+    var rows = MESSAGES.filter(function (m) {
+      if (filters.min != null && m.conv < filters.min) return false;
+      if (filters.netuid != null && m.netuid !== filters.netuid) return false;
+      return true;
+    });
+    empty.classList.toggle("show", rows.length === 0);
+    if (!rows.length) { feed.innerHTML = ""; return; }
+    feed.innerHTML = rows.map(function (m) {
+      var why = m.why.map(function (w) {
+        return '<span class="lsn-sig-chip' + (w[0] ? " " + w[0] : "") + '">' + w[1] + "</span>";
+      }).join("");
+      var highConv = m.conv >= 60 ? " high" : "";
+      return (
+        '<div class="lsn-feed-row is-' + m.dir + '" data-id="' + m.id + '">' +
+          '<div class="lsn-rail-node"></div>' +
+          '<div class="lsn-feed-body">' +
+            '<div class="lsn-feed-top">' +
+              '<div class="lsn-f-avatar">' + esc(m.initial) + "</div>" +
+              '<div class="lsn-f-handle">' + esc(m.handle) + "</div>" +
+              '<div class="lsn-f-tag ' + m.dir + '">' + m.tag + "</div>" +
+              '<div class="lsn-f-conv' + highConv + '">' + m.conv + "% conv</div>" +
+              '<div class="lsn-f-time">' + m.time + "</div>" +
+            "</div>" +
+            '<p class="lsn-f-text">' + esc(m.text) + '<span class="lsn-sn-inline">SN' + m.netuid + "</span></p>" +
+            '<div class="lsn-signal-strip"><span class="lsn-why-label">WHY</span>' + why + "</div>" +
+            '<div class="lsn-detail' + (openId === m.id ? " open" : "") + '">' +
+              "<div>" + m.detail + "</div>" +
+              '<div class="lsn-detail-actions">' +
+                '<button type="button" class="lsn-detail-btn" data-toast="Open /subnet/' + m.netuid + '">Open subnet</button>' +
+                '<button type="button" class="lsn-detail-btn solid" data-toast="Pin to Living Focus">Prove it</button>' +
+              "</div>" +
+            "</div>" +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  function setActive(group, attr, value) {
+    group.querySelectorAll(".lsn-filter-chip").forEach(function (btn) {
+      var v = btn.getAttribute(attr);
+      var active = (value == null && v === "") || (value != null && String(value) === v);
+      btn.classList.toggle("active", active);
+    });
+  }
+
+  document.getElementById("convFilters").addEventListener("click", function (e) {
+    var btn = e.target.closest(".lsn-filter-chip");
+    if (!btn) return;
+    var v = btn.getAttribute("data-min");
+    filters.min = v === "" ? null : Number(v);
+    setActive(this, "data-min", filters.min);
+    openId = null;
+    render();
+  });
+
+  document.getElementById("subnetFilters").addEventListener("click", function (e) {
+    var btn = e.target.closest(".lsn-filter-chip");
+    if (!btn) return;
+    var v = btn.getAttribute("data-netuid");
+    filters.netuid = v === "" ? null : Number(v);
+    setActive(this, "data-netuid", filters.netuid);
+    openId = null;
+    render();
+  });
+
+  feed.addEventListener("click", function (e) {
+    var action = e.target.closest("[data-toast]");
+    if (action && action.classList.contains("lsn-detail-btn")) {
+      e.stopPropagation();
+      toast(action.getAttribute("data-toast"));
+      return;
+    }
+    var row = e.target.closest(".lsn-feed-row");
+    if (!row) return;
+    var id = Number(row.getAttribute("data-id"));
+    openId = openId === id ? null : id;
+    render();
+  });
+
+  document.body.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-toast]");
+    if (!t || t.classList.contains("lsn-detail-btn")) return;
+    toast(t.getAttribute("data-toast"));
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
