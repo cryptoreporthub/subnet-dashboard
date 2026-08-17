@@ -445,6 +445,7 @@ async def _listener_page_context() -> Dict[str, Any]:
         feed_rows.append(
             {
                 "author": m.get("author_name") or m.get("author") or m.get("author_id") or "—",
+                "author_id": m.get("author_id"),
                 "text": m.get("text") or m.get("message") or m.get("content") or "",
                 "conviction": (
                     m.get("conviction")
@@ -674,6 +675,7 @@ async def _listener_page_context() -> Dict[str, Any]:
                 {
                     "emoji": row.get("emoji") or "✨",
                     "label": row.get("label") or row.get("key") or "Reaction",
+                    "author_id": row.get("author_id"),
                     "author": row.get("display_name")
                     or row.get("author_username")
                     or row.get("author_name")
