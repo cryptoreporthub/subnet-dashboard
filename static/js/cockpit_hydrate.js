@@ -4093,27 +4093,38 @@
   }
 
   function startTrailHydration() {
-    return fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1)
-      .then(function (payload) {
-        var next = safePayload(payload).trail || [];
-        renderTrail(next);
-        patchK3LifecycleFromTrail(next, lastDailyPickPayload);
-        window.__homeTrailHydratePending = false;
-        window.HomeHydrateCache = window.HomeHydrateCache || {};
-        window.HomeHydrateCache.trail = next;
-        window.HomeHydrateCache.at = Date.now();
-        document.dispatchEvent(new CustomEvent('home:trail-hydrated', {
-          detail: { trail: next },
-        }));
-        return next;
-      })
-      .catch(function (err) {
+      // The worker trace snapshot can be briefly empty while its cache warms after
+      // deploy. Retry uncached empty responses, but keep the honest empty state if
+      // no events arrive after the bounded retry window.
+      var attempt = 0;
+      var maxAttempts = 3;
+      function loadTrail() {
+        attempt += 1;
+        return fetchJsonRetry('/api/mindmap/trail?limit=20', 15000, 1, 0)
+          .then(function (payload) {
+            var next = safePayload(payload).trail || [];
+            if (!next.length && attempt < maxAttempts) {
+              return pause(1200).then(loadTrail);
+            }
+            renderTrail(next);
+            patchK3LifecycleFromTrail(next, lastDailyPickPayload);
+            window.__homeTrailHydratePending = false;
+            window.HomeHydrateCache = window.HomeHydrateCache || {};
+            window.HomeHydrateCache.trail = next;
+            window.HomeHydrateCache.at = Date.now();
+            document.dispatchEvent(new CustomEvent('home:trail-hydrated', {
+              detail: { trail: next },
+            }));
+            return next;
+          });
+      }
+      return loadTrail().catch(function (err) {
         window.__homeTrailHydratePending = false;
         console.warn('[cockpit_hydrate] trail fetch failed', err);
         return [];
       });
-  }
-
+    }
+    
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
