@@ -247,6 +247,89 @@ def test_reaction_crowns_unit(monkeypatch):
     assert authors[0]["influence_score"] > authors[1]["influence_score"]
 
 
+def test_today_reaction_leaders_rank_by_todays_volume(monkeypatch):
+    """Top emoji today is first — heart/thumb are not a fixed 1st/2nd."""
+    from datetime import datetime, timedelta, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    today = now.isoformat()
+    yesterday = (now - timedelta(days=1)).isoformat()
+    rows = [
+        {
+            "timestamp": today,
+            "author_id": "jane",
+            "author_name": "Jane doe",
+            "reactions": [{"emoji": "❤️", "count": 2}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "papi",
+            "author_name": "Papichi",
+            "reactions": [{"emoji": "👍", "count": 3}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "fq",
+            "author_name": "Fire Queen",
+            "reactions": [{"emoji": "🔥", "count": 8}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "other",
+            "author_name": "Other",
+            "reactions": [{"emoji": "🔥", "count": 1}],
+        },
+        {
+            "timestamp": yesterday,
+            "author_id": "old",
+            "author_name": "Yesterday Heart",
+            "reactions": [{"emoji": "❤️", "count": 50}],
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    leaders = rollup.build_today_reaction_leaders()
+    assert [row["key"] for row in leaders] == ["fire", "thumbs", "heart"]
+    assert leaders[0]["author_name"] == "Fire Queen"
+    assert leaders[0]["count"] == 8
+    assert leaders[1]["author_name"] == "Papichi"
+    assert leaders[1]["count"] == 3
+    assert leaders[2]["author_name"] == "Jane doe"
+    assert leaders[2]["count"] == 2
+    lines = rollup.format_today_reaction_leader_lines(leaders)
+    assert lines[0] == "Fire Queen leads Firestarter with 8 🔥's"
+    assert lines[1] == "Papichi leads ThumbWar god with 3 👍's"
+    assert lines[2] == "Jane doe leads Hearteater with 2 ❤️'s"
+    assert "Yesterday Heart" not in " ".join(lines)
+
+
+def test_today_reaction_leaders_hearts_first_when_hearts_win(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "timestamp": now,
+            "author_id": "jane",
+            "author_name": "Jane doe",
+            "reactions": [{"emoji": "❤️", "count": 2}],
+        },
+        {
+            "timestamp": now,
+            "author_id": "papi",
+            "author_name": "Papichi",
+            "reactions": [{"emoji": "👍", "count": 1}],
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    leaders = rollup.build_today_reaction_leaders()
+    assert [row["key"] for row in leaders] == ["heart", "thumbs"]
+    assert leaders[0]["title"] == "Hearteater"
+
+
 def test_yesterday_leader_in_meta(client, monkeypatch):
     from internal.message_intel import rollup
 

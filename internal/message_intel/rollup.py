@@ -139,6 +139,13 @@ _REACTION_KEYS = (
     ("thumbs", "👍", "Agree"),
     ("rocket", "🚀", "Moon"),
 )
+_REACTION_TITLES = {
+    "fire": "Firestarter",
+    "hundred": "Facts dealer",
+    "heart": "Hearteater",
+    "thumbs": "ThumbWar god",
+    "rocket": "Moonpilot",
+}
 
 
 def _reaction_score(raw: Any) -> Dict[str, int]:
@@ -750,6 +757,91 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
             }
         )
     return crowns
+
+
+def _reaction_count_label(emoji: str, n: int) -> str:
+    if n == 1:
+        return f"1 {emoji}"
+    return f"{n} {emoji}'s"
+
+
+def format_today_reaction_leader_lines(rows: List[Dict[str, Any]]) -> List[str]:
+    lines: List[str] = []
+    for row in rows:
+        name = str(row.get("author_name") or "Unknown").strip() or "Unknown"
+        title = str(row.get("title") or "").strip()
+        n = int(row.get("count") or 0)
+        emoji = str(row.get("emoji") or "")
+        if not title or n <= 0:
+            continue
+        lines.append(f"{name} leads {title} with {_reaction_count_label(emoji, n)}")
+    return lines
+
+
+def build_today_reaction_leaders(*, db=None, limit: int = 3) -> List[Dict[str, Any]]:
+    """Today's top emojis by volume, with the person who received the most of each.
+
+    Order follows today's usage, not a fixed heart/thumb ranking.
+    """
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    totals = {key: 0 for key, _, _ in _REACTION_KEYS}
+    tallies: Dict[str, Dict[str, Dict[str, Any]]] = {
+        key: {} for key, _, _ in _REACTION_KEYS
+    }
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < today_start:
+            continue
+        rx = _reaction_score(row.get("reactions"))
+        if not any(rx.values()):
+            continue
+        author_id = stable_author_id(row)
+        name = str(row.get("author_name") or "").strip() or "Unknown"
+        for key, _, _ in _REACTION_KEYS:
+            n = int(rx.get(key) or 0)
+            if n <= 0:
+                continue
+            totals[key] += n
+            entry = tallies[key].setdefault(
+                author_id,
+                {"author_id": author_id, "author_name": name, "count": 0},
+            )
+            entry["count"] += n
+            entry["author_name"] = name or entry["author_name"]
+
+    key_order = {key: i for i, (key, _, _) in enumerate(_REACTION_KEYS)}
+    ranked = sorted(
+        [key for key, _, _ in _REACTION_KEYS if totals[key] > 0],
+        key=lambda key: (-totals[key], key_order[key]),
+    )[: max(0, int(limit or 3))]
+
+    leaders: List[Dict[str, Any]] = []
+    emoji_for = {key: emoji for key, emoji, _ in _REACTION_KEYS}
+    for key in ranked:
+        bucket = tallies[key]
+        winner = max(
+            bucket.values(),
+            key=lambda e: (int(e["count"]), str(e["author_name"])),
+        )
+        n = int(winner["count"])
+        if n <= 0:
+            continue
+        emoji = emoji_for[key]
+        title = _REACTION_TITLES.get(key) or key
+        leaders.append(
+            {
+                "key": key,
+                "emoji": emoji,
+                "title": title,
+                "author_id": winner["author_id"],
+                "author_name": winner["author_name"],
+                "count": n,
+                "total": totals[key],
+            }
+        )
+    return leaders
 
 
 def _reaction_total(raw: Any) -> int:

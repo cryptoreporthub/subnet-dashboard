@@ -299,10 +299,19 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
         narrative = "\n".join(html.escape(line) for line in today_lines[:3])
     else:
         narrative = html.escape(_compose_today_narrative(summary))
+    leaders = [str(x).strip() for x in (summary.get("reaction_leaders") or []) if str(x).strip()]
+    leader_block = ""
+    if leaders:
+        leader_block = (
+            "\nLeading in reactions\n"
+            + "\n".join(html.escape(line) for line in leaders[:3])
+            + "\n"
+        )
     bonus = _format_bonus_line(summary)
     return (
         f"<b>Subnet Summers</b>\n"
         f"{narrative}\n"
+        f"{leader_block}"
         f"<i>{bonus}</i>\n"
         f'<a href="{desk}">Open the Subnet Summers desk</a>'
     )
@@ -391,6 +400,8 @@ def build_summary_text(*, db=None) -> str:
     from internal.message_intel.rollup import (
         build_24h_summary,
         build_today_conversation_summary,
+        build_today_reaction_leaders,
+        format_today_reaction_leader_lines,
     )
 
     names = _registry_subnet_names()
@@ -399,6 +410,9 @@ def build_summary_text(*, db=None) -> str:
     summary["today_narrative"] = today.get("narrative") or ""
     summary["today_topics"] = today.get("topics") or []
     summary["today_lines"] = today.get("lines") or []
+    summary["reaction_leaders"] = format_today_reaction_leader_lines(
+        build_today_reaction_leaders(db=db)
+    )
     return format_summary_message(summary)
 
 

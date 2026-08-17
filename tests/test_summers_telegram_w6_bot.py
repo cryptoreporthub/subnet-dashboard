@@ -168,6 +168,32 @@ def test_format_summary_includes_trending_topics_today():
     assert "<b>Topics</b>" not in text
 
 
+def test_format_summary_includes_reaction_leaders_in_usage_order():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "today_lines": ["People argued over whether Teutonic (SN3) validator rotation is free money."],
+            "reaction_leaders": [
+                "Fire Queen leads Firestarter with 8 🔥's",
+                "Papichi leads ThumbWar god with 3 👍's",
+                "Jane doe leads Hearteater with 2 ❤️'s",
+            ],
+        }
+    )
+
+    assert "Leading in reactions" in text
+    fire_at = text.find("Fire Queen leads Firestarter")
+    thumb_at = text.find("Papichi leads ThumbWar god")
+    heart_at = text.find("Jane doe leads Hearteater")
+    recap_at = text.find("People argued over whether Teutonic")
+    bonus_at = text.find("<i>")
+    assert recap_at != -1 and recap_at < fire_at < thumb_at < heart_at < bonus_at
+    assert "Hearteater" in text
+    assert text.find("Leading in reactions") > recap_at
+
+
 def test_rate_limit_per_chat(intel_env):
     chat_id = 999001
     first, limited1 = summary_bot.handle_summary_command(chat_id, db=intel_env)
