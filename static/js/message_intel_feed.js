@@ -81,12 +81,13 @@
           minConviction: parsed.minConviction != null ? Number(parsed.minConviction) : null,
           netuid: parsed.netuid != null ? Number(parsed.netuid) : null,
           topic: parsed.topic ? String(parsed.topic) : null,
+          authorId: parsed.authorId ? String(parsed.authorId) : null,
         };
       }
     } catch (e) {
       /* ignore */
     }
-    return { minConviction: 60, netuid: null, topic: null };
+    return { minConviction: 60, netuid: null, topic: null, authorId: null };
   }
 
   function saveFilters() {
@@ -168,6 +169,9 @@
     }
     if (filters.topic) {
       url += "&topic=" + encodeURIComponent(filters.topic);
+    }
+    if (filters.authorId) {
+      url += "&author_id=" + encodeURIComponent(filters.authorId);
     }
     return url;
   }
@@ -355,11 +359,21 @@
     }
   }
 
+  window.__messageIntelSetFilter = function (next) {
+    next = next || {};
+    if (Object.prototype.hasOwnProperty.call(next, "topic")) { filters.topic = next.topic ? String(next.topic) : null; filters.authorId = null; }
+    if (Object.prototype.hasOwnProperty.call(next, "authorId")) { filters.authorId = next.authorId ? String(next.authorId) : null; filters.topic = null; }
+    saveFilters();
+    syncFilterChipStates();
+    hydrate();
+  };
+
   function renderFilterEmpty() {
     var parts = [];
     if (filters.minConviction != null) parts.push(filters.minConviction + "%+ conviction");
     if (filters.netuid != null) parts.push("SN" + filters.netuid);
     if (filters.topic) parts.push(filters.topic);
+    if (filters.authorId) parts.push("reaction leader");
     var label = parts.length ? parts.join(" · ") : "current filters";
     return (
       '<p class="empty">No messages match ' +
