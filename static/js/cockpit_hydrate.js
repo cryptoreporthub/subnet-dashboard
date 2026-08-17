@@ -1330,10 +1330,19 @@
     };
   }
 
+  function tribunalHeroNeedsHydrate() {
+    var hero = document.getElementById('tribunal-hero');
+    if (!hero) return false;
+    if (hero.getAttribute('data-verdict-kind') === 'cold') return true;
+    var title = document.getElementById('tribunal-hero-title');
+    return !!(title && String(title.textContent || '').trim() === 'Awaiting subnet');
+  }
+
   function shouldApplyDailyPickPayload(payload) {
     if (!payload || typeof payload !== 'object') return false;
     var status = String(payload.status || 'ok').toLowerCase();
     if (status === 'timeout' || status === 'error') return false;
+    if (tribunalHeroNeedsHydrate() && (payload.pick || payload.candidate)) return true;
     var ssr = ssrDailyPickMeta();
     var incomingAt = parseIsoMs(dailyPickGeneratedAt(payload));
     var ssrAt = parseIsoMs(ssr.generatedAt);
@@ -4439,20 +4448,6 @@
     refreshStoryStrip();
   });
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function () {
-      maybeClearShellWarmingEarly();
-      bindProofTabs();
-      patchK3StaleBadge();
-      run();
-    });
-  } else {
-    maybeClearShellWarmingEarly();
-    bindProofTabs();
-    patchK3StaleBadge();
-    run();
-  }
-
   // ---------- Council Hero v4 (tribunal hero slot) ----------
 
   function formatGaugePct(val) {
@@ -5155,7 +5150,55 @@
     verdictKind: verdictKind,
   };
 
+  function fetchDailyPickForHero() {
+    return fetchJsonRetry('/api/daily-pick', 35000, 3, 0).then(function (dp) {
+      if (!dp) return dp;
+      var status = String(dp.status || 'ok').toLowerCase();
+      var hasCall = !!(dp.pick || dp.candidate);
+      if ((status === 'timeout' || status === 'error' || !hasCall) && tribunalHeroNeedsHydrate()) {
+        return fetchJsonRetry('/api/daily-pick', 35000, 1, 0);
+      }
+      return dp;
+    });
+  }
+
+  function bootstrapCouncilHeroHydrate() {
+    if (!document.getElementById('tribunal-hero')) return;
+    if (document.documentElement.dataset.hydrate !== '1') return;
+    Promise.all([
+      fetchDailyPickForHero().catch(function (err) {
+        console.warn('[cockpit_hydrate] tribunal bootstrap daily-pick failed', err);
+        return null;
+      }),
+      loadLearningStats(),
+    ]).then(function (results) {
+      var dp = results[0];
+      var stats = results[1];
+      if (dp) {
+        renderDailyPick(dp);
+      } else if (stats) {
+        renderTribunalHero(lastDailyPickPayload || {}, stats);
+      }
+    });
+  }
+
   if (document.getElementById('tribunal-hero')) {
     patchTribunalSyncStamp();
+  }
+
+  bootstrapCouncilHeroHydrate();
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      maybeClearShellWarmingEarly();
+      bindProofTabs();
+      patchK3StaleBadge();
+      run();
+    });
+  } else {
+    maybeClearShellWarmingEarly();
+    bindProofTabs();
+    patchK3StaleBadge();
+    run();
   }
 })();
