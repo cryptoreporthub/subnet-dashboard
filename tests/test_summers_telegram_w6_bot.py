@@ -191,6 +191,8 @@ def test_format_summary_includes_reaction_leaders_in_usage_order():
     bonus_at = text.find("<i>")
     assert recap_at != -1 and recap_at < fire_at < thumb_at < heart_at < bonus_at
     assert "Hearteater" in text
+    assert "&#x27;" not in text
+    assert "❤️'s" in text
     assert text.find("Leading in reactions") > recap_at
 
 

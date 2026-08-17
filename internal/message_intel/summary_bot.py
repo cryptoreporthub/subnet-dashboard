@@ -296,15 +296,15 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
 
     today_lines = [str(x).strip() for x in (summary.get("today_lines") or []) if str(x).strip()]
     if today_lines:
-        narrative = "\n".join(html.escape(line) for line in today_lines[:3])
+        narrative = "\n".join(html.escape(line, quote=False) for line in today_lines[:3])
     else:
-        narrative = html.escape(_compose_today_narrative(summary))
+        narrative = html.escape(_compose_today_narrative(summary), quote=False)
     leaders = [str(x).strip() for x in (summary.get("reaction_leaders") or []) if str(x).strip()]
     leader_block = ""
     if leaders:
         leader_block = (
             "\nLeading in reactions\n"
-            + "\n".join(html.escape(line) for line in leaders[:3])
+            + "\n".join(html.escape(line, quote=False) for line in leaders[:3])
             + "\n"
         )
     bonus = _format_bonus_line(summary)
