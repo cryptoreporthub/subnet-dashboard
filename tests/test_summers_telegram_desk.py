@@ -67,6 +67,7 @@ def test_summers_desk_js_renders_conviction():
     assert "renderHeroStats" in src
     assert "renderInterceptWave" in src
     assert "renderTrendingSky" in src
+    assert 'rank === 1 ? 30 : rank === 2 ? 22 : 15' in src
     assert "awaiting signal" in src
     assert "pingPulsar" in src
     assert "message-intel__conv-ring" in src
@@ -168,6 +169,7 @@ def test_summers_flagship_composition_hooks():
     assert 'id="message-intel-sky"' in core
     assert "message-intel__sky-legend" in core
     assert "closer = higher rank" in core
+    assert "bigger = higher rank" in core
     assert "message-intel__bay" in html
     assert "message-intel__heartbeat" in html
     assert "message-intel__loop" in html
@@ -218,6 +220,7 @@ def test_listener_share_page_composition():
     assert "lsn-rail" not in html
     assert "lsn-orbit-legend" not in html
     assert "closer = higher rank" in open("templates/partials/premium/cosmic_resonance_core.html", encoding="utf-8").read()
+    assert "bigger = higher rank" in open("templates/partials/premium/cosmic_resonance_core.html", encoding="utf-8").read()
     assert ".lsn-orbit" in css
     assert ".lsn-hall" in css
     assert "@media (max-width: 520px)" in css

@@ -12551,6 +12551,9 @@ body.wrap {
   flex-shrink: 0;
   transition: transform 0.2s ease;
 }
+.message-intel--v2 .message-intel__sky-dot[data-rank="1"] { width: 30px; height: 30px; }
+.message-intel--v2 .message-intel__sky-dot[data-rank="2"] { width: 22px; height: 22px; }
+.message-intel--v2 .message-intel__sky-dot[data-rank="3"] { width: 15px; height: 15px; }
 
 .message-intel--v2 .message-intel__sky-dot::before {
   content: "";
