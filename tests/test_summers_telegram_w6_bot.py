@@ -95,7 +95,7 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
     _seed_messages(intel_env, count=12)
     text = summary_bot.format_summary_message(build_24h_summary(db=intel_env))
     assert "Subnet Summers" in text
-    assert "https://example.test/#section-message-intel" in text
+    assert "https://example.test/subnetsummer" in text
     assert "Top" in text
     narrative_at = text.find("</b>")
     bonus_at = text.find("<i>")

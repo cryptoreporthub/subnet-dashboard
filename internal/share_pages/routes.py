@@ -837,13 +837,12 @@ async def subnet_summer_page(request: Request):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
     ctx = await _listener_page_context()
     base = _public_base(request)
-    page_url = f"{base}/listener"
-    title = "SimiVision — Telegram Listener"
+    page_url = f"{base}/subnetsummer"
+    title = "Subnet Summer Bot"
     desc = (
-        ctx.get("summary_text")
-        or f"Live-graded Telegram signal for {ctx.get('graded_count') or 0} messages across the Bittensor subnet group."
+        "Powered by SimiVision — live-graded Telegram signal for the Bittensor subnet group."
     )[:200]
-    og_image = f"{base}/static/og-share.png"
+    og_image = f"{base}/static/og-subnet-summer.png"
     # §28 canonical/OG: derived from APP_BASE_URL or request.base_url — never localhost.
     ctx.update(
         {
