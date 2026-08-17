@@ -94,9 +94,12 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
 
     _seed_messages(intel_env, count=12)
     text = summary_bot.format_summary_message(build_24h_summary(db=intel_env))
-    assert "Subnet Summers — 24h pulse" in text
+    assert "Subnet Summers" in text
     assert "https://example.test/#section-message-intel" in text
-    assert "Top subnets" in text
+    assert "Top" in text
+    narrative_at = text.find("</b>")
+    bonus_at = text.find("<i>")
+    assert narrative_at != -1 and bonus_at != -1 and narrative_at < bonus_at
 
 
 def test_format_summary_includes_what_mentions_are_about():
@@ -117,8 +120,8 @@ def test_format_summary_includes_what_mentions_are_about():
     )
 
     assert "SN7 Allways (3 mentions)" in text
-    assert "SN7 Allways (3 mentions)\n  Validators discussed a new release" in text
     assert "Validators discussed a new release" in text
+    assert text.find("Validators discussed a new release") < text.find("<i>")
 
 
 def test_format_summary_includes_hour_price_change():
@@ -139,6 +142,58 @@ def test_format_summary_includes_hour_price_change():
     )
 
     assert "SN28 gm (2 mentions, +4.8% 1h)" in text
+
+
+def test_format_summary_includes_trending_topics_today():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "group_pulse": {"sentiment": "Cautious"},
+            "top_subnets": [{"netuid": 3, "name": "Teutonic", "mentions": 5}],
+            "today_lines": [
+                "People argued over whether Teutonic (SN3) validator rotation is free money, or Teutonic (SN3) emissions already priced in.",
+                "People split on whether TAO price still has a dip bid, or TAO dump with no reclaim.",
+                "Allways (SN7) APY (emissions yield, not token price) still printing after the validator rotation.",
+            ],
+        }
+    )
+
+    assert "People argued over whether Teutonic (SN3) validator rotation" in text
+    assert "TAO price still has a dip bid" in text
+    assert "Allways (SN7) APY" in text
+    assert "chatter stuck on" not in text.lower()
+    assert "took most of the airtime" not in text.lower()
+    assert "<b>Topics</b>" not in text
+
+
+def test_format_summary_includes_reaction_leaders_in_usage_order():
+    text = summary_bot.format_summary_message(
+        {
+            "ready": True,
+            "message_count": 12,
+            "high_conviction_count": 4,
+            "today_lines": ["People argued over whether Teutonic (SN3) validator rotation is free money."],
+            "reaction_leaders": [
+                "Fire Queen leads Firestarter with 8 🔥's",
+                "Papichi leads ThumbWar god with 3 👍's",
+                "Jane doe leads Hearteater with 2 ❤️'s",
+            ],
+        }
+    )
+
+    assert "Leading in reactions" in text
+    fire_at = text.find("Fire Queen leads Firestarter")
+    thumb_at = text.find("Papichi leads ThumbWar god")
+    heart_at = text.find("Jane doe leads Hearteater")
+    recap_at = text.find("People argued over whether Teutonic")
+    bonus_at = text.find("<i>")
+    assert recap_at != -1 and recap_at < fire_at < thumb_at < heart_at < bonus_at
+    assert "Hearteater" in text
+    assert "&#x27;" not in text
+    assert "❤️'s" in text
+    assert text.find("Leading in reactions") > recap_at
 
 
 def test_rate_limit_per_chat(intel_env):

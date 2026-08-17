@@ -247,6 +247,89 @@ def test_reaction_crowns_unit(monkeypatch):
     assert authors[0]["influence_score"] > authors[1]["influence_score"]
 
 
+def test_today_reaction_leaders_rank_by_todays_volume(monkeypatch):
+    """Top emoji today is first — heart/thumb are not a fixed 1st/2nd."""
+    from datetime import datetime, timedelta, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc)
+    today = now.isoformat()
+    yesterday = (now - timedelta(days=1)).isoformat()
+    rows = [
+        {
+            "timestamp": today,
+            "author_id": "jane",
+            "author_name": "Jane doe",
+            "reactions": [{"emoji": "❤️", "count": 2}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "papi",
+            "author_name": "Papichi",
+            "reactions": [{"emoji": "👍", "count": 3}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "fq",
+            "author_name": "Fire Queen",
+            "reactions": [{"emoji": "🔥", "count": 8}],
+        },
+        {
+            "timestamp": today,
+            "author_id": "other",
+            "author_name": "Other",
+            "reactions": [{"emoji": "🔥", "count": 1}],
+        },
+        {
+            "timestamp": yesterday,
+            "author_id": "old",
+            "author_name": "Yesterday Heart",
+            "reactions": [{"emoji": "❤️", "count": 50}],
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    leaders = rollup.build_today_reaction_leaders()
+    assert [row["key"] for row in leaders] == ["fire", "thumbs", "heart"]
+    assert leaders[0]["author_name"] == "Fire Queen"
+    assert leaders[0]["count"] == 8
+    assert leaders[1]["author_name"] == "Papichi"
+    assert leaders[1]["count"] == 3
+    assert leaders[2]["author_name"] == "Jane doe"
+    assert leaders[2]["count"] == 2
+    lines = rollup.format_today_reaction_leader_lines(leaders)
+    assert lines[0] == "Fire Queen leads Firestarter with 8 🔥's"
+    assert lines[1] == "Papichi leads ThumbWar god with 3 👍's"
+    assert lines[2] == "Jane doe leads Hearteater with 2 ❤️'s"
+    assert "Yesterday Heart" not in " ".join(lines)
+
+
+def test_today_reaction_leaders_hearts_first_when_hearts_win(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "timestamp": now,
+            "author_id": "jane",
+            "author_name": "Jane doe",
+            "reactions": [{"emoji": "❤️", "count": 2}],
+        },
+        {
+            "timestamp": now,
+            "author_id": "papi",
+            "author_name": "Papichi",
+            "reactions": [{"emoji": "👍", "count": 1}],
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    leaders = rollup.build_today_reaction_leaders()
+    assert [row["key"] for row in leaders] == ["heart", "thumbs"]
+    assert leaders[0]["title"] == "Hearteater"
+
+
 def test_yesterday_leader_in_meta(client, monkeypatch):
     from internal.message_intel import rollup
 
@@ -339,7 +422,12 @@ def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
         },
     ]
     monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
-    summary = rollup.build_yesterday_chat_summary(registry_names={14: "TaoHash", 78: "Apex"})
+    registry_names = {14: "TaoHash", 78: "Apex"}
+    monkeypatch.setattr(
+        "internal.subnet_names.display_name_for_netuid",
+        lambda netuid, **kw: registry_names.get(int(netuid), f"SN{netuid}"),
+    )
+    summary = rollup.build_yesterday_chat_summary(registry_names=registry_names)
     assert summary["ready"] is True
     assert summary["date"] == "2026-07-27"
     assert summary["message_count"] == 3
@@ -349,6 +437,182 @@ def test_build_yesterday_chat_summary_calendar_window(monkeypatch):
     assert summary["hourly"]
     assert summary["stats"]["graded"] == 3
     assert "line that stuck" in summary["narrative"]
+
+
+def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
+    """Stale registry_names must not leak EdgeMaxxing into yesterday recap."""
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {"39": "SN39 (deprecated)"},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {39: "EdgeMaxxing"},
+    )
+    rows = [
+        {
+            "timestamp": "2026-08-16T10:00:00Z",
+            "conviction": 72,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Alpha",
+            "content": "SN3 Teutonic looks interesting today",
+            "entities_json": '{"subnets": [3]}',
+        },
+        {
+            "timestamp": "2026-08-16T11:00:00Z",
+            "conviction": 65,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Beta",
+            "content": "Watching SN39 closely",
+            "entities_json": '{"subnets": [39]}',
+        },
+        {
+            "timestamp": "2026-08-16T12:00:00Z",
+            "conviction": 80,
+            "sentiment": "cautious",
+            "group_name": "OfficialSubnetSummer",
+            "author_name": "Gamma",
+            "content": "Market and alpha chatter on SN3",
+            "entities_json": '{"subnets": [3]}',
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    stale_names = {3: "Teutonic", 39: "EdgeMaxxing"}
+    summary = rollup.build_yesterday_chat_summary(registry_names=stale_names)
+    assert summary["ready"] is True
+    assert "EdgeMaxxing" not in summary["narrative"]
+    assert "SN39 (deprecated)" in summary["narrative"]
+    assert summary["top_subnets"][0]["name"] == "Teutonic"
+    assert summary["top_subnets"][1]["name"] == "SN39 (deprecated)"
+
+
+def test_build_today_topic_summary_calendar_day(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    rows = [
+        {
+            "timestamp": "2026-08-17T10:00:00Z",
+            "content": "TAO market looks choppy but alpha calls still printing",
+        },
+        {
+            "timestamp": "2026-08-16T23:00:00Z",
+            "content": "old market chatter should not count",
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    today = rollup.build_today_conversation_summary()
+    labels = [t["label"] for t in today["topics"]]
+    assert "Market" in labels
+    assert "Alpha" in labels
+    hay = today["narrative"].lower()
+    assert "tao" in hay or "dip" in hay or "apy" in hay or "alpha" in hay
+
+
+def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    fixed_now = datetime(2026, 8, 17, 15, 0, tzinfo=timezone.utc)
+
+    class _FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed_now if tz else fixed_now.replace(tzinfo=None)
+
+    monkeypatch.setattr(rollup, "datetime", _FixedDatetime)
+    rows = [
+        {
+            "timestamp": "2026-08-17T10:00:00Z",
+            "author_name": "Alice",
+            "content": "SN3 validator rotation is free money",
+            "sentiment": "bullish",
+            "entities_json": '{"subnets": [3]}',
+            "external_message_id": "100",
+        },
+        {
+            "timestamp": "2026-08-17T10:05:00Z",
+            "author_name": "Bob",
+            "content": "nah emissions already priced in",
+            "sentiment": "bearish",
+            "entities_json": '{"subnets": [3]}',
+            "reply_to_message_id": "100",
+            "reply_parent_content": "SN3 validator rotation is free money",
+        },
+        {
+            "timestamp": "2026-08-17T10:08:00Z",
+            "author_name": "Cara",
+            "content": "wrong, wait for the next emission cut",
+            "sentiment": "bullish",
+            "entities_json": '{"subnets": [3]}',
+            "reply_to_message_id": "100",
+            "reply_parent_content": "SN3 validator rotation is free money",
+        },
+        {
+            "timestamp": "2026-08-17T11:00:00Z",
+            "author_name": "Dee",
+            "content": "TAO market looks choppy, dip still has a bid though",
+            "sentiment": "bullish",
+        },
+        {
+            "timestamp": "2026-08-17T11:02:00Z",
+            "author_name": "Ed",
+            "content": "nah this dump has no bid, wait for a real market reclaim",
+            "sentiment": "bearish",
+        },
+        {
+            "timestamp": "2026-08-17T12:00:00Z",
+            "author_name": "Fay",
+            "content": "SN7 APY still printing after the validator rotation",
+            "sentiment": "bullish",
+            "entities_json": '{"subnets": [7]}',
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(
+        "internal.subnet_names.display_name_for_netuid",
+        lambda netuid, **kw: {3: "Teutonic", 7: "Allways"}.get(int(netuid), f"SN{netuid}"),
+    )
+    today = rollup.build_today_conversation_summary(registry_names={3: "Teutonic", 7: "Allways"})
+    narrative = today["narrative"]
+    lines = today["lines"]
+    assert len(lines) == 3
+    assert "argued" in lines[0].lower() or "split" in lines[0].lower()
+    assert "Teutonic" in lines[0] or "SN3" in lines[0]
+    assert "validator rotation" in lines[0].lower()
+    joined = " ".join(lines[1:])
+    assert "TAO" in joined or "dip" in joined.lower() or "dump" in joined.lower()
+    alpha_line = next(ln for ln in lines if "APY" in ln or "Allways" in ln or "SN7" in ln)
+    assert "APY" in alpha_line
+    assert "Allways" in alpha_line or "SN7" in alpha_line
+    assert "validator rotation" in alpha_line.lower()
+    assert "token price" in alpha_line.lower() or "not token price" in alpha_line.lower() or "emissions yield" in alpha_line.lower()
+    assert "chatter stuck on" not in narrative.lower()
+    assert "Alice" not in narrative
 
 
 def test_week_top_comment_unit(monkeypatch):

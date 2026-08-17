@@ -30,7 +30,7 @@ def test_display_name_override_sn39_deprecated(monkeypatch):
     monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
     monkeypatch.setattr(
         "internal.subnet_names._load_name_overrides",
-        lambda: {"39": "deprecated"},
+        lambda: {"39": "SN39 (deprecated)"},
     )
     monkeypatch.setattr(
         "internal.subnet_names._remote_registry",
@@ -41,7 +41,7 @@ def test_display_name_override_sn39_deprecated(monkeypatch):
         lambda: {"39": {"name": "EdgeMaxxing"}},
     )
     name = display_name_for_netuid(39, use_taostats_fallback=False)
-    assert name == "deprecated"
+    assert name == "SN39 (deprecated)"
 
 
 def test_display_name_override_sn6_numinous_when_tmc_empty(monkeypatch):

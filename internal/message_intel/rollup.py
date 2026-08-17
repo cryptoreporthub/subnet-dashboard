@@ -139,6 +139,13 @@ _REACTION_KEYS = (
     ("thumbs", "👍", "Agree"),
     ("rocket", "🚀", "Moon"),
 )
+_REACTION_TITLES = {
+    "fire": "Firestarter",
+    "hundred": "Facts dealer",
+    "heart": "Hearteater",
+    "thumbs": "ThumbWar god",
+    "rocket": "Moonpilot",
+}
 
 
 def _reaction_score(raw: Any) -> Dict[str, int]:
@@ -356,7 +363,7 @@ def build_trending_subnets(
         out.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": mentions,
                 "velocity": round(velocity, 3),
                 "conviction": round(avg_conv, 1),
@@ -439,7 +446,7 @@ def build_yesterday_leader(
 
     out: Dict[str, Any] = {
         "netuid": top_netuid,
-        "name": registry_names.get(top_netuid) or f"Subnet {top_netuid}",
+        "name": _rollup_subnet_name(top_netuid, registry_names),
         "mentions": int(top["mentions"]),
         "sentiment": _sentiment_tag(avg),
         "date": yesterday_start.date().isoformat(),
@@ -449,7 +456,7 @@ def build_yesterday_leader(
         ru_netuid, ru = ranked[1]
         out["runner_up"] = {
             "netuid": ru_netuid,
-            "name": registry_names.get(ru_netuid) or f"Subnet {ru_netuid}",
+            "name": _rollup_subnet_name(ru_netuid, registry_names),
             "mentions": int(ru["mentions"]),
         }
     return out
@@ -750,6 +757,91 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
             }
         )
     return crowns
+
+
+def _reaction_count_label(emoji: str, n: int) -> str:
+    if n == 1:
+        return f"1 {emoji}"
+    return f"{n} {emoji}'s"
+
+
+def format_today_reaction_leader_lines(rows: List[Dict[str, Any]]) -> List[str]:
+    lines: List[str] = []
+    for row in rows:
+        name = str(row.get("author_name") or "Unknown").strip() or "Unknown"
+        title = str(row.get("title") or "").strip()
+        n = int(row.get("count") or 0)
+        emoji = str(row.get("emoji") or "")
+        if not title or n <= 0:
+            continue
+        lines.append(f"{name} leads {title} with {_reaction_count_label(emoji, n)}")
+    return lines
+
+
+def build_today_reaction_leaders(*, db=None, limit: int = 3) -> List[Dict[str, Any]]:
+    """Today's top emojis by volume, with the person who received the most of each.
+
+    Order follows today's usage, not a fixed heart/thumb ranking.
+    """
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    totals = {key: 0 for key, _, _ in _REACTION_KEYS}
+    tallies: Dict[str, Dict[str, Dict[str, Any]]] = {
+        key: {} for key, _, _ in _REACTION_KEYS
+    }
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < today_start:
+            continue
+        rx = _reaction_score(row.get("reactions"))
+        if not any(rx.values()):
+            continue
+        author_id = stable_author_id(row)
+        name = str(row.get("author_name") or "").strip() or "Unknown"
+        for key, _, _ in _REACTION_KEYS:
+            n = int(rx.get(key) or 0)
+            if n <= 0:
+                continue
+            totals[key] += n
+            entry = tallies[key].setdefault(
+                author_id,
+                {"author_id": author_id, "author_name": name, "count": 0},
+            )
+            entry["count"] += n
+            entry["author_name"] = name or entry["author_name"]
+
+    key_order = {key: i for i, (key, _, _) in enumerate(_REACTION_KEYS)}
+    ranked = sorted(
+        [key for key, _, _ in _REACTION_KEYS if totals[key] > 0],
+        key=lambda key: (-totals[key], key_order[key]),
+    )[: max(0, int(limit or 3))]
+
+    leaders: List[Dict[str, Any]] = []
+    emoji_for = {key: emoji for key, emoji, _ in _REACTION_KEYS}
+    for key in ranked:
+        bucket = tallies[key]
+        winner = max(
+            bucket.values(),
+            key=lambda e: (int(e["count"]), str(e["author_name"])),
+        )
+        n = int(winner["count"])
+        if n <= 0:
+            continue
+        emoji = emoji_for[key]
+        title = _REACTION_TITLES.get(key) or key
+        leaders.append(
+            {
+                "key": key,
+                "emoji": emoji,
+                "title": title,
+                "author_id": winner["author_id"],
+                "author_name": winner["author_name"],
+                "count": n,
+                "total": totals[key],
+            }
+        )
+    return leaders
 
 
 def _reaction_total(raw: Any) -> int:
@@ -1655,6 +1747,7 @@ def build_24h_summary(
     subnet_counts: Dict[int, int] = defaultdict(int)
     prev_subnet_counts: Dict[int, int] = defaultdict(int)
     group_counts: Dict[str, int] = defaultdict(int)
+    subnet_snippets: Dict[int, tuple[float, str]] = {}
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1680,8 +1773,15 @@ def build_24h_summary(
             group = str(row.get("group_name") or "").strip()
             if group:
                 group_counts[group] += 1
+            content = str(row.get("content") or "").strip()
             for netuid in _netuids_from_row(row):
                 subnet_counts[netuid] += 1
+                if content:
+                    prev = subnet_snippets.get(netuid)
+                    if prev is None or conviction >= prev[0]:
+                        snippet = _clip_snippet(content, max_len=80)
+                        if snippet:
+                            subnet_snippets[netuid] = (conviction, snippet)
 
         if in_prev:
             for netuid in _netuids_from_row(row):
@@ -1705,13 +1805,15 @@ def build_24h_summary(
 
     top_subnets: List[Dict[str, Any]] = []
     for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
-        top_subnets.append(
-            {
-                "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
-                "mentions": int(mentions),
-            }
-        )
+        snippet = subnet_snippets.get(netuid, (0.0, ""))[1]
+        row_out: Dict[str, Any] = {
+            "netuid": netuid,
+            "name": _rollup_subnet_name(netuid, registry_names),
+            "mentions": int(mentions),
+        }
+        if snippet:
+            row_out["mention_context"] = snippet
+        top_subnets.append(row_out)
 
     movers: List[Dict[str, Any]] = []
     for netuid in set(subnet_counts) | set(prev_subnet_counts):
@@ -1722,7 +1824,7 @@ def build_24h_summary(
         movers.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": cur,
                 "prev_mentions": prev,
                 "change": cur - prev,
@@ -1752,6 +1854,528 @@ def build_24h_summary(
     }
 
 
+_PUSHBACK_CUES = (
+    "nah",
+    "nope",
+    "wrong",
+    "cope",
+    "disagree",
+    "scam",
+    "rug",
+    "overvalued",
+    "undervalued",
+    "don't buy",
+    "dont buy",
+    "trap",
+    "fud",
+    "shill",
+    "priced in",
+    "already priced",
+    "that's not",
+    "is not",
+    "isn't",
+    "not even",
+)
+
+
+def _anon_clip(text: Optional[str], *, max_len: int = 90) -> str:
+    raw = re.sub(r"https?://\S+", "", str(text or ""))
+    raw = re.sub(r"@\w+", "", raw)
+    return _clip_snippet(raw, max_len=max_len)
+
+
+def _strip_pushback_prefix(text: Optional[str]) -> str:
+    raw = str(text or "").strip()
+    lowered = raw.lower()
+    for cue in ("nah,", "nah ", "nope,", "nope ", "wrong,", "wrong ", "cope,", "cope "):
+        if lowered.startswith(cue):
+            return raw[len(cue) :].lstrip(" ,:-")
+    return raw
+
+
+def _has_pushback(text: Optional[str]) -> bool:
+    hay = str(text or "").lower()
+    return any(cue in hay for cue in _PUSHBACK_CUES)
+
+
+def _direction_side(row: Dict[str, Any]) -> Optional[str]:
+    sent = str(row.get("sentiment") or "").lower()
+    pred = str(row.get("predicted_direction") or "").lower()
+    if sent in ("bullish", "positive") or pred in ("up", "bullish"):
+        return "buy"
+    if sent in ("bearish", "negative") or pred in ("down", "bearish"):
+        return "fade"
+    return None
+
+
+def _pick_today_contention(
+    *,
+    threads: Dict[str, Dict[str, Any]],
+    split_sides: Dict[int, Dict[str, str]],
+    registry_names: Dict[int, str],
+    subnet_counts: Dict[int, int],
+) -> Optional[Dict[str, Any]]:
+    ranked: List[tuple[int, Dict[str, Any]]] = []
+    for thread in threads.values():
+        replies = [r for r in (thread.get("replies") or []) if r]
+        if len(replies) < 1:
+            continue
+        sentiments = thread.get("sentiments") or set()
+        mixed = len(sentiments) >= 2
+        pushback = bool(thread.get("pushback"))
+        if len(replies) < 2 and not pushback and not mixed:
+            continue
+        score = len(replies) + (3 if mixed else 0) + (2 if pushback else 0)
+        parent = _anon_clip(thread.get("parent") or "", max_len=90)
+        push = ""
+        for reply in replies:
+            if _has_pushback(reply):
+                push = _anon_clip(_strip_pushback_prefix(reply), max_len=80)
+                break
+        if not push and replies:
+            push = _anon_clip(max(replies, key=len), max_len=80)
+        names = [
+            _subnet_labels("", [n], registry_names)[0]
+            if _subnet_labels("", [n], registry_names)
+            else _rollup_subnet_name(n, registry_names)
+            for n in sorted(thread.get("netuids") or [])[:2]
+        ]
+        ranked.append(
+            (
+                score,
+                {
+                    "kind": "thread",
+                    "subject": parent or push,
+                    "pushback": push if parent else "",
+                    "names": names,
+                },
+            )
+        )
+    if ranked:
+        ranked.sort(key=lambda item: item[0], reverse=True)
+        return ranked[0][1]
+
+    mixed_netuids = [n for n, sides in split_sides.items() if "buy" in sides and "fade" in sides]
+    if not mixed_netuids:
+        return None
+    mixed_netuids.sort(key=lambda n: (-int(subnet_counts.get(n, 0)), n))
+    netuid = mixed_netuids[0]
+    sides = split_sides[netuid]
+    return {
+        "kind": "split",
+        "names": _subnet_labels("", [netuid], registry_names) or [_rollup_subnet_name(netuid, registry_names)],
+        "buy": _anon_clip(sides.get("buy") or "", max_len=80),
+        "fade": _anon_clip(sides.get("fade") or "", max_len=80),
+    }
+
+
+def build_today_conversation_summary(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    db=None,
+    limit: int = 3,
+) -> Dict[str, Any]:
+    """UTC-calendar-day recap of what the group is talking about so far."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    registry_names = registry_names or {}
+    message_count = 0
+    sentiment_sum = 0.0
+    sentiment_n = 0
+    subnet_counts: Dict[int, int] = defaultdict(int)
+    subnet_snippets: Dict[int, tuple[float, str]] = {}
+    topic_counts: Dict[str, int] = defaultdict(int)
+    threads: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {"replies": [], "parent": "", "sentiments": set(), "netuids": set(), "pushback": False}
+    )
+    split_sides: Dict[int, Dict[str, str]] = defaultdict(dict)
+    topic_buckets: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "count": 0,
+            "buy": "",
+            "fade": "",
+            "push": "",
+            "snip": "",
+            "netuids": set(),
+        }
+    )
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < today_start:
+            continue
+        message_count += 1
+        sentiment_sum += _sentiment_value(row.get("sentiment"))
+        sentiment_n += 1
+        try:
+            conviction = float(row.get("conviction") or 0)
+        except (TypeError, ValueError):
+            conviction = 0.0
+        content = str(row.get("content") or "").strip()
+        tags = classify_message_topics(content)
+        exclusive = len(tags) == 1
+        pri = 1 if exclusive else 0
+        for tag in tags:
+            topic_counts[tag] += 1
+            bucket = topic_buckets[tag]
+            bucket["count"] += 1
+            if content and pri >= int(bucket.get("snip_pri", -1)):
+                if pri > int(bucket.get("snip_pri", -1)) or not bucket["snip"]:
+                    bucket["snip"] = content
+                    bucket["snip_pri"] = pri
+            side = _direction_side(row)
+            if side and content and pri >= int(bucket.get(f"{side}_pri", -1)):
+                if pri > int(bucket.get(f"{side}_pri", -1)) or not bucket[side]:
+                    bucket[side] = content
+                    bucket[f"{side}_pri"] = pri
+            if _has_pushback(content) and pri >= int(bucket.get("push_pri", -1)):
+                if pri > int(bucket.get("push_pri", -1)) or not bucket["push"]:
+                    bucket["push"] = content
+                    bucket["push_pri"] = pri
+        netuids = _netuids_from_row(row)
+        if exclusive:
+            for tag in tags:
+                topic_buckets[tag]["netuids"].update(netuids)
+        side = _direction_side(row)
+        for netuid in netuids:
+            subnet_counts[netuid] += 1
+            if content:
+                prev = subnet_snippets.get(netuid)
+                if prev is None or conviction >= prev[0]:
+                    snippet = _clip_snippet(content, max_len=80)
+                    if snippet:
+                        subnet_snippets[netuid] = (conviction, snippet)
+            if side and content and side not in split_sides[netuid]:
+                split_sides[netuid][side] = content
+        reply_id = row.get("reply_to_message_id")
+        if reply_id and content:
+            thread = threads[str(reply_id)]
+            thread["replies"].append(content)
+            parent = str(row.get("reply_parent_content") or "").strip()
+            if parent:
+                thread["parent"] = parent
+            sent = str(row.get("sentiment") or "").strip().lower()
+            if sent:
+                thread["sentiments"].add(sent)
+            thread["netuids"].update(netuids)
+            if _has_pushback(content):
+                thread["pushback"] = True
+
+    top_subnets: List[Dict[str, Any]] = []
+    for netuid, mentions in sorted(subnet_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]:
+        snippet = subnet_snippets.get(netuid, (0.0, ""))[1]
+        row_out: Dict[str, Any] = {
+            "netuid": netuid,
+            "name": _rollup_subnet_name(netuid, registry_names),
+            "mentions": int(mentions),
+        }
+        if snippet:
+            row_out["mention_context"] = snippet
+        top_subnets.append(row_out)
+
+    topics = [
+        {"topic": tag, "label": _topic_label(tag), "count": int(count)}
+        for tag, count in sorted(topic_counts.items(), key=lambda kv: (-kv[1], kv[0]))[:4]
+    ]
+    sentiment = _sentiment_tag((sentiment_sum / sentiment_n) if sentiment_n else 0.0)
+    contention = _pick_today_contention(
+        threads=threads,
+        split_sides=split_sides,
+        registry_names=registry_names,
+        subnet_counts=subnet_counts,
+    )
+    payload = {
+        "message_count": message_count,
+        "top_subnets": top_subnets,
+        "topics": topics,
+        "sentiment": sentiment,
+        "contention": contention,
+        "topic_buckets": dict(topic_buckets),
+        "registry_names": registry_names,
+    }
+    payload["lines"] = _today_lines(payload)
+    payload["narrative"] = " ".join(payload["lines"])
+    return payload
+
+
+def build_today_topic_summary(*, db=None, limit: int = 4) -> List[Dict[str, Any]]:
+    """Top conversation topics since UTC midnight — used by /summary tests."""
+    return (build_today_conversation_summary(db=db, limit=limit).get("topics") or [])[:limit]
+
+
+def _cap_sentence(text: str) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+    if not raw.endswith("."):
+        raw += "."
+    return raw[:1].upper() + raw[1:]
+
+
+def _texts_overlap(left: str, right: str) -> bool:
+    a = re.sub(r"\s+", " ", str(left or "").lower())[:48]
+    b = re.sub(r"\s+", " ", str(right or "").lower())[:48]
+    if not a or not b:
+        return False
+    return a in str(right or "").lower() or b in str(left or "").lower()
+
+
+def _yield_kind(text: str) -> str:
+    hay = str(text or "").lower()
+    apy = bool(re.search(r"\b(apy|yield|staking)\b", hay))
+    price = bool(re.search(r"\b(price|pump|dump|bid|chart|candle)\b", hay))
+    if apy and price:
+        return "APY and token price"
+    if apy:
+        return "APY"
+    if price:
+        return "token price"
+    if re.search(r"\balpha\b", hay):
+        return ""
+    return ""
+
+
+def _rotation_kind(text: str) -> str:
+    hay = str(text or "").lower()
+    if "rotat" not in hay:
+        return ""
+    if "validator" in hay:
+        return "validator rotation"
+    if "subnet" in hay:
+        return "subnet rotation"
+    if "daily" in hay or "council" in hay or "pick" in hay:
+        return "daily pick rotation"
+    return ""
+
+
+def _subnet_labels(text: str, netuids: Any, registry_names: Dict[int, str]) -> List[str]:
+    found: set[int] = set()
+    for n in netuids or []:
+        try:
+            found.add(int(n))
+        except (TypeError, ValueError):
+            continue
+    for match in re.findall(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", str(text or ""), re.I):
+        found.add(int(match))
+    labels: List[str] = []
+    for n in sorted(found):
+        name = _rollup_subnet_name(n, registry_names)
+        if not name or name.upper() == f"SN{n}" or name.lower().startswith(f"sn{n} "):
+            labels.append(f"SN{n}")
+        else:
+            labels.append(f"{name} (SN{n})")
+    return labels
+
+
+def _ground_claim(text: str, *, tag: str, names: List[str]) -> str:
+    """Turn a raw chat line into a specific claim (who / what kind / which rotation)."""
+    raw = _strip_pushback_prefix(text)
+    hay = raw.lower()
+    who = names[0] if names else ""
+    yk = _yield_kind(raw)
+    rk = _rotation_kind(raw)
+
+    if tag == "alpha":
+        kind = yk or "alpha"
+        if kind == "APY":
+            kind = "APY (emissions yield, not token price)"
+        elif not yk:
+            kind = "alpha (APY vs token price not specified)"
+        if who:
+            claim = f"{who} {kind}"
+        else:
+            claim = f"{kind} with no subnet named"
+        if re.search(r"\b(print|printing|still)\b", hay):
+            claim += " still printing"
+        if rk:
+            claim += f" after the {rk}"
+        elif "rotat" in hay:
+            claim += " after a rotation (validator vs subnet not specified)"
+        return claim
+
+    if tag == "market":
+        asset = who or "TAO"
+        if "choppy" in hay or "dip" in hay:
+            return f"{asset} price still has a dip bid"
+        if "dump" in hay or "reclaim" in hay:
+            return f"{asset} dump with no reclaim"
+        if "bull" in hay:
+            return f"{asset} price leaning bullish"
+        if "bear" in hay:
+            return f"{asset} price leaning bearish"
+        clip = _anon_clip(raw, max_len=70)
+        return f"{asset} price: {clip}"
+
+    if tag == "validator":
+        target = who or "a named subnet"
+        if not who:
+            return ""
+        if rk:
+            claim = f"{target} {rk}"
+        else:
+            claim = f"{target} validators"
+        if "free money" in hay:
+            claim += " is free money"
+        return claim
+
+    if tag == "emissions":
+        if not who:
+            return _anon_clip(raw, max_len=70)
+        if "priced in" in hay:
+            return f"{who} emissions already priced in"
+        if "cut" in hay:
+            return f"{who} waiting on an emission cut"
+        return f"{who} emissions"
+
+    if tag == "partnership":
+        clip = _anon_clip(raw, max_len=70)
+        if who:
+            return f"{who} partnership/integration: {clip}"
+        return clip
+
+    clip = _anon_clip(raw, max_len=70)
+    if who and who not in clip:
+        return f"{who}: {clip}"
+    return clip
+
+
+def _contention_line(contention: Dict[str, Any]) -> str:
+    names = [str(x) for x in (contention.get("names") or []) if x]
+    if contention.get("kind") == "thread":
+        subject = contention.get("subject") or ""
+        pushback = contention.get("pushback") or ""
+        who = names[0] if names else ""
+        left = _ground_claim(subject, tag="validator", names=names) if subject else ""
+        if "emission" in (pushback or "").lower() or "priced" in (pushback or "").lower():
+            right = _ground_claim(pushback, tag="emissions", names=names)
+        else:
+            right = _ground_claim(pushback, tag="validator", names=names) if pushback else ""
+        if left and right and right != left:
+            lead = f"People argued over whether {left}, or {right}"
+        elif left:
+            lead = f"People argued over {left}"
+        else:
+            return ""
+        if who and who not in lead:
+            lead += f" ({who})"
+        return _cap_sentence(lead)
+    if contention.get("kind") == "split":
+        name = names[0] if names else "a subnet"
+        buy = contention.get("buy") or ""
+        fade = contention.get("fade") or ""
+        left = _ground_claim(buy, tag="market", names=names) if buy else ""
+        right = _ground_claim(fade, tag="market", names=names) if fade else ""
+        lead = f"Calls split on {name}"
+        if left and right:
+            lead += f": whether {left}, or {right}"
+        elif left or right:
+            lead += f" — {left or right}"
+        return _cap_sentence(lead)
+    return ""
+
+
+def _topic_recap_line(
+    tag: str,
+    bucket: Dict[str, Any],
+    *,
+    registry_names: Dict[int, str],
+) -> str:
+    texts = [bucket.get("buy"), bucket.get("fade"), bucket.get("push"), bucket.get("snip")]
+    blob = " ".join(str(t) for t in texts if t)
+    names = _subnet_labels(blob, bucket.get("netuids"), registry_names)
+    buy_raw = bucket.get("buy") or ""
+    fade_raw = bucket.get("fade") or ""
+    push_raw = bucket.get("push") or ""
+    snip_raw = bucket.get("snip") or ""
+    buy = _ground_claim(buy_raw, tag=tag, names=_subnet_labels(buy_raw, bucket.get("netuids"), registry_names) or names) if buy_raw else ""
+    fade = _ground_claim(fade_raw, tag=tag, names=_subnet_labels(fade_raw, bucket.get("netuids"), registry_names) or names) if fade_raw else ""
+    push = _ground_claim(push_raw, tag=tag, names=names) if push_raw else ""
+    snip = _ground_claim(snip_raw, tag=tag, names=_subnet_labels(snip_raw, bucket.get("netuids"), registry_names) or names) if snip_raw else ""
+    if buy and fade and not _texts_overlap(buy, fade):
+        return _cap_sentence(f"People split on whether {buy}, or {fade}")
+    if snip and push and not _texts_overlap(snip, push):
+        return _cap_sentence(f"People argued over whether {snip}, or {push}")
+    if snip:
+        return _cap_sentence(snip)
+    return ""
+
+
+def _norm_words(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
+def _repeats_used(story: str, used: List[str], extra: List[str] | None = None) -> bool:
+    hay = _norm_words(story)
+    for prev in list(used) + list(extra or []):
+        clip = _norm_words(prev)
+        if len(clip) < 12:
+            continue
+        needle = clip[:40]
+        if needle and needle in hay:
+            return True
+        if _texts_overlap(hay, clip):
+            return True
+    return False
+
+
+def _today_lines(payload: Dict[str, Any]) -> List[str]:
+    n = int(payload.get("message_count") or 0)
+    if n <= 0:
+        return ["Quiet so far today — no graded chatter yet."]
+
+    registry_names = payload.get("registry_names") or {}
+    lines: List[str] = []
+    used: List[str] = []
+    contention = payload.get("contention") or {}
+    lead = _contention_line(contention)
+    if lead:
+        lines.append(lead)
+        used.append(lead)
+
+    topics = payload.get("topics") or []
+    buckets = payload.get("topic_buckets") or {}
+    for row in topics:
+        if len(lines) >= 3:
+            break
+        tag = str(row.get("topic") or "").strip()
+        if not tag:
+            continue
+        story = _topic_recap_line(tag, buckets.get(tag) or {}, registry_names=registry_names)
+        if not story:
+            continue
+        extra = [
+            str(contention.get(k) or "")
+            for k in ("subject", "pushback", "buy", "fade")
+        ]
+        if _repeats_used(story, used, extra):
+            continue
+        lines.append(story)
+        used.append(story)
+
+    if lines:
+        return lines[:3]
+
+    top = payload.get("top_subnets") or []
+    for row in top:
+        ctx = str(row.get("mention_context") or "").strip()
+        if not ctx:
+            continue
+        netuid = row.get("netuid")
+        names = _subnet_labels(ctx, [netuid] if netuid is not None else [], registry_names)
+        tags = classify_message_topics(ctx)
+        tag = tags[0] if tags else ("market" if re.search(r"\btao\b", ctx, re.I) else "")
+        if not tag:
+            continue
+        story = _ground_claim(ctx, tag=tag, names=names)
+        if story:
+            return [_cap_sentence(story)]
+    return [f"No specific thread to recap yet ({n} graded messages)."]
+
+
+def _today_narrative(payload: Dict[str, Any]) -> str:
+    return " ".join(_today_lines(payload))
+
+
 _MIN_YESTERDAY_SUMMARY_MESSAGES = 3
 
 
@@ -1777,6 +2401,21 @@ def _join_phrase(items: List[str]) -> str:
 
 def _topic_label(tag: str) -> str:
     return str(tag or "").replace("_", " ").strip().title()
+
+
+def _rollup_subnet_name(netuid: int, registry_names: Optional[Dict[int, str]] = None) -> str:
+    """Canonical subnet label for rollups — re-resolve overrides on every read."""
+    try:
+        from internal.subnet_names import display_name_for_netuid
+
+        return display_name_for_netuid(int(netuid), use_taostats_fallback=False)
+    except (TypeError, ValueError):
+        pass
+    if registry_names:
+        hit = registry_names.get(netuid)
+        if hit:
+            return str(hit)
+    return f"Subnet {netuid}"
 
 
 def _display_group_name(name: Optional[str]) -> str:
@@ -2024,7 +2663,7 @@ def build_yesterday_chat_summary(
         top_subnets.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": int(mentions),
             }
         )
@@ -2038,7 +2677,7 @@ def build_yesterday_chat_summary(
         movers.append(
             {
                 "netuid": netuid,
-                "name": registry_names.get(netuid) or f"Subnet {netuid}",
+                "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": cur,
                 "prev_mentions": prev,
                 "change": cur - prev,
@@ -2148,7 +2787,7 @@ def build_high_conviction_strip(
                 "conviction": conviction,
                 "direction": direction,
                 "netuid": netuid,
-                "subnet_name": names.get(netuid) if netuid is not None else None,
+                "subnet_name": _rollup_subnet_name(netuid, names) if netuid is not None else None,
                 "timestamp": row.get("timestamp") or row.get("created_at"),
                 "skin_type": skin_type,
                 "skin_amount": skin_amount,
