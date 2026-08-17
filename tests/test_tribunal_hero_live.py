@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from internal.preview.tribunal_hero import (
     _format_judge_weight_pct,
     _judge_agreement_labels,
+    attach_focus_judge_scores_to_daily_pick,
     attach_judge_scores_to_daily_pick,
     build_tribunal_view,
     conviction_temp,
@@ -24,6 +25,52 @@ def test_weighted_verdict_pct_gauge_math():
     weights = {"oracle": 0.40, "echo": 0.30, "pulse": 0.30}
     signals = {"oracle": 36.0, "echo": 32.0, "pulse": 32.0}
     assert weighted_verdict_pct(weights, signals) == 33.6
+
+
+def test_weighted_verdict_pct_normalizes_soul_map_weights():
+    weights = {"oracle": 2.0, "echo": 2.0, "pulse": 2.0}
+    signals = {"oracle": 90.0, "echo": 80.0, "pulse": 50.0}
+    assert weighted_verdict_pct(weights, signals) == 73.3
+
+
+def test_attach_focus_judge_scores_when_disk_missing(monkeypatch):
+    def fake_score(netuid, subnet_row):
+        return {
+            "oracle": {"confidence": 0.9},
+            "echo": {"confidence": 0.8},
+            "pulse": {"confidence": 0.5},
+        }
+
+    monkeypatch.setattr("internal.judges.subnet_judges.score_subnet", fake_score)
+    monkeypatch.setattr(
+        "internal.preview.tribunal_hero._registry_subnet_row",
+        lambda nu: {"netuid": nu, "name": "Targon", "rsi": 55},
+    )
+    payload = {
+        "action": "HOLD",
+        "candidate": {"subnet": {"netuid": 4, "name": "Targon"}, "confidence": 0.64},
+    }
+    out = attach_focus_judge_scores_to_daily_pick(payload)
+    scores = out["candidate"]["judge_scores_at_creation"]
+    assert scores["oracle"]["confidence"] == 0.9
+    view = build_tribunal_view(
+        out,
+        {"judge_weights": {"oracle": 2.0, "echo": 2.0, "pulse": 2.0}},
+    )
+    assert view["judges"][0]["signal_pct"] == "90%"
+    assert view["conviction_pct"] == 73.3
+
+
+def test_cockpit_hydrate_js_has_valid_syntax():
+    import subprocess
+
+    proc = subprocess.run(
+        ["node", "--check", "static/js/cockpit_hydrate.js"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout
 
 
 def test_conviction_temp_warm_above_threshold_cool_below():
@@ -121,13 +168,20 @@ def test_daily_pick_lite_enrich_attaches_matching_day_judge_scores(monkeypatch):
     assert out["pick"]["judge_scores_at_creation"] == scores
 
 
-def test_daily_pick_lite_enrich_does_not_attach_unmatched_judge_scores(monkeypatch):
+def test_daily_pick_lite_enrich_attaches_focus_scores_when_predictions_missing(monkeypatch):
     import server as srv
 
-    scores = {"oracle": {"confidence": 0.8}, "echo": {"confidence": 0.7}, "pulse": {"confidence": 0.6}}
     monkeypatch.setattr(
-        "internal.council.conviction_bands.judge_scores_for_netuid",
-        lambda netuid: scores,
+        "internal.judges.subnet_judges.score_subnet",
+        lambda netuid, row: {
+            "oracle": {"confidence": 0.76},
+            "echo": {"confidence": 0.25},
+            "pulse": {"confidence": 0.45},
+        },
+    )
+    monkeypatch.setattr(
+        "internal.preview.tribunal_hero._registry_subnet_row",
+        lambda nu: {"netuid": nu, "name": "SN12"},
     )
     out = srv._enrich_daily_pick_payload_lite(
         {
@@ -138,7 +192,7 @@ def test_daily_pick_lite_enrich_does_not_attach_unmatched_judge_scores(monkeypat
             },
         }
     )
-    assert "judge_scores_at_creation" not in out["pick"]
+    assert out["pick"]["judge_scores_at_creation"]["oracle"]["confidence"] == 0.76
 
 
 def test_build_tribunal_view_decision_log_from_judge_scores():

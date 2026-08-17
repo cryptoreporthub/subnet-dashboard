@@ -222,19 +222,141 @@ def attach_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]
     return out
 
 
+def _judge_weight_fractions(weights: Dict[str, float]) -> Dict[str, float]:
+    """Normalize soul_map judge weights (0.1–2.0 each) to blend fractions summing to 1."""
+    fracs: Dict[str, float] = {}
+    total = 0.0
+    for key in _JUDGE_KEYS:
+        raw = weights.get(key)
+        if raw is None:
+            continue
+        try:
+            val = float(raw)
+        except (TypeError, ValueError):
+            continue
+        if val <= 0:
+            continue
+        fracs[key] = val
+        total += val
+    if total <= 0:
+        return {}
+    return {key: fracs[key] / total for key in fracs}
+
+
+def _registry_subnet_row(netuid: int) -> Optional[Dict[str, Any]]:
+    try:
+        from internal.store import load_data
+
+        registry = load_data("config/registry.json")
+        if not isinstance(registry, dict):
+            return None
+        for row in registry.values():
+            if not isinstance(row, dict):
+                continue
+            nu = row.get("netuid") if row.get("netuid") is not None else row.get("id")
+            if nu is not None and int(nu) == int(netuid):
+                return dict(row)
+    except Exception:
+        return None
+    return None
+
+
+def _judge_scores_from_subnet_result(result: Dict[str, Any]) -> Dict[str, Any]:
+    scores: Dict[str, Any] = {}
+    for key in _JUDGE_KEYS:
+        block = result.get(key)
+        if not isinstance(block, dict):
+            continue
+        conf = block.get("confidence")
+        if conf is None:
+            continue
+        scores[key] = {"confidence": conf}
+    return scores
+
+
+def enrich_active_subnet_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge registry indicators into pick/candidate subnet for instrument SSR."""
+    if not isinstance(payload, dict):
+        return {}
+    out = dict(payload)
+    for block_key in ("pick", "candidate"):
+        block = out.get(block_key)
+        if not isinstance(block, dict):
+            continue
+        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else {}
+        netuid = sn.get("netuid") or block.get("netuid")
+        if netuid is None:
+            continue
+        try:
+            netuid_i = int(netuid)
+        except (TypeError, ValueError):
+            continue
+        row = _registry_subnet_row(netuid_i)
+        if not row:
+            continue
+        merged_subnet = {**row, **sn}
+        out[block_key] = {**block, "subnet": merged_subnet}
+    return out
+
+
+def attach_focus_judge_scores_to_daily_pick(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Score focus subnet only when creation scores are missing from disk."""
+    if not isinstance(payload, dict):
+        return {}
+    signals = judge_signals_from_pick(payload)
+    if any(signals.get(key) is not None for key in _JUDGE_KEYS):
+        return payload
+    active = payload.get("pick") or payload.get("candidate")
+    if not isinstance(active, dict):
+        return payload
+    sn = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
+    netuid = sn.get("netuid") or active.get("netuid")
+    if netuid is None:
+        return payload
+    try:
+        netuid_i = int(netuid)
+    except (TypeError, ValueError):
+        return payload
+    subnet_row = _registry_subnet_row(netuid_i) or dict(sn)
+    subnet_row.setdefault("netuid", netuid_i)
+    try:
+        from internal.judges.subnet_judges import score_subnet
+
+        result = score_subnet(netuid_i, subnet_row)
+    except Exception:
+        return payload
+    if not isinstance(result, dict):
+        return payload
+    scores = _judge_scores_from_subnet_result(result)
+    if not scores:
+        return payload
+    out = dict(payload)
+    for block_key in ("pick", "candidate"):
+        block = out.get(block_key)
+        if not isinstance(block, dict):
+            continue
+        existing = block.get("judge_scores_at_creation")
+        if isinstance(existing, dict) and existing:
+            continue
+        out[block_key] = {**block, "judge_scores_at_creation": scores}
+    return out
+
+
 def weighted_verdict_pct(
     weights: Dict[str, float],
     signals: Dict[str, Optional[float]],
 ) -> Optional[float]:
-    """Σ(weight_j × signal_j_pct) — e.g. 0.4×36 + 0.3×32 + 0.3×32 = 33.6."""
+    """Σ(weight_j × signal_j_pct) with normalized trust weights."""
+    fracs = _judge_weight_fractions(weights)
+    if not fracs:
+        return None
     total = 0.0
     used = False
-    for key in _JUDGE_KEYS:
-        w = weights.get(key)
+    for key, frac in fracs.items():
         s = signals.get(key)
-        if w is None or s is None:
+        if s is None:
             continue
-        total += float(w) * float(s)
+        total += frac * float(s)
         used = True
     if not used:
         return None
@@ -302,16 +424,13 @@ _EQUAL_WEIGHT_SPREAD = 0.015  # normalized fractions (~1.5pp)
 
 def _format_judge_weight_pct(weights: Dict[str, float], key: str) -> str:
     """Trust-weight share for verdict blend — not the judge's signal score."""
-    if weights.get(key) is None:
+    fracs = _judge_weight_fractions(weights)
+    if key not in fracs:
         return "—"
-    try:
-        vals = [float(weights[k]) for k in _JUDGE_KEYS if weights.get(k) is not None]
-        w = float(weights[key])
-    except (TypeError, ValueError):
-        return "—"
+    vals = list(fracs.values())
     if len(vals) >= 2 and max(vals) - min(vals) < _EQUAL_WEIGHT_SPREAD:
         return "Equal weight"
-    pct = w * 100.0
+    pct = fracs[key] * 100.0
     if abs(pct - round(pct)) < 0.05:
         return f"{int(round(pct))}%"
     return f"{pct:.1f}%"
@@ -768,11 +887,7 @@ def build_tribunal_view(
         "gauge_attr": gauge_attr(gauge),
         "synced_at": synced_at_iso(pick),
         "judges": judges,
-        "weight_fracs": {
-            key: float(weights[key])
-            for key in _JUDGE_KEYS
-            if weights.get(key) is not None
-        },
+        "weight_fracs": _judge_weight_fractions(weights),
         "instrument": _instrument_panel(pick, stats, signals),
         "panels": {
             "decision_log": _decision_log_panel(pick, kind, gauge, signals),

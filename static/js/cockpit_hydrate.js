@@ -269,9 +269,15 @@
   function prefetchFocusJudges(payload) {
     var netuid = pickNetuidFromPayload(payload);
     if (netuid == null) return;
-    fetchJsonRetry('/api/judges/' + encodeURIComponent(netuid), 18000, 1)
+    fetchJsonRetry('/api/judges/' + encodeURIComponent(netuid), 18000, 1, 0)
       .then(function (data) {
         renderFocusJudgeCard(data);
+        var stats = window.SimiLearning && window.SimiLearning.stats;
+        patchTribunalJudgeSignalsFromJudgesApi(
+          data,
+          lastDailyPickPayload || payload,
+          stats
+        );
       })
       .catch(function () {
         var panel = document.getElementById('judges-panel');
@@ -4503,15 +4509,37 @@
     return out;
   }
 
+  function normalizeJudgeWeightFracs(weights) {
+    if (!weights || typeof weights !== 'object') return {};
+    var fracs = {};
+    var total = 0;
+    ['oracle', 'echo', 'pulse'].forEach(function (key) {
+      var raw = weights[key];
+      if (raw == null || isNaN(Number(raw))) return;
+      var val = Number(raw);
+      if (val <= 0) return;
+      fracs[key] = val;
+      total += val;
+    });
+    if (total <= 0) return {};
+    var out = {};
+    ['oracle', 'echo', 'pulse'].forEach(function (key) {
+      if (fracs[key] != null) out[key] = fracs[key] / total;
+    });
+    return out;
+  }
+
   function weightedVerdictPct(weights, signals) {
     if (!weights || !signals) return null;
+    var fracs = normalizeJudgeWeightFracs(weights);
+    if (!fracs.oracle && !fracs.echo && !fracs.pulse) return null;
     var total = 0;
     var used = false;
     ['oracle', 'echo', 'pulse'].forEach(function (key) {
-      var w = weights[key];
+      var f = fracs[key];
       var s = signals[key];
-      if (w == null || s == null || isNaN(Number(w)) || isNaN(Number(s))) return;
-      total += Number(w) * Number(s);
+      if (f == null || s == null || isNaN(Number(f)) || isNaN(Number(s))) return;
+      total += Number(f) * Number(s);
       used = true;
     });
     if (!used) return null;
@@ -4602,10 +4630,11 @@
 
   function formatJudgeWeightPct(weight, weights) {
     if (weight == null || isNaN(Number(weight))) return '—';
-    weights = weights || {};
-    var vals = ['oracle', 'echo', 'pulse']
+    var fracs = normalizeJudgeWeightFracs(weights || {});
+    var keys = ['oracle', 'echo', 'pulse'];
+    var vals = keys
       .map(function (k) {
-        return weights[k];
+        return fracs[k];
       })
       .filter(function (v) {
         return v != null && !isNaN(Number(v));
@@ -4615,7 +4644,18 @@
       var spread = Math.max.apply(null, vals) - Math.min.apply(null, vals);
       if (spread < 0.015) return 'Equal weight';
     }
-    var pct = Number(weight) * 100;
+    var key = null;
+    keys.forEach(function (k) {
+      if (weights && weights[k] === weight) key = k;
+    });
+    if (!key) {
+      keys.forEach(function (k) {
+        if (fracs[k] != null && Math.abs(fracs[k] - Number(weight)) < 0.0001) key = k;
+      });
+    }
+    var frac = key ? fracs[key] : null;
+    if (frac == null || isNaN(Number(frac))) return '—';
+    var pct = Number(frac) * 100;
     if (Math.abs(pct - Math.round(pct)) < 0.05) return String(Math.round(pct)) + '%';
     return pct.toFixed(1) + '%';
   }
@@ -4970,6 +5010,46 @@
       weights.oracle != null && weights.echo != null && weights.pulse != null;
     if (has) return weights;
     return parseTribunalWeightsAttr(hero) || weights;
+  }
+
+  function judgeScoresAtCreationFromJudgesApi(data) {
+    if (!data || typeof data !== 'object') return null;
+    var scores = {};
+    var used = false;
+    ['oracle', 'echo', 'pulse'].forEach(function (key) {
+      var block = data[key];
+      if (!block || block.confidence == null || isNaN(Number(block.confidence))) return;
+      scores[key] = { confidence: Number(block.confidence) };
+      used = true;
+    });
+    return used ? scores : null;
+  }
+
+  function patchTribunalJudgeSignalsFromJudgesApi(data, dailyPick, learningStats) {
+    if (!document.getElementById('tribunal-hero')) return false;
+    var scores = judgeScoresAtCreationFromJudgesApi(data);
+    if (!scores) return false;
+    var payload =
+      dailyPick && typeof dailyPick === 'object' ? Object.assign({}, dailyPick) : null;
+    if (!payload) return false;
+    var activeKey = payload.pick ? 'pick' : payload.candidate ? 'candidate' : null;
+    if (!activeKey || !payload[activeKey]) return false;
+    var existing = payload[activeKey].judge_scores_at_creation;
+    if (existing && typeof existing === 'object') {
+      var has = ['oracle', 'echo', 'pulse'].some(function (key) {
+        return judgeSignalPct(existing[key]) != null;
+      });
+      if (has) return false;
+    }
+    payload[activeKey] = Object.assign({}, payload[activeKey], {
+      judge_scores_at_creation: scores,
+    });
+    lastDailyPickPayload = payload;
+    renderTribunalHero(
+      payload,
+      learningStats || (window.SimiLearning && window.SimiLearning.stats)
+    );
+    return true;
   }
 
   function patchTribunalJudges(stats, dailyPick) {
