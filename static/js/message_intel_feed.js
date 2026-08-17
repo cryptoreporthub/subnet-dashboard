@@ -1843,11 +1843,6 @@ function renderTrendingSky(rows) {
   skyEl.hidden = false;
   skyEl.setAttribute("data-empty", "false");
   skyEl.setAttribute("aria-hidden", "false");
-  var max = 1;
-  list.forEach(function (r) {
-    var n = Number(r.chatter_power != null ? r.chatter_power : r.heat) || Number(r.mentions) || 0;
-    if (n > max) max = n;
-  });
   var html =
     '<div class="message-intel__sky-starfield" aria-hidden="true"></div>' +
     '<div class="message-intel__sky-bg-moon message-intel__sky-bg-moon--1" aria-hidden="true"></div>' +
@@ -1896,8 +1891,7 @@ function renderTrendingSky(rows) {
   for (i = 0; i < 3; i++) {
     var row = list[i];
     var rank = i + 1;
-    var power = Number(row.chatter_power != null ? row.chatter_power : row.heat) || Number(row.mentions) || 0;
-    var size = 14 + Math.round((power / max) * 4);
+    var size = rank === 1 ? 30 : rank === 2 ? 22 : 15;
     var sent = String(row.sentiment || "").toLowerCase();
     if (sent.indexOf("bull") !== -1) sent = "bull";
     else if (sent.indexOf("bear") !== -1) sent = "bear";
@@ -1906,7 +1900,7 @@ function renderTrendingSky(rows) {
     var pctDisplay = (row.pct != null ? (Number(row.pct) > 0 ? "+" + row.pct + "%" : row.pct + "%") : (rank === 1 ? "+15.8%" : rank === 2 ? "+12.1%" : "+4.2%"));
     var dotColorClass = rank === 1 ? "message-intel__sky-dot--cyan" : (rank === 2 ? "message-intel__sky-dot--violet" : "message-intel__sky-dot--emerald");
     var badgeHtml = '<span class="message-intel__sky-badge"><b class="message-intel__sky-sn">' + esc(snDisplay) + '</b><span class="message-intel__sky-pct message-intel__sky-pct--up">' + esc(pctDisplay) + '</span></span>';
-    var dotHtml = '<span class="message-intel__sky-dot ' + dotColorClass + '" style="width:' + size + 'px;height:' + size + 'px"></span>';
+    var dotHtml = '<span class="message-intel__sky-dot ' + dotColorClass + '" data-rank="' + rank + '" style="width:' + size + 'px;height:' + size + 'px"></span>';
     var innerNode = rank === 2 ? (dotHtml + badgeHtml) : (badgeHtml + dotHtml);
     html +=
       '<div class="message-intel__sky-orbit message-intel__sky-orbit--' + rank + '">' +
@@ -1920,6 +1914,7 @@ function renderTrendingSky(rows) {
       esc(row.netuid) +
       '" data-name="' +
       esc(row.name || "") +
+      '" aria-label="rank ' + rank + ' ' + esc(snDisplay) +
       '">' +
       innerNode +
       '</button></div></div>';
