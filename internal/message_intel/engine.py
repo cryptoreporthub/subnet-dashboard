@@ -255,26 +255,25 @@ def _message_matches_filters(
         if row_netuid is None or int(row_netuid) != int(netuid):
             return False
     if topic:
-            needle = str(topic).strip().lower()
-            topics = row.get("topics") if isinstance(row.get("topics"), list) else []
-            topic_hit = any(str(item).strip().lower() == needle for item in topics)
-            if not topic_hit:
-                group_name = str(row.get("group_name") or "").strip().lower()
-                topic_hit = group_name == needle
-            if not topic_hit:
-                subnet_match = re.fullmatch(r"(?:sn|subnet)\s*#?(\d+)", needle)
-                if subnet_match:
-                    row_netuid = row.get("netuid") or _primary_netuid_from_message(row)
-                    try:
-                        topic_hit = row_netuid is not None and int(row_netuid) == int(subnet_match.group(1))
-                    except (TypeError, ValueError):
-                        topic_hit = False
-            if not topic_hit:
-                return False
-        if author_id and stable_author_id(row) != str(author_id):
+        needle = str(topic).strip().lower()
+        topics = row.get("topics") if isinstance(row.get("topics"), list) else []
+        topic_hit = any(str(item).strip().lower() == needle for item in topics)
+        if not topic_hit:
+            group_name = str(row.get("group_name") or "").strip().lower()
+            topic_hit = group_name == needle
+        if not topic_hit:
+            subnet_match = re.fullmatch(r"(?:sn|subnet)\s*#?(\d+)", needle)
+            if subnet_match:
+                row_netuid = row.get("netuid") or _primary_netuid_from_message(row)
+                try:
+                    topic_hit = row_netuid is not None and int(row_netuid) == int(subnet_match.group(1))
+                except (TypeError, ValueError):
+                    topic_hit = False
+        if not topic_hit:
             return False
-        return True
-
+    if author_id and stable_author_id(row) != str(author_id):
+        return False
+    return True
 
 def list_messages(
     limit: int = 50,
