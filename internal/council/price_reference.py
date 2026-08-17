@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
+PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 # Hourly OHLCV is the canonical resolver source. A single quality-checked
 # candle within this window is preferable to retiring valid calls because the
 # feed cannot provide three 15-minute candles.
@@ -207,6 +208,66 @@ def audit_cache_coverage(
             ok.append(uid_str)
 
     return {"ok": ok, "missing": missing, "empty": empty}
+
+
+def cache_coverage_strict_enabled() -> bool:
+    """When true (CI/staging), incomplete coverage aborts worker startup."""
+    return os.environ.get("CACHE_COVERAGE_STRICT", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+def run_startup_cache_coverage_audit(
+    *,
+    predictions_path: str = PREDICTIONS_PATH,
+    cache_path: str = PRICE_CACHE_PATH,
+) -> Dict[str, Any]:
+    """Startup gate: every prediction netuid should have gradeable candles in price_cache.
+
+    Normal mode logs warnings and continues. Set ``CACHE_COVERAGE_STRICT=true`` to
+  abort when any netuid is missing or has an empty candle block.
+    """
+    if not os.path.exists(predictions_path):
+        logger.info("startup cache coverage audit skipped (no %s)", predictions_path)
+        return {"ok": [], "missing": [], "empty": [], "skipped": True}
+
+    renamed = normalize_price_cache_keys(cache_path)
+    if renamed:
+        logger.info(
+            "startup cache coverage: normalized %s non-canonical price_cache key(s)",
+            renamed,
+        )
+
+    report = audit_cache_coverage(predictions_path, cache_path)
+    report["skipped"] = False
+    missing = list(report.get("missing") or [])
+    empty = list(report.get("empty") or [])
+    ok = list(report.get("ok") or [])
+    gaps = len(missing) + len(empty)
+
+    if gaps:
+        logger.warning(
+            "startup cache coverage audit: %s ok, %s missing cache keys, %s empty "
+            "candle blocks — resolver may retire as missing_price_at_horizon",
+            len(ok),
+            len(missing),
+            len(empty),
+        )
+        if cache_coverage_strict_enabled():
+            raise RuntimeError(
+                "CACHE_COVERAGE_STRICT: "
+                f"{gaps} prediction netuid(s) lack gradeable candles "
+                f"(missing={missing}, empty={empty})"
+            )
+    else:
+        logger.info(
+            "startup cache coverage audit: %s prediction netuid(s) covered in price_cache",
+            len(ok),
+        )
+    return report
 
 
 def _window_candles(
