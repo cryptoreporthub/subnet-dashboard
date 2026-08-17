@@ -69,6 +69,11 @@
     var copyBtn = document.getElementById("lsnCopyBtn");
     if (copyBtn) {
       copyBtn.addEventListener("click", function () {
+        var urlEl = sharePop.querySelector(".url");
+        var text = (urlEl && urlEl.textContent.trim()) || window.location.href || "";
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () { /* honest fallback */ });
+        }
         copyBtn.textContent = "Copied ✓";
         copyBtn.classList.add("ok");
         setTimeout(function () { copyBtn.textContent = "Copy"; copyBtn.classList.remove("ok"); }, 1600);
@@ -116,9 +121,9 @@
   }
 
   function pickAnchor() {
-    var msg = document.querySelector(".lsn-msg.focused");
-    if (msg && msg.getAttribute("data-sn")) {
-      setAnchor(msg.getAttribute("data-sn"), msg.getAttribute("data-name"));
+    var msg = document.querySelector(".message-intel__feed-row[data-netuid]");
+    if (msg && msg.getAttribute("data-netuid")) {
+      setAnchor(msg.getAttribute("data-netuid"), null);
       return;
     }
     var first = document.querySelector(".lsn-trow[data-sn], .lsn-crow2[data-sn], .lsn-ylead[data-sn]");
@@ -233,14 +238,10 @@
   }
 
   /* ── re-anchor on row / feed clicks ── */
-  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-msg, .lsn-drow, .lsn-orbit__node").forEach(function (el) {
+  document.querySelectorAll(".lsn-trow, .lsn-crow2, .lsn-ylead, .lsn-yrow, .lsn-drow, .lsn-orbit__node, .message-intel__hc-cta[data-netuid], .message-intel__feed-row[data-netuid]").forEach(function (el) {
     el.addEventListener("click", function () {
-      var sn = el.getAttribute("data-sn");
+      var sn = el.getAttribute("data-sn") || el.getAttribute("data-netuid");
       var nm = el.getAttribute("data-name");
-      if (el.classList.contains("lsn-msg")) {
-        document.querySelectorAll(".lsn-msg").forEach(function (x) { x.classList.remove("focused"); });
-        el.classList.add("focused");
-      }
       if (sn || nm) { setAnchor(sn, nm); prevSample = null; pollSubnets(); }
     });
   });

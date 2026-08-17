@@ -468,6 +468,7 @@ async def _listener_page_context() -> Dict[str, Any]:
             }
         )
     ctx["feed"] = feed_rows
+    ctx["mi_messages"] = [m for m in msgs[:12] if isinstance(m, dict)]
 
     # trending — subnet telegram conviction (1h lens)
     conv_payload = (

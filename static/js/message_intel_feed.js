@@ -2237,6 +2237,7 @@ function renderTrendingSky(rows) {
         (conv != null ? "; --pct: " + conv : "") +
         '" data-msg-id="' +
         esc(row.id) +
+        (netuids.length ? '" data-netuid="' + esc(netuids[0]) : "") +
         '" tabindex="0" role="button">' +
         (conv != null
           ? '<div class="message-intel__conv-ring" style="--pct: ' +
