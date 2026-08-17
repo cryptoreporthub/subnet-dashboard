@@ -108,3 +108,13 @@ def test_hydration_awaits_daily_pick_before_tribunal_stats_render():
 def test_daily_pick_hydrate_bypasses_api_fetch_cache():
     source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "fetchJsonRetry('/api/daily-pick', 35000, 3, 0)" in source
+
+
+def test_tribunal_hero_bootstrap_hydrates_cold_shell():
+    source = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
+    assert "function bootstrapCouncilHeroHydrate()" in source
+    assert "function tribunalHeroNeedsHydrate()" in source
+    run_idx = source.index("run();")
+    bootstrap_idx = source.index("bootstrapCouncilHeroHydrate();")
+    home_idx = source.index("window.__cockpitHome = {")
+    assert home_idx < bootstrap_idx < run_idx
