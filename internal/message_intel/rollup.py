@@ -1843,7 +1843,9 @@ def _pick_today_contention(
         if not push and replies:
             push = _anon_clip(max(replies, key=len), max_len=80)
         names = [
-            _rollup_subnet_name(n, registry_names)
+            _subnet_labels("", [n], registry_names)[0]
+            if _subnet_labels("", [n], registry_names)
+            else _rollup_subnet_name(n, registry_names)
             for n in sorted(thread.get("netuids") or [])[:2]
         ]
         ranked.append(
@@ -1869,7 +1871,7 @@ def _pick_today_contention(
     sides = split_sides[netuid]
     return {
         "kind": "split",
-        "names": [_rollup_subnet_name(netuid, registry_names)],
+        "names": _subnet_labels("", [netuid], registry_names) or [_rollup_subnet_name(netuid, registry_names)],
         "buy": _anon_clip(sides.get("buy") or "", max_len=80),
         "fade": _anon_clip(sides.get("fade") or "", max_len=80),
     }
@@ -2026,30 +2028,156 @@ def _texts_overlap(left: str, right: str) -> bool:
     return a in str(right or "").lower() or b in str(left or "").lower()
 
 
+def _yield_kind(text: str) -> str:
+    hay = str(text or "").lower()
+    apy = bool(re.search(r"\b(apy|yield|staking)\b", hay))
+    price = bool(re.search(r"\b(price|pump|dump|bid|chart|candle)\b", hay))
+    if apy and price:
+        return "APY and token price"
+    if apy:
+        return "APY"
+    if price:
+        return "token price"
+    if re.search(r"\balpha\b", hay):
+        return ""
+    return ""
+
+
+def _rotation_kind(text: str) -> str:
+    hay = str(text or "").lower()
+    if "rotat" not in hay:
+        return ""
+    if "validator" in hay:
+        return "validator rotation"
+    if "subnet" in hay:
+        return "subnet rotation"
+    if "daily" in hay or "council" in hay or "pick" in hay:
+        return "daily pick rotation"
+    return ""
+
+
+def _subnet_labels(text: str, netuids: Any, registry_names: Dict[int, str]) -> List[str]:
+    found: set[int] = set()
+    for n in netuids or []:
+        try:
+            found.add(int(n))
+        except (TypeError, ValueError):
+            continue
+    for match in re.findall(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", str(text or ""), re.I):
+        found.add(int(match))
+    labels: List[str] = []
+    for n in sorted(found):
+        name = _rollup_subnet_name(n, registry_names)
+        if not name or name.upper() == f"SN{n}" or name.lower().startswith(f"sn{n} "):
+            labels.append(f"SN{n}")
+        else:
+            labels.append(f"{name} (SN{n})")
+    return labels
+
+
+def _ground_claim(text: str, *, tag: str, names: List[str]) -> str:
+    """Turn a raw chat line into a specific claim (who / what kind / which rotation)."""
+    raw = _strip_pushback_prefix(text)
+    hay = raw.lower()
+    who = names[0] if names else ""
+    yk = _yield_kind(raw)
+    rk = _rotation_kind(raw)
+
+    if tag == "alpha":
+        kind = yk or "alpha"
+        if kind == "APY":
+            kind = "APY (emissions yield, not token price)"
+        elif not yk:
+            kind = "alpha (APY vs token price not specified)"
+        if who:
+            claim = f"{who} {kind}"
+        else:
+            claim = f"{kind} with no subnet named"
+        if re.search(r"\b(print|printing|still)\b", hay):
+            claim += " still printing"
+        if rk:
+            claim += f" after the {rk}"
+        elif "rotat" in hay:
+            claim += " after a rotation (validator vs subnet not specified)"
+        return claim
+
+    if tag == "market":
+        asset = who or "TAO"
+        if "choppy" in hay or "dip" in hay:
+            return f"{asset} price still has a dip bid"
+        if "dump" in hay or "reclaim" in hay:
+            return f"{asset} dump with no reclaim"
+        if "bull" in hay:
+            return f"{asset} price leaning bullish"
+        if "bear" in hay:
+            return f"{asset} price leaning bearish"
+        clip = _anon_clip(raw, max_len=70)
+        return f"{asset} price: {clip}"
+
+    if tag == "validator":
+        target = who or "a named subnet"
+        if not who:
+            return ""
+        if rk:
+            claim = f"{target} {rk}"
+        else:
+            claim = f"{target} validators"
+        if "free money" in hay:
+            claim += " is free money"
+        return claim
+
+    if tag == "emissions":
+        if not who:
+            return _anon_clip(raw, max_len=70)
+        if "priced in" in hay:
+            return f"{who} emissions already priced in"
+        if "cut" in hay:
+            return f"{who} waiting on an emission cut"
+        return f"{who} emissions"
+
+    if tag == "partnership":
+        clip = _anon_clip(raw, max_len=70)
+        if who:
+            return f"{who} partnership/integration: {clip}"
+        return clip
+
+    clip = _anon_clip(raw, max_len=70)
+    if who and who not in clip:
+        return f"{who}: {clip}"
+    return clip
+
+
 def _contention_line(contention: Dict[str, Any]) -> str:
+    names = [str(x) for x in (contention.get("names") or []) if x]
     if contention.get("kind") == "thread":
         subject = contention.get("subject") or ""
         pushback = contention.get("pushback") or ""
-        names = [str(x) for x in (contention.get("names") or []) if x]
-        if subject and pushback and pushback != subject:
-            lead = f"People argued over whether {subject}, or {pushback}"
-        elif subject:
-            lead = f"People argued over {subject}"
+        who = names[0] if names else ""
+        left = _ground_claim(subject, tag="validator", names=names) if subject else ""
+        if "emission" in (pushback or "").lower() or "priced" in (pushback or "").lower():
+            right = _ground_claim(pushback, tag="emissions", names=names)
+        else:
+            right = _ground_claim(pushback, tag="validator", names=names) if pushback else ""
+        if left and right and right != left:
+            lead = f"People argued over whether {left}, or {right}"
+        elif left:
+            lead = f"People argued over {left}"
         else:
             return ""
-        if names:
-            lead += f" ({_join_phrase(names)})"
+        if who and who not in lead:
+            lead += f" ({who})"
         return _cap_sentence(lead)
     if contention.get("kind") == "split":
-        names = [str(x) for x in (contention.get("names") or []) if x]
         name = names[0] if names else "a subnet"
         buy = contention.get("buy") or ""
         fade = contention.get("fade") or ""
+        left = _ground_claim(buy, tag="market", names=names) if buy else ""
+        right = _ground_claim(fade, tag="market", names=names) if fade else ""
         lead = f"Calls split on {name}"
-        if buy and fade:
-            lead += f": whether {buy}, or {fade}"
-        elif buy or fade:
-            lead += f" — {buy or fade}"
+        if left and right:
+            lead += f": whether {left}, or {right}"
+        elif left or right:
+            lead += f" — {left or right}"
         return _cap_sentence(lead)
     return ""
 
@@ -2060,35 +2188,40 @@ def _topic_recap_line(
     *,
     registry_names: Dict[int, str],
 ) -> str:
-    label = _topic_label(tag)
-    buy = _anon_clip(_strip_pushback_prefix(bucket.get("buy") or ""), max_len=70)
-    fade = _anon_clip(_strip_pushback_prefix(bucket.get("fade") or ""), max_len=70)
-    push = _anon_clip(_strip_pushback_prefix(bucket.get("push") or ""), max_len=70)
-    snip = _anon_clip(_strip_pushback_prefix(bucket.get("snip") or ""), max_len=70)
-    names = [
-        _rollup_subnet_name(int(n), registry_names)
-        for n in list(bucket.get("netuids") or [])[:1]
-    ]
-    name_bit = f" ({names[0]})" if names else ""
+    texts = [bucket.get("buy"), bucket.get("fade"), bucket.get("push"), bucket.get("snip")]
+    blob = " ".join(str(t) for t in texts if t)
+    names = _subnet_labels(blob, bucket.get("netuids"), registry_names)
+    buy_raw = bucket.get("buy") or ""
+    fade_raw = bucket.get("fade") or ""
+    push_raw = bucket.get("push") or ""
+    snip_raw = bucket.get("snip") or ""
+    buy = _ground_claim(buy_raw, tag=tag, names=_subnet_labels(buy_raw, bucket.get("netuids"), registry_names) or names) if buy_raw else ""
+    fade = _ground_claim(fade_raw, tag=tag, names=_subnet_labels(fade_raw, bucket.get("netuids"), registry_names) or names) if fade_raw else ""
+    push = _ground_claim(push_raw, tag=tag, names=names) if push_raw else ""
+    snip = _ground_claim(snip_raw, tag=tag, names=_subnet_labels(snip_raw, bucket.get("netuids"), registry_names) or names) if snip_raw else ""
     if buy and fade and not _texts_overlap(buy, fade):
-        return _cap_sentence(f"{label} talk split on whether {buy}, or {fade}{name_bit}")
+        return _cap_sentence(f"People split on whether {buy}, or {fade}")
     if snip and push and not _texts_overlap(snip, push):
-        return _cap_sentence(f"People argued over whether {snip}, or {push}{name_bit}")
+        return _cap_sentence(f"People argued over whether {snip}, or {push}")
     if snip:
-        return _cap_sentence(f"{label} chatter stuck on {snip}{name_bit}")
+        return _cap_sentence(snip)
     return ""
 
 
+def _norm_words(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
+
+
 def _repeats_used(story: str, used: List[str], extra: List[str] | None = None) -> bool:
-    hay = story.lower()
+    hay = _norm_words(story)
     for prev in list(used) + list(extra or []):
-        clip = re.sub(r"\s+", " ", str(prev or "")).strip()
-        if len(clip) < 18:
+        clip = _norm_words(prev)
+        if len(clip) < 12:
             continue
-        needle = clip.lower()[:36]
+        needle = clip[:40]
         if needle and needle in hay:
             return True
-        if _texts_overlap(story, clip):
+        if _texts_overlap(hay, clip):
             return True
     return False
 
@@ -2130,31 +2263,21 @@ def _today_lines(payload: Dict[str, Any]) -> List[str]:
     if lines:
         return lines[:3]
 
-    topic_labels = [
-        _topic_label(t.get("topic") or t.get("label"))
-        for t in topics[:3]
-        if t.get("topic") or t.get("label")
-    ]
-    sentiment = str(payload.get("sentiment") or "mixed").lower()
-    opener = f"{n} messages landed"
-    if topic_labels:
-        opener = f"{_join_phrase(topic_labels).lower()} took most of the airtime"
-    if sentiment == "bullish":
-        opener += ", and the room leaned bullish"
-    elif sentiment == "bearish":
-        opener += ", with bearish calls carrying the thread"
-    elif sentiment == "cautious":
-        opener += ", in a cautious wait-and-see mood"
-    fallback = [_cap_sentence(opener)]
     top = payload.get("top_subnets") or []
-    if top:
-        name = top[0].get("name") or f"SN{top[0].get('netuid')}"
-        ctx = str(top[0].get("mention_context") or "").strip()
-        detail = f"{name} led chatter"
-        if ctx:
-            detail += f" — {ctx}"
-        fallback.append(_cap_sentence(detail))
-    return fallback
+    for row in top:
+        ctx = str(row.get("mention_context") or "").strip()
+        if not ctx:
+            continue
+        netuid = row.get("netuid")
+        names = _subnet_labels(ctx, [netuid] if netuid is not None else [], registry_names)
+        tags = classify_message_topics(ctx)
+        tag = tags[0] if tags else ("market" if re.search(r"\btao\b", ctx, re.I) else "")
+        if not tag:
+            continue
+        story = _ground_claim(ctx, tag=tag, names=names)
+        if story:
+            return [_cap_sentence(story)]
+    return [f"No specific thread to recap yet ({n} graded messages)."]
 
 
 def _today_narrative(payload: Dict[str, Any]) -> str:

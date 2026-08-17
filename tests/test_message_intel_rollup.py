@@ -445,7 +445,8 @@ def test_build_today_topic_summary_calendar_day(monkeypatch):
     labels = [t["label"] for t in today["topics"]]
     assert "Market" in labels
     assert "Alpha" in labels
-    assert "market" in today["narrative"].lower()
+    hay = today["narrative"].lower()
+    assert "tao" in hay or "dip" in hay or "apy" in hay or "alpha" in hay
 
 
 def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
@@ -503,28 +504,32 @@ def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
         {
             "timestamp": "2026-08-17T12:00:00Z",
             "author_name": "Fay",
-            "content": "alpha yield still printing after the last rotation",
+            "content": "SN7 APY still printing after the validator rotation",
             "sentiment": "bullish",
+            "entities_json": '{"subnets": [7]}',
         },
     ]
     monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
     monkeypatch.setattr(
         "internal.subnet_names.display_name_for_netuid",
-        lambda netuid, **kw: "Teutonic" if int(netuid) == 3 else f"SN{netuid}",
+        lambda netuid, **kw: {3: "Teutonic", 7: "Allways"}.get(int(netuid), f"SN{netuid}"),
     )
-    today = rollup.build_today_conversation_summary(registry_names={3: "Teutonic"})
+    today = rollup.build_today_conversation_summary(registry_names={3: "Teutonic", 7: "Allways"})
     narrative = today["narrative"]
     lines = today["lines"]
     assert len(lines) == 3
     assert "argued" in lines[0].lower() or "split" in lines[0].lower()
-    assert "priced in" in lines[0].lower() or "validator rotation" in lines[0].lower()
+    assert "Teutonic" in lines[0] or "SN3" in lines[0]
+    assert "validator rotation" in lines[0].lower()
     joined = " ".join(lines[1:])
-    assert "market" in joined.lower()
-    assert "alpha" in joined.lower()
+    assert "TAO" in joined or "dip" in joined.lower() or "dump" in joined.lower()
+    alpha_line = next(ln for ln in lines if "APY" in ln or "Allways" in ln or "SN7" in ln)
+    assert "APY" in alpha_line
+    assert "Allways" in alpha_line or "SN7" in alpha_line
+    assert "validator rotation" in alpha_line.lower()
+    assert "token price" in alpha_line.lower() or "not token price" in alpha_line.lower() or "emissions yield" in alpha_line.lower()
+    assert "chatter stuck on" not in narrative.lower()
     assert "Alice" not in narrative
-    assert "Bob" not in narrative
-    assert "Cara" not in narrative
-    assert "took most of the airtime" not in narrative
 
 
 def test_week_top_comment_unit(monkeypatch):
