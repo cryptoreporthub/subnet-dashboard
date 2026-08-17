@@ -12059,6 +12059,19 @@ body.wrap {
   box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
 }
 
+.message-intel--v2 .message-intel__vis-top-pill--solo {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.message-intel--listener-orbit .message-intel__visualizer-card {
+  margin-bottom: 0;
+}
+
+.message-intel--listener-orbit .message-intel__vis-top-row {
+  margin-bottom: 8px;
+}
+
 /* ── Cosmic Resonance Core Visualizer (3D cosmic orbit, plasma rings, glass badges) ── */
 .message-intel--v2 .message-intel__visualizer-card {
   position: relative;
