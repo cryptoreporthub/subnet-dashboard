@@ -10171,6 +10171,9 @@ body.wrap {
 .message-intel__receipt small { color: var(--stage-muted); }
 .message-intel__outcome { display: inline-flex; width: fit-content; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid currentColor; margin: 6px 0 0; }
 .message-intel__outcome--hit { color: #34d399; }.message-intel__outcome--miss { color: #fb7185; }.message-intel__outcome--neutral { color: #fbbf24; }.message-intel__outcome--pending { color: #a5b4fc; }
+.message-intel__outcome--activity { color: #f472b6; }
+.message-intel__legacy-note { margin: 10px 0 0; padding: 8px 10px; border-radius: 6px; font-size: 11px; color: var(--stage-muted); background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.2); }
+.message-intel__receipts h4 + h4 { margin-top: 14px; }
 .message-intel__detail-proof { margin: 8px 0; color: var(--stage-muted); font-size: 11px; }
 .message-intel__hc-strip {
   margin: 0 0 16px;
@@ -18143,6 +18146,89 @@ section.desk-zone,
 .message-intel__podium-receipt-btn:hover {
     background: rgba(56, 189, 248, 0.2);
     border-color: rgba(56, 189, 248, 0.4);
+}
+
+.message-intel__podium-card-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.message-intel__podium-vip-pill--caution {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.35);
+}
+
+.message-intel__champ-wrap {
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (max-width: 480px) {
+    .message-intel__podium-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .message-intel__podium-card {
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .message-intel__podium-tenure {
+        white-space: normal;
+    }
+
+    .message-intel__podium-metrics {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        padding: 6px;
+    }
+
+    .message-intel__podium-metric {
+        min-width: 0;
+    }
+
+    .message-intel__podium-metric-label {
+        font-size: 7.5px;
+        letter-spacing: 0.04em;
+        text-align: center;
+    }
+
+    .message-intel__podium-metric-val {
+        font-size: 12px;
+    }
+
+    .message-intel__podium-footer {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .message-intel__dossier-row {
+        display: grid;
+        grid-template-columns: 2fr 1fr 1fr 1fr;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 8px;
+    }
+
+    .message-intel__dossier-rate,
+    .message-intel__dossier-inf,
+    .message-intel__dossier-action {
+        flex-shrink: 1;
+        min-width: 0;
+    }
+
+    .message-intel__dossier-user {
+        min-width: 0;
+    }
+
+    .message-intel__dossier-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 }
 
 /* Dossier Rows List */

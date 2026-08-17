@@ -544,6 +544,12 @@ class TelegramListener:
             "message_id": str(msg.id),
         }
 
+        reply_to = getattr(msg, "reply_to", None)
+        if reply_to is not None:
+            parent_id = getattr(reply_to, "reply_to_msg_id", None)
+            if parent_id is not None:
+                normalized["reply_to_message_id"] = str(parent_id)
+
         # Capture engagement metrics when available
         metrics: Dict[str, Any] = {}
         if hasattr(msg, "views") and msg.views is not None:
