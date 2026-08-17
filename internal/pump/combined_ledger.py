@@ -304,11 +304,17 @@ def _grade_candidate_at_call(
         return None
     resolve_at = created_at + timedelta(hours=HORIZON_HOURS)
     try:
-        from internal.council.grading import compute_actual_pct, pump_lead_hit
+        from internal.council.grading import (
+            compute_actual_pct,
+            is_price_unit_mismatch,
+            pump_lead_hit,
+        )
         from internal.council.price_reference import price_at_resolve_at
 
         status, resolved_price, _meta = price_at_resolve_at(netuid, resolve_at)
         if status != "ok" or resolved_price <= 0:
+            return None
+        if is_price_unit_mismatch(ref, resolved_price):
             return None
         actual_pct = compute_actual_pct(ref, resolved_price)
         pred = {"predicted_pct": claim_pct, "pump_claim": "COMBINED_EXP", "pump_badge": "COMBINED EXP"}

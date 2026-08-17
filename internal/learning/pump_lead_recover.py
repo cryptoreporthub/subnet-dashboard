@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from internal.council.grading import (
     compute_actual_pct,
     grade_prediction,
+    is_price_unit_mismatch,
     is_pump_desk_claim,
     is_pump_lead,
 )
@@ -145,6 +146,10 @@ def _finalize_grade(
     resolve_at: datetime,
 ) -> Dict[str, Any]:
     ref = float(prediction.get("reference_price") or 0)
+    if is_price_unit_mismatch(ref, price):
+        return _mark_ungradeable(
+            prediction, reason="price_unit_mismatch", now=_utcnow()
+        )
     actual_pct = compute_actual_pct(ref, price)
     correct, outcome = grade_prediction(prediction, actual_pct)
     out = dict(prediction)
@@ -205,6 +210,8 @@ def update_pump_horizon_outcomes(
                 cache_path=cache_path,
             )
             if status != "ok" or price <= 0:
+                continue
+            if is_price_unit_mismatch(ref, price):
                 continue
             actual_pct = compute_actual_pct(ref, price)
             outcomes[label] = {
