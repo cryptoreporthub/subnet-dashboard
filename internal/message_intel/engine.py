@@ -255,10 +255,23 @@ def _message_matches_filters(
         if row_netuid is None or int(row_netuid) != int(netuid):
             return False
     if topic:
-        topics = row.get("topics") if isinstance(row.get("topics"), list) else []
-        if topic not in topics:
-            return False
-    if author_id and stable_author_id(row) != str(author_id):
+            needle = str(topic).strip().lower()
+            topics = row.get("topics") if isinstance(row.get("topics"), list) else []
+            topic_hit = any(str(item).strip().lower() == needle for item in topics)
+            if not topic_hit:
+                group_name = str(row.get("group_name") or "").strip().lower()
+                topic_hit = group_name == needle
+            if not topic_hit:
+                subnet_match = re.fullmatch(r"(?:sn|subnet)\s*#?(\d+)", needle)
+                if subnet_match:
+                    row_netuid = row.get("netuid") or _primary_netuid_from_message(row)
+                    try:
+                        topic_hit = row_netuid is not None and int(row_netuid) == int(subnet_match.group(1))
+                    except (TypeError, ValueError):
+                        topic_hit = False
+            if not topic_hit:
+                return False
+        if author_id and stable_author_id(row) != str(author_id):
         return False
     return True
 
@@ -293,7 +306,10 @@ def list_messages(
         or bool(author_id)
     )
     # ponytail: filtered queries scan recent 200 rows max — enough for desk feed, not full archive search
-    fetch_limit = min(200, max(limit + offset, limit)) if filters_active else limit
+    # Author crowns and topic chips must search the complete bounded archive;
+    # limiting them to the newest 200 rows makes valid weekly leaders appear
+    # empty whenever their latest message is just outside that window.
+    fetch_limit = min(5000, max(limit + offset, 5000 if (author_id or topic) else limit)) if filters_active else limit
     fetch_offset = 0 if filters_active else offset
     raw = db.list_messages(limit=fetch_limit, offset=fetch_offset)
     messages = [_enrich_message_row(m, names) for m in raw]
