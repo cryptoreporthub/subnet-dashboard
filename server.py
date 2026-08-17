@@ -1789,6 +1789,24 @@ def get_subnet(subnet_id: int):
     return {"subnet_id": subnet_id, "data": merged}
 
 
+@app.get("/api/subnet/{subnet_id}/pool")
+def get_subnet_pool(subnet_id: int):
+    """Return the live on-chain TAO reserve used by the listener flow gauge."""
+    try:
+        from internal.chain_client import get_default_client
+
+        pool = get_default_client().get_pool_state(subnet_id)
+    except Exception as exc:
+        logger.debug("subnet pool snapshot failed for %s: %s", subnet_id, exc)
+        pool = None
+    if not pool:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "subnet_id": subnet_id},
+        )
+    return {"status": "success", "subnet_id": subnet_id, "pool": pool}
+
+
 @app.get("/api/summary")
 def get_summary():
     """Lightweight aggregated hero-card data for the dashboard."""
