@@ -155,13 +155,19 @@ def test_format_summary_includes_trending_topics_today():
             "today_topics": [
                 {"label": "Market", "count": 19},
                 {"label": "Alpha", "count": 10},
+                {"label": "Emissions", "count": 7},
             ],
         }
     )
 
-    assert "Market and alpha took most of the airtime" in text
+    assert "took most of the airtime" in text
+    assert "<b>Topics</b>" in text
+    assert "• Market" in text
+    assert "• Alpha" in text
+    assert "• Emissions" in text
     assert "Market (19)" not in text
-    assert text.find("Market and alpha took most of the airtime") < text.find("<i>")
+    assert text.find("took most of the airtime") < text.find("<b>Topics</b>")
+    assert text.find("<b>Topics</b>") < text.find("<i>")
 
 
 def test_rate_limit_per_chat(intel_env):
