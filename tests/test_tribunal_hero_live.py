@@ -1,5 +1,8 @@
 """Tribunal hero live-wired into homepage council_stage."""
 
+import subprocess
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from internal.preview.tribunal_hero import (
@@ -273,6 +276,15 @@ def test_tribunal_hero_template_sync_and_conviction_hooks():
     assert "id=\"tribunal-hero-sync\"" in html
     assert "tribunal-hero__sync" in html
     assert 'data-panel="decision-log"' in html
+
+
+def test_cockpit_hydrate_js_parses():
+    """Parse-time guard: a syntax error in cockpit_hydrate.js breaks all homepage hydration."""
+    subprocess.run(
+        ["node", "--check", "static/js/cockpit_hydrate.js"],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+    )
 
 
 def test_cockpit_hydrate_tribunal_sync_helpers():

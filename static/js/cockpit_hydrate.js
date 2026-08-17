@@ -4957,12 +4957,6 @@
     if (has) return weights;
     return parseTribunalWeightsAttr(hero) || weights;
   }
-    var hero = document.getElementById('tribunal-hero');
-    if (!hero) return;
-    var el = hero.querySelector('[data-council-last5]');
-    if (!el) return;
-    renderTribunalLast5Ticks(el, stats && stats.council_last5);
-  }
 
   function patchTribunalJudges(stats, dailyPick) {
     var hero = document.getElementById('tribunal-hero');
