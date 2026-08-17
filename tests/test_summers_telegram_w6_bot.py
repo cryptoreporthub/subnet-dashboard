@@ -94,9 +94,12 @@ def test_format_summary_includes_desk_link(monkeypatch, intel_env):
 
     _seed_messages(intel_env, count=12)
     text = summary_bot.format_summary_message(build_24h_summary(db=intel_env))
-    assert "Subnet Summers — 24h pulse" in text
+    assert "Subnet Summers" in text
     assert "https://example.test/#section-message-intel" in text
     assert "Top" in text
+    narrative_at = text.find("</b>")
+    bonus_at = text.find("<i>")
+    assert narrative_at != -1 and bonus_at != -1 and narrative_at < bonus_at
 
 
 def test_format_summary_includes_what_mentions_are_about():
@@ -118,7 +121,7 @@ def test_format_summary_includes_what_mentions_are_about():
 
     assert "SN7 Allways (3 mentions)" in text
     assert "Validators discussed a new release" in text
-    assert "Today" in text
+    assert text.find("Validators discussed a new release") < text.find("<i>")
 
 
 def test_format_summary_includes_hour_price_change():
@@ -156,9 +159,9 @@ def test_format_summary_includes_trending_topics_today():
         }
     )
 
-    assert "Today" in text
     assert "Market and alpha took most of the airtime" in text
     assert "Market (19)" not in text
+    assert text.find("Market and alpha took most of the airtime") < text.find("<i>")
 
 
 def test_rate_limit_per_chat(intel_env):
