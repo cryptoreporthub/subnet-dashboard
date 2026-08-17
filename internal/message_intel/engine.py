@@ -272,8 +272,8 @@ def _message_matches_filters(
             if not topic_hit:
                 return False
         if author_id and stable_author_id(row) != str(author_id):
-        return False
-    return True
+            return False
+        return True
 
 
 def list_messages(
