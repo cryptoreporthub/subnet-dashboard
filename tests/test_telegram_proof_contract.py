@@ -68,50 +68,41 @@ def _seed(db, *, author_name="Nick", author_username="nick_tg", author_id=None,
 
 def test_up_hit_miss_neutral_mapping(intel_db):
     from internal.message_intel.proof import classify_call
-    hit = classify_call({"source": "telegram", "predicted_direction": "up",
-                         "conviction": 70, "tao_usd_price": 1.0, "outcome": "pump",
-                         "pump_pct_max": 4.2})
+    base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
+    hit = classify_call({**base, "predicted_direction": "up", "outcome": "pump", "pump_pct_max": 4.2})
     assert hit["resolved"] is True and hit["evaluation"] == "resolved"
     assert hit["status"] == "hit"
     assert hit["direction"] == "up"
 
-    miss = classify_call({"source": "telegram", "predicted_direction": "up",
-                          "conviction": 70, "tao_usd_price": 1.0, "outcome": "dump",
-                          "pump_pct_max": -4.0})
+    miss = classify_call({**base, "predicted_direction": "up", "outcome": "dump", "pump_pct_max": -4.0})
     assert miss["status"] == "miss"
 
-    neutral = classify_call({"source": "telegram", "predicted_direction": "up",
-                             "conviction": 70, "tao_usd_price": 1.0, "outcome": "stable"})
+    neutral = classify_call({**base, "predicted_direction": "up", "outcome": "stable"})
     assert neutral["status"] == "neutral"
 
-    # up call where a large transient pump confirms even with no explicit outcome pump
-    transient = classify_call({"source": "telegram", "predicted_direction": "up",
-                               "conviction": 70, "tao_usd_price": 1.0, "outcome": "stable",
-                               "pump_pct_max": 2.5})
+    transient = classify_call({**base, "predicted_direction": "up", "outcome": "stable", "pump_pct_max": 2.5})
     assert transient["status"] == "hit"
 
 
 def test_down_hit_miss_mapping(intel_db):
     from internal.message_intel.proof import classify_call
-    hit = classify_call({"source": "telegram", "predicted_direction": "down",
-                         "conviction": 70, "tao_usd_price": 1.0, "outcome": "dump"})
+    base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
+    hit = classify_call({**base, "predicted_direction": "down", "outcome": "dump"})
     assert hit["status"] == "hit"
-    miss = classify_call({"source": "telegram", "predicted_direction": "down",
-                          "conviction": 70, "tao_usd_price": 1.0, "outcome": "mild_pump"})
+    miss = classify_call({**base, "predicted_direction": "down", "outcome": "mild_pump"})
     assert miss["status"] == "miss"
 
 
 def test_flat_direction_uses_stable(intel_db):
     from internal.message_intel.proof import classify_call
-    hit = classify_call({"source": "telegram", "predicted_direction": "sideways",
-                         "conviction": 70, "tao_usd_price": 1.0, "outcome": "stable"})
+    base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
+    hit = classify_call({**base, "predicted_direction": "sideways", "outcome": "stable"})
     assert hit["status"] == "hit"
-    miss = classify_call({"source": "telegram", "predicted_direction": "flat",
-                          "conviction": 70, "tao_usd_price": 1.0, "outcome": "pump"})
+    miss = classify_call({**base, "predicted_direction": "flat", "outcome": "pump"})
     assert miss["status"] == "miss"
 
 
-def test_price_basis_requires_subnet_or_explicit_tao():
+def test_price_basis_requires_subnet_or_reply_parent():
     from internal.message_intel.proof import classify_call
 
     subnet = classify_call(
@@ -127,6 +118,7 @@ def test_price_basis_requires_subnet_or_explicit_tao():
     assert subnet["eligible"] is True
     assert subnet["price_basis"] == "subnet"
     assert subnet["subnet_name"] == "SN7"
+    assert subnet["subnet_source"] == "self"
 
     named_subnet = classify_call(
         {
@@ -142,6 +134,36 @@ def test_price_basis_requires_subnet_or_explicit_tao():
     assert named_subnet["price_basis"] == "subnet"
     assert named_subnet["subnet_name"] == "Subnet Seven"
 
+    reply_subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "content": "Agreed — strong setup",
+            "reply_to_message_id": "219521",
+            "reply_parent_content": "SN127 looks strong here",
+            "outcome": "pump",
+        }
+    )
+    assert reply_subnet["eligible"] is True
+    assert reply_subnet["price_basis"] == "subnet"
+    assert reply_subnet["subnet_source"] == "reply"
+    assert reply_subnet["subnet_name"] == "SN127"
+
+    url_subnet = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 1.0,
+            "content": "https://www.tao.app/subnet/100",
+            "outcome": "pump",
+        }
+    )
+    assert url_subnet["eligible"] is True
+    assert url_subnet["price_basis"] == "subnet"
+
     tao = classify_call(
         {
             "source": "telegram",
@@ -152,9 +174,8 @@ def test_price_basis_requires_subnet_or_explicit_tao():
             "outcome": "pump",
         }
     )
-    assert tao["eligible"] is True
-    assert tao["price_basis"] == "tao"
-    assert tao["subnet_name"] is None
+    assert tao["eligible"] is False
+    assert tao["price_basis"] is None
 
     chatter = classify_call(
         {
@@ -173,7 +194,7 @@ def test_price_basis_requires_subnet_or_explicit_tao():
 def test_pending_call_not_counted(intel_db):
     from internal.message_intel.proof import classify_call
     pending = classify_call({"source": "telegram", "predicted_direction": "up",
-                             "conviction": 70, "tao_usd_price": 1.0, "outcome": None})
+                             "conviction": 70, "tao_usd_price": 1.0, "netuid": 7, "outcome": None})
     assert pending["eligible"] is True
     assert pending["resolved"] is False
     assert pending["evaluation"] == "pending"
@@ -224,7 +245,7 @@ def test_classifier_parity_with_locked_rule(intel_db):
                 for pct in pcts:
                     row = {"source": "telegram", "verdict": verdict,
                            "predicted_direction": d, "conviction": 70,
-                           "tao_usd_price": 1.0, "outcome": outcome,
+                           "tao_usd_price": 1.0, "netuid": 7, "outcome": outcome,
                            "pump_pct_max": pct}
                     proof = classify_call(row)
                     assert proof["eligible"] and proof["resolved"]
@@ -238,7 +259,7 @@ def test_classifier_parity_with_locked_rule(intel_db):
     for outcome in outcomes:
         row = {"source": "telegram", "verdict": "neutral",
                "predicted_direction": "sideways", "conviction": 70,
-               "tao_usd_price": 1.0, "outcome": outcome}
+               "tao_usd_price": 1.0, "netuid": 7, "outcome": outcome}
         proof = classify_call(row)
         assert proof["eligible"] and proof["resolved"]
         correct = outcome == "stable"

@@ -6,12 +6,16 @@ these helpers so the numbers can never disagree. Grading is based on resolved
 price prices only and NEVER on reaction counts, views, forwards, or ungraded
 chatter.
 
-Eligibility (a "qualified call")
+Eligibility (a "qualified call)
   - source == 'telegram'
   - a non-empty, normalised direction (up / down / flat)
   - conviction >= MIN_CONVICTION (jury score, default 60)
   - a positive finite price snapshot (baseline > 0)
+  - subnet identity: explicit netuid/SN mention in the message OR in the
+    replied-to parent message (reply_to_message_id join)
   - a recorded resolved outcome (price_outcomes.outcome is not null)
+
+TAO-only chatter (no subnet) is never a qualified call.
 
 Grading (canonical, aligned with self_learning._is_correct_prediction)
   hit      — direction confirms:
@@ -176,6 +180,8 @@ def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
     every subnet-basis call classifies as ineligible.
     """
     netuid = row.get("netuid")
+    if netuid is None:
+        netuid = row.get("snap_netuid")
     if netuid is not None:
         try:
             return int(netuid)
@@ -190,7 +196,34 @@ def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
     except (TypeError, ValueError, json.JSONDecodeError):
         pass
     match = re.search(r"\b(?:sn|subnet)\s*#?\s*(\d{1,4})\b", str(row.get("content") or ""), re.IGNORECASE)
-    return int(match.group(1)) if match else None
+    if match:
+        return int(match.group(1))
+    for url_match in re.findall(r"subnet[/\s#:]+(\d{1,4})\b", str(row.get("content") or ""), re.IGNORECASE):
+        return int(url_match)
+    return None
+
+
+def _resolve_subnet_identity(row: Dict[str, Any]) -> tuple[Optional[int], str, Optional[str]]:
+    """Return (netuid, subnet_name, source) where source is self|reply|None."""
+    netuid = _row_netuid(row)
+    subnet_name = str(row.get("subnet_name") or (f"SN{netuid}" if netuid is not None else "")).strip()
+    if netuid is not None or subnet_name:
+        return netuid, subnet_name, "self"
+
+    if not (row.get("reply_to_message_id") or row.get("reply_parent_content")):
+        return None, "", None
+
+    parent = {
+        "content": row.get("reply_parent_content"),
+        "entities_json": row.get("reply_parent_entities_json"),
+        "netuid": row.get("reply_parent_netuid"),
+        "snap_netuid": row.get("reply_parent_netuid"),
+    }
+    parent_netuid = _row_netuid(parent)
+    parent_name = str(row.get("reply_parent_subnet_name") or (f"SN{parent_netuid}" if parent_netuid else "")).strip()
+    if parent_netuid is not None or parent_name:
+        return parent_netuid, parent_name, "reply"
+    return None, "", None
 
 
 def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -> Dict[str, Any]:
@@ -212,10 +245,9 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     baseline = _to_float(row.get("tao_usd_price"))
     outcome = (row.get("outcome") or "").strip()
     pump_pct = _to_float(row.get("pump_pct_max"))
-    netuid = _row_netuid(row)
-    subnet_name = str(row.get("subnet_name") or (f"SN{netuid}" if netuid is not None else "")).strip()
+    netuid, subnet_name, subnet_source = _resolve_subnet_identity(row)
     has_subnet_identity = netuid is not None or bool(subnet_name)
-    price_basis = "subnet" if has_subnet_identity else ("tao" if _about_tao(row) else None)
+    price_basis = "subnet" if has_subnet_identity else None
 
     eligible = (
         source == "telegram"
@@ -241,6 +273,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "move_pct": move_pct,
             "price_basis": price_basis,
             "subnet_name": subnet_name or None,
+            "subnet_source": subnet_source,
             "raw_outcome": outcome or None,
             "threshold": min_conviction,
         }
@@ -255,6 +288,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "move_pct": move_pct,
             "price_basis": price_basis,
             "subnet_name": subnet_name or None,
+            "subnet_source": subnet_source,
             "raw_outcome": None,
             "threshold": min_conviction,
         }
@@ -269,6 +303,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         "move_pct": move_pct,
         "price_basis": price_basis,
         "subnet_name": subnet_name or None,
+        "subnet_source": subnet_source,
         "raw_outcome": outcome,
         "threshold": min_conviction,
     }

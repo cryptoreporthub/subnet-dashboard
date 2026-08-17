@@ -98,6 +98,19 @@ def _netuids_from_row(row: Dict[str, Any]) -> Set[int]:
             found.add(int(match))
         except (TypeError, ValueError):
             continue
+    for match in re.findall(r"subnet[/\s#:]+(\d{1,4})\b", content, re.IGNORECASE):
+        try:
+            found.add(int(match))
+        except (TypeError, ValueError):
+            continue
+
+    if row.get("reply_to_message_id") or row.get("reply_parent_content"):
+        parent = {
+            "content": row.get("reply_parent_content"),
+            "entities_json": row.get("reply_parent_entities_json"),
+            "snap_netuid": row.get("reply_parent_netuid"),
+        }
+        found.update(_netuids_from_row(parent))
     return found
 
 
@@ -185,13 +198,22 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
+                      m.reply_to_message_id,
                       a.sentiment, a.influence_score,
                       a.entities_json, mm.reactions, ps.netuid AS snap_netuid,
+                      pm.content AS reply_parent_content,
+                      pa.entities_json AS reply_parent_entities_json,
+                      pps.netuid AS reply_parent_netuid,
                       v.conviction, v.predicted_direction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_metrics mm ON mm.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN messages pm ON pm.source = m.source
+                   AND pm.group_id = m.group_id
+                   AND pm.external_message_id = m.reply_to_message_id
+               LEFT JOIN message_analysis pa ON pa.message_id = pm.id
+               LEFT JOIN price_snapshots pps ON pps.message_id = pm.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                ORDER BY m.id DESC"""
         ).fetchall()
@@ -570,7 +592,7 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
                     "author_id": entry["author_id"],
                     "author_name": name,
                     "author_username": entry["author_username"],
-                    "available": canonical_graded > 0,
+                    "available": canonical_graded > 0 or int(entry["message_count"]) > 0,
                     "graded": canonical_graded,
                     "hit_rate": graded.get("hit_rate") if canonical_graded else None,
                     "strike_rate": graded.get("strike_rate") if canonical_graded else None,
@@ -871,13 +893,24 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
+                      m.reply_to_message_id,
+                      a.entities_json,
                       v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
-                      po.price_1h, po.price_4h, po.price_24h
+                      po.price_1h, po.price_4h, po.price_24h,
+                      pm.content AS reply_parent_content,
+                      pa.entities_json AS reply_parent_entities_json,
+                      pps.netuid AS reply_parent_netuid
                FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                LEFT JOIN price_outcomes po ON po.message_id = m.id
+               LEFT JOIN messages pm ON pm.source = m.source
+                   AND pm.group_id = m.group_id
+                   AND pm.external_message_id = m.reply_to_message_id
+               LEFT JOIN message_analysis pa ON pa.message_id = pm.id
+               LEFT JOIN price_snapshots pps ON pps.message_id = pm.id
                WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
         ).fetchall()
     out = []
@@ -1461,15 +1494,141 @@ def telegram_message_url(row: Dict[str, Any]) -> Optional[str]:
 
 
 def list_telegram_caller_receipts(*, author_id: str, days: int = 30, limit: int = 20, offset: int = 0, db=None) -> Dict[str, Any]:
-    """Paginated public receipts, restricted to resolved qualifying evidence."""
+    """Paginated proof receipts plus activity receipts (reactions / influence)."""
     receipts = []
     for row in _proof_rows(db, days=days, author_id=author_id):
         proof = classify_call(row)
         if proof["resolved"]:
             receipts.append(_receipt(row, proof))
     page = receipts[offset: offset + limit]
-    return {"author_id": author_id, "days": days, "count": len(page), "total": len(receipts),
-            "receipts": page, "empty": not receipts, "offset": offset, "limit": limit}
+
+    activity = list_telegram_caller_activity(
+        author_id=author_id, days=days, limit=limit, offset=offset, db=db
+    )
+
+    legacy_reliability = None
+    rel = _author_reliability_rows(db).get(str(author_id))
+    if rel and int(rel.get("total_messages") or 0) > 0:
+        total = int(rel["total_messages"])
+        correct = int(rel["correct_predictions"])
+        legacy_reliability = {
+            "total_messages": total,
+            "correct_predictions": correct,
+            "accuracy_pct": round((correct / total) * 100.0, 1) if total else None,
+            "source": "author_reliability",
+            "note": (
+                "Legacy TAO-price grading from price_tracker/self_learning before the "
+                "subnet-only proof contract. Not itemized as proof receipts."
+            ),
+        }
+
+    return {
+        "author_id": author_id,
+        "days": days,
+        "count": len(page),
+        "total": len(receipts),
+        "receipts": page,
+        "empty": not receipts and not activity["receipts"],
+        "offset": offset,
+        "limit": limit,
+        "activity": activity["receipts"],
+        "activity_total": activity["total"],
+        "activity_empty": activity["empty"],
+        "legacy_reliability": legacy_reliability,
+    }
+
+
+def _activity_receipt(row: Dict[str, Any]) -> Dict[str, Any]:
+    rx = _reaction_score(row.get("reactions"))
+    boost = _reaction_influence_boost(rx)
+    netuids = _netuids_from_row(row)
+    netuid = row.get("netuid")
+    if netuid is None and netuids:
+        netuid = next(iter(netuids))
+    proof_row = {
+        **row,
+        "source": "telegram",
+        "netuid": netuid,
+        "tao_usd_price": row.get("tao_usd_price"),
+    }
+    receipt: Dict[str, Any] = {
+        "message_id": int(row["id"]),
+        "content": str(row.get("content") or "")[:280],
+        "timestamp": row.get("timestamp") or row.get("created_at"),
+        "netuid": netuid,
+        "kind": "activity",
+        "influence_score": round(float(row.get("influence_score") or 0.0), 4),
+        "reactions": rx,
+        "reaction_boost": boost,
+        "proof": proof_for_message(proof_row),
+    }
+    source_link = telegram_message_url(row)
+    if source_link:
+        receipt["source_url"] = source_link
+    return receipt
+
+
+def list_telegram_caller_activity(
+    *, author_id: str, days: int = 30, limit: int = 20, offset: int = 0, db=None
+) -> Dict[str, Any]:
+    """Messages that drove influence (especially reactions) — not proof-contract hits."""
+    database = db or get_db()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    with database._connect() as conn:
+        rows = conn.execute(
+            """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
+                      m.content, m.timestamp, m.created_at, m.external_message_id,
+                      m.reply_to_message_id,
+                      a.influence_score, a.entities_json,
+                      mm.reactions,
+                      v.conviction, v.verdict, v.predicted_direction,
+                      ps.netuid, ps.tao_usd_price,
+                      po.outcome, po.pump_pct_max, po.price_24h
+               FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
+               LEFT JOIN message_metrics mm ON mm.message_id = m.id
+               LEFT JOIN message_verdicts v ON v.message_id = m.id
+               LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN price_outcomes po ON po.message_id = m.id
+               WHERE m.source = 'telegram'
+               ORDER BY m.id DESC LIMIT 3000"""
+        ).fetchall()
+
+    items: List[Dict[str, Any]] = []
+    for raw in rows:
+        row = dict(raw)
+        if stable_author_id(row) != str(author_id):
+            continue
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < cutoff:
+            continue
+        rx = _reaction_score(row.get("reactions"))
+        boost = _reaction_influence_boost(rx)
+        influence = float(row.get("influence_score") or 0.0)
+        if boost <= 0 and influence <= 0:
+            continue
+        items.append(row)
+
+    items.sort(
+        key=lambda r: (
+            _reaction_influence_boost(_reaction_score(r.get("reactions"))),
+            float(r.get("influence_score") or 0.0),
+            _parse_ts(r.get("timestamp")) or datetime.min.replace(tzinfo=timezone.utc),
+        ),
+        reverse=True,
+    )
+    receipts = [_activity_receipt(row) for row in items]
+    page = receipts[offset: offset + limit]
+    return {
+        "author_id": author_id,
+        "days": days,
+        "count": len(page),
+        "total": len(receipts),
+        "receipts": page,
+        "empty": not receipts,
+        "offset": offset,
+        "limit": limit,
+    }
 
 
 _MIN_24H_SUMMARY_MESSAGES = 10
