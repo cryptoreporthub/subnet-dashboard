@@ -25,6 +25,25 @@ def test_display_name_tmc_sn6_numinous(monkeypatch):
     assert name == "Numinous"
 
 
+def test_display_name_override_sn39_deprecated(monkeypatch):
+    """SN39 on-chain identity is deprecated; stale taostat still lists EdgeMaxxing."""
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnet_names._load_name_overrides",
+        lambda: {"39": "deprecated"},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._remote_registry",
+        lambda: {"39": {"name": "EdgeMaxxing"}},
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names._load_local_registry",
+        lambda: {"39": {"name": "EdgeMaxxing"}},
+    )
+    name = display_name_for_netuid(39, use_taostats_fallback=False)
+    assert name == "deprecated"
+
+
 def test_display_name_override_sn6_numinous_when_tmc_empty(monkeypatch):
     """Curator override wins over stale registry when TMC is empty."""
     monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {})
