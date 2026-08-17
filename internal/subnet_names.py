@@ -198,8 +198,8 @@ def resolve_subnet_name(
         return "SN?"
 
     override = _load_name_overrides().get(str(n))
-    if override and not _is_bad_name(override):
-        return override
+    if override and str(override).strip():
+        return str(override).strip()
 
     tmc_hit = _tmc_label(n, tmc_name) if use_tmc_names else None
     if tmc_hit:
@@ -264,7 +264,7 @@ def display_name_for_netuid(
     # live feed name (Blockmachine/TMC). Otherwise the override only surfaces
     # in the degraded path and the live hero label regresses.
     override = _load_name_overrides().get(str(n))
-    if override and not _is_bad_name(override):
+    if override and str(override).strip():
         return str(override).strip()
 
     row_name = subnet_row.get("name") if isinstance(subnet_row, dict) else None

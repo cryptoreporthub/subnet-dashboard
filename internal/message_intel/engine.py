@@ -205,12 +205,18 @@ def _enrich_message_row(row: Dict[str, Any], names: Optional[Dict[int, str]] = N
     from internal.message_intel.topic_tags import classify_message_topics
 
     out = dict(row)
-    if out.get("netuid") is None:
+    netuid = out.get("netuid")
+    if netuid is None:
         netuid = _primary_netuid_from_message(out)
         if netuid is not None:
             out["netuid"] = netuid
-            if names and not out.get("subnet_name"):
-                out["subnet_name"] = names.get(netuid)
+    if names and netuid is not None:
+        try:
+            canonical = names.get(int(netuid))
+        except (TypeError, ValueError):
+            canonical = None
+        if canonical:
+            out["subnet_name"] = canonical
     content = out.get("content")
     if content and not out.get("topics"):
         out["topics"] = classify_message_topics(str(content))
