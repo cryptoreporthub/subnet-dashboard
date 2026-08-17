@@ -1925,20 +1925,11 @@ function renderTrendingSky(rows) {
     if (authorsUnavailable) {
       return '<p class="empty">Weekly champions API unavailable — redeploy to pick up the latest build.</p>';
     }
-    var defaultAuthors = [
-      { author_username: "maankai_0000", author_name: "Maan Kai", initials: "MK", influence_score: 595.6, hit_rate: 88.0, graded: 8, hits: 5, message_count: 24, subnet_count: 5, author_id: "1", role: "✦ VERIFIED VIP", top_subnet: "SN19 (+28.4%)", streak: "5W" },
-      { author_username: "tao_max17", author_name: "Tao Max", initials: "TM", influence_score: 470.2, hit_rate: 84.0, graded: 7, hits: 5, message_count: 18, subnet_count: 4, author_id: "2", role: "✦ COMPUTE SPECIALIST", top_subnet: "SN8 (+19.2%)", streak: "4W" },
-      { author_username: "alphahunter_x7", author_name: "Alpha Hunter", initials: "AH", influence_score: 392.0, hit_rate: 80.0, graded: 6, hits: 4, message_count: 14, subnet_count: 3, author_id: "3", role: "✦ SPEED SNIPER", top_subnet: "SN1 (+14.8%)", streak: "3W" },
-      { author_username: "chatterqueen4", author_name: "Chatter Queen", initials: "CQ", influence_score: 312.4, hit_rate: 75.0, graded: 5, hits: 3, message_count: 12, subnet_count: 3, author_id: "4", role: "✦ LIQUIDITY TRACKER", top_subnet: "SN64 (+11.5%)", streak: "2W" },
-      { author_username: "nova_calls", author_name: "Nova Calls", initials: "NC", influence_score: 245.0, hit_rate: 67.5, graded: 4, hits: 2, message_count: 9, subnet_count: 2, author_id: "5", role: "✦ SENTIMENT ANALYST", top_subnet: "SN127 (+8.2%)", streak: "2W" }
-    ];
-    var list = (rows && rows.length) ? rows : defaultAuthors;
-    var maxInf = Math.max.apply(
-      null,
-      list.map(function (r) {
-        return Number(r.influence_score) || 0;
-      }).concat([1])
-    );
+    var list = (rows && rows.length) ? rows : [];
+
+    if (!list.length) {
+      return '<p class="empty">No weekly champions yet — waiting for subnet-call activity.</p>';
+    }
 
     var html = '<div class="message-intel__champ-wrap">';
     
@@ -1947,23 +1938,29 @@ function renderTrendingSky(rows) {
     list.slice(0, 3).forEach(function (row, idx) {
       var rank = idx + 1;
       var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : (row.author_name || "Unknown");
-      var inf = Number(row.influence_score) || (600 - idx * 120);
-      var hitRate = row.hit_rate != null ? Number(row.hit_rate).toFixed(1) + "%" : (88 - idx * 4).toFixed(1) + "%";
-      var calls = row.message_count || row.graded || (12 - idx * 2);
-      var hits = row.hits || Math.round(calls * 0.8);
+      var inf = Number(row.influence_score) || 0;
+      var hitRateVal = row.strike_rate_pct != null ? row.strike_rate_pct : (row.accuracy_pct != null ? row.accuracy_pct : row.hit_rate);
+      var hitRate = hitRateVal != null ? Number(hitRateVal).toFixed(1) + "%" : "—";
+      var calls = row.message_count || 0;
+      var hits = row.hits || 0;
+      var subnets = row.subnet_count || 0;
+      var graded = row.graded || 0;
+      var receiptsOk = row.receipt_friendly ? row.receipt_friendly.available : graded > 0;
       var rankBadge = rank === 1 ? '👑 #1 SOVEREIGN' : (rank === 2 ? '🥈 #2 ALPHA CALLER' : '🥉 #3 ALPHA CALLER');
       var rankClass = rank === 1 ? 'message-intel__podium-card--gold' : (rank === 2 ? 'message-intel__podium-card--silver' : 'message-intel__podium-card--bronze');
-      var vipTag = rank === 1 ? '✦ VERIFIED VIP' : (rank === 2 ? '✦ COMPUTE LEAD' : '✦ SPEED SNIPER');
-      var topCall = rank === 1 ? 'SN19 <b>+28.4%</b>' : (rank === 2 ? 'SN8 <b>+19.2%</b>' : 'SN1 <b>+14.8%</b>');
-      var streak = (6 - idx) + 'W 🔥';
+      var cautionPill = (row.caution || row.stats_source === 'author_reliability')
+        ? '<span class="message-intel__podium-vip-pill message-intel__podium-vip-pill--caution">⚠ LOW SAMPLE</span>'
+        : '';
       var initials = row.initials || initialLetter(row.author_name || handle);
-      var receiptBtn = '<button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>';
+      var receiptBtn = receiptsOk
+        ? '<button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>'
+        : '<span class="message-intel__podium-top-call">No subnet-call receipts</span>';
 
       html +=
         '<div class="message-intel__podium-card ' + rankClass + '">' +
         '<div class="message-intel__podium-card-top">' +
         '<span class="message-intel__podium-rank-pill">' + rankBadge + '</span>' +
-        '<span class="message-intel__podium-vip-pill">' + vipTag + '</span>' +
+        cautionPill +
         '</div>' +
         '<div class="message-intel__podium-user">' +
         '<div class="message-intel__podium-avatar-wrap">' +
@@ -1972,7 +1969,7 @@ function renderTrendingSky(rows) {
         '</div>' +
         '<div class="message-intel__podium-identity">' +
         '<b class="message-intel__podium-name">' + esc(handle) + '</b>' +
-        '<span class="message-intel__podium-tenure">' + esc(calls) + ' calls · ' + esc(hits) + ' verified hits · ' + esc(row.subnet_count || 3) + ' subnets</span>' +
+        '<span class="message-intel__podium-tenure">' + esc(calls) + ' calls · ' + esc(hits) + ' verified hits · ' + esc(subnets) + ' subnets</span>' +
         '</div>' +
         '</div>' +
         '<div class="message-intel__podium-metrics">' +
@@ -1985,12 +1982,11 @@ function renderTrendingSky(rows) {
         '<b class="message-intel__podium-metric-val">' + (inf.toFixed ? inf.toFixed(1) : inf) + '</b>' +
         '</div>' +
         '<div class="message-intel__podium-metric">' +
-        '<span class="message-intel__podium-metric-label">Win Streak</span>' +
-        '<b class="message-intel__podium-metric-val message-intel__text-gold">' + streak + '</b>' +
+        '<span class="message-intel__podium-metric-label">Graded</span>' +
+        '<b class="message-intel__podium-metric-val">' + esc(graded) + '</b>' +
         '</div>' +
         '</div>' +
         '<div class="message-intel__podium-footer">' +
-        '<span class="message-intel__podium-top-call">Top Call: ' + topCall + '</span>' +
         receiptBtn +
         '</div>' +
         '</div>';
@@ -2004,13 +2000,17 @@ function renderTrendingSky(rows) {
       list.slice(3, 8).forEach(function (row, idx) {
         var rank = idx + 4;
         var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : (row.author_name || "Unknown");
-        var inf = Number(row.influence_score) || (280 - idx * 50);
-        var hitRate = row.hit_rate != null ? Number(row.hit_rate).toFixed(1) + "%" : (75 - idx * 5).toFixed(1) + "%";
-        var calls = row.message_count || row.graded || (10 - idx * 2);
-        var hits = row.hits || Math.round(calls * 0.72);
+        var inf = Number(row.influence_score) || 0;
+        var hitRateVal = row.strike_rate_pct != null ? row.strike_rate_pct : (row.accuracy_pct != null ? row.accuracy_pct : row.hit_rate);
+        var hitRate = hitRateVal != null ? Number(hitRateVal).toFixed(1) + "%" : "—";
+        var calls = row.message_count || 0;
+        var hits = row.hits || 0;
+        var graded = row.graded || 0;
+        var receiptsOk = row.receipt_friendly ? row.receipt_friendly.available : graded > 0;
         var initials = row.initials || initialLetter(row.author_name || handle);
-        var streak = (3 - idx > 0 ? (3 - idx) + 'W' : '2W');
-        var receiptBtn = '<button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>';
+        var receiptBtn = receiptsOk
+          ? '<button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>'
+          : '<span class="message-intel__dossier-sub">—</span>';
 
         html +=
           '<div class="message-intel__dossier-row">' +
@@ -2024,7 +2024,6 @@ function renderTrendingSky(rows) {
           '</div>' +
           '<div class="message-intel__dossier-rate">' +
           '<b class="message-intel__text-green">' + esc(hitRate) + '</b>' +
-          '<span class="message-intel__dossier-streak">' + streak + ' streak</span>' +
           '</div>' +
           '<div class="message-intel__dossier-inf">' +
           '<b>' + (inf.toFixed ? inf.toFixed(1) : inf) + '</b>' +

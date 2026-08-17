@@ -157,6 +157,12 @@ class Database:
                     )
                 except sqlite3.OperationalError:
                     pass
+            msg_cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
+            if "reply_to_message_id" not in msg_cols:
+                try:
+                    conn.execute("ALTER TABLE messages ADD COLUMN reply_to_message_id TEXT")
+                except sqlite3.OperationalError:
+                    pass
             conn.execute(
                 """CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedup
                    ON messages(source, group_id, external_message_id)
@@ -173,6 +179,9 @@ class Database:
         external_id = msg.get("message_id")
         if external_id is not None:
             external_id = str(external_id)
+        reply_to = msg.get("reply_to_message_id")
+        if reply_to is not None:
+            reply_to = str(reply_to)
 
         with self._connect() as conn:
             if external_id and group_id:
@@ -186,8 +195,9 @@ class Database:
 
             cur = conn.execute(
                 """INSERT INTO messages (source, group_id, group_name, author_id,
-                   author_name, author_username, content, timestamp, raw_json, external_message_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   author_name, author_username, content, timestamp, raw_json, external_message_id,
+                   reply_to_message_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     source,
                     group_id,
@@ -199,6 +209,7 @@ class Database:
                     msg.get("timestamp"),
                     json.dumps(raw),
                     external_id,
+                    reply_to,
                 ),
             )
             message_id = cur.lastrowid

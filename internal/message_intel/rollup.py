@@ -98,6 +98,14 @@ def _netuids_from_row(row: Dict[str, Any]) -> Set[int]:
             found.add(int(match))
         except (TypeError, ValueError):
             continue
+
+    if row.get("reply_to_message_id") or row.get("reply_parent_content"):
+        parent = {
+            "content": row.get("reply_parent_content"),
+            "entities_json": row.get("reply_parent_entities_json"),
+            "snap_netuid": row.get("reply_parent_netuid"),
+        }
+        found.update(_netuids_from_row(parent))
     return found
 
 
@@ -185,13 +193,22 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
+                      m.reply_to_message_id,
                       a.sentiment, a.influence_score,
                       a.entities_json, mm.reactions, ps.netuid AS snap_netuid,
+                      pm.content AS reply_parent_content,
+                      pa.entities_json AS reply_parent_entities_json,
+                      pps.netuid AS reply_parent_netuid,
                       v.conviction, v.predicted_direction
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_metrics mm ON mm.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
+               LEFT JOIN messages pm ON pm.source = m.source
+                   AND pm.group_id = m.group_id
+                   AND pm.external_message_id = m.reply_to_message_id
+               LEFT JOIN message_analysis pa ON pa.message_id = pm.id
+               LEFT JOIN price_snapshots pps ON pps.message_id = pm.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                ORDER BY m.id DESC"""
         ).fetchall()
@@ -871,13 +888,24 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
+                      m.reply_to_message_id,
+                      a.entities_json,
                       v.predicted_direction, v.conviction,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
-                      po.price_1h, po.price_4h, po.price_24h
+                      po.price_1h, po.price_4h, po.price_24h,
+                      pm.content AS reply_parent_content,
+                      pa.entities_json AS reply_parent_entities_json,
+                      pps.netuid AS reply_parent_netuid
                FROM messages m
+               LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
                LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                LEFT JOIN price_outcomes po ON po.message_id = m.id
+               LEFT JOIN messages pm ON pm.source = m.source
+                   AND pm.group_id = m.group_id
+                   AND pm.external_message_id = m.reply_to_message_id
+               LEFT JOIN message_analysis pa ON pa.message_id = pm.id
+               LEFT JOIN price_snapshots pps ON pps.message_id = pm.id
                WHERE m.source = 'telegram' ORDER BY m.id DESC LIMIT 2000"""
         ).fetchall()
     out = []
