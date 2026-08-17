@@ -1958,7 +1958,7 @@ def build_yesterday_chat_summary(
 def build_high_conviction_strip(
     *,
     limit: int = 5,
-    min_conviction: float = 60.0,
+    min_conviction: float = 70.0,
     db=None,
     registry_names: Optional[Dict[int, str]] = None,
 ) -> List[Dict[str, Any]]:
@@ -1980,8 +1980,6 @@ def build_high_conviction_strip(
         netuid = min(netuids) if netuids else None
         skin_type = row.get("skin_type")
         skin_amount = row.get("skin_amount")
-        if not skin_type:
-            skin_type = "staked" if (conviction and float(conviction) >= 80.0) else "ape"
         out.append(
             {
                 "id": row.get("id"),

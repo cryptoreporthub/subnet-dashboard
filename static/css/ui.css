@@ -12059,21 +12059,16 @@ body.wrap {
 /* ── Cosmic Resonance Core Visualizer (3D cosmic orbit, plasma rings, glass badges) ── */
 .message-intel--v2 .message-intel__visualizer-card {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   isolation: isolate;
-  border-radius: 28px;
+  border-radius: 0;
   padding: 16px 14px 20px;
   margin-bottom: 14px;
-  background:
-    radial-gradient(ellipse at 50% 42%, rgba(56, 189, 248, 0.18) 0%, transparent 42%),
-    radial-gradient(ellipse at 50% 50%, rgba(30, 27, 75, 0.55) 0%, rgba(8, 12, 28, 0.92) 58%, rgba(3, 6, 16, 0.98) 100%);
-  border: 1px solid rgba(56, 189, 248, 0.38);
-  box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 0 40px rgba(56, 189, 248, 0.16);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: none;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .message-intel--v2 .message-intel__vis-top-row {
@@ -12227,6 +12222,7 @@ body.wrap {
 
 /* Starfield with twinkling cosmic stars */
 .message-intel--v2 .message-intel__sky-starfield {
+  display: none;
   position: absolute;
   inset: -12px;
   border-radius: 28px;
@@ -12570,11 +12566,9 @@ body.wrap {
   gap: 6px;
   padding: 4px 10px 4px 8px;
   border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(56, 189, 248, 0.45);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35), 0 0 12px rgba(56, 189, 248, 0.25);
+  background: rgba(8, 9, 17, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.35);
   white-space: nowrap;
 }
 
@@ -12582,7 +12576,8 @@ body.wrap {
   font-family: var(--font-mono, monospace);
   font-size: 11px;
   font-weight: 700;
-  color: #f8fafc;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .message-intel--v2 .message-intel__sky-pct {
@@ -12590,6 +12585,7 @@ body.wrap {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .message-intel--v2 .message-intel__sky-pct--up {
@@ -12608,8 +12604,9 @@ body.wrap {
   margin: 8px 0 0;
   font-family: var(--font-mono, monospace);
   font-size: 8.5px;
-  color: var(--mi-text-faint, rgba(226, 232, 240, 0.62));
+  color: rgba(248, 250, 252, 0.88);
   letter-spacing: 0.04em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85);
 }
 .message-intel--v2 .message-intel__sky-legend span { display: inline-flex; align-items: center; gap: 4px; }
 
@@ -12694,17 +12691,12 @@ body.wrap {
 }
 
 .message-intel--v2 .message-intel__visualizer-card.glass-card {
-  background:
-    radial-gradient(ellipse at 50% 42%, rgba(56, 189, 248, 0.18) 0%, transparent 42%),
-    radial-gradient(ellipse at 50% 50%, rgba(30, 27, 75, 0.55) 0%, rgba(8, 12, 28, 0.92) 58%, rgba(3, 6, 16, 0.98) 100%) !important;
-  border: 1px solid rgba(56, 189, 248, 0.38) !important;
-  border-radius: 28px !important;
-  box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 0 40px rgba(56, 189, 248, 0.16) !important;
-  backdrop-filter: blur(18px) !important;
-  -webkit-backdrop-filter: blur(18px) !important;
+  background: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ── Live Decoder Signal Feed Card Styles ── */

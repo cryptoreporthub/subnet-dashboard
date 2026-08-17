@@ -123,6 +123,15 @@ def test_summers_flagship_css_tokens():
     # Shared site sky — desk mock palette must not retint .cosmic-sky
     sky = css.split(".cosmic-sky {", 1)[1].split("}", 1)[0]
     assert "#060814" not in sky
+    # Visualizer floats on that sky — no navy card fill; SN chips stay opaque
+    vis = css.split(".message-intel--v2 .message-intel__visualizer-card {", 1)[1].split("}", 1)[0]
+    assert "background: none" in vis
+    assert "rgba(8, 12, 28, 0.92)" not in vis
+    vis_glass = css.split(".message-intel--v2 .message-intel__visualizer-card.glass-card {", 1)[1].split("}", 1)[0]
+    assert "rgba(8, 12, 28, 0.92)" not in vis_glass
+    badge = css.split(".message-intel--v2 .message-intel__sky-badge {", 1)[1].split("}", 1)[0]
+    assert "rgba(8, 9, 17, 0.82)" in badge
+    assert "backdrop-filter" not in badge
 
 
 def test_summers_flagship_composition_hooks():
@@ -130,6 +139,7 @@ def test_summers_flagship_composition_hooks():
     assert html.find("message-intel__visualizer-card") < html.find('role="tablist"'), (
         "Cosmic Resonance Core must sit at the top of the Telegram section, before LISTEN/LEARN/RANK/SERVE"
     )
+    assert 'message-intel__visualizer-card glass-card' not in html
     assert html.find("OPEN FULL DESK") < html.find(">LISTEN<")
     assert "message-intel__masthead" in html
     assert "message-intel__pulse-stage" in html
@@ -247,3 +257,21 @@ def test_summers_divergence_mobile_and_keyboard_hooks():
     assert ".message-intel__divergence" in css
     assert ".message-intel__divergence-receipt:focus-visible" in css
     assert ".message-intel__divergence-head" in css
+
+
+def test_learn_proof_and_conviction_are_honest_when_empty():
+    js = open("static/js/message_intel_feed.js", encoding="utf-8").read()
+    assert "var defaultProof" not in js
+    assert "var defaultHc" not in js
+    assert "hit_rate: 60.9" not in js
+    assert "var defaultCallers" not in js
+    assert "No callers with enough graded calls yet" in js
+    assert "No graded Telegram calls yet" in js
+    assert "No ≥70% conviction messages yet" in js
+
+
+def test_high_conviction_strip_default_is_seventy():
+    import inspect
+    from internal.message_intel.rollup import build_high_conviction_strip
+
+    assert inspect.signature(build_high_conviction_strip).parameters["min_conviction"].default == 70.0
