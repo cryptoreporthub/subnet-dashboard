@@ -34,7 +34,7 @@ def test_champion_rows_no_demo_fallback_when_hit_rate_missing():
     assert "2 verified hits" not in html
     assert "0 verified hits" in html
     assert "100.0%" in html
-    assert "No subnet-call receipts" in html
+    assert "Receipts ↗" in html
 
 
 def test_champion_rows_uses_real_subnet_count():

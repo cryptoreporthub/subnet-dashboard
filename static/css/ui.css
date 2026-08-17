@@ -10171,6 +10171,9 @@ body.wrap {
 .message-intel__receipt small { color: var(--stage-muted); }
 .message-intel__outcome { display: inline-flex; width: fit-content; padding: 2px 6px; border-radius: 999px; font-size: 10px; font-weight: 700; border: 1px solid currentColor; margin: 6px 0 0; }
 .message-intel__outcome--hit { color: #34d399; }.message-intel__outcome--miss { color: #fb7185; }.message-intel__outcome--neutral { color: #fbbf24; }.message-intel__outcome--pending { color: #a5b4fc; }
+.message-intel__outcome--activity { color: #f472b6; }
+.message-intel__legacy-note { margin: 10px 0 0; padding: 8px 10px; border-radius: 6px; font-size: 11px; color: var(--stage-muted); background: rgba(251, 191, 36, 0.08); border: 1px solid rgba(251, 191, 36, 0.2); }
+.message-intel__receipts h4 + h4 { margin-top: 14px; }
 .message-intel__detail-proof { margin: 8px 0; color: var(--stage-muted); font-size: 11px; }
 .message-intel__hc-strip {
   margin: 0 0 16px;

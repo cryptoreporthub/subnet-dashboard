@@ -821,31 +821,73 @@
     }
   }
 
+  function activityPill(receipt) {
+    receipt = receipt || {};
+    var rx = receipt.reactions || {};
+    var parts = [];
+    if (rx.fire) parts.push("🔥" + rx.fire);
+    if (rx.hundred) parts.push("💯" + rx.hundred);
+    if (rx.rocket) parts.push("🚀" + rx.rocket);
+    if (rx.heart) parts.push("❤️" + rx.heart);
+    if (rx.thumbs) parts.push("👍" + rx.thumbs);
+    var boost = Number(receipt.reaction_boost) || 0;
+    var label = parts.length ? parts.join(" ") : "ACTIVITY";
+    if (boost > 0) label += " · +" + boost.toFixed(0) + " inf";
+    return '<span class="message-intel__outcome message-intel__outcome--activity">' + esc(label) + "</span>";
+  }
+
+  function renderReceiptList(receipts, pillFn) {
+    return receipts.map(function (r) {
+      return '<div class="message-intel__receipt" data-receipt-id="' + esc(r.message_id) + '" role="button" tabindex="0">' +
+        pillFn(r) + '<span>' + esc(snippet(r.content, 110)) + '</span><small>' + esc(fmtTime(r.timestamp)) +
+        (r.netuid != null ? " · SN" + esc(r.netuid) : "") +
+        (r.influence_score != null ? " · inf " + esc(Number(r.influence_score).toFixed(2)) : "") +
+        "</small>" +
+        (r.source_url ? '<a class="message-intel__receipt-src" href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer" title="View the original Telegram message">source ↗</a>' : "") +
+        "</div>";
+    }).join("");
+  }
+
   async function loadCallerReceipts(authorId, name, hostEl) {
     var host = hostEl || callersBody;
     if (!host) return;
     var target = host.querySelector(".message-intel__receipts");
     if (!target) {
-      host.insertAdjacentHTML("beforeend", '<div class="message-intel__receipts"><p class="empty">Loading proof receipts for ' + esc(name) + "…</p></div>");
+      host.insertAdjacentHTML("beforeend", '<div class="message-intel__receipts"><p class="empty">Loading receipts for ' + esc(name) + "…</p></div>");
       target = host.querySelector(".message-intel__receipts");
     } else {
-      target.innerHTML = '<p class="empty">Loading proof receipts for ' + esc(name) + "…</p>";
+      target.innerHTML = '<p class="empty">Loading receipts for ' + esc(name) + "…</p>";
     }
     target.scrollIntoView({ behavior: "smooth", block: "nearest" });
     try {
       var data = await fetchJsonWithRetry("/api/message-intel/callers/" + encodeURIComponent(authorId) + "/receipts?days=" + callerDays + "&limit=20");
-      var receipts = data.receipts || [];
-      if (!receipts.length) {
-        target.innerHTML = '<p class="empty">No resolved qualifying receipts in this window.</p>';
-        return;
+      var proofReceipts = data.receipts || [];
+      var activityReceipts = data.activity || [];
+      var legacy = data.legacy_reliability;
+      var html = "";
+
+      html += '<h4>Subnet proof receipts · ' + esc(name) + '</h4>';
+      if (proofReceipts.length) {
+        html += renderReceiptList(proofReceipts, function (r) { return proofPill(r.proof); });
+      } else {
+        html += '<p class="empty">No resolved subnet-call proof in this window.</p>';
       }
-      target.innerHTML = '<h4>Proof receipts · ' + esc(name) + '</h4>' + receipts.map(function (r) {
-        var proof = r.proof || {};
-        return '<div class="message-intel__receipt" data-receipt-id="' + esc(r.message_id) + '" role="button" tabindex="0">' +
-          proofPill(proof) + '<span>' + esc(snippet(r.content, 110)) + '</span><small>' + esc(fmtTime(r.timestamp)) + (r.netuid != null ? " · SN" + esc(r.netuid) : "") + "</small>" +
-          (r.source_url ? '<a class="message-intel__receipt-src" href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer" title="View the original Telegram message">source ↗</a>' : "") +
-          "</div>";
-      }).join("");
+
+      if (activityReceipts.length) {
+        html += '<h4>Activity receipts · reactions &amp; influence</h4>';
+        html += renderReceiptList(activityReceipts, activityPill);
+      }
+
+      if (legacy && legacy.total_messages) {
+        html += '<p class="message-intel__legacy-note">Legacy score: ' + esc(legacy.correct_predictions) + '/' +
+          esc(legacy.total_messages) + ' (' + esc(legacy.accuracy_pct) + '%) from pre-subnet TAO grading — not itemized below.</p>';
+      }
+
+      if (!proofReceipts.length && !activityReceipts.length && !legacy) {
+        html = '<p class="empty">No receipts in this window.</p>';
+      }
+
+      target.innerHTML = html;
       target.querySelectorAll("[data-receipt-id]").forEach(function (button) {
         button.addEventListener("click", function (ev) {
           if (ev.target.closest("a")) return;
@@ -853,7 +895,7 @@
         });
       });
     } catch (e) {
-      target.innerHTML = '<p class="empty">Could not load these proof receipts.</p>';
+      target.innerHTML = '<p class="empty">Could not load these receipts.</p>';
     }
   }
 
@@ -1945,16 +1987,13 @@ function renderTrendingSky(rows) {
       var hits = row.hits || 0;
       var subnets = row.subnet_count || 0;
       var graded = row.graded || 0;
-      var receiptsOk = row.receipt_friendly ? row.receipt_friendly.available : graded > 0;
       var rankBadge = rank === 1 ? '👑 #1 SOVEREIGN' : (rank === 2 ? '🥈 #2 ALPHA CALLER' : '🥉 #3 ALPHA CALLER');
       var rankClass = rank === 1 ? 'message-intel__podium-card--gold' : (rank === 2 ? 'message-intel__podium-card--silver' : 'message-intel__podium-card--bronze');
       var cautionPill = (row.caution || row.stats_source === 'author_reliability')
         ? '<span class="message-intel__podium-vip-pill message-intel__podium-vip-pill--caution">⚠ LOW SAMPLE</span>'
         : '';
       var initials = row.initials || initialLetter(row.author_name || handle);
-      var receiptBtn = receiptsOk
-        ? '<button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>'
-        : '<span class="message-intel__podium-top-call">No subnet-call receipts</span>';
+      var receiptBtn = '<button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>';
 
       html +=
         '<div class="message-intel__podium-card ' + rankClass + '">' +
@@ -2006,11 +2045,8 @@ function renderTrendingSky(rows) {
         var calls = row.message_count || 0;
         var hits = row.hits || 0;
         var graded = row.graded || 0;
-        var receiptsOk = row.receipt_friendly ? row.receipt_friendly.available : graded > 0;
         var initials = row.initials || initialLetter(row.author_name || handle);
-        var receiptBtn = receiptsOk
-          ? '<button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>'
-          : '<span class="message-intel__dossier-sub">—</span>';
+        var receiptBtn = '<button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="' + esc(row.author_id || rank) + '" data-caller-name="' + esc(handle) + '">Receipts ↗</button>';
 
         html +=
           '<div class="message-intel__dossier-row">' +

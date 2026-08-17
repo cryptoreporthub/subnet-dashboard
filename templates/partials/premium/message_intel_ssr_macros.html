@@ -70,11 +70,7 @@
         </div>
       </div>
       <div class="message-intel__podium-footer">
-        {% if receipts_ok %}
         <button type="button" class="message-intel__receipt-toggle message-intel__podium-receipt-btn" data-champ-receipts="{{ row.author_id|default(rank) }}" data-caller-name="{{ handle }}">Receipts ↗</button>
-        {% else %}
-        <span class="message-intel__podium-top-call">No subnet-call receipts</span>
-        {% endif %}
       </div>
     </div>
     {% endfor %}
@@ -113,11 +109,7 @@
         <b>{{ '%.1f'|format(inf) }}</b>
       </div>
       <div class="message-intel__dossier-action">
-        {% if receipts_ok %}
         <button type="button" class="message-intel__receipt-toggle message-intel__dossier-receipt-btn" data-champ-receipts="{{ row.author_id|default(rank) }}" data-caller-name="{{ handle }}">Receipts ↗</button>
-        {% else %}
-        <span class="message-intel__dossier-sub">—</span>
-        {% endif %}
       </div>
     </div>
     {% endfor %}

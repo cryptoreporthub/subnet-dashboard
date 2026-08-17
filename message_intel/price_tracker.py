@@ -393,19 +393,34 @@ class PriceTracker:
                     # A later 24h update enriches the same receipt; only the
                     # first recorded outcome affects historical author scoring.
                     if verdict is not None and msg.get("outcome_id") is None:
+                        from internal.message_intel.proof import classify_call
                         from message_intel.self_learning import SelfLearning
+
                         direction = msg.get("predicted_direction") or "neutral"
-                        correct = SelfLearning._is_correct_prediction(
-                            verdict,
-                            direction,
-                            outcome_data["outcome"],
-                            outcome_data.get("pump_pct_max") or 0.0,
-                        )
-                        self.db.increment_author_reliability(
-                            msg.get("author_id") or "unknown",
-                            msg.get("author_name") or "Unknown",
-                            correct,
-                        )
+                        proof_row = {
+                            "source": "telegram",
+                            "verdict": verdict,
+                            "predicted_direction": direction,
+                            "conviction": msg.get("conviction") or 0.0,
+                            "tao_usd_price": snapshot_price,
+                            "netuid": netuid,
+                            "content": msg.get("content"),
+                            "entities_json": msg.get("entities_json"),
+                            "outcome": outcome_data["outcome"],
+                            "pump_pct_max": outcome_data.get("pump_pct_max"),
+                        }
+                        if classify_call(proof_row)["eligible"]:
+                            correct = SelfLearning._is_correct_prediction(
+                                verdict,
+                                direction,
+                                outcome_data["outcome"],
+                                outcome_data.get("pump_pct_max") or 0.0,
+                            )
+                            self.db.increment_author_reliability(
+                                msg.get("author_id") or "unknown",
+                                msg.get("author_name") or "Unknown",
+                                correct,
+                            )
                 except Exception:
                     logger.exception(
                         "Author reliability update failed for message %s", message_id

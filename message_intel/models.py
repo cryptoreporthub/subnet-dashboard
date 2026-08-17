@@ -494,7 +494,7 @@ class Database:
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
-                           v.verdict, v.predicted_direction,
+                           v.verdict, v.predicted_direction, v.conviction,
                            po.id AS outcome_id, po.price_24h_recorded_at
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
