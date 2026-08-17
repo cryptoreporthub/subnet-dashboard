@@ -689,7 +689,7 @@ def shape_weighing_board(
             primary["gap_whisper"] = whisper
             primary["gap_pts"] = abs(int(primary.get("conviction") or 0) - int(call_conv))
             primary["stitch_border"] = primary.get("deliberation_state") != "FADING"
-    elif rows:
+    elif rows and call_netuid is not None:
         rows[0]["closest_to_call"] = True
 
     judge_long_on_table = sum(1 for r in rows if r.get("judge_long"))

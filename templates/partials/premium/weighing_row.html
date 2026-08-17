@@ -21,7 +21,9 @@
         </a>
         <span class="wr-netuid">SN{{ pick.netuid }}</span>
       </div>
-      {% if pick.closest_to_call %}
+      {% if pick.primary_call %}
+      <p class="wr-stitch">today&apos;s call</p>
+      {% elif pick.closest_to_call and pick.gap_whisper %}
       <p class="wr-stitch">≈ today&apos;s call</p>
       {% endif %}
       {% if pick.gap_whisper %}
