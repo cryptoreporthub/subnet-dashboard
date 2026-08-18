@@ -136,6 +136,7 @@ def test_summary_subnet_shows_chatter_without_qualified_calls(monkeypatch):
             "avg_conviction": 58.0,
             "bullish_mentions": 1,
             "bearish_mentions": 1,
+            "debate_line": 'Split: some say "bull case" — others "bear case"',
             "snippets": [{"content": "Mainframe emissions already priced in", "conviction": 55}],
             "empty": False,
         },
@@ -149,12 +150,47 @@ def test_summary_subnet_shows_chatter_without_qualified_calls(monkeypatch):
     assert "4 mentions" in out
     assert "avg confidence 58%" in out
     assert "Mainframe emissions already priced in" in out
+    assert "Split: some say" in out
+    assert "Watch this subnet: /track 25" in out
     assert "No proven-caller directional bets yet" in out
 
 
 def test_subnet_from_arg_accepts_hash_syntax():
     assert summary_bot._subnet_from_arg("#25") == 25
     assert summary_bot._subnet_from_arg("SN25") == 25
+
+
+def test_parse_summary_args_supports_one_hour_window():
+    assert summary_bot._parse_summary_args("25 1h") == (25, 1)
+    assert summary_bot._parse_summary_args("SN25") == (25, 24)
+    assert summary_bot._parse_summary_args("1h") == (None, 1)
+
+
+def test_champions_and_crowns_commands(monkeypatch):
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_weekly_authors",
+        lambda **kw: [{
+            "author_name": "Alpha",
+            "influence_score": 42.3,
+            "message_count": 11,
+            "strike_rate": 82.0,
+        }],
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_reaction_crowns",
+        lambda **kw: [{
+            "emoji": "🔥",
+            "label": "Hype",
+            "display_name": "@alpha",
+            "count": 8,
+        }],
+    )
+    champs = summary_bot.handle_command("/champions")
+    crowns = summary_bot.handle_command("/crowns")
+    assert "Weekly Champions" in champs
+    assert "Alpha" in champs
+    assert "Reaction Crowns" in crowns
+    assert "@alpha" in crowns
 
 
 def test_handle_command_who_and_alerts(monkeypatch):

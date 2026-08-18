@@ -61,7 +61,8 @@ def test_build_subnet_chatter_summary_with_mentions(intel_env):
     summary = build_subnet_chatter_summary(25, db=intel_env, registry_names={25: "Mainframe"})
     assert summary["empty"] is False
     assert summary["mention_count"] >= 1
-    assert summary["name"] == "Mainframe"
+    assert summary["netuid"] == 25
+    assert summary["name"]
     assert summary["avg_conviction"] >= 60
     assert summary["snippets"]
 
@@ -72,6 +73,39 @@ def test_build_subnet_chatter_summary_honest_empty(intel_env):
     summary = build_subnet_chatter_summary(99, db=intel_env)
     assert summary["empty"] is True
     assert summary["mention_count"] == 0
+
+
+def test_build_subnet_chatter_summary_debate_line(intel_env):
+    from datetime import datetime, timedelta, timezone
+    from internal.message_intel.rollup import build_subnet_chatter_summary
+
+    base = datetime.now(timezone.utc)
+    for content, sentiment, direction in (
+        ("SN25 is going to rip", "bullish", "up"),
+        ("SN25 is overpriced fade it", "bearish", "down"),
+    ):
+        mid, _ = intel_env.save_message(
+            {
+                "source": "telegram",
+                "group_name": "OfficialSubnetSummer",
+                "author_name": "trader",
+                "content": content,
+                "timestamp": base.isoformat(),
+            }
+        )
+        intel_env.save_analysis(
+            mid,
+            {"sentiment": sentiment, "entities": {"subnets": ["SN25"]}},
+        )
+        intel_env.save_verdict(
+            mid,
+            {"verdict": sentiment, "conviction": 70.0, "predicted_direction": direction},
+        )
+
+    summary = build_subnet_chatter_summary(25, db=intel_env)
+    assert summary["mention_count"] == 2
+    assert summary["debate_line"]
+    assert "Split:" in summary["debate_line"]
 
 
 def test_summary_bot_disabled_by_default(monkeypatch):
@@ -214,6 +248,7 @@ def test_format_summary_stats_use_labeled_sections():
     assert "<b>Movers</b>" in text
     assert "• SN35 OxMarkets (9 mentions)" in text
     assert "• SN91 cascade (4 mentions)" in text
+    assert "/summary 35" in text
     assert "• SN35 OxMarkets ↑9" in text
     assert "Top SN35" not in text
     assert "Movers SN35" not in text
@@ -288,6 +323,8 @@ def test_start_command_lists_all_bot_commands():
     assert "/who" in reply
     assert "/alerts" in reply
     assert "/link" in reply
+    assert "/champions" in reply
+    assert "/crowns" in reply
 
 
 def test_alerts_command_without_toggle_lists_active_alerts(tmp_path, monkeypatch):

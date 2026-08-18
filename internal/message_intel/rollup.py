@@ -1878,6 +1878,10 @@ def build_subnet_chatter_summary(
     snippets: List[Dict[str, Any]] = []
     bullish = 0
     bearish = 0
+    buy_snippet = ""
+    buy_conv = -1.0
+    fade_snippet = ""
+    fade_conv = -1.0
 
     for row in _load_message_rows(db):
         ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
@@ -1902,6 +1906,12 @@ def build_subnet_chatter_summary(
         if content:
             snippet = _clip_snippet(content, max_len=120)
             if snippet:
+                if side == "buy" and conviction >= buy_conv:
+                    buy_snippet = _clip_snippet(content, max_len=80)
+                    buy_conv = conviction
+                elif side == "fade" and conviction >= fade_conv:
+                    fade_snippet = _clip_snippet(content, max_len=80)
+                    fade_conv = conviction
                 snippets.append(
                     {
                         "content": snippet,
@@ -1925,6 +1935,12 @@ def build_subnet_chatter_summary(
 
     avg_sent = (sentiment_sum / sentiment_n) if sentiment_n else 0.0
     avg_conv = (conviction_sum / mention_count) if mention_count else 0.0
+    debate_line = None
+    if bullish > 0 and bearish > 0:
+        if buy_snippet and fade_snippet:
+            debate_line = f'Split: some say "{buy_snippet}" — others "{fade_snippet}"'
+        else:
+            debate_line = "Split: the group is arguing both sides."
 
     return {
         "netuid": nu,
@@ -1938,6 +1954,7 @@ def build_subnet_chatter_summary(
         "high_conviction_count": hc_count,
         "bullish_mentions": bullish,
         "bearish_mentions": bearish,
+        "debate_line": debate_line,
         "snippets": unique_snippets,
         "empty": mention_count == 0,
         "generated_at": now.isoformat().replace("+00:00", "Z"),

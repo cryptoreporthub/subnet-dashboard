@@ -106,6 +106,48 @@ def _subnet_from_arg(arg: str) -> Optional[int]:
         return None
 
 
+def _parse_summary_args(arg: str) -> tuple[Optional[int], int]:
+    text = str(arg or "").strip()
+    window_hours = 24
+    if re.search(r"\b1h\b", text, re.IGNORECASE):
+        window_hours = 1
+        text = re.sub(r"\b1h\b", "", text, flags=re.IGNORECASE).strip()
+    return _subnet_from_arg(text), window_hours
+
+
+def _registry_price_change_1h(netuid: int) -> Optional[float]:
+    try:
+        from internal.subnets.feed import registry_subnet_rows
+
+        for sn in registry_subnet_rows():
+            if int(sn.get("netuid", -1)) != int(netuid):
+                continue
+            val = sn.get("price_change_1h")
+            if val is None:
+                val = sn.get("price_change_24h")
+            if val is not None:
+                return float(val)
+    except Exception:
+        pass
+    return None
+
+
+def _subnet_chatter_rank(netuid: int, *, db=None, registry_names: Optional[Dict[int, str]] = None) -> Optional[tuple[int, Dict[str, Any]]]:
+    from internal.message_intel.rollup import build_trending_subnets
+
+    items = build_trending_subnets(
+        limit=50,
+        rank_hours=24,
+        window_hours=24,
+        db=db,
+        registry_names=registry_names,
+    )
+    for index, row in enumerate(items, 1):
+        if int(row.get("netuid") or 0) == int(netuid):
+            return index, row
+    return None
+
+
 def _format_error(msg: str) -> str:
     return f"<b>Subnet Summers</b>\n\n{msg}"
 
@@ -137,7 +179,7 @@ def _subnet_page_url(netuid: int) -> str:
     return f"{base}/subnet/{int(netuid)}"
 
 
-def _format_subnet_summary_reply(netuid: int, db=None) -> str:
+def _format_subnet_summary_reply(netuid: int, *, window_hours: int = 24, db=None) -> str:
     from internal.message_intel.rollup import (
         build_subnet_chatter_summary,
         build_subnet_telegram_conviction,
@@ -145,15 +187,21 @@ def _format_subnet_summary_reply(netuid: int, db=None) -> str:
 
     names = _registry_subnet_names()
     nu = int(netuid)
-    chatter = build_subnet_chatter_summary(netuid=nu, registry_names=names, db=db)
+    chatter = build_subnet_chatter_summary(
+        netuid=nu,
+        window_hours=window_hours,
+        registry_names=names,
+        db=db,
+    )
+    window_label = f"{window_hours}h" if window_hours != 24 else "24h"
     if chatter.get("empty"):
-        return _format_error(f"No Subnet Summers chatter about SN{nu} in the last 24h.")
+        return _format_error(f"No Subnet Summers chatter about SN{nu} in the last {window_label}.")
 
     name = html.escape(str(chatter.get("name") or f"Subnet {nu}"))
     mentions = int(chatter.get("mention_count") or 0)
     authors = int(chatter.get("author_count") or 0)
     pulse_bits = [
-        f"{mentions} mention{'s' if mentions != 1 else ''}",
+        f"{mentions} mention{'s' if mentions != 1 else ''} ({window_label})",
         f"{chatter.get('sentiment') or 'Cautious'} mood",
         f"avg confidence {float(chatter.get('avg_conviction') or 0):.0f}%",
     ]
@@ -166,9 +214,28 @@ def _format_subnet_summary_reply(netuid: int, db=None) -> str:
         f"<i>{' · '.join(pulse_bits)}</i>",
     ]
 
+    rank_hit = _subnet_chatter_rank(nu, db=db, registry_names=names)
+    if rank_hit:
+        rank, row = rank_hit
+        delta = int(row.get("change") or row.get("delta") or 0)
+        delta_bit = ""
+        if delta:
+            arrow = "↑" if delta > 0 else "↓"
+            delta_bit = f", {arrow}{abs(delta)} vs prior window"
+        lines.append(f"Chatter rank: #{rank} in group today ({mentions} mentions{delta_bit})")
+
+    price_1h = _registry_price_change_1h(nu)
+    if price_1h is not None:
+        sign = "+" if price_1h > 0 else ""
+        lines.append(f"Token move: {sign}{price_1h:.1f}% (registry)")
+
+    debate = str(chatter.get("debate_line") or "").strip()
+    if debate:
+        lines.append(html.escape(debate, quote=False))
+
     bull = int(chatter.get("bullish_mentions") or 0)
     bear = int(chatter.get("bearish_mentions") or 0)
-    if bull or bear:
+    if (bull or bear) and not debate:
         lines.append(f"Directional chatter: {bull} bullish · {bear} bearish")
 
     snippets = chatter.get("snippets") or []
@@ -223,6 +290,7 @@ def _format_subnet_summary_reply(netuid: int, db=None) -> str:
         [
             "",
             f'<a href="{_subnet_page_url(nu)}">Open SN{nu} on the desk</a>',
+            f"Watch this subnet: /track {nu}",
             "Community commentary; not financial advice.",
         ]
     )
@@ -298,6 +366,81 @@ def _format_author(item: Dict[str, Any], *, rank: int = 1) -> str:
     if not item:
         return _format_error("No matching author found.")
     return f"<b>Author Leaderboard</b>\n\n{_format_author_line(item, rank)}"
+
+
+def _format_start_help() -> str:
+    return (
+        "<b>Subnet Summer Bot</b>\n\n"
+        "<b>Group pulse</b>\n"
+        "/summary — 24h group recap\n"
+        "/subnetsummers — full desk snapshot\n"
+        "/trending — ChatterPower leaders (try /trending 1h)\n\n"
+        "<b>Subnet detail</b>\n"
+        "/summary &lt;SN#&gt; — what the group says + confidence (e.g. /summary 25)\n"
+        "/summary &lt;SN#&gt; 1h — last-hour pulse\n"
+        "/rank &lt;SN#&gt; — subnet ChatterPower rank\n"
+        "/track &lt;SN#&gt; — add to your watchlist\n\n"
+        "<b>People</b>\n"
+        "/champions — weekly influence leaders\n"
+        "/crowns — weekly reaction emoji kings\n"
+        "/who — graded call accuracy board\n\n"
+        "<b>Your desk</b>\n"
+        "/alerts — active alerts (or /alerts on|off)\n"
+        "/link &lt;code&gt; — sync with My Desk\n\n"
+        f'<a href="{_desk_url()}">Open the Subnet Summers desk</a>'
+    )
+
+
+def _format_champions(*, db=None) -> str:
+    from internal.message_intel.rollup import build_weekly_authors
+
+    rows = build_weekly_authors(days=7, limit=5, db=db)
+    if not rows:
+        return _format_error("No weekly champions yet — waiting for group activity.")
+    lines = ["<b>Weekly Champions (7d)</b>", ""]
+    for index, row in enumerate(rows[:5], 1):
+        influence = float(row.get("influence_score") or 0.0)
+        msgs = int(row.get("message_count") or 0)
+        strike = _format_accuracy_pct(row.get("strike_rate") or row.get("hit_rate"))
+        lines.append(
+            f"{index}. {_author_display_name(row)} — influence {influence:.1f} · "
+            f"{msgs} msgs · {strike} strike"
+        )
+    lines.extend(["", f'<a href="{_desk_url()}">Open the Subnet Summers desk</a>'])
+    return "\n".join(lines)
+
+
+def _format_crowns(*, db=None) -> str:
+    from internal.message_intel.rollup import build_reaction_crowns
+
+    crowns = build_reaction_crowns(days=7, db=db)
+    if not crowns:
+        return _format_error("No reaction crowns yet — they appear as the group reacts.")
+    lines = ["<b>Reaction Crowns (7d)</b>", ""]
+    for row in crowns[:6]:
+        handle = html.escape(str(row.get("display_name") or row.get("author_name") or "Unknown"))
+        lines.append(
+            f"• {html.escape(str(row.get('emoji') or ''))} "
+            f"{html.escape(str(row.get('label') or row.get('key') or 'Reaction'))}: "
+            f"{handle} ({row.get('count', 0)})"
+        )
+    lines.extend(["", f'<a href="{_desk_url()}">Open the Subnet Summers desk</a>'])
+    return "\n".join(lines)
+
+
+def _format_alerts_list() -> str:
+    from internal.signals.alerts import AlertEngine
+
+    payload = AlertEngine().recent_alerts(limit=5, active_only=True)
+    alerts = payload.get("alerts") or []
+    if not alerts:
+        return _format_error("No active alerts right now.")
+    lines = ["<b>Active Alerts</b>", ""]
+    for alert in alerts:
+        msg = html.escape(str(alert.get("message") or "Alert"))
+        lines.append(f"• {msg}")
+    lines.extend(["", "Toggle yours: /alerts on|off"])
+    return "\n".join(lines)
 
 
 def _watchlist_load(owner=None):
@@ -404,7 +547,11 @@ def _format_stats_block(summary: Dict[str, Any]) -> str:
     if top:
         lines.extend(["", "<b>Top</b>"])
         for row in top[:5]:
-            lines.append(f"• {_format_subnet_chip(row)}")
+            chip = _format_subnet_chip(row)
+            netuid = row.get("netuid")
+            if netuid is not None:
+                chip += f" — /summary {netuid}"
+            lines.append(f"• {chip}")
     movers = [m for m in (summary.get("movers") or []) if int(m.get("change") or 0) != 0][:3]
     if movers:
         lines.extend(["", "<b>Movers</b>"])
@@ -598,13 +745,19 @@ def handle_summary_command(chat_id: int, *, db=None) -> tuple[str, bool]:
 
 def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
     cmd, arg = _parse_command_text(text)
+    if cmd == "/start":
+        return _format_start_help()
     if cmd == "/subnetsummers":
         return build_subnetsummers_text(db=db)
     if cmd == "/summary":
-        subnet = _subnet_from_arg(arg)
+        subnet, window_hours = _parse_summary_args(arg)
         if subnet is not None:
-            return _format_subnet_summary_reply(subnet, db=db)
+            return _format_subnet_summary_reply(subnet, window_hours=window_hours, db=db)
         return _format_summary_reply(db=db)
+    if cmd == "/champions":
+        return _format_champions(db=db)
+    if cmd == "/crowns":
+        return _format_crowns(db=db)
     if cmd == "/trending":
         window = "1h" if arg.strip() == "1h" else "24h"
         from internal.message_intel.rollup import build_trending_subnets
@@ -663,25 +816,27 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
             None,
         )
         return _format_author(row or {})
-    if cmd == "/alerts" and message is not None:
+    if cmd == "/alerts":
         parts = arg.lower().split()
-        if not parts or parts[0] not in {"on", "off"}:
-            return _format_error("Usage: /alerts on|off")
-        owner = _telegram_watchlist_owner(message)
-        watch = _watchlist_load(owner) if owner is not None else _watchlist_load()
-        user_key = _stable_telegram_user(message)
-        alerts = dict(watch.get("alerts") or {})
-        alerts[user_key] = {"enabled": parts[0] == "on"}
-        if owner is None:
-            _watchlist_save(watch.get("netuids") or [], thresholds=watch.get("thresholds") or {}, alerts=alerts)
-        else:
-            _watchlist_save(
-                watch.get("netuids") or [],
-                thresholds=watch.get("thresholds") or {},
-                alerts=alerts,
-                owner=owner,
-            )
-        return _format_error(f"Alerts turned {parts[0]} for your Telegram identity.")
+        if parts and parts[0] in {"on", "off"}:
+            if message is None:
+                return _format_error("Usage: /alerts on|off")
+            owner = _telegram_watchlist_owner(message)
+            watch = _watchlist_load(owner) if owner is not None else _watchlist_load()
+            user_key = _stable_telegram_user(message)
+            alerts = dict(watch.get("alerts") or {})
+            alerts[user_key] = {"enabled": parts[0] == "on"}
+            if owner is None:
+                _watchlist_save(watch.get("netuids") or [], thresholds=watch.get("thresholds") or {}, alerts=alerts)
+            else:
+                _watchlist_save(
+                    watch.get("netuids") or [],
+                    thresholds=watch.get("thresholds") or {},
+                    alerts=alerts,
+                    owner=owner,
+                )
+            return _format_error(f"Alerts turned {parts[0]} for your Telegram identity.")
+        return _format_alerts_list()
     return None
 
 
