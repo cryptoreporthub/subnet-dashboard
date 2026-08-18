@@ -193,6 +193,48 @@ def test_spotlight_uses_shaped_weighing_rows_when_provided():
     assert out["candidate"]["subnet"]["netuid"] == 25
 
 
+def test_weighing_lead_prefers_closest_to_call_on_conviction_tie():
+    from internal.simivision.weighing_room import weighing_lead_from_rows
+
+    rows = [
+        {"netuid": 13, "conviction": 58, "primary_call": True},
+        {"netuid": 9, "conviction": 89, "proximity": 69, "judge_long": False},
+        {
+            "netuid": 25,
+            "conviction": 89,
+            "proximity": 69,
+            "judge_long": True,
+            "closest_to_call": True,
+        },
+        {"netuid": 65, "conviction": 89, "proximity": 69, "judge_long": True},
+    ]
+    lead = weighing_lead_from_rows(rows, beat_conviction=58, skip_netuid=13)
+    assert lead is not None
+    assert lead["netuid"] == 25
+
+
+def test_weighing_lead_returns_none_when_still_ambiguous():
+    from internal.simivision.weighing_room import weighing_lead_from_rows
+
+    rows = [
+        {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
+        {"netuid": 65, "conviction": 89, "proximity": 69, "judge_long": True},
+    ]
+    assert weighing_lead_from_rows(rows, beat_conviction=58) is None
+
+
+def test_weighing_lead_prefers_judge_long_over_expert_when_other_keys_tie():
+    from internal.simivision.weighing_room import weighing_lead_from_rows
+
+    rows = [
+        {"netuid": 9, "conviction": 89, "proximity": 69, "judge_long": False},
+        {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
+    ]
+    lead = weighing_lead_from_rows(rows, beat_conviction=58)
+    assert lead is not None
+    assert lead["netuid"] == 25
+
+
 def test_weighing_lead_from_rows_skips_primary_call_bar():
     from internal.simivision.weighing_room import weighing_lead_from_rows
 
