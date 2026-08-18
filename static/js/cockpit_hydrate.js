@@ -2594,8 +2594,7 @@
   function patchPumpDeskCta(row) {
     var cta = document.getElementById('pump-desk-cta');
     if (!cta) return;
-    var hero = document.getElementById('pump-desk-hero');
-    var source = row || hero;
+    var source = row && String(row.timing || '') === 'lead' ? row : null;
     if (!source) {
       var ladder = document.querySelector('.pds-ladder[data-netuid], .pd-r[data-netuid]');
       if (ladder) {
@@ -2607,10 +2606,13 @@
     }
     if (!source || source.netuid == null) {
       cta.textContent = 'Open dossier';
+      cta.removeAttribute('data-netuid');
+      cta.removeAttribute('data-name');
+      cta.href = '#pro-cockpit';
       return;
     }
     var nu = source.netuid;
-    var name = source.name || (hero && hero.getAttribute('data-name')) || null;
+    var name = source.name || null;
     cta.href = '/subnet/' + encodeURIComponent(String(nu));
     cta.setAttribute('data-netuid', String(nu));
     if (name) cta.setAttribute('data-name', String(name));
@@ -2894,6 +2896,25 @@
     );
   }
 
+  function pumpDeskLeadRow(payload, alerts) {
+    var hero = payload && payload.hero;
+    if (hero && String(hero.timing || '') === 'lead') return hero;
+    var rows = alerts || (payload && payload.alerts) || [];
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i] && String(rows[i].timing || '') === 'lead') return rows[i];
+    }
+    return null;
+  }
+
+  function shouldKeepPumpDeskSnapshot(payload, alerts) {
+    if (!pumpDeskHasSnapshot()) return false;
+    // Stale SSR/hydrate hero cards (e.g. old SN13 lead) must not block refresh
+    // when the live payload has zero lead entries.
+    if (pumpDeskLeadRow(payload, alerts)) return true;
+    if (document.getElementById('pump-desk-hero')) return false;
+    return true;
+  }
+
   function renderPumpAlerts(payload) {
     var body = document.getElementById('pump-alert-body');
     if (!body || !payload) return;
@@ -2904,7 +2925,7 @@
       payloadStatus === 'unavailable' ||
       payload.error === 'worker_volume_proxy_failed'
     ) {
-      if (pumpDeskHasSnapshot()) return;
+      if (shouldKeepPumpDeskSnapshot(payload, payload.alerts)) return;
     }
     var listPanel = document.getElementById('pump-list-panel');
     var trust = payload.trust || {};
@@ -2931,7 +2952,7 @@
     if (!count && !exitCount) {
       var watchRows = payload.watch || [];
       if (!watchRows.length) {
-        if (pumpDeskHasSnapshot()) return;
+        if (shouldKeepPumpDeskSnapshot(payload, alerts)) return;
       var liveHost = pumpDeskLiveHost();
       if (liveHost) {
         liveHost.innerHTML =
@@ -3054,14 +3075,7 @@
     if (window.PumpMap) window.PumpMap.refresh(mapRows);
     if (typeof window.__paintSparks === 'function') window.__paintSparks();
     renderProofPumpTab(trust);
-    var heroForCta = payload.hero;
-    if (!heroForCta && alerts.length) {
-      heroForCta =
-        alerts.find(function (r) {
-          return r.timing === 'lead';
-        }) || alerts[0];
-    }
-    patchPumpDeskCta(heroForCta);
+    patchPumpDeskCta(pumpDeskLeadRow(payload, alerts));
   }
 
   function renderDailyPick(payload) {
