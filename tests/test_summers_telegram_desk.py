@@ -230,6 +230,7 @@ def test_listener_share_page_composition():
     assert "max-width:980px" not in css
     assert "1.2fr 1fr" not in css
     assert 'grid-template-areas:"orbit feed"' not in css
+    assert 'data-anchor="true"' in html
     site_rule = css.split(".lsn-site{", 1)[1].split("}", 1)[0].replace(" ", "")
     assert "flex-wrap:wrap" in site_rule
     assert "lsn-zones" not in html
