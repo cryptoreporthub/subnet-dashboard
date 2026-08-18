@@ -159,6 +159,52 @@ def test_shape_board_no_false_stitch_without_call_context():
     assert rows[0].get("closest_to_call") is not True
 
 
+def test_spotlight_uses_shaped_weighing_rows_when_provided():
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+    shaped = [
+        {
+            "netuid": 13,
+            "name": "Data Universe",
+            "conviction": 58,
+            "primary_call": True,
+            "closest_to_call": True,
+        },
+        {
+            "netuid": 25,
+            "name": "Mainframe",
+            "conviction": 89,
+            "judge_long": True,
+            "closest_to_call": False,
+            "gap_whisper": "31 pts above the call bar",
+        },
+    ]
+    from internal.learning.dpick_spotlight import attach_hero_spotlight_from_weighing_rows
+
+    out = attach_hero_spotlight_from_weighing_rows(payload, shaped)
+    assert out["hero_spotlight_source"] == "judge_long"
+    assert out["candidate"]["subnet"]["netuid"] == 25
+
+
+def test_weighing_lead_from_rows_skips_primary_call_bar():
+    from internal.simivision.weighing_room import weighing_lead_from_rows
+
+    rows = [
+        {"netuid": 13, "conviction": 58, "primary_call": True},
+        {"netuid": 25, "conviction": 89, "judge_long": True},
+    ]
+    lead = weighing_lead_from_rows(rows, beat_conviction=58)
+    assert lead is not None
+    assert lead["netuid"] == 25
+
+
 def test_shape_board_hold_candidate_sets_call_bar_then_alternatives():
     daily = {
         "action": "HOLD",
