@@ -142,7 +142,7 @@
       <div class="lsn-picker" id="lsnPicker">
         <div class="phead">Switch subnet — gauge re-anchors &amp; tracks 60s deltas</div>
         {% for t in trending %}
-        <div class="lsn-prow{% if loop.first %} active{% endif %}" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}"><span class="nm">{{ t["name"] or "—" }}<small>SN{{ t["netuid"] or "?" }}</small></span><span class="f">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span><span class="chk"></span></div>
+        <div class="lsn-prow{% if loop.first %} active{% endif %}" data-sn="{{ t["netuid"] or "" }}" data-name="{{ t["name"] or "" }}"{% if loop.first %} data-anchor="true"{% endif %}><span class="nm">{{ t["name"] or "—" }}<small>SN{{ t["netuid"] or "?" }}</small></span><span class="f">{{ t["conviction"] if t["conviction"] is not none else "—" }}</span><span class="chk"></span></div>
         {% endfor %}
         {% if not trending %}<p class="lsn-champ-empty">No tracked subnets yet — the picker fills as chatter ranks.</p>{% endif %}
       </div>
