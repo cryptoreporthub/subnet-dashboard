@@ -215,16 +215,29 @@ def test_weighing_lead_prefers_closest_to_call_on_conviction_tie():
     assert lead["netuid"] == 25
 
 
-def test_weighing_lead_breaks_conviction_tie_by_lowest_netuid():
+def test_weighing_lead_prefers_board_order_on_conviction_tie():
+    """Ties break by shaped board order — not netuid."""
     from internal.simivision.weighing_room import weighing_lead_from_rows
 
-    rows = [
-        {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
-        {"netuid": 65, "conviction": 89, "proximity": 69, "judge_long": True},
-    ]
-    lead = weighing_lead_from_rows(rows, beat_conviction=58)
-    assert lead is not None
-    assert lead["netuid"] == 25
+    lead_first = weighing_lead_from_rows(
+        [
+            {"netuid": 71, "conviction": 89, "proximity": 69, "judge_long": True},
+            {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
+        ],
+        beat_conviction=58,
+    )
+    assert lead_first is not None
+    assert lead_first["netuid"] == 71
+
+    lead_second = weighing_lead_from_rows(
+        [
+            {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
+            {"netuid": 71, "conviction": 89, "proximity": 69, "judge_long": True},
+        ],
+        beat_conviction=58,
+    )
+    assert lead_second is not None
+    assert lead_second["netuid"] == 25
 
 
 def test_weighing_lead_prefers_judge_long_over_expert_when_other_keys_tie():
@@ -326,8 +339,8 @@ def test_spotlight_suppresses_blocked_expert_when_no_weighing_lead(monkeypatch):
     assert out["desk_candidate"]["subnet"]["netuid"] == 13
 
 
-def test_spotlight_prod_tie_picks_lowest_netuid_judge_long(monkeypatch):
-    """Prod-shaped tie at 89% — SN25 beats SN71 when proximity matches."""
+def test_spotlight_prod_tie_uses_weighing_board_order(monkeypatch):
+    """Prod-shaped tie at 89% — hero follows board row order, not netuid."""
     rows = [
         {"netuid": 13, "conviction": 58, "primary_call": True, "closest_to_call": True},
         {"netuid": 25, "conviction": 89, "judge_long": True, "proximity": 69},
