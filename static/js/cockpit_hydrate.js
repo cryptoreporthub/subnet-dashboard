@@ -1353,7 +1353,7 @@
     if (payload.pick) return 4;
     if (payload.hero_spotlight_source) return 4;
     if (payload.candidate) return 3;
-    if (payload.hero_spotlight_blocked) return 3;
+    if (payload.hero_spotlight_blocked || payload.hero_spotlight_pending) return 3;
     if (status === 'degraded' || status === 'cached') return 1;
     return 2;
   }
@@ -1377,6 +1377,14 @@
         existing.candidate.subnet &&
         existing.candidate.subnet.netuid;
       if (inNu != null && exNu != null && inNu !== exNu) return true;
+    }
+    if (
+      incoming.hero_spotlight_pending &&
+      existing &&
+      existing.candidate &&
+      !existing.hero_spotlight_source
+    ) {
+      return true;
     }
     if (
       incoming.hero_spotlight_blocked &&
@@ -4400,7 +4408,9 @@
                 .then(function (retry) {
                   if (
                     retry &&
-                    (retry.hero_spotlight_source || retry.hero_spotlight_blocked)
+                    (retry.hero_spotlight_source ||
+                      retry.hero_spotlight_blocked ||
+                      retry.hero_spotlight_pending)
                   ) {
                     renderDailyPick(retry);
                   }
@@ -4818,6 +4828,9 @@
         payload.hero_spotlight_blocked
       ) {
         return 'Council held';
+      }
+      if (!payload.pick && act0 === 'HOLD' && payload.hero_spotlight_pending) {
+        return 'Awaiting near call';
       }
       return 'Awaiting subnet';
     }
