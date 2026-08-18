@@ -301,6 +301,24 @@ def test_hold_reason_line_directional_conflict_with_signal_net():
     assert view["hold_reason"] == line
 
 
+def test_hold_reason_line_blocked_spotlight_uses_desk_candidate():
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "hero_spotlight_blocked": True,
+        "desk_candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "signal_impact": {"net_predicted_pct": -0.58},
+        },
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+    }
+    line = hold_reason_line(payload)
+    assert "directional conflict" in line.lower()
+    assert "council signal net -0.58%" in line
+    view = build_tribunal_view(payload, {"judge_weights": {}})
+    assert view["subnet_label"] == "Council held"
+
+
 def test_hold_reason_line_degraded_worker_volume():
     payload = {
         "action": "HOLD",

@@ -511,7 +511,7 @@ def _call_context(
 
 
 def _weighing_lead_sort_key(row: Dict[str, Any]) -> tuple:
-    """Rank weighing alternatives — no netuid tiebreaker."""
+    """Rank weighing alternatives — no netuid tiebreaker (board order breaks ties)."""
     return (
         -conviction_pct(row.get("conviction")),
         -int(bool(row.get("closest_to_call"))),
@@ -548,11 +548,7 @@ def weighing_lead_from_rows(
         candidates.append(row)
     if not candidates:
         return None
-    candidates.sort(key=_weighing_lead_sort_key)
-    best_key = _weighing_lead_sort_key(candidates[0])
-    tied = [row for row in candidates if _weighing_lead_sort_key(row) == best_key]
-    if len(tied) > 1:
-        return None
+    candidates.sort(key=_weighing_lead_sort_key)  # stable — ties keep weighing-board row order
     return candidates[0]
 
 
