@@ -510,15 +510,26 @@ def _call_context(
     return netuid, conv if conv and conv > 0 else None, resolves_in, horizon
 
 
+def _weighing_lead_sort_key(row: Dict[str, Any]) -> tuple:
+    """Rank weighing alternatives — no netuid tiebreaker."""
+    return (
+        -conviction_pct(row.get("conviction")),
+        -int(bool(row.get("closest_to_call"))),
+        -int(row.get("proximity") or 0),
+        -int(bool(row.get("judge_long"))),
+    )
+
+
 def weighing_lead_from_rows(
     shaped_rows: List[Dict[str, Any]],
     *,
     beat_conviction: Optional[int] = None,
     skip_netuid: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Best non-primary row from an already-shaped Conviction Board table."""
+    """Best non-primary weighing row — conviction, then closest_to_call, proximity, judge_long."""
     from internal.subnets.tradable import is_tradable_subnet
 
+    candidates: List[Dict[str, Any]] = []
     for row in shaped_rows or []:
         if not isinstance(row, dict) or row.get("primary_call"):
             continue
@@ -534,8 +545,15 @@ def weighing_lead_from_rows(
         conv = conviction_pct(row.get("conviction"))
         if beat_conviction is not None and conv <= beat_conviction:
             continue
-        return row
-    return None
+        candidates.append(row)
+    if not candidates:
+        return None
+    candidates.sort(key=_weighing_lead_sort_key)
+    best_key = _weighing_lead_sort_key(candidates[0])
+    tied = [row for row in candidates if _weighing_lead_sort_key(row) == best_key]
+    if len(tied) > 1:
+        return None
+    return candidates[0]
 
 
 def best_weighing_alternative(
@@ -544,10 +562,9 @@ def best_weighing_alternative(
     *,
     market_context: Optional[Dict[str, Any]] = None,
     beat_conviction: Optional[int] = None,
+    skip_netuid: Optional[int] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Lead non-primary weighing row — same ordering as the Conviction Board UI."""
-    from internal.subnets.tradable import is_tradable_subnet
-
+    """Lead non-primary weighing row — same ranking as hero spotlight."""
     if not subnets:
         return None
     raw_top, total = build_weighing_candidates_from_shortlist(
@@ -559,16 +576,14 @@ def best_weighing_alternative(
         total_considered=total,
         daily_pick=daily_pick,
     )
-    for row in rows:
-        if not isinstance(row, dict) or row.get("primary_call"):
-            continue
-        if not is_tradable_subnet({"netuid": row.get("netuid")}):
-            continue
-        conv = conviction_pct(row.get("conviction"))
-        if beat_conviction is not None and conv <= beat_conviction:
-            continue
-        return row
-    return None
+    if skip_netuid is None and isinstance(daily_pick, dict):
+        call_netuid, _, _, _ = _call_context(daily_pick)
+        skip_netuid = call_netuid
+    return weighing_lead_from_rows(
+        rows,
+        beat_conviction=beat_conviction,
+        skip_netuid=skip_netuid,
+    )
 
 
 def shape_weighing_board(
