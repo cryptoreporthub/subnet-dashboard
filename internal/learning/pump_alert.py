@@ -1090,8 +1090,9 @@ def _finalize_pump_payload(
         "desk": desk,
     }
     if desk and alerts:
-        hero = next((a for a in alerts if a.get("timing") == "lead"), alerts[0])
-        payload["hero"] = hero
+        hero = next((a for a in alerts if a.get("timing") == "lead"), None)
+        if hero:
+            payload["hero"] = hero
     return payload
 
 

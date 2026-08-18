@@ -20,8 +20,8 @@
     {% if row.timing == 'exit' %}{% set _ = exit_ns.rows.append(row) %}{% endif %}
   {% endif %}
 {% endfor %}
-{% if not hero_row and pa_count > 0 %}
-  {% if warm_ns.rows %}{% set hero_row = warm_ns.rows[0] %}{% elif active_ns.rows %}{% set hero_row = active_ns.rows[0] %}{% endif %}
+{% if not hero_row and warm_ns.rows %}
+  {% set hero_row = warm_ns.rows[0] %}
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 
@@ -53,7 +53,7 @@
 
   <div class="pump-alert__body" id="pump-alert-body" aria-live="polite">
     <div class="pump-desk" id="pump-desk-panel">
-      {% if compact and hero_row %}
+      {% if compact and hero_row and hero_row.timing == 'lead' %}
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
       {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
       {% set form_pct = hero_row.formation_pct|default(0)|int %}
