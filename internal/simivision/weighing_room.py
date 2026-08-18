@@ -509,6 +509,39 @@ def _call_context(
     return netuid, conv if conv and conv > 0 else None, resolves_in, horizon
 
 
+def best_weighing_alternative(
+    daily_pick: Optional[Dict[str, Any]],
+    subnets: List[Dict[str, Any]],
+    *,
+    market_context: Optional[Dict[str, Any]] = None,
+    beat_conviction: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Lead non-primary weighing row — same ordering as the Conviction Board UI."""
+    from internal.subnets.tradable import is_tradable_subnet
+
+    if not subnets:
+        return None
+    raw_top, total = build_weighing_candidates_from_shortlist(
+        subnets, daily_pick, market_context or {}
+    )
+    rows, _meta = shape_weighing_board(
+        raw_top,
+        pool_count=total,
+        total_considered=total,
+        daily_pick=daily_pick,
+    )
+    for row in rows:
+        if not isinstance(row, dict) or row.get("primary_call"):
+            continue
+        if not is_tradable_subnet({"netuid": row.get("netuid")}):
+            continue
+        conv = conviction_pct(row.get("conviction"))
+        if beat_conviction is not None and conv <= beat_conviction:
+            continue
+        return row
+    return None
+
+
 def shape_weighing_board(
     top: List[Dict[str, Any]],
     *,

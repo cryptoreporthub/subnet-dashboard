@@ -423,7 +423,8 @@ def subnet_label(payload: Dict[str, Any]) -> str:
     if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
         prefix = (
             "Near call · "
-            if str(payload.get("hero_spotlight_source") or "").lower() == "judge_long"
+            if str(payload.get("hero_spotlight_source") or "").lower()
+            in ("judge_long", "weighing_lead")
             else "Closest · "
         )
         return f"{prefix}{base}"
@@ -438,9 +439,12 @@ def subnet_label_title(payload: Dict[str, Any]) -> Optional[str]:
     if payload.get("pick"):
         return "Today's published council long call."
     if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
-        if str(payload.get("hero_spotlight_source") or "").lower() == "judge_long":
+        if str(payload.get("hero_spotlight_source") or "").lower() in (
+            "judge_long",
+            "weighing_lead",
+        ):
             return (
-                "Top judge-aligned name on today's desk — not a published long. "
+                "Top name on today's weighing desk — not a published long. "
                 "Council held because the expert tail had a directional conflict."
             )
         return (

@@ -1147,7 +1147,7 @@ def _enrich_daily_pick_payload(
     out = attach_brief_to_daily_pick(out)
     from internal.learning.dpick_spotlight import attach_hero_spotlight_candidate
 
-    out = attach_hero_spotlight_candidate(out, subnets)
+    out = attach_hero_spotlight_candidate(out, subnets, market_context=market_context)
     return attach_pump_chip_to_daily_pick(out, subnets)
 
 

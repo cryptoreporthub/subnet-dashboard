@@ -1,4 +1,4 @@
-"""Hero spotlight swaps bearish expert tails for judge-long desk leads."""
+"""Hero spotlight swaps bearish expert tails for weighing-board desk leads."""
 
 from __future__ import annotations
 
@@ -16,19 +16,23 @@ def test_spotlight_replaces_bearish_expert_candidate(monkeypatch):
     assert directional_publish_guard(expert)["approved"] is False
 
     monkeypatch.setattr(
-        "internal.simivision.weighing_room._judge_long_rows",
-        lambda subnets, limit=1: [
-            {
-                "netuid": 25,
-                "name": "Mainframe",
-                "conviction": 89,
-                "judge_scores": {
-                    "oracle": {"score": 0.9, "confidence": 0.9},
-                    "echo": {"score": 0.85, "confidence": 0.85},
-                    "pulse": {"score": 0.8, "confidence": 0.8},
-                },
-            }
-        ],
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (
+            [
+                {
+                    "netuid": 25,
+                    "name": "Mainframe",
+                    "conviction": 89,
+                    "judge_long": True,
+                    "judge_scores": {
+                        "oracle": {"score": 0.9, "confidence": 0.9},
+                        "echo": {"score": 0.85, "confidence": 0.85},
+                        "pulse": {"score": 0.8, "confidence": 0.8},
+                    },
+                }
+            ],
+            10,
+        ),
     )
     payload = {
         "action": "HOLD",
@@ -36,10 +40,60 @@ def test_spotlight_replaces_bearish_expert_candidate(monkeypatch):
         "candidate": expert,
         "reason": "Directional conflict: council signal is bearish; no LONG published.",
     }
-    out = attach_hero_spotlight_candidate(payload)
+    out = attach_hero_spotlight_candidate(payload, [{"netuid": 25, "name": "Mainframe"}])
     assert out["hero_spotlight_source"] == "judge_long"
     assert out["candidate"]["subnet"]["netuid"] == 25
     assert out["desk_candidate"]["subnet"]["netuid"] == 13
+
+
+def test_spotlight_picks_highest_conviction_not_cache_order(monkeypatch):
+    """Weighing board sorts by conviction — hero must match, not raw judge-cache order."""
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (
+            [
+                {"netuid": 93, "name": "Bitcast", "conviction": 72, "judge_long": True},
+                {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
+            ],
+            10,
+        ),
+    )
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+    out = attach_hero_spotlight_candidate(payload, [{"netuid": 25, "name": "Mainframe"}])
+    assert out["candidate"]["subnet"]["netuid"] == 25
+    assert out["hero_spotlight_source"] == "judge_long"
+
+
+def test_spotlight_skips_when_weighing_not_better(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (
+            [{"netuid": 13, "name": "Data Universe", "conviction": 40, "judge_long": True}],
+            5,
+        ),
+    )
+    expert = {
+        "subnet": {"netuid": 13, "name": "Data Universe"},
+        "final_confidence": 0.58,
+        "signal_impact": {"net_direction": "bearish", "net_predicted_pct": -0.58},
+    }
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "candidate": expert,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+    }
+    out = attach_hero_spotlight_candidate(payload, [{"netuid": 13, "name": "Data Universe"}])
+    assert "hero_spotlight_source" not in out
+    assert out["candidate"]["subnet"]["netuid"] == 13
 
 
 def test_spotlight_keeps_nonconflicting_candidate(monkeypatch):
@@ -49,11 +103,15 @@ def test_spotlight_keeps_nonconflicting_candidate(monkeypatch):
         "signal_impact": {"net_direction": "bullish", "net_predicted_pct": 0.4},
     }
     monkeypatch.setattr(
-        "internal.simivision.weighing_room._judge_long_rows",
-        lambda subnets, limit=1: [{"netuid": 25, "name": "Mainframe", "conviction": 89}],
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (
+            [{"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True}],
+            10,
+        ),
     )
     out = attach_hero_spotlight_candidate(
-        {"action": "HOLD", "pick": None, "candidate": expert}
+        {"action": "HOLD", "pick": None, "candidate": expert},
+        [{"netuid": 25, "name": "Mainframe"}],
     )
     assert out["candidate"]["subnet"]["netuid"] == 4
     assert "hero_spotlight_source" not in out
@@ -61,11 +119,14 @@ def test_spotlight_keeps_nonconflicting_candidate(monkeypatch):
 
 def test_spotlight_uses_payload_reason_when_signal_impact_missing(monkeypatch):
     monkeypatch.setattr(
-        "internal.simivision.weighing_room._judge_long_rows",
-        lambda subnets, limit=12: [
-            {"netuid": 0, "name": "Root", "conviction": 99},
-            {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_scores": {}},
-        ],
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (
+            [
+                {"netuid": 0, "name": "Root", "conviction": 99, "judge_long": True},
+                {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
+            ],
+            10,
+        ),
     )
     payload = {
         "action": "HOLD",
@@ -98,7 +159,7 @@ def test_shape_board_no_false_stitch_without_call_context():
     assert rows[0].get("closest_to_call") is not True
 
 
-def test_shape_board_primary_call_gets_todays_call_stitch():
+def test_shape_board_hold_candidate_sets_call_bar_then_alternatives():
     daily = {
         "action": "HOLD",
         "pick": None,
@@ -117,8 +178,35 @@ def test_shape_board_primary_call_gets_todays_call_stitch():
     ]
     rows, meta = shape_weighing_board(top, pool_count=10, daily_pick=daily)
     assert meta["call_netuid"] == 13
-    primary = next(r for r in rows if r.get("primary_call"))
-    assert primary["netuid"] == 13
-    assert primary["closest_to_call"] is True
+    call_bar = next(r for r in rows if r.get("primary_call"))
+    assert call_bar["netuid"] == 13
     mainframe = next(r for r in rows if r["netuid"] == 25)
-    assert mainframe.get("closest_to_call") is not True
+    assert mainframe.get("primary_call") is not True
+    assert mainframe["conviction"] == 89
+
+
+def test_best_weighing_alternative_matches_board_lead(monkeypatch):
+    from internal.simivision.weighing_room import best_weighing_alternative
+
+    daily = {
+        "action": "HOLD",
+        "pick": None,
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+    subnets = [{"netuid": 25, "name": "Mainframe"}]
+    top = [
+        {"netuid": 93, "name": "Bitcast", "conviction": 72, "judge_long": True},
+        {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
+    ]
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: (top, 10),
+    )
+    lead = best_weighing_alternative(daily, subnets, beat_conviction=58)
+    rows, _ = shape_weighing_board(top, pool_count=10, daily_pick=daily)
+    board_lead = next(r for r in rows if not r.get("primary_call"))
+    assert lead is not None
+    assert lead["netuid"] == board_lead["netuid"] == 25
