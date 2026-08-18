@@ -2718,7 +2718,13 @@
         '</p>';
       return;
     }
-    var hero = (payload && payload.hero) || warm[0] || active[0];
+    var payloadHero = payload && payload.hero;
+    var hero = null;
+    if (warm.length) {
+      hero = payloadHero && payloadHero.timing === 'lead' ? payloadHero : warm[0];
+    } else if (payloadHero && payloadHero.timing === 'lead') {
+      hero = payloadHero;
+    }
     var html = '';
     if (compact && hero) {
       if (isPumpScanMode()) {
@@ -2790,6 +2796,63 @@
         more += '</div></section>';
       }
       if (more) html += '<div class="pd-board" id="pump-desk-more">' + more + '</div>';
+      renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
+      liveHost.innerHTML = html;
+      if (typeof window.__paintSparks === 'function') window.__paintSparks();
+      return;
+    }
+    if (compact && !hero && (active.length || exits.length)) {
+      if (isPumpScanMode()) {
+        var boardScan = '';
+        if (active.length) {
+          boardScan +=
+            '<h3 class="pds-board__lbl pds-board__lbl--chase">Active · chase risk <span>' +
+            active.length +
+            '</span></h3>';
+          active.forEach(function (row) {
+            boardScan += renderPumpScanRow(row, 'active');
+          });
+        }
+        if (exits.length) {
+          boardScan +=
+            '<h3 class="pds-board__lbl pds-board__lbl--exit">Cooling <span>' +
+            exits.length +
+            '</span></h3>';
+          exits.forEach(function (row) {
+            boardScan += renderPumpScanRow(row, 'exit');
+          });
+        }
+        if (boardScan) {
+          html = '<div class="pds-board" id="pump-desk-more">' + boardScan + '</div>';
+        }
+        renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
+        liveHost.innerHTML = html;
+        if (typeof window.__paintSparks === 'function') window.__paintSparks();
+        return;
+      }
+      if (active.length) {
+        html +=
+          '<section class="pd-board__section"><h4 class="pd-board__lbl">Active · chase risk <span>' +
+          active.length +
+          '</span></h4><div class="pd-board__rows">';
+        active.forEach(function (row) {
+          html += renderPumpDeskRow(row, 'active');
+        });
+        html += '</div></section>';
+      }
+      if (exits.length) {
+        html +=
+          '<section class="pd-board__section"><h4 class="pd-board__lbl">Cooling · exit watch <span>' +
+          exits.length +
+          '</span></h4><div class="pd-board__rows">';
+        exits.forEach(function (row) {
+          html += renderPumpDeskRow(row, 'exit');
+        });
+        html += '</div></section>';
+      }
+      if (html) {
+        html = '<div class="pd-board" id="pump-desk-more">' + html + '</div>';
+      }
       renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
       liveHost.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();

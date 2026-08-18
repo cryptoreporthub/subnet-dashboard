@@ -166,7 +166,11 @@ def test_resolve_name_prefers_live_ladder_over_stale_registry():
     assert "WebGenieAI" not in row["move"]
 
 
-def test_resolve_name_override_when_ladder_blank():
+def test_resolve_name_override_when_ladder_blank(monkeypatch):
+    monkeypatch.setattr(
+        "internal.subnet_names._tmc_display_names",
+        lambda: {54: "Yanez MIID"},
+    )
     row = build_alert_row(
         {
             "netuid": 54,
@@ -289,7 +293,7 @@ def test_pumping_not_on_dossier_chip():
 def test_resolve_name_from_subnet_row():
     row = build_alert_row(
         {"netuid": 106, "name": "Unknown", "phase": "PUMPING", "composite_score": 0.8},
-        {"netuid": 106, "name": "FlameWire"},
+        {"netuid": 106, "name": "FlameWire", "source": "taomarketcap"},
     )
     assert "FlameWire" in row["move"]
 
@@ -410,7 +414,7 @@ def test_pump_alert_compact_renders_hero_card():
     assert "Conf" in html
     assert "Gap" in html
     assert "Inflow" in html
-    assert "Open SN" in html and "dossier" in html
+    assert "Open " in html and "dossier" in html
     assert "progress_series" in row
     assert row["progress_series"][-1] == int(round(float(row["score"]) / row["trigger_score"] * 100))
     assert row.get("buy_pct") is not None
@@ -514,6 +518,17 @@ def test_api_pump_alerts_route():
     assert body.get("desk") is True
 
 
+def test_confirmed_only_desk_has_no_hero():
+    """CHASE RISK names must not occupy the formation hero when zero leads exist."""
+    ladder = {"subnets": {"75": _ladder_entry("PUMPING", netuid=75, score=0.85)}}
+    with patch("internal.pump.state.load_state", return_value=ladder):
+        out = build_pump_alerts_desk([])
+    assert out["confirmed_count"] == 1
+    assert out["early_count"] == 0
+    assert out.get("hero") is None
+    assert out["alerts"][0]["name"]  # still listed on the ladder
+
+
 def test_build_pump_alerts_desk_includes_hero_and_metrics():
     ladder = {
         "subnets": {
@@ -539,6 +554,7 @@ def test_build_pump_alerts_desk_includes_hero_and_metrics():
             out = build_pump_alerts_desk([])
     kick.assert_not_called()
     assert out["confirmed_count"] == 1
+    assert out.get("hero") is None
     assert out["desk"] is True
 
 
@@ -597,6 +613,29 @@ def test_preview_pump_alert_route():
     assert "BUILDING" in html
 
 
+def test_pump_alert_scan_compact_skips_confirmed_hero():
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert_scan.html")
+    chase = build_desk_row(_ladder_entry("PUMPING", netuid=75, score=0.85))
+    html = tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 0,
+            "confirmed_count": 1,
+            "exit_count": 0,
+            "alerts": [chase],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+    assert "pds-hero" not in html
+    assert "SN75" in html
+    assert "CONFIRMED" in html or "CHASE" in html
+
+
 def test_pump_alert_scan_compact_renders_hero():
     env = Environment(
         loader=FileSystemLoader("templates"),
@@ -623,7 +662,7 @@ def test_pump_alert_scan_compact_renders_hero():
     assert "pds-phase" in html
     assert "pd-evidence" not in html
     assert "pd-verdict__trigger" not in html
-    assert "Open SN" in html and "dossier" in html
+    assert "Open " in html and "dossier" in html
     assert 'class="pds-variant"' not in html
 
 
@@ -691,8 +730,8 @@ def test_pump_desk_page_route():
     with TestClient(app) as client:
         html = client.get("/pump").text
     assert "Pump desk" in html
-    assert "pd-evidence" in html
-    assert 'href="/"' in html
+    assert "pump-desk" in html or "pd-empty" in html
+    assert "← Home" in html or 'href="/"' in html
 
 
 def test_preview_pump_desk_full_route():

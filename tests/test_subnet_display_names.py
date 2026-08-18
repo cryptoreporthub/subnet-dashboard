@@ -6,6 +6,18 @@ from internal.subnet_names import display_name_for_netuid, is_generic_display_na
 from internal.subnets.feed import load_subnets_for_display
 
 
+def test_display_name_prefers_specific_ladder_hint(monkeypatch):
+    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {54: "Yanez"})
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    name = display_name_for_netuid(
+        54,
+        subnet_row={"netuid": 54, "name": "WebGenieAI"},
+        ladder_hint="Yanez MIID",
+        use_taostats_fallback=False,
+    )
+    assert name == "Yanez MIID"
+
+
 def test_is_generic_display_name():
     assert is_generic_display_name("SN78", 78)
     assert is_generic_display_name("Unknown", 78)
