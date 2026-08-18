@@ -4270,6 +4270,20 @@
           fetchJsonRetry('/api/simivision', 16000, 1).then(function (payload) {
             var data = safePayload(safePayload(payload).data);
             renderSimivision(data.top || [], data.meta || {});
+            var dp = lastDailyPickPayload;
+            if (
+              dp &&
+              !dp.pick &&
+              String(dp.action || 'HOLD').toUpperCase() === 'HOLD' &&
+              dp.candidate &&
+              !dp.hero_spotlight_source
+            ) {
+              fetchDailyPickForHero({ force: true })
+                .then(function (retry) {
+                  if (retry && retry.hero_spotlight_source) renderDailyPick(retry);
+                })
+                .catch(function () {});
+            }
           }),
           window.PaperPortfolio && window.PaperPortfolio.hydrate
             ? window.PaperPortfolio.hydrate()

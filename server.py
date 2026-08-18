@@ -1098,7 +1098,7 @@ def _subnets_for_spotlight_lite() -> List[Dict[str, Any]]:
     from internal.learning.dpick_spotlight import _registry_subnets_for_spotlight
 
     try:
-        hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "1.0"))
+        hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "2.5"))
         subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
         if subnets:
             return _cap_subnets_for_scoring(subnets)
