@@ -4689,8 +4689,9 @@
     }
     var act = String(payload.action || 'HOLD').toUpperCase();
     if (!payload.pick && payload.candidate && act === 'HOLD') {
+      var spotlight = String(payload.hero_spotlight_source || '').toLowerCase();
       var prefix =
-        String(payload.hero_spotlight_source || '').toLowerCase() === 'judge_long'
+        spotlight === 'judge_long' || spotlight === 'weighing_lead'
           ? 'Near call · '
           : 'Closest · ';
       return prefix + base;
@@ -4705,9 +4706,10 @@
       return "Today's published council long call.";
     }
     if (!payload.pick && payload.candidate && act === 'HOLD') {
-      if (String(payload.hero_spotlight_source || '').toLowerCase() === 'judge_long') {
+      var spotlight = String(payload.hero_spotlight_source || '').toLowerCase();
+      if (spotlight === 'judge_long' || spotlight === 'weighing_lead') {
         return (
-          "Top judge-aligned name on today's desk — not a published long. " +
+          "Top name on today's weighing desk — not a published long. " +
           'Council held because the expert tail had a directional conflict.'
         );
       }
