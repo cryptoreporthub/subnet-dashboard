@@ -123,20 +123,61 @@ def attach_hero_spotlight_from_weighing_rows(
     return _apply_weighing_spotlight(payload, expert, lead)
 
 
+def _extract_weighing_top(board_payload: Any) -> List[Dict[str, Any]]:
+    if not isinstance(board_payload, dict):
+        return []
+    data = board_payload.get("data") if isinstance(board_payload.get("data"), dict) else board_payload
+    top = data.get("top") if isinstance(data, dict) else None
+    return list(top) if isinstance(top, list) else []
+
+
+def _spotlight_applicable(payload: Dict[str, Any]) -> bool:
+    if not isinstance(payload, dict) or payload.get("pick"):
+        return False
+    if str(payload.get("action", "HOLD")).upper() != "HOLD":
+        return False
+    expert = payload.get("candidate")
+    if not isinstance(expert, dict):
+        return False
+    return _hold_has_directional_conflict(payload, expert)
+
+
+def _weighing_rows_for_spotlight() -> List[Dict[str, Any]]:
+    """Warm cache first; one sync SimiVision build when cold so hero matches the weighing tab."""
+    try:
+        import time
+
+        import server as srv
+
+        rows = srv._simivision_weighing_rows_cached()
+        if rows:
+            return rows
+        built = srv._simivision_build_inner()
+        rows = _extract_weighing_top(built)
+        if rows:
+            with srv._SIMIVISION_LOCK:
+                srv._SIMIVISION_CACHE["payload"] = built
+                srv._SIMIVISION_CACHE["at"] = time.time()
+        return rows
+    except Exception:
+        return []
+
+
 def enrich_daily_pick_spotlight_for_web(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Web-only spotlight — uses warm SimiVision weighing rows + optional hydrate."""
     if not isinstance(payload, dict):
         return payload
     weighing_rows: Optional[List[Dict[str, Any]]] = None
     subnets: Optional[List[Dict[str, Any]]] = None
-    try:
-        import server as srv
+    if _spotlight_applicable(payload):
+        weighing_rows = _weighing_rows_for_spotlight()
+    if not weighing_rows:
+        try:
+            import server as srv
 
-        weighing_rows = srv._simivision_weighing_rows_cached()
-        if not weighing_rows:
             subnets = srv._subnets_for_spotlight_lite()
-    except Exception:
-        subnets = _registry_subnets_for_spotlight()
+        except Exception:
+            subnets = _registry_subnets_for_spotlight()
     return attach_hero_spotlight_candidate(
         payload,
         subnets,

@@ -298,3 +298,49 @@ def test_best_weighing_alternative_matches_board_lead(monkeypatch):
     board_lead = next(r for r in rows if not r.get("primary_call"))
     assert lead is not None
     assert lead["netuid"] == board_lead["netuid"] == 25
+
+
+def test_enrich_web_spotlight_sync_builds_when_cache_cold(monkeypatch):
+    from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
+
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+            "signal_impact": {"net_direction": "bearish", "net_predicted_pct": -0.58},
+        },
+    }
+    board = {
+        "status": "success",
+        "data": {
+            "top": [
+                {"netuid": 13, "name": "Data Universe", "conviction": 58, "primary_call": True},
+                {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
+            ]
+        },
+    }
+
+    class _FakeSrv:
+        _SIMIVISION_LOCK = __import__("threading").Lock()
+        _SIMIVISION_CACHE: dict = {}
+
+        @staticmethod
+        def _simivision_weighing_rows_cached(max_age_s: float = 120.0):
+            return []
+
+        @staticmethod
+        def _simivision_build_inner():
+            return board
+
+        @staticmethod
+        def _subnets_for_spotlight_lite():
+            return [{"netuid": 25, "name": "Mainframe"}]
+
+    monkeypatch.setitem(__import__("sys").modules, "server", _FakeSrv)
+    out = enrich_daily_pick_spotlight_for_web(payload)
+    assert out["hero_spotlight_source"] == "judge_long"
+    assert out["candidate"]["subnet"]["netuid"] == 25
+    assert out["desk_candidate"]["subnet"]["netuid"] == 13
