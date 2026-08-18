@@ -7,6 +7,31 @@ from typing import Any, Dict, List, Optional
 from internal.council.publish_gate import directional_publish_guard
 
 
+def _registry_subnets_for_spotlight(limit: int = 96) -> List[Dict[str, Any]]:
+    """Registry-only subnet rows for judge-long scoring on the lite read path."""
+    import json
+    import os
+
+    from internal.subnets.tradable import tradable_subnets
+
+    path = os.path.join("config", "registry.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        rows = tradable_subnets(list(data.values()) if isinstance(data, dict) else [])
+        return rows[:limit]
+    except Exception:
+        return []
+
+
+def _hold_has_directional_conflict(payload: Dict[str, Any], expert: Dict[str, Any]) -> bool:
+    """True when HOLD is due to bearish council signal, not just low confidence."""
+    if not directional_publish_guard(expert).get("approved"):
+        return True
+    reason = str(payload.get("reason") or "").lower()
+    return "directional conflict" in reason
+
+
 def _judge_row_as_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
     conv = int(row.get("conviction") or 0)
     fc = conv / 100.0
@@ -51,12 +76,15 @@ def attach_hero_spotlight_candidate(
     expert = payload.get("candidate")
     if not isinstance(expert, dict):
         return payload
-    if directional_publish_guard(expert).get("approved"):
+    if not _hold_has_directional_conflict(payload, expert):
         return payload
 
     from internal.simivision.weighing_room import _judge_long_rows
+    from internal.subnets.tradable import is_tradable_subnet
 
-    rows = _judge_long_rows(list(subnets or []), limit=1)
+    subnet_rows = list(subnets or []) or _registry_subnets_for_spotlight()
+    rows = _judge_long_rows(subnet_rows, limit=12)
+    rows = [r for r in rows if is_tradable_subnet({"netuid": r.get("netuid")})]
     if not rows:
         return payload
     top = rows[0]

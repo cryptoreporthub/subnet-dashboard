@@ -59,6 +59,29 @@ def test_spotlight_keeps_nonconflicting_candidate(monkeypatch):
     assert "hero_spotlight_source" not in out
 
 
+def test_spotlight_uses_payload_reason_when_signal_impact_missing(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room._judge_long_rows",
+        lambda subnets, limit=12: [
+            {"netuid": 0, "name": "Root", "conviction": 99},
+            {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_scores": {}},
+        ],
+    )
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+    out = attach_hero_spotlight_candidate(payload, [{"netuid": 25, "name": "Mainframe"}])
+    assert out["hero_spotlight_source"] == "judge_long"
+    assert out["candidate"]["subnet"]["netuid"] == 25
+    assert out["desk_candidate"]["subnet"]["netuid"] == 13
+
+
 def test_shape_board_no_false_stitch_without_call_context():
     top = [
         {
