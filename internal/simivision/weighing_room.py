@@ -137,6 +137,7 @@ def _judge_long_rows(
         )
         if len(rows) >= limit:
             break
+    rows.sort(key=lambda r: -int(r.get("conviction") or 0))
     return rows
 
 
@@ -507,6 +508,34 @@ def _call_context(
     if horizon is not None:
         horizon = str(horizon)
     return netuid, conv if conv and conv > 0 else None, resolves_in, horizon
+
+
+def weighing_lead_from_rows(
+    shaped_rows: List[Dict[str, Any]],
+    *,
+    beat_conviction: Optional[int] = None,
+    skip_netuid: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """Best non-primary row from an already-shaped Conviction Board table."""
+    from internal.subnets.tradable import is_tradable_subnet
+
+    for row in shaped_rows or []:
+        if not isinstance(row, dict) or row.get("primary_call"):
+            continue
+        nu = row.get("netuid")
+        if skip_netuid is not None:
+            try:
+                if int(nu) == int(skip_netuid):
+                    continue
+            except (TypeError, ValueError):
+                pass
+        if not is_tradable_subnet({"netuid": nu}):
+            continue
+        conv = conviction_pct(row.get("conviction"))
+        if beat_conviction is not None and conv <= beat_conviction:
+            continue
+        return row
+    return None
 
 
 def best_weighing_alternative(

@@ -32,6 +32,14 @@ def _hold_has_directional_conflict(payload: Dict[str, Any], expert: Dict[str, An
     return "directional conflict" in reason
 
 
+def _expert_netuid(expert: Dict[str, Any]) -> Optional[int]:
+    expert_sn = expert.get("subnet") if isinstance(expert.get("subnet"), dict) else {}
+    try:
+        return int(expert_sn.get("netuid")) if expert_sn.get("netuid") is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _weighing_row_as_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
     from internal.simivision.weighing_room import conviction_pct
 
@@ -67,13 +75,67 @@ def _weighing_row_as_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _apply_weighing_spotlight(
+    payload: Dict[str, Any],
+    expert: Dict[str, Any],
+    row: Dict[str, Any],
+) -> Dict[str, Any]:
+    expert_nu = _expert_netuid(expert)
+    try:
+        spotlight_nu = int(row.get("netuid")) if row.get("netuid") is not None else None
+    except (TypeError, ValueError):
+        spotlight_nu = None
+    if expert_nu is not None and expert_nu == spotlight_nu:
+        return payload
+    out = dict(payload)
+    out["desk_candidate"] = dict(expert)
+    out["candidate"] = _weighing_row_as_candidate(row)
+    out["hero_spotlight_source"] = (
+        "judge_long" if row.get("judge_long") else "weighing_lead"
+    )
+    return out
+
+
+def attach_hero_spotlight_from_weighing_rows(
+    payload: Dict[str, Any],
+    shaped_rows: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Spotlight using the same shaped rows the Conviction Board UI already rendered."""
+    if not isinstance(payload, dict) or not shaped_rows:
+        return payload
+    if payload.get("pick") or str(payload.get("action", "HOLD")).upper() != "HOLD":
+        return payload
+    expert = payload.get("candidate")
+    if not isinstance(expert, dict) or not _hold_has_directional_conflict(payload, expert):
+        return payload
+
+    from internal.simivision.weighing_room import conviction_pct, weighing_lead_from_rows
+
+    lead = weighing_lead_from_rows(
+        shaped_rows,
+        beat_conviction=conviction_pct(
+            expert.get("final_confidence", expert.get("confidence"))
+        ),
+        skip_netuid=_expert_netuid(expert),
+    )
+    if not lead:
+        return payload
+    return _apply_weighing_spotlight(payload, expert, lead)
+
+
 def attach_hero_spotlight_candidate(
     payload: Dict[str, Any],
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
     market_context: Optional[Dict[str, Any]] = None,
+    weighing_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """When HOLD blocks a bearish expert tail, spotlight weighing's better lead."""
+    if weighing_rows:
+        out = attach_hero_spotlight_from_weighing_rows(payload, weighing_rows)
+        if out.get("hero_spotlight_source"):
+            return out
+
     if not isinstance(payload, dict) or payload.get("pick"):
         return payload
     if str(payload.get("action", "HOLD")).upper() != "HOLD":
@@ -98,23 +160,4 @@ def attach_hero_spotlight_candidate(
     )
     if not top:
         return payload
-
-    expert_sn = expert.get("subnet") if isinstance(expert.get("subnet"), dict) else {}
-    try:
-        expert_nu = int(expert_sn.get("netuid")) if expert_sn.get("netuid") is not None else None
-    except (TypeError, ValueError):
-        expert_nu = None
-    try:
-        spotlight_nu = int(top.get("netuid")) if top.get("netuid") is not None else None
-    except (TypeError, ValueError):
-        spotlight_nu = None
-    if expert_nu is not None and expert_nu == spotlight_nu:
-        return payload
-
-    out = dict(payload)
-    out["desk_candidate"] = dict(expert)
-    out["candidate"] = _weighing_row_as_candidate(top)
-    out["hero_spotlight_source"] = (
-        "judge_long" if top.get("judge_long") else "weighing_lead"
-    )
-    return out
+    return _apply_weighing_spotlight(payload, expert, top)

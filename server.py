@@ -1074,6 +1074,39 @@ def _fast_home_hero_context(
     return ctx
 
 
+def _simivision_weighing_rows_cached(max_age_s: float = 120.0) -> List[Dict[str, Any]]:
+    """Shaped weighing rows when SimiVision cache is warm — matches the UI table."""
+    import time
+
+    try:
+        with _SIMIVISION_LOCK:
+            cached = _SIMIVISION_CACHE.get("payload")
+            at = float(_SIMIVISION_CACHE.get("at") or 0)
+        if not isinstance(cached, dict) or (time.time() - at) > max_age_s:
+            return []
+        data = cached.get("data") if isinstance(cached.get("data"), dict) else cached
+        top = data.get("top") if isinstance(data, dict) else None
+        return list(top) if isinstance(top, list) else []
+    except Exception:
+        return []
+
+
+def _subnets_for_spotlight_lite() -> List[Dict[str, Any]]:
+    """Hydrated subnets for hero/weighing parity; registry fallback when feed is cold."""
+    import os
+
+    from internal.learning.dpick_spotlight import _registry_subnets_for_spotlight
+
+    try:
+        hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "2.5"))
+        subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
+        if subnets:
+            return _cap_subnets_for_scoring(subnets)
+    except Exception as exc:
+        logger.debug("spotlight subnet hydrate skipped: %s", exc)
+    return _registry_subnets_for_spotlight()
+
+
 def _enrich_daily_pick_payload_lite(
     pick_payload: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
@@ -1096,7 +1129,12 @@ def _enrich_daily_pick_payload_lite(
     )
 
     out = enrich_active_subnet_fields(out)
-    out = attach_hero_spotlight_candidate(out)
+    weighing_rows = _simivision_weighing_rows_cached()
+    out = attach_hero_spotlight_candidate(
+        out,
+        _subnets_for_spotlight_lite(),
+        weighing_rows=weighing_rows or None,
+    )
     out = attach_judge_scores_to_daily_pick(out)
     out = attach_focus_judge_scores_to_daily_pick(out)
     if "shortlist" not in out:
