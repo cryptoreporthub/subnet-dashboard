@@ -54,6 +54,26 @@ def _seed_messages(db, count: int = 12, *, conviction: float = 65.0):
     return ids
 
 
+def test_build_subnet_chatter_summary_with_mentions(intel_env):
+    from internal.message_intel.rollup import build_subnet_chatter_summary
+
+    _seed_messages(intel_env, count=8, conviction=68.0)
+    summary = build_subnet_chatter_summary(25, db=intel_env, registry_names={25: "Mainframe"})
+    assert summary["empty"] is False
+    assert summary["mention_count"] >= 1
+    assert summary["name"] == "Mainframe"
+    assert summary["avg_conviction"] >= 60
+    assert summary["snippets"]
+
+
+def test_build_subnet_chatter_summary_honest_empty(intel_env):
+    from internal.message_intel.rollup import build_subnet_chatter_summary
+
+    summary = build_subnet_chatter_summary(99, db=intel_env)
+    assert summary["empty"] is True
+    assert summary["mention_count"] == 0
+
+
 def test_summary_bot_disabled_by_default(monkeypatch):
     monkeypatch.delenv("TELEGRAM_SUMMARY_BOT", raising=False)
     assert summary_bot.summary_bot_enabled() is False

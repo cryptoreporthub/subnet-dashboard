@@ -94,7 +94,10 @@ def _command_rate_limit(key: tuple[str, int], seconds: int = 60) -> Optional[str
 
 
 def _subnet_from_arg(arg: str) -> Optional[int]:
-    m = re.search(r"\b(?:sn|subnet)?\s*(\d+)\b", str(arg or ""), re.IGNORECASE)
+    text = str(arg or "")
+    m = re.search(r"#\s*(\d{1,4})\b", text)
+    if not m:
+        m = re.search(r"\b(?:sn|subnet)?\s*(\d+)\b", text, re.IGNORECASE)
     if not m:
         return None
     try:
@@ -123,26 +126,106 @@ def _format_summary_reply(db=None) -> str:
     return build_summary_text(db=db)
 
 
-def _format_subnet_summary_reply(netuid: int, db=None) -> str:
-    from internal.message_intel.rollup import build_subnet_telegram_conviction
+def _escape_telegram_html(text: str) -> str:
+    return str(text or "").strip().replace("<", "&lt;").replace(">", "&gt;")
 
-    payload = build_subnet_telegram_conviction(netuid=netuid, limit=1, db=db)
-    item = next((row for row in payload.get("items") or [] if int(row.get("netuid") or 0) == int(netuid)), None)
-    if not item or not item.get("current_calls"):
-        return _format_error(f"No recent qualified Telegram calls for SN{netuid}.")
-    label = item.get("label") or "mixed"
-    lines = [
-        f"<b>SN{netuid} Telegram summary</b>",
-        "",
-        f"Current read: {label} · {item.get('call_count', 0)} calls from {item.get('contributor_count', 0)} contributors",
+
+def _subnet_page_url(netuid: int) -> str:
+    base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/")
+    if not base:
+        base = "https://subnet-dashboard.fly.dev"
+    return f"{base}/subnet/{int(netuid)}"
+
+
+def _format_subnet_summary_reply(netuid: int, db=None) -> str:
+    from internal.message_intel.rollup import (
+        build_subnet_chatter_summary,
+        build_subnet_telegram_conviction,
+    )
+
+    names = _registry_subnet_names()
+    nu = int(netuid)
+    chatter = build_subnet_chatter_summary(netuid=nu, registry_names=names, db=db)
+    if chatter.get("empty"):
+        return _format_error(f"No Subnet Summers chatter about SN{nu} in the last 24h.")
+
+    name = html.escape(str(chatter.get("name") or f"Subnet {nu}"))
+    mentions = int(chatter.get("mention_count") or 0)
+    authors = int(chatter.get("author_count") or 0)
+    pulse_bits = [
+        f"{mentions} mention{'s' if mentions != 1 else ''}",
+        f"{chatter.get('sentiment') or 'Cautious'} mood",
+        f"avg confidence {float(chatter.get('avg_conviction') or 0):.0f}%",
     ]
-    for call in (item.get("current_calls") or [])[:3]:
-        direction = str(call.get("direction") or "neutral").upper()
-        snippet = str(call.get("content") or "").strip().replace("<", "&lt;").replace(">", "&gt;")
-        if len(snippet) > 140:
-            snippet = snippet[:137].rstrip() + "…"
-        lines.append(f"• {direction} — {snippet or 'call recorded'}")
-    lines.extend(["", "Evidence-qualified community commentary; not financial advice."])
+    if authors:
+        pulse_bits.append(f"{authors} contributor{'s' if authors != 1 else ''}")
+
+    lines = [
+        f"<b>{name} (SN{nu})</b>",
+        "",
+        f"<i>{' · '.join(pulse_bits)}</i>",
+    ]
+
+    bull = int(chatter.get("bullish_mentions") or 0)
+    bear = int(chatter.get("bearish_mentions") or 0)
+    if bull or bear:
+        lines.append(f"Directional chatter: {bull} bullish · {bear} bearish")
+
+    snippets = chatter.get("snippets") or []
+    if snippets:
+        lines.extend(["", "<b>What they're saying</b>"])
+        for snip in snippets[:4]:
+            text = _escape_telegram_html(snip.get("content") or "")
+            if len(text) > 140:
+                text = text[:137].rstrip() + "…"
+            conv = snip.get("conviction")
+            conv_bit = ""
+            try:
+                if conv is not None and float(conv) > 0:
+                    conv_bit = f" · {int(float(conv))}% conv"
+            except (TypeError, ValueError):
+                pass
+            lines.append(f"• {text}{conv_bit}")
+
+    payload = build_subnet_telegram_conviction(netuid=nu, limit=1, db=db, registry_names=names)
+    item = next((row for row in payload.get("items") or [] if int(row.get("netuid") or 0) == nu), None)
+    current_calls = (item or {}).get("current_calls") or []
+    if current_calls:
+        label = item.get("label") or "mixed"
+        score = item.get("score")
+        score_bit = ""
+        if item.get("ready") and score is not None:
+            try:
+                score_val = float(score)
+                score_bit = f" ({'+' if score_val > 0 else ''}{score_val:.0f})"
+            except (TypeError, ValueError):
+                pass
+        lines.extend(
+            [
+                "",
+                (
+                    f"<b>Proven-caller consensus</b>: {label}{score_bit} · "
+                    f"{item.get('call_count', 0)} calls from {item.get('contributor_count', 0)} callers"
+                ),
+            ]
+        )
+        for call in current_calls[:2]:
+            direction = str(call.get("direction") or "neutral").upper()
+            snippet = _escape_telegram_html(call.get("content") or "")
+            if len(snippet) > 100:
+                snippet = snippet[:97].rstrip() + "…"
+            lines.append(f"• {direction} — {snippet or 'call recorded'}")
+    else:
+        lines.append("")
+        lines.append("<i>No proven-caller directional bets yet — summary is from general chatter.</i>")
+
+    lines.extend(
+        [
+            "",
+            f'<a href="{_subnet_page_url(nu)}">Open SN{nu} on the desk</a>',
+            "Community commentary; not financial advice.",
+        ]
+    )
     return "\n".join(lines)
 
 

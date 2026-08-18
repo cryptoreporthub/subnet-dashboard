@@ -89,11 +89,28 @@ def test_subnetsummers_command_includes_full_desk_sections(monkeypatch):
 
 def test_summary_subnet_uses_current_qualified_calls(monkeypatch):
     monkeypatch.setattr(
+        "internal.message_intel.rollup.build_subnet_chatter_summary",
+        lambda **kw: {
+            "netuid": 7,
+            "name": "Subnet Seven",
+            "mention_count": 3,
+            "author_count": 2,
+            "sentiment": "Bullish",
+            "avg_conviction": 72.0,
+            "bullish_mentions": 2,
+            "bearish_mentions": 0,
+            "snippets": [{"content": "SN7 building", "conviction": 72}],
+            "empty": False,
+        },
+    )
+    monkeypatch.setattr(
         "internal.message_intel.rollup.build_subnet_telegram_conviction",
         lambda **kw: {
             "items": [{
                 "netuid": 7,
                 "label": "bullish",
+                "ready": True,
+                "score": 42,
                 "call_count": 2,
                 "contributor_count": 1,
                 "current_calls": [{"direction": "up", "content": "SN7 building"}],
@@ -101,8 +118,43 @@ def test_summary_subnet_uses_current_qualified_calls(monkeypatch):
         },
     )
     out = summary_bot.handle_command("/summary SN7")
-    assert "SN7 Telegram summary" in out
+    assert "Subnet Seven (SN7)" in out
+    assert "What they're saying" in out
     assert "SN7 building" in out
+    assert "Proven-caller consensus" in out
+
+
+def test_summary_subnet_shows_chatter_without_qualified_calls(monkeypatch):
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_subnet_chatter_summary",
+        lambda **kw: {
+            "netuid": 25,
+            "name": "Mainframe",
+            "mention_count": 4,
+            "author_count": 3,
+            "sentiment": "Cautious",
+            "avg_conviction": 58.0,
+            "bullish_mentions": 1,
+            "bearish_mentions": 1,
+            "snippets": [{"content": "Mainframe emissions already priced in", "conviction": 55}],
+            "empty": False,
+        },
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_subnet_telegram_conviction",
+        lambda **kw: {"items": [{"netuid": 25, "current_calls": []}]},
+    )
+    out = summary_bot.handle_command("/summary 25")
+    assert "Mainframe (SN25)" in out
+    assert "4 mentions" in out
+    assert "avg confidence 58%" in out
+    assert "Mainframe emissions already priced in" in out
+    assert "No proven-caller directional bets yet" in out
+
+
+def test_subnet_from_arg_accepts_hash_syntax():
+    assert summary_bot._subnet_from_arg("#25") == 25
+    assert summary_bot._subnet_from_arg("SN25") == 25
 
 
 def test_handle_command_who_and_alerts(monkeypatch):

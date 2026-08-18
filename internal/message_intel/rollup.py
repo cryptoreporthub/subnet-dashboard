@@ -1854,6 +1854,96 @@ def build_24h_summary(
     }
 
 
+def build_subnet_chatter_summary(
+    netuid: int,
+    *,
+    window_hours: int = 24,
+    registry_names: Optional[Dict[int, str]] = None,
+    snippet_limit: int = 4,
+    min_conviction_for_hc: float = 60.0,
+    db=None,
+) -> Dict[str, Any]:
+    """24h Subnet Summers chatter rollup for one netuid (mentions + confidence)."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=max(1, int(window_hours)))
+    registry_names = registry_names or {}
+    nu = int(netuid)
+
+    mention_count = 0
+    sentiment_sum = 0.0
+    sentiment_n = 0
+    conviction_sum = 0.0
+    hc_count = 0
+    authors: Set[str] = set()
+    snippets: List[Dict[str, Any]] = []
+    bullish = 0
+    bearish = 0
+
+    for row in _load_message_rows(db):
+        ts = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if ts is None or ts < window_start:
+            continue
+        if nu not in _netuids_from_row(row):
+            continue
+        mention_count += 1
+        sentiment_sum += _sentiment_value(row.get("sentiment"))
+        sentiment_n += 1
+        conviction = _coerce_float(row.get("conviction"))
+        conviction_sum += conviction
+        if conviction >= min_conviction_for_hc:
+            hc_count += 1
+        authors.add(stable_author_id(row))
+        side = _direction_side(row)
+        if side == "buy":
+            bullish += 1
+        elif side == "fade":
+            bearish += 1
+        content = str(row.get("content") or "").strip()
+        if content:
+            snippet = _clip_snippet(content, max_len=120)
+            if snippet:
+                snippets.append(
+                    {
+                        "content": snippet,
+                        "conviction": conviction,
+                        "direction": side,
+                        "author_name": row.get("author_name") or row.get("author_username") or "Unknown",
+                    }
+                )
+
+    snippets.sort(key=lambda item: item["conviction"], reverse=True)
+    seen: Set[str] = set()
+    unique_snippets: List[Dict[str, Any]] = []
+    for item in snippets:
+        key = str(item["content"])[:80]
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_snippets.append(item)
+        if len(unique_snippets) >= snippet_limit:
+            break
+
+    avg_sent = (sentiment_sum / sentiment_n) if sentiment_n else 0.0
+    avg_conv = (conviction_sum / mention_count) if mention_count else 0.0
+
+    return {
+        "netuid": nu,
+        "name": _rollup_subnet_name(nu, registry_names),
+        "window_hours": int(window_hours),
+        "mention_count": mention_count,
+        "author_count": len(authors),
+        "sentiment": _sentiment_tag(avg_sent),
+        "avg_sentiment": round(avg_sent, 3),
+        "avg_conviction": round(avg_conv, 1),
+        "high_conviction_count": hc_count,
+        "bullish_mentions": bullish,
+        "bearish_mentions": bearish,
+        "snippets": unique_snippets,
+        "empty": mention_count == 0,
+        "generated_at": now.isoformat().replace("+00:00", "Z"),
+    }
+
+
 _PUSHBACK_CUES = (
     "nah",
     "nope",
