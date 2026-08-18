@@ -53,7 +53,7 @@
       <div class="lsn-logo">S</div>
       <div class="t">
         <div class="app">SIMI <em>·</em> LISTENER</div>
-        <div class="grp">@{{ monitored_group or "officialsubnetsummer" }}</div>
+        <div class="grp">@{{ monitored_group or "configured-source" }}</div>
         <div class="lsn-graded"><b>{{ graded_count or 0 }}</b> messages graded{% if high_conviction %} · <b>{{ high_conviction }}</b> high conviction{% endif %}</div>
       </div>
       <div class="lsn-hdr-actions">
@@ -66,7 +66,7 @@
             <div class="prev">
               <div class="banner"></div>
               <div class="cap">
-                <div class="pt2">SimiVision — @{{ monitored_group or "Subnet Summers" }}</div>
+                <div class="pt2">SimiVision — @{{ monitored_group or "configured source" }}</div>
                 <div class="pd">{{ graded_count or 0 }} graded · {% if trending %}top sn {{ trending[0]["name"] }}{% else %}listener warming up{% endif %}</div>
               </div>
             </div>
@@ -83,7 +83,7 @@
         <span class="lsn-core"><i></i><i></i><i></i><i></i><i></i><i></i></span>
       </div>
       <div class="lsn-identity">
-        <p class="lsn-eyebrow">SIGNAL DECK · t.me/{{ monitored_group or "OfficialSubnetSummer" }}</p>
+        <p class="lsn-eyebrow">SIGNAL DECK · t.me/{{ monitored_group or "configured-source" }}</p>
         <h1 class="lsn-title">Telegram pulse</h1>
         <p class="lsn-sub">Shareable intercept of Subnet Summers — every call jury-scored the instant it lands.</p>
       </div>
@@ -357,7 +357,7 @@
         <div class="nm">
           <div class="h">{{ a["author"] or "—" }}{% if loop.first %} <span class="crown">👑</span>{% endif %}</div>
           <div class="m">{% if a["messages"] is not none %}{{ a["messages"] }} msgs{% endif %}{% if a["accuracy"] is not none %} · {{ a["accuracy"] }}% hit-rate{% endif %}</div>
-          <div class="lsn-hmeter"><div style="width:{{ 96 if loop.first else 71 }}%"></div></div>
+          <div class="lsn-hmeter"><div style="width:clamp(0%, {{ a["accuracy"] if a["accuracy"] is not none else 0 }}%, 100%)"></div></div>
         </div>
         <div class="stats"><div class="inf">{{ a["influence"] if a["influence"] is not none else "—" }}</div><div class="lbl">influence</div></div>
       </div>

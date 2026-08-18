@@ -2483,7 +2483,10 @@ function renderTrendingSky(rows) {
     if (feed) feed.setAttribute("aria-busy", "false");
   }
 
+  var hydrateToken = 0;
+
   async function hydrate() {
+    var token = ++hydrateToken;
     try {
       var status = null;
       var payload = null;
@@ -2524,6 +2527,7 @@ function renderTrendingSky(rows) {
       if (newestId && lastSeenMsgId && newestId !== lastSeenMsgId) pingPulsar();
       if (newestId) lastSeenMsgId = newestId;
 
+      if (token !== hydrateToken) return;
       var listener = (status && status.listener) || (payload.meta && payload.meta.listener) || {};
       var trending = (payload.meta && payload.meta.trending) || [];
       var trendingWindow = (payload.meta && payload.meta.trending_window) || "1h";

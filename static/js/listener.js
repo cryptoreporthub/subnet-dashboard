@@ -125,14 +125,9 @@
       setAnchor(msg.getAttribute("data-sn"), msg.getAttribute("data-name"));
       return;
     }
-    var first = document.querySelector(".lsn-trow[data-sn], .lsn-crow2[data-sn], .lsn-ylead[data-sn]");
-    if (first && first.getAttribute("data-sn")) {
-      setAnchor(first.getAttribute("data-sn"), first.getAttribute("data-name"));
-      return;
-    }
-    if (rows && rows.length) {
-      var r0 = rows[0];
-      setAnchor(r0.getAttribute("data-sn"), r0.getAttribute("data-name"));
+    var explicit = document.querySelector("[data-anchor=\"true\"]");
+    if (explicit && explicit.getAttribute("data-sn")) {
+      setAnchor(explicit.getAttribute("data-sn"), explicit.getAttribute("data-name"));
       return;
     }
     anchor = null;
@@ -250,9 +245,8 @@
     var generation = ++pollGeneration;
     try {
       if (!anchor) pickAnchor();
-      var endpoint = anchor && anchor.netuid
-        ? "/api/subnet/" + encodeURIComponent(anchor.netuid) + "/pool"
-        : "/api/subnets?limit=16";
+      if (!anchor || !anchor.netuid) { warming("select a subnet to inspect its pool"); return; }
+      var endpoint = "/api/subnet/" + encodeURIComponent(anchor.netuid) + "/pool";
       fetch(endpoint, { headers: { "Accept": "application/json" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
