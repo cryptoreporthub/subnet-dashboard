@@ -79,6 +79,19 @@ def _learning_path(path: str) -> bool:
     }
 
 
+def _daily_pick_path(path: str) -> bool:
+    return path == "/api/daily-pick"
+
+
+def _daily_pick_proxy_timeout() -> httpx.Timeout:
+    try:
+        read = float(os.environ.get("WORKER_PROXY_DAILY_PICK_TIMEOUT_SECONDS", "8"))
+    except ValueError:
+        read = 8.0
+    connect = min(3.0, read)
+    return httpx.Timeout(connect=connect, read=read, write=read, pool=connect)
+
+
 def _learning_proxy_timeout() -> httpx.Timeout:
     try:
         read = float(os.environ.get("WORKER_PROXY_LEARNING_TIMEOUT_SECONDS", "25"))
@@ -444,6 +457,25 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             },
         )
     if path == "/api/daily-pick":
+        try:
+            data = fetch_worker_json_sync(
+                "/api/daily-pick",
+                timeout=_daily_pick_proxy_timeout(),
+            )
+            if isinstance(data, dict) and (data.get("pick") or data.get("candidate")):
+                from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
+
+                data = enrich_daily_pick_spotlight_for_web(data)
+                _store_payload_cache(path, data)
+                content = dict(data)
+                content["status"] = "cached"
+                content["detail"] = (
+                    "Serving last-good worker payload while the volume reconnects."
+                )
+                content["path"] = path
+                return JSONResponse(status_code=200, content=content)
+        except Exception as exc:
+            logger.debug("daily-pick degraded recovery fetch failed: %s", exc)
         return JSONResponse(
             status_code=200,
             content={
@@ -680,23 +712,62 @@ def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dic
     return _run_coro_sync(_load())
 
 
+def _maybe_web_spotlight_daily_pick(raw: bytes) -> bytes:
+    """Apply hero spotlight on web using the warm SimiVision weighing cache."""
+    from internal.run_mode import is_worker_mode
+
+    if is_worker_mode():
+        return raw
+    import json
+
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return raw
+    if not isinstance(data, dict):
+        return raw
+    status = str(data.get("status") or "").lower()
+    if status not in {"success", "ok", "cached"} or not (
+        data.get("pick") or data.get("candidate")
+    ):
+        return raw
+    try:
+        from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
+
+        out = enrich_daily_pick_spotlight_for_web(data)
+        if isinstance(out, dict):
+            _store_payload_cache("/api/daily-pick", out)
+            return json.dumps(out).encode("utf-8")
+    except Exception as exc:
+        logger.debug("daily-pick web spotlight skipped: %s", exc)
+    return raw
+
+
 async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
     fast = _mindmap_path(path)
     degraded = _proxy_degraded_response(path)
     if _circuit_open() and degraded is not None:
-        return degraded
+        if _daily_pick_path(path) and "/api/daily-pick" not in _LAST_GOOD_PAYLOADS:
+            pass
+        else:
+            return degraded
     if fast:
         timeout = _mindmap_proxy_timeout()
     elif _learning_path(path):
         timeout = _learning_proxy_timeout()
+    elif _daily_pick_path(path):
+        timeout = _daily_pick_proxy_timeout()
     else:
         timeout = _proxy_timeout()
     try:
         resp = await _fetch_worker_http(path, query=query, timeout=timeout, fast_path=True)
+        body = resp.content
+        if _daily_pick_path(path):
+            body = _maybe_web_spotlight_daily_pick(body)
         media_type = resp.headers.get("content-type") or "application/json"
-        return Response(content=resp.content, status_code=resp.status_code, media_type=media_type)
+        return Response(content=body, status_code=resp.status_code, media_type=media_type)
     except Exception as exc:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
         if degraded is not None:

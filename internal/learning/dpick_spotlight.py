@@ -123,6 +123,27 @@ def attach_hero_spotlight_from_weighing_rows(
     return _apply_weighing_spotlight(payload, expert, lead)
 
 
+def enrich_daily_pick_spotlight_for_web(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Web-only spotlight — uses warm SimiVision weighing rows + optional hydrate."""
+    if not isinstance(payload, dict):
+        return payload
+    weighing_rows: Optional[List[Dict[str, Any]]] = None
+    subnets: Optional[List[Dict[str, Any]]] = None
+    try:
+        import server as srv
+
+        weighing_rows = srv._simivision_weighing_rows_cached()
+        if not weighing_rows:
+            subnets = srv._subnets_for_spotlight_lite()
+    except Exception:
+        subnets = _registry_subnets_for_spotlight()
+    return attach_hero_spotlight_candidate(
+        payload,
+        subnets,
+        weighing_rows=weighing_rows or None,
+    )
+
+
 def attach_hero_spotlight_candidate(
     payload: Dict[str, Any],
     subnets: Optional[List[Dict[str, Any]]] = None,
