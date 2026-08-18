@@ -125,7 +125,7 @@
       setAnchor(msg.getAttribute("data-sn"), msg.getAttribute("data-name"));
       return;
     }
-    var explicit = document.querySelector("[data-anchor=\"true\"]");
+    var explicit = document.querySelector("[data-anchor=\"true\"], .lsn-prow.active[data-sn]");
     if (explicit && explicit.getAttribute("data-sn")) {
       setAnchor(explicit.getAttribute("data-sn"), explicit.getAttribute("data-name"));
       return;
