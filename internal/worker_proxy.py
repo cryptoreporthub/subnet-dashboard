@@ -457,25 +457,6 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             },
         )
     if path == "/api/daily-pick":
-        try:
-            data = fetch_worker_json_sync(
-                "/api/daily-pick",
-                timeout=_daily_pick_proxy_timeout(),
-            )
-            if isinstance(data, dict) and (data.get("pick") or data.get("candidate")):
-                from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
-
-                data = enrich_daily_pick_spotlight_for_web(data)
-                _store_payload_cache(path, data)
-                content = dict(data)
-                content["status"] = "cached"
-                content["detail"] = (
-                    "Serving last-good worker payload while the volume reconnects."
-                )
-                content["path"] = path
-                return JSONResponse(status_code=200, content=content)
-        except Exception as exc:
-            logger.debug("daily-pick degraded recovery fetch failed: %s", exc)
         return JSONResponse(
             status_code=200,
             content={
@@ -747,12 +728,13 @@ async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
     fast = _mindmap_path(path)
-    degraded = _proxy_degraded_response(path)
-    if _circuit_open() and degraded is not None:
-        if _daily_pick_path(path) and "/api/daily-pick" not in _LAST_GOOD_PAYLOADS:
-            pass
-        else:
-            return degraded
+    if _circuit_open():
+        degraded = _proxy_degraded_response(path)
+        if degraded is not None:
+            if _daily_pick_path(path) and "/api/daily-pick" not in _LAST_GOOD_PAYLOADS:
+                pass
+            else:
+                return degraded
     if fast:
         timeout = _mindmap_proxy_timeout()
     elif _learning_path(path):
@@ -770,6 +752,7 @@ async def proxy_get_to_worker(request: Request) -> Response:
         return Response(content=body, status_code=resp.status_code, media_type=media_type)
     except Exception as exc:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
+        degraded = _proxy_degraded_response(path)
         if degraded is not None:
             return degraded
         return JSONResponse(

@@ -319,6 +319,18 @@ def test_hold_reason_line_blocked_spotlight_uses_desk_candidate():
     assert view["subnet_label"] == "Council held"
 
 
+def test_pending_spotlight_label_is_awaiting_near_call():
+    from internal.preview.tribunal_hero import subnet_label
+
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "hero_spotlight_pending": True,
+        "desk_candidate": {"subnet": {"netuid": 13, "name": "Data Universe"}},
+    }
+    assert subnet_label(payload) == "Awaiting near call"
+
+
 def test_hold_reason_line_degraded_worker_volume():
     payload = {
         "action": "HOLD",

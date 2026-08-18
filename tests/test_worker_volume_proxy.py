@@ -254,30 +254,26 @@ def test_payload_cache_served_for_pump_and_message_intel(monkeypatch):
     assert json.loads(data)["count"] == 2
 
 
-def test_daily_pick_degraded_retries_worker_fetch(monkeypatch):
+def test_daily_pick_degraded_is_hold_without_sync_worker_fetch(monkeypatch):
+    """Degraded path must not block the ASGI loop with fetch+scoring."""
     import internal.worker_proxy as wp
 
     wp._LAST_GOOD_PAYLOADS.clear()
-    monkeypatch.setattr(
-        wp,
-        "fetch_worker_json_sync",
-        lambda path, timeout=None: {
-            "status": "ok",
-            "action": "HOLD",
-            "candidate": {"subnet": {"netuid": 13, "name": "Data Universe"}, "final_confidence": 0.58},
-        },
-    )
-    monkeypatch.setattr(
-        "internal.learning.dpick_spotlight.enrich_daily_pick_spotlight_for_web",
-        lambda payload: {**payload, "hero_spotlight_source": "judge_long"},
-    )
+    calls: list[str] = []
+
+    def _boom(path, timeout=None):
+        calls.append(path)
+        raise AssertionError("degraded daily-pick must not fetch_worker_json_sync")
+
+    monkeypatch.setattr(wp, "fetch_worker_json_sync", _boom)
     response = wp._proxy_degraded_response("/api/daily-pick")
     import json
 
     data = json.loads(response.body)
-    assert data["status"] == "cached"
-    assert data["candidate"]["subnet"]["netuid"] == 13
-    assert data.get("hero_spotlight_source") == "judge_long"
+    assert data["status"] == "degraded"
+    assert data["action"] == "HOLD"
+    assert data.get("pick") is None
+    assert calls == []
 
 
 def test_maybe_web_spotlight_skips_on_worker(monkeypatch):

@@ -362,7 +362,7 @@ def test_spotlight_prod_tie_uses_weighing_board_order(monkeypatch):
     assert out["candidate"]["subnet"]["netuid"] == 25
 
 
-def test_enrich_web_spotlight_sync_builds_when_cache_cold(monkeypatch):
+def test_enrich_web_spotlight_uses_warm_cache_and_kicks_refresh_when_cold(monkeypatch):
     from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
 
     payload = {
@@ -375,15 +375,12 @@ def test_enrich_web_spotlight_sync_builds_when_cache_cold(monkeypatch):
             "signal_impact": {"net_direction": "bearish", "net_predicted_pct": -0.58},
         },
     }
-    board = {
-        "status": "success",
-        "data": {
-            "top": [
-                {"netuid": 13, "name": "Data Universe", "conviction": 58, "primary_call": True},
-                {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
-            ]
-        },
-    }
+    board_rows = [
+        {"netuid": 13, "name": "Data Universe", "conviction": 58, "primary_call": True},
+        {"netuid": 25, "name": "Mainframe", "conviction": 89, "judge_long": True},
+    ]
+    kicks: list[int] = []
+    builds: list[int] = []
 
     class _FakeSrv:
         _SIMIVISION_LOCK = __import__("threading").Lock()
@@ -395,14 +392,66 @@ def test_enrich_web_spotlight_sync_builds_when_cache_cold(monkeypatch):
 
         @staticmethod
         def _simivision_build_inner():
-            return board
+            builds.append(1)
+            raise AssertionError("request path must not build SimiVision")
+
+        @staticmethod
+        def _kick_simivision_background_refresh():
+            kicks.append(1)
 
         @staticmethod
         def _subnets_for_spotlight_lite():
-            return [{"netuid": 25, "name": "Mainframe"}]
+            raise AssertionError("request path must not hydrate subnets for spotlight")
 
     monkeypatch.setitem(__import__("sys").modules, "server", _FakeSrv)
+    cold = enrich_daily_pick_spotlight_for_web(payload)
+    assert cold.get("hero_spotlight_pending") is True
+    assert "candidate" not in cold
+    assert cold["desk_candidate"]["subnet"]["netuid"] == 13
+    assert kicks == [1]
+    assert builds == []
+
+    class _WarmSrv(_FakeSrv):
+        @staticmethod
+        def _simivision_weighing_rows_cached(max_age_s: float = 120.0):
+            return board_rows
+
+    monkeypatch.setitem(__import__("sys").modules, "server", _WarmSrv)
+    warm = enrich_daily_pick_spotlight_for_web(payload)
+    assert warm["hero_spotlight_source"] == "judge_long"
+    assert warm["candidate"]["subnet"]["netuid"] == 25
+    assert warm["desk_candidate"]["subnet"]["netuid"] == 13
+
+
+def test_enrich_web_spotlight_blocks_when_warm_cache_has_no_lead(monkeypatch):
+    from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
+    from internal.preview.tribunal_hero import subnet_label
+
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+
+    class _WarmNoLead:
+        @staticmethod
+        def _simivision_weighing_rows_cached(max_age_s: float = 120.0):
+            return [{"netuid": 13, "conviction": 58, "primary_call": True}]
+
+        @staticmethod
+        def _kick_simivision_background_refresh():
+            raise AssertionError("warm cache must not kick a rebuild")
+
+        @staticmethod
+        def _simivision_build_inner():
+            raise AssertionError("must not score")
+
+    monkeypatch.setitem(__import__("sys").modules, "server", _WarmNoLead)
     out = enrich_daily_pick_spotlight_for_web(payload)
-    assert out["hero_spotlight_source"] == "judge_long"
-    assert out["candidate"]["subnet"]["netuid"] == 25
-    assert out["desk_candidate"]["subnet"]["netuid"] == 13
+    assert out.get("hero_spotlight_blocked") is True
+    assert "candidate" not in out
+    assert subnet_label(out) == "Council held"

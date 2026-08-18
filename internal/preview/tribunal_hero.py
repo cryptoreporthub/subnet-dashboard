@@ -416,6 +416,12 @@ def subnet_label(payload: Dict[str, Any]) -> str:
             and payload.get("hero_spotlight_blocked")
         ):
             return "Council held"
+        if (
+            not payload.get("pick")
+            and act == "HOLD"
+            and payload.get("hero_spotlight_pending")
+        ):
+            return "Awaiting near call"
         return "Awaiting subnet"
     subnet = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
     name = str(subnet.get("name") or "").strip()
