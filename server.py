@@ -1098,7 +1098,7 @@ def _subnets_for_spotlight_lite() -> List[Dict[str, Any]]:
     from internal.learning.dpick_spotlight import _registry_subnets_for_spotlight
 
     try:
-        hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "2.5"))
+        hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "1.0"))
         subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
         if subnets:
             return _cap_subnets_for_scoring(subnets)
@@ -1115,7 +1115,6 @@ def _enrich_daily_pick_payload_lite(
         return {}
     from internal.learning.dpick_copy import attach_brief_to_daily_pick
     from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick
-    from internal.learning.dpick_spotlight import attach_hero_spotlight_candidate
     from internal.learning.dpick_temporal import attach_temporal_to_daily_pick
     from internal.subnet_names import refresh_daily_pick_names
 
@@ -1129,12 +1128,13 @@ def _enrich_daily_pick_payload_lite(
     )
 
     out = enrich_active_subnet_fields(out)
-    weighing_rows = _simivision_weighing_rows_cached()
-    out = attach_hero_spotlight_candidate(
-        out,
-        _subnets_for_spotlight_lite(),
-        weighing_rows=weighing_rows or None,
-    )
+    from internal.run_mode import is_worker_mode
+
+    # Worker serves the stored pick fast; web applies spotlight after proxy fetch.
+    if not is_worker_mode():
+        from internal.learning.dpick_spotlight import enrich_daily_pick_spotlight_for_web
+
+        out = enrich_daily_pick_spotlight_for_web(out)
     out = attach_judge_scores_to_daily_pick(out)
     out = attach_focus_judge_scores_to_daily_pick(out)
     if "shortlist" not in out:

@@ -254,6 +254,40 @@ def test_payload_cache_served_for_pump_and_message_intel(monkeypatch):
     assert json.loads(data)["count"] == 2
 
 
+def test_daily_pick_degraded_retries_worker_fetch(monkeypatch):
+    import internal.worker_proxy as wp
+
+    wp._LAST_GOOD_PAYLOADS.clear()
+    monkeypatch.setattr(
+        wp,
+        "fetch_worker_json_sync",
+        lambda path, timeout=None: {
+            "status": "ok",
+            "action": "HOLD",
+            "candidate": {"subnet": {"netuid": 13, "name": "Data Universe"}, "final_confidence": 0.58},
+        },
+    )
+    monkeypatch.setattr(
+        "internal.learning.dpick_spotlight.enrich_daily_pick_spotlight_for_web",
+        lambda payload: {**payload, "hero_spotlight_source": "judge_long"},
+    )
+    response = wp._proxy_degraded_response("/api/daily-pick")
+    import json
+
+    data = json.loads(response.body)
+    assert data["status"] == "cached"
+    assert data["candidate"]["subnet"]["netuid"] == 13
+    assert data.get("hero_spotlight_source") == "judge_long"
+
+
+def test_maybe_web_spotlight_skips_on_worker(monkeypatch):
+    import internal.worker_proxy as wp
+
+    monkeypatch.setenv("RUN_MODE", "worker")
+    raw = b'{"status":"ok","candidate":{"subnet":{"netuid":13}}}'
+    assert wp._maybe_web_spotlight_daily_pick(raw) == raw
+
+
 def test_daily_pick_cache_served_when_degraded(monkeypatch):
     import internal.worker_proxy as wp
 
