@@ -1351,9 +1351,42 @@
     var status = String(payload.status || 'ok').toLowerCase();
     if (status === 'timeout' || status === 'error') return 0;
     if (payload.pick) return 4;
+    if (payload.hero_spotlight_source) return 4;
     if (payload.candidate) return 3;
+    if (payload.hero_spotlight_blocked) return 3;
     if (status === 'degraded' || status === 'cached') return 1;
     return 2;
+  }
+
+  function tribunalHeroTitleShowsStaleClosest() {
+    var title = document.getElementById('tribunal-hero-title');
+    if (!title) return false;
+    return String(title.textContent || '').trim().indexOf('Closest · ') === 0;
+  }
+
+  function dailyPickSpotlightUpgrade(incoming, existing) {
+    if (!incoming || typeof incoming !== 'object') return false;
+    if (incoming.hero_spotlight_source) {
+      if (!existing || !existing.hero_spotlight_source) return true;
+      var inNu =
+        incoming.candidate &&
+        incoming.candidate.subnet &&
+        incoming.candidate.subnet.netuid;
+      var exNu =
+        existing.candidate &&
+        existing.candidate.subnet &&
+        existing.candidate.subnet.netuid;
+      if (inNu != null && exNu != null && inNu !== exNu) return true;
+    }
+    if (
+      incoming.hero_spotlight_blocked &&
+      existing &&
+      existing.candidate &&
+      !existing.hero_spotlight_blocked
+    ) {
+      return true;
+    }
+    return false;
   }
 
   function richerDailyPickPayload(incoming, existing) {
@@ -1364,6 +1397,13 @@
     if (!payload || typeof payload !== 'object') return false;
     var status = String(payload.status || 'ok').toLowerCase();
     if (status === 'timeout' || status === 'error') return false;
+    if (dailyPickSpotlightUpgrade(payload, lastDailyPickPayload)) return true;
+    if (
+      payload.hero_spotlight_source &&
+      tribunalHeroTitleShowsStaleClosest()
+    ) {
+      return true;
+    }
     if (lastDailyPickPayload && dailyPickPayloadRank(payload) < dailyPickPayloadRank(lastDailyPickPayload)) return false;
     if (tribunalHeroNeedsHydrate() && (payload.pick || payload.candidate)) return true;
     if (tribunalHeroNeedsHydrate() && (status === 'degraded' || status === 'cached')) return true;
@@ -4352,12 +4392,18 @@
               dp &&
               !dp.pick &&
               String(dp.action || 'HOLD').toUpperCase() === 'HOLD' &&
-              dp.candidate &&
-              !dp.hero_spotlight_source
+              (dp.candidate || dp.desk_candidate) &&
+              !dp.hero_spotlight_source &&
+              !dp.hero_spotlight_blocked
             ) {
               fetchDailyPickForHero({ force: true })
                 .then(function (retry) {
-                  if (retry && retry.hero_spotlight_source) renderDailyPick(retry);
+                  if (
+                    retry &&
+                    (retry.hero_spotlight_source || retry.hero_spotlight_blocked)
+                  ) {
+                    renderDailyPick(retry);
+                  }
                 })
                 .catch(function () {});
             }
