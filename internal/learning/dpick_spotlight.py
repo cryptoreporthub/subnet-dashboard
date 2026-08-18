@@ -185,6 +185,18 @@ def enrich_daily_pick_spotlight_for_web(payload: Dict[str, Any]) -> Dict[str, An
     )
 
 
+def _suppress_blocked_expert_in_hero(
+    payload: Dict[str, Any],
+    expert: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Directional HOLD with no weighing lead — hide bearish expert from hero masthead."""
+    out = dict(payload)
+    out["desk_candidate"] = dict(expert)
+    out.pop("candidate", None)
+    out["hero_spotlight_blocked"] = True
+    return out
+
+
 def attach_hero_spotlight_candidate(
     payload: Dict[str, Any],
     subnets: Optional[List[Dict[str, Any]]] = None,
@@ -221,5 +233,5 @@ def attach_hero_spotlight_candidate(
         beat_conviction=expert_conv,
     )
     if not top:
-        return payload
+        return _suppress_blocked_expert_in_hero(payload, expert)
     return _apply_weighing_spotlight(payload, expert, top)

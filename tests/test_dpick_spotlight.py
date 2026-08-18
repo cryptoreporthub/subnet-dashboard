@@ -93,7 +93,9 @@ def test_spotlight_skips_when_weighing_not_better(monkeypatch):
     }
     out = attach_hero_spotlight_candidate(payload, [{"netuid": 13, "name": "Data Universe"}])
     assert "hero_spotlight_source" not in out
-    assert out["candidate"]["subnet"]["netuid"] == 13
+    assert out.get("hero_spotlight_blocked") is True
+    assert "candidate" not in out
+    assert out["desk_candidate"]["subnet"]["netuid"] == 13
 
 
 def test_spotlight_keeps_nonconflicting_candidate(monkeypatch):
@@ -213,14 +215,16 @@ def test_weighing_lead_prefers_closest_to_call_on_conviction_tie():
     assert lead["netuid"] == 25
 
 
-def test_weighing_lead_returns_none_when_still_ambiguous():
+def test_weighing_lead_breaks_conviction_tie_by_lowest_netuid():
     from internal.simivision.weighing_room import weighing_lead_from_rows
 
     rows = [
         {"netuid": 25, "conviction": 89, "proximity": 69, "judge_long": True},
         {"netuid": 65, "conviction": 89, "proximity": 69, "judge_long": True},
     ]
-    assert weighing_lead_from_rows(rows, beat_conviction=58) is None
+    lead = weighing_lead_from_rows(rows, beat_conviction=58)
+    assert lead is not None
+    assert lead["netuid"] == 25
 
 
 def test_weighing_lead_prefers_judge_long_over_expert_when_other_keys_tie():
@@ -298,6 +302,51 @@ def test_best_weighing_alternative_matches_board_lead(monkeypatch):
     board_lead = next(r for r in rows if not r.get("primary_call"))
     assert lead is not None
     assert lead["netuid"] == board_lead["netuid"] == 25
+
+
+def test_spotlight_suppresses_blocked_expert_when_no_weighing_lead(monkeypatch):
+    monkeypatch.setattr(
+        "internal.simivision.weighing_room.build_weighing_candidates_from_shortlist",
+        lambda subnets, daily_pick, market_context: ([], 0),
+    )
+    expert = {
+        "subnet": {"netuid": 13, "name": "Data Universe"},
+        "final_confidence": 0.58,
+        "signal_impact": {"net_direction": "bearish", "net_predicted_pct": -0.58},
+    }
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "candidate": expert,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+    }
+    out = attach_hero_spotlight_candidate(payload, [])
+    assert out.get("hero_spotlight_blocked") is True
+    assert "candidate" not in out
+    assert out["desk_candidate"]["subnet"]["netuid"] == 13
+
+
+def test_spotlight_prod_tie_picks_lowest_netuid_judge_long(monkeypatch):
+    """Prod-shaped tie at 89% — SN25 beats SN71 when proximity matches."""
+    rows = [
+        {"netuid": 13, "conviction": 58, "primary_call": True, "closest_to_call": True},
+        {"netuid": 25, "conviction": 89, "judge_long": True, "proximity": 69},
+        {"netuid": 71, "conviction": 89, "judge_long": True, "proximity": 69},
+    ]
+    payload = {
+        "action": "HOLD",
+        "pick": None,
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {
+            "subnet": {"netuid": 13, "name": "Data Universe"},
+            "final_confidence": 0.58,
+        },
+    }
+    from internal.learning.dpick_spotlight import attach_hero_spotlight_from_weighing_rows
+
+    out = attach_hero_spotlight_from_weighing_rows(payload, rows)
+    assert out["hero_spotlight_source"] == "judge_long"
+    assert out["candidate"]["subnet"]["netuid"] == 25
 
 
 def test_enrich_web_spotlight_sync_builds_when_cache_cold(monkeypatch):

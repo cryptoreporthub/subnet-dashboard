@@ -4763,7 +4763,18 @@
   function tribunalSubnetLabel(payload) {
     if (!payload) return 'Awaiting subnet';
     var active = payload.pick || payload.candidate;
-    if (!active) return 'Awaiting subnet';
+    if (!active) {
+      var act0 = String(payload.action || 'HOLD').toUpperCase();
+      if (
+        !payload.pick &&
+        act0 === 'HOLD' &&
+        payload.desk_candidate &&
+        payload.hero_spotlight_blocked
+      ) {
+        return 'Council held';
+      }
+      return 'Awaiting subnet';
+    }
     var sn = active.subnet;
     if (!sn) return 'Awaiting subnet';
     var name = String(sn.name || '').trim();
@@ -4809,6 +4820,17 @@
         'Council held because conviction or direction did not clear the gate.'
       );
     }
+    if (
+      !payload.pick &&
+      act === 'HOLD' &&
+      payload.desk_candidate &&
+      payload.hero_spotlight_blocked
+    ) {
+      return (
+        'Council held on a directional conflict — no weighing alternative cleared ' +
+        "the spotlight bar for today's hero."
+      );
+    }
     return '';
   }
 
@@ -4827,6 +4849,7 @@
     if (!line) return '';
     if (line.toLowerCase().indexOf('directional') >= 0) {
       var cand = dailyPick.candidate;
+      if (!cand && dailyPick.desk_candidate) cand = dailyPick.desk_candidate;
       var si =
         cand && cand.signal_impact && typeof cand.signal_impact === 'object'
           ? cand.signal_impact

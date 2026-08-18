@@ -50,8 +50,9 @@ def verdict_kind(payload: Dict[str, Any]) -> str:
         return "sealed"
     if payload.get("pick"):
         return "gated"
-    if not payload.get("pick") and payload.get("candidate") and act == "HOLD":
-        return "gated"
+    if not payload.get("pick") and act == "HOLD":
+        if payload.get("candidate") or payload.get("desk_candidate"):
+            return "gated"
     if str(payload.get("status") or "").lower() == "pending":
         return "forming"
     return "cold"
@@ -407,6 +408,14 @@ def synced_at_iso(payload: Dict[str, Any]) -> Optional[str]:
 def subnet_label(payload: Dict[str, Any]) -> str:
     active = payload.get("pick") or payload.get("candidate")
     if not active:
+        act = str(payload.get("action") or "HOLD").upper()
+        if (
+            not payload.get("pick")
+            and act == "HOLD"
+            and payload.get("desk_candidate")
+            and payload.get("hero_spotlight_blocked")
+        ):
+            return "Council held"
         return "Awaiting subnet"
     subnet = active.get("subnet") if isinstance(active.get("subnet"), dict) else {}
     name = str(subnet.get("name") or "").strip()
@@ -451,6 +460,16 @@ def subnet_label_title(payload: Dict[str, Any]) -> Optional[str]:
             "Closest name on today's desk — not a published long. "
             "Council held because conviction or direction did not clear the gate."
         )
+    if (
+        not payload.get("pick")
+        and act == "HOLD"
+        and payload.get("desk_candidate")
+        and payload.get("hero_spotlight_blocked")
+    ):
+        return (
+            "Council held on a directional conflict — no weighing alternative cleared "
+            "the spotlight bar for today's hero."
+        )
     return None
 
 
@@ -478,6 +497,8 @@ def hold_reason_line(payload: Dict[str, Any]) -> Optional[str]:
     # When directional guard fired, show the weighted signal net so users can audit the block.
     if "directional" in line.lower():
         active = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+        if not active and isinstance(payload.get("desk_candidate"), dict):
+            active = payload["desk_candidate"]
         si = active.get("signal_impact") if isinstance(active.get("signal_impact"), dict) else {}
         net = si.get("net_predicted_pct")
         if net is not None:
