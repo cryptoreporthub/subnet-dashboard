@@ -36,6 +36,8 @@
   var callersBody = document.getElementById("message-intel-callers-body");
   var consensusBody = document.getElementById("message-intel-consensus-body");
   var divergenceBody = document.getElementById("message-intel-divergence-body");
+  var divergenceVisualizerBody = document.getElementById("message-intel-divergence-visualizer-body");
+  var decoderBody = document.getElementById("message-intel-decoder-body");
   var heartbeatEl = document.getElementById("message-intel-heartbeat");
   var ekgPath = document.getElementById("message-intel-ekg");
   var hbModeEl = document.getElementById("message-intel-hb-mode");
@@ -435,48 +437,8 @@
     summary = summary || {};
     summary24hCard.hidden = false;
     
-    // Provide a rich default recap if data is warming or minimal
     if (!summary.ready && !summary.narrative) {
-      summary = {
-        ready: true,
-        narrative: "Yesterday in Subnet Summer chat: Teutonic (SN3) dominated chatter with 5 mentions, followed closely by Enigma (SN4). Enigma heated up late (+4 mentions vs the day before). The line that stuck came from SideEye (100% conviction): \"🖥️ SN100: BASE buy 100 Acc: [🦍 [5HN2..TP...\"] — a bullish read. Traffic peaked near 10:00 UTC.",
-        stats: {
-          graded: 173,
-          high_conviction: 96,
-          hot_subnets: 6,
-          top_acc: null,
-          topics: 5,
-          recent_msgs: 173
-        },
-        top_subnets: [
-          { netuid: 3, name: "Teutonic", mentions: 5 },
-          { netuid: 63, name: "Enigma", mentions: 4 },
-          { netuid: 1, name: "Score", count: 1 },
-          { netuid: 81, name: "Subnet 81", count: 1 },
-          { netuid: 96, name: "Subnet 96", count: 1 }
-        ],
-        movers: [
-          { netuid: 63, name: "Enigma", delta: 4 },
-          { netuid: 96, name: "Subnet 96", delta: 1 },
-          { netuid: 100, name: "Subnet 100", delta: 1 },
-          { netuid: 1, name: "Score", delta: 1 },
-          { netuid: 81, name: "Subnet 81", delta: 0 }
-        ],
-        topics: [
-          { topic: "Market", count: 19 },
-          { topic: "Alpha", count: 10 },
-          { topic: "Emissions", count: 7 },
-          { topic: "Validator", count: 3 },
-          { topic: "Partnership", count: 2 }
-        ],
-        hourly_peak: 10,
-        hourly: [
-          { hour: 0, pct: 15 }, { hour: 2, pct: 20 }, { hour: 4, pct: 10 },
-          { hour: 6, pct: 30 }, { hour: 8, pct: 45 }, { hour: 10, pct: 100 },
-          { hour: 12, pct: 40 }, { hour: 14, pct: 55 }, { hour: 16, pct: 60 },
-          { hour: 18, pct: 25 }, { hour: 20, pct: 20 }, { hour: 22, pct: 15 }
-        ]
-      };
+      summary = { ready: false, narrative: "No 24-hour summary yet — the listener needs a full day of qualifying traffic before it publishes a recap.", stats: {} };
     }
 
     var stats = summary.stats || {};
@@ -500,18 +462,18 @@
 
     html +=
       '<div class="message-intel__summary-24h-stats">' +
-      statChip(stats.graded != null ? stats.graded : (summary.message_count || 173), "graded") +
+      statChip(stats.graded != null ? stats.graded : (summary.message_count != null ? summary.message_count : null), "graded") +
       statChip(
-        stats.high_conviction != null ? stats.high_conviction : (summary.high_conviction_count || 96),
+        stats.high_conviction != null ? stats.high_conviction : (summary.high_conviction_count != null ? summary.high_conviction_count : null),
         "high conv"
       ) +
-      statChip(stats.hot_subnets != null ? stats.hot_subnets : (stats.active_subnets || 6), "hot subnets") +
+      statChip(stats.hot_subnets != null ? stats.hot_subnets : (stats.active_subnets != null ? stats.active_subnets : null), "hot subnets") +
       statChip(
         stats.top_acc != null ? Number(stats.top_acc).toFixed(1) : "—",
         "top acc"
       ) +
-      statChip(stats.topics != null ? stats.topics : 5, "topics") +
-      statChip(stats.recent_msgs != null ? stats.recent_msgs : (summary.message_count || 173), "recent msgs") +
+      statChip(stats.topics != null ? stats.topics : null, "topics") +
+      statChip(stats.recent_msgs != null ? stats.recent_msgs : (summary.message_count != null ? summary.message_count : null), "recent msgs") +
       "</div>";
 
     function chipRow(label, rows, kind) {
@@ -999,17 +961,21 @@
   }
 
   function renderDivergence(payload) {
-    if (!divergenceBody) return;
+    if (!divergenceBody && !divergenceVisualizerBody) return;
     if (payload && payload.status === "upgrade_required") {
-      divergenceBody.innerHTML = '<p class="empty">' + esc((payload.upgrade_prompt && payload.upgrade_prompt.body) || "Upgrade required.") + '</p>';
+      var upgradeHtml = '<p class="empty">' + esc((payload.upgrade_prompt && payload.upgrade_prompt.body) || "Upgrade required.") + '</p>';
+      if (divergenceBody) divergenceBody.innerHTML = upgradeHtml;
+      if (divergenceVisualizerBody) divergenceVisualizerBody.innerHTML = upgradeHtml;
       return;
     }
     var stories = (payload && payload.stories) || [];
     if (!stories.length) {
-      divergenceBody.innerHTML = '<p class="empty">No resolved, evidence-qualified Telegram outcome stories in this window yet. Pending calls stay out until their recorded outcomes resolve.</p>';
+      var divergenceEmpty = '<p class="empty">No resolved, evidence-qualified Telegram outcome stories in this window yet. Pending calls stay out until their recorded outcomes resolve.</p>';
+      if (divergenceBody) divergenceBody.innerHTML = divergenceEmpty;
+      if (divergenceVisualizerBody) divergenceVisualizerBody.innerHTML = divergenceEmpty;
       return;
     }
-    divergenceBody.innerHTML = '<div class="message-intel__divergence-list">' + stories.map(function (story) {
+    var divergenceHtml = '<div class="message-intel__divergence-list">' + stories.map(function (story) {
       var state = String(story.state || "insufficient_data");
       var label = story.ready ? String(story.label || "mixed-evidence").replace(/-/g, " ").toUpperCase() : "INSUFFICIENT DATA";
       var window = story.time_window || {};
@@ -1370,15 +1336,13 @@
   function renderYesterdayLeader(row) {
     if (!yesterdayCard) return;
     if (!row || row.netuid == null) {
-      row = {
-        netuid: 3,
-        name: "Teutonic",
-        mentions: 5,
-        sentiment: "Cautious",
-        date: "2026-08-15",
-        why_chips: ["alpha ×2", "TAO"],
-        runner_up: { netuid: 63, name: "Enigma", mentions: 4 }
-      };
+      yesterdayCard.hidden = false;
+      if (yesterdayIcon) yesterdayIcon.textContent = "—";
+      if (yesterdayLink) { yesterdayLink.removeAttribute("href"); yesterdayLink.textContent = "Awaiting 24h leader"; }
+      if (yesterdayStats) yesterdayStats.textContent = "No qualifying 24-hour leader yet.";
+      if (yesterdayChips) { yesterdayChips.hidden = true; yesterdayChips.innerHTML = ""; }
+      if (yesterdayRunner) { yesterdayRunner.hidden = true; yesterdayRunner.innerHTML = ""; }
+      return;
     }
     yesterdayCard.hidden = false;
     var name = row.name || "SN" + row.netuid;
@@ -1650,14 +1614,6 @@
 
   function renderAccolades(rows) {
     if (!accoladesEl) return;
-    var defaultAccolades = [
-      { handle: "@alpha_whale", author_id: "1", badge: "Early & Right", why: "88% strike rate · called SN127 breakout 14h prior (+34.2% gain)", star: "🌟", req: "≥60% strike rate on calls >12h prior to pump", tag: "EARLY ALPHA" },
-      { handle: "@tao_sage", author_id: "2", badge: "On Fire", why: "6 consecutive winning calls on SN19 compute & liquidity pools", star: "🔥", req: "≥5 consecutive winning calls in 7d window", tag: "HOT STREAK" },
-      { handle: "@quant_lead", author_id: "3", badge: "High Signal", why: "94.2% substance score · zero noise signals across 16 analyses", star: "🧠", req: "≥90% quality score with high data density", tag: "DEEP ANALYSIS" },
-      { handle: "@sn_oracle", author_id: "4", badge: "Contrarian Alpha", why: "Correctly flagged SN64 divergence against crowd consensus", star: "💎", req: "Profitable calls against >70% crowd sentiment", tag: "CONTRARIAN" },
-      { handle: "@maankai_0000", author_id: "1", badge: "Accuracy King", why: "88.0% cumulative strike rate over 30d with 21 verified hits", star: "🎯", req: "Highest strike rate over 30d (N≥10 calls)", tag: "PRECISION" },
-      { handle: "@chatterqueen4", author_id: "4", badge: "Speed Lead", why: "First caller to report 12 breaking governance & emission events", star: "⚡", req: "Sub-3-minute latency on protocol breaking news", tag: "SPEED" }
-    ];
     var earned = [];
     (rows || []).forEach(function (row) {
       var handle = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name;
@@ -1672,7 +1628,8 @@
         earned.push(Object.assign(base, { badge: "High Signal", why: "low fluff, high substance this week", star: "🧠", req: "High substance score", tag: "DEEP ANALYSIS" }));
       }
     });
-    var list = earned.length >= 4 ? earned : defaultAccolades;
+    var list = earned;
+    if (!list.length) { accoladesEl.innerHTML = '<p class="empty">No earned accolades yet — badges appear after evidence-qualified samples fill.</p>'; return; }
     accoladesEl.innerHTML = '<div class="message-intel__accolades-grid-v2">' + list.map(function (row) {
       var star = row.star || "★";
       var tag = row.tag || "VERIFIED";
@@ -1829,17 +1786,20 @@
     core.classList.add("is-ping");
   }
 
+function renderDecoder(rows) {
+  if (!decoderBody) return;
+  var row = rows && rows.length ? rows[0] : null;
+  if (!row) { decoderBody.innerHTML = '<p class="empty">No qualifying call is available to decode yet.</p>'; return; }
+  var netuid = row.netuid != null ? row.netuid : row.subnet_id;
+  var caller = row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : (row.author_name || "Unknown caller");
+  var conviction = row.conviction != null ? Number(row.conviction).toFixed(0) + "% conviction" : "conviction unavailable";
+  decoderBody.innerHTML = '<div class="message-intel__decoder-live"><b>' + esc(caller) + '</b> · ' + esc(conviction) + (netuid != null ? ' · <a href="/subnet/' + esc(netuid) + '">SN' + esc(netuid) + '</a>' : '') + '<p>Qualifying high-conviction evidence is available in the Learn proof card.</p></div>';
+}
+
 function renderTrendingSky(rows) {
   if (!skyEl) return;
-  var defaultList = [
-    { netuid: 127, name: "SN127", pct: 15.8, sentiment: "bull", chatter_power: 48 },
-    { netuid: 19, name: "SN19", pct: 12.1, sentiment: "bull", chatter_power: 36 },
-    { netuid: 1, name: "SN1", pct: 4.2, sentiment: "bull", chatter_power: 24 }
-  ];
-  var list = (rows && rows.length) ? rows.slice(0, 3) : defaultList;
-  if (list.length < 3) {
-    defaultList.slice(list.length).forEach(function (d) { list.push(d); });
-  }
+  var list = (rows && rows.length) ? rows.slice(0, 3) : [];
+  if (!list.length) { skyEl.hidden = true; skyEl.setAttribute("data-empty", "true"); skyEl.setAttribute("aria-hidden", "true"); skyEl.innerHTML = ""; return; }
   skyEl.hidden = false;
   skyEl.setAttribute("data-empty", "false");
   skyEl.setAttribute("aria-hidden", "false");
@@ -1897,7 +1857,7 @@ function renderTrendingSky(rows) {
     else if (sent.indexOf("bear") !== -1) sent = "bear";
     else sent = "mix";
     var snDisplay = row.name || ("SN" + row.netuid);
-    var pctDisplay = (row.pct != null ? (Number(row.pct) > 0 ? "+" + row.pct + "%" : row.pct + "%") : (rank === 1 ? "+15.8%" : rank === 2 ? "+12.1%" : "+4.2%"));
+    var pctDisplay = row.pct != null ? (Number(row.pct) > 0 ? "+" + row.pct + "%" : row.pct + "%") : "—";
     var dotColorClass = rank === 1 ? "message-intel__sky-dot--cyan" : (rank === 2 ? "message-intel__sky-dot--violet" : "message-intel__sky-dot--emerald");
     var badgeHtml = '<span class="message-intel__sky-badge"><b class="message-intel__sky-sn">' + esc(snDisplay) + '</b><span class="message-intel__sky-pct message-intel__sky-pct--up">' + esc(pctDisplay) + '</span></span>';
     var dotHtml = '<span class="message-intel__sky-dot ' + dotColorClass + '" data-rank="' + rank + '" style="width:' + size + 'px;height:' + size + 'px"></span>';
@@ -2096,14 +2056,8 @@ function renderTrendingSky(rows) {
   }
 
   function renderReactionCrowns(rows) {
-    var defaultCrowns = [
-      { emoji: "🔥", label: "Hype King", count: 90, author: "@maankai_0000", quote: "SN127 liquidity pool expanding rapidly, watch the breakout above 24 τ. Whale volume stacking on pool #4.", source_url: "https://t.me/OfficialSubnetSummer/127", context: "SN127 · +18.4% surge" },
-      { emoji: "🚀", label: "Moon Rider", count: 76, author: "@tao_sage", quote: "Subnet 19 compute benchmark results just dropped. Massive 3.4x speedup across top 10 validators.", source_url: "https://t.me/OfficialSubnetSummer/19", context: "SN19 · +28.4% compute surge" },
-      { emoji: "🧠", label: "Big Brain", count: 54, author: "@quant_lead", quote: "Analyzing emission distribution changes across subnet 1 validators vs secondary market yield curves.", source_url: "https://t.me/OfficialSubnetSummer/1", context: "SN1 · Quantitative proof" },
-      { emoji: "💎", label: "Diamond Hands", count: 42, author: "@sn_oracle", quote: "Holding high-conviction stake through volatility. Fundamental tokenomics remain completely intact.", source_url: "https://t.me/OfficialSubnetSummer/64", context: "SN64 · +14.2% recovery" },
-      { emoji: "👑", label: "Sovereign Crown", count: 38, author: "@neural_king", quote: "Consensus alignment confirmed across all 32 subnets with zero chamber divergence.", source_url: "https://t.me/OfficialSubnetSummer/88", context: "Network Milestone" }
-    ];
-    var list = (rows && rows.length && rows[0].quote) ? rows : defaultCrowns;
+    var list = (rows && rows.length && rows[0].quote) ? rows : [];
+    if (!list.length) { if (crownsEl) crownsEl.innerHTML = '<p class="empty">No reaction crowns yet — they appear as the group reacts.</p>'; return; }
     var html = '<div class="message-intel__crowns-grid-v2">';
     list.forEach(function (row) {
       var handle = row.display_name || (row.author_username ? "@" + String(row.author_username).replace(/^@/, "") : row.author_name) || row.author || "Unknown";
@@ -2602,7 +2556,9 @@ function renderTrendingSky(rows) {
       hydrateCallerLeaderboard();
       hydrateConsensus();
       hydrateDivergence();
-      renderHighConvictionStrip((payload.meta && payload.meta.high_conviction_strip) || []);
+      var highConvictionRows = (payload.meta && payload.meta.high_conviction_strip) || [];
+      renderHighConvictionStrip(highConvictionRows);
+      renderDecoder(highConvictionRows);
       renderSubnetFilterChips(trending);
       renderWatchlistPanel(trending);
       renderMyPulse(trending);

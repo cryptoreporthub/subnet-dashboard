@@ -13,6 +13,8 @@
     { m: "archive", label: "ARCHIVE", d: "M0,13 L120,13" },
     { m: "warming", label: "WARMING", d: "M0,13 L18,13 L22,10 L26,16 L30,13 L58,13 L62,10 L66,16 L70,13 L98,13 L102,10 L106,16 L110,13 L120,13" }
   ];
+  var pollGeneration = 0;
+
   var modeBtn = document.getElementById("lsnModeBtn");
   var modeLabel = document.getElementById("lsnModeLabel");
   var ekg = document.getElementById("lsnEkg");
@@ -71,11 +73,8 @@
       copyBtn.addEventListener("click", function () {
         var urlEl = sharePop.querySelector(".url");
         var text = (urlEl && urlEl.textContent.trim()) || window.location.href || "";
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).catch(function () { /* honest fallback */ });
-        }
-        copyBtn.textContent = "Copied ✓";
-        copyBtn.classList.add("ok");
+        var copyPromise = navigator.clipboard && navigator.clipboard.writeText ? navigator.clipboard.writeText(text) : Promise.reject(new Error("clipboard unavailable"));
+        copyPromise.then(function () { copyBtn.textContent = "Copied ✓"; copyBtn.classList.add("ok"); }).catch(function () { copyBtn.textContent = "Copy unavailable"; copyBtn.classList.remove("ok"); });
         setTimeout(function () { copyBtn.textContent = "Copy"; copyBtn.classList.remove("ok"); }, 1600);
       });
     }
@@ -248,6 +247,7 @@
   }
 
   function pollSubnets() {
+    var generation = ++pollGeneration;
     try {
       if (!anchor) pickAnchor();
       var endpoint = anchor && anchor.netuid
@@ -256,6 +256,7 @@
       fetch(endpoint, { headers: { "Accept": "application/json" } })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (j) {
+          if (generation !== pollGeneration) return;
           var row = rowFromPayload(j);
           if (!row && !anchor) { warming("pool snapshot unavailable — retrying"); return; }
           if (!row && anchor) { warming("pool snapshot unavailable — retrying"); return; }
@@ -264,7 +265,7 @@
           if (!sample) { warming("pool snapshot unavailable — retrying"); return; }
           applySample(sample);
         })
-        .catch(function () { warming("pool feed unreachable — SSR state kept"); });
+        .catch(function () { if (generation === pollGeneration) warming("pool feed unreachable — SSR state kept"); });
     } catch (e) { warming(); }
   }
 

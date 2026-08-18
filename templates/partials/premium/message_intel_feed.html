@@ -30,7 +30,7 @@
         <div class="message-intel__source-strip" id="message-intel-source-strip" aria-live="polite">
           <span class="message-intel__brand">SUBNET SUMMERS · <em>SIMIVISION</em></span>
           <span class="message-intel__live-tag" id="message-intel-live-tag" {% if not message_intel or not message_intel.meta or not message_intel.meta.total_messages %}hidden{% endif %}>Live</span>
-          <span id="message-intel-meta">{% if message_intel and message_intel.meta and message_intel.meta.total_messages %}<b>OfficialSubnetSummer</b> · {{ message_intel.meta.total_messages }} messages graded{% else %}Desk warming — first beat lands with the listener.{% endif %}</span>
+          <span id="message-intel-meta">{% if message_intel and message_intel.meta and message_intel.meta.total_messages %}<b>Telegram listener</b> · {{ message_intel.meta.total_messages }} messages graded{% else %}Desk warming — first beat lands with the listener.{% endif %}</span>
         </div>
       </div>
     </div>
@@ -78,98 +78,26 @@
             <span class="message-intel__summary-24h-when">24h lens</span>
           </div>
           <div class="message-intel__summary-24h-body" id="message-intel-summary-24h-body">
-            <p class="message-intel__summary-24h-narrative">{% if mi_meta.yesterday_summary and mi_meta.yesterday_summary.narrative %}{{ mi_meta.yesterday_summary.narrative }}{% else %}Yesterday in Subnet Summer chat: Teutonic (SN3) dominated chatter with 5 mentions, followed closely by Enigma (SN4). Enigma heated up late (+4 mentions vs the day before). The line that stuck came from SideEye (100% conviction): &ldquo;🖥️ SN100: BASE buy 100 Acc: [🦍 [5HN2..TP...&rdquo; — a bullish read. Traffic peaked near 10:00 UTC.{% endif %}</p>
-            
+            <p class="message-intel__summary-24h-narrative">No 24-hour summary yet — the listener needs a full day of qualifying traffic before it publishes a recap.</p>
             <div class="message-intel__summary-24h-stats">
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">173</div>
-                <div class="message-intel__summary-24h-stat-l">GRADED</div>
-              </div>
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">96</div>
-                <div class="message-intel__summary-24h-stat-l">HIGH CONV</div>
-              </div>
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">6</div>
-                <div class="message-intel__summary-24h-stat-l">HOT SUBNETS</div>
-              </div>
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">—</div>
-                <div class="message-intel__summary-24h-stat-l">TOP ACC</div>
-              </div>
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">5</div>
-                <div class="message-intel__summary-24h-stat-l">TOPICS</div>
-              </div>
-              <div class="message-intel__summary-24h-stat">
-                <div class="message-intel__summary-24h-stat-v">173</div>
-                <div class="message-intel__summary-24h-stat-l">RECENT MSGS</div>
-              </div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">GRADED</div></div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">HIGH CONV</div></div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">HOT SUBNETS</div></div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">TOP ACC</div></div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">TOPICS</div></div>
+              <div class="message-intel__summary-24h-stat"><div class="message-intel__summary-24h-stat-v">—</div><div class="message-intel__summary-24h-stat-l">RECENT MSGS</div></div>
             </div>
-
-            <div class="message-intel__summary-24h-row">
-              <span class="message-intel__summary-24h-kicker">Top</span>
-              <div class="message-intel__summary-24h-chips">
-                <a class="message-intel__summary-24h-chip" href="/subnet/3">Teutonic ×5</a>
-                <a class="message-intel__summary-24h-chip" href="/subnet/63">Enigma ×4</a>
-                <a class="message-intel__summary-24h-chip" href="/subnet/1">Score ×1</a>
-                <a class="message-intel__summary-24h-chip" href="/subnet/81">Subnet 81 ×1</a>
-                <a class="message-intel__summary-24h-chip" href="/subnet/96">Subnet 96 ×1</a>
-              </div>
-            </div>
-
-            <div class="message-intel__summary-24h-row">
-              <span class="message-intel__summary-24h-kicker">Movers</span>
-              <div class="message-intel__summary-24h-chips">
-                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/63">Enigma +4</a>
-                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/96">Subnet 96 +1</a>
-                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/100">Subnet 100 +1</a>
-                <a class="message-intel__summary-24h-chip message-intel__summary-24h-chip--up" href="/subnet/1">Score +1</a>
-                <a class="message-intel__summary-24h-chip" href="/subnet/81">Subnet 81 0</a>
-              </div>
-            </div>
-
-            <div class="message-intel__summary-24h-row">
-              <span class="message-intel__summary-24h-kicker">Themes</span>
-              <div class="message-intel__summary-24h-chips">
-                <span class="message-intel__summary-24h-chip">Market ×19</span>
-                <span class="message-intel__summary-24h-chip">Alpha ×10</span>
-                <span class="message-intel__summary-24h-chip">Emissions ×7</span>
-                <span class="message-intel__summary-24h-chip">Validator ×3</span>
-                <span class="message-intel__summary-24h-chip">Partnership ×2</span>
-              </div>
-            </div>
-
-            <div class="message-intel__summary-24h-hourly">
-              <div class="message-intel__summary-24h-hourly-head">
-                <span>Message volume by hour</span>
-                <span class="message-intel__summary-24h-peak">peak 10:00</span>
-              </div>
-              <div class="message-intel__summary-24h-bars" aria-hidden="true">
-                <i style="height:15%" title="0:00 - 15%"></i>
-                <i style="height:20%" title="2:00 - 20%"></i>
-                <i style="height:10%" title="4:00 - 10%"></i>
-                <i style="height:30%" title="6:00 - 30%"></i>
-                <i style="height:45%" title="8:00 - 45%"></i>
-                <i class="hot" style="height:100%" title="10:00 - 100%"></i>
-                <i style="height:40%" title="12:00 - 40%"></i>
-                <i style="height:55%" title="14:00 - 55%"></i>
-                <i style="height:60%" title="16:00 - 60%"></i>
-                <i style="height:25%" title="18:00 - 25%"></i>
-                <i style="height:20%" title="20:00 - 20%"></i>
-                <i style="height:15%" title="22:00 - 15%"></i>
-              </div>
-            </div>
+            <p class="message-intel__panel-hint">Top subnets, movers, themes, and hourly volume appear here after the live listener data hydrates.</p>
           </div>
         </div>
       </div>
 
       <!-- Pulse Snapshot / Stats At A Glance -->
       <div class="message-intel__hero-stats" id="message-intel-hero-stats" aria-label="Pulse snapshot">
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">2463</b><span>Archived</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">100</b><span>Last 24h</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">63%</b><span>Live conv.</span></div>
-        <div class="message-intel__stat-chip"><b id="message-intel-stat-active">warming</b><span>Active</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-archived">—</b><span>Archived</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-24h">—</b><span>Last 24h</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-conv">—</b><span>Live conv.</span></div>
+        <div class="message-intel__stat-chip"><b id="message-intel-stat-active">—</b><span>Active</span></div>
       </div>
 
       <!-- Net flow & Yesterday's Most Talked About Spotlight -->
@@ -192,17 +120,14 @@
           <div class="message-intel__hero glass-card" id="message-intel-yesterday">
             <p class="message-intel__hero-eyebrow">Yesterday&apos;s most talked about</p>
             <div class="message-intel__hero-main">
-              <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">T</span>
+              <span class="message-intel__hero-icon" id="message-intel-yesterday-icon" aria-hidden="true">—</span>
               <div>
-                <a class="message-intel__hero-name" id="message-intel-yesterday-link" href="/subnet/3">Teutonic <span class="message-intel__hero-sn">· SN3</span></a>
-                <p class="message-intel__hero-meta" id="message-intel-yesterday-stats">5 mentions · <span class="message-intel__sent--cautious">Cautious</span> · 2026-08-15</p>
+                <span class="message-intel__hero-name" id="message-intel-yesterday-link">Awaiting 24h leader</span>
+                <p class="message-intel__hero-meta" id="message-intel-yesterday-stats">No qualifying 24-hour leader yet.</p>
               </div>
             </div>
-            <div class="message-intel__hero-why" id="message-intel-yesterday-chips">
-              <span class="message-intel__chip message-intel__chip--hot">alpha ×2</span>
-              <span class="message-intel__chip">TAO</span>
-            </div>
-            <p class="message-intel__hero-runner" id="message-intel-yesterday-runner">Runner-up: <b>Enigma SN63</b> · 4 mentions</p>
+            <div class="message-intel__hero-why" id="message-intel-yesterday-chips" hidden></div>
+            <p class="message-intel__hero-runner" id="message-intel-yesterday-runner" hidden></p>
           </div>
           <div class="message-intel__week-top glass-card" id="message-intel-week-top" hidden aria-live="polite">
             <div class="message-intel__sec-label">
@@ -220,117 +145,19 @@
         </div>
       </div>
 
-      <!-- Live Sovereign Alpha Stream & Signal Decoder Card -->
+      <!-- Live signal decoder — hydrated only from qualifying calls -->
       <div class="message-intel__tile message-intel__tile--decoder">
-        <div class="message-intel__panel message-intel__panel--decoder glass-card">
-          <div class="message-intel__sec-label">
-            <span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span>
-            <h3 class="message-intel__panel-title">LIVE SOVEREIGN ALPHA STREAM</h3>
-            <span class="message-intel__decoder-rec"><i class="message-intel__rec-dot" aria-hidden="true"></i> LIVE · 100% VERIFIED</span>
-          </div>
-
-          <div class="message-intel__sovereign-banner">
-            <div class="message-intel__sovereign-star"><span class="message-intel__star-icon" aria-hidden="true">✦</span><div><b>SOVEREIGN SIGNAL</b><span>78% CONVICTION</span></div></div>
-            <div class="message-intel__sovereign-user">
-              <div class="message-intel__sov-avatar">AW</div>
-              <div class="message-intel__sov-meta">
-                <b>@alpha_whale <i class="message-intel__crown-badge" title="Verified Alpha Caller">👑</i></b>
-                <span>68% Strike-Rate · 12d track</span>
-              </div>
-              <span class="message-intel__sov-badge">★ ALPHA CALLER</span>
-            </div>
-          </div>
-
-          <div class="message-intel__decoder-metrics">
-            <div class="message-intel__decoder-sn">
-              <span class="message-intel__decoder-icon">📈</span>
-              <b>SN127</b>
-              <span class="message-intel__decoder-gain">+15.8%</span>
-              <span class="message-intel__decoder-vol">vol $189.5K</span>
-            </div>
-            <a class="message-intel__receipt-src message-intel__decoder-src" href="https://t.me/OfficialSubnetSummer/127" target="_blank" rel="noopener noreferrer">source ↗</a>
-          </div>
-
-          <!-- Live Signal Telemetry HUD -->
-          <div class="message-intel__signal-hud" aria-label="Signal telemetry breakdown">
-            <div class="message-intel__signal-hud-meters">
-              <div class="message-intel__hud-meter">
-                <div class="message-intel__hud-meter-label"><span>VELOCITY</span><b>88/100</b></div>
-                <div class="message-intel__hud-bar-track"><div class="message-intel__hud-bar-fill message-intel__hud-bar-fill--cyan" style="width:88%"></div></div>
-              </div>
-              <div class="message-intel__hud-meter">
-                <div class="message-intel__hud-meter-label"><span>CONVICTION</span><b>78%</b></div>
-                <div class="message-intel__hud-bar-track"><div class="message-intel__hud-bar-fill message-intel__hud-bar-fill--purple" style="width:78%"></div></div>
-              </div>
-              <div class="message-intel__hud-meter">
-                <div class="message-intel__hud-meter-label"><span>SENTIMENT</span><b>+0.84 BULLISH</b></div>
-                <div class="message-intel__hud-bar-track"><div class="message-intel__hud-bar-fill message-intel__hud-bar-fill--green" style="width:92%"></div></div>
-              </div>
-            </div>
-            <div class="message-intel__signal-hud-thesis">
-              <p>“Real-time consensus pivot detected on SN127. Heavy validator stake rebalancing with net positive volume divergence.”</p>
-            </div>
-          </div>
-
-          <div class="message-intel__decoder-tags">
-            <span class="message-intel__dec-tag message-intel__dec-tag--cyan">#alpha</span>
-            <span class="message-intel__dec-tag message-intel__dec-tag--purple">#conviction</span>
-            <span class="message-intel__dec-tag message-intel__dec-tag--green">#SN127</span>
-            <a class="message-intel__dec-tag message-intel__dec-tag--receipt" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">12 receipts ↗</a>
-          </div>
+        <div class="message-intel__panel message-intel__panel--decoder glass-card" id="message-intel-decoder">
+          <div class="message-intel__sec-label"><span class="message-intel__sec-bar message-intel__sec-bar--blue" aria-hidden="true"></span><h3 class="message-intel__panel-title">LIVE SIGNAL DECODER</h3><span class="message-intel__panel-unit">awaiting qualifying call</span></div>
+          <div id="message-intel-decoder-body" class="message-intel__decoder-empty" aria-live="polite">No qualifying call is available to decode yet. This panel will fill from the same live proof payload as the feed.</div>
         </div>
       </div>
 
-      <!-- Proof & Divergence Visualizer Card -->
+      <!-- Proof & divergence — hydrated from resolved outcome stories -->
       <div class="message-intel__tile message-intel__tile--proof-chart">
-        <div class="message-intel__panel message-intel__panel--proof-chart glass-card">
-          <div class="message-intel__sec-label">
-            <span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span>
-            <h3 class="message-intel__panel-title">PROOF &amp; DIVERGENCE</h3>
-            <span class="message-intel__panel-unit">CROWD CONSENSUS VS REAL PRICE FLOW</span>
-          </div>
-          
-          <div class="message-intel__proof-graph">
-            <svg class="message-intel__proof-svg" viewBox="0 0 360 110" preserveAspectRatio="none" aria-hidden="true">
-              <defs>
-                <linearGradient id="mi-flow-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="#10b981" stop-opacity="0.4"/>
-                  <stop offset="100%" stop-color="#10b981" stop-opacity="0.0"/>
-                </linearGradient>
-                <linearGradient id="mi-chamber-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35"/>
-                  <stop offset="100%" stop-color="#a855f7" stop-opacity="0.0"/>
-                </linearGradient>
-              </defs>
-              <!-- Grid lines -->
-              <line x1="0" y1="28" x2="360" y2="28" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="2 4"/>
-              <line x1="0" y1="58" x2="360" y2="58" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="2 4"/>
-              <line x1="0" y1="88" x2="360" y2="88" stroke="rgba(255,255,255,0.06)" stroke-width="1" stroke-dasharray="2 4"/>
-              <!-- Vertical divergence marker line -->
-              <line x1="190" y1="6" x2="190" y2="94" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="3 3"/>
-              <!-- Chamber / Crowd consensus path (purple) with area fill -->
-              <path d="M0,74 C40,72 80,75 120,70 C160,66 180,62 210,58 C250,54 290,50 360,46 L360,110 L0,110 Z" fill="url(#mi-chamber-grad)"/>
-              <path d="M0,74 C40,72 80,75 120,70 C160,66 180,62 210,58 C250,54 290,50 360,46" fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round"/>
-              <!-- Real price flow path (green) with area fill -->
-              <path d="M0,84 C40,82 80,80 120,78 C160,72 185,54 220,34 C260,20 300,16 360,12 L360,110 L0,110 Z" fill="url(#mi-flow-grad)"/>
-              <path d="M0,84 C40,82 80,80 120,78 C160,72 185,54 220,34 C260,20 300,16 360,12" fill="none" stroke="#10b981" stroke-width="2.8" stroke-linecap="round"/>
-            </svg>
-            <div class="message-intel__divergence-pill" style="left:53%">DIVERGENCE</div>
-          </div>
-
-          <div class="message-intel__proof-axis">
-            <span>T-24</span>
-            <span>T-18</span>
-            <span>T-12</span>
-            <span>T-6</span>
-            <span>NOW</span>
-          </div>
-
-          <div class="message-intel__proof-graph-legend">
-            <span class="message-intel__legend-pill message-intel__legend-pill--purple">● CROWD CONSENSUS</span>
-            <span class="message-intel__legend-pill message-intel__legend-pill--green">● REAL PRICE FLOW (+18.4%)</span>
-            <a class="message-intel__receipt-src" href="https://t.me/OfficialSubnetSummer" target="_blank" rel="noopener noreferrer">receipts ↗</a>
-          </div>
+        <div class="message-intel__panel message-intel__panel--proof-chart glass-card" id="message-intel-divergence-visualizer">
+          <div class="message-intel__sec-label"><span class="message-intel__sec-bar message-intel__sec-bar--violet" aria-hidden="true"></span><h3 class="message-intel__panel-title">PROOF &amp; DIVERGENCE</h3><span class="message-intel__panel-unit">awaiting resolved outcomes</span></div>
+          <div id="message-intel-divergence-visualizer-body" class="message-intel__divergence-empty" aria-live="polite">No resolved, evidence-qualified outcome stories yet. Pending calls stay out until their 24-hour proof is complete.</div>
         </div>
       </div>
 
@@ -458,7 +285,7 @@
               </div>
             </div>
             <div class="message-intel__rank-header-tags">
-              <span class="message-intel__rank-pill message-intel__rank-pill--green">● VERIFIED</span>
+              <span class="message-intel__rank-pill message-intel__rank-pill--green">● EVIDENCE GATED</span>
             </div>
           </div>
           <div class="message-intel__proof-body" id="message-intel-proof-body"></div>
@@ -601,8 +428,8 @@
               </div>
             </div>
             <div class="message-intel__rank-header-tags">
-              <span class="message-intel__rank-pill message-intel__rank-pill--purple">● 6 BADGES</span>
-              <span class="message-intel__rank-pill message-intel__rank-pill--gold">VERIFIED</span>
+              <span class="message-intel__rank-pill message-intel__rank-pill--purple">EARNED · N≥5</span>
+              <span class="message-intel__rank-pill message-intel__rank-pill--gold">EVIDENCE GATED</span>
             </div>
           </div>
           <div id="message-intel-accolades" class="message-intel__accolades" aria-live="polite">
