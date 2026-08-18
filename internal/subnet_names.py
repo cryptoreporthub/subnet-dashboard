@@ -247,6 +247,20 @@ def _subnet_row_name_trustworthy(subnet_row: Dict[str, Any]) -> bool:
     return False
 
 
+def _prefer_ladder_hint(hint: Optional[str], canon: str, netuid: int) -> bool:
+    """True when a pump-ladder label is a live, more-specific form of canon (not stale meme)."""
+    if not hint or _is_bad_name(hint) or is_generic_display_name(hint, netuid):
+        return False
+    h = str(hint).strip()
+    c = str(canon).strip()
+    if is_generic_display_name(c, netuid):
+        return True
+    if h.lower() == c.lower():
+        return True
+    hl, cl = h.lower(), c.lower()
+    return hl.startswith(cl + " ") or hl.startswith(cl + "-") or hl.startswith(cl + "·")
+
+
 def display_name_for_netuid(
     netuid: int,
     *,
@@ -269,17 +283,22 @@ def display_name_for_netuid(
 
     row_name = subnet_row.get("name") if isinstance(subnet_row, dict) else None
     canon = resolve_subnet_name(n, tmc_name=None, use_taostats=False)
-    if row_name and not is_generic_display_name(row_name, n):
-        if isinstance(subnet_row, dict) and _subnet_row_name_trustworthy(subnet_row):
-            return str(row_name).strip()
-        if not is_generic_display_name(canon, n) and str(row_name).strip() != canon:
-            return canon
 
     hint = ladder_hint
     if not hint and isinstance(subnet_row, dict):
         hint = subnet_row.get("name")
     if hint and _is_bad_name(hint):
         hint = None
+
+    if hint and _prefer_ladder_hint(hint, canon, n):
+        if not isinstance(subnet_row, dict) or not _subnet_row_name_trustworthy(subnet_row):
+            return str(hint).strip()
+
+    if row_name and not is_generic_display_name(row_name, n):
+        if isinstance(subnet_row, dict) and _subnet_row_name_trustworthy(subnet_row):
+            return str(row_name).strip()
+        if not is_generic_display_name(canon, n) and str(row_name).strip() != canon:
+            return canon
 
     name = resolve_subnet_name(n, tmc_name=hint, use_taostats=False)
     if is_generic_display_name(name, n) and use_taostats_fallback:
