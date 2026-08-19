@@ -1,4 +1,4 @@
-"""Fly.toml contract for web + dedicated worker (Telegram listener on worker)."""
+"""Fly.toml + fly.yml contract for v1 inline worker on web (prod canon after 2026-08-19 incident)."""
 
 from __future__ import annotations
 
@@ -30,21 +30,22 @@ def test_fly_toml_message_intel_listener_auto():
     assert 'MESSAGE_INTEL_LISTENER = "off"' not in fly
 
 
-def test_fly_toml_split_v2_worker_topology():
+def test_fly_toml_v1_inline_topology():
     fly = _fly_toml()
-    assert 'WORKER_SPLIT_V2 = "on"' in fly
-    assert 'INLINE_WORKER = "0"' in fly
-    assert 'ENABLE_INLINE_WORKER = "0"' in fly
-    assert 'processes = ["worker"]' in fly
+    assert 'WORKER_SPLIT_V2 = "off"' in fly
+    assert 'INLINE_WORKER = "1"' in fly
+    assert 'ENABLE_INLINE_WORKER = "1"' in fly
     assert 'processes = ["web"]' in fly
-    assert "WORKER_HTTP_PORT" in fly
-    assert "internal_port = 8081" in fly
+    assert re.search(
+        r'\[mounts\][\s\S]*processes = \["web"\]',
+        fly,
+    )
 
 
-def test_fly_toml_worker_uses_dedicated_cpu_and_preserves_memory():
+def test_fly_toml_web_vm_shared_cpu():
     fly = _fly_toml()
     assert re.search(
-        r'\[\[vm\]\]\s+#.*\n\s*size = "performance-1x"\s+memory = "2gb"\s+processes = \["worker"\]',
+        r'\[\[vm\]\][\s\S]*size = "shared-cpu-1x"[\s\S]*memory = "2gb"[\s\S]*processes = \["web"\]',
         fly,
     )
 
@@ -56,30 +57,30 @@ def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
     assert "MESSAGE_INTEL_LISTENER" in script
 
 
-def test_fly_yml_scales_web_and_worker():
+def test_fly_yml_scales_v1_inline():
     yml = _fly_yml()
-    assert "flyctl scale count web=1 worker=1" in yml
-    assert "worker=0" not in yml
-    assert "Rollback split_v2" not in yml
+    assert "flyctl scale count web=1" in yml
+    assert "worker=0" in yml
+    assert "flyctl scale count web=1 worker=1" not in yml
 
 
-def test_fly_yml_verifies_process_topology():
+def test_fly_yml_verifies_v1_topology():
     yml = _fly_yml()
-    assert "Verify Fly process topology" in yml
-    assert "counts['web'] < 1 or counts['worker'] < 1" in yml
+    assert "Verify Fly process topology (web=1, no dedicated worker)" in yml
+    assert "counts['worker'] > 0" in yml
 
 
-def test_fly_yml_waits_for_worker_peer_alive():
+def test_fly_yml_verifies_inline_readiness():
     yml = _fly_yml()
-    assert "Wait for worker peer" in yml
-    assert "fly_wait_worker_peer_alive.sh" in yml
+    assert "Verify v1 inline readiness" in yml
+    assert "split_v2" in yml
 
 
-def test_fly_yml_prep_split_v2_before_deploy():
+def test_fly_yml_clears_v2_secrets_before_deploy():
     yml = _fly_yml()
-    assert "Prep split v2 deploy" in yml
-    assert "fly_split_v2_deploy_prep.sh" in yml
-    assert "prep_retry" in yml
+    assert "secrets unset WORKER_SPLIT_V2" in yml
+    assert "Prep split v2 deploy" not in yml
+    assert "fly_wait_worker_peer_alive.sh" not in yml
 
 
 def test_fly_split_v2_deploy_prep_script():
@@ -163,17 +164,24 @@ def test_worker_diag_jq_machine_selectors():
     assert "k1 state=running pg=worker" in listed.stdout
 
 
-def test_machine_process_group_counts():
-    """Mirror fly.yml post-deploy topology guard."""
-    from tests.test_fly_v2_volume_repair import machine_process_group
+def test_machine_process_group_counts_v1():
+    """Mirror fly.yml post-deploy v1 topology guard."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "fly_v2_volume_repair",
+        Path(__file__).with_name("test_fly_v2_volume_repair.py"),
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    machine_process_group = mod.machine_process_group
 
     machines = [
         {"id": "w1", "config": {"metadata": {"fly_process_group": "web"}}, "state": "started"},
-        {"id": "k1", "config": {"metadata": {"fly_process_group": "worker"}}, "state": "started"},
     ]
     counts = {"web": 0, "worker": 0}
     for m in machines:
         pg = machine_process_group(m)
         if pg in counts:
             counts[pg] += 1
-    assert counts == {"web": 1, "worker": 1}
+    assert counts == {"web": 1, "worker": 0}
