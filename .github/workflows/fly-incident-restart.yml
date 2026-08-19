@@ -1,0 +1,33 @@
+# Optional incident mitigation — run ONLY after fly-incident-logs.yml output is saved.
+name: Fly incident machine restart
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type restart after saving pre-restart logs"
+        required: true
+        default: ""
+      machine_id:
+        description: "Fly machine id (default prod web box)"
+        required: false
+        default: "d8939d7c597218"
+
+jobs:
+  restart:
+    name: Restart web machine
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'restart'
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Restart machine
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP=subnet-dashboard
+          ID="${{ github.event.inputs.machine_id }}"
+          echo "restarting machine $ID on $APP"
+          flyctl machine restart "$ID" -a "$APP"
+          sleep 20
+          curl -sS --max-time 15 -w "\nhealth HTTP %{http_code} in %{time_total}s\n" "https://${APP}.fly.dev/health"

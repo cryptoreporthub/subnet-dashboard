@@ -76,65 +76,27 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
           FLY_PRIMARY_REGION: sjc
-      # Canon = split v2 (fly.toml): web HTTP :8080 + dedicated worker :8081 (volume on worker).
-      - name: Prep split v2 deploy (release web volume, clear stale machines)
+      # Canon = v1 inline (fly.toml): one web machine + inline worker subprocess; volume on web.
+      - name: Clear v2 secrets if present
         run: |
-          chmod +x scripts/fly_split_v2_deploy_prep.sh scripts/fly_v2_volume_repair.sh
-          FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc ./scripts/fly_split_v2_deploy_prep.sh
+          flyctl secrets unset WORKER_SPLIT_V2 --app subnet-dashboard 2>/dev/null || true
+          flyctl secrets unset WORKER_INTERNAL_URL --app subnet-dashboard 2>/dev/null || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Deploy to Fly (split v2 fly.toml, region sjc)
+      - name: Deploy to Fly (v1 inline fly.toml, region sjc)
         run: |
           set -e
-          FLY_CONFIG=fly.toml
-          echo "deploying $FLY_CONFIG (web + dedicated worker, volume on worker)"
-          deploy_once() {
-            flyctl deploy --config "$FLY_CONFIG" --remote-only --no-cache --yes --regions sjc --ha=false
-          }
-          prep_retry() {
-            chmod +x scripts/fly_split_v2_deploy_prep.sh
-            FLY_APP=subnet-dashboard FLY_PRIMARY_REGION=sjc FLY_PREP_WAIT_SECONDS=45 \
-              ./scripts/fly_split_v2_deploy_prep.sh || true
-          }
-          # ponytail: never destroy healthy machines up front — prep only removes
-          # web+volume misconfig and stale/failed machines that block flyctl leases.
-          for attempt in 1 2 3 4 5; do
-            echo "=== flyctl deploy attempt $attempt/5 (regions=sjc) ==="
-            if deploy_once; then
-              exit 0
-            fi
-            echo "deploy attempt $attempt failed — prep stale machines then wait 60s"
-            prep_retry
-            sleep 60
-          done
-          echo "=== deploy still failing — run volume recover then retry ==="
-          ./scripts/fly_volume_recover.sh
-          prep_retry
-          for attempt in 1 3; do
-            echo "=== post-recover deploy attempt $attempt/3 ==="
-            if deploy_once; then
-              exit 0
-            fi
-            echo "post-recover attempt $attempt failed — prep stale machines then wait 90s"
-            prep_retry
-            sleep 90
-          done
-          echo "GUARD FAIL: flyctl deploy failed after volume recover"
-          exit 1
+          echo "deploying fly.toml (v1 inline worker, volume on web)"
+          flyctl deploy --config fly.toml --remote-only --no-cache --yes --regions sjc --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale web=1 worker=1
+      - name: Scale web=1 worker=0 (v1 inline)
         run: |
-          flyctl scale count web=1 worker=1 --app subnet-dashboard --yes
+          flyctl scale count web=1 --app subnet-dashboard --yes
+          flyctl scale count worker=0 --app subnet-dashboard --yes 2>/dev/null || true
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Reconcile process groups (web + worker)
-        run: |
-          chmod +x scripts/fly_web_recover.sh scripts/fly_worker_split_v2_guard.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_web_recover.sh
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Verify Fly process topology (web=1 worker=1)
+      - name: Verify Fly process topology (web=1, no dedicated worker)
         run: |
           set -e
           flyctl machines list -a subnet-dashboard --json | python3 -c "
@@ -153,16 +115,32 @@ jobs:
               if pg in counts:
                   counts[pg] += 1
           print('process_groups:', counts)
-          if counts['web'] < 1 or counts['worker'] < 1:
-              print('GUARD FAIL: expected web>=1 and worker>=1 after scale')
+          if counts['web'] < 1:
+              print('GUARD FAIL: expected web>=1 after v1 deploy')
+              sys.exit(1)
+          if counts['worker'] > 0:
+              print('GUARD FAIL: v1 deploy must not keep dedicated worker machines')
               sys.exit(1)
           "
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Pin worker internal URL (split v2 proxy)
+      - name: Verify v1 inline readiness
         run: |
-          chmod +x scripts/fly_set_worker_internal_url.sh scripts/fly_worker_split_v2_guard.sh
-          FLY_APP=subnet-dashboard ./scripts/fly_set_worker_internal_url.sh
+          set -e
+          curl -fsS -m 30 https://subnet-dashboard.fly.dev/api/ops/readiness | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          mode = d.get('worker_mode')
+          peer = d.get('worker_peer') or {}
+          print('worker_mode=', mode)
+          print('worker_peer=', peer)
+          if mode == 'split_v2':
+              print('GUARD FAIL: still reporting split_v2 after v1 deploy')
+              sys.exit(1)
+          if not peer.get('alive'):
+              print('GUARD FAIL: inline worker not alive in readiness')
+              sys.exit(1)
+          "
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # flyctl treats "stopped" as a good post-deploy state; a started machine
@@ -208,13 +186,6 @@ jobs:
             echo "GUARD FAIL: server not healthy (health 200 or render /pump 200) within ~3m"
             exit 1
           fi
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Wait for worker peer (split v2 private HTTP)
-        run: |
-          chmod +x scripts/fly_wait_worker_peer_alive.sh scripts/fly_probe_worker_from_web.sh
-          FLY_APP=subnet-dashboard APP_BASE_URL=https://subnet-dashboard.fly.dev \
-            ./scripts/fly_wait_worker_peer_alive.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Warm production caches
