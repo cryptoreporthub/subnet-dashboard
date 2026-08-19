@@ -23,7 +23,7 @@ fi
 echo "fly_probe_worker_from_web: web=$WEB_ID port=$PORT"
 # flyctl machine exec accepts: machine-id + single command string (no -- argv split).
 # Image WORKDIR may be /, so use absolute /app path.
-if ! flyctl machine exec -a "$APP" "$WEB_ID" "python /app/scripts/probe_worker_peer_once.py"; then
+if ! flyctl machine exec -a "$APP" "$WEB_ID" --timeout 30 "python /app/scripts/probe_worker_peer_once.py"; then
   echo "fly_probe_worker_from_web: probe failed (web could not reach worker :${PORT})"
   exit 1
 fi
