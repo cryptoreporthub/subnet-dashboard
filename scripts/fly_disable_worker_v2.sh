@@ -111,7 +111,7 @@ for m in json.load(sys.stdin):
   fi
 
   echo "=== 7. Verify v1 readiness (inline worker) ==="
-  curl -sS -m 20 "https://${APP}.fly.dev/api/ops/readiness" | python3 -c "
+  curl -fsS -m 20 "https://${APP}.fly.dev/api/ops/readiness" | python3 -c "
 import json,sys
 d=json.load(sys.stdin)
 mode=d.get('worker_mode')
@@ -123,10 +123,7 @@ if mode == 'split_v2':
     print('WARN: still reporting split_v2 — check secrets / process groups')
     sys.exit(1)
 print('rollback verify ok')
-  " || {
-    echo "WARN: readiness shape unexpected — check manually"
-    curl -sS -m 20 "https://${APP}.fly.dev/api/ops/readiness" | head -c 1500 || true
-  }
+  "
 fi
 
 echo ""

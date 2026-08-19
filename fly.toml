@@ -1,5 +1,5 @@
 # fly.toml app configuration file generated for subnet-dashboard
-# 2026-08-13: web + dedicated worker (Telegram listener on worker; volume on worker only).
+# v1 production topology: web + inline worker on one machine and one persistent volume.
 
 app = "subnet-dashboard"
 primary_region = "sjc"
@@ -29,11 +29,11 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "web"
-  # Web serves HTTP only; background jobs + Telegram listener run on dedicated worker.
+  # Web serves HTTP; the inline worker owns schedulers and the persistent volume.
   BACKGROUND_ON_WEB = "off"
-  INLINE_WORKER = "0"
-  ENABLE_INLINE_WORKER = "0"
-  WORKER_SPLIT_V2 = "on"
+  INLINE_WORKER = "1"
+  ENABLE_INLINE_WORKER = "1"
+  WORKER_SPLIT_V2 = "off"
   # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
   WORKER_HEAVY = "essential"
   # auto: start Telethon listener when session exists on worker volume (see DEPLOY.md).
@@ -111,7 +111,7 @@ primary_region = "sjc"
   RESOLVER_STATE_TIMEOUT_SECONDS = "15"
   LEARNING_SNAPSHOT_PREWARM_SECONDS = "10"
   WORKER_HTTP_PORT = "8081"
-  # Web probes worker on :8081 (worker-only Fly service — avoids 8080 collision with web).
+  # Legacy worker-proxy settings retained for compatible API shapes; v1 uses the inline worker.
   WORKER_PROXY_TIMEOUT_SECONDS = "4"
   WORKER_PROXY_CONNECT_SECONDS = "3"
   WORKER_PEER_TIMEOUT_SECONDS = "4"
@@ -120,39 +120,15 @@ primary_region = "sjc"
   WORKER_PROXY_LEARNING_TIMEOUT_SECONDS = "25"
 
 # Persistent volume for runtime/learning data (soul_map.json, predictions.json,
-# SQLite caches under /app/data). Worker-only mount — web proxies volume APIs.
+# SQLite caches under /app/data). The v1 web machine owns the volume.
 [mounts]
   source = "data_volume"
   destination = "/app/data"
-  processes = ["worker"]
-
-[[vm]]
-  size = "shared-cpu-1x"
-  memory = "1gb"
   processes = ["web"]
 
 [[vm]]
-  # Dedicated CPU keeps the worker HTTP port responsive during pump/resolver scans.
-  size = "performance-1x"
+  size = "shared-cpu-1x"
   memory = "2gb"
-  processes = ["worker"]
+  processes = ["web"]
 
-# Worker internal HTTP on 8081 — web uses 8080; flycast :8081 routes to worker only.
-[[services]]
-  protocol = "tcp"
-  internal_port = 8081
-  processes = ["worker"]
-  auto_stop_machines = "off"
-  auto_start_machines = true
-  min_machines_running = 1
 
-  [[services.ports]]
-    port = 8081
-    handlers = ["http"]
-
-  [[services.http_checks]]
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "30s"
-    method = "GET"
-    path = "/health"
