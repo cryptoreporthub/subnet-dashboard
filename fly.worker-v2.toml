@@ -8,8 +8,8 @@ primary_region = "sjc"
   dockerfile = "Dockerfile"
 
 [processes]
-  web = "./scripts/fly_web_entrypoint.sh"
-  worker = "./scripts/fly_worker_entrypoint.sh"
+  web = "sh ./scripts/fly_web_entrypoint.sh"
+  worker = "sh ./scripts/fly_worker_entrypoint.sh"
 
 [http_service]
   internal_port = 8080
@@ -31,7 +31,10 @@ primary_region = "sjc"
   BACKGROUND_ON_WEB = "off"
   INLINE_WORKER = "0"
   ENABLE_INLINE_WORKER = "0"
-  WORKER_SPLIT_V2 = "on"
+  # WORKER_SPLIT_V2 is NOT set here — the enable script sets it as a Fly
+  # secret AFTER the worker is proven healthy on :8081. Setting it in [env]
+  # would flip split_v2 on at deploy time before health is verified.
+  WORKER_SPLIT_V2 = "off"
   WORKER_HEAVY = "essential"
   LIVE_SUBNETS_BOOT_IMMEDIATE = "off"
   LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS = "120"

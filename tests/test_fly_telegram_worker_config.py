@@ -10,6 +10,10 @@ def _fly_toml() -> str:
     return Path("fly.toml").read_text(encoding="utf-8")
 
 
+def _fly_worker_v2_toml() -> str:
+    return Path("fly.worker-v2.toml").read_text(encoding="utf-8")
+
+
 def _fly_yml() -> str:
     return Path(".github/workflows/fly.yml").read_text(encoding="utf-8")
 
@@ -31,6 +35,7 @@ def test_fly_toml_message_intel_listener_auto():
 
 
 def test_fly_toml_v1_inline_topology():
+    """fly.toml is v1 canon: inline worker, volume on web, WORKER_SPLIT_V2=off."""
     fly = _fly_toml()
     assert 'WORKER_SPLIT_V2 = "off"' in fly
     assert 'INLINE_WORKER = "1"' in fly
@@ -50,11 +55,57 @@ def test_fly_toml_web_vm_shared_cpu():
     )
 
 
+# --- fly.worker-v2.toml (v2 kit — not deployed until Stage 3) ---
+
+
+def test_fly_worker_v2_toml_topology():
+    """fly.worker-v2.toml is the v2 kit: dedicated worker, volume on worker."""
+    fly = _fly_worker_v2_toml()
+    assert 'INLINE_WORKER = "0"' in fly
+    assert 'ENABLE_INLINE_WORKER = "0"' in fly
+    assert 'processes = ["worker"]' in fly
+    assert 'processes = ["web"]' in fly
+    assert "WORKER_HTTP_PORT" in fly
+    assert "internal_port = 8081" in fly
+
+
+def test_fly_worker_v2_toml_does_not_preset_split_v2():
+    """fly.worker-v2.toml must NOT set WORKER_SPLIT_V2=on in [env].
+
+    The enable script sets it as a Fly secret AFTER the worker is proven
+    healthy. If the toml pre-sets it, deploy flips split_v2 on before
+    health is verified — the exact bug class from the 01:59 incident.
+    """
+    fly = _fly_worker_v2_toml()
+    assert 'WORKER_SPLIT_V2 = "on"' not in fly
+
+
+def test_fly_worker_v2_toml_sh_prefix():
+    """Both entrypoints in fly.worker-v2.toml must use sh prefix."""
+    fly = _fly_worker_v2_toml()
+    assert 'web = "sh ./scripts/fly_web_entrypoint.sh"' in fly
+    assert 'worker = "sh ./scripts/fly_worker_entrypoint.sh"' in fly
+
+
+def test_fly_worker_v2_toml_worker_vm():
+    fly = _fly_worker_v2_toml()
+    assert re.search(
+        r'\[\[vm\]\]\s+size\s*=\s*"shared-cpu-1x"\s+memory\s*=\s*"2gb"\s+processes\s*=\s*\["worker"\]',
+        fly,
+    )
+
+
+# --- Entrypoint scripts ---
+
+
 def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
     script = Path("scripts/fly_worker_entrypoint.sh").read_text(encoding="utf-8")
     assert "RUN_MODE=worker" in script
     assert "uvicorn server:app" in script
     assert "MESSAGE_INTEL_LISTENER" in script
+
+
+# --- fly.yml (v1 inline deploy — from PR #999) ---
 
 
 def test_fly_yml_scales_v1_inline():
@@ -81,6 +132,47 @@ def test_fly_yml_clears_v2_secrets_before_deploy():
     assert "secrets unset WORKER_SPLIT_V2" in yml
     assert "Prep split v2 deploy" not in yml
     assert "fly_wait_worker_peer_alive.sh" not in yml
+
+
+# --- Enable / soak / cutover scripts ---
+
+
+def test_fly_enable_v2_secret_after_health():
+    """fly_enable_worker_v2.sh must set WORKER_SPLIT_V2=on AFTER worker is healthy."""
+    script = Path("scripts/fly_enable_worker_v2.sh").read_text(encoding="utf-8")
+    deploy_pos = script.find("flyctl deploy")
+    secret_pos = script.find("flyctl secrets set WORKER_SPLIT_V2=on")
+    assert deploy_pos > 0, "enable script must deploy"
+    assert secret_pos > 0, "enable script must set WORKER_SPLIT_V2=on"
+    assert secret_pos > deploy_pos, "secret must come AFTER deploy"
+    probe_pos = script.find("fly_probe_worker_from_web")
+    assert probe_pos > 0, "enable script must probe worker from web"
+    assert secret_pos > probe_pos, "secret must come AFTER probe gate"
+
+
+def test_fly_soak_probe_script_exists():
+    """Stage 2 soak probe script must exist and have zero-failure gate."""
+    script = Path("scripts/fly_soak_probe_worker.sh").read_text(encoding="utf-8")
+    assert "SOAK_HOURS" in script
+    assert "PROBE_INTERVAL_SECONDS" in script
+    assert "zero" in script.lower() or "ZERO" in script
+    assert "SOAK FAILED" in script
+    assert "SOAK PASSED" in script
+    assert "fly_probe_worker_from_web.sh" in script
+
+
+def test_fly_v2_cutover_gate_script_exists():
+    """Stage 3 cutover gate script must check all required conditions."""
+    script = Path("scripts/fly_v2_cutover_gate.sh").read_text(encoding="utf-8")
+    assert "worker_mode" in script
+    assert "worker_peer" in script
+    assert "data-freshness" in script
+    assert "skipping inline worker" in script
+    assert "GATE FAIL" in script
+    assert "ROLLBACK" in script or "rollback" in script
+
+
+# --- Utility scripts ---
 
 
 def test_fly_split_v2_deploy_prep_script():
