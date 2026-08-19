@@ -3,19 +3,19 @@ set -euo pipefail
 APP="subnet-dashboard"
 
 echo "== machine states =="
-flyctl machines list -a "$APP" --json | jq -r '.[] | "\(.id) state=\(.state) pg=\(.process_group // .config.process_group // \"web\")"' || true
+flyctl machines list -a "$APP" --json | jq -r '.[] | "\(.id) state=\(.state) pg=\(.process_group // .config.process_group // "web")"' || true
 
 echo "== resolving probe machine (worker when split v2, else web) =="
 # split v2: background jobs + Telegram listener run on the worker process group.
-WORKER_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // \"\") | ascii_downcase) == \"worker\") and (.state == \"running\" or .state == \"started\")][0].id // empty')"
+WORKER_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // "") | ascii_downcase) == "worker" and (.state == "running" or .state == "started"))][0].id // empty')"
 if [ -n "${WORKER_ID:-}" ] && [ "$WORKER_ID" != "null" ]; then
   TARGET_ID="$WORKER_ID"
   echo "split v2 — probing worker machine"
 else
   # v1 fallback: inline worker on web machine
-  TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // \"web\") == \"web\") and .state == \"running\")][0].id // empty')"
+  TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select(((.process_group // .config.process_group // "web") == "web" and .state == "running"))][0].id // empty')"
   if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
-    TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select((.process_group // .config.process_group // \"web\") == \"web\")][0].id // empty')"
+    TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '[.[] | select((.process_group // .config.process_group // "web") == "web")][0].id // empty')"
   fi
   if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
     TARGET_ID="$(flyctl machines list -a "$APP" --json | jq -r '.[0].id')"

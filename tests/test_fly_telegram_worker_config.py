@@ -121,6 +121,46 @@ def test_diag_scripts_use_grep_not_rg():
         assert not re.search(r"\brg\b", text), f"{path} must not use rg"
     diag = Path("scripts/worker-diag.sh").read_text(encoding="utf-8")
     assert not re.search(r"\brg\b", diag), "worker-diag.sh must not use rg"
+    for line in diag.splitlines():
+        if "jq -r" in line:
+            assert '\\"' not in line, f"jq line must not use backslash-escaped quotes: {line}"
+
+
+def test_worker_diag_jq_machine_selectors():
+    """Mirror scripts/worker-diag.sh jq — must compile and pick worker when split v2."""
+    import json
+    import subprocess
+
+    machines = [
+        {"id": "w1", "state": "started", "process_group": "web"},
+        {"id": "k1", "state": "running", "config": {"process_group": "worker"}},
+    ]
+    payload = json.dumps(machines)
+    worker_q = (
+        '[.[] | select(((.process_group // .config.process_group // "") | ascii_downcase) == "worker" '
+        'and (.state == "running" or .state == "started"))][0].id // empty'
+    )
+    web_q = (
+        '[.[] | select(((.process_group // .config.process_group // "web") == "web" '
+        'and .state == "running"))][0].id // empty'
+    )
+    list_q = r'.[] | "\(.id) state=\(.state) pg=\(.process_group // .config.process_group // "web")"'
+
+    worker = subprocess.run(
+        ["jq", "-r", worker_q], input=payload, text=True, capture_output=True, check=True
+    )
+    assert worker.stdout.strip() == "k1"
+
+    web_only = json.dumps([{"id": "w1", "state": "running", "process_group": "web"}])
+    web = subprocess.run(
+        ["jq", "-r", web_q], input=web_only, text=True, capture_output=True, check=True
+    )
+    assert web.stdout.strip() == "w1"
+
+    listed = subprocess.run(
+        ["jq", "-r", list_q], input=payload, text=True, capture_output=True, check=True
+    )
+    assert "k1 state=running pg=worker" in listed.stdout
 
 
 def test_machine_process_group_counts():
