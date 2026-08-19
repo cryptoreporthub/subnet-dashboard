@@ -8,8 +8,8 @@ primary_region = "sjc"
   dockerfile = "Dockerfile"
 
 [processes]
-  web = "./scripts/fly_web_entrypoint.sh"
-  worker = "./scripts/fly_worker_entrypoint.sh"
+  web = "sh ./scripts/fly_web_entrypoint.sh"
+  worker = "sh ./scripts/fly_worker_entrypoint.sh"
 
 [http_service]
   internal_port = 8080
