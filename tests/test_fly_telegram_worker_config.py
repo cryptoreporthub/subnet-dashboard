@@ -159,6 +159,37 @@ def test_fly_soak_probe_script_exists():
     assert "SOAK FAILED" in script
     assert "SOAK PASSED" in script
     assert "fly_probe_worker_from_web.sh" in script
+    assert "MAX_GAP_SECONDS" in script or "CADENCE GAP" in script
+    assert "lease currently held" in script
+
+
+def test_fly_stage2_soak_gha_workflow():
+    """Stage 2 soak must run on GHA workflow_dispatch with 4h timeout."""
+    yml = Path(".github/workflows/fly-stage2-soak.yml").read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in yml
+    assert "timeout-minutes: 240" in yml
+    assert "fly_soak_probe_worker.sh" in yml
+    assert "confirm == 'soak'" in yml
+
+
+def test_fly_stage2_temp_worker_script():
+    """Stage 2 temp worker deploys via v2 kit services, not machine run."""
+    script = Path("scripts/fly_stage2_temp_worker.sh").read_text(encoding="utf-8")
+    assert "flyctl machine run" not in script
+    assert "fly.worker-v2-hop.toml" in script
+    assert "--process-group worker" in script
+    hop = Path("fly.worker-v2-hop.toml").read_text(encoding="utf-8")
+    assert "[[services]]" in hop
+    assert "internal_port = 8081" in hop
+    assert re.search(r"^\[mounts\]", hop, re.MULTILINE) is None
+
+
+def test_fly_probe_requires_flycast_ok():
+    """Hop proof must require flycast path OK (not just any candidate)."""
+    script = Path("scripts/fly_probe_worker_from_web.sh").read_text(encoding="utf-8")
+    assert ".flycast:" in script
+    assert "/health" in script
+    assert "/api/ops/worker-peer" in script
 
 
 def test_fly_v2_cutover_gate_script_exists():

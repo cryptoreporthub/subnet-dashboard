@@ -21,9 +21,32 @@ if [ -z "$WEB_ID" ]; then
 fi
 
 echo "fly_probe_worker_from_web: web=$WEB_ID port=$PORT"
-# flyctl machine exec accepts: machine-id + single command string (no -- argv split).
-# Image WORKDIR may be /, so use absolute /app path.
-if ! flyctl machine exec -a "$APP" "$WEB_ID" --timeout 30 "python /app/scripts/probe_worker_peer_once.py"; then
-  echo "fly_probe_worker_from_web: probe failed (web could not reach worker :${PORT})"
+
+probe_out="$(mktemp)"
+trap 'rm -f "$probe_out"' EXIT
+
+set +e
+flyctl machine exec -a "$APP" "$WEB_ID" --timeout 30 \
+  "python /app/scripts/probe_worker_peer_once.py" > "$probe_out" 2>&1
+exec_rc=$?
+set -e
+cat "$probe_out"
+
+if [ "$exec_rc" -ne 0 ]; then
+  if grep -qi 'lease currently held' "$probe_out"; then
+    echo "fly_probe_worker_from_web: machine lease conflict (concurrent flyctl)"
+  else
+    echo "fly_probe_worker_from_web: flyctl machine exec failed (rc=$exec_rc)"
+  fi
+  exit 1
+fi
+
+# Stage 2 gate: flycast is the proven hop — require both health + worker-peer OK.
+if ! grep -qE "OK 200 http://${APP}\\.flycast:${PORT}/health" "$probe_out"; then
+  echo "fly_probe_worker_from_web: flycast /health not OK 200"
+  exit 1
+fi
+if ! grep -qE "OK 200 http://${APP}\\.flycast:${PORT}/api/ops/worker-peer" "$probe_out"; then
+  echo "fly_probe_worker_from_web: flycast /api/ops/worker-peer not OK 200"
   exit 1
 fi

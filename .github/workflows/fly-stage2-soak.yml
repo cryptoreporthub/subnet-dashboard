@@ -1,0 +1,86 @@
+# Stage 2 hop-proof soak — 4h continuous probe, zero failures.
+# Run ONLY after temp worker is deployed via scripts/fly_stage2_temp_worker.sh
+# (v2 kit [[services]] on :8081). Do NOT set WORKER_SPLIT_V2 during Stage 2.
+name: Fly Stage 2 soak (hop proof)
+
+on:
+  workflow_dispatch:
+    inputs:
+      soak_hours:
+        description: "Soak duration in hours (default 4)"
+        required: false
+        default: "4"
+      probe_interval_seconds:
+        description: "Seconds between probes (default 300 = 5 min)"
+        required: false
+        default: "300"
+      confirm:
+        description: "Type soak to start the 4h clock"
+        required: true
+        default: ""
+
+jobs:
+  stage2-soak:
+    name: Stage 2 web→worker soak
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    if: github.event.inputs.confirm == 'soak'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Preflight — Stage 2 must not flip split_v2
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP=subnet-dashboard
+          if flyctl secrets list -a "$APP" --json | python3 -c "
+          import json, sys
+          rows = json.load(sys.stdin)
+          bad = [r['Name'] for r in rows if r.get('Name') in ('WORKER_SPLIT_V2', 'WORKER_INTERNAL_URL')]
+          sys.exit(1 if bad else 0)
+          "; then
+            echo "OK: WORKER_SPLIT_V2 / WORKER_INTERNAL_URL not set"
+          else
+            echo "ABORT: Stage 2 forbids WORKER_SPLIT_V2 / WORKER_INTERNAL_URL secrets"
+            exit 1
+          fi
+          echo "=== machines (expect web + temp worker) ==="
+          flyctl machines list -a "$APP"
+          workers=$(flyctl machines list -a "$APP" --json | python3 -c "
+          import json, sys
+          n = sum(1 for m in json.load(sys.stdin)
+                  if ((m.get('config') or {}).get('metadata') or {}).get('fly_process_group') == 'worker')
+          print(n)
+          ")
+          if [ "$workers" -lt 1 ]; then
+            echo "ABORT: no worker machine — run scripts/fly_stage2_temp_worker.sh first"
+            exit 1
+          fi
+          echo "worker machines: $workers"
+
+      - name: Run Stage 2 soak (zero-failure gate)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          FLY_APP: subnet-dashboard
+          SOAK_HOURS: ${{ github.event.inputs.soak_hours }}
+          PROBE_INTERVAL_SECONDS: ${{ github.event.inputs.probe_interval_seconds }}
+          SOAK_LOG: stage2_soak_${{ github.run_id }}.log
+        run: |
+          set -euo pipefail
+          chmod +x scripts/fly_soak_probe_worker.sh scripts/fly_probe_worker_from_web.sh
+          ./scripts/fly_soak_probe_worker.sh | tee soak-console.log
+
+      - name: Upload soak log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-soak-log-${{ github.run_id }}
+          path: |
+            stage2_soak_*.log
+            soak-console.log
+          if-no-files-found: warn
