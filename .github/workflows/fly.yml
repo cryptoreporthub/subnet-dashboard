@@ -1,8 +1,8 @@
 name: Fly Deploy
 on:
-  push:
-    branches:
-      - main
+  # INCIDENT 2026-08-19: push-to-main disabled until fly.toml + this workflow + contract
+  # tests agree on one topology (v2 deploy at 01:59 UTC caused outage + rollback loop).
+  # Deploy only via workflow_dispatch after explicit review.
   workflow_dispatch:
 jobs:
   deploy-guard:
