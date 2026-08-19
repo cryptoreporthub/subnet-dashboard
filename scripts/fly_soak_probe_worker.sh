@@ -33,9 +33,9 @@ echo "" | tee -a "$LOGFILE"
 if [ -f "$SCRIPT_DIR/fly_enable_worker_v2.sh" ]; then
   # The old broken ordering had "Set WORKER_SPLIT_V2=on" as step 2 (before deploy).
   # The fixed ordering has it as step 6 (after worker proven healthy).
-  # Detect the old pattern: "=== 2." line mentioning WORKER_SPLIT_V2.
+  # Detect the old pattern: "=== 2." line followed by "flyctl secrets set WORKER_SPLIT_V2".
   if grep -qE '=== 2\.' "$SCRIPT_DIR/fly_enable_worker_v2.sh" && \
-     grep -A1 '=== 2\.' "$SCRIPT_DIR/fly_enable_worker_v2.sh" | grep -qi 'WORKER_SPLIT_V2'; then
+     grep -A3 '=== 2\.' "$SCRIPT_DIR/fly_enable_worker_v2.sh" | grep -q 'flyctl secrets set WORKER_SPLIT_V2'; then
     echo "ABORT: fly_enable_worker_v2.sh still has secret-before-deploy ordering." | tee -a "$LOGFILE"
     echo "The enable script must set WORKER_SPLIT_V2=on AFTER worker is proven" | tee -a "$LOGFILE"
     echo "healthy on :8081. Fix the script first." | tee -a "$LOGFILE"
