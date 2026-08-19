@@ -262,6 +262,60 @@ def test_listener_share_page_composition():
     assert bounced.headers.get("location") == "/subnetsummer"
 
 
+def test_listener_page_ssr_parallel_budget(monkeypatch):
+    """Independent listener rollups must not stack sequential 6–8s caps into 60s+ SSR."""
+    import asyncio
+    import time
+
+    import internal.share_pages.routes as routes
+
+    async def _slow_call(fn, default, timeout: float = 6.0):
+        await asyncio.sleep(0.35)
+        name = getattr(fn, "__name__", None)
+        if name == "listener_status":
+            return {"monitored_group": "officialsubnetsummer", "live": False}
+        if name == "outcome_loop_status":
+            return {"running": False, "live": False}
+        if name == "live_stats":
+            return {"ok": True, "total_messages": 0}
+        if callable(fn) and fn is routes._listener_message_payload:
+            return {"messages": [], "meta": {}}
+        return default
+
+    monkeypatch.setattr(routes, "_listener_call", _slow_call)
+    monkeypatch.setenv("LISTENER_PAGE_SSR_BUDGET_SECONDS", "12")
+
+    started = time.perf_counter()
+    ctx = asyncio.run(routes._listener_page_context())
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 4.0, f"listener SSR took {elapsed:.1f}s — expected parallel batches"
+    assert ctx["display_mode"] in ("warming", "live", "archive")
+    assert isinstance(ctx.get("trending"), list)
+
+
+def test_listener_page_ssr_budget_returns_fallback(monkeypatch):
+    import asyncio
+    import time
+
+    import internal.share_pages.routes as routes
+
+    async def _hang_call(fn, default, timeout: float = 6.0):
+        await asyncio.sleep(30)
+        return default
+
+    monkeypatch.setattr(routes, "_listener_call", _hang_call)
+    monkeypatch.setenv("LISTENER_PAGE_SSR_BUDGET_SECONDS", "1")
+
+    started = time.perf_counter()
+    ctx = asyncio.run(routes._listener_page_context())
+    elapsed = time.perf_counter() - started
+
+    assert elapsed < 3.0
+    assert ctx["display_mode"] == "warming"
+    assert ctx["store"]["ok"] is False
+
+
 def test_summers_divergence_mobile_and_keyboard_hooks():
     css = open("static/css/ui.css", encoding="utf-8").read()
     assert ".message-intel__divergence" in css

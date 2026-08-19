@@ -304,6 +304,15 @@ async def wallet_share_page(request: Request, wallet: str):
 # so every block is individually guarded — the page must never 5xx.
 
 
+LISTENER_PAGE_SSR_BUDGET_SECONDS = float(
+    os.environ.get("LISTENER_PAGE_SSR_BUDGET_SECONDS", "15")
+)
+
+
+def _listener_page_ssr_budget_seconds() -> float:
+    return float(os.environ.get("LISTENER_PAGE_SSR_BUDGET_SECONDS", "15"))
+
+
 async def _listener_call(fn, default, timeout: float = 6.0):
     """Run a blocking message-intel engine call off-thread with a hard timeout."""
     try:
@@ -311,6 +320,36 @@ async def _listener_call(fn, default, timeout: float = 6.0):
     except Exception as exc:
         logger.debug("listener page call %s failed: %s", getattr(fn, "__name__", "?"), exc)
         return default
+
+
+def _listener_page_fallback_ctx() -> Dict[str, Any]:
+    """Honest empty shell when SSR exceeds the page budget."""
+    return {
+        "listener": {},
+        "outcomes": {"running": False, "live": False},
+        "store": {"ok": False, "total_messages": 0},
+        "messages": [],
+        "trending": [],
+        "callers": [],
+        "authors": [],
+        "reaction_crowns": [],
+        "topics": [],
+        "divergence": [],
+        "subnet_conviction": [],
+        "conviction_top": [],
+        "summary_text": "",
+        "hourly": [],
+        "recap": {},
+        "feed": [],
+        "mi_messages": [],
+        "graded_count": 0,
+        "high_conviction": 0,
+        "monitored_group": "officialsubnetsummer",
+        "group_connected": False,
+        "display_mode": "warming",
+        "live": False,
+        "last_msg_label": "—",
+    }
 
 
 def _as_list(v, default=None):
@@ -368,14 +407,37 @@ def _listener_caller_board():
 
 
 async def _listener_page_context() -> Dict[str, Any]:
+    budget = _listener_page_ssr_budget_seconds()
+    try:
+        return await asyncio.wait_for(
+            _listener_page_context_body(),
+            timeout=budget,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "listener page SSR exceeded %.0fs budget",
+            budget,
+        )
+        return _listener_page_fallback_ctx()
+
+
+async def _listener_page_context_body() -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
 
+    # ponytail: parallelize independent engine reads — sequential 6–8s caps stacked to 60s+.
+    listener_raw, outcomes_raw, store_raw, message_payload = await asyncio.gather(
+        _listener_call(listener_status, {}),
+        _listener_call(outcome_loop_status, {"running": False, "live": False}),
+        _listener_call(live_stats, {"ok": False, "total_messages": 0}),
+        _listener_call(_listener_message_payload, {}, timeout=8),
+    )
+
     ctx: Dict[str, Any] = {
-        "listener": await _listener_call(listener_status, {}),
-        "outcomes": await _listener_call(outcome_loop_status, {"running": False, "live": False}),
-        "store": await _listener_call(live_stats, {"ok": False, "total_messages": 0}),
+        "listener": listener_raw,
+        "outcomes": outcomes_raw,
+        "store": store_raw,
         "messages": [],
         "trending": [],
         "callers": [],
@@ -393,7 +455,6 @@ async def _listener_page_context() -> Dict[str, Any]:
     # On Fly split_v2 the web machine has no SQLite volume. Use the same
     # worker-backed response as /api/message-intel so the page does not render
     # an honest-but-empty local archive while the live API has messages.
-    message_payload = await _listener_call(_listener_message_payload, {}, timeout=8)
     message_meta = (
         message_payload.get("meta")
         if isinstance(message_payload, dict) and isinstance(message_payload.get("meta"), dict)
@@ -471,16 +532,49 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["feed"] = feed_rows
     ctx["mi_messages"] = [m for m in msgs[:12] if isinstance(m, dict)]
 
-    # Trending and evidence-qualified conviction are separate worker-backed
-    # rollups. On split_v2 the web process may have the feed payload but not
-    # the worker's SQLite volume, so do not rebuild either rollup locally when
-    # the worker can provide it.
-    trend_payload = await _listener_call(
-        lambda: _listener_worker_json(
-            "/api/message-intel/trending-v2?limit=8&rank_hours=1&window_hours=24"
+    # Trending, conviction, callers, etc. are independent worker rollups — fetch together.
+    (
+        trend_payload,
+        conv_payload,
+        callers_payload,
+        authors_payload,
+        topics_payload,
+        div_payload,
+        ci_payload,
+    ) = await asyncio.gather(
+        _listener_call(
+            lambda: _listener_worker_json(
+                "/api/message-intel/trending-v2?limit=8&rank_hours=1&window_hours=24"
+            ),
+            None,
+            timeout=7,
         ),
-        None,
-        timeout=7,
+        _listener_call(
+            lambda: _listener_worker_json("/api/message-intel/subnet-conviction?limit=8"),
+            None,
+            timeout=7,
+        ),
+        _listener_call(
+            lambda: _listener_worker_json("/api/message-intel/callers?days=30&limit=8"),
+            None,
+            timeout=7,
+        ),
+        _listener_call(
+            lambda: _listener_worker_json("/api/message-intel/authors?days=7&limit=5"),
+            None,
+            timeout=7,
+        ),
+        _listener_call(
+            lambda: _listener_worker_json("/api/message-intel/topics?limit=8"),
+            None,
+            timeout=6,
+        ),
+        _listener_call(
+            lambda: _listener_worker_json("/api/message-intel/divergence?days=7&limit=3"),
+            None,
+            timeout=7,
+        ),
+        _listener_call(lambda: _listener_conviction()(refresh=False), None, timeout=6),
     )
     trend_rows = []
     if isinstance(trend_payload, dict):
@@ -521,19 +615,6 @@ async def _listener_page_context() -> Dict[str, Any]:
         except Exception:
             trend_rows = []
 
-    conv_payload = await _listener_call(
-        lambda: _listener_worker_json("/api/message-intel/subnet-conviction?limit=8"),
-        None,
-        timeout=7,
-    )
-    if conv_payload is None:
-        try:
-            engine = _listener_engine()
-            conv_payload = await _listener_call(
-                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
-            )
-        except Exception:
-            pass
     conv_rows = []
     if isinstance(conv_payload, dict):
         conv_rows = _as_list(
@@ -566,15 +647,26 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["trending"] = trending
     ctx["subnet_conviction"] = conv_rows
 
+    if conv_payload is None:
+        try:
+            engine = _listener_engine()
+            conv_payload = await _listener_call(
+                lambda: engine.list_subnet_telegram_conviction(limit=8), None, timeout=6
+            )
+        except Exception:
+            pass
+        if isinstance(conv_payload, dict):
+            conv_rows = _as_list(
+                conv_payload.get("items")
+                or conv_payload.get("rows")
+                or conv_payload.get("subnets")
+                or conv_payload.get("conviction")
+            )
+        elif isinstance(conv_payload, list):
+            conv_rows = conv_payload
+        ctx["subnet_conviction"] = conv_rows
+
     # conviction index top5
-    ci_payload = None
-    try:
-        get_conviction_snapshot = _listener_conviction()
-        ci_payload = await _listener_call(
-            lambda: get_conviction_snapshot(refresh=False), None, timeout=6
-        )
-    except Exception:
-        pass
     ci_top = []
     if isinstance(ci_payload, dict):
         ci_top = _as_list(ci_payload.get("top5"))
@@ -595,11 +687,6 @@ async def _listener_page_context() -> Dict[str, Any]:
             )
 
     # callers — resolved qualifying accuracy only
-    callers_payload = await _listener_call(
-        lambda: _listener_worker_json("/api/message-intel/callers?days=30&limit=8"),
-        None,
-        timeout=7,
-    )
     if callers_payload is None:
         try:
             build_board = _listener_caller_board()
@@ -637,11 +724,6 @@ async def _listener_page_context() -> Dict[str, Any]:
     ctx["callers"] = callers
 
     # authors — weekly champions
-    authors_payload = await _listener_call(
-        lambda: _listener_worker_json("/api/message-intel/authors?days=7&limit=5"),
-        None,
-        timeout=7,
-    )
     if authors_payload is None:
         try:
             engine = _listener_engine()
@@ -687,11 +769,6 @@ async def _listener_page_context() -> Dict[str, Any]:
             ]
 
     # hot topics
-    topics_payload = await _listener_call(
-        lambda: _listener_worker_json("/api/message-intel/topics?limit=8"),
-        None,
-        timeout=6,
-    )
     if topics_payload is None or (
         isinstance(topics_payload, dict)
         and not ("topics" in topics_payload or "rows" in topics_payload)
@@ -736,11 +813,6 @@ async def _listener_page_context() -> Dict[str, Any]:
 
     # Divergence is also worker-owned on split_v2; otherwise the web process
     # can show a live feed while incorrectly rendering an empty story panel.
-    div_payload = await _listener_call(
-        lambda: _listener_worker_json("/api/message-intel/divergence?days=7&limit=3"),
-        None,
-        timeout=7,
-    )
     if div_payload is None:
         try:
             engine = _listener_engine()
