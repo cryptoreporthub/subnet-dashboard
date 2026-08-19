@@ -1,0 +1,38 @@
+# Read-only incident capture — run BEFORE any machine restart.
+# workflow_dispatch only; does not deploy or restart.
+name: Fly incident logs (read-only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  capture:
+    name: Pre-restart logs + secrets + readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Pre-restart capture (do not restart in this job)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          APP=subnet-dashboard
+          echo "=== flyctl secrets list ==="
+          flyctl secrets list -a "$APP" || true
+          echo "=== flyctl machines list ==="
+          flyctl machines list -a "$APP" || true
+          echo "=== flyctl volumes list ==="
+          flyctl volumes list -a "$APP" || true
+          echo "=== worker / sync / boot log lines (last 200 matches) ==="
+          flyctl logs -a "$APP" --no-tail 2>&1 \
+            | grep -iE "inline worker|WORKER_SPLIT|skipping inline|starting inline|worker pid|sync_start|sync_done|heartbeat stale|OOM|killed|loop stall|boot_status" \
+            | tail -200 || true
+          echo "=== public readiness ==="
+          curl -sS --max-time 25 "https://${APP}.fly.dev/api/ops/readiness" | python3 -m json.tool || true
+          echo "=== public data-freshness ==="
+          curl -sS --max-time 25 "https://${APP}.fly.dev/api/data-freshness" | python3 -m json.tool || true
+          echo "=== public health ==="
+          curl -sS --max-time 10 -w "\nHTTP %{http_code} in %{time_total}s\n" "https://${APP}.fly.dev/health" || true
