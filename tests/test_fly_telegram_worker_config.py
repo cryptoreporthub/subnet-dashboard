@@ -177,7 +177,7 @@ def test_fly_stage2_temp_worker_script():
     script = Path("scripts/fly_stage2_temp_worker.sh").read_text(encoding="utf-8")
     assert "flyctl machine run" not in script
     assert "fly.worker-v2-hop.toml" in script
-    assert "--process-group worker" in script
+    assert "--process-groups worker" in script
     hop = Path("fly.worker-v2-hop.toml").read_text(encoding="utf-8")
     assert "[[services]]" in hop
     assert "internal_port = 8081" in hop

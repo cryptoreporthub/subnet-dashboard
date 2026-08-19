@@ -46,7 +46,7 @@ flyctl machines list -a "$APP"
 
 echo ""
 echo "=== deploy worker process group (v2 hop overlay) ==="
-flyctl deploy --config "$CONFIG" --process-group worker -a "$APP" --ha=false
+flyctl deploy --config "$CONFIG" --process-groups worker -a "$APP" --ha=false --yes
 
 echo ""
 echo "=== wait for worker :8081 health ==="
