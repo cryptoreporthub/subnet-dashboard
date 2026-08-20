@@ -204,6 +204,53 @@ def test_fly_stage2_temp_worker_script():
         assert key in hop and key in v2
 
 
+def test_fly_stage2_representative_soak_toml():
+    """Stage 2b representative config: volume + essential, no STAGE2_HOP."""
+    soak = Path("fly.worker-v2-essential-soak.toml").read_text(encoding="utf-8")
+    hop = Path("fly.worker-v2-hop.toml").read_text(encoding="utf-8")
+    assert 'STAGE2_REPRESENTATIVE = "1"' in soak
+    assert 'STAGE2_HOP = "1"' not in soak
+    assert 'WORKER_HEAVY = "essential"' in soak
+    assert 'WORKER_HEAVY = "off"' not in soak
+    assert 'MESSAGE_INTEL_LISTENER = "auto"' in soak
+    assert re.search(r'\[mounts\][\s\S]*processes = \["worker"\]', soak)
+    assert 'STAGE2_HOP = "1"' in hop
+
+
+def test_fly_stage2_representative_scripts_exist():
+    for name in (
+        "fly_stage2_representative_worker.sh",
+        "fly_stage2_representative_rollback.sh",
+        "fly_v1_freshness_gate.sh",
+        "fly_tmp_boot_reaper.sh",
+        "fly_stage2_soak_sample.sh",
+        "tmp_boot_reap_once.py",
+    ):
+        path = Path("scripts") / name
+        assert path.is_file(), f"missing {path}"
+    worker = Path("scripts/fly_stage2_representative_worker.sh").read_text(encoding="utf-8")
+    assert "fly_v1_freshness_gate.sh" in worker
+    assert "fly.worker-v2-essential-soak.toml" in worker
+    assert "flyctl secrets set WORKER_SPLIT_V2=on" not in worker
+    rollback = Path("scripts/fly_stage2_representative_rollback.sh").read_text(encoding="utf-8")
+    assert "fly.toml" in rollback
+
+
+def test_fly_stage2_representative_soak_gha_workflow():
+    yml = Path(".github/workflows/fly-stage2-representative-soak.yml").read_text(encoding="utf-8")
+    assert "soak-representative" in yml
+    assert "fly_soak_probe_worker.sh" in yml
+    assert "fly_v1_freshness_gate.sh" in yml
+    assert "validate_stage2_soak_log.py" in yml
+    assert "SOAK_INSTRUMENT" in yml or "soak_samples" in yml
+
+
+def test_fly_soak_probe_instruments_when_enabled():
+    script = Path("scripts/fly_soak_probe_worker.sh").read_text(encoding="utf-8")
+    assert "fly_stage2_soak_sample.sh" in script
+    assert "SOAK_INSTRUMENT" in script
+
+
 def test_stage2_hop_skips_telegram_despite_secrets(monkeypatch):
     from internal.message_intel import summary_bot
     from internal.run_mode import stage2_hop_mode

@@ -1,0 +1,138 @@
+# Stage 2b representative soak — real worker load, NOT hop decoy.
+#
+# Diff vs fly.worker-v2-hop.toml:
+#   - data_volume on worker (same as Stage 3 cutover topology)
+#   - STAGE2_HOP unset — real background schedulers run
+#   - WORKER_HEAVY=essential (explicit; never full on 2GB — see stage2-representative-soak-lock.md)
+#   - MESSAGE_INTEL_LISTENER=auto + TELEGRAM_SUMMARY_BOT=on (Fly secrets apply)
+#
+# Diff vs Stage 3 cutover:
+#   - WORKER_SPLIT_V2 stays off — web does NOT proxy volume APIs yet
+#   - ENABLE_INLINE_WORKER=0 — web skips inline worker (matches v2 web config)
+#
+# Deploy: scripts/fly_stage2_representative_worker.sh
+# Rollback: scripts/fly_stage2_representative_rollback.sh
+
+app = "subnet-dashboard"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[processes]
+  web = "sh ./scripts/fly_web_entrypoint.sh"
+  worker = "sh ./scripts/fly_worker_entrypoint.sh"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  processes = ["web"]
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "60s"
+    interval = "30s"
+    method = "GET"
+    path = "/health"
+    timeout = "10s"
+
+[env]
+  RUN_MODE = "web"
+  STAGE2_REPRESENTATIVE = "1"
+  BACKGROUND_ON_WEB = "off"
+  INLINE_WORKER = "0"
+  ENABLE_INLINE_WORKER = "0"
+  WORKER_SPLIT_V2 = "off"
+  # Decision: essential only. full wedges 2GB VM (#517/#520); cutover uses essential.
+  WORKER_HEAVY = "essential"
+  LIVE_SUBNETS_BOOT_IMMEDIATE = "off"
+  LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS = "120"
+  LIVE_SUBNETS_FETCH_MODE = "lite"
+  MESSAGE_INTEL_LISTENER = "auto"
+  TELEGRAM_SUMMARY_BOT = "on"
+  RESOLVER_REFRESH_MINUTES = "15"
+  RESOLVER_BOOT_IMMEDIATE = "off"
+  BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
+  SUBNETS_LOAD_TIMEOUT_SECONDS = "6"
+  HYDRATE_SUBNETS_TIMEOUT_SECONDS = "4"
+  BOOT_DEFER_SECONDS = "45"
+  MAX_IN_FLIGHT_REQUESTS = "12"
+  LOAD_SHED_ACQUIRE_SECONDS = "2"
+  HOMEPAGE_BUILD_TIMEOUT = "8"
+  HOMEPAGE_SHELL_CACHE_SECONDS = "60"
+  SCORE_CACHE_TTL = "120"
+  SHORTLIST_CACHE_SECONDS = "180"
+  PICK_HANDLER_TIMEOUT_SECONDS = "8"
+  HOUR_PICK_CACHE_SECONDS = "60"
+  PUMP_ALERTS_CACHE_SECONDS = "60"
+  BRAIN_LETTER_TIMEOUT_SECONDS = "8"
+  BRAIN_LETTER_CACHE_SECONDS = "60"
+  ENABLE_METRICS = "1"
+  CONTENT_SECURITY_POLICY_ENFORCE = "1"
+  CALIBRATION_AUTO_RETRAIN = "off"
+  SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
+  SCORING_CAP_MEGA_CEILING_RANK = "10"
+  SCORING_CAP_MID_RANK_MIN = "11"
+  SCORING_CAP_MID_RANK_MAX = "75"
+  CONVICTION_ALERTS_ENABLED = "off"
+  PUMP_LADDER_REFRESH_MINUTES = "20"
+  PUMP_LADDER_STALE_MINUTES = "12"
+  PUMP_LADDER_BOOT_IMMEDIATE = "off"
+  PUMP_LADDER_INLINE_DEFER_SECONDS = "120"
+  PUMP_LADDER_INLINE_SCHEDULER = "on"
+  DAILY_PICK_PUBLISH_GATE = "0.40"
+  RED_TEAM_MAX_HAIRCUT = "0.12"
+  PICK_AUDIT_ENABLED = "on"
+  PICK_AUDIT_SLOT_UTC_HOUR = "23"
+  PICK_AUDIT_SLOT_UTC_MINUTE = "45"
+  PUMP_DESK_SNAPSHOT_ENABLED = "on"
+  PUMP_DESK_SNAPSHOT_MINUTES = "15"
+  OUTCOME_SNAPSHOT_ENABLED = "on"
+  OUTCOME_SNAPSHOT_UTC_HOUR = "4"
+  OUTCOME_SNAPSHOT_UTC_MINUTE = "50"
+  OUTCOME_SNAPSHOT_INTERVAL_HOURS = "6"
+  WHALE_LEDGER_WARM_INTERVAL_MINUTES = "20"
+  ALLOWED_ORIGINS = "https://subnet-dashboard.fly.dev,https://dashboard.cryptoreporthub.com,https://cryptoreporthub.com"
+  WORKER_HTTP_PORT = "8081"
+  WORKER_PROXY_TIMEOUT_SECONDS = "4"
+  WORKER_PROXY_CONNECT_SECONDS = "3"
+  WORKER_PEER_TIMEOUT_SECONDS = "4"
+  WORKER_PROXY_CIRCUIT_OPEN_SECONDS = "30"
+  WORKER_PROXY_MINDMAP_TIMEOUT_SECONDS = "4"
+
+[mounts]
+  source = "data_volume"
+  destination = "/app/data"
+  processes = ["worker"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+  processes = ["web"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "2gb"
+  processes = ["worker"]
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8081
+  processes = ["worker"]
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8081
+    handlers = ["http"]
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "30s"
+    method = "GET"
+    path = "/health"

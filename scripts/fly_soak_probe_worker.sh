@@ -104,6 +104,11 @@ for i in $(seq 1 "$total_probes"); do
   echo "[$ts] machine state:" | tee -a "$LOGFILE"
   log_machine_state "$WEB_ID" | tee -a "$LOGFILE"
 
+  if [ "${SOAK_INSTRUMENT:-1}" != "0" ] && [ -x "$SCRIPT_DIR/fly_stage2_soak_sample.sh" ]; then
+    SOAK_PROBE_N="$i" SOAK_SAMPLES_LOG="${SOAK_SAMPLES_LOG:-soak_samples.jsonl}" \
+      FLY_APP="$APP" "$SCRIPT_DIR/fly_stage2_soak_sample.sh" 2>&1 | tee -a "$LOGFILE" || true
+  fi
+
   probe_out="$(mktemp)"
   set +e
   FLY_APP="$APP" "$SCRIPT_DIR/fly_probe_worker_from_web.sh" > "$probe_out" 2>&1
