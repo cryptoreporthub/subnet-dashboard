@@ -185,11 +185,13 @@ def _resolved_receipts(rows: List[Dict[str, Any]], now: datetime) -> List[Dict[s
     return receipts
 
 
-def calibration_health(*, db=None, now: Optional[datetime] = None) -> Dict[str, Any]:
+def calibration_health(
+    *, db=None, now: Optional[datetime] = None, conviction_rows: Optional[List[Dict[str, Any]]] = None
+) -> Dict[str, Any]:
     """Return reproducible outcome health and all activation/withhold reasons."""
     now = now or datetime.now(timezone.utc)
     cfg = _config()
-    rows = _conviction_rows(db)
+    rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
     receipts = _resolved_receipts(rows, now)
     scored = [r for r in receipts if r["_proof"]["status"] in {"hit", "miss"}]
     fresh_cutoff = now - timedelta(days=cfg["max_age_days"])
@@ -233,9 +235,16 @@ def calibration_health(*, db=None, now: Optional[datetime] = None) -> Dict[str, 
     }
 
 
-def calibration_for_subnet(netuid: Any, *, db=None, now: Optional[datetime] = None) -> Dict[str, Any]:
+def calibration_for_subnet(
+    netuid: Any,
+    *,
+    db=None,
+    now: Optional[datetime] = None,
+    conviction_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """Return an additive, bounded score adjustment for one subnet's current calls."""
-    health = calibration_health(db=db, now=now)
+    rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
+    health = calibration_health(db=db, now=now, conviction_rows=rows)
     now = now or datetime.now(timezone.utc)
     cfg = _config()
     try:
@@ -244,7 +253,7 @@ def calibration_for_subnet(netuid: Any, *, db=None, now: Optional[datetime] = No
         return {**health, "applied": False, "adjustment_points": 0.0, "current_evidence": None}
     cutoff = now - timedelta(hours=cfg["current_window_hours"])
     current = []
-    for row in _conviction_rows(db):
+    for row in rows:
         proof = classify_call(row)
         timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
         if not proof["eligible"] or timestamp is None or timestamp < cutoff:

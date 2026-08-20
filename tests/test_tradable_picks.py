@@ -87,3 +87,15 @@ def test_select_daily_pick_empty_after_root_only():
     pick = select_daily_pick([_sample(netuid=0, name="Root")])
     assert pick["subnet"] is None
     assert pick["final_confidence"] == 0.0
+
+
+def test_select_daily_pick_loads_conviction_rows_once(monkeypatch):
+    calls = {"n": 0}
+
+    def _counting_rows(db=None):
+        calls["n"] += 1
+        return []
+
+    monkeypatch.setattr("internal.message_intel.rollup._conviction_rows", _counting_rows)
+    select_daily_pick([_sample(netuid=1), _sample(netuid=2)], {})
+    assert calls["n"] == 1
