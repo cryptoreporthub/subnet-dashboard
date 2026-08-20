@@ -410,6 +410,13 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         return
 
     try:
+        from internal.tmp_boot_reaper import maybe_reap_at_boot
+
+        maybe_reap_at_boot()
+    except Exception as exc:
+        logger.debug("tmp boot reaper skipped: %s", exc)
+
+    try:
         from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
 
         apply_resolver_semantics_patch()
