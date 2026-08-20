@@ -16,12 +16,30 @@ Python cannot kill abandoned threads. On timeout, the scheduler **logically** ab
 
 ---
 
+## Pre-merge / pre-deploy: isolate this from Stage 2/3
+
+PR #1008 also carries Stage 2b scaffolding (representative soak toml, scripts, GHA workflow). **None of that runs because you merged.** Verify before merge + before triggering deploy:
+
+| Check | Expected |
+|-------|----------|
+| **Auto-deploy on merge?** | **No.** `.github/workflows/fly.yml` is `workflow_dispatch` only (push-to-main disabled since 2026-08-19 incident). Merging lands code in git; prod changes only when someone manually runs **Fly Deploy**. |
+| **Stage 2 soak workflow** | **Manual only.** `.github/workflows/fly-stage2-representative-soak.yml` requires `workflow_dispatch` + `confirm=soak-representative`. Will not fire on merge. |
+| **Deploy config used** | **`fly.toml` only** (`flyctl deploy --config fly.toml`). Does **not** deploy `fly.worker-v2-essential-soak.toml`. |
+| **Process topology after deploy** | Workflow enforces **v1 inline**: `web=1`, `worker=0`, clears `WORKER_SPLIT_V2` / `WORKER_INTERNAL_URL` secrets. |
+| **Scripts that must NOT be run tonight** | `scripts/fly_stage2_representative_worker.sh`, `fly_stage2_representative_rollback.sh`, Stage 3 cutover scripts. |
+| **Co-shipped but passive (OK on v1 deploy)** | Pick scheduler fix + conviction-row cache (the reason to ship). `internal/tmp_boot_reaper.py` boot hook (volume `.tmp` cleanup — runs once at boot, unrelated to soak). `fly.toml` `shared-cpu-2x` (already applied manually; deploy reaffirms). Stage 2 scripts/toml sit in repo **dormant**. |
+
+**Deploy action tonight = one manual Fly Deploy workflow run.** That ships the scheduler fix to v1 prod. It does **not** start representative soak or Stage 3 cutover.
+
+---
+
 ## Deploy steps
 
-1. Merge PR #1008 to `main` (Fly deploy-on-push runs Deploy Guard + deploy).
-2. Confirm deploy completes (`flyctl releases list -a subnet-dashboard` or GitHub Actions fly workflow).
-3. **Do not** run Stage 2 representative soak or Stage 3 cutover scripts.
-4. Start the watch window below **before** declaring success.
+1. Merge PR #1008 to `main`.
+2. Manually trigger **Fly Deploy** workflow (GitHub Actions → Fly Deploy → Run workflow). Do **not** trigger Fly Stage 2 representative soak.
+3. Confirm deploy completes (`flyctl releases list -a subnet-dashboard` or workflow green).
+4. **Do not** run Stage 2 representative soak or Stage 3 cutover scripts.
+5. Start the watch window below **before** declaring success.
 
 ---
 
@@ -165,11 +183,12 @@ Re-run the 45 min watch after rollback to confirm state.
 
 ## Quick checklist
 
-- [ ] PR #1008 merged; Fly deploy green
+- [ ] **Deploy isolation confirmed:** merge ≠ deploy; Fly Deploy uses `fly.toml` only; no Stage 2/3 scripts/workflows triggered
+- [ ] PR #1008 merged; **Fly Deploy** workflow manually triggered and green
 - [ ] Poll learning-health every 5 min for **≥ 45 min**
 - [ ] Confirm `last_run_at` advanced **≥ 2 times**
 - [ ] Confirm errors are explicit (timeout/hold/success), not silence
-- [ ] Note timeout frequency (rare vs every cycle)
+- [ ] Note timeout frequency (rare vs every cycle) — separates correctness fixed vs problem solved
 - [ ] Confirm logs say `worker abandoned`, not `worker left running`
-- [ ] Run `./scripts/fly_v1_freshness_gate.sh` only after watch log saved
+- [ ] Run `./scripts/fly_v1_freshness_gate.sh` only after watch log saved **and** both bars met (advancing timestamps + timeouts rare)
 - [ ] Stage 2/3 stay blocked until gate green
