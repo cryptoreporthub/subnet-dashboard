@@ -231,10 +231,11 @@ async def _lifespan(app: FastAPI):
 
     if is_worker_mode():
         if stage2_hop_mode():
-            from internal.worker_heartbeat import touch_heartbeat
+            from internal.worker_heartbeat import start_heartbeat_thread, touch_heartbeat
 
             touch_heartbeat()
-            logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat only")
+            start_heartbeat_thread()
+            logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat thread")
             yield
             return
 

@@ -218,6 +218,13 @@ def test_fly_probe_requires_flycast_ok():
     assert ".flycast:" in script
     assert "/health" in script
     assert "/api/ops/worker-peer" in script
+    assert "worker_peer.alive is not true" in script
+
+
+def test_probe_worker_peer_once_requires_alive_true():
+    script = Path("scripts/probe_worker_peer_once.py").read_text(encoding="utf-8")
+    assert "worker_peer.alive" in script
+    assert "alive is not True" in script or "alive={alive" in script
 
 
 def test_fly_v2_cutover_gate_script_exists():

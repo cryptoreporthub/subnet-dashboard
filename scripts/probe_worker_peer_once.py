@@ -38,6 +38,16 @@ def main() -> int:
                     r = client.get(url, headers={"X-Worker-Proxy": "1"})
                 print(f"OK {r.status_code} {url} {r.text[:200]!r}")
                 if r.status_code == 200:
+                    if path == "/api/ops/worker-peer":
+                        try:
+                            body = r.json()
+                            alive = (body.get("worker_peer") or {}).get("alive")
+                            if alive is not True:
+                                print(f"ERR {url} worker_peer.alive={alive!r} (expected true)")
+                                continue
+                        except Exception as exc:
+                            print(f"ERR {url} worker_peer JSON parse: {exc}")
+                            continue
                     ok += 1
             except Exception as exc:
                 print(f"ERR {url} {exc}")
