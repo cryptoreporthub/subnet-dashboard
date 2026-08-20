@@ -52,7 +52,7 @@ def test_fly_toml_v1_inline_topology():
 def test_fly_toml_web_vm_shared_cpu():
     fly = _fly_toml()
     assert re.search(
-        r'\[\[vm\]\][\s\S]*size = "shared-cpu-1x"[\s\S]*memory = "2gb"[\s\S]*processes = \["web"\]',
+        r'\[\[vm\]\][\s\S]*size = "shared-cpu-2x"[\s\S]*memory = "2gb"[\s\S]*processes = \["web"\]',
         fly,
     )
 
