@@ -25,6 +25,8 @@ Stage 2 soak #5 (`STAGE2_HOP=1`, no volume, `WORKER_HEAVY=off`, schedulers skipp
 ./scripts/fly_v1_freshness_gate.sh
 ```
 
+**Read the output, not just exit code.** A green gate rules out the buried “v1 baseline capacity” concern from the alive-flip report. A fail (degraded learning-health, daily-pick 90s timeout, resolver not running, `subnet_sync_last_ok=0`, live_subnets boot timeout) is a **live prod problem** — fix or recover v1 before representative soak or Stage 3. Do not treat fail as “expected, move on.”
+
 Do not start representative soak or Stage 3 while v1 shows stale freshness / missed scheduler ticks.
 
 ### 1. tmp boot reaper (volume orphans)

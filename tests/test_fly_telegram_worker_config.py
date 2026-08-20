@@ -245,6 +245,15 @@ def test_fly_stage2_representative_soak_gha_workflow():
     assert "SOAK_INSTRUMENT" in yml or "soak_samples" in yml
 
 
+def test_fly_v1_freshness_gate_strict():
+    script = Path("scripts/fly_v1_freshness_gate.sh").read_text(encoding="utf-8")
+    assert "learning-health is" in script or "status not in" in script
+    assert "degraded" in script
+    assert "daily pick scheduler timeout" in script or "timed out" in script
+    assert "subnet_sync_last_ok=0" in script
+    assert "MAX_LEARNING_HEALTH_LATENCY_SECONDS" in script
+
+
 def test_fly_soak_probe_instruments_when_enabled():
     script = Path("scripts/fly_soak_probe_worker.sh").read_text(encoding="utf-8")
     assert "fly_stage2_soak_sample.sh" in script
