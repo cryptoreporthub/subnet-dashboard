@@ -189,29 +189,50 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     assert "timed out" in str(result.get("error") or holds[0])
 
 
-def test_daily_tick_skips_when_previous_work_is_still_running(monkeypatch):
-    release = threading.Event()
-    worker = threading.Thread(target=release.wait, daemon=True)
-    worker.start()
+def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
+    """After timeout, the next tick must start fresh work — not skip forever."""
+    pick_scheduler.stop_pick_schedulers()
+    calls = {"n": 0}
+    second_started = threading.Event()
 
+    def _slow_then_fast(subnets, market_context=None, force=False):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            import time
+
+            time.sleep(12)
+            return {"action": "HOLD", "date": "2026-08-03", "pick": None}
+        second_started.set()
+        return {"action": "HOLD", "date": "2026-08-03", "pick": None}
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _slow_then_fast,
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "scheduler_hold": True,
+        },
+    )
     monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
-    monkeypatch.setattr(
-        "internal.council.daily_pick_engine.write_scheduler_hold",
-        lambda reason: {"action": "HOLD", "date": "2026-08-03"},
-    )
     monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
     sched._running = True
-    sched._work_thread = worker
-    result = sched._tick(reschedule=False)
+    first = sched._tick(reschedule=False)
+    assert "timed out" in str(first.get("error") or "")
 
-    release.set()
-    worker.join(timeout=2)
-    assert result["error"] == "daily pick tick skipped; previous worker still running"
+    second = sched._tick(reschedule=False)
+    assert calls["n"] >= 2
+    assert second_started.wait(timeout=2)
+    assert "skipped" not in str(second.get("error") or "").lower()
 
 
 def test_seconds_until_next_daily_tick_branches():

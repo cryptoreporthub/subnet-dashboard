@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -209,7 +210,9 @@ class DailyPickScheduler:
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
         self._work_lock = threading.Lock()
-        self._work_thread: Optional[threading.Thread] = None
+        # ponytail: timeout abandons in-flight work via generation bump; orphan
+        # threads may still finish in the background but cannot commit results.
+        self._work_generation = 0
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
@@ -252,34 +255,29 @@ class DailyPickScheduler:
             ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
-            done = threading.Event()
-            error: Dict[str, BaseException] = {}
-
-            def _run_pick() -> None:
-                nonlocal payload
-                try:
-                    payload = get_or_create_today_pick(subnets, ctx, False)
-                except BaseException as exc:
-                    error["exc"] = exc
-                finally:
-                    done.set()
-
             with self._work_lock:
-                active = self._work_thread is not None and self._work_thread.is_alive()
-                if active:
-                    result["error"] = "daily pick tick skipped; previous worker still running"
-                else:
-                    self._work_thread = threading.Thread(
-                        target=_run_pick, daemon=True, name="daily-pick-work"
-                    )
-                    self._work_thread.start()
-            if active:
-                logger.warning("%s", result["error"])
-            elif not done.wait(timeout):
+                self._work_generation += 1
+                tick_generation = self._work_generation
+
+            pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
+
+            def _run_pick() -> Optional[Dict[str, Any]]:
+                out = get_or_create_today_pick(subnets, ctx, False)
+                with self._work_lock:
+                    if tick_generation != self._work_generation:
+                        return None
+                return out
+
+            try:
+                fut = pool.submit(_run_pick)
+                payload = fut.result(timeout=timeout)
+            except FuturesTimeoutError:
+                with self._work_lock:
+                    self._work_generation += 1
                 result["error"] = f"daily pick tick timed out after {timeout}s"
-                logger.warning("%s (worker left running)", result["error"])
-            elif "exc" in error:
-                raise error["exc"]
+                logger.warning("%s (worker abandoned)", result["error"])
+            finally:
+                pool.shutdown(wait=False, cancel_futures=True)
             if isinstance(payload, dict):
                 result["ok"] = True
                 result["action"] = payload.get("action")

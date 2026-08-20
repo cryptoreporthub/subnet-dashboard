@@ -1870,7 +1870,11 @@ def score_subnet_for_day(
         # and is default-off until operators explicitly enable it.
         from internal.message_intel.calibration import calibration_for_subnet
 
-        telegram_calibration = calibration_for_subnet(sn.get("netuid") or sn.get("id"))
+        conviction_rows = (market_context or {}).get("telegram_conviction_rows")
+        telegram_calibration = calibration_for_subnet(
+            sn.get("netuid") or sn.get("id"),
+            conviction_rows=conviction_rows,
+        )
         total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
     except Exception:
         telegram_calibration = {
