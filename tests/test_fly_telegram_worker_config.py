@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 
@@ -236,6 +238,50 @@ def test_fly_v2_cutover_gate_script_exists():
     assert "skipping inline worker" in script
     assert "GATE FAIL" in script
     assert "ROLLBACK" in script or "rollback" in script
+
+
+def _run_web_entrypoint_skip_only(env: dict[str, str]) -> str:
+    """Run only _start_inline_worker from fly_web_entrypoint.sh (no supervise/uvicorn)."""
+    src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    # Drop supervise (infinite loop when ENABLE=1) and uvicorn exec.
+    marker = "_start_inline_worker\n_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
+    assert marker in src, "entrypoint tail changed — update this test"
+    stub = src.replace(
+        marker,
+        '_start_inline_worker\necho "entrypoint stub exit"\nexit 0\n',
+    )
+    merged = dict(os.environ)
+    merged["ENABLE_INLINE_WORKER"] = "1"
+    merged["WORKER_SPLIT_V2"] = "off"
+    merged.update(env)
+    proc = subprocess.run(
+        ["sh", "-s"],
+        input=stub,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=merged,
+        check=False,
+    )
+    assert proc.returncode == 0, f"stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    return proc.stdout
+
+
+def test_web_entrypoint_logs_skip_under_v2_enable_inline_off():
+    """Stage 3 fly.worker-v2.toml sets ENABLE_INLINE_WORKER=0; gate needs this log."""
+    out = _run_web_entrypoint_skip_only(
+        {"ENABLE_INLINE_WORKER": "0", "WORKER_SPLIT_V2": "off"}
+    )
+    assert "skipping inline worker" in out.lower()
+    assert "starting inline" not in out.lower()
+
+
+def test_web_entrypoint_logs_skip_when_split_v2_on():
+    out = _run_web_entrypoint_skip_only(
+        {"ENABLE_INLINE_WORKER": "1", "WORKER_SPLIT_V2": "on"}
+    )
+    assert "skipping inline worker" in out.lower()
+    assert "starting inline" not in out.lower()
 
 
 # --- Utility scripts ---

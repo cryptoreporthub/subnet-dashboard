@@ -8,8 +8,14 @@ set -eu
 INLINE_WORKER_PIDFILE="${INLINE_WORKER_PIDFILE:-/tmp/inline_worker.pid}"
 
 _start_inline_worker() {
+  # Both skip paths MUST log "skipping inline worker" — Stage 3 gate check 7
+  # greps that substring. fly.worker-v2.toml sets ENABLE_INLINE_WORKER=0, so
+  # this branch runs before WORKER_SPLIT_V2 and used to return silently.
   case "${ENABLE_INLINE_WORKER:-1}" in
-    0|false|no|off) return 0 ;;
+    0|false|no|off)
+      echo "ENABLE_INLINE_WORKER=${ENABLE_INLINE_WORKER} — skipping inline worker (v2 web config)"
+      return 0
+      ;;
   esac
   case "${WORKER_SPLIT_V2:-0}" in
     1|true|yes|on)
