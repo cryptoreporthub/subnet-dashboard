@@ -46,7 +46,7 @@ flyctl machines list -a "$APP"
 
 echo ""
 echo "=== deploy worker process group (v2 hop overlay) ==="
-flyctl deploy --config "$CONFIG" --process-group worker -a "$APP" --ha=false
+flyctl deploy --config "$CONFIG" --process-groups worker -a "$APP" --ha=false
 
 echo ""
 echo "=== wait for worker :8081 health ==="
@@ -73,4 +73,4 @@ echo "=== machines after ==="
 flyctl machines list -a "$APP"
 echo ""
 echo "Temp worker ready. Run Stage 2 soak via GHA workflow 'Fly Stage 2 soak (hop proof)'"
-echo "(workflow_dispatch, confirm=soak, timeout-minutes: 240)."
+echo "(workflow_dispatch, confirm=soak; job timeout-minutes: 259 per run 32306510707 math)."

@@ -225,10 +225,19 @@ async def _lifespan(app: FastAPI):
         background_boot_allowed,
         background_on_web,
         is_worker_mode,
+        stage2_hop_mode,
         worker_heavy_feeds_enabled,
     )
 
     if is_worker_mode():
+        if stage2_hop_mode():
+            from internal.worker_heartbeat import touch_heartbeat
+
+            touch_heartbeat()
+            logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat only")
+            yield
+            return
+
         if background_boot_allowed():
             from internal.background_boot import start_background_workers, stop_background_workers
             from internal.worker_heartbeat import touch_heartbeat

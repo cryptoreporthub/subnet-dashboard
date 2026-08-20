@@ -167,7 +167,8 @@ def test_fly_stage2_soak_gha_workflow():
     """Stage 2 soak must run on GHA workflow_dispatch with 4h timeout."""
     yml = Path(".github/workflows/fly-stage2-soak.yml").read_text(encoding="utf-8")
     assert "workflow_dispatch:" in yml
-    assert "timeout-minutes: 240" in yml
+    assert "timeout-minutes: 259" in yml
+    assert "243.7" in yml or "32306510707" in yml
     assert "fly_soak_probe_worker.sh" in yml
     assert "confirm == 'soak'" in yml
 
@@ -177,11 +178,38 @@ def test_fly_stage2_temp_worker_script():
     script = Path("scripts/fly_stage2_temp_worker.sh").read_text(encoding="utf-8")
     assert "flyctl machine run" not in script
     assert "fly.worker-v2-hop.toml" in script
-    assert "--process-group worker" in script
+    assert "--process-groups worker" in script
     hop = Path("fly.worker-v2-hop.toml").read_text(encoding="utf-8")
     assert "[[services]]" in hop
     assert "internal_port = 8081" in hop
+    assert 'STAGE2_HOP = "1"' in hop
     assert re.search(r"^\[mounts\]", hop, re.MULTILINE) is None
+    # Networking block must match fly.worker-v2.toml (background env may differ).
+    v2 = Path("fly.worker-v2.toml").read_text(encoding="utf-8")
+    svc = '[[services]]\n  protocol = "tcp"\n  internal_port = 8081'
+    assert hop.count(svc) == 1 and v2.count(svc) == 1
+    for key in (
+        'auto_stop_machines = "off"',
+        "auto_start_machines = true",
+        "min_machines_running = 1",
+        "port = 8081",
+        'handlers = ["http"]',
+        'interval = "30s"',
+        'timeout = "5s"',
+        'grace_period = "30s"',
+        'path = "/health"',
+    ):
+        assert key in hop and key in v2
+
+
+def test_stage2_hop_skips_telegram_despite_secrets(monkeypatch):
+    from internal.message_intel import summary_bot
+    from internal.run_mode import stage2_hop_mode
+
+    monkeypatch.setenv("STAGE2_HOP", "1")
+    monkeypatch.setenv("TELEGRAM_SUMMARY_BOT", "on")
+    assert stage2_hop_mode() is True
+    assert summary_bot.summary_bot_enabled() is False
 
 
 def test_fly_probe_requires_flycast_ok():

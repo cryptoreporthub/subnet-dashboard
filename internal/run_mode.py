@@ -42,6 +42,11 @@ def split_worker_v2_enabled() -> bool:
     return os.environ.get("WORKER_SPLIT_V2", "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def stage2_hop_mode() -> bool:
+    """Stage 2 temp worker — flycast hop proof only; skips background schedulers."""
+    return os.environ.get("STAGE2_HOP", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def worker_mode_label() -> str:
     """web | worker | split | combined — for /api/ops/readiness."""
     if is_worker_mode():
