@@ -403,6 +403,12 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     * **heavy** (worker or ``BACKGROUND_ON_WEB=on``): also live subnets and feed
       warmup on top of essential.
     """
+    from internal.run_mode import stage2_hop_mode
+
+    if stage2_hop_mode():
+        logger.info("Stage 2 hop worker — background schedulers skipped (flycast proof only)")
+        return
+
     try:
         from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
 

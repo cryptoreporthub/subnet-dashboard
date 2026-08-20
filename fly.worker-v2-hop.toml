@@ -3,6 +3,10 @@
 # Canon routing config lives in fly.worker-v2.toml; this file drops [mounts] so
 # prod volume stays on web during hop proof.
 #
+# STAGE2_HOP=1 skips background schedulers on the temp worker (Fly app secrets
+# would otherwise override TELEGRAM_* / MESSAGE_INTEL off). Networking block is
+# byte-identical to fly.worker-v2.toml [[services]].
+#
 # Deploy: scripts/fly_stage2_temp_worker.sh
 
 app = "subnet-dashboard"
@@ -16,11 +20,12 @@ primary_region = "sjc"
 
 [env]
   RUN_MODE = "worker"
+  STAGE2_HOP = "1"
   BACKGROUND_ON_WEB = "off"
   INLINE_WORKER = "0"
   ENABLE_INLINE_WORKER = "0"
   WORKER_SPLIT_V2 = "off"
-  WORKER_HEAVY = "essential"
+  WORKER_HEAVY = "off"
   MESSAGE_INTEL_LISTENER = "off"
   TELEGRAM_SUMMARY_BOT = "off"
   WORKER_HTTP_PORT = "8081"

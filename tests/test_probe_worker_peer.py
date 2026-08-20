@@ -22,3 +22,16 @@ def test_probe_url_private_ip():
     assert probe_url("http://[fdaa::1]:8081", "subnet-dashboard", "8081") == (
         "http://[fdaa::1]:8081/api/ops/worker-peer"
     )
+
+
+def test_stage2_hop_heartbeat_thread_stays_alive(monkeypatch, tmp_path):
+    import time
+
+    from internal.worker_heartbeat import is_alive, start_heartbeat_thread, touch_heartbeat
+
+    hb = tmp_path / "hb.json"
+    monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(hb))
+    touch_heartbeat()
+    start_heartbeat_thread(interval_seconds=1)
+    time.sleep(2.5)
+    assert is_alive(max_age_seconds=2) is True

@@ -26,6 +26,10 @@ _ENABLED = frozenset({"1", "true", "yes", "on"})
 
 
 def summary_bot_enabled() -> bool:
+    from internal.run_mode import stage2_hop_mode
+
+    if stage2_hop_mode():
+        return False
     return os.environ.get("TELEGRAM_SUMMARY_BOT", "off").strip().lower() in _ENABLED
 
 

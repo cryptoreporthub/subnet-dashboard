@@ -50,3 +50,7 @@ if ! grep -qE "OK 200 http://${APP}\\.flycast:${PORT}/api/ops/worker-peer" "$pro
   echo "fly_probe_worker_from_web: flycast /api/ops/worker-peer not OK 200"
   exit 1
 fi
+if ! grep -qE '"alive"[[:space:]]*:[[:space:]]*true' "$probe_out"; then
+  echo "fly_probe_worker_from_web: worker_peer.alive is not true (Stage 3 gate requires fresh heartbeat)"
+  exit 1
+fi

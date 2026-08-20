@@ -23,7 +23,8 @@ jobs:
   stage2-soak:
     name: Stage 2 web→worker soak
     runs-on: ubuntu-latest
-    timeout-minutes: 240
+    # Run 32306510707: 48×5min probes ≈ 243.7 min wall + setup; +15 min buffer → 259
+    timeout-minutes: 259
     if: github.event.inputs.confirm == 'soak'
     steps:
       - uses: actions/checkout@v4

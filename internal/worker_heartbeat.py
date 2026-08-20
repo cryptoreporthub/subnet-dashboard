@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 
 def _path() -> str:
@@ -44,3 +49,17 @@ def is_alive(*, max_age_seconds: int = 120) -> bool:
         return age <= max_age_seconds
     except Exception:
         return False
+
+
+def start_heartbeat_thread(*, interval_seconds: int = 30) -> None:
+    """Periodic heartbeat for worker modes without a background scheduler (Stage 2 hop)."""
+
+    def _beat() -> None:
+        while True:
+            time.sleep(interval_seconds)
+            try:
+                touch_heartbeat()
+            except Exception as exc:
+                logger.debug("heartbeat tick failed: %s", exc)
+
+    threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()

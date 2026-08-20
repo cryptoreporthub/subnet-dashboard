@@ -3,14 +3,12 @@
 # ponytail: single uvicorn process; lifespan starts background workers + live_subnets sync.
 set -eu
 
-# Dedicated worker: essential heavy feeds + deferred boot so :8081 stays responsive.
-DEDICATED_WORKER_HEAVY=essential
 DEDICATED_BOOT_IMMEDIATE="${LIVE_SUBNETS_BOOT_IMMEDIATE:-off}"
 
 PORT="${WORKER_HTTP_PORT:-8081}"
-echo "starting dedicated worker HTTP on :${PORT} (WORKER_HEAVY=${DEDICATED_WORKER_HEAVY}, LIVE_SUBNETS_BOOT_IMMEDIATE=${DEDICATED_BOOT_IMMEDIATE})..."
+echo "starting dedicated worker HTTP on :${PORT} (WORKER_HEAVY=${WORKER_HEAVY:-essential}, LIVE_SUBNETS_BOOT_IMMEDIATE=${DEDICATED_BOOT_IMMEDIATE})..."
 exec env RUN_MODE=worker \
-  WORKER_HEAVY="${DEDICATED_WORKER_HEAVY}" \
+  WORKER_HEAVY="${WORKER_HEAVY:-essential}" \
   LIVE_SUBNETS_BOOT_IMMEDIATE="${DEDICATED_BOOT_IMMEDIATE}" \
   PUMP_LADDER_BOOT_IMMEDIATE="${PUMP_LADDER_BOOT_IMMEDIATE:-off}" \
   LIVE_SUBNETS_FETCH_MODE="${LIVE_SUBNETS_FETCH_MODE:-lite}" \
