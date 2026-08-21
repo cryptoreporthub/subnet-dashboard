@@ -6,8 +6,15 @@ App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `s
 
 ### Deploy
 
+Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (`workflow_dispatch`; not push-to-main). That workflow **must** scale `web=1 worker=0` after deploy and fail if a dedicated worker machine remains.
+
+Manual v1 deploy — `worker=0` is **required**, not optional. Removing `worker` from `fly.toml` does not delete a leftover Fly worker process group:
+
 ```bash
-flyctl deploy --app subnet-dashboard --remote-only --regions sjc --ha=false
+flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false
+flyctl scale count web=1 --app subnet-dashboard --yes
+flyctl scale count worker=0 --app subnet-dashboard --yes
+flyctl machines list -a subnet-dashboard   # expect one started web machine, zero worker
 ```
 
 If CI fails with `insufficient resources to create new machine with existing volume`, prod has **zero machines** (TLS error in browser). The deploy workflow only runs `fly_volume_recover.sh` after repeated deploy failures — not before every deploy.
@@ -84,7 +91,7 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 
 **VM:** `2gb` on `shared-cpu-1x` — required headroom for inline worker + HTTP on one machine (1GB OOMs/wedges).
 
-**Do not** add a separate `worker` Fly process group or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume.
+**Do not** add a separate `worker` Fly process group to `fly.toml` or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume. `fly.toml` v1 lists only `web`; dedicated worker lives in `fly.worker-v2.toml`. After every v1 deploy, `flyctl scale count worker=0` is required (GHA Fly Deploy does this, then fails the job if a worker machine remains).
 
 Verify after deploy:
 
@@ -119,7 +126,7 @@ chmod +x scripts/fly_enable_worker_v2.sh
 Manual steps (same as script):
 
 ```bash
-# 1. Scale worker process group (after deploy with processes.worker in fly.toml)
+# 1. Scale worker process group (after deploy with fly.worker-v2.toml, not fly.toml)
 fly scale count web=1 worker=1 --app subnet-dashboard
 
 # 2. Enable v2 (disables inline worker on web)

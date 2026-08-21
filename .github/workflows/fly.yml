@@ -90,7 +90,11 @@ jobs:
           flyctl deploy --config fly.toml --remote-only --no-cache --yes --regions sjc --ha=false
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Scale web=1 worker=0 (v1 inline)
+      # REQUIRED after every v1 deploy. Removing worker from fly.toml does not
+      # delete an existing Fly worker process group; a leftover machine splits
+      # the volume. `|| true` covers "no worker group" after a clean toml.
+      # The next step fails the job if any worker machine is still running.
+      - name: Scale web=1 worker=0 (v1 inline, required)
         run: |
           flyctl scale count web=1 --app subnet-dashboard --yes
           flyctl scale count worker=0 --app subnet-dashboard --yes 2>/dev/null || true
