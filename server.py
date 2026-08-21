@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import atexit
 import asyncio
 import concurrent.futures
 import threading
@@ -361,9 +362,10 @@ async def _lifespan(app: FastAPI):
 
     # ponytail: cap default asyncio thread pool — timed-out pick/weighed work can't exhaust all slots
     pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
-    asyncio.get_running_loop().set_default_executor(
-        concurrent.futures.ThreadPoolExecutor(max_workers=pool_cap)
+    aio_pool = concurrent.futures.ThreadPoolExecutor(
+        max_workers=pool_cap, thread_name_prefix="aio-web"
     )
+    asyncio.get_running_loop().set_default_executor(aio_pool)
 
     yield
     if background_on_web() and background_boot_allowed():
@@ -376,6 +378,7 @@ async def _lifespan(app: FastAPI):
         await close_async_client()
     except Exception:
         pass
+    aio_pool.shutdown(wait=False, cancel_futures=True)
 
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)
@@ -523,6 +526,9 @@ _CACHE_PATHS = {
 _DASHBOARD_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     max_workers=max(2, int(os.environ.get("DASHBOARD_WORKER_POOL_SIZE", "4"))),
     thread_name_prefix="dashboard-work",
+)
+atexit.register(
+    _DASHBOARD_EXECUTOR.shutdown, wait=False, cancel_futures=True
 )
 
 
@@ -823,13 +829,28 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
         req: Any = request if request is not None else _HomepageStubRequest()
         warm_timeout = HOMEPAGE_BUILD_TIMEOUT + 5.0
         html = None
-        try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                fut = pool.submit(_render_index_html, req)
-                html = fut.result(timeout=warm_timeout)
-        except Exception as exc:
-            logger.warning("homepage cache warm timed out/failed (%s) — ultra-minimal", exc)
+        box: Dict[str, Any] = {}
+
+        def _run() -> None:
+            try:
+                box["html"] = _render_index_html(req)
+            except Exception as exc:
+                box["exc"] = exc
+
+        # ponytail: daemon thread — ThreadPoolExecutor workers are non-daemon;
+        # a hung render joined at pytest/CI atexit and cancelled required smoke
+        # after "2 passed" (job timeout-minutes=15).
+        t = threading.Thread(target=_run, daemon=True, name="homepage-warm-render")
+        t.start()
+        t.join(timeout=warm_timeout)
+        if t.is_alive() or "html" not in box:
+            logger.warning(
+                "homepage cache warm timed out/failed (%s) — ultra-minimal",
+                box.get("exc") or "join_timeout",
+            )
             html = _ultra_minimal_index_html()
+        else:
+            html = box["html"]
         if html and "tribunal-hero" in html:
             _HOMEPAGE_HTML_CACHE["html"] = html
             _HOMEPAGE_HTML_CACHE["at"] = time.time()
