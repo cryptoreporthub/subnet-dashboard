@@ -31,7 +31,7 @@ def test_fly_toml_does_not_declare_worker_process_group():
     match = re.search(r"\[processes\](.*?)(?=\n\[|\Z)", fly, re.S)
     assert match, "fly.toml missing [processes]"
     block = match.group(1)
-    assert "worker =" not in block
+    assert not re.search(r"^\s*worker\s*=", block, re.M)
     assert 'web = "sh ./scripts/fly_web_entrypoint.sh"' in block
 
 
