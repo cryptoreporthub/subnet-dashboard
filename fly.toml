@@ -9,7 +9,9 @@ primary_region = "sjc"
 
 [processes]
   web = "sh ./scripts/fly_web_entrypoint.sh"
-  worker = "./scripts/fly_worker_entrypoint.sh"
+  # v1: do not declare a dedicated Fly worker process group here.
+  # flyctl deploy would spawn a second machine (volume split-brain).
+  # Stage 2+ uses fly.worker-v2.toml only after explicit human approve.
 
 [http_service]
   internal_port = 8080

@@ -84,7 +84,7 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 
 **VM:** `2gb` on `shared-cpu-1x` — required headroom for inline worker + HTTP on one machine (1GB OOMs/wedges).
 
-**Do not** add a separate `worker` Fly process group or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume.
+**Do not** add a separate `worker` Fly process group to `fly.toml` or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume. `fly.toml` v1 lists only `web`; dedicated worker lives in `fly.worker-v2.toml`. After any `flyctl deploy --config fly.toml`, run `flyctl scale count worker=0` if a leftover worker group still exists.
 
 Verify after deploy:
 
@@ -119,7 +119,7 @@ chmod +x scripts/fly_enable_worker_v2.sh
 Manual steps (same as script):
 
 ```bash
-# 1. Scale worker process group (after deploy with processes.worker in fly.toml)
+# 1. Scale worker process group (after deploy with fly.worker-v2.toml, not fly.toml)
 fly scale count web=1 worker=1 --app subnet-dashboard
 
 # 2. Enable v2 (disables inline worker on web)

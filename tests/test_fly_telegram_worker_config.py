@@ -25,9 +25,14 @@ def test_fly_toml_preserves_web_process():
     assert 'web = "sh ./scripts/fly_web_entrypoint.sh"' in fly
 
 
-def test_fly_toml_worker_uses_repo_entrypoint():
+def test_fly_toml_does_not_declare_worker_process_group():
+    """v1 fly.toml must not list a worker process — flyctl deploy would spawn one."""
     fly = _fly_toml()
-    assert 'worker = "./scripts/fly_worker_entrypoint.sh"' in fly
+    match = re.search(r"\[processes\](.*?)(?=\n\[|\Z)", fly, re.S)
+    assert match, "fly.toml missing [processes]"
+    block = match.group(1)
+    assert "worker =" not in block
+    assert 'web = "sh ./scripts/fly_web_entrypoint.sh"' in block
 
 
 def test_fly_toml_message_intel_listener_auto():
