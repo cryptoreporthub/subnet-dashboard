@@ -7,6 +7,16 @@ it through the RedTeam audit layer before returning a final payload.
 
 from typing import Any, Dict, List, Optional
 
+import time
+
+from internal.council.daily_pick_timing import (
+    StageTimer,
+    begin_tick_profile,
+    end_tick_profile,
+    log_stage_summary,
+    log_tick_profile,
+)
+
 from internal.council.state_vector import (
     attach_council_prediction,
     pick_reasons,
@@ -33,20 +43,79 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
     })
 
 
+def _ensure_scoring_io_cache(market_context: Dict[str, Any]) -> None:
+    """Hoist soul_map / pump / scenario reads once per tick (same pattern as score_cache)."""
+    if "signal_weights" not in market_context:
+        try:
+            from internal.council.weights import load_signal_weights
+
+            market_context["signal_weights"] = load_signal_weights()
+        except Exception:
+            pass
+    if "impact_strength" not in market_context:
+        try:
+            from internal.council.weights import load_impact_strength
+
+            market_context["impact_strength"] = float(load_impact_strength())
+        except Exception:
+            market_context["impact_strength"] = 1.0
+    if "_scenario_scenarios_cache" not in market_context:
+        try:
+            from internal.council import scenario_memory
+
+            market_context["_scenario_scenarios_cache"] = scenario_memory.get_scenarios(limit=300)
+        except Exception:
+            market_context["_scenario_scenarios_cache"] = []
+    if "pump_state" not in market_context:
+        try:
+            from internal.pump.state import load_state
+
+            market_context["pump_state"] = load_state()
+        except Exception:
+            market_context["pump_state"] = {}
+    if "_soul_map_disposition_cache" not in market_context:
+        try:
+            from internal.council.weights import _load_raw
+
+            raw = _load_raw(copy_blob=False)
+            sms = raw.get("soul_map_state") or raw.get("adversarial_state") or {}
+            market_context["_soul_map_disposition_cache"] = sms if isinstance(sms, dict) else {}
+        except Exception:
+            market_context["_soul_map_disposition_cache"] = {}
+
+
 def select_daily_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
-    market_context.setdefault("weights", _weights_for_context(market_context))
-    if "telegram_conviction_rows" not in market_context:
-        try:
-            from internal.message_intel.rollup import _conviction_rows
+    stages: Dict[str, float] = {}
+    profile = begin_tick_profile()
+    with StageTimer("weights") as weights_timer:
+        market_context.setdefault("weights", _weights_for_context(market_context))
+    stages["weights"] = weights_timer.ms
+    with StageTimer("io_cache") as cache_timer:
+        _ensure_scoring_io_cache(market_context)
+    stages["io_cache"] = cache_timer.ms
+    if "telegram_conviction_rows" in market_context:
+        if profile is not None:
+            profile.conviction_rows_cached = True
+    else:
+        with StageTimer("conviction_rows") as conv_timer:
+            try:
+                from internal.message_intel.rollup import _conviction_rows
 
-            market_context["telegram_conviction_rows"] = _conviction_rows()
-        except Exception:
-            market_context["telegram_conviction_rows"] = None
-    subnets = tradable_subnets(subnets)
+                market_context["telegram_conviction_rows"] = _conviction_rows()
+            except Exception:
+                market_context["telegram_conviction_rows"] = None
+        stages["conviction_rows"] = conv_timer.ms
+        if profile is not None:
+            profile.conviction_rows_calls = 1
+            profile.conviction_rows_ms = conv_timer.ms
+            profile.note_io("sqlite_conviction_rows", conv_timer.ms)
+    with StageTimer("tradable") as tradable_timer:
+        subnets = tradable_subnets(subnets)
+    stages["tradable"] = tradable_timer.ms
 
     if not subnets:
         return {
@@ -70,9 +139,19 @@ def select_daily_pick(
         }
 
     scored = []
+    score_started = time.perf_counter()
     for sn in subnets:
+        subnet_started = time.perf_counter()
         day_score = score_subnet_for_day(sn, market_context)
+        if profile is not None and isinstance(day_score, dict):
+            stage_detail = day_score.pop("_timing_stages", {})
+            profile.record_subnet(
+                sn.get("netuid"),
+                (time.perf_counter() - subnet_started) * 1000,
+                stage_detail,
+            )
         scored.append({"subnet": sn, "score": day_score})
+    stages["score_all"] = (time.perf_counter() - score_started) * 1000
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
@@ -89,26 +168,37 @@ def select_daily_pick(
                 candidate = runner_up["subnet"]
                 score_payload = runner_up["score"]
 
-    audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
-    audit = audit_daily_pick(audit_candidate, subnets)
+    with StageTimer("audit") as audit_timer:
+        audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
+        audit = audit_daily_pick(audit_candidate, subnets)
+    stages["audit"] = audit_timer.ms
     final_confidence = audit["adjusted_confidence"]
     learning = unpack_score_learning_fields(score_payload)
     from internal.learning.pick_horizon import day_horizon_hours
 
-    prediction = attach_council_prediction(
-        candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
-    )
-    reasons = pick_reasons(
-        candidate,
-        learning["signal_impact"],
-        allow_hydration=False,
-    )
-    try:
-        from internal.subnets.impact import impact_profile
+    with StageTimer("attach") as attach_timer:
+        prediction = attach_council_prediction(
+            candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
+        )
+        reasons = pick_reasons(
+            candidate,
+            learning["signal_impact"],
+            allow_hydration=False,
+        )
+        try:
+            from internal.subnets.impact import impact_profile
 
-        impact = impact_profile(candidate)
-    except Exception:
-        impact = None
+            impact = impact_profile(candidate)
+        except Exception:
+            impact = None
+    stages["attach"] = attach_timer.ms
+
+    log_stage_summary(
+        "select_daily_pick timing",
+        stages,
+        extra={"universe": len(subnets)},
+    )
+    log_tick_profile("select_daily_pick profile", end_tick_profile())
 
     return {
         "subnet": {

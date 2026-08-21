@@ -25,6 +25,14 @@ REGIMES = {"bull", "bear", "volatile", "neutral"}
 def _load(path: Optional[str] = None) -> Dict[str, Any]:
     path = path or SCENARIO_MEMORY_PATH
     try:
+        from internal.council.daily_pick_timing import active_profile
+
+        profile = active_profile()
+        if profile is not None:
+            profile.note_io("scenario_memory_read")
+    except Exception:
+        pass
+    try:
         with open(path, "r") as f:
             data = json.load(f)
         if isinstance(data, dict):

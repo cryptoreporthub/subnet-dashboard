@@ -206,6 +206,9 @@ def record_pick_prediction(
 
     Returns the stored prediction dict, or None when skipped (duplicate / invalid).
     """
+    from internal.council.daily_pick_timing import StageTimer, log_stage_summary, timing_enabled
+
+    stages: Dict[str, float] = {}
     if not isinstance(pick, dict) or not isinstance(subnet, dict):
         return None
 
@@ -227,182 +230,219 @@ def record_pick_prediction(
         if int(netuid) <= 0:
             return None
 
-    if has_pending_duplicate(netuid, horizon_type, shadow=shadow):
-        return None
+    with StageTimer("duplicate_check") as dup_timer:
+        if has_pending_duplicate(netuid, horizon_type, shadow=shadow):
+            if timing_enabled():
+                log_stage_summary(
+                    "record_pick_prediction timing",
+                    {"duplicate_check": dup_timer.ms},
+                    extra={"shadow": shadow, "skipped": "duplicate"},
+                )
+            return None
+    stages["duplicate_check"] = dup_timer.ms
 
     ref_price = float(subnet.get("price", 0) or 0)
     if ref_price <= 0:
         return None
 
-    expert = dominant_expert_for_learning(pick)
-    expert_contributions = pick.get("expert_contributions") or {}
-    existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
-    magnitude_source = "preattached"
-    if existing_pred and existing_pred.get("predicted_pct") is not None:
-        predicted_pct = float(existing_pred["predicted_pct"])
-        magnitude_source = str(
-            existing_pred.get("magnitude_source") or "preattached"
-        )
-    else:
-        predicted_pct, magnitude_source = _predicted_pct_from_pick(pick, subnet)
-    from internal.learning.pick_horizon import day_horizon_hours
+    with StageTimer("build_body") as build_timer:
+        expert = dominant_expert_for_learning(pick)
+        expert_contributions = pick.get("expert_contributions") or {}
+        existing_pred = pick.get("prediction") if isinstance(pick.get("prediction"), dict) else None
+        magnitude_source = "preattached"
+        if existing_pred and existing_pred.get("predicted_pct") is not None:
+            predicted_pct = float(existing_pred["predicted_pct"])
+            magnitude_source = str(
+                existing_pred.get("magnitude_source") or "preattached"
+            )
+        else:
+            predicted_pct, magnitude_source = _predicted_pct_from_pick(pick, subnet)
+        from internal.learning.pick_horizon import day_horizon_hours
 
-    horizon_hours = 1 if horizon_type == "hour" else day_horizon_hours()
-    if existing_pred and existing_pred.get("horizon_hours") is not None:
+        horizon_hours = 1 if horizon_type == "hour" else day_horizon_hours()
+        if existing_pred and existing_pred.get("horizon_hours") is not None:
+            try:
+                horizon_hours = int(existing_pred["horizon_hours"])
+            except (TypeError, ValueError):
+                pass
+        now = datetime.now(timezone.utc)
+
+        signal_contributions = pick.get("signal_contributions")
+        if not isinstance(signal_contributions, dict):
+            nested = expert_contributions.get("signal_contributions")
+            signal_contributions = nested if isinstance(nested, dict) else None
+        active_signals = pick.get("active_signals")
+        if not isinstance(active_signals, list):
+            nested_active = expert_contributions.get("active_signals")
+            active_signals = nested_active if isinstance(nested_active, list) else []
+        signal_impact = pick.get("signal_impact")
+        if not isinstance(signal_impact, dict):
+            signal_impact = pick.get("signals") if isinstance(pick.get("signals"), dict) else None
+
+        if existing_pred and existing_pred.get("statement"):
+            prediction = dict(existing_pred)
+            prediction.setdefault("horizon_type", horizon_type)
+            prediction.setdefault("expert", expert)
+            if signal_contributions and not prediction.get("signal_contributions"):
+                prediction["signal_contributions"] = signal_contributions
+            if active_signals and not prediction.get("active_signals"):
+                prediction["active_signals"] = list(active_signals)
+        else:
+            prediction = build_prediction_statement(
+                sn=subnet,
+                predicted_pct=predicted_pct,
+                horizon=horizon_hours,
+                ref_price=ref_price,
+                signal_source=f"council_{horizon_type}_pick",
+                expert=expert,
+                now=now.replace(tzinfo=None),
+                signal_contributions=signal_contributions,
+                horizon_type=horizon_type,
+                active_signals=active_signals or None,
+            )
+        prediction["pick_source"] = "council_shadow" if shadow else "council"
+        prediction["pick_score"] = pick.get("score")
+        prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
+        scores = canonical_expert_contributions(expert_contributions)
+        if scores:
+            prediction["experts_involved"] = [
+                name for name, _ in sorted(scores.items(), key=lambda row: (-row[1], row[0]))
+            ][:3]
+        else:
+            prediction["experts_involved"] = [expert]
+        prediction["magnitude_source"] = magnitude_source
+        if shadow:
+            prediction["shadow"] = True
+            prediction["counterfactual"] = True
+            prediction["shadow_reason"] = "hold_near_call"
+        prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
+        pump_phase = _pump_phase_at_prediction(netuid)
+        if pump_phase:
+            prediction["phase_at_prediction"] = pump_phase
+        pattern = _pattern_at_prediction(netuid)
+        if pattern:
+            prediction["pattern_at_prediction"] = pattern.get("pattern_class")
+            if pattern.get("pattern_label"):
+                prediction["pattern_label"] = pattern["pattern_label"]
+            if pattern.get("shape_hash"):
+                prediction["shape_hash"] = pattern["shape_hash"]
         try:
-            horizon_hours = int(existing_pred["horizon_hours"])
-        except (TypeError, ValueError):
+            from internal.council.weights import load_impact_strength
+            from internal.subnets.impact import impact_profile
+
+            impact = pick.get("impact") if isinstance(pick.get("impact"), dict) else None
+            prediction["market_impact"] = impact or impact_profile(subnet)
+            prediction["impact_tier"] = prediction["market_impact"].get("tier")
+            strength = float(
+                prediction["market_impact"].get("strength")
+                if prediction["market_impact"].get("strength") is not None
+                else load_impact_strength()
+            )
+            prediction["impact_strength"] = strength
+            prediction["impact_strength_at_creation"] = strength
+        except Exception:
             pass
-    now = datetime.now(timezone.utc)
+    stages["build_body"] = build_timer.ms
 
-    # Prefer tech signal stamps on the pick root; fall back to nested score shape.
-    signal_contributions = pick.get("signal_contributions")
-    if not isinstance(signal_contributions, dict):
-        nested = expert_contributions.get("signal_contributions")
-        signal_contributions = nested if isinstance(nested, dict) else None
-    active_signals = pick.get("active_signals")
-    if not isinstance(active_signals, list):
-        nested_active = expert_contributions.get("active_signals")
-        active_signals = nested_active if isinstance(nested_active, list) else []
-    signal_impact = pick.get("signal_impact")
-    if not isinstance(signal_impact, dict):
-        signal_impact = pick.get("signals") if isinstance(pick.get("signals"), dict) else None
+    with StageTimer("scenario_link") as scen_timer:
+        scenario_id = _link_scenario_memory(prediction, subnet, market_context)
+        if scenario_id:
+            prediction["scenario_id"] = scenario_id
+    stages["scenario_link"] = scen_timer.ms
 
-    if existing_pred and existing_pred.get("statement"):
-        prediction = dict(existing_pred)
-        prediction.setdefault("horizon_type", horizon_type)
-        prediction.setdefault("expert", expert)
-        if signal_contributions and not prediction.get("signal_contributions"):
-            prediction["signal_contributions"] = signal_contributions
-        if active_signals and not prediction.get("active_signals"):
-            prediction["active_signals"] = list(active_signals)
-    else:
-        prediction = build_prediction_statement(
-            sn=subnet,
-            predicted_pct=predicted_pct,
-            horizon=horizon_hours,
-            ref_price=ref_price,
-            signal_source=f"council_{horizon_type}_pick",
-            expert=expert,
-            now=now.replace(tzinfo=None),
-            signal_contributions=signal_contributions,
-            horizon_type=horizon_type,
-            active_signals=active_signals or None,
+    with StageTimer("weights") as weights_timer:
+        expert_weights = load_weights()
+        prediction["weights_at_creation"] = dict(expert_weights)
+        prediction["learning_state_at_creation"] = {
+            "council_weights": dict(expert_weights),
+            "impact_strength": prediction.get("impact_strength_at_creation"),
+            "impact_tier": prediction.get("impact_tier"),
+        }
+        try:
+            from internal.council.prediction_trace import record_prediction_created
+
+            record_prediction_created(
+                prediction,
+                weights_at_creation=expert_weights,
+            )
+        except Exception as exc:
+            logger.warning("Prediction trace on create failed: %s", exc)
+    stages["weights"] = weights_timer.ms
+
+    with StageTimer("judges") as judges_timer:
+        try:
+            from internal.judges.tracker import on_prediction_created
+
+            if isinstance(signal_impact, dict):
+                prediction["signal_impact"] = signal_impact
+
+            judge_scores = on_prediction_created(
+                prediction,
+                signal_impact=signal_impact,
+                subnet=subnet,
+                expert_weights=expert_weights,
+            )
+            prediction["judge_scores_at_creation"] = judge_scores
+        except Exception as exc:
+            logger.warning("Judge on_prediction_created failed: %s", exc)
+    stages["judges"] = judges_timer.ms
+
+    with StageTimer("append") as append_timer:
+        if not append_prediction(prediction):
+            if timing_enabled():
+                log_stage_summary(
+                    "record_pick_prediction timing",
+                    {**stages, "append": append_timer.ms},
+                    extra={"shadow": shadow, "netuid": netuid, "skipped": "append_failed"},
+                )
+            return None
+    stages["append"] = append_timer.ms
+
+    with StageTimer("mindmap_trail") as mindmap_timer:
+        _append_mindmap_trail(pick, prediction, horizon_type)
+    stages["mindmap_trail"] = mindmap_timer.ms
+
+    with StageTimer("soul_map_mirror") as mirror_timer:
+        _mirror_pick_to_soul_map(pick, prediction, horizon_type)
+    stages["soul_map_mirror"] = mirror_timer.ms
+
+    with StageTimer("trail_bus") as bus_timer:
+        try:
+            from internal.learning.trail_bus import emit_conviction_update, emit_signal_triggered
+
+            conf = pick.get("confidence", pick.get("final_confidence"))
+            emit_conviction_update(
+                subnet=prediction.get("name"),
+                netuid=prediction.get("netuid"),
+                conviction=float(conf) * 100 if conf and float(conf) <= 1 else conf,
+                horizon_type=horizon_type,
+                evidence={
+                    "pick_score": pick.get("score"),
+                    "expert": expert,
+                    "impact_tier": prediction.get("impact_tier"),
+                    "impact_strength": prediction.get("impact_strength_at_creation"),
+                },
+            )
+            emit_signal_triggered(
+                subnet=prediction.get("name"),
+                netuid=prediction.get("netuid"),
+                signal_name=f"council_{horizon_type}_pick",
+                direction=prediction.get("direction"),
+                evidence={
+                    "prediction_id": prediction.get("id"),
+                    "impact_tier": prediction.get("impact_tier"),
+                },
+            )
+        except Exception as exc:
+            logger.warning("Pick trail emission failed: %s", exc)
+    stages["trail_bus"] = bus_timer.ms
+
+    if timing_enabled():
+        log_stage_summary(
+            "record_pick_prediction timing",
+            stages,
+            extra={"shadow": shadow, "netuid": netuid},
         )
-    prediction["pick_source"] = "council_shadow" if shadow else "council"
-    prediction["pick_score"] = pick.get("score")
-    prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))
-    scores = canonical_expert_contributions(expert_contributions)
-    if scores:
-        prediction["experts_involved"] = [
-            name for name, _ in sorted(scores.items(), key=lambda row: (-row[1], row[0]))
-        ][:3]
-    else:
-        prediction["experts_involved"] = [expert]
-    prediction["magnitude_source"] = magnitude_source
-    if shadow:
-        prediction["shadow"] = True
-        prediction["counterfactual"] = True
-        prediction["shadow_reason"] = "hold_near_call"
-    prediction["subnet_snapshot"] = _subnet_snapshot(subnet)
-    pump_phase = _pump_phase_at_prediction(netuid)
-    if pump_phase:
-        prediction["phase_at_prediction"] = pump_phase
-    pattern = _pattern_at_prediction(netuid)
-    if pattern:
-        prediction["pattern_at_prediction"] = pattern.get("pattern_class")
-        if pattern.get("pattern_label"):
-            prediction["pattern_label"] = pattern["pattern_label"]
-        if pattern.get("shape_hash"):
-            prediction["shape_hash"] = pattern["shape_hash"]
-    try:
-        from internal.council.weights import load_impact_strength
-        from internal.subnets.impact import impact_profile
-
-        impact = pick.get("impact") if isinstance(pick.get("impact"), dict) else None
-        prediction["market_impact"] = impact or impact_profile(subnet)
-        prediction["impact_tier"] = prediction["market_impact"].get("tier")
-        strength = float(
-            prediction["market_impact"].get("strength")
-            if prediction["market_impact"].get("strength") is not None
-            else load_impact_strength()
-        )
-        prediction["impact_strength"] = strength
-        prediction["impact_strength_at_creation"] = strength
-    except Exception:
-        pass
-
-    scenario_id = _link_scenario_memory(prediction, subnet, market_context)
-    if scenario_id:
-        prediction["scenario_id"] = scenario_id
-
-    expert_weights = load_weights()
-    prediction["weights_at_creation"] = dict(expert_weights)
-    prediction["learning_state_at_creation"] = {
-        "council_weights": dict(expert_weights),
-        "impact_strength": prediction.get("impact_strength_at_creation"),
-        "impact_tier": prediction.get("impact_tier"),
-    }
-    try:
-        from internal.council.prediction_trace import record_prediction_created
-
-        record_prediction_created(
-            prediction,
-            weights_at_creation=expert_weights,
-        )
-    except Exception as exc:
-        logger.warning("Prediction trace on create failed: %s", exc)
-
-    try:
-        from internal.judges.tracker import on_prediction_created
-
-        if isinstance(signal_impact, dict):
-            prediction["signal_impact"] = signal_impact
-
-        judge_scores = on_prediction_created(
-            prediction,
-            signal_impact=signal_impact,
-            subnet=subnet,
-            expert_weights=expert_weights,
-        )
-        prediction["judge_scores_at_creation"] = judge_scores
-    except Exception as exc:
-        logger.warning("Judge on_prediction_created failed: %s", exc)
-
-    if not append_prediction(prediction):
-        return None
-
-    _append_mindmap_trail(pick, prediction, horizon_type)
-    _mirror_pick_to_soul_map(pick, prediction, horizon_type)
-
-    try:
-        from internal.learning.trail_bus import emit_conviction_update, emit_signal_triggered
-
-        conf = pick.get("confidence", pick.get("final_confidence"))
-        emit_conviction_update(
-            subnet=prediction.get("name"),
-            netuid=prediction.get("netuid"),
-            conviction=float(conf) * 100 if conf and float(conf) <= 1 else conf,
-            horizon_type=horizon_type,
-            evidence={
-                "pick_score": pick.get("score"),
-                "expert": expert,
-                "impact_tier": prediction.get("impact_tier"),
-                "impact_strength": prediction.get("impact_strength_at_creation"),
-            },
-        )
-        emit_signal_triggered(
-            subnet=prediction.get("name"),
-            netuid=prediction.get("netuid"),
-            signal_name=f"council_{horizon_type}_pick",
-            direction=prediction.get("direction"),
-            evidence={
-                "prediction_id": prediction.get("id"),
-                "impact_tier": prediction.get("impact_tier"),
-            },
-        )
-    except Exception as exc:
-        logger.warning("Pick trail emission failed: %s", exc)
 
     return prediction
 
@@ -529,6 +569,9 @@ def record_hold_decision(
     Phase 3: also enqueue a ``shadow`` counterfactual prediction for the
     candidate when a priced subnet row is available (excluded from RF-2).
     """
+    from internal.council.daily_pick_timing import StageTimer, log_stage_summary, timing_enabled
+
+    stages: Dict[str, float] = {}
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     cand = candidate if isinstance(candidate, dict) else {}
     sn = cand.get("subnet") if isinstance(cand.get("subnet"), dict) else {}
@@ -543,65 +586,76 @@ def record_hold_decision(
     else:
         conv_pct = round(conv, 1)
 
-    try:
-        from internal.council.publish_gate import publish_gate_fraction
-        from internal.learning.trail_events import emit_trail_event
-
-        emit_trail_event(
-            "conviction_update",
-            subnet=name,
-            netuid=netuid,
-            evidence={
-                "action": "HOLD",
-                "reason": reason or "No long call published",
-                "conviction": conv_pct,
-                "horizon_type": horizon_type,
-                "gate": f"confidence_below_{publish_gate_fraction():.2f}" if cand else "no_subnets",
-            },
-            signal="council_hold",
-            decision="HOLD",
-            prediction=reason,
-        )
-    except Exception as exc:
-        logger.warning("HOLD trail emit failed: %s", exc)
-
-    try:
-        from internal.council.weights import _load_raw, _save_raw
-
-        data = _load_raw()
-        sms = data.setdefault("soul_map_state", {})
-        if not isinstance(sms, dict):
-            sms = {}
-            data["soul_map_state"] = sms
-        entry = {
-            "action": "HOLD",
-            "pick": None,
-            "candidate": cand or None,
-            "reason": reason,
-            "updated_at": now,
-        }
-        sms[f"last_{horizon_type}_pick"] = entry
-        sms[f"last_{horizon_type}_hold"] = entry
-        _save_raw(data)
-    except Exception as exc:
-        logger.warning("HOLD soul-map mirror failed: %s", exc)
-
-    # Phase 3 — counterfactual shadow (no RF-2 / no weight nudge).
-    if cand:
+    with StageTimer("trail_emit") as trail_timer:
         try:
-            subnet_row = subnet if isinstance(subnet, dict) else None
-            if subnet_row is None and netuid is not None:
-                subnet_row = dict(sn) if sn else {"netuid": netuid}
-                if "price" not in subnet_row and isinstance(cand.get("subnet"), dict):
-                    # Candidate may lack live price; skip shadow quietly.
-                    pass
-            if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
-                record_pick_prediction(
-                    cand,
-                    subnet_row,
-                    horizon_type=horizon_type,
-                    market_context=market_context,
-                    shadow=True,
-                )
+            from internal.council.publish_gate import publish_gate_fraction
+            from internal.learning.trail_events import emit_trail_event
+
+            emit_trail_event(
+                "conviction_update",
+                subnet=name,
+                netuid=netuid,
+                evidence={
+                    "action": "HOLD",
+                    "reason": reason or "No long call published",
+                    "conviction": conv_pct,
+                    "horizon_type": horizon_type,
+                    "gate": f"confidence_below_{publish_gate_fraction():.2f}" if cand else "no_subnets",
+                },
+                signal="council_hold",
+                decision="HOLD",
+                prediction=reason,
+            )
         except Exception as exc:
-            logger.warning("HOLD shadow prediction failed: %s", exc)
+            logger.warning("HOLD trail emit failed: %s", exc)
+    stages["trail_emit"] = trail_timer.ms
+
+    with StageTimer("soul_map_hold_mirror") as mirror_timer:
+        try:
+            from internal.council.weights import _load_raw, _save_raw
+
+            data = _load_raw()
+            sms = data.setdefault("soul_map_state", {})
+            if not isinstance(sms, dict):
+                sms = {}
+                data["soul_map_state"] = sms
+            entry = {
+                "action": "HOLD",
+                "pick": None,
+                "candidate": cand or None,
+                "reason": reason,
+                "updated_at": now,
+            }
+            sms[f"last_{horizon_type}_pick"] = entry
+            sms[f"last_{horizon_type}_hold"] = entry
+            _save_raw(data)
+        except Exception as exc:
+            logger.warning("HOLD soul-map mirror failed: %s", exc)
+    stages["soul_map_hold_mirror"] = mirror_timer.ms
+
+    if cand:
+        with StageTimer("shadow_pick") as shadow_timer:
+            try:
+                subnet_row = subnet if isinstance(subnet, dict) else None
+                if subnet_row is None and netuid is not None:
+                    subnet_row = dict(sn) if sn else {"netuid": netuid}
+                    if "price" not in subnet_row and isinstance(cand.get("subnet"), dict):
+                        pass
+                if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
+                    record_pick_prediction(
+                        cand,
+                        subnet_row,
+                        horizon_type=horizon_type,
+                        market_context=market_context,
+                        shadow=True,
+                    )
+            except Exception as exc:
+                logger.warning("HOLD shadow prediction failed: %s", exc)
+        stages["shadow_pick"] = shadow_timer.ms
+
+    if timing_enabled():
+        log_stage_summary(
+            "record_hold_decision timing",
+            stages,
+            extra={"horizon_type": horizon_type, "netuid": netuid, "has_candidate": bool(cand)},
+        )
