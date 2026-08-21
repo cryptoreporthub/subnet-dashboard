@@ -7,6 +7,10 @@ it through the RedTeam audit layer before returning a final payload.
 
 from typing import Any, Dict, List, Optional
 
+import time
+
+from internal.council.daily_pick_timing import StageTimer, log_stage_summary
+
 from internal.council.state_vector import (
     attach_council_prediction,
     pick_reasons,
@@ -38,15 +42,22 @@ def select_daily_pick(
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
-    market_context.setdefault("weights", _weights_for_context(market_context))
+    stages: Dict[str, float] = {}
+    with StageTimer("weights") as weights_timer:
+        market_context.setdefault("weights", _weights_for_context(market_context))
+    stages["weights"] = weights_timer.ms
     if "telegram_conviction_rows" not in market_context:
-        try:
-            from internal.message_intel.rollup import _conviction_rows
+        with StageTimer("conviction_rows") as conv_timer:
+            try:
+                from internal.message_intel.rollup import _conviction_rows
 
-            market_context["telegram_conviction_rows"] = _conviction_rows()
-        except Exception:
-            market_context["telegram_conviction_rows"] = None
-    subnets = tradable_subnets(subnets)
+                market_context["telegram_conviction_rows"] = _conviction_rows()
+            except Exception:
+                market_context["telegram_conviction_rows"] = None
+        stages["conviction_rows"] = conv_timer.ms
+    with StageTimer("tradable") as tradable_timer:
+        subnets = tradable_subnets(subnets)
+    stages["tradable"] = tradable_timer.ms
 
     if not subnets:
         return {
@@ -70,9 +81,18 @@ def select_daily_pick(
         }
 
     scored = []
+    score_started = time.perf_counter()
+    per_subnet_ms: List[tuple] = []
     for sn in subnets:
+        subnet_started = time.perf_counter()
         day_score = score_subnet_for_day(sn, market_context)
+        per_subnet_ms.append(
+            (sn.get("netuid"), (time.perf_counter() - subnet_started) * 1000)
+        )
         scored.append({"subnet": sn, "score": day_score})
+    stages["score_all"] = (time.perf_counter() - score_started) * 1000
+    per_subnet_ms.sort(key=lambda row: row[1], reverse=True)
+    slowest = per_subnet_ms[:3]
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
@@ -89,26 +109,39 @@ def select_daily_pick(
                 candidate = runner_up["subnet"]
                 score_payload = runner_up["score"]
 
-    audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
-    audit = audit_daily_pick(audit_candidate, subnets)
+    with StageTimer("audit") as audit_timer:
+        audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
+        audit = audit_daily_pick(audit_candidate, subnets)
+    stages["audit"] = audit_timer.ms
     final_confidence = audit["adjusted_confidence"]
     learning = unpack_score_learning_fields(score_payload)
     from internal.learning.pick_horizon import day_horizon_hours
 
-    prediction = attach_council_prediction(
-        candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
-    )
-    reasons = pick_reasons(
-        candidate,
-        learning["signal_impact"],
-        allow_hydration=False,
-    )
-    try:
-        from internal.subnets.impact import impact_profile
+    with StageTimer("attach") as attach_timer:
+        prediction = attach_council_prediction(
+            candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
+        )
+        reasons = pick_reasons(
+            candidate,
+            learning["signal_impact"],
+            allow_hydration=False,
+        )
+        try:
+            from internal.subnets.impact import impact_profile
 
-        impact = impact_profile(candidate)
-    except Exception:
-        impact = None
+            impact = impact_profile(candidate)
+        except Exception:
+            impact = None
+    stages["attach"] = attach_timer.ms
+
+    log_stage_summary(
+        "select_daily_pick timing",
+        stages,
+        extra={
+            "universe": len(subnets),
+            "slowest": ",".join(f"sn{n}:{int(ms)}ms" for n, ms in slowest if n is not None),
+        },
+    )
 
     return {
         "subnet": {

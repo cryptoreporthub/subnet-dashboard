@@ -246,13 +246,22 @@ class DailyPickScheduler:
         return self._tick(reschedule=False)
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
+        from internal.council.daily_pick_timing import StageTimer, log_stage_summary
+
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
+        tick_stages: Dict[str, float] = {}
+        subnets: Any = []
+        timeout = DAILY_PICK_TICK_TIMEOUT_SECONDS
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            subnets = _load_capped_subnets()
-            ctx = _market_context(subnets)
+            with StageTimer("load_subnets") as load_timer:
+                subnets = _load_capped_subnets()
+            tick_stages["load_subnets"] = load_timer.ms
+            with StageTimer("market_context") as ctx_timer:
+                ctx = _market_context(subnets)
+            tick_stages["market_context"] = ctx_timer.ms
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
             with self._work_lock:
@@ -269,9 +278,12 @@ class DailyPickScheduler:
                 return out
 
             try:
-                fut = pool.submit(_run_pick)
-                payload = fut.result(timeout=timeout)
+                with StageTimer("pick_work") as work_timer:
+                    fut = pool.submit(_run_pick)
+                    payload = fut.result(timeout=timeout)
+                tick_stages["pick_work"] = work_timer.ms
             except FuturesTimeoutError:
+                tick_stages["pick_work"] = work_timer.ms
                 with self._work_lock:
                     self._work_generation += 1
                 result["error"] = f"daily pick tick timed out after {timeout}s"
@@ -336,6 +348,16 @@ class DailyPickScheduler:
             schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
             result["next_delay_seconds"] = delay
             result["today_ready"] = today_ready
+        log_stage_summary(
+            "daily pick tick timing",
+            tick_stages,
+            extra={
+                "universe": len(subnets) if isinstance(subnets, list) else 0,
+                "timeout_s": timeout,
+                "ok": result.get("ok"),
+                "error": result.get("error") or "",
+            },
+        )
         _write_scheduler_state({"last_tick": result})
         return result
 
