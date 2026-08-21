@@ -172,3 +172,87 @@ def test_bailout_static_allowlist_includes_hydrate_assets():
     assert hydrate.status_code == 200
     assert css.status_code == 200
     assert "text/css" in css.headers.get("content-type", "")
+
+
+_ALLOWLIST_PATHS = (
+    "/static/js/cockpit_hydrate.js",
+    "/static/js/mindmap_graph.js",
+    "/static/js/api_fetch.js",
+    "/static/css/ui.css",
+)
+
+
+def test_bailout_static_allowlist_api_fetch_js_when_inner_wedged():
+    app = wrap_instant_bailout(
+        _wedged_app,
+        get_homepage_html=lambda: None,
+        schedule_warm=lambda: None,
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            t0 = time.time()
+            resp = await client.get("/static/js/api_fetch.js")
+            return resp, time.time() - t0
+
+    resp, elapsed = _run(_check())
+    assert resp.status_code == 200
+    assert elapsed < 1.0
+    assert "application/javascript" in resp.headers.get("content-type", "")
+    assert b"fetchJson" in resp.content
+
+
+def test_bailout_all_allowlisted_assets_bypass_inner_app():
+    app = wrap_instant_bailout(
+        _wedged_app,
+        get_homepage_html=lambda: None,
+        schedule_warm=lambda: None,
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            t0 = time.time()
+            responses = []
+            for path in _ALLOWLIST_PATHS:
+                responses.append(await client.get(path))
+            return responses, time.time() - t0
+
+    responses, elapsed = _run(_check())
+    assert elapsed < 1.0
+    for path, resp in zip(_ALLOWLIST_PATHS, responses):
+        assert resp.status_code == 200, path
+        assert len(resp.content) > 50, path
+
+
+def test_bailout_missing_allowlist_file_falls_through_to_inner(tmp_path):
+    hit = []
+
+    async def inner(scope, receive, send):
+        hit.append(scope.get("path"))
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 418,
+                "headers": [(b"content-type", b"text/plain")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"inner"})
+
+    app = wrap_instant_bailout(
+        inner,
+        get_homepage_html=lambda: None,
+        schedule_warm=lambda: None,
+        static_dir=str(tmp_path),
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+            return await client.get("/static/js/api_fetch.js")
+
+    resp = _run(_check())
+    assert resp.status_code == 418
+    assert resp.text == "inner"
+    assert hit == ["/static/js/api_fetch.js"]
