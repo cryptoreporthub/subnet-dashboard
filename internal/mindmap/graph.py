@@ -13,15 +13,15 @@ def _utcnow_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _empty_graph() -> Dict[str, Any]:
+def _empty_graph(*, status: str = "success", detail: Optional[str] = None) -> Dict[str, Any]:
     from internal.learning.mindmap_aggregator import (
         _build_integration_status,
         _build_runtime_status,
         build_learning_state,
     )
 
-    return {
-        "status": "success",
+    out: Dict[str, Any] = {
+        "status": status,
         "source": "registry_heuristic",
         "nodes": [],
         "edges": [],
@@ -29,6 +29,9 @@ def _empty_graph() -> Dict[str, Any]:
         "learning_state": build_learning_state(),
         "runtime_status": _build_runtime_status(),
     }
+    if detail:
+        out["detail"] = detail
+    return out
 
 
 # Pseudo-subnet hub for judge/weight-nudge events that carry no netuid — the
@@ -234,7 +237,10 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
         trail = _collect_trail()
     except Exception as exc:
         logger.warning("mindmap graph trail read failed: %s", exc)
-        return _empty_graph()
+        return _empty_graph(
+            status="error",
+            detail="Trail read failed — retry shortly.",
+        )
 
     if focus_netuid is not None:
         try:
