@@ -108,9 +108,20 @@ def test_mindmap_js_covers_loop_hub_and_market_signals():
     src = resp.text
     assert "isLoop" in src
     assert "data-loop" in src
-    assert "AbortSignal.timeout" in src
+    assert "GRAPH_FETCH_TIMEOUT_MS = 12000" in src
     for kind in ("loop", "whale", "risk", "indicator"):
         assert f"{kind}:" in src
+
+
+def test_mindmap_js_honest_timeout_and_empty_states():
+    client = TestClient(app)
+    src = client.get("/static/js/mindmap_graph.js").text
+    assert "emptyMessageForGraph" in src
+    assert "isUsableInitialGraph" in src
+    assert "Graph build timed out" in src
+    assert "Graph build failed" in src
+    assert "cached" in src or "Graph build timed out" in src
+    assert "panel will activate when /api/mindmap/graph is wired" not in src
 
 
 def test_mindmap_js_focus_spine_sort_and_consume_initial_graph():

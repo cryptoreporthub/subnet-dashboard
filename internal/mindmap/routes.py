@@ -112,5 +112,10 @@ async def api_mindmap_graph(focus: int | None = Query(default=None, ge=1)):
     except ImportError as exc:
         return {"status": "unavailable", "nodes": [], "edges": [], "detail": str(exc)}
     except Exception as exc:
-        logger.warning("mindmap graph endpoint failed: %s", exc)
-        return {"status": "success", "nodes": [], "edges": []}
+        logger.warning("mindmap graph endpoint failed: %s", exc, exc_info=True)
+        return {
+            "status": "error",
+            "nodes": [],
+            "edges": [],
+            "detail": "Graph build failed — retry shortly.",
+        }
