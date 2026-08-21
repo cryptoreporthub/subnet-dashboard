@@ -253,6 +253,60 @@ def test_snapshot_subnet_cap_defaults_on_worker(monkeypatch):
     assert snaps._snapshot_subnet_cap() == 5
 
 
+def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):
+    """Already-done future must not deadlock when registering the release callback."""
+    from concurrent.futures import Future, ThreadPoolExecutor
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": 1, "name": "One"}], "registry-fallback"),
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: {"total_score": 2.0},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+
+    class _RaceExecutor(ThreadPoolExecutor):
+        def submit(self, fn, *args, **kwargs):
+            fut = Future()
+            try:
+                fut.set_result(fn(*args, **kwargs))
+            except Exception as exc:
+                fut.set_exception(exc)
+            return fut
+
+    monkeypatch.setattr(snaps, "ThreadPoolExecutor", _RaceExecutor)
+    _reset_write_occupancy()
+
+    result: dict[str, object] = {}
+
+    def _run() -> None:
+        result["out"] = snaps.write_full_universe_snapshot()
+
+    import threading
+
+    worker = threading.Thread(target=_run)
+    worker.start()
+    worker.join(timeout=2.0)
+    assert not worker.is_alive(), "write_full_universe_snapshot deadlocked on fast completion"
+    out = result.get("out")
+    assert isinstance(out, dict)
+    assert out.get("ok") is True
+    assert path.is_file()
+
+
 def test_write_snapshot_times_out(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
@@ -270,3 +324,128 @@ def test_write_snapshot_times_out(monkeypatch, tmp_path):
     assert out["ok"] is False
     assert "write_timeout" in out.get("error", "")
     assert not path.is_file()
+    time.sleep(3.5)  # drain singleton executor slot after timeout
+
+
+def _reset_write_occupancy() -> None:
+    deadline = time.time() + 6
+    while snaps._scoring_write_in_progress() and time.time() < deadline:
+        time.sleep(0.1)
+    snaps._TICK_ACTIVE = False
+    with snaps._lock:
+        snaps._write_future = None
+
+
+def _wire_scheduler_paths(tmp_path, monkeypatch):
+    path = tmp_path / "score_snapshots.json"
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": 1, "name": "One"}], "registry-fallback"),
+    )
+    return path
+
+
+def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
+    """After write_timeout, another tick must not submit a second universe write."""
+    path = _wire_scheduler_paths(tmp_path, monkeypatch)
+    write_calls = {"n": 0}
+
+    def _slow_build(*_args, **_kwargs):
+        write_calls["n"] += 1
+        time.sleep(3)
+        payload = {
+            "written_at": "2026-08-21T00:00:00Z",
+            "count": 1,
+            "hour": [],
+            "day": [{"netuid": 1, "total_score": 1.0}],
+        }
+        snaps.save_score_snapshot(payload, str(path))
+        return payload
+
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._scoring_in_progress = lambda: False
+
+    first = sched.run_once()
+    assert first.get("ok") is False
+    assert "write_timeout" in first.get("error", "")
+    assert write_calls["n"] == 1
+    assert snaps._scoring_write_in_progress()
+
+    second = sched.run_once()
+    assert second.get("skipped") == "scoring_in_progress"
+    assert write_calls["n"] == 1
+
+    time.sleep(3.5)
+    assert path.is_file()
+    assert not snaps._scoring_write_in_progress()
+    assert snaps._TICK_ACTIVE is False
+
+
+def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
+    """When the timed-out write finishes, occupancy clears and a later tick may run."""
+    path = _wire_scheduler_paths(tmp_path, monkeypatch)
+    write_calls = {"n": 0}
+
+    def _slow_build(*_args, **_kwargs):
+        write_calls["n"] += 1
+        time.sleep(2)
+        payload = {
+            "written_at": "2026-08-21T00:00:00Z",
+            "count": 1,
+            "hour": [],
+            "day": [{"netuid": 1, "total_score": 1.0}],
+        }
+        snaps.save_score_snapshot(payload, str(path))
+        return payload
+
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._scoring_in_progress = lambda: False
+
+    timed_out = sched.run_once()
+    assert "write_timeout" in timed_out.get("error", "")
+    assert write_calls["n"] == 1
+
+    time.sleep(2.5)
+    assert path.is_file()
+    assert not snaps._scoring_write_in_progress()
+
+    def _fast_build(*_args, **_kwargs):
+        write_calls["n"] += 1
+        payload = {
+            "written_at": "2026-08-21T01:00:00Z",
+            "count": 2,
+            "hour": [],
+            "day": [{"netuid": 2, "total_score": 2.0}],
+        }
+        snaps.save_score_snapshot(payload, str(path))
+        return payload
+
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _fast_build)
+    third = sched.run_once()
+    assert third.get("ok") is True
+    assert write_calls["n"] == 2
+
+
+def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, monkeypatch):
+    """Race: write released between occupancy check and callback register."""
+    _wire_scheduler_paths(tmp_path, monkeypatch)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._running = True
+    snaps._TICK_ACTIVE = True
+    sched._tick_active = True
+    with snaps._lock:
+        snaps._write_future = None
+    sched._register_write_completion_callback(reschedule=False)
+    assert snaps._TICK_ACTIVE is False
+    assert sched._tick_active is False
