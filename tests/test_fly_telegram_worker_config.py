@@ -65,6 +65,9 @@ def test_fly_toml_v1_health_check_timeout_12s():
     assert 'interval = "15s"' in block
     v2 = _fly_worker_v2_toml()
     assert 'timeout = "5s"' in v2
+    for name in ("fly.worker-v2-hop.toml", "fly.worker-v2-essential-soak.toml"):
+        text = Path(name).read_text(encoding="utf-8")
+        assert 'timeout = "5s"' in text
 
 
 def test_fly_toml_web_vm_shared_cpu():

@@ -17,6 +17,7 @@ def test_home_hero_context_does_not_call_get_or_create_today_pick(monkeypatch):
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
+    monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
@@ -33,6 +34,8 @@ def test_home_hero_context_does_not_call_get_or_create_today_pick(monkeypatch):
 
 
 def test_pick_sections_does_not_call_get_or_create_today_pick(monkeypatch):
+    import server as srv
+
     def _boom(*_a, **_k):
         raise AssertionError("get_or_create_today_pick must not run on pick_sections")
 
@@ -40,6 +43,7 @@ def test_pick_sections_does_not_call_get_or_create_today_pick(monkeypatch):
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
+    monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
@@ -71,6 +75,7 @@ def test_homepage_warm_does_not_call_get_or_create_today_pick(monkeypatch):
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
+    monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
