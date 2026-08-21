@@ -470,9 +470,16 @@ class ScoreSnapshotScheduler:
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
 
     def _register_write_completion_callback(self, reschedule: bool) -> None:
+        global _TICK_ACTIVE
         with _lock:
             fut = _write_future
         if fut is None:
+            # Race: write finished and released between occupancy check and here.
+            with _lock:
+                _TICK_ACTIVE = False
+                self._tick_active = False
+            if reschedule and self._running:
+                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
             return
         if fut.done():
             self._complete_write_future(fut, reschedule)

@@ -434,3 +434,18 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     third = sched.run_once()
     assert third.get("ok") is True
     assert write_calls["n"] == 2
+
+
+def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, monkeypatch):
+    """Race: write released between occupancy check and callback register."""
+    _wire_scheduler_paths(tmp_path, monkeypatch)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._running = True
+    snaps._TICK_ACTIVE = True
+    sched._tick_active = True
+    with snaps._lock:
+        snaps._write_future = None
+    sched._register_write_completion_callback(reschedule=False)
+    assert snaps._TICK_ACTIVE is False
+    assert sched._tick_active is False
