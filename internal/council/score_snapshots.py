@@ -304,6 +304,7 @@ class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
         self._running = False
+        self._tick_active = False
         self._last_run_at: Optional[str] = None
         self._last_ok: Optional[bool] = None
         self._last_error: Optional[str] = None
@@ -342,6 +343,8 @@ class ScoreSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _scoring_in_progress(self) -> bool:
+        if self._tick_active:
+            return True
         try:
             from internal.council import weights
 
@@ -386,7 +389,9 @@ class ScoreSnapshotScheduler:
 
         if self._scoring_in_progress():
             skipped = {"ok": True, "run_at": _now_iso(), "skipped": "scoring_in_progress"}
-            self._persist_cycle_summary(skipped)
+            # ponytail: skip persist while body runs — would drop phase=scoring and hide in-flight work
+            if not self._tick_active:
+                self._persist_cycle_summary(skipped)
             if reschedule and self._running:
                 schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
             return skipped
@@ -402,46 +407,50 @@ class ScoreSnapshotScheduler:
         return self._tick_body(reschedule=reschedule)
 
     def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
-        self._clear_stuck_scoring()
-        started_at = _now_iso()
-        self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
-
-        def _progress(done: int, total: int) -> None:
-            self._persist_cycle_summary(
-                {
-                    "run_at": _now_iso(),
-                    "ok": False,
-                    "phase": "scoring",
-                    "progress": f"{done}/{total}",
-                }
-            )
-
-        logger.info("score snapshot cycle started")
+        self._tick_active = True
         try:
-            result = write_full_universe_snapshot(progress_cb=_progress)
-        except Exception as exc:
-            logger.warning("score snapshot cycle exception: %s", exc)
-            result = {"ok": False, "error": str(exc)}
-        result["run_at"] = _now_iso()
-        with _lock:
-            self._last_run_at = result["run_at"]
-            self._last_ok = bool(result.get("ok"))
-            self._last_error = result.get("error")
-            self._last_result = {
-                k: result.get(k) for k in ("count", "written_at", "path") if k in result
-            }
-        self._persist_cycle_summary(result)
-        if result.get("ok"):
-            logger.info(
-                "score snapshot cycle ok count=%s path=%s",
-                result.get("count"),
-                result.get("path"),
-            )
-        else:
-            logger.warning("score snapshot cycle failed: %s", result.get("error"))
-        if reschedule and self._running:
-            schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
-        return result
+            self._clear_stuck_scoring()
+            started_at = _now_iso()
+            self._persist_cycle_summary({"run_at": started_at, "ok": False, "phase": "scoring"})
+
+            def _progress(done: int, total: int) -> None:
+                self._persist_cycle_summary(
+                    {
+                        "run_at": _now_iso(),
+                        "ok": False,
+                        "phase": "scoring",
+                        "progress": f"{done}/{total}",
+                    }
+                )
+
+            logger.info("score snapshot cycle started")
+            try:
+                result = write_full_universe_snapshot(progress_cb=_progress)
+            except Exception as exc:
+                logger.warning("score snapshot cycle exception: %s", exc)
+                result = {"ok": False, "error": str(exc)}
+            result["run_at"] = _now_iso()
+            with _lock:
+                self._last_run_at = result["run_at"]
+                self._last_ok = bool(result.get("ok"))
+                self._last_error = result.get("error")
+                self._last_result = {
+                    k: result.get(k) for k in ("count", "written_at", "path") if k in result
+                }
+            self._persist_cycle_summary(result)
+            if result.get("ok"):
+                logger.info(
+                    "score snapshot cycle ok count=%s path=%s",
+                    result.get("count"),
+                    result.get("path"),
+                )
+            else:
+                logger.warning("score snapshot cycle failed: %s", result.get("error"))
+            if reschedule and self._running:
+                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+            return result
+        finally:
+            self._tick_active = False
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
@@ -515,8 +524,16 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
 
     Loop stall guard strike 1 calls this. Idempotent ``start_*`` alone cannot
     refresh the artifact when the scheduler claims ``running`` but periodic
-    ticks stopped (alive-but-hung). Recycle when the file is very stale, then
-    run one synchronous cycle so the guarded mtime actually moves.
+    ticks stopped (alive-but-hung). Recycle whenever ``_running`` (stop +
+    cancel JOB_ID + start), then run one synchronous ``run_once`` so the
+    guarded mtime actually moves.
+
+    Blocks on the guard thread for up to ``SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS``
+    (default 600s) while ``run_once`` completes — not fire-and-forget.
+
+    ponytail: ``stop``/``cancel_job`` cannot kill a hung Python thread; if
+    ``_tick_active`` is set, return ``tick_in_progress`` and let the in-flight
+    body finish or hit the write timeout.
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
@@ -526,8 +543,18 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     with _lock:
         sched = _scheduler
         running = bool(sched and sched._running)
+        tick_in_progress = bool(sched and sched._tick_active)
 
-    if running and age_before is not None and age_before > SCORE_SNAPSHOT_MAX_AGE_SECONDS:
+    if tick_in_progress:
+        return {
+            "revived": False,
+            "reason": "tick_in_progress",
+            "recycled": False,
+            "age_before": age_before,
+            "age_after": snapshot_age_seconds(),
+        }
+
+    if running:
         stop_score_snapshot_scheduler()
         recycled = True
 
@@ -539,8 +566,14 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
         tick_out = sched.run_once()
 
     age_after = snapshot_age_seconds()
+    revived = bool(
+        tick_out.get("ok")
+        and not tick_out.get("skipped")
+        and age_after is not None
+        and (age_before is None or age_after < age_before or age_after < 60)
+    )
     return {
-        "revived": bool(tick_out.get("ok")),
+        "revived": revived,
         "recycled": recycled,
         "age_before": age_before,
         "age_after": age_after,

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import time
+from pathlib import Path
 
 from internal.council import score_snapshots as snaps
 from internal.learning import loop_health
-from internal.loop_stall_guard import _try_revive
+from internal.loop_stall_guard import MAX_SNAPSHOT_AGE_SECONDS, _try_revive
 
 
 def _make_stale_snapshot(path, *, age_seconds: float = 100_000) -> None:
@@ -27,10 +28,7 @@ def _wire_snapshot_paths(tmp_path, monkeypatch):
     return snap_path
 
 
-def test_revive_resets_stale_snapshot_age(tmp_path, monkeypatch):
-    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
-    _make_stale_snapshot(snap_path)
-
+def _fake_write_that_saves(snap_path):
     def _fake_write(progress_cb=None):
         if progress_cb:
             progress_cb(1, 1)
@@ -49,7 +47,13 @@ def test_revive_resets_stale_snapshot_age(tmp_path, monkeypatch):
             "path": str(snap_path),
         }
 
-    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
+    return _fake_write
+
+
+def test_revive_resets_stale_snapshot_age(tmp_path, monkeypatch):
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
 
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
     assert age_before is not None
@@ -69,19 +73,7 @@ def test_revive_resets_stale_snapshot_age(tmp_path, monkeypatch):
 def test_try_revive_targets_score_snapshot_scheduler(tmp_path, monkeypatch):
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     _make_stale_snapshot(snap_path)
-
-    def _fake_write(progress_cb=None):
-        snaps.save_score_snapshot(
-            {
-                "day": [{"netuid": 7, "total_score": 7.0}],
-                "hour": [],
-                "written_at": "2026-08-21T00:00:00Z",
-            },
-            str(snap_path),
-        )
-        return {"ok": True, "count": 1, "path": str(snap_path)}
-
-    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
 
     # Simulate alive-but-hung: scheduler claims running but file never updates.
     snaps.stop_score_snapshot_scheduler()
@@ -97,11 +89,114 @@ def test_try_revive_targets_score_snapshot_scheduler(tmp_path, monkeypatch):
         age_after = loop_health._snapshot_age_seconds(str(snap_path))
         assert age_after is not None
         assert age_after < 60
+        assert age_after < age_before
+    finally:
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_recycles_running_scheduler_in_guard_age_window(tmp_path, monkeypatch):
+    """5400–7200s window: guard already stale; recycle whenever _running."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    guard_stale_age = MAX_SNAPSHOT_AGE_SECONDS + 100
+    assert guard_stale_age < snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS
+    _make_stale_snapshot(snap_path, age_seconds=guard_stale_age)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
+
+    snaps.stop_score_snapshot_scheduler()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._running = True
+    snaps._scheduler = sched
+
+    age_before = loop_health._snapshot_age_seconds(str(snap_path))
+    assert age_before > MAX_SNAPSHOT_AGE_SECONDS
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["recycled"] is True
+        assert out["revived"] is True
+        age_after = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_after is not None
+        assert age_after < 60
+        assert age_after < age_before
     finally:
         snaps.stop_score_snapshot_scheduler()
 
 
 def test_revive_recycles_very_stale_running_scheduler(tmp_path, monkeypatch):
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
+
+    snaps.stop_score_snapshot_scheduler()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._running = True
+    snaps._scheduler = sched
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["recycled"] is True
+        assert out["revived"] is True
+        age_after = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_after is not None
+        assert age_after < 60
+    finally:
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+    write_calls = {"n": 0}
+
+    def _slow_write(progress_cb=None):
+        write_calls["n"] += 1
+        time.sleep(0.5)
+        return _fake_write_that_saves(snap_path)(progress_cb)
+
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _slow_write)
+
+    snaps.stop_score_snapshot_scheduler()
+    sched = snaps.ScoreSnapshotScheduler()
+    sched._running = True
+    snaps._scheduler = sched
+    sched._tick_active = True
+
+    age_before = loop_health._snapshot_age_seconds(str(snap_path))
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["revived"] is False
+        assert out.get("reason") == "tick_in_progress"
+        assert write_calls["n"] == 0
+        age_after = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_after is not None
+        assert age_after >= age_before - 1
+    finally:
+        sched._tick_active = False
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_false_on_skip_or_ok_without_file_write(tmp_path, monkeypatch):
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+
+    def _skip_only(progress_cb=None):
+        return {"ok": True, "skipped": "heavy_job_busy", "run_at": "2026-08-21T00:00:00Z"}
+
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _skip_only)
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["revived"] is False
+        age_after = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_after is not None
+        assert age_after > 5000
+    finally:
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
+    """ok:True without save_score_snapshot must not count as revived."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
 
@@ -124,6 +219,14 @@ def test_revive_recycles_very_stale_running_scheduler(tmp_path, monkeypatch):
     try:
         out = snaps.revive_score_snapshot_scheduler()
         assert out["recycled"] is True
-        assert out["revived"] is True
+        assert out["revived"] is False
     finally:
         snaps.stop_score_snapshot_scheduler()
+
+
+def test_try_revive_contract_uses_score_snapshot_revive():
+    src = Path("internal/loop_stall_guard.py").read_text(encoding="utf-8")
+    assert "revive_score_snapshot_scheduler" in src
+    assert "pump_desk" not in src
+    assert "pump desk" not in src.lower()
+

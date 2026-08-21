@@ -59,6 +59,7 @@ MAX_RESOLVER_AGE_SECONDS = max(
     1800, _env_int("LOOP_STALL_GUARD_MAX_RESOLVER_AGE_SECONDS", 21600)
 )
 CONSECUTIVE_CHECKS = max(1, _env_int("LOOP_STALL_GUARD_CONSECUTIVE_CHECKS", 2))
+# ponytail: loop_health snapshot boot grace defaults 900s; guard waits 1500s — intentional dual, no knob change
 BOOT_GRACE_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_BOOT_GRACE_SECONDS", 1500))
 KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 
