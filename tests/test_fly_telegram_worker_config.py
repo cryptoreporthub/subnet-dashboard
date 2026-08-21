@@ -120,6 +120,11 @@ def test_fly_yml_scales_v1_inline():
     assert "flyctl scale count web=1" in yml
     assert "worker=0" in yml
     assert "flyctl scale count web=1 worker=1" not in yml
+    deploy_pos = yml.find("flyctl deploy --config fly.toml")
+    scale_pos = yml.find("Scale web=1 worker=0 (v1 inline, required)")
+    verify_pos = yml.find("Verify Fly process topology (web=1, no dedicated worker)")
+    assert deploy_pos > 0 and scale_pos > deploy_pos, "worker=0 scale must run after deploy"
+    assert verify_pos > scale_pos, "topology verify must run after worker=0 scale"
 
 
 def test_fly_yml_verifies_v1_topology():
