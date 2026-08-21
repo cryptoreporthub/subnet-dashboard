@@ -235,6 +235,52 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
     assert "skipped" not in str(second.get("error") or "").lower()
 
 
+def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch):
+    """Timeout must retry in 15m even if a zombie wrote a finished HOLD to disk."""
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+
+    def _hang(*_a, **_k):
+        import time
+
+        time.sleep(12)
+        return {"action": "HOLD", "date": "2026-08-03", "pick": None}
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick", _hang
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "scheduler_hold": True,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    monkeypatch.setenv("DAILY_PICK_RETRY_MINUTES", "15")
+    pick_scheduler.DAILY_PICK_RETRY_MINUTES = 15
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    result = sched._tick(reschedule=True)
+
+    assert "timed out" in str(result.get("error") or "")
+    assert result.get("today_ready") is False
+    assert scheduled
+    assert scheduled[0][1] == 15 * 60
+    assert result["next_delay_seconds"] == 15 * 60
+
+
 def test_seconds_until_next_daily_tick_branches():
     assert pick_scheduler._seconds_until_next_daily_tick(today_ready=False) == float(
         max(1, min(pick_scheduler.DAILY_PICK_RETRY_MINUTES, 120)) * 60

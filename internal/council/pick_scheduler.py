@@ -278,7 +278,8 @@ class DailyPickScheduler:
                 logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
-            if isinstance(payload, dict):
+            tick_succeeded = isinstance(payload, dict)
+            if tick_succeeded:
                 result["ok"] = True
                 result["action"] = payload.get("action")
                 result["date"] = payload.get("date")
@@ -289,7 +290,11 @@ class DailyPickScheduler:
                 result["ab_benchmark"] = _record_ab_benchmark(
                     subnets, ctx, "daily-pick-scheduler"
                 )
-            today_ready = _today_pick_ready()
+                today_ready = _today_pick_ready()
+            else:
+                # ponytail: timeout/error ticks must retry soon — abandoned worker
+                # writes to disk must not defer scheduling to tomorrow's UTC slot.
+                today_ready = False
             if not today_ready and result.get("error"):
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
@@ -306,8 +311,8 @@ class DailyPickScheduler:
         except Exception as exc:
             result["error"] = str(exc)
             logger.warning("daily pick scheduler tick failed: %s", exc)
-            today_ready = _today_pick_ready()
-            if not today_ready:
+            today_ready = False
+            if not _today_pick_ready():
                 try:
                     from internal.council.daily_pick_engine import write_scheduler_hold
 
