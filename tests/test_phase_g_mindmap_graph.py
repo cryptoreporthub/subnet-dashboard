@@ -74,6 +74,20 @@ def test_mindmap_graph_empty_state_success(monkeypatch):
     assert graph["edges"] == []
 
 
+def test_mindmap_graph_trail_read_failure_returns_error(monkeypatch):
+    import internal.mindmap.graph as graph_mod
+
+    def _boom(limit=200):
+        raise OSError("trail store unreadable")
+
+    monkeypatch.setattr(graph_mod, "_collect_trail", _boom)
+    graph = get_mindmap_graph()
+    assert graph["status"] == "error"
+    assert graph["nodes"] == []
+    assert graph["edges"] == []
+    assert "detail" in graph
+
+
 def test_mindmap_graph_skips_full_build_mindmap_state(monkeypatch):
     """Regression: cold graph must not run panel summaries / hourly pick."""
     import internal.learning.mindmap_aggregator as agg
