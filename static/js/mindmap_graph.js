@@ -497,11 +497,31 @@
       return;
     }
 
-    setEmptyMessage(root, '', false);
     const focusNu = getFocusNetuid();
     const groups = buildTrailGroups(nodes, edges, focusNu);
+    if (!groups.length) {
+      setEmptyMessage(
+        root,
+        'Trail data is loading but no subnet groups are visible yet — retry in a moment.',
+        true
+      );
+      return;
+    }
+
+    setEmptyMessage(root, '', false);
     groups.forEach((group, index) => list.appendChild(renderGroup(group, index, focusNu)));
     root.dataset.rendered = '1';
+  }
+
+  const GRAPH_FETCH_TIMEOUT_MS = 12000;
+
+  function isUsableInitialGraph(graph) {
+    if (!graph || typeof graph !== 'object') return false;
+    const status = String(graph.status || '').toLowerCase();
+    if (status === 'error' || status === 'unavailable') return false;
+    if (Array.isArray(graph.nodes) && graph.nodes.length) return true;
+    if (status === 'success' || status === 'cached') return false;
+    return status !== 'timeout' && status !== 'warming' && status !== 'degraded';
   }
 
   async function fetchGraph(root) {
@@ -509,7 +529,10 @@
     if (initial) {
       delete root.dataset.initialGraph;
       try {
-        return JSON.parse(initial);
+        const parsed = JSON.parse(initial);
+        if (isUsableInitialGraph(parsed)) {
+          return parsed;
+        }
       } catch (_) {
         /* fall through to fetch */
       }
@@ -524,7 +547,7 @@
     try {
       const signal =
         typeof AbortSignal !== 'undefined' && AbortSignal.timeout
-          ? AbortSignal.timeout(6000)
+          ? AbortSignal.timeout(GRAPH_FETCH_TIMEOUT_MS)
           : undefined;
       const resp = await fetch(api, {
         headers: { Accept: 'application/json' },
@@ -534,9 +557,51 @@
         return { status: 'unavailable', nodes: [], edges: [] };
       }
       return await resp.json();
-    } catch (_) {
-      return { status: 'unavailable', nodes: [], edges: [] };
+    } catch (err) {
+      const aborted =
+        err &&
+        (err.name === 'AbortError' ||
+          err.name === 'TimeoutError' ||
+          String(err.message || '').toLowerCase().indexOf('abort') >= 0);
+      return {
+        status: aborted ? 'timeout' : 'unavailable',
+        nodes: [],
+        edges: [],
+        detail: aborted
+          ? 'Graph request timed out — the trail is still building. Retry shortly.'
+          : 'Graph request failed — check network and retry.',
+      };
     }
+  }
+
+  function emptyMessageForGraph(graph) {
+    const status = String((graph && graph.status) || '').toLowerCase();
+    const noNodes = !(graph && graph.nodes && graph.nodes.length);
+    if ((status === 'timeout' || status === 'warming' || status === 'cached') && noNodes) {
+      return (
+        (graph && graph.detail) ||
+        'Graph build timed out — trail will appear when the learning loop catches up.'
+      );
+    }
+    if (status === 'error') {
+      return (graph && graph.detail) || 'Graph build failed — retry shortly.';
+    }
+    if (status === 'unavailable') {
+      return (
+        (graph && graph.detail) ||
+        'Mindmap graph request failed or timed out — retry shortly.'
+      );
+    }
+    if (status === 'degraded' && !(graph.nodes || []).length) {
+      return (
+        graph.detail ||
+        'Worker volume temporarily unavailable — trail will refill when the learning loop reconnects.'
+      );
+    }
+    if (graph && graph.scoped && !(graph.nodes || []).length) {
+      return 'No graph edges for this focus subnet yet — trail fills as picks resolve.';
+    }
+    return '';
   }
 
   async function refreshGraph() {
@@ -545,28 +610,12 @@
     const graph = await fetchGraph(root);
     renderSpineChrome(graph);
     renderIntegrationStatusLegend(graph);
-    if (graph.status === 'unavailable') {
-      setEmptyMessage(
-        root,
-        'Mindmap graph API is unavailable on this deploy. The panel will activate when /api/mindmap/graph is wired.',
-        true
-      );
+    const emptyMsg = emptyMessageForGraph(graph);
+    if (emptyMsg) {
+      setEmptyMessage(root, emptyMsg, true);
       return;
     }
-    if (graph.status === 'degraded' && !(graph.nodes || []).length) {
-      setEmptyMessage(
-        root,
-        graph.detail ||
-          'Worker volume temporarily unavailable — trail will refill when the learning loop reconnects.',
-        true
-      );
-      return;
-    }
-    if (graph.scoped && !(graph.nodes || []).length) {
-      setEmptyMessage(root, 'No graph edges for this focus subnet yet — trail fills as picks resolve.', true);
-    } else {
-      renderTrail(root, graph);
-    }
+    renderTrail(root, graph);
   }
 
   async function init() {

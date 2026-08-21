@@ -533,6 +533,9 @@ def get_mindmap_graph(focus_netuid: Optional[int] = None) -> Dict[str, Any]:
             )
         )
         keep_ids = {n["id"] for n in node_list[:_NODE_CAP]}
+        for n in node_list:
+            if n.get("kind") in ("subnet", "loop"):
+                keep_ids.add(n["id"])
         node_list = [n for n in node_list if n["id"] in keep_ids]
         edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
 

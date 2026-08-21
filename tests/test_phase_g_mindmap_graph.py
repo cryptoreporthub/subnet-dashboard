@@ -209,6 +209,43 @@ def test_mindmap_graph_api_surfaces_heuristic_source(client):
     assert response.json().get("source") == "registry_heuristic"
 
 
+def test_mindmap_graph_api_exception_returns_error(monkeypatch, client):
+    import internal.mindmap.routes as graph_routes
+
+    def _boom(focus=None):
+        raise RuntimeError("simulated graph build failure")
+
+    monkeypatch.setattr(graph_routes, "_cached_or_build", _boom)
+    body = client.get("/api/mindmap/graph").json()
+    assert body["status"] == "error"
+    assert body["nodes"] == []
+    assert "detail" in body
+
+
+def test_mindmap_graph_cap_keeps_subnet_and_loop_hubs(monkeypatch):
+    import internal.mindmap.graph as graph_mod
+
+    trail = []
+    for i in range(60):
+        trail.append(
+            {
+                "netuid": i,
+                "event_type": "signal_triggered",
+                "subnet": f"SN{i}",
+                "time": f"2026-08-21T00:{i:02d}:00Z",
+            }
+        )
+    monkeypatch.setattr(graph_mod, "_collect_trail", lambda limit=200: trail)
+    monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus: [])
+    monkeypatch.setattr(graph_mod, "_load_whale_and_rugger_alerts", lambda focus: {})
+
+    graph = get_mindmap_graph()
+    kinds = {n["kind"] for n in graph["nodes"]}
+    assert "subnet" in kinds
+    assert len([n for n in graph["nodes"] if n["kind"] == "subnet"]) >= 1
+
+
 def test_brain_recommendations_no_hardcoded_sn123(tmp_path):
     from internal.council.mindmap_bridge import MindmapBridge
 

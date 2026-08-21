@@ -902,21 +902,38 @@ def _safe_brain_letter_context(*, timeout_s: float = 1.5) -> Dict[str, Any]:
 
 def _safe_mindmap_graph_context(*, timeout_s: float = 2.0) -> Dict[str, Any]:
     """Timeboxed mindmap SSR — split_v2 web proxies one fast flycast attempt."""
+    import time as _time
+
+    branch = "local"
+    started = _time.monotonic()
     try:
         from internal.data_volume import needs_worker_volume_proxy
 
         if needs_worker_volume_proxy():
+            branch = "proxy"
             from internal.worker_proxy import fetch_worker_json_sync
 
             graph = fetch_worker_json_sync("/api/mindmap/graph", timeout=timeout_s)
             if isinstance(graph, dict) and graph.get("status") != "error":
                 return {"mindmap_graph": graph}
+            logger.warning(
+                "mindmap graph context skipped after %.0fms (%s): worker payload status=%s",
+                (_time.monotonic() - started) * 1000,
+                branch,
+                graph.get("status") if isinstance(graph, dict) else type(graph).__name__,
+            )
             return {}
         from internal.mindmap.graph import get_mindmap_graph
 
         return {"mindmap_graph": get_mindmap_graph()}
     except Exception as exc:
-        logger.debug("mindmap graph context skipped: %s", exc)
+        logger.warning(
+            "mindmap graph context skipped after %.0fms (%s): %s",
+            (_time.monotonic() - started) * 1000,
+            branch,
+            exc,
+            exc_info=True,
+        )
         return {}
 
 
