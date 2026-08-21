@@ -43,6 +43,47 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
     })
 
 
+def _ensure_scoring_io_cache(market_context: Dict[str, Any]) -> None:
+    """Hoist soul_map / pump / scenario reads once per tick (same pattern as score_cache)."""
+    if "signal_weights" not in market_context:
+        try:
+            from internal.council.weights import load_signal_weights
+
+            market_context["signal_weights"] = load_signal_weights()
+        except Exception:
+            pass
+    if "impact_strength" not in market_context:
+        try:
+            from internal.council.weights import load_impact_strength
+
+            market_context["impact_strength"] = float(load_impact_strength())
+        except Exception:
+            market_context["impact_strength"] = 1.0
+    if "_scenario_scenarios_cache" not in market_context:
+        try:
+            from internal.council import scenario_memory
+
+            market_context["_scenario_scenarios_cache"] = scenario_memory.get_scenarios(limit=300)
+        except Exception:
+            market_context["_scenario_scenarios_cache"] = []
+    if "pump_state" not in market_context:
+        try:
+            from internal.pump.state import load_state
+
+            market_context["pump_state"] = load_state()
+        except Exception:
+            market_context["pump_state"] = {}
+    if "_soul_map_disposition_cache" not in market_context:
+        try:
+            from internal.council.weights import _load_raw
+
+            raw = _load_raw(copy_blob=False)
+            sms = raw.get("soul_map_state") or raw.get("adversarial_state") or {}
+            market_context["_soul_map_disposition_cache"] = sms if isinstance(sms, dict) else {}
+        except Exception:
+            market_context["_soul_map_disposition_cache"] = {}
+
+
 def select_daily_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
@@ -53,6 +94,9 @@ def select_daily_pick(
     with StageTimer("weights") as weights_timer:
         market_context.setdefault("weights", _weights_for_context(market_context))
     stages["weights"] = weights_timer.ms
+    with StageTimer("io_cache") as cache_timer:
+        _ensure_scoring_io_cache(market_context)
+    stages["io_cache"] = cache_timer.ms
     if "telegram_conviction_rows" in market_context:
         if profile is not None:
             profile.conviction_rows_cached = True

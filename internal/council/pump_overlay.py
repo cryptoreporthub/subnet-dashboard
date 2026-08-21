@@ -18,11 +18,17 @@ def overlay_alpha() -> float:
     return max(0.0, min(0.25, alpha))
 
 
-def pump_ladder_entry(netuid: int) -> Optional[Dict[str, Any]]:
+def pump_ladder_entry(
+    netuid: int,
+    pump_state: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     try:
-        from internal.pump.state import load_state
+        if pump_state is None:
+            from internal.pump.state import load_state
 
-        st = load_state()
+            st = load_state()
+        else:
+            st = pump_state
         subnets = st.get("subnets") if isinstance(st, dict) else {}
         if not isinstance(subnets, dict):
             return None
@@ -52,6 +58,8 @@ def pump_prior_0_1(entry: Dict[str, Any]) -> Optional[float]:
 def apply_pump_score_overlay(
     total_score: float,
     subnet_data: Dict[str, Any],
+    *,
+    pump_state: Optional[Dict[str, Any]] = None,
 ) -> Tuple[float, Optional[Dict[str, Any]]]:
     """Blend council total (0–100) with pump prior. No persistence."""
     alpha = overlay_alpha()
@@ -64,7 +72,7 @@ def apply_pump_score_overlay(
         nu = int(netuid)
     except (TypeError, ValueError):
         return total_score, None
-    entry = pump_ladder_entry(nu)
+    entry = pump_ladder_entry(nu, pump_state=pump_state)
     if not entry:
         return total_score, None
     prior = pump_prior_0_1(entry)

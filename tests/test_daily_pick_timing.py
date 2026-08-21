@@ -1,6 +1,7 @@
 """Daily pick stage timing helper tests."""
 
 import logging
+from unittest.mock import patch
 
 from internal.council.daily_pick_timing import (
     StageTimer,
@@ -60,3 +61,63 @@ def test_log_stage_summary_respects_disable(monkeypatch, caplog):
     caplog.set_level(logging.WARNING)
     log_stage_summary("daily pick tick timing", {"pick_work": 1.0})
     assert not caplog.records
+
+
+def test_record_hold_decision_emits_timing(monkeypatch, caplog):
+    caplog.set_level(logging.WARNING)
+    monkeypatch.setenv("DAILY_PICK_STAGE_TIMING", "on")
+    with patch("internal.learning.trail_events.emit_trail_event"), patch(
+        "internal.council.weights._load_raw", return_value={"soul_map_state": {}}
+    ), patch("internal.council.weights._save_raw"), patch(
+        "internal.learning.prediction_loop.record_pick_prediction"
+    ):
+        from internal.learning.prediction_loop import record_hold_decision
+
+        record_hold_decision(
+            candidate={"subnet": {"netuid": 9, "name": "SN9"}, "final_confidence": 0.4},
+            reason="below gate",
+            subnet={"netuid": 9, "name": "SN9", "price": 1.0},
+        )
+    assert any("record_hold_decision timing" in rec.message for rec in caplog.records)
+
+
+def test_select_daily_pick_hoists_io_cache_once(monkeypatch):
+    calls = {"scenario": 0, "signal": 0, "pump": 0, "soul": 0}
+
+    def _scenario(limit=None):
+        calls["scenario"] += 1
+        return []
+
+    def _signal():
+        calls["signal"] += 1
+        return {"hour": {}, "day": {}}
+
+    def _pump():
+        calls["pump"] += 1
+        return {"subnets": {}}
+
+    def _soul(path=None, *, copy_blob=False):
+        calls["soul"] += 1
+        return {"soul_map_state": {}}
+
+    monkeypatch.setattr("internal.council.weights.load_impact_strength", lambda: 1.0)
+    monkeypatch.setattr("internal.council.weights.repair_stale_contrarian_weights", lambda path=None, predictions_path=None: False)
+    monkeypatch.setattr("internal.council.scenario_memory.get_scenarios", _scenario)
+    monkeypatch.setattr("internal.council.weights.load_signal_weights", _signal)
+    monkeypatch.setattr("internal.pump.state.load_state", _pump)
+    monkeypatch.setattr("internal.council.weights._load_raw", _soul)
+    monkeypatch.setattr("internal.message_intel.rollup._conviction_rows", lambda db=None: [])
+
+    from internal.council.daily_pick import select_daily_pick
+
+    select_daily_pick(
+        [
+            {"netuid": 1, "name": "A", "price": 1.0, "change_24h": 0.0},
+            {"netuid": 2, "name": "B", "price": 1.0, "change_24h": 0.0},
+        ],
+        {},
+    )
+    assert calls["scenario"] == 1
+    assert calls["signal"] == 1
+    assert calls["pump"] == 1
+    assert calls["soul"] >= 1

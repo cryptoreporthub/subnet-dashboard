@@ -1883,7 +1883,7 @@ def score_subnet_for_day(
                 scenario_outcome_adjustment,
             )
 
-            memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(
+            memory_adj = disposition_score_adjustment(sn, market_context) + scenario_outcome_adjustment(
                 sn, market_context
             )
         except Exception:
@@ -1914,7 +1914,9 @@ def score_subnet_for_day(
             try:
                 from internal.council.pump_overlay import apply_pump_score_overlay
 
-                total, pump_overlay = apply_pump_score_overlay(total, sn)
+                total, pump_overlay = apply_pump_score_overlay(
+                    total, sn, pump_state=(market_context or {}).get("pump_state")
+                )
             except Exception:
                 pass
         stages["pump_overlay"] = t.ms

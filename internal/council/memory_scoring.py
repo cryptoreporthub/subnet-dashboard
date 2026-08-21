@@ -23,13 +23,21 @@ def _netuid_key(sn: Dict[str, Any]) -> Optional[int]:
     return None
 
 
-def _load_disposition(netuid: int) -> Optional[Dict[str, Any]]:
+def _load_disposition(
+    netuid: int,
+    market_context: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
     try:
-        from internal.council.weights import _load_raw
+        sms = None
+        if isinstance(market_context, dict):
+            cached = market_context.get("_soul_map_disposition_cache")
+            if isinstance(cached, dict):
+                sms = cached
+        if sms is None:
+            from internal.council.weights import _load_raw
 
-        # Read-only: avoid deepcopy-per-subnet of soul_map during score_universe.
-        raw = _load_raw(copy_blob=False)
-        sms = raw.get("soul_map_state") or raw.get("adversarial_state") or {}
+            raw = _load_raw(copy_blob=False)
+            sms = raw.get("soul_map_state") or raw.get("adversarial_state") or {}
         for block_key in ("message_intel_dispositions", "pump_dispositions"):
             block = sms.get(block_key)
             if not isinstance(block, dict):
@@ -42,12 +50,15 @@ def _load_disposition(netuid: int) -> Optional[Dict[str, Any]]:
     return None
 
 
-def disposition_score_adjustment(sn: Dict[str, Any]) -> float:
+def disposition_score_adjustment(
+    sn: Dict[str, Any],
+    market_context: Optional[Dict[str, Any]] = None,
+) -> float:
     """Capped ±3 pt tilt from message-intel / pump dispositions."""
     netuid = _netuid_key(sn or {})
     if netuid is None:
         return 0.0
-    disp = _load_disposition(netuid)
+    disp = _load_disposition(netuid, market_context)
     if not disp:
         return 0.0
     action = str(
@@ -73,9 +84,15 @@ def scenario_outcome_adjustment(
     if netuid is None:
         return 0.0
     try:
-        from internal.council import scenario_memory
+        scenarios = None
+        if isinstance(market_context, dict):
+            cached = market_context.get("_scenario_scenarios_cache")
+            if isinstance(cached, list):
+                scenarios = cached
+        if scenarios is None:
+            from internal.council import scenario_memory
 
-        scenarios = scenario_memory.get_scenarios(limit=300)
+            scenarios = scenario_memory.get_scenarios(limit=300)
     except Exception:
         return 0.0
 
