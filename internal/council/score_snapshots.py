@@ -52,7 +52,26 @@ def _snapshot_subnet_cap() -> int:
 
 _lock = threading.Lock()
 _TICK_ACTIVE = False
+_write_executor: Optional[ThreadPoolExecutor] = None
+_write_future: Optional[Any] = None
 _scheduler: Optional["ScoreSnapshotScheduler"] = None
+
+
+def _write_future_active() -> bool:
+    fut = _write_future
+    return fut is not None and not fut.done()
+
+
+def _scoring_write_in_progress() -> bool:
+    with _lock:
+        return _write_future_active()
+
+
+def _release_write_future(done_fut: Any) -> None:
+    global _write_future
+    with _lock:
+        if _write_future is done_fut:
+            _write_future = None
 
 
 def _now_iso() -> str:
@@ -284,21 +303,29 @@ def write_full_universe_snapshot(
             logger.warning("score snapshot write failed: %s", exc)
             return {"ok": False, "error": str(exc)}
 
-    pool = ThreadPoolExecutor(max_workers=1)
-    try:
-        fut = pool.submit(_build_and_save)
-        try:
-            return fut.result(timeout=timeout)
-        except FuturesTimeoutError:
-            logger.warning(
-                "score snapshot write timed out after %ds", timeout
+    global _write_executor, _write_future
+    with _lock:
+        if _write_future is not None and not _write_future.done():
+            return {"ok": False, "error": "scoring_in_progress"}
+        if _write_executor is None:
+            _write_executor = ThreadPoolExecutor(
+                max_workers=1, thread_name_prefix="score-snap-write"
             )
-            return {"ok": False, "error": f"write_timeout_{timeout}s"}
+        fut = _write_executor.submit(_build_and_save)
+        _write_future = fut
+        fut.add_done_callback(_release_write_future)
+    try:
+        return fut.result(timeout=timeout)
+    except FuturesTimeoutError:
+        logger.warning("score snapshot write timed out after %ds", timeout)
+        return {"ok": False, "error": f"write_timeout_{timeout}s"}
     except Exception as exc:
         logger.warning("score snapshot write failed: %s", exc)
         return {"ok": False, "error": str(exc)}
     finally:
-        pool.shutdown(wait=False, cancel_futures=True)
+        with _lock:
+            if _write_future is fut and fut.done():
+                _write_future = None
 
 
 class ScoreSnapshotScheduler:
@@ -344,7 +371,7 @@ class ScoreSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _scoring_in_progress(self) -> bool:
-        if _TICK_ACTIVE or self._tick_active:
+        if _scoring_write_in_progress() or _TICK_ACTIVE or self._tick_active:
             return True
         try:
             from internal.council import weights
@@ -407,10 +434,59 @@ class ScoreSnapshotScheduler:
         # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
         return self._tick_body(reschedule=reschedule)
 
+    def _complete_write_future(self, fut: Any, reschedule: bool) -> None:
+        global _TICK_ACTIVE, _write_future
+        try:
+            try:
+                result = dict(fut.result())
+            except Exception as exc:
+                result = {"ok": False, "error": str(exc)}
+            result["run_at"] = _now_iso()
+            with _lock:
+                self._last_run_at = result["run_at"]
+                self._last_ok = bool(result.get("ok"))
+                self._last_error = result.get("error")
+                self._last_result = {
+                    k: result.get(k) for k in ("count", "written_at", "path") if k in result
+                }
+            self._persist_cycle_summary(result)
+            if result.get("ok"):
+                logger.info(
+                    "score snapshot cycle ok (deferred) count=%s path=%s",
+                    result.get("count"),
+                    result.get("path"),
+                )
+            else:
+                logger.warning(
+                    "score snapshot cycle failed (deferred): %s", result.get("error")
+                )
+        finally:
+            with _lock:
+                if _write_future is fut:
+                    _write_future = None
+                _TICK_ACTIVE = False
+                self._tick_active = False
+            if reschedule and self._running:
+                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
+
+    def _register_write_completion_callback(self, reschedule: bool) -> None:
+        with _lock:
+            fut = _write_future
+        if fut is None:
+            return
+        if fut.done():
+            self._complete_write_future(fut, reschedule)
+            return
+
+        def _on_done(done_fut: Any) -> None:
+            self._complete_write_future(done_fut, reschedule)
+
+        fut.add_done_callback(_on_done)
+
     def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
         global _TICK_ACTIVE
         with _lock:
-            if _TICK_ACTIVE:
+            if _TICK_ACTIVE or _write_future_active():
                 skipped = {
                     "ok": True,
                     "run_at": _now_iso(),
@@ -461,13 +537,16 @@ class ScoreSnapshotScheduler:
                 )
             else:
                 logger.warning("score snapshot cycle failed: %s", result.get("error"))
-            if reschedule and self._running:
-                schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
             return result
         finally:
-            with _lock:
-                _TICK_ACTIVE = False
-                self._tick_active = False
+            if _scoring_write_in_progress():
+                self._register_write_completion_callback(reschedule)
+            else:
+                with _lock:
+                    _TICK_ACTIVE = False
+                    self._tick_active = False
+                if reschedule and self._running:
+                    schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
@@ -561,7 +640,11 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     with _lock:
         sched = _scheduler
         running = bool(sched and sched._running)
-        tick_in_progress = _TICK_ACTIVE or bool(sched and sched._tick_active)
+        tick_in_progress = (
+            _write_future_active()
+            or _TICK_ACTIVE
+            or bool(sched and sched._tick_active)
+        )
 
     if tick_in_progress:
         return {
