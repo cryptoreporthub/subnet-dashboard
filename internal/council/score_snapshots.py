@@ -313,7 +313,7 @@ def write_full_universe_snapshot(
             )
         fut = _write_executor.submit(_build_and_save)
         _write_future = fut
-        fut.add_done_callback(_release_write_future)
+    fut.add_done_callback(_release_write_future)
     try:
         return fut.result(timeout=timeout)
     except FuturesTimeoutError:

@@ -253,6 +253,60 @@ def test_snapshot_subnet_cap_defaults_on_worker(monkeypatch):
     assert snaps._snapshot_subnet_cap() == 5
 
 
+def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):
+    """Already-done future must not deadlock when registering the release callback."""
+    from concurrent.futures import Future, ThreadPoolExecutor
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": 1, "name": "One"}], "registry-fallback"),
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: {"total_score": 2.0},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+
+    class _RaceExecutor(ThreadPoolExecutor):
+        def submit(self, fn, *args, **kwargs):
+            fut = Future()
+            try:
+                fut.set_result(fn(*args, **kwargs))
+            except Exception as exc:
+                fut.set_exception(exc)
+            return fut
+
+    monkeypatch.setattr(snaps, "ThreadPoolExecutor", _RaceExecutor)
+    _reset_write_occupancy()
+
+    result: dict[str, object] = {}
+
+    def _run() -> None:
+        result["out"] = snaps.write_full_universe_snapshot()
+
+    import threading
+
+    worker = threading.Thread(target=_run)
+    worker.start()
+    worker.join(timeout=2.0)
+    assert not worker.is_alive(), "write_full_universe_snapshot deadlocked on fast completion"
+    out = result.get("out")
+    assert isinstance(out, dict)
+    assert out.get("ok") is True
+    assert path.is_file()
+
+
 def test_write_snapshot_times_out(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
