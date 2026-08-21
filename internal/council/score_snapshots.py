@@ -508,3 +508,42 @@ def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
                 "enabled": _enabled(),
             }
         return {**_scheduler.state(), "enabled": _enabled()}
+
+
+def revive_score_snapshot_scheduler() -> Dict[str, Any]:
+    """Best-effort in-place revive when ``score_snapshots.json`` goes stale.
+
+    Loop stall guard strike 1 calls this. Idempotent ``start_*`` alone cannot
+    refresh the artifact when the scheduler claims ``running`` but periodic
+    ticks stopped (alive-but-hung). Recycle when the file is very stale, then
+    run one synchronous cycle so the guarded mtime actually moves.
+    """
+    if not _enabled():
+        return {"revived": False, "reason": "disabled"}
+
+    age_before = snapshot_age_seconds()
+    recycled = False
+    with _lock:
+        sched = _scheduler
+        running = bool(sched and sched._running)
+
+    if running and age_before is not None and age_before > SCORE_SNAPSHOT_MAX_AGE_SECONDS:
+        stop_score_snapshot_scheduler()
+        recycled = True
+
+    start_out = start_score_snapshot_scheduler(immediate=False)
+    tick_out: Dict[str, Any] = {"ok": False, "error": "no_scheduler"}
+    with _lock:
+        sched = _scheduler
+    if sched is not None:
+        tick_out = sched.run_once()
+
+    age_after = snapshot_age_seconds()
+    return {
+        "revived": bool(tick_out.get("ok")),
+        "recycled": recycled,
+        "age_before": age_before,
+        "age_after": age_after,
+        "start": start_out,
+        "tick": tick_out,
+    }

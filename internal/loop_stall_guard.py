@@ -3,18 +3,17 @@
 Background (prod incident 2026-08-09): the Fly supervisor restarts the worker
 process only when the worker heartbeat goes stale. A live process whose
 internal scheduler threads have died still touches the heartbeat, so the
-supervisor never restarts it and data (pump desk snapshots) goes stale
-overnight.
+supervisor never restarts it and data goes stale overnight.
 
-This guard runs inside the worker process and watches the artifact those
-schedulers are supposed to produce — the pump desk snapshot, written every
-PUMP_DESK_SNAPSHOT_MINUTES (default 15) by
-internal.pump.desk_snapshot_scheduler:
+This guard runs inside the worker process and watches the artifact the
+council score snapshot scheduler is supposed to produce —
+``data/score_snapshots.json`` (probe: ``loop_health._snapshot_age_seconds``,
+producer: ``internal.council.score_snapshots``):
 
   * every tick it logs the observed snapshot age (diagnosable),
-  * on the first stale observation it attempts a safe in-place revive
-    (start_pump_desk_snapshot_scheduler is idempotent — calling it while
-     running is a no-op),
+  * on the first stale observation it attempts a safe in-place revive via
+    ``revive_score_snapshot_scheduler`` (stop+restart when very stale, then
+    one synchronous cycle so the guarded mtime moves),
   * if the snapshot stays stale for LOOP_STALL_GUARD_CONSECUTIVE_CHECKS
     consecutive ticks it logs CRITICAL and exits(1) so the supervisor
     restarts the worker fresh (which re-runs background_boot and revives
@@ -65,7 +64,7 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 
 
 def _snapshot_age_seconds() -> Optional[float]:
-    """Age in seconds of the latest pump desk snapshot (None if unknown)."""
+    """Age in seconds of score_snapshots.json (None if unknown)."""
     try:
         from internal.learning.loop_health import _snapshot_age_seconds as _age
 
@@ -109,9 +108,9 @@ def _worker_mode() -> bool:
 
 def _try_revive() -> None:
     try:
-        from internal.pump.desk_snapshot_scheduler import start_pump_desk_snapshot_scheduler
+        from internal.council.score_snapshots import revive_score_snapshot_scheduler
 
-        result = start_pump_desk_snapshot_scheduler(immediate=False)
+        result = revive_score_snapshot_scheduler()
         logger.warning("loop stall guard: in-place revive attempt -> %s", result)
     except Exception as exc:
         logger.warning("loop stall guard: revive attempt failed: %s", exc)
