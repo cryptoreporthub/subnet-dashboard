@@ -9,7 +9,13 @@ from typing import Any, Dict, List, Optional
 
 import time
 
-from internal.council.daily_pick_timing import StageTimer, log_stage_summary
+from internal.council.daily_pick_timing import (
+    StageTimer,
+    begin_tick_profile,
+    end_tick_profile,
+    log_stage_summary,
+    log_tick_profile,
+)
 
 from internal.council.state_vector import (
     attach_council_prediction,
@@ -43,10 +49,14 @@ def select_daily_pick(
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
     stages: Dict[str, float] = {}
+    profile = begin_tick_profile()
     with StageTimer("weights") as weights_timer:
         market_context.setdefault("weights", _weights_for_context(market_context))
     stages["weights"] = weights_timer.ms
-    if "telegram_conviction_rows" not in market_context:
+    if "telegram_conviction_rows" in market_context:
+        if profile is not None:
+            profile.conviction_rows_cached = True
+    else:
         with StageTimer("conviction_rows") as conv_timer:
             try:
                 from internal.message_intel.rollup import _conviction_rows
@@ -55,6 +65,10 @@ def select_daily_pick(
             except Exception:
                 market_context["telegram_conviction_rows"] = None
         stages["conviction_rows"] = conv_timer.ms
+        if profile is not None:
+            profile.conviction_rows_calls = 1
+            profile.conviction_rows_ms = conv_timer.ms
+            profile.note_io("sqlite_conviction_rows", conv_timer.ms)
     with StageTimer("tradable") as tradable_timer:
         subnets = tradable_subnets(subnets)
     stages["tradable"] = tradable_timer.ms
@@ -82,17 +96,18 @@ def select_daily_pick(
 
     scored = []
     score_started = time.perf_counter()
-    per_subnet_ms: List[tuple] = []
     for sn in subnets:
         subnet_started = time.perf_counter()
         day_score = score_subnet_for_day(sn, market_context)
-        per_subnet_ms.append(
-            (sn.get("netuid"), (time.perf_counter() - subnet_started) * 1000)
-        )
+        if profile is not None and isinstance(day_score, dict):
+            stage_detail = day_score.pop("_timing_stages", {})
+            profile.record_subnet(
+                sn.get("netuid"),
+                (time.perf_counter() - subnet_started) * 1000,
+                stage_detail,
+            )
         scored.append({"subnet": sn, "score": day_score})
     stages["score_all"] = (time.perf_counter() - score_started) * 1000
-    per_subnet_ms.sort(key=lambda row: row[1], reverse=True)
-    slowest = per_subnet_ms[:3]
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
@@ -137,11 +152,9 @@ def select_daily_pick(
     log_stage_summary(
         "select_daily_pick timing",
         stages,
-        extra={
-            "universe": len(subnets),
-            "slowest": ",".join(f"sn{n}:{int(ms)}ms" for n, ms in slowest if n is not None),
-        },
+        extra={"universe": len(subnets)},
     )
+    log_tick_profile("select_daily_pick profile", end_tick_profile())
 
     return {
         "subnet": {

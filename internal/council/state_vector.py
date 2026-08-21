@@ -60,6 +60,14 @@ def _load_price_cache() -> Dict[str, Any]:
     if _price_cache_memo["mtime"] == mtime:
         return _price_cache_memo["data"]
     try:
+        from internal.council.daily_pick_timing import active_profile
+
+        profile = active_profile()
+        if profile is not None:
+            profile.note_io("price_cache_reload")
+    except Exception:
+        pass
+    try:
         with open(_PRICE_CACHE_PATH, "r") as f:
             data = _json.load(f)
     except Exception:
@@ -1778,31 +1786,44 @@ def score_subnet_for_day(
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """24h score (0-100) emphasizing yield, trend, and lower volatility."""
+    from internal.council.daily_pick_timing import StageTimer, active_profile
+
     sn = subnet_data or {}
+    stages: Dict[str, float] = {}
+    profile = active_profile()
     # Daily picks run on the request/scheduler critical path.  Technical
     # history is cache-only here; the recovery worker may hydrate cold rows
     # separately without holding up pick publication.
-    indicators = _compute_technical_indicators(sn, allow_hydration=False)
+    with StageTimer("technical") as t:
+        indicators = _compute_technical_indicators(sn, allow_hydration=False)
+    stages["technical"] = t.ms
     from internal.council.recovery_context import build_recovery_context
 
-    price_history = _get_price_history(
-        sn.get("netuid"),
-        sn,
-        allow_hydration=False,
-    )
-    recovery_context = build_recovery_context(
-        sn,
-        indicators,
-        price_history,
-    )
-    convergence = _detect_oversold_convergence(indicators)
-    hot = _compute_hot_signals(sn, indicators, convergence)
-    sell = _compute_sell_signals(sn, indicators, convergence)
-    signal_impact = _compute_signal_impact(
-        sn, indicators, hot, sell, horizon_type="day", market_context=market_context
-    )
-
-    experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
+    with StageTimer("price_history") as t:
+        price_history = _get_price_history(
+            sn.get("netuid"),
+            sn,
+            allow_hydration=False,
+        )
+    stages["price_history"] = t.ms
+    if profile and price_history.get("source") not in ("unavailable", "synthetic", "cached"):
+        profile.note_io("price_history_miss")
+    with StageTimer("recovery") as t:
+        recovery_context = build_recovery_context(
+            sn,
+            indicators,
+            price_history,
+        )
+    stages["recovery"] = t.ms
+    with StageTimer("signals") as t:
+        convergence = _detect_oversold_convergence(indicators)
+        hot = _compute_hot_signals(sn, indicators, convergence)
+        sell = _compute_sell_signals(sn, indicators, convergence)
+        signal_impact = _compute_signal_impact(
+            sn, indicators, hot, sell, horizon_type="day", market_context=market_context
+        )
+        experts = _expert_contributions(sn, indicators, signal_impact, hot, sell)
+    stages["signals"] = t.ms
     try:
         from internal.signal_hub.overlay import apply_hub_overlay
 
@@ -1842,53 +1863,63 @@ def score_subnet_for_day(
     except (TypeError, ValueError):
         strength = None
     if strength is None:
-        try:
-            from internal.council.weights import load_impact_strength
+        with StageTimer("impact_strength_io") as t:
+            try:
+                from internal.council.weights import load_impact_strength
 
-            strength = float(load_impact_strength())
-        except Exception:
-            strength = 1.0
+                strength = float(load_impact_strength())
+            except Exception:
+                strength = 1.0
+        stages["impact_strength_io"] = t.ms
+        if profile:
+            profile.note_io("soul_map_read", t.ms)
     flow_boost = max(-0.05, min(0.08, relative_flow(sn) * 0.15)) * strength
     # Large caps stay eligible but score dampens vs mid/small for the same signals.
     size_tilt = max(-0.06, min(0.06, (impact_sensitivity(sn) - 1.0) * 0.04)) * strength
-    try:
-        from internal.council.memory_scoring import (
-            disposition_score_adjustment,
-            scenario_outcome_adjustment,
-        )
+    with StageTimer("memory") as t:
+        try:
+            from internal.council.memory_scoring import (
+                disposition_score_adjustment,
+                scenario_outcome_adjustment,
+            )
 
-        memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(
-            sn, market_context
-        )
-    except Exception:
-        memory_adj = 0.0
+            memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(
+                sn, market_context
+            )
+        except Exception:
+            memory_adj = 0.0
+    stages["memory"] = t.ms
     total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)
     total = min(100.0, max(0.0, total))
     telegram_calibration = None
-    try:
-        # Lazy, read-only boundary: Telegram history never changes council weights
-        # and is default-off until operators explicitly enable it.
-        from internal.message_intel.calibration import calibration_for_subnet
+    with StageTimer("calibration") as t:
+        try:
+            from internal.message_intel.calibration import calibration_for_subnet
 
-        conviction_rows = (market_context or {}).get("telegram_conviction_rows")
-        telegram_calibration = calibration_for_subnet(
-            sn.get("netuid") or sn.get("id"),
-            conviction_rows=conviction_rows,
-        )
-        total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
-    except Exception:
-        telegram_calibration = {
-            "active": False, "applied": False, "adjustment_points": 0.0,
-            "withheld_reasons": ["calibration_unavailable"],
-        }
+            conviction_rows = (market_context or {}).get("telegram_conviction_rows")
+            telegram_calibration = calibration_for_subnet(
+                sn.get("netuid") or sn.get("id"),
+                conviction_rows=conviction_rows,
+            )
+            total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
+        except Exception:
+            telegram_calibration = {
+                "active": False, "applied": False, "adjustment_points": 0.0,
+                "withheld_reasons": ["calibration_unavailable"],
+            }
+    stages["calibration"] = t.ms
     pump_overlay = None
     if not (market_context or {}).get("skip_pump_overlay"):
-        try:
-            from internal.council.pump_overlay import apply_pump_score_overlay
+        with StageTimer("pump_overlay") as t:
+            try:
+                from internal.council.pump_overlay import apply_pump_score_overlay
 
-            total, pump_overlay = apply_pump_score_overlay(total, sn)
-        except Exception:
-            pass
+                total, pump_overlay = apply_pump_score_overlay(total, sn)
+            except Exception:
+                pass
+        stages["pump_overlay"] = t.ms
+        if profile:
+            profile.note_io("pump_state_read", stages["pump_overlay"])
 
     # Long-pick guard: distinguish recovery from correction.  A subnet with a
     # prolonged downtrend, lower lows, bearish technicals, and no positive flow
@@ -1905,10 +1936,13 @@ def score_subnet_for_day(
     confidence = _compute_confidence(sn, indicators, experts, total_score=total)
     tags = _scenario_tags(sn, indicators, market_context)
 
-    # Compute weighted technical score for day horizon
-    tech_score = _compute_technical_score(sn, "day", indicators, market_context)
+    with StageTimer("tech_score") as t:
+        tech_score = _compute_technical_score(sn, "day", indicators, market_context)
+    stages["tech_score"] = t.ms
+    if profile:
+        profile.note_io("signal_weights_read", stages["tech_score"])
 
-    return {
+    out = {
         "total_score": total,
         "expert_contributions": {
             **experts,
@@ -1927,6 +1961,9 @@ def score_subnet_for_day(
         "pump_overlay": pump_overlay,
         "telegram_evidence_calibration": telegram_calibration,
     }
+    if profile and stages:
+        out["_timing_stages"] = stages
+    return out
 
 
 # ---------------------------------------------------------------------------
