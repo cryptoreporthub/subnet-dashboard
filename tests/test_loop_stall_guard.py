@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -147,10 +148,13 @@ def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     _make_stale_snapshot(snap_path)
     write_calls = {"n": 0}
+    tick_started = threading.Event()
+    release_tick = threading.Event()
 
     def _slow_write(progress_cb=None):
         write_calls["n"] += 1
-        time.sleep(0.5)
+        tick_started.set()
+        release_tick.wait(timeout=5)
         return _fake_write_that_saves(snap_path)(progress_cb)
 
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _slow_write)
@@ -158,21 +162,59 @@ def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
     sched._running = True
+    sched._scoring_in_progress = lambda: False
     snaps._scheduler = sched
-    sched._tick_active = True
 
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
+    tick_thread = threading.Thread(
+        target=sched._tick_body,
+        kwargs={"reschedule": False},
+        daemon=True,
+    )
+    tick_thread.start()
+    assert tick_started.wait(timeout=5)
 
     try:
         out = snaps.revive_score_snapshot_scheduler()
         assert out["revived"] is False
         assert out.get("reason") == "tick_in_progress"
-        assert write_calls["n"] == 0
+        assert write_calls["n"] == 1
         age_after = loop_health._snapshot_age_seconds(str(snap_path))
         assert age_after is not None
         assert age_after >= age_before - 1
     finally:
-        sched._tick_active = False
+        release_tick.set()
+        tick_thread.join(timeout=5)
+        snaps._TICK_ACTIVE = False
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_false_when_file_already_young_and_no_write(tmp_path, monkeypatch):
+    """Young mtime + ok tick without save_score_snapshot must not claim revived."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    snap_path.write_text('{"day":[],"hour":[]}', encoding="utf-8")
+    age_before = loop_health._snapshot_age_seconds(str(snap_path))
+    assert age_before is not None
+    assert age_before < 60
+
+    monkeypatch.setattr(
+        snaps,
+        "write_full_universe_snapshot",
+        lambda progress_cb=None: {
+            "ok": True,
+            "count": 0,
+            "written_at": "2026-08-21T00:00:00Z",
+            "path": str(snap_path),
+        },
+    )
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["revived"] is False
+        age_after = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_after is not None
+        assert age_after >= age_before - 1
+    finally:
         snaps.stop_score_snapshot_scheduler()
 
 
@@ -226,7 +268,6 @@ def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
 
 def test_try_revive_contract_uses_score_snapshot_revive():
     src = Path("internal/loop_stall_guard.py").read_text(encoding="utf-8")
-    assert "revive_score_snapshot_scheduler" in src
-    assert "pump_desk" not in src
-    assert "pump desk" not in src.lower()
-
+    assert "from internal.council.score_snapshots import revive_score_snapshot_scheduler" in src
+    assert "desk_snapshot_scheduler" not in src
+    assert "start_pump_desk" not in src

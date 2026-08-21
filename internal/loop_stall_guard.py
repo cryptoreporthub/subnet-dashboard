@@ -12,8 +12,8 @@ producer: ``internal.council.score_snapshots``):
 
   * every tick it logs the observed snapshot age (diagnosable),
   * on the first stale observation it attempts a safe in-place revive via
-    ``revive_score_snapshot_scheduler`` (stop+restart when very stale, then
-    one synchronous cycle so the guarded mtime moves),
+    ``revive_score_snapshot_scheduler`` (recycle whenever the scheduler claims
+    running, then one synchronous cycle so the guarded mtime moves),
   * if the snapshot stays stale for LOOP_STALL_GUARD_CONSECUTIVE_CHECKS
     consecutive ticks it logs CRITICAL and exits(1) so the supervisor
     restarts the worker fresh (which re-runs background_boot and revives

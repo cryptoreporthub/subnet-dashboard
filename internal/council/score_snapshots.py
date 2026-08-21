@@ -51,6 +51,7 @@ def _snapshot_subnet_cap() -> int:
     return 0
 
 _lock = threading.Lock()
+_TICK_ACTIVE = False
 _scheduler: Optional["ScoreSnapshotScheduler"] = None
 
 
@@ -343,7 +344,7 @@ class ScoreSnapshotScheduler:
         return self._tick(reschedule=False)
 
     def _scoring_in_progress(self) -> bool:
-        if self._tick_active:
+        if _TICK_ACTIVE or self._tick_active:
             return True
         try:
             from internal.council import weights
@@ -407,7 +408,21 @@ class ScoreSnapshotScheduler:
         return self._tick_body(reschedule=reschedule)
 
     def _tick_body(self, reschedule: bool = True) -> Dict[str, Any]:
-        self._tick_active = True
+        global _TICK_ACTIVE
+        with _lock:
+            if _TICK_ACTIVE:
+                skipped = {
+                    "ok": True,
+                    "run_at": _now_iso(),
+                    "skipped": "scoring_in_progress",
+                }
+                if reschedule and self._running:
+                    schedule_in_seconds(
+                        JOB_ID, self._tick, min(120, self.refresh_minutes * 60)
+                    )
+                return skipped
+            _TICK_ACTIVE = True
+            self._tick_active = True
         try:
             self._clear_stuck_scoring()
             started_at = _now_iso()
@@ -450,7 +465,9 @@ class ScoreSnapshotScheduler:
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
             return result
         finally:
-            self._tick_active = False
+            with _lock:
+                _TICK_ACTIVE = False
+                self._tick_active = False
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
@@ -532,8 +549,9 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     (default 600s) while ``run_once`` completes — not fire-and-forget.
 
     ponytail: ``stop``/``cancel_job`` cannot kill a hung Python thread; if
-    ``_tick_active`` is set, return ``tick_in_progress`` and let the in-flight
-    body finish or hit the write timeout.
+    module ``_TICK_ACTIVE`` or instance ``_tick_active`` is set, return
+    ``tick_in_progress`` and let the in-flight body finish or hit the write
+    timeout.
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
@@ -543,7 +561,7 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     with _lock:
         sched = _scheduler
         running = bool(sched and sched._running)
-        tick_in_progress = bool(sched and sched._tick_active)
+        tick_in_progress = _TICK_ACTIVE or bool(sched and sched._tick_active)
 
     if tick_in_progress:
         return {
@@ -570,7 +588,10 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
         tick_out.get("ok")
         and not tick_out.get("skipped")
         and age_after is not None
-        and (age_before is None or age_after < age_before or age_after < 60)
+        and (
+            (age_before is None and age_after < 60)
+            or (age_before is not None and age_after < age_before)
+        )
     )
     return {
         "revived": revived,
