@@ -635,11 +635,19 @@ def test_api_mindmap_graph_timeout_returns_degraded(monkeypatch):
         return {"status": "success", "nodes": [{"id": "sn:1"}], "edges": []}
 
     monkeypatch.setattr(graph_routes, "_cached_or_build", _slow)
+    def _boom(*_a, **_k):
+        raise AssertionError("timeout path must not build integration_status on the loop")
+
+    monkeypatch.setattr(
+        "internal.learning.mindmap_aggregator._build_integration_status",
+        _boom,
+    )
     resp = TestClient(app).get("/api/mindmap/graph")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "timeout"
     assert body["nodes"] == []
+    assert body.get("integration_status") == {}
 
 
 def test_api_mindmap_graph_timeout_serves_stale_cache(monkeypatch):
