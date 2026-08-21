@@ -106,6 +106,25 @@ def test_warm_homepage_cache_falls_back_to_ultra_minimal(monkeypatch):
     assert srv._EMERGENCY_HOME_HTML and 'id="tribunal-hero"' in srv._EMERGENCY_HOME_HTML
 
 
+def test_warm_homepage_cache_timeout_does_not_join_hung_render(monkeypatch):
+    """CI smoke hung 15m after pytest passed: TPE context-manager join on timeout."""
+    import server as srv
+
+    def _hang(_request):
+        time.sleep(30)
+        return "<html></html>"
+
+    monkeypatch.setattr(srv, "_render_index_html", _hang)
+    monkeypatch.setattr(srv, "HOMEPAGE_BUILD_TIMEOUT", 0.2)
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._HOMEPAGE_WARMING = False
+    t0 = time.time()
+    srv._warm_homepage_cache(None)
+    elapsed = time.time() - t0
+    assert elapsed < 12.0, f"warm cache joined hung render for {elapsed:.1f}s"
+
+
 def test_ultra_minimal_index_html_paints_hero():
     import server as srv
 
