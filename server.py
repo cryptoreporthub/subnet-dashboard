@@ -1594,14 +1594,7 @@ def _bailout_homepage_html() -> Optional[str]:
         daemon=True,
         name="bailout-emergency-prime",
     ).start()
-    try:
-        # The ultra-minimal shell is deliberately local/file-backed and
-        # time-safe. Prefer it over a blank reload loop so API hydration can
-        # start immediately on a cold worker.
-        return _ultra_minimal_index_html()
-    except Exception as exc:
-        logger.warning("ultra-minimal bailout render failed: %s", exc)
-        return _INSTANT_HOME_SHELL
+    return _INSTANT_HOME_SHELL
 
 
 def _schedule_homepage_warm(request: Optional[Request] = None) -> None:

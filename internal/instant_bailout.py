@@ -8,6 +8,7 @@ entire app including StaticFiles. This layer short-circuits the hot paths.
 from __future__ import annotations
 
 import json
+import os
 from typing import Callable, Optional
 
 # Inline critical CSS — no /static dependency on first paint.
@@ -41,6 +42,32 @@ HARDCODED_EMERGENCY_HTML = """<!DOCTYPE html>
 </body>
 </html>
 """.encode("utf-8")
+
+# Critical hydrate assets — served without touching the inner app when the loop is wedged.
+_BAILOUT_STATIC_ALLOWLIST: dict[str, str] = {
+    "/static/js/cockpit_hydrate.js": "application/javascript",
+    "/static/js/mindmap_graph.js": "application/javascript",
+    "/static/js/api_fetch.js": "application/javascript",
+    "/static/css/ui.css": "text/css",
+}
+_BAILOUT_STATIC_CACHE_CONTROL = b"public, max-age=60"
+
+
+def _default_static_dir() -> str:
+    return os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+
+
+def _preload_bailout_static(static_dir: str) -> dict[str, bytes]:
+    loaded: dict[str, bytes] = {}
+    for url_path in _BAILOUT_STATIC_ALLOWLIST:
+        rel = url_path.removeprefix("/static/").replace("/", os.sep)
+        file_path = os.path.join(static_dir, rel)
+        try:
+            with open(file_path, "rb") as fh:
+                loaded[url_path] = fh.read()
+        except OSError:
+            continue
+    return loaded
 
 
 async def _send_response(
@@ -77,11 +104,13 @@ class InstantBailoutASGI:
         get_homepage_html: Callable[[], Optional[str]],
         schedule_warm: Callable[[], None],
         homepage_cache_control: bytes = b"no-store, max-age=0",
+        static_dir: Optional[str] = None,
     ) -> None:
         self.app = app
         self._get_homepage_html = get_homepage_html
         self._schedule_warm = schedule_warm
         self._homepage_cache_control = homepage_cache_control
+        self._bailout_static = _preload_bailout_static(static_dir or _default_static_dir())
 
     def __getattr__(self, name: str):
         return getattr(self.app, name)
@@ -108,6 +137,17 @@ class InstantBailoutASGI:
         if method == "GET" and path == "/api/health":
             body = json.dumps({"status": "ok"}).encode("utf-8")
             await _send_response(send, status=200, body=body, content_type="application/json; charset=utf-8")
+            return
+
+        if method == "GET" and path in self._bailout_static:
+            content_type = _BAILOUT_STATIC_ALLOWLIST[path]
+            await _send_response(
+                send,
+                status=200,
+                body=self._bailout_static[path],
+                content_type=f"{content_type}; charset=utf-8",
+                cache_control=_BAILOUT_STATIC_CACHE_CONTROL,
+            )
             return
 
         if method == "GET" and path == "/":
@@ -140,10 +180,12 @@ def wrap_instant_bailout(
     get_homepage_html,
     schedule_warm,
     homepage_cache_control: bytes = b"no-store, max-age=0",
+    static_dir: Optional[str] = None,
 ):
     return InstantBailoutASGI(
         app,
         get_homepage_html=get_homepage_html,
         schedule_warm=schedule_warm,
         homepage_cache_control=homepage_cache_control,
+        static_dir=static_dir,
     )
