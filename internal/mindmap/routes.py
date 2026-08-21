@@ -81,17 +81,13 @@ def _graph_timeout_payload(focus: Optional[int]) -> Dict[str, Any]:
         out["status"] = "cached"
         out["detail"] = "Graph build timed out — serving last-good trail."
         return out
-    try:
-        from internal.learning.mindmap_aggregator import _build_integration_status
-
-        integration_status = _build_integration_status()
-    except Exception:
-        integration_status = {}
+    # ponytail: never call mindmap_aggregator here — this runs on the ASGI
+    # loop after wait_for fires; trail/integration I/O wedges InstantBailout /health.
     return {
         "status": "timeout",
         "nodes": [],
         "edges": [],
-        "integration_status": integration_status,
+        "integration_status": {},
         "detail": "Graph build timed out — retry shortly.",
     }
 
