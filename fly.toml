@@ -27,7 +27,7 @@ primary_region = "sjc"
     interval = "15s"
     method = "GET"
     path = "/health"
-    timeout = "5s"
+    timeout = "12s"
 
 [env]
   RUN_MODE = "web"
