@@ -159,6 +159,14 @@ def select_daily_pick(
 
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
+    cache_session = None
+    try:
+        from internal.council import pick_score_cache
+
+        cache_session = pick_score_cache.begin_session(market_context)
+    except Exception as exc:
+        logger.warning("dpick: pick_score_cache unavailable (%s); scoring without cache", exc)
+
     def _score_one(sn: Dict[str, Any]) -> Dict[str, Any]:
         """Score one subnet and return {subnet, score, latency_row}.
 
@@ -166,7 +174,24 @@ def select_daily_pick(
         exactly as it did in the sequential loop.
         """
         t0 = time.perf_counter()
-        day_score = score_subnet_for_day(sn, market_context)
+        cache_status = "miss"
+        day_score: Dict[str, Any]
+        if cache_session is not None:
+            from internal.council import pick_score_cache
+
+            cached, cache_status = pick_score_cache.lookup(
+                cache_session, int(sn.get("netuid", 0))
+            )
+            if cached is not None:
+                day_score = cached
+            else:
+                day_score = score_subnet_for_day(sn, market_context)
+                if cache_status != "bypass_stale":
+                    cache_status = pick_score_cache.store(
+                        cache_session, int(sn.get("netuid", 0)), day_score
+                    )
+        else:
+            day_score = score_subnet_for_day(sn, market_context)
         row: Optional[Dict[str, Any]] = None
         try:
             row = {
@@ -176,7 +201,10 @@ def select_daily_pick(
                 "subnet": sn.get("name"),
                 "score_ms": round((time.perf_counter() - t0) * 1000.0, 1),
                 "outcome": "ok",
+                "cache": cache_status,
             }
+            if cache_session is not None:
+                row["epoch_unix"] = cache_session.get("epoch_unix")
         except Exception:
             pass
         return {"subnet": sn, "score": day_score, "latency_row": row}
@@ -192,6 +220,14 @@ def select_daily_pick(
         # ponytail: wait=False — scorer failure must not block on peer I/O (scheduler timeout).
         executor.shutdown(wait=False, cancel_futures=True)
     score_wall_ms = round((time.perf_counter() - score_wall_t0) * 1000.0, 1)
+
+    if cache_session is not None:
+        try:
+            from internal.council import pick_score_cache
+
+            pick_score_cache.end_session(cache_session)
+        except Exception as exc:
+            logger.warning("dpick: pick_score_cache persist failed (%s)", exc)
 
     scored = [{"subnet": r["subnet"], "score": r["score"]} for r in results]
     latency_rows = [r["latency_row"] for r in results if r["latency_row"] is not None]
