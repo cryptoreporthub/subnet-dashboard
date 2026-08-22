@@ -54,6 +54,22 @@ def test_fly_toml_v1_inline_topology():
     )
 
 
+def test_fly_toml_v1_health_check_timeout_12s():
+    """v1 web /health check tolerates warm GIL without proxy flap (v2 kit stays 5s)."""
+    fly = _fly_toml()
+    match = re.search(r"\[\[http_service\.checks\]\](.*?)(?=\n\[|\Z)", fly, re.S)
+    assert match, "fly.toml missing [[http_service.checks]]"
+    block = match.group(1)
+    assert 'timeout = "12s"' in block
+    assert 'grace_period = "90s"' in block
+    assert 'interval = "15s"' in block
+    v2 = _fly_worker_v2_toml()
+    assert 'timeout = "5s"' in v2
+    for name in ("fly.worker-v2-hop.toml", "fly.worker-v2-essential-soak.toml"):
+        text = Path(name).read_text(encoding="utf-8")
+        assert 'timeout = "5s"' in text
+
+
 def test_fly_toml_web_vm_shared_cpu():
     fly = _fly_toml()
     assert re.search(

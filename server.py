@@ -1254,16 +1254,14 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     pick_payload: Optional[Dict[str, Any]] = None
     pick_netuid: Optional[int] = None
     try:
-        if _PICKS_ENGINE:
-            market_context = _market_context_with_weights(subnets)
-            pick_payload = get_or_create_today_pick(subnets, market_context)
+        pick_payload = _read_shell_daily_pick()
+        if isinstance(pick_payload, dict) and pick_payload:
             pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
-            if isinstance(pick_payload, dict):
-                pick_payload = _enrich_daily_pick_payload(
-                    pick_payload, subnets, market_context
-                )
+        else:
+            pick_payload = {}
     except Exception as exc:
         logger.warning("home hero context failed: %s", exc)
+        pick_payload = {}
     story_path: Dict[str, Any] = {}
     try:
         from internal.learning.story_path import build_story_path
