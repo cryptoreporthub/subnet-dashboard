@@ -7,8 +7,15 @@ it through the RedTeam audit layer before returning a final payload.
 Per-subnet scoring latency is logged (timing only) to
 `data/pick_score_latency.jsonl` so cache/parallelization work can be
 sized against real distribution data. Logging never alters behavior.
+
+The per-subnet scoring loop runs on a bounded thread pool
+(DPICK_MAX_WORKERS, default 4). Baseline run 20260822T131116Z (n=20)
+showed ~1712s scoring wall vs ~128 CPU-seconds with an even latency
+distribution (top-5 = 53%), i.e. I/O-bound fetch waiting, so fetches are
+parallelized rather than cached.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 import json
@@ -34,9 +41,34 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 LATENCY_PATH = os.environ.get("DPICK_LATENCY_PATH", os.path.join("data", "pick_score_latency.jsonl"))
+_DPICK_MAX_WORKERS_DEFAULT = 4
+_DPICK_MAX_WORKERS_HARD_CAP = 8
 
 
-def _log_score_latency(rows: List[Dict[str, Any]], run_id: str) -> None:
+def _parse_dpick_max_workers(raw: Optional[str] = None) -> int:
+    """Parse DPICK_MAX_WORKERS; invalid/nonpositive values fall back safely."""
+    value = (
+        raw
+        if raw is not None
+        else os.environ.get("DPICK_MAX_WORKERS", str(_DPICK_MAX_WORKERS_DEFAULT))
+    )
+    try:
+        workers = int(value)
+    except (TypeError, ValueError):
+        workers = _DPICK_MAX_WORKERS_DEFAULT
+    if workers < 1:
+        workers = _DPICK_MAX_WORKERS_DEFAULT
+    return min(workers, _DPICK_MAX_WORKERS_HARD_CAP)
+
+
+DPICK_MAX_WORKERS = _parse_dpick_max_workers()
+
+
+def _log_score_latency(
+    rows: List[Dict[str, Any]],
+    run_id: str,
+    score_wall_ms: Optional[float] = None,
+) -> None:
     """Append per-subnet scoring latency rows + one summary log line. Best-effort."""
     try:
         if rows:
@@ -52,11 +84,13 @@ def _log_score_latency(rows: List[Dict[str, Any]], run_id: str) -> None:
                 {"netuid": r.get("netuid"), "subnet": r.get("subnet"), "score_ms": r["score_ms"]}
                 for r in sorted(rows, key=lambda x: float(x["score_ms"]), reverse=True)[:5]
             ]
+            sum_score_ms = sum(times)
             logger.info(
-                "dpick score latency: run_id=%s n=%d total_ms=%.0f median_ms=%.0f p90_ms=%.0f top5=%s",
+                "dpick score latency: run_id=%s n=%d sum_score_ms=%.0f score_wall_ms=%.0f median_ms=%.0f p90_ms=%.0f top5=%s",
                 run_id,
                 n,
-                sum(times),
+                sum_score_ms,
+                float(score_wall_ms or 0.0),
                 median,
                 p90,
                 json.dumps(top5),
@@ -111,25 +145,45 @@ def select_daily_pick(
             "active_signals": [],
         }
 
-    scored = []
-    latency_rows: List[Dict[str, Any]] = []
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-    for sn in subnets:
+
+    def _score_one(sn: Dict[str, Any]) -> Dict[str, Any]:
+        """Score one subnet and return {subnet, score, latency_row}.
+
+        Latency row capture stays best-effort; a scoring exception propagates
+        exactly as it did in the sequential loop.
+        """
         t0 = time.perf_counter()
         day_score = score_subnet_for_day(sn, market_context)
+        row: Optional[Dict[str, Any]] = None
         try:
-            latency_rows.append({
+            row = {
                 "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "run_id": run_id,
                 "netuid": sn.get("netuid"),
                 "subnet": sn.get("name"),
                 "score_ms": round((time.perf_counter() - t0) * 1000.0, 1),
                 "outcome": "ok",
-            })
+            }
         except Exception:
             pass
-        scored.append({"subnet": sn, "score": day_score})
-    _log_score_latency(latency_rows, run_id)
+        return {"subnet": sn, "score": day_score, "latency_row": row}
+
+    # Parallel scoring: results are collected in input (netuid) order via
+    # executor.map, preserving the sequential loop's ordering semantics.
+    workers = min(DPICK_MAX_WORKERS, len(subnets))
+    score_wall_t0 = time.perf_counter()
+    executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dpick-score")
+    try:
+        results = list(executor.map(_score_one, subnets))
+    finally:
+        # ponytail: wait=False — scorer failure must not block on peer I/O (scheduler timeout).
+        executor.shutdown(wait=False, cancel_futures=True)
+    score_wall_ms = round((time.perf_counter() - score_wall_t0) * 1000.0, 1)
+
+    scored = [{"subnet": r["subnet"], "score": r["score"]} for r in results]
+    latency_rows = [r["latency_row"] for r in results if r["latency_row"] is not None]
+    _log_score_latency(latency_rows, run_id, score_wall_ms=score_wall_ms)
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
