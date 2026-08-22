@@ -13,7 +13,7 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 
@@ -29,6 +29,10 @@ PICK_SCHEDULER_UNIVERSE_CAP = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", 
 # ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
 DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
 DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90"))
+# Fly 2026-08-22: DateTrigger default grace=1s dropped the #1009 retry
+# (00:07:59 missed by 2.6s). 60s covers that lateness with headroom; not
+# so wide that a truly skipped tick looks successful hours later.
+DAILY_PICK_MISFIRE_GRACE_SECONDS = int(os.environ.get("DAILY_PICK_MISFIRE_GRACE_SECONDS", "60"))
 PICK_SCHEDULER_STATE_PATH = os.environ.get(
     "PICK_SCHEDULER_STATE_PATH", os.path.join("data", "pick_scheduler_state.json")
 )
@@ -71,6 +75,15 @@ def _seconds_until_next_daily_tick(*, today_ready: bool) -> float:
         return _seconds_until_daily_slot()
     retry_m = max(1, min(DAILY_PICK_RETRY_MINUTES, 120))
     return float(retry_m * 60)
+
+
+def _schedule_daily_tick(func: Callable[..., Any], seconds: float) -> None:
+    schedule_in_seconds(
+        DAILY_JOB_ID,
+        func,
+        seconds,
+        misfire_grace_time=max(1, min(DAILY_PICK_MISFIRE_GRACE_SECONDS, 600)),
+    )
 
 
 def _today_pick_ready() -> bool:
@@ -223,7 +236,7 @@ class DailyPickScheduler:
             threading.Thread(target=self._tick, daemon=True, name="daily-pick-tick").start()
         else:
             # Cold start: create today soon, then align to UTC slot.
-            schedule_in_seconds(DAILY_JOB_ID, self._tick, 45)
+            _schedule_daily_tick(self._tick, 45)
         return {"started": True, "job": DAILY_JOB_ID}
 
     def stop(self) -> Dict[str, Any]:
@@ -251,10 +264,13 @@ class DailyPickScheduler:
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            subnets = _load_capped_subnets()
-            ctx = _market_context(subnets)
+            # ponytail: load+context sit inside the 90s box — leaving them
+            # outside made a "90s timeout" tick take ~278s (2026-08-21 23:48).
+            # Outer wrap of all of _tick would also timeout the #1009
+            # reschedule; post-timeout HOLD/state stay on this thread so
+            # retry still arms after abandon.
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
-            payload = None
+            packed = None
             with self._work_lock:
                 self._work_generation += 1
                 tick_generation = self._work_generation
@@ -262,15 +278,17 @@ class DailyPickScheduler:
             pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
 
             def _run_pick() -> Optional[Dict[str, Any]]:
+                subnets = _load_capped_subnets()
+                ctx = _market_context(subnets)
                 out = get_or_create_today_pick(subnets, ctx, False)
                 with self._work_lock:
                     if tick_generation != self._work_generation:
                         return None
-                return out
+                return {"payload": out, "subnets": subnets, "ctx": ctx}
 
             try:
                 fut = pool.submit(_run_pick)
-                payload = fut.result(timeout=timeout)
+                packed = fut.result(timeout=timeout)
             except FuturesTimeoutError:
                 with self._work_lock:
                     self._work_generation += 1
@@ -278,6 +296,9 @@ class DailyPickScheduler:
                 logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
+            payload = packed.get("payload") if isinstance(packed, dict) else None
+            subnets = packed.get("subnets") if isinstance(packed, dict) else None
+            ctx = packed.get("ctx") if isinstance(packed, dict) else {}
             tick_succeeded = isinstance(payload, dict)
             if tick_succeeded:
                 result["ok"] = True
@@ -288,7 +309,7 @@ class DailyPickScheduler:
                     sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
                     result["netuid"] = pick.get("netuid") or sn.get("netuid")
                 result["ab_benchmark"] = _record_ab_benchmark(
-                    subnets, ctx, "daily-pick-scheduler"
+                    subnets, ctx if isinstance(ctx, dict) else {}, "daily-pick-scheduler"
                 )
                 today_ready = _today_pick_ready()
             else:
@@ -333,7 +354,7 @@ class DailyPickScheduler:
 
         if reschedule and self._running:
             delay = _seconds_until_next_daily_tick(today_ready=today_ready)
-            schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
+            _schedule_daily_tick(self._tick, delay)
             result["next_delay_seconds"] = delay
             result["today_ready"] = today_ready
         _write_scheduler_state({"last_tick": result})

@@ -98,17 +98,27 @@ def schedule_in_seconds(
     seconds: float,
     *,
     replace_existing: bool = True,
+    misfire_grace_time: Optional[int] = None,
 ) -> None:
-    """Run ``func`` once after ``seconds``."""
+    """Run ``func`` once after ``seconds``.
+
+    ``misfire_grace_time`` overrides APScheduler's 1s default. Daily-pick
+    retries pass 60s so a GIL-late DateTrigger is not silently dropped.
+    """
     if _shutting_down:
         return
     sched = get_background_scheduler()
     run_at = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+    kwargs: Dict[str, Any] = {
+        "id": job_id,
+        "replace_existing": replace_existing,
+    }
+    if misfire_grace_time is not None:
+        kwargs["misfire_grace_time"] = max(1, int(misfire_grace_time))
     sched.add_job(
         _guarded(job_id, func, retryable=True),
         DateTrigger(run_date=run_at),
-        id=job_id,
-        replace_existing=replace_existing,
+        **kwargs,
     )
 
 
