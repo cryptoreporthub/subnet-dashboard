@@ -1,7 +1,29 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-05T19:05:00Z  
-**main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
+**Last updated:** 2026-08-22T18:35:00Z  
+**main:** `a8d690ef` (#1022 merged — TMC single-flight herd fix)  
+**Active sprint:** daily-pick perf measurement (closed A/B + workers=8 blocked on OOM)
+
+## STATUS SNAPSHOT (2026-08-22) — daily-pick perf
+
+| Item | Status |
+|------|--------|
+| **PR #1020** latency instrumentation | **MERGED** `985d763` · deployed |
+| **PR #1021** parallel fetch (4 workers) | **MERGED** `e7b9d9f1` · deployed |
+| **PR #1022** TMC single-flight + pre-warm | **MERGED** `a8d690ef` · Fly deploy #32586199254 **PASS** |
+| **Sequential baseline** `20260822T131116Z` | n=20 · sum_score_ms=1,711,777 · wall_s=1,932.2 |
+| **Parallel pre-herd** `20260822T145215Z` (workers=4) | n=20 · score_wall_ms=3,382,289 · wall_s=3,657.0 · **valid negative** (contention) |
+| **workers=8 post-#1022** pid736 | **INVALID** — OOM SIGKILL 17:21:05Z on 2GB machine · no DONE/JSONL · **not a serializer verdict** |
+| **Fork rule** | Epoch-keyed score cache = **priority**; parallel layer kept but no wall-clock win under contention |
+| **Next** | workers=8 rerun needs **memory headroom** (bigger machine / isolated window) before ChainClient discriminator |
+| **Stale Ditto Code** `1bfb8971` | Superseded by #1022 — cancel if still open |
+
+**A/B protocol (locked):** speedup = `score_wall_ms` vs wall only; reject n<20 / duplicate START·DONE / missing score_wall_ms.
+
+---
+
+**Last updated (prior):** 2026-08-05T19:05:00Z  
+**main (prior):** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
 **Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
 **Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
 **Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
