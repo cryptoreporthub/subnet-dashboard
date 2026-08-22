@@ -23,6 +23,8 @@ from internal.indicators import price_fetcher as _pf
 
 _tmc_refresh_lock = threading.Lock()
 _installed = False
+_orig_fetch_subnets = None
+_orig_fetch_candles = None
 
 
 def _wrap(
@@ -51,12 +53,24 @@ def _wrap(
 
 def install_once() -> None:
     """Idempotently patch price_fetcher's TMC fetchers to single-flight."""
-    global _installed
+    global _installed, _orig_fetch_subnets, _orig_fetch_candles
     if _installed:
         return
-    _pf._fetch_tmc_subnets = _wrap(_pf._fetch_tmc_subnets, _pf._tmc_subnets_cache)
-    _pf._fetch_tmc_candles = _wrap(_pf._fetch_tmc_candles, _pf._tmc_candles_cache)
+    _orig_fetch_subnets = _pf._fetch_tmc_subnets
+    _orig_fetch_candles = _pf._fetch_tmc_candles
+    _pf._fetch_tmc_subnets = _wrap(_orig_fetch_subnets, _pf._tmc_subnets_cache)
+    _pf._fetch_tmc_candles = _wrap(_orig_fetch_candles, _pf._tmc_candles_cache)
     _installed = True
+
+
+def uninstall_for_tests() -> None:
+    """Restore unwrapped fetchers (test isolation only)."""
+    global _installed
+    if _orig_fetch_subnets is not None:
+        _pf._fetch_tmc_subnets = _orig_fetch_subnets
+    if _orig_fetch_candles is not None:
+        _pf._fetch_tmc_candles = _orig_fetch_candles
+    _installed = False
 
 
 def prewarm() -> bool:

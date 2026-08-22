@@ -8,9 +8,9 @@ from internal.indicators import tmc_singleflight as tsf
 
 
 def _reset(monkeypatch):
+    tsf.uninstall_for_tests()
     monkeypatch.setattr(pf, "_tmc_subnets_cache", {"data": None, "cached_at": 0.0})
     monkeypatch.setattr(pf, "_tmc_candles_cache", {"data": None, "cached_at": 0.0})
-    tsf._installed = False
 
 
 def _fake_response(payload):
@@ -57,6 +57,8 @@ def test_expired_ttl_refetches_exactly_once_again(monkeypatch):
 
     def fake_get(url, **kwargs):
         calls.append(url)
+        if "candle-data" in url:
+            return _fake_response([])
         return _fake_response({"results": []})
 
     monkeypatch.setattr(pf.requests, "get", fake_get)
