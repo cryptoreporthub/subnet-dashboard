@@ -36,3 +36,24 @@ These proceed independently of Parts 1-2.
 2. Run one instrumented pick; collect distribution.
 3. Build cache (Part 2) sized to what the data shows.
 4. Capacity fixes land alongside whenever ready.
+
+## Rerun preconditions (workers=6 probe, 2026-08-22)
+
+Ranked options: **(1) workers=6 on current 2GB box** (zero infra) → **(2) scale to 4GB** if 6 OOMs or stays slow.
+
+### Gates before launch
+
+| Gate | Requirement |
+|------|-------------|
+| OOM evidence | Confirm prior failure via kernel log (`Out of memory: Killed process`) or exit 137 — not assumed |
+| Machine header | Record in run notes: `shared-cpu-2x:2048MB`, deploy SHA, `DPICK_MAX_WORKERS` |
+| Memory cliff | workers=4 completed (fits); workers=8 OOM at ~601MB RSS (pid736, 17:21:05Z) |
+| Protocol | Same FORCE_REGEN: truncate out/err, single sidecar, `N_SUBNETS 20`, 1 START + 1 DONE, JSONL n=20, `score_wall_ms` for speedup |
+| Mid-run | Do not touch process; JSONL flush at end — watch `ts` bursts for parallelism preview |
+| Comparators | Sequential `20260822T131116Z` (1,712s score wall); parallel-4 `20260822T145215Z` (3,382s) — caveat: same machine size |
+
+### Verdict interpretation (workers=6)
+
+- score_wall well under ~1,000s → herd-fix worked at viable N; ChainClient likely not dominant
+- score_wall still ~1,700s+ → serialization real regardless of N
+- OOM again → max viable N is ≤5 on 2GB; escalate to 4GB box for workers=8 retest
