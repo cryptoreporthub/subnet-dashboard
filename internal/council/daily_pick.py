@@ -41,10 +41,34 @@ except Exception:
 logger = logging.getLogger(__name__)
 
 LATENCY_PATH = os.environ.get("DPICK_LATENCY_PATH", os.path.join("data", "pick_score_latency.jsonl"))
-DPICK_MAX_WORKERS = max(1, int(os.environ.get("DPICK_MAX_WORKERS", "4")))
+_DPICK_MAX_WORKERS_DEFAULT = 4
+_DPICK_MAX_WORKERS_HARD_CAP = 8
 
 
-def _log_score_latency(rows: List[Dict[str, Any]], run_id: str) -> None:
+def _parse_dpick_max_workers(raw: Optional[str] = None) -> int:
+    """Parse DPICK_MAX_WORKERS; invalid/nonpositive values fall back safely."""
+    value = (
+        raw
+        if raw is not None
+        else os.environ.get("DPICK_MAX_WORKERS", str(_DPICK_MAX_WORKERS_DEFAULT))
+    )
+    try:
+        workers = int(value)
+    except (TypeError, ValueError):
+        workers = _DPICK_MAX_WORKERS_DEFAULT
+    if workers < 1:
+        workers = _DPICK_MAX_WORKERS_DEFAULT
+    return min(workers, _DPICK_MAX_WORKERS_HARD_CAP)
+
+
+DPICK_MAX_WORKERS = _parse_dpick_max_workers()
+
+
+def _log_score_latency(
+    rows: List[Dict[str, Any]],
+    run_id: str,
+    score_wall_ms: Optional[float] = None,
+) -> None:
     """Append per-subnet scoring latency rows + one summary log line. Best-effort."""
     try:
         if rows:
@@ -60,11 +84,13 @@ def _log_score_latency(rows: List[Dict[str, Any]], run_id: str) -> None:
                 {"netuid": r.get("netuid"), "subnet": r.get("subnet"), "score_ms": r["score_ms"]}
                 for r in sorted(rows, key=lambda x: float(x["score_ms"]), reverse=True)[:5]
             ]
+            sum_score_ms = sum(times)
             logger.info(
-                "dpick score latency: run_id=%s n=%d total_ms=%.0f median_ms=%.0f p90_ms=%.0f top5=%s",
+                "dpick score latency: run_id=%s n=%d sum_score_ms=%.0f score_wall_ms=%.0f median_ms=%.0f p90_ms=%.0f top5=%s",
                 run_id,
                 n,
-                sum(times),
+                sum_score_ms,
+                float(score_wall_ms or 0.0),
                 median,
                 p90,
                 json.dumps(top5),
@@ -146,12 +172,18 @@ def select_daily_pick(
     # Parallel scoring: results are collected in input (netuid) order via
     # executor.map, preserving the sequential loop's ordering semantics.
     workers = min(DPICK_MAX_WORKERS, len(subnets))
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dpick-score") as executor:
+    score_wall_t0 = time.perf_counter()
+    executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dpick-score")
+    try:
         results = list(executor.map(_score_one, subnets))
+    finally:
+        # ponytail: wait=False — scorer failure must not block on peer I/O (scheduler timeout).
+        executor.shutdown(wait=False, cancel_futures=True)
+    score_wall_ms = round((time.perf_counter() - score_wall_t0) * 1000.0, 1)
 
     scored = [{"subnet": r["subnet"], "score": r["score"]} for r in results]
     latency_rows = [r["latency_row"] for r in results if r["latency_row"] is not None]
-    _log_score_latency(latency_rows, run_id)
+    _log_score_latency(latency_rows, run_id, score_wall_ms=score_wall_ms)
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]

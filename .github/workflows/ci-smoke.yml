@@ -49,7 +49,9 @@ jobs:
             tests/test_learning_loop_impact.py \
             tests/test_audit_remediation.py \
             tests/test_phase_f_sqlite_store.py \
-            tests/test_council_side_effect_honesty.py -q
+            tests/test_council_side_effect_honesty.py \
+            tests/test_dpick_latency_logging.py \
+            tests/test_dpick_parallel_fetch.py -q
       - name: Homepage hydration smoke
         timeout-minutes: 2
         env:

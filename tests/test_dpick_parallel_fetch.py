@@ -6,9 +6,10 @@ behavior, respects DPICK_MAX_WORKERS, and keeps latency instrumentation
 intact.
 """
 
-import os
+import json
 import threading
 import time
+from contextlib import ExitStack
 from unittest.mock import patch
 
 import pytest
@@ -68,22 +69,50 @@ def _gated_score(gate, delay=0.05):
             return _fake_score(sn, market_context)
         finally:
             gate.exit()
+
     return scorer
+
+
+def _enter_select_patches(stack: ExitStack):
+    stack.enter_context(patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s))
+    stack.enter_context(
+        patch.object(
+            daily_pick,
+            "audit_daily_pick",
+            side_effect=lambda c, s: {"approved": True, "adjusted_confidence": 0.5},
+        )
+    )
+    stack.enter_context(patch.object(daily_pick, "attach_council_prediction", return_value={}))
+    stack.enter_context(patch.object(daily_pick, "pick_reasons", return_value=[]))
+    stack.enter_context(
+        patch.object(
+            daily_pick,
+            "unpack_score_learning_fields",
+            return_value={
+                "signal_impact": None,
+                "signal_contributions": None,
+                "active_signals": [],
+            },
+        )
+    )
+
+
+def test_parse_dpick_max_workers_invalid_and_cap():
+    assert daily_pick._parse_dpick_max_workers("99") == 8
+    assert daily_pick._parse_dpick_max_workers("0") == 4
+    assert daily_pick._parse_dpick_max_workers("abc") == 4
+    assert daily_pick._parse_dpick_max_workers("3") == 3
 
 
 def test_parallel_results_match_sequential_order(fast_latency, monkeypatch):
     subnets = [_make_subnet(i) for i in range(8)]
     monkeypatch.setattr(daily_pick, "DPICK_MAX_WORKERS", 4)
 
-    with patch.object(daily_pick, "score_subnet_for_day", side_effect=_fake_score), \
-         patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s), \
-         patch.object(daily_pick, "audit_daily_pick", side_effect=lambda c, s: {"approved": True, "adjusted_confidence": 0.5}), \
-         patch.object(daily_pick, "attach_council_prediction", return_value={}), \
-         patch.object(daily_pick, "pick_reasons", return_value=[]), \
-         patch.object(daily_pick, "unpack_score_learning_fields", return_value={"signal_impact": None, "signal_contributions": None, "active_signals": []}):
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(daily_pick, "score_subnet_for_day", side_effect=_fake_score))
+        _enter_select_patches(stack)
         result = daily_pick.select_daily_pick(subnets, {})
 
-    # Highest total_score wins deterministically; ordering preserved.
     assert result["subnet"]["netuid"] == 7
 
 
@@ -92,12 +121,11 @@ def test_worker_cap_respected(fast_latency, monkeypatch):
     gate = _Gate()
     monkeypatch.setattr(daily_pick, "DPICK_MAX_WORKERS", 3)
 
-    with patch.object(daily_pick, "score_subnet_for_day", side_effect=_gated_score(gate)), \
-         patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s), \
-         patch.object(daily_pick, "audit_daily_pick", side_effect=lambda c, s: {"approved": True, "adjusted_confidence": 0.5}), \
-         patch.object(daily_pick, "attach_council_prediction", return_value={}), \
-         patch.object(daily_pick, "pick_reasons", return_value=[]), \
-         patch.object(daily_pick, "unpack_score_learning_fields", return_value={"signal_impact": None, "signal_contributions": None, "active_signals": []}):
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch.object(daily_pick, "score_subnet_for_day", side_effect=_gated_score(gate))
+        )
+        _enter_select_patches(stack)
         daily_pick.select_daily_pick(subnets, {})
 
     assert gate.max_active <= 3
@@ -108,17 +136,15 @@ def test_parallel_faster_than_sequential(fast_latency, monkeypatch):
     gate = _Gate()
     monkeypatch.setattr(daily_pick, "DPICK_MAX_WORKERS", 6)
 
-    with patch.object(daily_pick, "score_subnet_for_day", side_effect=_gated_score(gate, delay=0.1)), \
-         patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s), \
-         patch.object(daily_pick, "audit_daily_pick", side_effect=lambda c, s: {"approved": True, "adjusted_confidence": 0.5}), \
-         patch.object(daily_pick, "attach_council_prediction", return_value={}), \
-         patch.object(daily_pick, "pick_reasons", return_value=[]), \
-         patch.object(daily_pick, "unpack_score_learning_fields", return_value={"signal_impact": None, "signal_contributions": None, "active_signals": []}):
+    with ExitStack() as stack:
+        stack.enter_context(
+            patch.object(daily_pick, "score_subnet_for_day", side_effect=_gated_score(gate, delay=0.1))
+        )
+        _enter_select_patches(stack)
         t0 = time.perf_counter()
         daily_pick.select_daily_pick(subnets, {})
         elapsed = time.perf_counter() - t0
 
-    # 6 x 0.1s serial would be >=0.6s; fully parallel should be well under.
     assert elapsed < 0.45
 
 
@@ -126,15 +152,27 @@ def test_latency_rows_still_written(fast_latency, monkeypatch):
     subnets = [_make_subnet(i) for i in range(4)]
     monkeypatch.setattr(daily_pick, "DPICK_MAX_WORKERS", 2)
 
-    with patch.object(daily_pick, "score_subnet_for_day", side_effect=_fake_score), \
-         patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s), \
-         patch.object(daily_pick, "audit_daily_pick", side_effect=lambda c, s: {"approved": True, "adjusted_confidence": 0.5}), \
-         patch.object(daily_pick, "attach_council_prediction", return_value={}), \
-         patch.object(daily_pick, "pick_reasons", return_value=[]), \
-         patch.object(daily_pick, "unpack_score_learning_fields", return_value={"signal_impact": None, "signal_contributions": None, "active_signals": []}):
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(daily_pick, "score_subnet_for_day", side_effect=_fake_score))
+        _enter_select_patches(stack)
         daily_pick.select_daily_pick(subnets, {})
 
-    rows = [eval(line) for line in fast_latency.read_text().strip().splitlines()]
+    rows = [json.loads(line) for line in fast_latency.read_text().strip().splitlines()]
     assert len(rows) == 4
-    # Rows must be in input netuid order despite parallel execution.
     assert [r["netuid"] for r in rows] == [0, 1, 2, 3]
+
+
+def test_scorer_exception_propagates(fast_latency, monkeypatch):
+    subnets = [_make_subnet(i) for i in range(4)]
+    monkeypatch.setattr(daily_pick, "DPICK_MAX_WORKERS", 2)
+
+    def scorer(sn, market_context):
+        if sn["netuid"] == 2:
+            raise RuntimeError("boom")
+        return _fake_score(sn, market_context)
+
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(daily_pick, "score_subnet_for_day", side_effect=scorer))
+        _enter_select_patches(stack)
+        with pytest.raises(RuntimeError, match="boom"):
+            daily_pick.select_daily_pick(subnets, {})
