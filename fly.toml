@@ -129,8 +129,8 @@ primary_region = "sjc"
   processes = ["web"]
 
 [[vm]]
-  size = "shared-cpu-2x"
-  memory = "2gb"
+  size = "performance-1x"
+  memory = "4gb"
   processes = ["web"]
 
 
