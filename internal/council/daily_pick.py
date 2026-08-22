@@ -5,7 +5,7 @@ Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 
 Per-subnet scoring latency is logged (timing only) to
-"data/pick_score_latency.jsonl" so cache/parallelization work can be
+`data/pick_score_latency.jsonl` so cache/parallelization work can be
 sized against real distribution data. Logging never alters behavior.
 
 The per-subnet scoring loop runs on a bounded thread pool
