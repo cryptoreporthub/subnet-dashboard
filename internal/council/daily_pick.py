@@ -5,7 +5,7 @@ Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 
 Per-subnet scoring latency is logged (timing only) to
-`data/pick_score_latency.jsonl` so cache/parallelization work can be
+"data/pick_score_latency.jsonl" so cache/parallelization work can be
 sized against real distribution data. Logging never alters behavior.
 
 The per-subnet scoring loop runs on a bounded thread pool
@@ -144,6 +144,18 @@ def select_daily_pick(
             "signal_contributions": None,
             "active_signals": [],
         }
+
+    # herd-fix: install single-flight TMC refresh and pre-warm caches sequentially
+    # BEFORE workers start, so neither the initial cold miss nor any mid-run TTL
+    # expiry can stampede TaoMarketCap from multiple scoring threads.
+    try:
+        from internal.indicators.tmc_singleflight import install_once, prewarm
+
+        install_once()
+        if not prewarm():
+            logger.warning("dpick: TMC pre-warm failed; continuing (workers fetch lazily)")
+    except Exception as exc:
+        logger.warning("dpick: tmc_singleflight unavailable (%s); continuing", exc)
 
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
@@ -305,6 +317,7 @@ def _apply_tie_break(
                 + str(round(r_flow, 3))
                 + ")"
             )
+            winner_changed = True
 
     if not reasons:
         reasons.append("Scores within 2.0 but no tie-break rule triggered; leader retained.")
