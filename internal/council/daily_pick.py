@@ -3,9 +3,18 @@ Daily pick selector for the Council engine.
 
 Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
+
+Per-subnet scoring latency is logged (timing only) to
+`data/pick_score_latency.jsonl` so cache/parallelization work can be
+sized against real distribution data. Logging never alters behavior.
 """
 
 from typing import Any, Dict, List, Optional
+
+import json
+import logging
+import os
+import time
 
 from internal.council.state_vector import (
     attach_council_prediction,
@@ -21,6 +30,39 @@ try:
 except Exception:
     def effective_weights(market_data=None, path=None):
         return {"quant": 0.30, "hype": 0.25, "dark_horse": 0.20, "technical": 0.25}
+
+logger = logging.getLogger(__name__)
+
+LATENCY_PATH = os.environ.get("DPICK_LATENCY_PATH", os.path.join("data", "pick_score_latency.jsonl"))
+
+
+def _log_score_latency(rows: List[Dict[str, Any]], run_id: str) -> None:
+    """Append per-subnet scoring latency rows + one summary log line. Best-effort."""
+    try:
+        if rows:
+            os.makedirs(os.path.dirname(LATENCY_PATH) or ".", exist_ok=True)
+            with open(LATENCY_PATH, "a") as f:
+                for row in rows:
+                    f.write(json.dumps(row, sort_keys=True) + "\n")
+            times = sorted(float(r["score_ms"]) for r in rows)
+            n = len(times)
+            p90 = times[min(n - 1, int(round(0.9 * (n - 1))))]
+            median = times[n // 2]
+            top5 = [
+                {"netuid": r.get("netuid"), "subnet": r.get("subnet"), "score_ms": r["score_ms"]}
+                for r in sorted(rows, key=lambda x: float(x["score_ms"]), reverse=True)[:5]
+            ]
+            logger.info(
+                "dpick score latency: run_id=%s n=%d total_ms=%.0f median_ms=%.0f p90_ms=%.0f top5=%s",
+                run_id,
+                n,
+                sum(times),
+                median,
+                p90,
+                json.dumps(top5),
+            )
+    except Exception as exc:  # never let logging break a pick
+        logger.warning("dpick latency logging failed: %s", exc)
 
 
 def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
@@ -70,9 +112,24 @@ def select_daily_pick(
         }
 
     scored = []
+    latency_rows: List[Dict[str, Any]] = []
+    run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
     for sn in subnets:
+        t0 = time.perf_counter()
         day_score = score_subnet_for_day(sn, market_context)
+        try:
+            latency_rows.append({
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "run_id": run_id,
+                "netuid": sn.get("netuid"),
+                "subnet": sn.get("name"),
+                "score_ms": round((time.perf_counter() - t0) * 1000.0, 1),
+                "outcome": "ok",
+            })
+        except Exception:
+            pass
         scored.append({"subnet": sn, "score": day_score})
+    _log_score_latency(latency_rows, run_id)
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
