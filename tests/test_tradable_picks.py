@@ -1,5 +1,7 @@
 """Root / tradable universe + prediction attachment for council picks."""
 
+import logging
+
 from internal.council.daily_pick import select_daily_pick
 from internal.council.hourly_pick import select_hourly_pick
 from internal.council.red_team import audit_daily_pick
@@ -99,3 +101,36 @@ def test_select_daily_pick_loads_conviction_rows_once(monkeypatch):
     monkeypatch.setattr("internal.message_intel.rollup._conviction_rows", _counting_rows)
     select_daily_pick([_sample(netuid=1), _sample(netuid=2)], {})
     assert calls["n"] == 1
+
+
+def test_select_daily_pick_stage_timing_log(monkeypatch, caplog):
+    monkeypatch.setenv("DAILY_PICK_STAGE_TIMING", "1")
+
+    def _fake_score(sn, _ctx):
+        return {
+            "total_score": float(sn["netuid"]),
+            "confidence": 0.5,
+            "expert_contributions": {},
+            "scenario_tags": {},
+        }
+
+    monkeypatch.setattr("internal.council.daily_pick.score_subnet_for_day", _fake_score)
+    monkeypatch.setattr(
+        "internal.council.daily_pick.audit_daily_pick",
+        lambda _c, _s: {"approved": True, "adjusted_confidence": 0.5, "concerns": []},
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick.attach_council_prediction",
+        lambda *_a, **_k: {"statement": "predicted to move +5%"},
+    )
+    monkeypatch.setattr("internal.council.daily_pick.pick_reasons", lambda *_a, **_k: [])
+
+    with caplog.at_level(logging.INFO, logger="internal.council.daily_pick"):
+        select_daily_pick(
+            [_sample(netuid=1), _sample(netuid=2)],
+            {"telegram_conviction_rows": [], "skip_pump_overlay": True},
+        )
+
+    stage_logs = [r for r in caplog.records if "daily pick stages" in r.message]
+    assert len(stage_logs) == 1
+    assert "n=2" in stage_logs[0].message
