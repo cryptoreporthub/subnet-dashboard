@@ -145,6 +145,18 @@ def select_daily_pick(
             "active_signals": [],
         }
 
+    # herd-fix: install single-flight TMC refresh and pre-warm caches sequentially
+    # BEFORE workers start, so neither the initial cold miss nor any mid-run TTL
+    # expiry can stampede TaoMarketCap from multiple scoring threads.
+    try:
+        from internal.indicators.tmc_singleflight import install_once, prewarm
+
+        install_once()
+        if not prewarm():
+            logger.warning("dpick: TMC pre-warm failed; continuing (workers fetch lazily)")
+    except Exception as exc:
+        logger.warning("dpick: tmc_singleflight unavailable (%s); continuing", exc)
+
     run_id = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
     def _score_one(sn: Dict[str, Any]) -> Dict[str, Any]:
