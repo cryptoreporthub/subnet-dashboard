@@ -317,7 +317,6 @@ def _apply_tie_break(
                 + str(round(r_flow, 3))
                 + ")"
             )
-            winner_changed = True
 
     if not reasons:
         reasons.append("Scores within 2.0 but no tie-break rule triggered; leader retained.")
