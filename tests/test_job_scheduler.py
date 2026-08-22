@@ -64,19 +64,16 @@ def test_late_date_trigger_60s_grace_still_runs():
     job_scheduler.schedule_in_seconds(
         "late-grace-job",
         _tick,
-        0.05,
+        3600,
         misfire_grace_time=60,
     )
-    # Force a late fire: replace with a past DateTrigger using the same grace.
     sched = job_scheduler.get_background_scheduler()
+    job = sched.get_job("late-grace-job")
+    assert job is not None
+    assert job.misfire_grace_time == 60
+    # Reschedule the schedule_in_seconds job (guarded wrapper intact) to a past run.
     run_at = datetime.now(timezone.utc) - timedelta(seconds=2.6)
-    sched.add_job(
-        _tick,
-        DateTrigger(run_date=run_at),
-        id="late-grace-job",
-        replace_existing=True,
-        misfire_grace_time=60,
-    )
+    job.reschedule(trigger=DateTrigger(run_date=run_at))
     deadline = time.monotonic() + 2.0
     while not seen and time.monotonic() < deadline:
         time.sleep(0.05)
