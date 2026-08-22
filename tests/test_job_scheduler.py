@@ -31,6 +31,36 @@ def test_schedule_in_seconds_runs_callback():
     _reset_scheduler_state()
 
 
+def test_schedule_in_seconds_default_misfire_grace():
+    _reset_scheduler_state()
+
+    def _tick() -> None:
+        pass
+
+    job_scheduler.schedule_in_seconds("default-grace-job", _tick, 3600)
+    sched = job_scheduler.get_background_scheduler()
+    job = sched.get_job("default-grace-job")
+    assert job is not None
+    assert job.misfire_grace_time == 60
+    job_scheduler.cancel_job("default-grace-job")
+    _reset_scheduler_state()
+
+
+def test_schedule_interval_seconds_default_misfire_grace():
+    _reset_scheduler_state()
+
+    def _tick() -> None:
+        pass
+
+    job_scheduler.schedule_interval_seconds("interval-grace-job", _tick, 300)
+    sched = job_scheduler.get_background_scheduler()
+    job = sched.get_job("interval-grace-job")
+    assert job is not None
+    assert job.misfire_grace_time == 60
+    job_scheduler.cancel_job("interval-grace-job")
+    _reset_scheduler_state()
+
+
 def test_late_date_trigger_default_grace_drops_job():
     """APScheduler default misfire_grace_time=1 drops a 2.6s-late one-shot."""
     _reset_scheduler_state()

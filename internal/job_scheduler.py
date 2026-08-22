@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # the logging wrapper.
 _JOB_RETRY_SECONDS = int(os.environ.get("JOB_RETRY_SECONDS", "60"))
 _JOB_RETRY_CAP = int(os.environ.get("JOB_RETRY_CAP", "5"))
+JOB_MISFIRE_GRACE_SECONDS = max(
+    1, min(600, int(os.environ.get("JOB_MISFIRE_GRACE_SECONDS", "60")))
+)
 _retry_counts: Dict[str, int] = {}
 
 
@@ -89,6 +92,7 @@ def schedule_interval_seconds(
         IntervalTrigger(seconds=seconds, start_date=start),
         id=job_id,
         replace_existing=replace_existing,
+        misfire_grace_time=JOB_MISFIRE_GRACE_SECONDS,
     )
 
 
@@ -109,16 +113,17 @@ def schedule_in_seconds(
         return
     sched = get_background_scheduler()
     run_at = datetime.now(timezone.utc) + timedelta(seconds=seconds)
-    kwargs: Dict[str, Any] = {
-        "id": job_id,
-        "replace_existing": replace_existing,
-    }
-    if misfire_grace_time is not None:
-        kwargs["misfire_grace_time"] = max(1, int(misfire_grace_time))
+    grace = (
+        JOB_MISFIRE_GRACE_SECONDS
+        if misfire_grace_time is None
+        else max(1, int(misfire_grace_time))
+    )
     sched.add_job(
         _guarded(job_id, func, retryable=True),
         DateTrigger(run_date=run_at),
-        **kwargs,
+        id=job_id,
+        replace_existing=replace_existing,
+        misfire_grace_time=grace,
     )
 
 
