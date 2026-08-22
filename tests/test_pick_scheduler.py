@@ -105,10 +105,11 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     monkeypatch.setattr(
         pick_scheduler,
         "schedule_in_seconds",
-        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+        lambda job_id, func, seconds, **kw: scheduled.append((job_id, seconds, kw)),
     )
     monkeypatch.setenv("DAILY_PICK_RETRY_MINUTES", "15")
     pick_scheduler.DAILY_PICK_RETRY_MINUTES = 15
+    pick_scheduler.DAILY_PICK_MISFIRE_GRACE_SECONDS = 60
 
     sched = pick_scheduler.DailyPickScheduler()
     sched._running = True
@@ -118,6 +119,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     assert scheduled
     assert scheduled[0][0] == pick_scheduler.DAILY_JOB_ID
     assert scheduled[0][1] == 15 * 60
+    assert scheduled[0][2].get("misfire_grace_time") == 60
     assert result["next_delay_seconds"] == 15 * 60
 
 
@@ -143,7 +145,7 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
     monkeypatch.setattr(
         pick_scheduler,
         "schedule_in_seconds",
-        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+        lambda job_id, func, seconds, **kw: scheduled.append((job_id, seconds, kw)),
     )
 
     sched = pick_scheduler.DailyPickScheduler()
@@ -264,10 +266,11 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
     monkeypatch.setattr(
         pick_scheduler,
         "schedule_in_seconds",
-        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+        lambda job_id, func, seconds, **kw: scheduled.append((job_id, seconds, kw)),
     )
     monkeypatch.setenv("DAILY_PICK_RETRY_MINUTES", "15")
     pick_scheduler.DAILY_PICK_RETRY_MINUTES = 15
+    pick_scheduler.DAILY_PICK_MISFIRE_GRACE_SECONDS = 60
     pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
@@ -278,7 +281,54 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
     assert result.get("today_ready") is False
     assert scheduled
     assert scheduled[0][1] == 15 * 60
+    assert scheduled[0][2].get("misfire_grace_time") == 60
     assert result["next_delay_seconds"] == 15 * 60
+
+
+def test_daily_tick_timeout_includes_slow_subnet_load(monkeypatch):
+    """Load/context used to sit outside the 90s box — a slow load never timed out."""
+    pick_scheduler.stop_pick_schedulers()
+    holds = []
+
+    def _slow_load():
+        import time
+
+        time.sleep(12)
+        return [{"netuid": 1}]
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "pick": None,
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.write_scheduler_hold",
+        lambda reason: holds.append(reason) or {
+            "action": "HOLD",
+            "date": "2026-08-03",
+            "scheduler_hold": True,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", _slow_load)
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", lambda *_a, **_k: None)
+    pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched._running = True
+    import time
+
+    t0 = time.monotonic()
+    result = sched._tick(reschedule=False)
+    elapsed = time.monotonic() - t0
+    assert elapsed < 10, elapsed
+    assert "timed out" in str(result.get("error") or "")
+    assert holds
 
 
 def test_seconds_until_next_daily_tick_branches():

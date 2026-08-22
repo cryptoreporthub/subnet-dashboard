@@ -5,7 +5,12 @@ Scores every subnet on the 24h horizon, picks the top candidate, and runs
 it through the RedTeam audit layer before returning a final payload.
 """
 
+import logging
+import os
+import time
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from internal.council.state_vector import (
     attach_council_prediction,
@@ -33,22 +38,50 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
     })
 
 
+def _daily_pick_stage_timing_enabled() -> bool:
+    return os.environ.get("DAILY_PICK_STAGE_TIMING", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def select_daily_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    stage_timing = _daily_pick_stage_timing_enabled()
+    total_start = time.perf_counter() if stage_timing else 0.0
+    conviction_ms = score_ms = audit_ms = predict_ms = 0.0
+
     market_context = dict(market_context or {})
     market_context.setdefault("weights", _weights_for_context(market_context))
     if "telegram_conviction_rows" not in market_context:
+        conviction_start = time.perf_counter() if stage_timing else 0.0
         try:
             from internal.message_intel.rollup import _conviction_rows
 
             market_context["telegram_conviction_rows"] = _conviction_rows()
         except Exception:
             market_context["telegram_conviction_rows"] = None
+        if stage_timing:
+            conviction_ms = (time.perf_counter() - conviction_start) * 1000
     subnets = tradable_subnets(subnets)
+    n = len(subnets)
 
     if not subnets:
+        if stage_timing:
+            total_ms = (time.perf_counter() - total_start) * 1000
+            logger.info(
+                "daily pick stages n=%s conviction_ms=%.0f score_ms=%.0f audit_ms=%.0f predict_ms=%.0f total_ms=%.0f",
+                n,
+                conviction_ms,
+                score_ms,
+                audit_ms,
+                predict_ms,
+                total_ms,
+            )
         return {
             "subnet": None,
             "score": 0.0,
@@ -69,10 +102,13 @@ def select_daily_pick(
             "active_signals": [],
         }
 
+    score_start = time.perf_counter() if stage_timing else 0.0
     scored = []
     for sn in subnets:
         day_score = score_subnet_for_day(sn, market_context)
         scored.append({"subnet": sn, "score": day_score})
+    if stage_timing:
+        score_ms = (time.perf_counter() - score_start) * 1000
 
     scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
     top = scored[0]
@@ -90,14 +126,20 @@ def select_daily_pick(
                 score_payload = runner_up["score"]
 
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
+    audit_start = time.perf_counter() if stage_timing else 0.0
     audit = audit_daily_pick(audit_candidate, subnets)
+    if stage_timing:
+        audit_ms = (time.perf_counter() - audit_start) * 1000
     final_confidence = audit["adjusted_confidence"]
     learning = unpack_score_learning_fields(score_payload)
     from internal.learning.pick_horizon import day_horizon_hours
 
+    predict_start = time.perf_counter() if stage_timing else 0.0
     prediction = attach_council_prediction(
         candidate, score_payload, final_confidence, horizon_type="day", horizon_hours=day_horizon_hours()
     )
+    if stage_timing:
+        predict_ms = (time.perf_counter() - predict_start) * 1000
     reasons = pick_reasons(
         candidate,
         learning["signal_impact"],
@@ -109,6 +151,18 @@ def select_daily_pick(
         impact = impact_profile(candidate)
     except Exception:
         impact = None
+
+    if stage_timing:
+        total_ms = (time.perf_counter() - total_start) * 1000
+        logger.info(
+            "daily pick stages n=%s conviction_ms=%.0f score_ms=%.0f audit_ms=%.0f predict_ms=%.0f total_ms=%.0f",
+            n,
+            conviction_ms,
+            score_ms,
+            audit_ms,
+            predict_ms,
+            total_ms,
+        )
 
     return {
         "subnet": {
