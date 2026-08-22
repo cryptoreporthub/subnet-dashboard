@@ -25,6 +25,12 @@ from internal.council.state_vector import (
 from internal.council.red_team import audit_daily_pick
 from internal.subnets.tradable import tradable_subnets
 
+try:
+    from internal.council.weights import effective_weights
+except Exception:
+    def effective_weights(market_data=None, path=None):
+        return {"quant": 0.30, "hype": 0.25, "dark_horse": 0.20, "technical": 0.25}
+
 logger = logging.getLogger(__name__)
 
 LATENCY_PATH = os.environ.get("DPICK_LATENCY_PATH", os.path.join("data", "pick_score_latency.jsonl"))
@@ -245,7 +251,6 @@ def _apply_tie_break(
                 + str(round(r_flow, 3))
                 + ")"
             )
-            winner_changed = True
 
     if not reasons:
         reasons.append("Scores within 2.0 but no tie-break rule triggered; leader retained.")
