@@ -40,6 +40,12 @@ def _fake_score(sn, market_context):
 @pytest.fixture
 def fast_latency(tmp_path, monkeypatch):
     monkeypatch.setattr(daily_pick, "LATENCY_PATH", str(tmp_path / "lat.jsonl"))
+    from internal.council import pick_score_cache
+
+    cache_path = tmp_path / "pick_score_cache.json"
+    monkeypatch.setattr(pick_score_cache, "CACHE_PATH", str(cache_path))
+    monkeypatch.setattr(pick_score_cache, "LOCK_PATH", str(cache_path) + ".lock")
+    pick_score_cache.clear_for_tests()
     return tmp_path / "lat.jsonl"
 
 
@@ -75,6 +81,12 @@ def _gated_score(gate, delay=0.05):
 
 def _enter_select_patches(stack: ExitStack):
     stack.enter_context(patch.object(daily_pick, "tradable_subnets", side_effect=lambda s: s))
+    stack.enter_context(
+        patch("internal.indicators.tmc_singleflight.install_once", return_value=None)
+    )
+    stack.enter_context(
+        patch("internal.indicators.tmc_singleflight.prewarm", return_value=True)
+    )
     stack.enter_context(
         patch.object(
             daily_pick,
