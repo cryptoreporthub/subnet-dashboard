@@ -6,6 +6,20 @@ TMC ``cached_at`` timestamps that single-flight refreshes together.
 
 When ``tmc_epoch.is_epoch_stale()`` is true the cache is bypassed entirely
 (``cache=bypass_stale``) so a stale epoch cannot masquerade as a hit.
+
+**Prod footprint (2026-08-23, deploy 0acd6922):** median ~5,827 B/entry for a
+full ``score_subnet_for_day`` payload (not the minimal unit-test fake).
+Steady state 20 subnets × 3 epochs ≈ 60 entries ≈ 350 KB (~68% of the 512 KiB
+byte cap).  The byte cap binds before the 256-entry cap.
+
+**Eviction:** FIFO by insertion timestamp (``stored_at``); hits do not refresh
+recency.  Not LRU.
+
+**Hit window (observed prod):** TMC ``cached_at`` can advance during a pick's
+own scoring run, so the effective shared-epoch window is ~30–40s — shorter than
+the 60s TTL.  Sequential picks ~21s apart still missed (epoch rotated).  Cache
+earns only on sub-rotation re-picks; scheduler cadence (15min/24h) yields ≈zero
+prod hit-rate by design, not defect.  Epoch pinning shelved (no current consumer).
 """
 
 from __future__ import annotations
@@ -26,6 +40,8 @@ logger = logging.getLogger(__name__)
 CACHE_PATH = os.environ.get("DPICK_SCORE_CACHE_PATH", os.path.join("data", "pick_score_cache.json"))
 LOCK_PATH = CACHE_PATH + ".lock"
 MAX_ENTRIES = int(os.environ.get("DPICK_SCORE_CACHE_MAX_ENTRIES", "256"))
+# ponytail: measured ~5.8KB/entry on prod (full score_subnet_for_day dict); byte cap
+# binds before entry cap (256 × ~5.8KB ≈ 1.46MB > 512KiB).  Steady 60 entries ≈ 350KB.
 MAX_BYTES = int(os.environ.get("DPICK_SCORE_CACHE_MAX_BYTES", "524288"))  # 512 KiB hard cap
 
 _session_lock = threading.Lock()
@@ -93,6 +109,7 @@ def _with_file_lock(fn):
 
 
 def _evict(store: Dict[str, Any]) -> None:
+    """Drop oldest entries by stored_at until within byte/entry caps (FIFO, not LRU)."""
     entries: Dict[str, Any] = store["entries"]
     while len(entries) > MAX_ENTRIES or int(store.get("total_bytes", 0)) > MAX_BYTES:
         if not entries:
