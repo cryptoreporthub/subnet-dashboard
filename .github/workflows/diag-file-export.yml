@@ -1,0 +1,45 @@
+# Diag v4 (temporary): export resolver_scheduler as JSON-escaped chunks.
+name: Diag File Export v4
+
+on: push
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Slice scheduler into JSON chunks
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, pathlib, hashlib
+          f = "internal/council/resolver_scheduler.py"
+          raw = pathlib.Path(f).read_bytes()
+          digest = hashlib.sha256(raw).hexdigest()
+          t = raw.decode("utf-8")
+          out = pathlib.Path("diag"); out.mkdir(exist_ok=True)
+          index = []
+          for k in range(0, len(t), 8000):
+              rec = {"file": f, "off": k, "sha256": digest, "n_chars": len(t),
+                     "data": t[k:k+8000]}
+              p = out / ("s_%03d.json" % (k // 8000))
+              p.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+              index.append(p.name)
+          (out / "index.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
+          print("wrote", len(index), "chunks")
+          PY
+      - name: Commit diag chunks if changed
+        run: |
+          set -e
+          git config user.name "diag-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "$(git status --porcelain diag)" ]; then
+            git add diag
+            git commit -m "diag(v4): export scheduler chunks"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "diag unchanged; done"
+          fi
