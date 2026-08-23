@@ -126,6 +126,15 @@ Note what's absent: there is no branch that consults `_running`, thread liveness
 ## 9. Post-green addendum (2026-08-23 ~05:00Z)
 
 - CI run 32616625040 (guard v2) went **red**: `test_no_new_handrolled_liveness` flagged `internal/scheduler.py` (AdversarialScheduler) — the 12th scheduler-named module, omitted from the initial allowlist snapshot. Diagnosis was by inference (raw log download is admin-gated); falsification test = controlled one-line allowlist commit `45a87ae8`. Re-run [32618505953](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/32618505953) went green with all steps succeeding; step 7 (pytest incl. both liveness test files at that SHA) passed and later steps executed, proving exit 0.
-- Standing gap: raw CI log access needs admin rights. Permanent fix option queued: diag workflow pulling job logs with the repo-scoped `GITHUB_TOKEN` and uploading them as an artifact, so future failures are read, not inferred.
-- Open disposition question: does `internal/scheduler.py` migrate onto LivenessTracker like the other legacy schedulers, or is it legitimately exempt? Explicit decision required before allowlist end-state — it must not silently become a permanent 12th legacy entry.
-- This spec now lives in-repo so the record outlives chat context.
+- Standing gap: raw CI log access needs admin rights. Permanent fix option queued: diag workflow pulling job logs with the repo-scoped `GITHUB_TO
+
+## PR-2 STATUS (2026-08-23)
+
+- resolver_scheduler migrated onto LivenessTracker (skip-first-class,
+  ok derived); allowlist shrunk 12 -> 11; resolver tests added to the
+  ci-smoke gate.
+- Open items: migrate-vs-exempt decision for internal/scheduler.py
+  reserved to issue #1032 (recommendation there is input, not default);
+  remaining legacy entries tracked under the same issue.
+- Diag scaffolding (diag-file-export workflow + diag/ chunks) is
+  temporary and must be removed before merge to main.
