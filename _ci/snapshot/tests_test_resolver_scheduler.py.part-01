@@ -1,0 +1,191 @@
+estores_recently_expired_malformed_timestamp():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [],
+        "resolved": [
+            {
+                "id": "malformed-horizon",
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+                "status": "expired",
+                "outcome": "expired",
+                "correct": None,
+                "resolved_at": now.isoformat().replace("+00:00", "Z"),
+            },
+        ],
+    })
+
+    result = resolver.resolve_due_predictions(subnets=[])
+    assert [row["id"] for row in result["restored_now"]] == ["malformed-horizon"]
+    assert len(result["pending"]) == 1
+    assert result["pending"][0]["status"] == "pending"
+    assert result["pending"][0]["resolve_at"].endswith("Z")
+    assert not result["pending"][0]["resolve_at"].endswith("+00:00Z")
+    assert all(row.get("outcome") != "expired" for row in result["pending"])
+
+
+def test_expire_skips_non_dict_records():
+    """A corrupt non-dict entry must not crash the loop."""
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            "i am not a dict",
+            42,
+            {
+                "netuid": 1,
+                "horizon_hours": 24,
+                "resolve_at": _iso(now - timedelta(hours=100)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["expired_now"]) == 1
+    assert result["stats"]["pending"] == 0
+
+
+def test_expire_does_not_nudge_weights(nudge_spy):
+    """Expired predictions carry no outcome -> expert weights must not move."""
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "horizon_hours": 24,
+                "expert": "quant",
+                "resolve_at": _iso(now - timedelta(hours=100)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    resolver.expire_stale_predictions()
+    assert nudge_spy == []
+
+
+def test_compute_stats_excludes_expired_from_accuracy():
+    data = {
+        "predictions": [],
+        "resolved": [
+            {"correct": True},
+            {"correct": False},
+            {"correct": None, "outcome": "expired"},
+            {"correct": None, "outcome": "expired"},
+        ],
+    }
+    _write_predictions(data)
+
+    result = resolver.get_resolved_predictions()
+    stats = result["stats"]
+    assert stats["correct"] == 1
+    assert stats["wrong"] == 1
+    assert stats["expired"] == 2
+    assert stats["accuracy"] == round(1 / 2, 3)
+
+
+def test_resolve_due_predictions_expires_when_no_price(nudge_spy):
+    """A due prediction with no price and past grace is expired, not stuck."""
+    now = datetime.now(timezone.utc)
+    horizon = 24.0
+    grace = horizon * resolver._EXPIRY_GRACE_MULTIPLE
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 999,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": horizon,
+                "resolve_at": _iso(now - timedelta(hours=grace + 5)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.resolve_due_predictions(subnets=[])
+    assert len(result.get("expired_now", [])) == 1
+    assert result["expired_now"][0]["status"] == "expired"
+    assert result["pending"] == []
+    assert nudge_spy == []
+
+
+def test_resolve_due_predictions_keeps_due_no_price_within_grace():
+    """Due + no price but within grace -> stays pending (price may recover)."""
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 999,
+                "horizon_hours": 24,
+                "resolve_at": _iso(now - timedelta(hours=1)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.resolve_due_predictions(subnets=[])
+    assert result.get("expired_now", []) == []
+    assert len(result["pending"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Scheduler lifecycle
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def fresh_scheduler(monkeypatch):
+    """Reset the module-level singleton between tests."""
+    monkeypatch.setattr(resolver_scheduler, "_scheduler", None)
+    yield
+    sched = resolver_scheduler.get_prediction_resolver_scheduler()
+    if sched is not None:
+        sched.stop()
+
+
+def _static_subnets():
+    return [{"netuid": 1, "price": 110.0}]
+
+
+def test_scheduler_start_stop(fresh_scheduler):
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_static_subnets
+    )
+    state = sched.state()
+    assert state["running"] is False
+
+    sched.start()
+    assert sched.state()["running"] is True
+    assert sched.state()["next_run_at"] is not None
+    assert sched.state()["lifecycle"] == "scheduled"
+    assert sched.state()["first_tick_scheduled_at"] is not None
+
+    sched.stop()
+    assert sched.state()["running"] is False
+    assert sched.state()["next_run_at"] is None
+
+
+def test_scheduler_start_is_idempotent(fresh_scheduler):
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_static_subnets
+    )
+    first = sched.start()
+    assert first["started"] is True
+    second = sched.start()
+    assert second["started"] is False
+    sched.stop()
+
+
+def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "referen

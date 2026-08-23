@@ -1,0 +1,57 @@
+     if self._consecutive_failures > 0:
+            return "failing", "last tick raised"
+        if success_age > stale_window:
+            return "stale", "success older than interval*factor"
+        return "ok", ""
+
+    def snapshot(self) -> Dict[str, Any]:
+        now = time.time()
+        with self._lock:
+            status, reason = self._status_locked(now)
+            age = None
+            if self._last_success_epoch is not None:
+                age = round(max(0.0, now - self._last_success_epoch), 3)
+            lsa = None
+            if self._last_success_epoch is not None:
+                lsa = datetime.fromtimestamp(
+                    self._last_success_epoch, timezone.utc
+                ).isoformat()
+            return {
+                "name": self.name,
+                "lifecycle": self._lifecycle,
+                "status": status,
+                "status_reason": reason,
+                "last_success_at": lsa,
+                "success_age_seconds": age,
+                "consecutive_failures": self._consecutive_failures,
+                "consecutive_skips": self._consecutive_skips,
+                "backoff_seconds": self._backoff_seconds,
+                "last_error": self._last_error,
+                "last_skip_reason": self._last_skip_reason,
+                "last_evidence": self._last_evidence,
+                "source": self._source,
+            }
+
+    # -- persistence ---------------------------------------------------
+
+    def _save(self) -> None:
+        if not self.persist or write_soul_map is None:
+            return
+        snap = self.snapshot()
+
+        def mutator(blob):
+            bucket = blob.setdefault(_PERSIST_PREFIX, {})
+            bucket[self.name] = {
+                "last_success_epoch": self._last_success_epoch,
+                "lifecycle": snap["lifecycle"],
+                "consecutive_failures": snap["consecutive_failures"],
+                "consecutive_skips": snap["consecutive_skips"],
+                "last_error": snap["last_error"],
+                "last_evidence": snap["last_evidence"],
+                "updated_at": _now_iso(),
+            }
+
+        try:
+            write_soul_map(mutator)
+        except Exception:
+            pass

@@ -1,0 +1,70 @@
+.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=transient
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+________________________ test_resolver_cycle_times_out _________________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.1 error=cycle_timeout_1s
+________________ test_resolver_first_tick_success_is_observable ________________
+------------------------------ Captured log call -------------------------------
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:292 resolver lifecycle event=tick_start first=True
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:351 resolver lifecycle event=success first=True duration_ms=0.3
+=========================== short test summary info ============================
+PASSED tests/test_liveness_tracker.py::test_contract
+PASSED tests/test_liveness_tracker.py::test_skip_burst_with_fresh_success_is_ok
+PASSED tests/test_liveness_tracker.py::test_starved_requires_stale_success
+PASSED tests/test_liveness_tracker.py::test_stale_auto_degrades
+PASSED tests/test_liveness_tracker.py::test_no_success_is_never_ok
+PASSED tests/test_liveness_tracker.py::test_empty_evidence_raises
+PASSED tests/test_liveness_tracker.py::test_persistence_round_trip_real_soul_map
+PASSED tests/test_no_handrolled_liveness.py::test_no_new_handrolled_liveness
+PASSED tests/test_no_handrolled_liveness.py::test_allowlist_monotonically_shrinks
+PASSED tests/test_resolver_scheduler.py::test_expire_does_not_touch_not_yet_due_predictions
+PASSED tests/test_resolver_scheduler.py::test_expire_keeps_predictions_within_grace_window
+PASSED tests/test_resolver_scheduler.py::test_expire_retires_predictions_past_grace_window
+PASSED tests/test_resolver_scheduler.py::test_expire_handles_corrupt_resolve_at
+PASSED tests/test_resolver_scheduler.py::test_resolver_accepts_offset_plus_z_timestamp
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_restores_recently_expired_malformed_timestamp
+PASSED tests/test_resolver_scheduler.py::test_expire_skips_non_dict_records
+PASSED tests/test_resolver_scheduler.py::test_expire_does_not_nudge_weights
+PASSED tests/test_resolver_scheduler.py::test_compute_stats_excludes_expired_from_accuracy
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_predictions_expires_when_no_price
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_predictions_keeps_due_no_price_within_grace
+PASSED tests/test_resolver_scheduler.py::test_scheduler_start_stop
+PASSED tests/test_resolver_scheduler.py::test_scheduler_start_is_idempotent
+PASSED tests/test_resolver_scheduler.py::test_scheduler_run_once_expires_stale_predictions
+PASSED tests/test_resolver_scheduler.py::test_scheduler_backoff_on_failure
+PASSED tests/test_resolver_scheduler.py::test_scheduler_backoff_caps_at_max
+PASSED tests/test_resolver_scheduler.py::test_scheduler_persists_cycle_summary
+PASSED tests/test_resolver_scheduler.py::test_scheduler_recovers_after_failure
+PASSED tests/test_resolver_scheduler.py::test_singleton_start_stop_state
+PASSED tests/test_resolver_scheduler.py::test_singleton_state_when_not_started
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_fallback_returns_list
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_uses_worker_cache
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_falls_back_to_registry_when_cache_read_fails
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_sorts_by_netuid
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_wraps_cursor
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_caps_at_subnet_count
+PASSED tests/test_resolver_scheduler.py::test_scheduler_persists_round_robin_cursor
+PASSED tests/test_resolver_scheduler.py::test_scheduler_passes_full_subnet_list_to_resolve
+PASSED tests/test_resolver_scheduler.py::test_scheduler_skip_persists_last_cycle_when_heavy_job_busy
+PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_times_out
+PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_timeout_does_not_overlap_inflight_work
+PASSED tests/test_resolver_scheduler.py::test_resolver_first_tick_success_is_observable
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /health]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /robots.txt]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/tribunal]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-hold]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-pump-alert]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-pump-alert-scan]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/pump-desk-polish]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/pump-desk-full]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /pump]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /judge-council]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-patterns/15]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-patterns/active]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /metrics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/health]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/data-freshness]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/readiness]
+PASSED tests/test_endpoint

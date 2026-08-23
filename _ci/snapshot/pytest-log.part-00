@@ -1,0 +1,82 @@
+......................F................................................. [ 33%]
+........................................................................ [ 67%]
+....................................................................     [100%]
+=================================== FAILURES ===================================
+_______________ test_scheduler_run_once_resolves_due_predictions _______________
+
+nudge_spy = [], fresh_scheduler = None
+
+    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+        now = datetime.now(timezone.utc)
+        _write_predictions({
+            "predictions": [
+                {
+                    "netuid": 1,
+                    "reference_price": 100.0,
+                    "predicted_pct": 10.0,
+                    "direction": "up",
+                    "expert": "quant",
+                    "resolve_at": _iso(now - timedelta(hours=1)),
+                },
+            ],
+            "resolved": [],
+        })
+    
+        sched = resolver_scheduler.PredictionResolverScheduler(
+            refresh_minutes=1, subnet_provider=_static_subnets
+        )
+        result = sched.run_once()
+    
+        assert result["ok"] is True
+        assert result["resolved_now"] == 1
+        assert result["error"] is None
+>       assert nudge_spy == [(True, "quant")]
+E       AssertionError: assert [] == [(True, 'quant')]
+E         
+E         Right contains one more item: (True, 'quant')
+E         
+E         Full diff:
+E         + []
+E         - [
+E         -     (
+E         -         True,
+E         -         'quant',
+E         -     ),
+E         - ]
+
+tests/test_resolver_scheduler.py:400: AssertionError
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+==================================== PASSES ====================================
+______________ test_resolve_due_predictions_expires_when_no_price ______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+_________ test_resolve_due_predictions_keeps_due_no_price_within_grace _________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+______________ test_scheduler_run_once_expires_stale_predictions _______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+______________________ test_scheduler_backoff_on_failure _______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=price feed down
+______________________ test_scheduler_backoff_caps_at_max ______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
+____________________ test_scheduler_persists_cycle_summary _____________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+____________________ test_scheduler_recovers_after_failure _____________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler

@@ -1,0 +1,39 @@
+  sched: Optional[PredictionResolverScheduler] = None
+    with _scheduler_lock:
+        sched = _scheduler
+        _scheduler = None
+    if sched is None:
+        return {"stopped": False, "reason": "not running"}
+    return sched.stop()
+
+
+def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
+    """Return the state of the module-level prediction resolver scheduler."""
+    with _scheduler_lock:
+        if _scheduler is None:
+            return {
+                "running": False,
+                "refresh_minutes": RESOLVER_REFRESH_MINUTES,
+                "backoff_minutes": RESOLVER_REFRESH_MINUTES,
+                "consecutive_failures": 0,
+                "last_run_at": None,
+                "last_run_ok": None,
+                "last_run_error": None,
+                "next_run_at": None,
+                "last_resolved": 0,
+                "last_expired": 0,
+                "last_pending": 0,
+                "lifecycle": "stopped",
+                "started_at": None,
+                "first_tick_scheduled_at": None,
+                "first_tick_at": None,
+                "first_tick_ok": None,
+                "lifecycle_error": None,
+            }
+        return _scheduler.state()
+
+
+def get_prediction_resolver_scheduler() -> Optional[PredictionResolverScheduler]:
+    """Return the scheduler singleton for direct access."""
+    with _scheduler_lock:
+        return _scheduler

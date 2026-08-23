@@ -1,0 +1,38 @@
+wait(timeout=1)
+    assert "cycle_timeout" in str(timed_out["error"])
+
+    skipped = sched._run_refresh_cycle_with_timeout()
+    assert skipped["skipped"] == "cycle_in_flight"
+    assert not finished.is_set()
+
+    release.set()
+    assert finished.wait(timeout=1)
+
+
+def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
+    caplog.set_level("INFO", logger="internal.council.resolver_scheduler")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._running = True
+    sched._first_tick_pending = True
+    monkeypatch.setattr(
+        sched,
+        "_run_refresh_cycle_with_timeout",
+        lambda: {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        },
+    )
+    monkeypatch.setattr(sched, "_persist_cycle_summary", lambda _result: None)
+    monkeypatch.setattr(sched, "_schedule_next", lambda _minutes: None)
+
+    result = sched._tick()
+
+    assert result["ok"] is True
+    assert sched.state()["first_tick_ok"] is True
+    assert sched.state()["lifecycle"] == "running"
+    assert "resolver lifecycle event=success" in caplog.text
