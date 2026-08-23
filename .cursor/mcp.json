@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "flyctl": {
+      "command": "flyctl",
+      "args": ["mcp", "server"]
+    }
+  }
+}
