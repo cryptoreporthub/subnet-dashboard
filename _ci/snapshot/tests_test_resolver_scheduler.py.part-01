@@ -187,5 +187,4 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler,
     _write_predictions({
         "predictions": [
             {
-                "netuid": 1,
-  
+                # council_publi

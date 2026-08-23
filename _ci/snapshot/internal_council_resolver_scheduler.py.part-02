@@ -1,8 +1,10 @@
-        self._persist_cycle_summary(skipped)
+      "expired_now": 0,
+                    "pending": 0,
+                }
+                self._persist_cycle_summary(skipped)
                 # Skips are recorded honestly; they never produce ok (spec §2).
                 self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
-                    self._last_run_at = skipped["run_at"]
                     self._last_run_error = None
                     self._mark_first_tick(skipped)
                 logger.info(
@@ -30,7 +32,6 @@
             self.liveness.record_skip(reason=str(result.get("skipped") or "cycle_skipped"))
 
         with self._lock:
-            self._last_run_at = result["run_at"]
             self._last_run_error = result.get("error")
             self._last_resolved = result.get("resolved_now", 0)
             self._last_expired = result.get("expired_now", 0)
@@ -149,4 +150,4 @@
                     "run_at": _now_iso(),
                     "resolved_now": 0,
                     "expired_now": 0,
-      
+                    "pending"

@@ -1,4 +1,14 @@
- test_singleton_state_when_not_started(fresh_scheduler):
+e()
+    assert state["running"] is True
+
+    stop = resolver_scheduler.stop_prediction_resolver_scheduler()
+    assert stop["stopped"] is True
+
+    state = resolver_scheduler.get_prediction_resolver_scheduler_state()
+    assert state["running"] is False
+
+
+def test_singleton_state_when_not_started(fresh_scheduler):
     state = resolver_scheduler.get_prediction_resolver_scheduler_state()
     assert state["running"] is False
     assert state["last_run_at"] is None
@@ -120,7 +130,7 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
-    assert sched._last_run_at == last.get("run_at")
+    assert sched.liveness.snapshot().get("last_event_at") is not None
     # Inverted laundering contract: a skip burst must NOT read as healthy.
     snap = sched.liveness.snapshot()
     assert snap["status"] != "ok"
@@ -161,16 +171,4 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert "cycle_timeout" in str(last.get("error"))
     assert sched.state()["lifecycle"] == "degraded"
     assert sched.state()["first_tick_ok"] is False
-    assert "resolver lifecycle event=timeout" in caplog.text
-
-
-def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
-    monkeypatch, fresh_scheduler
-):
-    started = threading.Event()
-    release = threading.Event()
-    finished = threading.Event()
-
-    def _blocked(self):
-        started.set()
-        r
+    assert "resolver lifecycle event=ti

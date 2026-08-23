@@ -1,4 +1,4 @@
-tes: int = RESOLVER_REFRESH_MINUTES,
+RESH_MINUTES,
     immediate: bool = False,
     **kwargs: Any,
 ) -> Dict[str, Any]:

@@ -1,4 +1,9 @@
-              "reference_price": 100.0,
+shed population is required for weight nudging
+                # (resolver._stamp_and_nudge_expert); bare expert rows are
+                # legacy_unclassified and silently never nudge.
+                "pick_source": "council",
+                "netuid": 1,
+                "reference_price": 100.0,
                 "predicted_pct": 10.0,
                 "direction": "up",
                 "expert": "quant",
@@ -180,14 +185,4 @@ def test_singleton_start_stop_state(fresh_scheduler):
     )
     assert start["started"] is True
 
-    state = resolver_scheduler.get_prediction_resolver_scheduler_state()
-    assert state["running"] is True
-
-    stop = resolver_scheduler.stop_prediction_resolver_scheduler()
-    assert stop["stopped"] is True
-
-    state = resolver_scheduler.get_prediction_resolver_scheduler_state()
-    assert state["running"] is False
-
-
-def
+    state = resolver_scheduler.get_prediction_resolver_scheduler_stat

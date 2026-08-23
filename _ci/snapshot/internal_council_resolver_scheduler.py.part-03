@@ -1,4 +1,4 @@
-              "pending": 0,
+: 0,
                     "error": f"cycle_timeout_{timeout}s",
                 }
                 self._persist_cycle_summary(result)
@@ -143,4 +143,4 @@ _scheduler_lock = threading.Lock()
 
 
 def start_prediction_resolver_scheduler(
-    refresh_minu
+    refresh_minutes: int = RESOLVER_REF

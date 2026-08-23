@@ -1,4 +1,10 @@
-     if self._consecutive_failures > 0:
+val_seconds * self.staleness_factor
+        if self._last_success_epoch is None:
+            return "no_success_yet", "no recorded success yet"
+        success_age = max(0.0, now - self._last_success_epoch)
+        if self._consecutive_skips >= self.skip_limit and success_age > stale_window:
+            return "starved", "skip burst while success stale"
+        if self._consecutive_failures > 0:
             return "failing", "last tick raised"
         if success_age > stale_window:
             return "stale", "success older than interval*factor"
@@ -16,6 +22,13 @@
                 lsa = datetime.fromtimestamp(
                     self._last_success_epoch, timezone.utc
                 ).isoformat()
+            lea = None
+            ea = None
+            if self._last_event_epoch is not None:
+                lea = datetime.fromtimestamp(
+                    self._last_event_epoch, timezone.utc
+                ).isoformat()
+                ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,
                 "lifecycle": self._lifecycle,
@@ -29,6 +42,8 @@
                 "last_error": self._last_error,
                 "last_skip_reason": self._last_skip_reason,
                 "last_evidence": self._last_evidence,
+                "last_event_at": lea,
+                "event_age_seconds": ea,
                 "source": self._source,
             }
 
@@ -43,6 +58,7 @@
             bucket = blob.setdefault(_PERSIST_PREFIX, {})
             bucket[self.name] = {
                 "last_success_epoch": self._last_success_epoch,
+                "last_event_epoch": self._last_event_epoch,
                 "lifecycle": snap["lifecycle"],
                 "consecutive_failures": snap["consecutive_failures"],
                 "consecutive_skips": snap["consecutive_skips"],

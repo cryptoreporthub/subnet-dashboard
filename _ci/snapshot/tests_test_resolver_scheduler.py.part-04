@@ -1,4 +1,16 @@
-elease.wait(timeout=2)
+meout" in caplog.text
+
+
+def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
+    monkeypatch, fresh_scheduler
+):
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
         finished.set()
         return {
             "ok": True,
@@ -62,6 +74,35 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
     assert "resolver lifecycle event=success" in caplog.text
 
 # ---------------------------------------------------------------------------
+# Tracker persistence isolation (spec §3): trackers must read/write a
+# tmp-backed soul map so prior CI runs can never leak into fresh instances.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file."""
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        sm_path.parent.mkdir(parents=True, exist_ok=True)
+        sm_path.write_text(json.dumps(blob), encoding="utf-8")
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+
+
+# ---------------------------------------------------------------------------
 # LivenessTracker conformance + honest-skip contract (spec §4)
 # ---------------------------------------------------------------------------
 
@@ -74,9 +115,8 @@ def test_resolver_scheduler_liveness_conformance():
         s = resolver_scheduler.PredictionResolverScheduler(
             refresh_minutes=1, subnet_provider=_static_subnets
         )
-        # Unique per-run name so persisted prior state can never make a
-        # "fresh" tracker look ok (conformance check #1).
-        s.liveness.name = "prediction_resolver-conformance-%f" % time.time()
+        # Persistence is tmp-isolated by autouse fixture, so a fresh
+        # tracker genuinely starts with no prior state.
         return s.liveness
 
     assert_liveness_compliant(factory)
