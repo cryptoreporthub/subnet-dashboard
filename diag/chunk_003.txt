@@ -1,0 +1,286 @@
+==FILE:tests/test_resolver_scheduler.py OFFSET:0==
+"""
+Tests for the prediction resolver scheduler and the stale-prediction expiry
+safety net.
+
+Covers:
+- ``resolver.expire_stale_predictions`` edge cases (not-yet-due, within grace,
+  past grace, corrupt records)
+- ``resolver._compute_stats`` excludes expired entries from accuracy
+- ``resolver_scheduler.PredictionResolverScheduler`` lifecycle: start/stop,
+  idempotency, single-cycle run, backoff on failure, cycle-summary persistence
+- Module-level singleton helpers
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import threading
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
+
+import pytest
+
+import internal.council.resolver as resolver
+import internal.council.resolver_scheduler as resolver_scheduler
+import internal.council.weights as weights
+
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def isolate_data_paths(tmp_path, monkeypatch):
+    """Keep all persistence inside a temp directory."""
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(tmp_path / "predictions.json"))
+    monkeypatch.setattr(resolver, "PRICE_CACHE_PATH", str(tmp_path / "price_cache.json"))
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+    monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+
+
+@pytest.fixture
+def nudge_spy(monkeypatch):
+    """Capture weight nudges without touching the filesystem."""
+    calls: List[Any] = []
+
+    def _fake_nudge(correct, expert):
+        calls.append((correct, expert))
+
+    monkeypatch.setattr(resolver, "_nudge_weights", _fake_nudge)
+    return calls
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _write_predictions(data: Dict[str, Any]) -> None:
+    with open(resolver.PREDICTIONS_PATH, "w") as f:
+        json.dump(data, f)
+
+
+# ---------------------------------------------------------------------------
+# Expiry logic
+# ---------------------------------------------------------------------------
+
+def test_expire_does_not_touch_not_yet_due_predictions():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": _iso(now + timedelta(hours=1)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert result["expired_now"] == []
+    assert len(result["pending"]) == 1
+    assert result["stats"]["pending"] == 1
+    assert result["stats"]["expired"] == 0
+
+
+def test_expire_keeps_predictions_within_grace_window():
+    """A prediction just past ``resolve_at`` but within the grace window must
+    stay pending -- the price feed may still recover."""
+    now = datetime.now(timezone.utc)
+    horizon = 24.0
+    grace = horizon * resolver._EXPIRY_GRACE_MULTIPLE
+    resolve_at = now - timedelta(hours=1)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": horizon,
+                "resolve_at": _iso(resolve_at),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert result["expired_now"] == []
+    assert len(result["pending"]) == 1
+
+
+def test_expire_retires_predictions_past_grace_window():
+    now = datetime.now(timezone.utc)
+    horizon = 24.0
+    grace = horizon * resolver._EXPIRY_GRACE_MULTIPLE
+    resolve_at = now - timedelta(hours=grace + 5)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": horizon,
+                "resolve_at": _iso(resolve_at),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["expired_now"]) == 1
+    expired = result["expired_now"][0]
+    assert expired["status"] == "expired"
+    assert expired["outcome"] == "expired"
+    assert expired["correct"] is None
+    assert result["stats"]["expired"] == 1
+    assert result["stats"]["pending"] == 0
+
+
+def test_expire_handles_corrupt_resolve_at():
+    """A prediction with an unparseable resolve_at is retired, not crashed on."""
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": "not-a-date",
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["expired_now"]) == 1
+    assert result["expired_now"][0]["status"] == "expired"
+
+
+def test_resolver_accepts_offset_plus_z_timestamp():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["pending"]) == 1
+    assert result["expired_now"] == []
+
+
+def test_resolve_due_restores_recently_expired_malformed_timestamp():
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [],
+        "resolved": [
+            {
+                "id": "malformed-horizon",
+                "netuid": 1,
+                "reference_price": 100.0,
+                "predicted_pct": 10.0,
+                "direction": "up",
+                "expert": "quant",
+                "horizon_hours": 24,
+                "resolve_at": (now + timedelta(hours=1)).isoformat() + "Z",
+                "status": "expired",
+                "outcome": "expired",
+                "correct": None,
+                "resolved_at": now.isoformat().replace("+00:00", "Z"),
+            },
+        ],
+    })
+
+    result = resolver.resolve_due_predictions(subnets=[])
+    assert [row["id"] for row in result["restored_now"]] == ["malformed-horizon"]
+    assert len(result["pending"]) == 1
+    assert result["pending"][0]["status"] == "pending"
+    assert result["pending"][0]["resolve_at"].endswith("Z")
+    assert not result["pending"][0]["resolve_at"].endswith("+00:00Z")
+    assert all(row.get("outcome") != "expired" for row in result["pending"])
+
+
+def test_expire_skips_non_dict_records():
+    """A corrupt non-dict entry must not crash the loop."""
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            "i am not a dict",
+            42,
+            {
+                "netuid": 1,
+                "horizon_hours": 24,
+                "resolve_at": _iso(now - timedelta(hours=100)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    result = resolver.expire_stale_predictions()
+    assert len(result["expired_now"]) == 1
+    assert result["stats"]["pending"] == 0
+
+
+def test_expire_does_not_nudge_weights(nudge_spy):
+    """Expired predictions carry no outcome -> expert weights must not move."""
+    now = datetime.now(timezone.utc)
+    _write_predictions({
+        "predictions": [
+            {
+                "netuid": 1,
+                "horizon_hours": 24,
+                "expert": "quant",
+                "resolve_at": _iso(now - timedelta(hours=100)),
+            },
+        ],
+        "resolved": [],
+    })
+
+    resolver.expire_stale_predictions()
+    assert nudge_spy == []
+
+
+def test_compute_stats_excludes_expired_from_accuracy():
+    data = {
+        "predictions": [],
+        "resolved": [
+            {"correct": True},
+            {"correct": False},
+            {"correct": None, "outcome": "expired"},
+            {"correct": None, "outcome": "expired"},
+        ],
+    }
+    _write_predictions(data)
+
+    result = resolver.get_resolved_predictions()
+    stats = result["stats"]
+    assert stats["correct"] == 1
+    assert stats["wrong"] == 1
+    assert stats["expired"] == 2
+    assert stats["accuracy"] == round(1 / 2, 3)
+
+
+def test_resolve_due_predictions_expires_when_no_price(nudge_spy):
+    """A due prediction with no price and past grace is expired, not stuck."""
+    now = datetime.now(timezone
