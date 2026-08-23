@@ -1,6 +1,4 @@
-: 0,
-                    "error": f"cycle_timeout_{timeout}s",
-                }
+   }
                 self._persist_cycle_summary(result)
                 return result
         except BaseException:
@@ -143,4 +141,7 @@ _scheduler_lock = threading.Lock()
 
 
 def start_prediction_resolver_scheduler(
-    refresh_minutes: int = RESOLVER_REF
+    refresh_minutes: int = RESOLVER_REFRESH_MINUTES,
+    immediate: bool = False,
+    **kwargs: Any,
+) -> Dict[str,

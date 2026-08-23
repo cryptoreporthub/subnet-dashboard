@@ -1,59 +1,341 @@
+......................F................................................. [ 33%]
+........................................................................ [ 67%]
+......................................................................   [100%]
+=================================== FAILURES ===================================
+_______________ test_scheduler_run_once_resolves_due_predictions _______________
 
-==================================== ERRORS ====================================
-______________ ERROR collecting tests/test_resolver_scheduler.py _______________
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/python.py:508: in importtestmodule
-    mod = import_path(
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/pathlib.py:596: in import_path
-    importlib.import_module(module_name)
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/importlib/__init__.py:90: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-<frozen importlib._bootstrap>:1387: in _gcd_import
-    ???
-<frozen importlib._bootstrap>:1360: in _find_and_load
-    ???
-<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
-    ???
-<frozen importlib._bootstrap>:935: in _load_unlocked
-    ???
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
-    exec(co, module.__dict__)
-tests/test_resolver_scheduler.py:26: in <module>
-    import internal.council.resolver_scheduler as resolver_scheduler
-E     File "/home/runner/work/subnet-dashboard/subnet-dashboard/internal/council/resolver_scheduler.py", line 159
-E       self.liveness.snapshot().get("last_event_at"): Optional[str] = None
-E       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   SyntaxError: illegal target for annotation
-_____________ ERROR collecting tests/test_learning_loop_health.py ______________
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/python.py:508: in importtestmodule
-    mod = import_path(
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/pathlib.py:596: in import_path
-    importlib.import_module(module_name)
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/importlib/__init__.py:90: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-<frozen importlib._bootstrap>:1387: in _gcd_import
-    ???
-<frozen importlib._bootstrap>:1360: in _find_and_load
-    ???
-<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
-    ???
-<frozen importlib._bootstrap>:935: in _load_unlocked
-    ???
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
-    exec(co, module.__dict__)
-tests/test_learning_loop_health.py:11: in <module>
-    from internal.learning.loop_health import build_learning_loop_health
-internal/learning/loop_health.py:12: in <module>
-    from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
-E     File "/home/runner/work/subnet-dashboard/subnet-dashboard/internal/council/resolver_scheduler.py", line 159
-E       self.liveness.snapshot().get("last_event_at"): Optional[str] = None
-E       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   SyntaxError: illegal target for annotation
+nudge_spy = [], fresh_scheduler = None
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_scheduler_run_once_resolv0')
+
+    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
+        now = datetime.now(timezone.utc)
+        _write_predictions({
+            "predictions": [
+                {
+                    # council_published population is required for weight nudging
+                    # (resolver._stamp_and_nudge_expert); bare expert rows are
+                    # legacy_unclassified and silently never nudge.
+                    "pick_source": "council",
+                    "netuid": 1,
+                    "reference_price": 100.0,
+                    "predicted_pct": 10.0,
+                    "direction": "up",
+                    "expert": "quant",
+                    "resolve_at": _iso(now - timedelta(hours=1)),
+                },
+            ],
+            "resolved": [],
+        })
+    
+        # Hourly OHLCV is the canonical grading source; hydrate the cache the
+        # autouse fixture points resolver at so this test grades deterministically
+        # instead of depending on spot-price fallback behavior.
+        (tmp_path / "price_cache.json").write_text(
+            json.dumps(
+                {
+                    "1": {
+                        "candles": [
+                            {
+                                "timestamp": _iso(now - timedelta(hours=1)),
+                                "close": 115.0,
+                                "volume": 10.0,
+                            }
+                        ]
+                    }
+                }
+            )
+        )
+    
+        sched = resolver_scheduler.PredictionResolverScheduler(
+            refresh_minutes=1, subnet_provider=_static_subnets
+        )
+        result = sched.run_once()
+    
+        assert result["ok"] is True
+        assert result["resolved_now"] == 1
+        assert result["error"] is None
+>       assert nudge_spy == [(True, "quant")]
+E       AssertionError: assert [] == [(True, 'quant')]
+E         
+E         Right contains one more item: (True, 'quant')
+E         
+E         Full diff:
+E         + []
+E         - [
+E         -     (
+E         -         True,
+E         -         'quant',
+E         -     ),
+E         - ]
+
+tests/test_resolver_scheduler.py:424: AssertionError
+==================================== PASSES ====================================
+______________ test_resolve_due_predictions_expires_when_no_price ______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+_________ test_resolve_due_predictions_keeps_due_no_price_within_grace _________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+______________ test_scheduler_run_once_expires_stale_predictions _______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+______________________ test_scheduler_backoff_on_failure _______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=price feed down
+______________________ test_scheduler_backoff_caps_at_max ______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+____________________ test_scheduler_persists_cycle_summary _____________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+____________________ test_scheduler_recovers_after_failure _____________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=transient
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+________________________ test_resolver_cycle_times_out _________________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:365 resolver lifecycle event=timeout first=True duration_ms=1001.3 error=cycle_timeout_1s
+________________ test_resolver_first_tick_success_is_observable ________________
+------------------------------ Captured log call -------------------------------
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:304 resolver lifecycle event=tick_start first=True
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:379 resolver lifecycle event=success first=True duration_ms=0.4
 =========================== short test summary info ============================
-ERROR tests/test_resolver_scheduler.py
-ERROR tests/test_learning_loop_health.py
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-2 errors in 1.99s
+PASSED tests/test_liveness_tracker.py::test_contract
+PASSED tests/test_liveness_tracker.py::test_skip_burst_with_fresh_success_is_ok
+PASSED tests/test_liveness_tracker.py::test_starved_requires_stale_success
+PASSED tests/test_liveness_tracker.py::test_stale_auto_degrades
+PASSED tests/test_liveness_tracker.py::test_no_success_is_never_ok
+PASSED tests/test_liveness_tracker.py::test_empty_evidence_raises
+PASSED tests/test_liveness_tracker.py::test_persistence_round_trip_real_soul_map
+PASSED tests/test_no_handrolled_liveness.py::test_no_new_handrolled_liveness
+PASSED tests/test_no_handrolled_liveness.py::test_allowlist_monotonically_shrinks
+PASSED tests/test_resolver_scheduler.py::test_expire_does_not_touch_not_yet_due_predictions
+PASSED tests/test_resolver_scheduler.py::test_expire_keeps_predictions_within_grace_window
+PASSED tests/test_resolver_scheduler.py::test_expire_retires_predictions_past_grace_window
+PASSED tests/test_resolver_scheduler.py::test_expire_handles_corrupt_resolve_at
+PASSED tests/test_resolver_scheduler.py::test_resolver_accepts_offset_plus_z_timestamp
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_restores_recently_expired_malformed_timestamp
+PASSED tests/test_resolver_scheduler.py::test_expire_skips_non_dict_records
+PASSED tests/test_resolver_scheduler.py::test_expire_does_not_nudge_weights
+PASSED tests/test_resolver_scheduler.py::test_compute_stats_excludes_expired_from_accuracy
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_predictions_expires_when_no_price
+PASSED tests/test_resolver_scheduler.py::test_resolve_due_predictions_keeps_due_no_price_within_grace
+PASSED tests/test_resolver_scheduler.py::test_scheduler_start_stop
+PASSED tests/test_resolver_scheduler.py::test_scheduler_start_is_idempotent
+PASSED tests/test_resolver_scheduler.py::test_scheduler_run_once_expires_stale_predictions
+PASSED tests/test_resolver_scheduler.py::test_scheduler_backoff_on_failure
+PASSED tests/test_resolver_scheduler.py::test_scheduler_backoff_caps_at_max
+PASSED tests/test_resolver_scheduler.py::test_scheduler_persists_cycle_summary
+PASSED tests/test_resolver_scheduler.py::test_scheduler_recovers_after_failure
+PASSED tests/test_resolver_scheduler.py::test_singleton_start_stop_state
+PASSED tests/test_resolver_scheduler.py::test_singleton_state_when_not_started
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_fallback_returns_list
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_uses_worker_cache
+PASSED tests/test_resolver_scheduler.py::test_default_subnets_falls_back_to_registry_when_cache_read_fails
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_sorts_by_netuid
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_wraps_cursor
+PASSED tests/test_resolver_scheduler.py::test_round_robin_batch_caps_at_subnet_count
+PASSED tests/test_resolver_scheduler.py::test_scheduler_persists_round_robin_cursor
+PASSED tests/test_resolver_scheduler.py::test_scheduler_passes_full_subnet_list_to_resolve
+PASSED tests/test_resolver_scheduler.py::test_scheduler_skip_persists_last_cycle_when_heavy_job_busy
+PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_times_out
+PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_timeout_does_not_overlap_inflight_work
+PASSED tests/test_resolver_scheduler.py::test_resolver_first_tick_success_is_observable
+PASSED tests/test_resolver_scheduler.py::test_resolver_scheduler_liveness_conformance
+PASSED tests/test_resolver_scheduler.py::test_skip_burst_never_produces_ok
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /health]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /robots.txt]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/tribunal]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-hold]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-pump-alert]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/k3-pump-alert-scan]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/pump-desk-polish]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /preview/pump-desk-full]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /pump]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /judge-council]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-patterns/15]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-patterns/active]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /metrics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/health]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/data-freshness]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/readiness]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/live]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/worker-peer]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/evidence]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ops/desearch-spend]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/subnet-integrations]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/subnet-integrations/signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/daily-rotation]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/registry]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/subnets]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/subnets?status=active&sort=emission&order=desc&limit=2]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/subnet/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/stats]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/soul-map]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/recommendations]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/mindmap/feedback]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/mindmap/graph]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/mindmap/trail]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/simivision]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/top-picks]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/daily-pick]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/daily-pick/weighed]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pick-explain/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/top-pick/day]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/top-pick/hour]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/dimensions]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/leaderboards]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/leaderboards/ruggers]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/subnet/1/flow]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/whales/flow-signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/dev-radar]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/whales/events]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/whales/scan]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/investigate/subnet/82/sellers]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/investigate/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/investigate/wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY/flow]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/investigate/subnet/82/owner-check?wallets=5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/investigate/ask]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/judges]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/judges/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/judges/oracle/postmortems]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/paper-portfolio]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/portfolios]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/postmortems]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/postmortems/oracle]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/council]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/mindmap/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/message-intel]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/message-intel/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/message-intel/social]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/message-intel/authors]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/message-intel/topics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/learning/health]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/learning/stats]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/story-strip]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/learning-metrics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/resolved]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/resolver]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ruggers/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ruggers/watchlist]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ruggers/watchlist/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ruggers/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/ruggers/subnet/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/ruggers/events]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/ruggers/scan]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/indicators]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/indicators-convergence]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/indicators/scheduler]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/feedback]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/learning/trigger]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/learning/rebalance-weights]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/learning/backfill-expert-attribution]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/predictions/resolver/run]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/learning/pump-lead/recover]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/learning/pump-lead/train-status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/learning/pump-lead/train]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/scenario-memory]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/scenario-memory]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pick-history]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/oracle]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/pump-analytics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/price-tracking/baselines]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/price-tracking/outcomes]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/backtest]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage/dark_horse]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage/dark_horse/evolution]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/market-drivers]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/market-drivers/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/mindmap/story-path]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id/og.svg]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id/og.png]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /share/call/test-id]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /listener]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /subnetsummer]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /subnet/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/search?q=1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/report/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/rotation-tracker]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/freshness]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/council/weights]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/weights]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/simivision/chat]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/resolve-predictions]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/rotation-tokens]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signals/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/calibration/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/calibration/retrain]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/conviction-alerts/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/conviction-alerts/notify]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/watchlist]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[PUT /api/watchlist]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/portfolio/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/weekly]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/daily]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/brain]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signal-hub/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signal-hub/signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/cockpit/stream?once=1]
+PASSED tests/test_endpoint_contract.py::test_registered_routes_cover_contract
+PASSED tests/test_server.py::test_index_route
+PASSED tests/test_server.py::test_registry_route
+PASSED tests/test_server.py::test_subnet_route_found
+PASSED tests/test_server.py::test_subnet_route_not_found
+PASSED tests/test_server.py::test_health_route
+PASSED tests/test_server.py::test_cors_headers
+PASSED tests/test_server.py::test_cors_headers_allowed_origin
+PASSED tests/test_server.py::test_cors_headers_disallowed_origin
+PASSED tests/test_server.py::test_stats_route
+PASSED tests/test_server.py::test_subnets_list_route
+PASSED tests/test_server.py::test_recommendations_route
+PASSED tests/test_server.py::test_soul_map_route
+PASSED tests/test_server.py::test_daily_rotation_route
+PASSED tests/test_learning_loop_health.py::test_api_learning_health_shape
+PASSED tests/test_learning_loop_health.py::test_published_long_without_ledger_is_stalled
+PASSED tests/test_learning_loop_health.py::test_hold_day_does_not_require_ledger
+PASSED tests/test_learning_loop_health.py::test_published_long_with_day_row_ok
+PASSED tests/test_learning_loop_health.py::test_inline_worker_alive_shows_resolver_running
+PASSED tests/test_learning_loop_health.py::test_young_pending_not_stalled_without_watchdog
+PASSED tests/test_learning_loop_health.py::test_restart_with_stale_tick_degraded_not_stalled
+PASSED tests/test_learning_loop_health.py::test_snapshot_age_from_soul_map_when_file_missing
+PASSED tests/test_learning_loop_health.py::test_snapshot_stale_degraded_not_stalled
+PASSED tests/test_learning_loop_health.py::test_self_learning_not_started_from_boot_or_server
+FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_predictions - AssertionError: assert [] == [(True, 'quant')]
+  
+  Right contains one more item: (True, 'quant')
+  
+  Full diff:
+  + []
+  - [
+  -     (
+  -         True,
+  -         'quant',
+  -     ),
+  - ]
+1 failed, 213 passed in 15.30s
 
-PYTEST_EXIT_CODE=2
+PYTEST_EXIT_CODE=1

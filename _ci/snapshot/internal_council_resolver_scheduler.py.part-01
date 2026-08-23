@@ -1,6 +1,4 @@
-= "stopped"
-        self._started_at: Optional[str] = None
-        self._first_tick_scheduled_at: Optional[str] = None
+st_tick_scheduled_at: Optional[str] = None
         self._first_tick_at: Optional[str] = None
         self._first_tick_ok: Optional[bool] = None
         self._lifecycle_error: Optional[str] = None
@@ -145,4 +143,6 @@
                     "run_at": _now_iso(),
                     "skipped": "heavy_job_busy",
                     "resolved_now": 0,
-              
+                    "expired_now": 0,
+                    "pending": 0,
+                }

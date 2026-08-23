@@ -1,6 +1,3 @@
-      "expired_now": 0,
-                    "pending": 0,
-                }
                 self._persist_cycle_summary(skipped)
                 # Skips are recorded honestly; they never produce ok (spec §2).
                 self.liveness.record_skip(reason="heavy_job_busy")
@@ -150,4 +147,6 @@
                     "run_at": _now_iso(),
                     "resolved_now": 0,
                     "expired_now": 0,
-                    "pending"
+                    "pending": 0,
+                    "error": f"cycle_timeout_{timeout}s",
+             

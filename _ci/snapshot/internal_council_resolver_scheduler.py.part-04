@@ -1,7 +1,4 @@
-RESH_MINUTES,
-    immediate: bool = False,
-    **kwargs: Any,
-) -> Dict[str, Any]:
+ Any]:
     """Start the module-level prediction resolver scheduler singleton."""
     global _scheduler
     with _scheduler_lock:

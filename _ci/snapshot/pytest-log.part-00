@@ -1,59 +1,97 @@
+......................F................................................. [ 33%]
+........................................................................ [ 67%]
+......................................................................   [100%]
+=================================== FAILURES ===================================
+_______________ test_scheduler_run_once_resolves_due_predictions _______________
 
-==================================== ERRORS ====================================
-______________ ERROR collecting tests/test_resolver_scheduler.py _______________
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/python.py:508: in importtestmodule
-    mod = import_path(
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/pathlib.py:596: in import_path
-    importlib.import_module(module_name)
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/importlib/__init__.py:90: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-<frozen importlib._bootstrap>:1387: in _gcd_import
-    ???
-<frozen importlib._bootstrap>:1360: in _find_and_load
-    ???
-<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
-    ???
-<frozen importlib._bootstrap>:935: in _load_unlocked
-    ???
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
-    exec(co, module.__dict__)
-tests/test_resolver_scheduler.py:26: in <module>
-    import internal.council.resolver_scheduler as resolver_scheduler
-E     File "/home/runner/work/subnet-dashboard/subnet-dashboard/internal/council/resolver_scheduler.py", line 159
-E       self.liveness.snapshot().get("last_event_at"): Optional[str] = None
-E       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   SyntaxError: illegal target for annotation
-_____________ ERROR collecting tests/test_learning_loop_health.py ______________
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/python.py:508: in importtestmodule
-    mod = import_path(
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/pathlib.py:596: in import_path
-    importlib.import_module(module_name)
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/importlib/__init__.py:90: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-<frozen importlib._bootstrap>:1387: in _gcd_import
-    ???
-<frozen importlib._bootstrap>:1360: in _find_and_load
-    ???
-<frozen importlib._bootstrap>:1331: in _find_and_load_unlocked
-    ???
-<frozen importlib._bootstrap>:935: in _load_unlocked
-    ???
-/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/site-packages/_pytest/assertion/rewrite.py:188: in exec_module
-    exec(co, module.__dict__)
-tests/test_learning_loop_health.py:11: in <module>
-    from internal.learning.loop_health import build_learning_loop_health
-internal/learning/loop_health.py:12: in <module>
-    from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
-E     File "/home/runner/work/subnet-dashboard/subnet-dashboard/internal/council/resolver_scheduler.py", line 159
-E       self.liveness.snapshot().get("last_event_at"): Optional[str] = None
-E       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E   SyntaxError: illegal target for annotation
-=========================== short test summary info ============================
-ERROR tests/test_resolver_scheduler.py
-ERROR tests/test_learning_loop_health.py
-!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-2 errors in 1.99s
+nudge_spy = [], fresh_scheduler = None
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_scheduler_run_once_resolv0')
 
-PYTEST_EXIT_CODE=2
+    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
+        now = datetime.now(timezone.utc)
+        _write_predictions({
+            "predictions": [
+                {
+                    # council_published population is required for weight nudging
+                    # (resolver._stamp_and_nudge_expert); bare expert rows are
+                    # legacy_unclassified and silently never nudge.
+                    "pick_source": "council",
+                    "netuid": 1,
+                    "reference_price": 100.0,
+                    "predicted_pct": 10.0,
+                    "direction": "up",
+                    "expert": "quant",
+                    "resolve_at": _iso(now - timedelta(hours=1)),
+                },
+            ],
+            "resolved": [],
+        })
+    
+        # Hourly OHLCV is the canonical grading source; hydrate the cache the
+        # autouse fixture points resolver at so this test grades deterministically
+        # instead of depending on spot-price fallback behavior.
+        (tmp_path / "price_cache.json").write_text(
+            json.dumps(
+                {
+                    "1": {
+                        "candles": [
+                            {
+                                "timestamp": _iso(now - timedelta(hours=1)),
+                                "close": 115.0,
+                                "volume": 10.0,
+                            }
+                        ]
+                    }
+                }
+            )
+        )
+    
+        sched = resolver_scheduler.PredictionResolverScheduler(
+            refresh_minutes=1, subnet_provider=_static_subnets
+        )
+        result = sched.run_once()
+    
+        assert result["ok"] is True
+        assert result["resolved_now"] == 1
+        assert result["error"] is None
+>       assert nudge_spy == [(True, "quant")]
+E       AssertionError: assert [] == [(True, 'quant')]
+E         
+E         Right contains one more item: (True, 'quant')
+E         
+E         Full diff:
+E         + []
+E         - [
+E         -     (
+E         -         True,
+E         -         'quant',
+E         -     ),
+E         - ]
+
+tests/test_resolver_scheduler.py:424: AssertionError
+==================================== PASSES ====================================
+______________ test_resolve_due_predictions_expires_when_no_price ______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+_________ test_resolve_due_predictions_keeps_due_no_price_within_grace _________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+______________ test_scheduler_run_once_expires_stale_predictions _______________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
+WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
+______________________ test_scheduler_backoff_on_failure _______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=price feed down
+______________________ test_scheduler_backoff_caps_at_max ______________________
+------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resol
