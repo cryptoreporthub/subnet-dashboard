@@ -15,18 +15,18 @@ WARNING  internal.council.price_reference:price_reference.py:67 price_cache miss
 WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
 ______________________ test_scheduler_backoff_on_failure _______________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.8 error=price feed down
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.9 error=price feed down
 ______________________ test_scheduler_backoff_caps_at_max ______________________
 ------------------------------ Captured log call -------------------------------
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=1.0 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=1.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
 ____________________ test_scheduler_persists_cycle_summary _____________________
 ------------------------------ Captured log call -------------------------------
@@ -37,7 +37,7 @@ WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:385 resolver 
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ________________________ test_resolver_cycle_times_out _________________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:365 resolver lifecycle event=timeout first=True duration_ms=1001.4 error=cycle_timeout_1s
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:365 resolver lifecycle event=timeout first=True duration_ms=1001.3 error=cycle_timeout_1s
 ________________ test_resolver_first_tick_success_is_observable ________________
 ------------------------------ Captured log call -------------------------------
 INFO     internal.council.resolver_scheduler:resolver_scheduler.py:304 resolver lifecycle event=tick_start first=True
