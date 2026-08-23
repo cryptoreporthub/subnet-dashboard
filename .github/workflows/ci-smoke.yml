@@ -1,6 +1,13 @@
 # Required PR/main gate — single job named "smoke" (branch protection).
 # Homepage hydration smoke is also registered below; this comment commit re-queues PR validation.
 # Replaces the old health-only smoke + duplicate ci-check + Phase K gate stack.
+#
+# Log-export addition (pre-PR-2): the pytest step tees its output to a file; on
+# failure that file is uploaded as an artifact AND its failure sections are
+# patched into the smoke check-run's output.summary, so failures can be READ
+# back via the check-runs API (no admin rights needed) instead of diagnosed by
+# inference from code. Both export steps are continue-on-error: they can never
+# change the pass/fail outcome of the gate.
 name: CI Smoke Test
 
 on:
@@ -43,6 +50,7 @@ jobs:
         env:
           DISABLE_BACKGROUND_SCANS: "1"
         run: |
+          set -o pipefail
           python -m pytest tests/test_endpoint_contract.py tests/test_server.py \
             tests/test_learning_loop_health.py \
             tests/test_prediction_loop_closure.py \
@@ -54,7 +62,36 @@ jobs:
             tests/test_dpick_parallel_fetch.py \
             tests/test_tmc_singleflight.py \
             tests/test_liveness_tracker.py \
-            tests/test_no_handrolled_liveness.py -q
+            tests/test_no_handrolled_liveness.py -q 2>&1 | tee ci-test-output.txt
+      - name: Upload test output artifact
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-test-output-${{ github.run_id }}
+          path: ci-test-output.txt
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Publish failure details to check run
+        if: failure()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          {
+            echo "## CI failure details (auto-extracted)"
+            echo ""
+            echo "### short test summary"
+            sed -n '/short test summary/,$p' ci-test-output.txt || true
+            echo ""
+            echo "### FAILURES section"
+            sed -n '/=\+ FAILURES =\+/,/short test summary/p' ci-test-output.txt | head -400 || true
+          } > failure_details.md
+          jq -n --rawfile s failure_details.md '{output:{title:"smoke failed — auto-extracted details",summary:$s}}' > payload.json
+          JOB_ID=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --jq '.jobs[] | select(.name=="smoke") | .id' | head -1)
+          gh api -X PATCH "repos/$REPO/check-runs/$JOB_ID" --input payload.json > /dev/null && echo "failure details published to check run $JOB_ID"
       - name: Homepage hydration smoke
         timeout-minutes: 2
         env:
