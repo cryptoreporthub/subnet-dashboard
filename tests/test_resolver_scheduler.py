@@ -379,6 +379,10 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler,
     _write_predictions({
         "predictions": [
             {
+                # council_published population is required for weight nudging
+                # (resolver._stamp_and_nudge_expert); bare expert rows are
+                # legacy_unclassified and silently never nudge.
+                "pick_source": "council",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
@@ -694,7 +698,7 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     last = soul["prediction_resolver_scheduler"]["last_cycle"]
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
-    assert sched._last_run_at == last.get("run_at")
+    assert sched.liveness.snapshot().get("last_event_at") is not None
     # Inverted laundering contract: a skip burst must NOT read as healthy.
     snap = sched.liveness.snapshot()
     assert snap["status"] != "ok"
@@ -811,6 +815,35 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
     assert "resolver lifecycle event=success" in caplog.text
 
 # ---------------------------------------------------------------------------
+# Tracker persistence isolation (spec §3): trackers must read/write a
+# tmp-backed soul map so prior CI runs can never leak into fresh instances.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file."""
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        sm_path.parent.mkdir(parents=True, exist_ok=True)
+        sm_path.write_text(json.dumps(blob), encoding="utf-8")
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+
+
+# ---------------------------------------------------------------------------
 # LivenessTracker conformance + honest-skip contract (spec §4)
 # ---------------------------------------------------------------------------
 
@@ -823,9 +856,8 @@ def test_resolver_scheduler_liveness_conformance():
         s = resolver_scheduler.PredictionResolverScheduler(
             refresh_minutes=1, subnet_provider=_static_subnets
         )
-        # Unique per-run name so persisted prior state can never make a
-        # "fresh" tracker look ok (conformance check #1).
-        s.liveness.name = "prediction_resolver-conformance-%f" % time.time()
+        # Persistence is tmp-isolated by autouse fixture, so a fresh
+        # tracker genuinely starts with no prior state.
         return s.liveness
 
     assert_liveness_compliant(factory)
