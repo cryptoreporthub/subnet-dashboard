@@ -1,0 +1,32 @@
+---
+description: Fly.io MCP guardrails for subnet-dashboard prod ops
+globs: ["**/*"]
+alwaysApply: true
+---
+
+You have access to the official **flyctl MCP server** (`fly mcp server`) when configured in `.cursor/mcp.json`. It wraps flyctl: apps, machines, logs, status, secrets, volumes.
+
+## Prerequisites (human / environment)
+- Local Cursor: `fly auth login` (or `FLY_ACCESS_TOKEN` in env).
+- Cloud Agents: `FLY_API_TOKEN` secret + MCP allowlist if the environment blocks unknown servers.
+
+## Default posture (read-first)
+Prefer these tools unless the task explicitly requires mutation:
+- `fly-apps-list`, `fly-status`, `fly-logs`, `fly-machines-list`, `fly-platform-status`
+
+Prod validation pattern for subnet-dashboard:
+- App: `subnet-dashboard`
+- Prefer `fly machine run` with `--timeout 600` over long SSH sessions.
+- Health: `/health` <1s; `/api/learning/health` <2s.
+
+## Require explicit human approval before
+- `fly deploy`, machine destroy/restart, secrets set/unset, volume create/destroy, org changes.
+- Any change to `fly.toml` VM size or process groups.
+
+## Standing gates (same as sprint)
+- Do not bump daily-pick 90s timeout or unmute `LOOP_STALL_GUARD_KILL` without explicit ask.
+- Deploy still gated by `tests/test_endpoint_contract.py` + Fly Deploy Guard on push to main.
+
+## Anti-patterns
+- No warm-cache speedup quotes as prod truth.
+- No "should work" — state the command and verification (run_id, deploy SHA, health).
