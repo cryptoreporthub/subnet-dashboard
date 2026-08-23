@@ -1,0 +1,53 @@
+# Diag v3 (temporary): export migrated scheduler + resolver scheduler tests as
+# JSON-escaped chunks for out-of-band readback. Removed immediately after the
+# PR-2 gate fixes land.
+name: Diag File Export v3
+
+on: push
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Slice target files into JSON chunks
+        run: |
+          set -e
+          python3 - <<'PY'
+          import json, pathlib, hashlib
+          files = [
+              "internal/council/resolver_scheduler.py",
+              "tests/test_resolver_scheduler.py",
+          ]
+          out = pathlib.Path("diag"); out.mkdir(exist_ok=True)
+          idx = 0
+          index = []
+          for f in files:
+              raw = pathlib.Path(f).read_bytes()
+              digest = hashlib.sha256(raw).hexdigest()
+              t = raw.decode("utf-8")
+              n_chars = len(t)
+              for k in range(0, len(t), 8000):
+                  rec = {"file": f, "off": k, "sha256": digest, "n_chars": n_chars,
+                         "data": t[k:k+8000]}
+                  p = out / ("j_%03d.json" % idx)
+                  p.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+                  index.append(p.name); idx += 1
+          (out / "index.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
+          print("wrote", idx, "chunks")
+          PY
+      - name: Commit diag chunks if changed
+        run: |
+          set -e
+          git config user.name "diag-bot"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -n "$(git status --porcelain diag)" ]; then
+            git add diag
+            git commit -m "diag(v3): export JSON-escaped file chunks"
+            git push origin HEAD:${{ github.ref_name }}
+          else
+            echo "diag unchanged; done"
+          fi
