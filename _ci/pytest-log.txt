@@ -112,7 +112,7 @@ _________________ test_resolver_scheduler_liveness_conformance _________________
 tests/test_resolver_scheduler.py:831: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f86a635eca0>
+make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f0ba2ea2ca0>
 
     def assert_liveness_compliant(make_tracker):
         """Contract checks every adopted tracker must satisfy."""
@@ -162,25 +162,25 @@ WARNING  internal.council.price_reference:price_reference.py:67 price_cache miss
 WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
 ______________________ test_scheduler_backoff_on_failure _______________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=price feed down
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.1 error=price feed down
 ______________________ test_scheduler_backoff_caps_at_max ______________________
 ------------------------------ Captured log call -------------------------------
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.0 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
 ____________________ test_scheduler_persists_cycle_summary _____________________
 ------------------------------ Captured log call -------------------------------
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ____________________ test_scheduler_recovers_after_failure _____________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=transient
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.0 error=transient
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ________________________ test_resolver_cycle_times_out _________________________
 ------------------------------ Captured log call -------------------------------
@@ -418,6 +418,6 @@ FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_pr
   -     ),
   - ]
 FAILED tests/test_resolver_scheduler.py::test_resolver_scheduler_liveness_conformance - AssertionError
-3 failed, 211 passed in 14.11s
+3 failed, 211 passed in 14.18s
 
 PYTEST_EXIT_CODE=1

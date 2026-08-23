@@ -112,7 +112,7 @@ _________________ test_resolver_scheduler_liveness_conformance _________________
 tests/test_resolver_scheduler.py:831: 
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 
-make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f86a635eca0>
+make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f0ba2ea2ca0>
 
     def assert_liveness_compliant(make_tracker):
         """Contract checks every adopted tracker must satisfy."""
