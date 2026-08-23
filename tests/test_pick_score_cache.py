@@ -43,6 +43,30 @@ def _isolate_cache(tmp_path, monkeypatch):
     pick_score_cache.clear_for_tests()
 
 
+def test_context_hash_stable_across_reload():
+    """Same market_context must produce the same key after a simulated restart."""
+    ctx = {
+        "tao_change_24h": -1.2345,
+        "weights": {"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25},
+        "breadth": "neutral",
+        "volatility": 0.12,
+    }
+    h1 = pick_score_cache._context_hash(ctx)
+    # Simulate process restart: fresh module call, no shared session state.
+    h2 = pick_score_cache._context_hash(dict(ctx))
+    assert h1 == h2
+    assert len(h1) == 12
+
+
+def test_context_hash_changes_when_scoring_inputs_change():
+    base = {
+        "tao_change_24h": 0.0,
+        "weights": {"quant": 0.3, "hype": 0.25, "dark_horse": 0.2, "technical": 0.25},
+    }
+    shifted = {**base, "tao_change_24h": 0.01}
+    assert pick_score_cache._context_hash(base) != pick_score_cache._context_hash(shifted)
+
+
 def test_tmc_data_epoch_is_min_of_both_caches():
     now = time.time()
     pf._tmc_subnets_cache["data"] = {}
