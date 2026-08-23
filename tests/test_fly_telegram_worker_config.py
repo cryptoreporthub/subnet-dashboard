@@ -54,10 +54,11 @@ def test_fly_toml_v1_inline_topology():
     )
 
 
-def test_fly_toml_web_vm_shared_cpu():
+def test_fly_toml_web_vm_performance_4gb():
+    """Web VM pinned to performance-1x 4GB after dpick memory cliff (#1024)."""
     fly = _fly_toml()
     assert re.search(
-        r'\[\[vm\]\][\s\S]*size = "shared-cpu-2x"[\s\S]*memory = "2gb"[\s\S]*processes = \["web"\]',
+        r'\[\[vm\]\][\s\S]*size = "performance-1x"[\s\S]*memory = "4gb"[\s\S]*processes = \["web"\]',
         fly,
     )
 
