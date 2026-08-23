@@ -1,7 +1,8 @@
-shed population is required for weight nudging
-                # (resolver._stamp_and_nudge_expert); bare expert rows are
-                # legacy_unclassified and silently never nudge.
+shed population + attributable signal evidence
+                # (the rogue guard rejects bare expert stamps), so the weight
+                # nudge fires for the stamped expert.
                 "pick_source": "council",
+                "signal_source": "emission_momentum",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
@@ -185,4 +186,4 @@ def test_singleton_start_stop_state(fresh_scheduler):
     )
     assert start["started"] is True
 
-    state = resolver_scheduler.get_prediction_resolver_scheduler_stat
+    state = resolver_s

@@ -1,4 +1,5 @@
-meout" in caplog.text
+s False
+    assert "resolver lifecycle event=timeout" in caplog.text
 
 
 def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
