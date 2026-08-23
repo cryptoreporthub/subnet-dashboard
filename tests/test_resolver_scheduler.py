@@ -379,10 +379,11 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler,
     _write_predictions({
         "predictions": [
             {
-                # council_published population is required for weight nudging
-                # (resolver._stamp_and_nudge_expert); bare expert rows are
-                # legacy_unclassified and silently never nudge.
+                # council_published population + attributable signal evidence
+                # (the rogue guard rejects bare expert stamps), so the weight
+                # nudge fires for the stamped expert.
                 "pick_source": "council",
+                "signal_source": "emission_momentum",
                 "netuid": 1,
                 "reference_price": 100.0,
                 "predicted_pct": 10.0,
