@@ -62,7 +62,8 @@ jobs:
             tests/test_dpick_parallel_fetch.py \
             tests/test_tmc_singleflight.py \
             tests/test_liveness_tracker.py \
-            tests/test_no_handrolled_liveness.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_no_handrolled_liveness.py \
+            tests/test_resolver_scheduler.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true
