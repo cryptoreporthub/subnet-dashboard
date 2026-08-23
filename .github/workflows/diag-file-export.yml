@@ -1,8 +1,7 @@
-# Diag: export selected source files as committed chunks so they can be read
-# back out-of-band (raw.githubusercontent.com) without admin log access.
-# Runs on every push; self-terminates when the diag/ tree is unchanged.
-# Remove after the PR-2 migration lands.
-name: Diag File Export
+# Diag v2: export selected source files as JSON-escaped chunks (newline-safe,
+# byte-exact reversible) so they can be read back out-of-band without admin
+# log access. Self-terminating when diag/ is unchanged. Removed post-migration.
+name: Diag File Export v2
 
 on: push
 
@@ -14,29 +13,39 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Slice target files into diag chunks
+      - name: Slice target files into JSON chunks
         run: |
           set -e
           python3 - <<'PY'
-          import pathlib
+          import json, pathlib, hashlib
           files = [
               "internal/council/resolver_scheduler.py",
               "tests/test_resolver_scheduler.py",
               "tests/liveness_conformance.py",
           ]
           out = pathlib.Path("diag"); out.mkdir(exist_ok=True)
-          for old in out.glob("chunk_*.txt"):
+          for old in list(out.glob("j_*.json")) + list(out.glob("chunk_*.txt")):
               old.unlink()
           idx = 0
+          index = []
           for f in files:
-              t = pathlib.Path(f).read_text(encoding="utf-8")
-              for k in range(0, len(t), 9000):
-                  (out / ("chunk_%03d.txt" % idx)).write_text(
-                      "==FILE:%s OFFSET:%d==\n" % (f, k) + t[k:k+9000],
-                      encoding="utf-8",
-                  )
+              raw = pathlib.Path(f).read_bytes()
+              digest = hashlib.sha256(raw).hexdigest()
+              t = raw.decode("utf-8")
+              n_chars = len(t)
+              for k in range(0, len(t), 8000):
+                  rec = {
+                      "file": f,
+                      "off": k,
+                      "sha256": digest,
+                      "n_chars": n_chars,
+                      "data": t[k:k+8000],
+                  }
+                  p = out / ("j_%03d.json" % idx)
+                  p.write_text(json.dumps(rec, ensure_ascii=False), encoding="utf-8")
+                  index.append(p.name)
                   idx += 1
-          (out / "index.txt").write_text("chunks=%d\n" % idx, encoding="utf-8")
+          (out / "index.txt").write_text("\n".join(index) + "\n", encoding="utf-8")
           print("wrote", idx, "chunks")
           PY
       - name: Commit diag chunks if changed
@@ -46,7 +55,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           if [ -n "$(git status --porcelain diag)" ]; then
             git add diag
-            git commit -m "diag: export file chunks for out-of-band read"
+            git commit -m "diag(v2): export JSON-escaped file chunks (byte-exact)"
             git push origin HEAD:${{ github.ref_name }}
           else
             echo "diag unchanged; done"
