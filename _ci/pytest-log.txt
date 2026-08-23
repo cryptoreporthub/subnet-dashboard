@@ -54,6 +54,6 @@ E   SyntaxError: illegal target for annotation
 ERROR tests/test_resolver_scheduler.py
 ERROR tests/test_learning_loop_health.py
 !!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!!
-2 errors in 1.92s
+2 errors in 2.09s
 
 PYTEST_EXIT_CODE=2
