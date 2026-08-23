@@ -156,7 +156,7 @@ class PredictionResolverScheduler:
         )
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
-        self._last_run_at: Optional[str] = None
+        self.liveness.snapshot().get("last_event_at"): Optional[str] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None
         self._last_resolved = 0
@@ -240,7 +240,7 @@ class PredictionResolverScheduler:
                 "refresh_minutes": self.refresh_minutes,
                 "backoff_minutes": self._backoff_minutes,
                 "consecutive_failures": self._consecutive_failures,
-                "last_run_at": self._last_run_at,
+                "last_run_at": self.liveness.snapshot().get("last_event_at"),
                 "last_run_ok": self._liveness_ok(),
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
@@ -276,7 +276,7 @@ class PredictionResolverScheduler:
             "skipped": True,
             "reason": "not running",
             "status": self.liveness.snapshot()["status"],
-            "last_run_at": self._last_run_at,
+            "last_run_at": self.liveness.snapshot().get("last_event_at"),
         }
 
     def _schedule_next(self, minutes: int) -> None:
@@ -316,7 +316,6 @@ class PredictionResolverScheduler:
                 # Skips are recorded honestly; they never produce ok (spec §2).
                 self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
-                    self._last_run_at = skipped["run_at"]
                     self._last_run_error = None
                     self._mark_first_tick(skipped)
                 logger.info(
@@ -344,7 +343,6 @@ class PredictionResolverScheduler:
             self.liveness.record_skip(reason=str(result.get("skipped") or "cycle_skipped"))
 
         with self._lock:
-            self._last_run_at = result["run_at"]
             self._last_run_error = result.get("error")
             self._last_resolved = result.get("resolved_now", 0)
             self._last_expired = result.get("expired_now", 0)
