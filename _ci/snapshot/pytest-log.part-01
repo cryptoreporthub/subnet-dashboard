@@ -2,7 +2,7 @@
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ________________________ test_resolver_cycle_times_out _________________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.1 error=cycle_timeout_1s
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.0 error=cycle_timeout_1s
 ________________ test_resolver_first_tick_success_is_observable ________________
 ------------------------------ Captured log call -------------------------------
 INFO     internal.council.resolver_scheduler:resolver_scheduler.py:292 resolver lifecycle event=tick_start first=True

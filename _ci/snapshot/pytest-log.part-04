@@ -31,6 +31,6 @@ FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_pr
   -         'quant',
   -     ),
   - ]
-1 failed, 211 passed in 14.70s
+1 failed, 211 passed in 14.02s
 
 PYTEST_EXIT_CODE=1

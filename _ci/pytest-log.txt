@@ -64,16 +64,16 @@ ______________________ test_scheduler_backoff_on_failure _______________________
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=price feed down
 ______________________ test_scheduler_backoff_caps_at_max ______________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
 WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
 ____________________ test_scheduler_persists_cycle_summary _____________________
 ------------------------------ Captured log call -------------------------------
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
@@ -83,7 +83,7 @@ WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver 
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ________________________ test_resolver_cycle_times_out _________________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.1 error=cycle_timeout_1s
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.0 error=cycle_timeout_1s
 ________________ test_resolver_first_tick_success_is_observable ________________
 ------------------------------ Captured log call -------------------------------
 INFO     internal.council.resolver_scheduler:resolver_scheduler.py:292 resolver lifecycle event=tick_start first=True
@@ -312,6 +312,6 @@ FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_pr
   -         'quant',
   -     ),
   - ]
-1 failed, 211 passed in 14.70s
+1 failed, 211 passed in 14.02s
 
 PYTEST_EXIT_CODE=1
