@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -373,7 +374,7 @@ def test_scheduler_start_is_idempotent(fresh_scheduler):
     sched.stop()
 
 
-def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
     now = datetime.now(timezone.utc)
     _write_predictions({
         "predictions": [
@@ -388,6 +389,25 @@ def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler)
         ],
         "resolved": [],
     })
+
+    # Hourly OHLCV is the canonical grading source; hydrate the cache the
+    # autouse fixture points resolver at so this test grades deterministically
+    # instead of depending on spot-price fallback behavior.
+    (tmp_path / "price_cache.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "candles": [
+                        {
+                            "timestamp": _iso(now - timedelta(hours=1)),
+                            "close": 115.0,
+                            "volume": 10.0,
+                        }
+                    ]
+                }
+            }
+        )
+    )
 
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=_static_subnets
@@ -666,7 +686,7 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
-    sched._running = True
+    sched._active = True
     sched._tick()
 
     with open(weights.SOUL_MAP_PATH, "r") as f:
@@ -675,7 +695,10 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
     assert sched._last_run_at == last.get("run_at")
-    assert sched._last_run_ok is True
+    # Inverted laundering contract: a skip burst must NOT read as healthy.
+    snap = sched.liveness.snapshot()
+    assert snap["status"] != "ok"
+    assert snap["consecutive_skips"] >= 1
 
 
 def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
@@ -703,7 +726,7 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
-    sched._running = True
+    sched._active = True
     sched._first_tick_pending = True
     sched._tick()
     with open(weights.SOUL_MAP_PATH, "r") as f:
@@ -744,7 +767,7 @@ def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: []
     )
-    sched._running = True
+    sched._active = True
     sched._first_tick_pending = True
 
     timed_out = sched._run_refresh_cycle_with_timeout()
@@ -764,7 +787,7 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
-    sched._running = True
+    sched._active = True
     sched._first_tick_pending = True
     monkeypatch.setattr(
         sched,
@@ -786,3 +809,44 @@ def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler,
     assert sched.state()["first_tick_ok"] is True
     assert sched.state()["lifecycle"] == "running"
     assert "resolver lifecycle event=success" in caplog.text
+
+# ---------------------------------------------------------------------------
+# LivenessTracker conformance + honest-skip contract (spec §4)
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_scheduler_liveness_conformance():
+    """The scheduler's tracker satisfies every contract check."""
+    from liveness_conformance import assert_liveness_compliant
+
+    def factory():
+        s = resolver_scheduler.PredictionResolverScheduler(
+            refresh_minutes=1, subnet_provider=_static_subnets
+        )
+        # Unique per-run name so persisted prior state can never make a
+        # "fresh" tracker look ok (conformance check #1).
+        s.liveness.name = "prediction_resolver-conformance-%f" % time.time()
+        return s.liveness
+
+    assert_liveness_compliant(factory)
+
+
+def test_skip_burst_never_produces_ok(monkeypatch, fresh_scheduler):
+    """The laundering inversion: repeated heavy-job skips must not read healthy."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _always_busy(_name):
+        yield False
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _always_busy)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._active = True
+    for _ in range(3):
+        sched._tick()
+
+    snap = sched.liveness.snapshot()
+    assert snap["status"] != "ok"
+    assert snap["consecutive_skips"] >= 3
