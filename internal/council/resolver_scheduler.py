@@ -156,7 +156,6 @@ class PredictionResolverScheduler:
         )
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
-        self.liveness.snapshot().get("last_event_at"): Optional[str] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None
         self._last_resolved = 0
