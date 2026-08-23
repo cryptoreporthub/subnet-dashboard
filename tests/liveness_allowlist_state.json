@@ -1,10 +1,13 @@
 [
+  "internal/calibration/scheduler.py",
+  "internal/council/pick_audit_scheduler.py",
   "internal/council/pick_scheduler.py",
   "internal/council/resolver_scheduler.py",
   "internal/council/score_snapshots.py",
   "internal/council/selector_scheduler.py",
+  "internal/indicators/indicator_scheduler.py",
   "internal/learning/outcome_snapshot_scheduler.py",
   "internal/message_intel/calibration_snapshot_scheduler.py",
-  "internal/calibration/scheduler.py",
+  "internal/pump/desk_snapshot_scheduler.py",
   "internal/pump/scheduler.py"
 ]
