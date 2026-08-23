@@ -32,6 +32,8 @@ from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map
 
+from internal.liveness import LivenessTracker
+
 logger = logging.getLogger(__name__)
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
@@ -143,23 +145,22 @@ class PredictionResolverScheduler:
 
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
-        self._running = False
+        # Control-flow flag only (start/stop); health reporting goes through
+        # the tracker below, never through stored booleans (spec §2).
+        self._active = False
+        self.liveness = LivenessTracker(
+            name="prediction_resolver",
+            interval_seconds=max(60, int(refresh_minutes) * 60),
+            staleness_factor=2,
+            persist=True,
+        )
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
         self._last_run_at: Optional[str] = None
-        self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None
         self._last_resolved = 0
         self._last_expired = 0
         self._last_pending = 0
         self._lifecycle = "stopped"
-        self._started_at: Optional[str] = None
-        self._first_tick_scheduled_at: Optional[str] = None
-        self._first_tick_at: Optional[str] = None
-        self._first_tick_ok: Optional[bool] = None
-        self._lifecycle_error: Optional[str] = None
-        self._first_tick_pending = False
-
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
-        "
+        self._st

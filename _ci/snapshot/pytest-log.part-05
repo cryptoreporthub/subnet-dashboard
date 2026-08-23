@@ -1,0 +1,17 @@
+sign:_last_run_at')]
+FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_predictions - AssertionError: assert [] == [(True, 'quant')]
+  
+  Right contains one more item: (True, 'quant')
+  
+  Full diff:
+  + []
+  - [
+  -     (
+  -         True,
+  -         'quant',
+  -     ),
+  - ]
+FAILED tests/test_resolver_scheduler.py::test_resolver_scheduler_liveness_conformance - AssertionError
+3 failed, 211 passed in 14.92s
+
+PYTEST_EXIT_CODE=1

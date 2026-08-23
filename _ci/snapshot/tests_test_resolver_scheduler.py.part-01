@@ -1,4 +1,4 @@
-estores_recently_expired_malformed_timestamp():
+esolve_due_restores_recently_expired_malformed_timestamp():
     now = datetime.now(timezone.utc)
     _write_predictions({
         "predictions": [],
@@ -182,10 +182,10 @@ def test_scheduler_start_is_idempotent(fresh_scheduler):
     sched.stop()
 
 
-def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
     now = datetime.now(timezone.utc)
     _write_predictions({
         "predictions": [
             {
                 "netuid": 1,
-                "referen
+  

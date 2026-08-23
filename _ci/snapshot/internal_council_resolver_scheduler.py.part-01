@@ -1,8 +1,16 @@
-""Start the scheduler. Idempotent."""
+arted_at: Optional[str] = None
+        self._first_tick_scheduled_at: Optional[str] = None
+        self._first_tick_at: Optional[str] = None
+        self._first_tick_ok: Optional[bool] = None
+        self._lifecycle_error: Optional[str] = None
+        self._first_tick_pending = False
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        """Start the scheduler. Idempotent."""
         with self._lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
             self._lifecycle = "starting"
@@ -45,7 +53,7 @@
     def stop(self) -> Dict[str, Any]:
         """Stop the scheduler and cancel any pending tick."""
         with self._lock:
-            self._running = False
+            self._active = False
             self._next_run_at = None
             self._lifecycle = "stopped"
             self._first_tick_pending = False
@@ -63,12 +71,12 @@
         """Return the current scheduler state for health checks."""
         with self._lock:
             return {
-                "running": self._running,
+                "running": self._active,
                 "refresh_minutes": self.refresh_minutes,
                 "backoff_minutes": self._backoff_minutes,
                 "consecutive_failures": self._consecutive_failures,
                 "last_run_at": self._last_run_at,
-                "last_run_ok": self._last_run_ok,
+                "last_run_ok": self._liveness_ok(),
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
                 "last_resolved": self._last_resolved,
@@ -86,8 +94,12 @@
         """Execute a single resolution cycle synchronously."""
         return self._tick()
 
+    def _liveness_ok(self) -> bool:
+        """True iff the age-derived tracker status is currently ok."""
+        return self.liveness.snapshot()["status"] == "ok"
+
     def should_refresh(self) -> bool:
-        if not self._running:
+        if not self._active:
             return False
         return True
 
@@ -96,9 +108,9 @@
         if self.should_refresh():
             return self._tick()
         return {
-            "ok": True,
             "skipped": True,
             "reason": "not running",
+            "status": self.liveness.snapshot()["status"],
             "last_run_at": self._last_run_at,
         }
 
@@ -107,7 +119,7 @@
 
     def _schedule_next_seconds(self, seconds: float) -> None:
         with self._lock:
-            if not self._running:
+            if not self._active:
                 return
             self._next_run_at = time.time() + seconds
             if self._first_tick_pending:
@@ -129,20 +141,10 @@
         with heavy_job_slot("prediction_resolver") as acquired:
             if not acquired:
                 skipped = {
-                    "ok": True,
                     "run_at": _now_iso(),
                     "skipped": "heavy_job_busy",
                     "resolved_now": 0,
                     "expired_now": 0,
                     "pending": 0,
                 }
-                self._persist_cycle_summary(skipped)
-                # Keep tick freshness visible to loop_health even when skipped.
-                with self._lock:
-                    self._last_run_at = skipped["run_at"]
-                    self._last_run_ok = True
-                    self._last_run_error = None
-                    self._mark_first_tick(skipped)
-                logger.info(
-                    "resolver lifecycle event=success first=%s duration_ms=%.1f skipped=heavy_job_busy",
-                    first_tic
+        

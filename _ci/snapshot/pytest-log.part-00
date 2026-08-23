@@ -1,12 +1,40 @@
-......................F................................................. [ 33%]
+.......F..............F...................F............................. [ 33%]
 ........................................................................ [ 67%]
-....................................................................     [100%]
+......................................................................   [100%]
 =================================== FAILURES ===================================
+_______________________ test_no_new_handrolled_liveness ________________________
+
+    def test_no_new_handrolled_liveness():
+        allowlist = _load_allowlist()
+        violations = []
+        for p in INTERNAL_ROOT.rglob("*.py"):
+            rel = p.relative_to(REPO_ROOT).as_posix()
+            if rel == SANCTIONED:
+                continue
+            if not _is_scheduler_module(rel):
+                continue
+            if rel in allowlist:
+                continue
+            try:
+                tree = ast.parse(p.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            violations.extend(_violations(rel, tree))
+>       assert not violations, "hand-rolled liveness in scheduler module(s):\n" + "\n".join(
+            "{}:{} {}".format(f, ln, kind) for f, ln, kind in violations
+        )
+E       AssertionError: hand-rolled liveness in scheduler module(s):
+E         internal/council/resolver_scheduler.py:347 assign:_last_run_at
+E         internal/council/resolver_scheduler.py:319 assign:_last_run_at
+E       assert not [('internal/council/resolver_scheduler.py', 347, 'assign:_last_run_at'), ('internal/council/resolver_scheduler.py', 319, 'assign:_last_run_at')]
+
+tests/test_no_handrolled_liveness.py:89: AssertionError
 _______________ test_scheduler_run_once_resolves_due_predictions _______________
 
 nudge_spy = [], fresh_scheduler = None
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_scheduler_run_once_resolv0')
 
-    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
         now = datetime.now(timezone.utc)
         _write_predictions({
             "predictions": [
@@ -21,6 +49,25 @@ nudge_spy = [], fresh_scheduler = None
             ],
             "resolved": [],
         })
+    
+        # Hourly OHLCV is the canonical grading source; hydrate the cache the
+        # autouse fixture points resolver at so this test grades deterministically
+        # instead of depending on spot-price fallback behavior.
+        (tmp_path / "price_cache.json").write_text(
+            json.dumps(
+                {
+                    "1": {
+                        "candles": [
+                            {
+                                "timestamp": _iso(now - timedelta(hours=1)),
+                                "close": 115.0,
+                                "volume": 10.0,
+                            }
+                        ]
+                    }
+                }
+            )
+        )
     
         sched = resolver_scheduler.PredictionResolverScheduler(
             refresh_minutes=1, subnet_provider=_static_subnets
@@ -44,39 +91,57 @@ E         -         'quant',
 E         -     ),
 E         - ]
 
-tests/test_resolver_scheduler.py:400: AssertionError
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
-==================================== PASSES ====================================
-______________ test_resolve_due_predictions_expires_when_no_price ______________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
-WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
-_________ test_resolve_due_predictions_keeps_due_no_price_within_grace _________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
-______________ test_scheduler_run_once_expires_stale_predictions _______________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 999 (tried '999' and 999) — subnet will be un-gradeable until the cache is refreshed
-WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
-______________________ test_scheduler_backoff_on_failure _______________________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=price feed down
-______________________ test_scheduler_backoff_caps_at_max ______________________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-____________________ test_scheduler_persists_cycle_summary _____________________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
-____________________ test_scheduler_recovers_after_failure _____________________
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler
+tests/test_resolver_scheduler.py:420: AssertionError
+_________________ test_resolver_scheduler_liveness_conformance _________________
+
+    def test_resolver_scheduler_liveness_conformance():
+        """The scheduler's tracker satisfies every contract check."""
+        from liveness_conformance import assert_liveness_compliant
+    
+        def factory():
+            s = resolver_scheduler.PredictionResolverScheduler(
+                refresh_minutes=1, subnet_provider=_static_subnets
+            )
+            # Unique per-run name so persisted prior state can never make a
+            # "fresh" tracker look ok (conformance check #1).
+            s.liveness.name = "prediction_resolver-conformance-%f" % time.time()
+            return s.liveness
+    
+>       assert_liveness_compliant(factory)
+
+tests/test_resolver_scheduler.py:831: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f4499972ca0>
+
+    def assert_liveness_compliant(make_tracker):
+        """Contract checks every adopted tracker must satisfy."""
+        t = make_tracker()
+    
+        # 1. a fresh tracker must never report ok
+        snap = t.snapshot()
+        assert snap["status"] != "ok", "fresh tracker reported ok"
+    
+        # 2. skips must never produce ok
+        t.record_skip("conformance-test")
+        assert t.snapshot()["status"] != "ok", "skip produced ok"
+    
+        # 3. empty evidence is rejected
+        with pytest.raises(ValueError):
+            t.record_success(evidence={})
+    
+        # 4. explicit success with evidence is the only path to ok
+        t.record_success(evidence={"conformance": 1})
+        assert t.snapshot()["status"] == "ok", "explicit success did not produce ok"
+    
+        # 5. failure flips status immediately and counts
+        t.record_failure("boom")
+        snap = t.snapshot()
+        assert snap["status"] == "failing", "failure did not flip status"
+        assert snap["consecutive_failures"] >= 1
+    
+        # 6. persistence round-trip (only meaningful for persist=True factories)
+        t2 = make_tracker()
+        if t2.persist:
+>           assert t2.snapshot()["source"] == "persisted"
+                   ^^^^^^^^^^^^^^^^^^^^^^

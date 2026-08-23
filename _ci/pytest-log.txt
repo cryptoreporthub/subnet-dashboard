@@ -1,12 +1,40 @@
-......................F................................................. [ 33%]
+.......F..............F...................F............................. [ 33%]
 ........................................................................ [ 67%]
-....................................................................     [100%]
+......................................................................   [100%]
 =================================== FAILURES ===================================
+_______________________ test_no_new_handrolled_liveness ________________________
+
+    def test_no_new_handrolled_liveness():
+        allowlist = _load_allowlist()
+        violations = []
+        for p in INTERNAL_ROOT.rglob("*.py"):
+            rel = p.relative_to(REPO_ROOT).as_posix()
+            if rel == SANCTIONED:
+                continue
+            if not _is_scheduler_module(rel):
+                continue
+            if rel in allowlist:
+                continue
+            try:
+                tree = ast.parse(p.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            violations.extend(_violations(rel, tree))
+>       assert not violations, "hand-rolled liveness in scheduler module(s):\n" + "\n".join(
+            "{}:{} {}".format(f, ln, kind) for f, ln, kind in violations
+        )
+E       AssertionError: hand-rolled liveness in scheduler module(s):
+E         internal/council/resolver_scheduler.py:347 assign:_last_run_at
+E         internal/council/resolver_scheduler.py:319 assign:_last_run_at
+E       assert not [('internal/council/resolver_scheduler.py', 347, 'assign:_last_run_at'), ('internal/council/resolver_scheduler.py', 319, 'assign:_last_run_at')]
+
+tests/test_no_handrolled_liveness.py:89: AssertionError
 _______________ test_scheduler_run_once_resolves_due_predictions _______________
 
 nudge_spy = [], fresh_scheduler = None
+tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_scheduler_run_once_resolv0')
 
-    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler):
+    def test_scheduler_run_once_resolves_due_predictions(nudge_spy, fresh_scheduler, tmp_path):
         now = datetime.now(timezone.utc)
         _write_predictions({
             "predictions": [
@@ -21,6 +49,25 @@ nudge_spy = [], fresh_scheduler = None
             ],
             "resolved": [],
         })
+    
+        # Hourly OHLCV is the canonical grading source; hydrate the cache the
+        # autouse fixture points resolver at so this test grades deterministically
+        # instead of depending on spot-price fallback behavior.
+        (tmp_path / "price_cache.json").write_text(
+            json.dumps(
+                {
+                    "1": {
+                        "candles": [
+                            {
+                                "timestamp": _iso(now - timedelta(hours=1)),
+                                "close": 115.0,
+                                "volume": 10.0,
+                            }
+                        ]
+                    }
+                }
+            )
+        )
     
         sched = resolver_scheduler.PredictionResolverScheduler(
             refresh_minutes=1, subnet_provider=_static_subnets
@@ -44,9 +91,63 @@ E         -         'quant',
 E         -     ),
 E         - ]
 
-tests/test_resolver_scheduler.py:400: AssertionError
------------------------------- Captured log call -------------------------------
-WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
+tests/test_resolver_scheduler.py:420: AssertionError
+_________________ test_resolver_scheduler_liveness_conformance _________________
+
+    def test_resolver_scheduler_liveness_conformance():
+        """The scheduler's tracker satisfies every contract check."""
+        from liveness_conformance import assert_liveness_compliant
+    
+        def factory():
+            s = resolver_scheduler.PredictionResolverScheduler(
+                refresh_minutes=1, subnet_provider=_static_subnets
+            )
+            # Unique per-run name so persisted prior state can never make a
+            # "fresh" tracker look ok (conformance check #1).
+            s.liveness.name = "prediction_resolver-conformance-%f" % time.time()
+            return s.liveness
+    
+>       assert_liveness_compliant(factory)
+
+tests/test_resolver_scheduler.py:831: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+make_tracker = <function test_resolver_scheduler_liveness_conformance.<locals>.factory at 0x7f4499972ca0>
+
+    def assert_liveness_compliant(make_tracker):
+        """Contract checks every adopted tracker must satisfy."""
+        t = make_tracker()
+    
+        # 1. a fresh tracker must never report ok
+        snap = t.snapshot()
+        assert snap["status"] != "ok", "fresh tracker reported ok"
+    
+        # 2. skips must never produce ok
+        t.record_skip("conformance-test")
+        assert t.snapshot()["status"] != "ok", "skip produced ok"
+    
+        # 3. empty evidence is rejected
+        with pytest.raises(ValueError):
+            t.record_success(evidence={})
+    
+        # 4. explicit success with evidence is the only path to ok
+        t.record_success(evidence={"conformance": 1})
+        assert t.snapshot()["status"] == "ok", "explicit success did not produce ok"
+    
+        # 5. failure flips status immediately and counts
+        t.record_failure("boom")
+        snap = t.snapshot()
+        assert snap["status"] == "failing", "failure did not flip status"
+        assert snap["consecutive_failures"] >= 1
+    
+        # 6. persistence round-trip (only meaningful for persist=True factories)
+        t2 = make_tracker()
+        if t2.persist:
+>           assert t2.snapshot()["source"] == "persisted"
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           AssertionError
+
+tests/liveness_conformance.py:44: AssertionError
 ==================================== PASSES ====================================
 ______________ test_resolve_due_predictions_expires_when_no_price ______________
 ------------------------------ Captured log call -------------------------------
@@ -61,33 +162,33 @@ WARNING  internal.council.price_reference:price_reference.py:67 price_cache miss
 WARNING  internal.council.resolver:resolver.py:1229 Cold-cache alert: price_data_unavailable ratio 100.0% (count=1) exceeds threshold 5.0% (COLD_CACHE_ALERT_RATIO=0.0500). Check price_cache.json coverage and subnet candle hydration.
 ______________________ test_scheduler_backoff_on_failure _______________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=price feed down
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.1 error=price feed down
 ______________________ test_scheduler_backoff_caps_at_max ______________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.6 error=boom
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.5 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.0 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.0 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.9 error=boom
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=0.8 error=boom
 ____________________ test_scheduler_persists_cycle_summary _____________________
 ------------------------------ Captured log call -------------------------------
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ____________________ test_scheduler_recovers_after_failure _____________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:357 resolver lifecycle event=failure first=False duration_ms=0.7 error=transient
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:388 resolver lifecycle event=failure first=False duration_ms=1.1 error=transient
 WARNING  internal.council.price_reference:price_reference.py:67 price_cache missing key for netuid 1 (tried '1' and 1) — subnet will be un-gradeable until the cache is refreshed
 ________________________ test_resolver_cycle_times_out _________________________
 ------------------------------ Captured log call -------------------------------
-WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:344 resolver lifecycle event=timeout first=True duration_ms=1001.0 error=cycle_timeout_1s
+WARNING  internal.council.resolver_scheduler:resolver_scheduler.py:368 resolver lifecycle event=timeout first=True duration_ms=1001.4 error=cycle_timeout_1s
 ________________ test_resolver_first_tick_success_is_observable ________________
 ------------------------------ Captured log call -------------------------------
-INFO     internal.council.resolver_scheduler:resolver_scheduler.py:292 resolver lifecycle event=tick_start first=True
-INFO     internal.council.resolver_scheduler:resolver_scheduler.py:351 resolver lifecycle event=success first=True duration_ms=0.3
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:305 resolver lifecycle event=tick_start first=True
+INFO     internal.council.resolver_scheduler:resolver_scheduler.py:382 resolver lifecycle event=success first=True duration_ms=0.5
 =========================== short test summary info ============================
 PASSED tests/test_liveness_tracker.py::test_contract
 PASSED tests/test_liveness_tracker.py::test_skip_burst_with_fresh_success_is_ok
@@ -96,7 +197,6 @@ PASSED tests/test_liveness_tracker.py::test_stale_auto_degrades
 PASSED tests/test_liveness_tracker.py::test_no_success_is_never_ok
 PASSED tests/test_liveness_tracker.py::test_empty_evidence_raises
 PASSED tests/test_liveness_tracker.py::test_persistence_round_trip_real_soul_map
-PASSED tests/test_no_handrolled_liveness.py::test_no_new_handrolled_liveness
 PASSED tests/test_no_handrolled_liveness.py::test_allowlist_monotonically_shrinks
 PASSED tests/test_resolver_scheduler.py::test_expire_does_not_touch_not_yet_due_predictions
 PASSED tests/test_resolver_scheduler.py::test_expire_keeps_predictions_within_grace_window
@@ -130,6 +230,7 @@ PASSED tests/test_resolver_scheduler.py::test_scheduler_skip_persists_last_cycle
 PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_times_out
 PASSED tests/test_resolver_scheduler.py::test_resolver_cycle_timeout_does_not_overlap_inflight_work
 PASSED tests/test_resolver_scheduler.py::test_resolver_first_tick_success_is_observable
+PASSED tests/test_resolver_scheduler.py::test_skip_burst_never_produces_ok
 PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /]
 PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /health]
 PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /robots.txt]
@@ -300,6 +401,10 @@ PASSED tests/test_learning_loop_health.py::test_restart_with_stale_tick_degraded
 PASSED tests/test_learning_loop_health.py::test_snapshot_age_from_soul_map_when_file_missing
 PASSED tests/test_learning_loop_health.py::test_snapshot_stale_degraded_not_stalled
 PASSED tests/test_learning_loop_health.py::test_self_learning_not_started_from_boot_or_server
+FAILED tests/test_no_handrolled_liveness.py::test_no_new_handrolled_liveness - AssertionError: hand-rolled liveness in scheduler module(s):
+  internal/council/resolver_scheduler.py:347 assign:_last_run_at
+  internal/council/resolver_scheduler.py:319 assign:_last_run_at
+assert not [('internal/council/resolver_scheduler.py', 347, 'assign:_last_run_at'), ('internal/council/resolver_scheduler.py', 319, 'assign:_last_run_at')]
 FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_predictions - AssertionError: assert [] == [(True, 'quant')]
   
   Right contains one more item: (True, 'quant')
@@ -312,6 +417,7 @@ FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_pr
   -         'quant',
   -     ),
   - ]
-1 failed, 211 passed in 14.02s
+FAILED tests/test_resolver_scheduler.py::test_resolver_scheduler_liveness_conformance - AssertionError
+3 failed, 211 passed in 14.92s
 
 PYTEST_EXIT_CODE=1

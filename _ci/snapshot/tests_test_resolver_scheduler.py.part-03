@@ -1,4 +1,21 @@
-s()
+ test_singleton_state_when_not_started(fresh_scheduler):
+    state = resolver_scheduler.get_prediction_resolver_scheduler_state()
+    assert state["running"] is False
+    assert state["last_run_at"] is None
+
+
+def test_default_subnets_fallback_returns_list():
+    """The default subnet provider must never raise -- it returns a list."""
+    result = resolver_scheduler._default_subnets()
+    assert isinstance(result, list)
+
+
+def test_default_subnets_uses_worker_cache(monkeypatch):
+    monkeypatch.setattr(
+        "internal.live_subnets.get_live_subnets",
+        lambda: [{"netuid": 7, "price": 1.0}],
+    )
+    result = resolver_scheduler._default_subnets()
     assert result[0]["netuid"] == 7
 
 
@@ -95,7 +112,7 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
-    sched._running = True
+    sched._active = True
     sched._tick()
 
     with open(weights.SOUL_MAP_PATH, "r") as f:
@@ -104,7 +121,10 @@ def test_scheduler_skip_persists_last_cycle_when_heavy_job_busy(monkeypatch, fre
     assert last.get("skipped") == "heavy_job_busy"
     assert last.get("run_at")
     assert sched._last_run_at == last.get("run_at")
-    assert sched._last_run_ok is True
+    # Inverted laundering contract: a skip burst must NOT read as healthy.
+    snap = sched.liveness.snapshot()
+    assert snap["status"] != "ok"
+    assert snap["consecutive_skips"] >= 1
 
 
 def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
@@ -132,7 +152,7 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
     )
-    sched._running = True
+    sched._active = True
     sched._first_tick_pending = True
     sched._tick()
     with open(weights.SOUL_MAP_PATH, "r") as f:
@@ -153,28 +173,4 @@ def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
 
     def _blocked(self):
         started.set()
-        release.wait(timeout=2)
-        finished.set()
-        return {
-            "ok": True,
-            "run_at": resolver_scheduler._now_iso(),
-            "resolved_now": 0,
-            "expired_now": 0,
-            "pending": 0,
-        }
-
-    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
-    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
-    monkeypatch.setattr(
-        resolver_scheduler.PredictionResolverScheduler,
-        "_run_refresh_cycle",
-        _blocked,
-    )
-    sched = resolver_scheduler.PredictionResolverScheduler(
-        refresh_minutes=1, subnet_provider=lambda: []
-    )
-    sched._running = True
-    sched._first_tick_pending = True
-
-    timed_out = sched._run_refresh_cycle_with_timeout()
-    assert started.
+        r

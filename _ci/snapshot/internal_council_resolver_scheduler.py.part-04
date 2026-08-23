@@ -1,10 +1,65 @@
-  sched: Optional[PredictionResolverScheduler] = None
+tes: int = RESOLVER_REFRESH_MINUTES,
+    immediate: bool = False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    """Start the module-level prediction resolver scheduler singleton."""
+    global _scheduler
+    with _scheduler_lock:
+        if _scheduler is None:
+            _scheduler = PredictionResolverScheduler(
+                refresh_minutes=refresh_minutes, **kwargs
+            )
+    result = _scheduler.start(immediate=immediate)
+    try:
+        from internal.council.selector_scheduler import start_selector_scheduler
+
+        start_selector_scheduler(immediate=False)
+    except Exception:
+        pass
+    try:
+        from internal.pump.scheduler import start_pump_ladder_scheduler
+
+        start_pump_ladder_scheduler(immediate=False)
+    except Exception:
+        pass
+    return result
+
+
+def stop_prediction_resolver_scheduler() -> Dict[str, Any]:
+    """Stop the module-level prediction resolver scheduler singleton."""
+    try:
+        from internal.council.selector_scheduler import stop_selector_scheduler
+
+        stop_selector_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.pump.scheduler import stop_pump_ladder_scheduler
+
+        stop_pump_ladder_scheduler()
+    except Exception:
+        pass
+    global _scheduler
+    sched: Optional[PredictionResolverScheduler] = None
     with _scheduler_lock:
         sched = _scheduler
         _scheduler = None
     if sched is None:
         return {"stopped": False, "reason": "not running"}
     return sched.stop()
+
+
+def _stopped_liveness_ok() -> Optional[bool]:
+    """Registry-derived ok for the stopped singleton (honest persisted view)."""
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("prediction_resolver")
+        if t is not None:
+            return t.snapshot()["status"] == "ok"
+    except Exception:
+        pass
+    return None
 
 
 def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
@@ -17,7 +72,7 @@ def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
                 "backoff_minutes": RESOLVER_REFRESH_MINUTES,
                 "consecutive_failures": 0,
                 "last_run_at": None,
-                "last_run_ok": None,
+                "last_run_ok": _stopped_liveness_ok(),
                 "last_run_error": None,
                 "next_run_at": None,
                 "last_resolved": 0,

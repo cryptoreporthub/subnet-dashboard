@@ -1,4 +1,51 @@
-er.py::test_subnet_route_found
+contract.py::test_contract_route_ok[GET /api/pump-analytics]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/price-tracking/baselines]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/price-tracking/outcomes]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/backtest]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage/dark_horse]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/formula-lineage/dark_horse/evolution]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/market-drivers]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/market-drivers/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/mindmap/story-path]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id/og.svg]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/predictions/capsule/test-id/og.png]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /share/call/test-id]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /listener]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /subnetsummer]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /subnet/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /wallet/5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/search?q=1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/report/1]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/rotation-tracker]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/freshness]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/council/weights]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/weights]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/simivision/chat]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/resolve-predictions]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/rotation-tokens]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signals/summary]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/alerts]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/calibration/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/calibration/retrain]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/conviction-alerts/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[POST /api/conviction-alerts/notify]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/watchlist]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[PUT /api/watchlist]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/portfolio/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/weekly]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/daily]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/letter/brain]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signal-hub/status]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/signal-hub/signals]
+PASSED tests/test_endpoint_contract.py::test_contract_route_ok[GET /api/cockpit/stream?once=1]
+PASSED tests/test_endpoint_contract.py::test_registered_routes_cover_contract
+PASSED tests/test_server.py::test_index_route
+PASSED tests/test_server.py::test_registry_route
+PASSED tests/test_server.py::test_subnet_route_found
 PASSED tests/test_server.py::test_subnet_route_not_found
 PASSED tests/test_server.py::test_health_route
 PASSED tests/test_server.py::test_cors_headers
@@ -19,18 +66,7 @@ PASSED tests/test_learning_loop_health.py::test_restart_with_stale_tick_degraded
 PASSED tests/test_learning_loop_health.py::test_snapshot_age_from_soul_map_when_file_missing
 PASSED tests/test_learning_loop_health.py::test_snapshot_stale_degraded_not_stalled
 PASSED tests/test_learning_loop_health.py::test_self_learning_not_started_from_boot_or_server
-FAILED tests/test_resolver_scheduler.py::test_scheduler_run_once_resolves_due_predictions - AssertionError: assert [] == [(True, 'quant')]
-  
-  Right contains one more item: (True, 'quant')
-  
-  Full diff:
-  + []
-  - [
-  -     (
-  -         True,
-  -         'quant',
-  -     ),
-  - ]
-1 failed, 211 passed in 14.02s
-
-PYTEST_EXIT_CODE=1
+FAILED tests/test_no_handrolled_liveness.py::test_no_new_handrolled_liveness - AssertionError: hand-rolled liveness in scheduler module(s):
+  internal/council/resolver_scheduler.py:347 assign:_last_run_at
+  internal/council/resolver_scheduler.py:319 assign:_last_run_at
+assert not [('internal/council/resolver_scheduler.py', 347, 'assign:_last_run_at'), ('internal/council/resolver_scheduler.py', 319, 'as

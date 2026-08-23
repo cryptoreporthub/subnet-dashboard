@@ -1,22 +1,43 @@
-k,
+        self._persist_cycle_summary(skipped)
+                # Skips are recorded honestly; they never produce ok (spec §2).
+                self.liveness.record_skip(reason="heavy_job_busy")
+                with self._lock:
+                    self._last_run_at = skipped["run_at"]
+                    self._last_run_error = None
+                    self._mark_first_tick(skipped)
+                logger.info(
+                    "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=heavy_job_busy",
+                    first_tick,
                     (time.perf_counter() - tick_started) * 1000,
                 )
-                if self._running:
+                if self._active:
                     # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
                     self._schedule_next(min(2, max(1, self.refresh_minutes)))
                 return skipped
             result = self._run_refresh_cycle_with_timeout()
 
+        if result.get("ok"):
+            self.liveness.record_success(
+                evidence={
+                    "resolved_now": result.get("resolved_now", 0),
+                    "expired_now": result.get("expired_now", 0),
+                    "pending": result.get("pending", 0),
+                }
+            )
+        elif result.get("error"):
+            self.liveness.record_failure(error=str(result.get("error")))
+        else:
+            self.liveness.record_skip(reason=str(result.get("skipped") or "cycle_skipped"))
+
         with self._lock:
             self._last_run_at = result["run_at"]
-            self._last_run_ok = result["ok"]
             self._last_run_error = result.get("error")
             self._last_resolved = result.get("resolved_now", 0)
             self._last_expired = result.get("expired_now", 0)
             self._last_pending = result.get("pending", 0)
             self._lifecycle = "running" if result.get("ok") else "degraded"
             self._lifecycle_error = result.get("error")
-            if result["ok"]:
+            if result.get("ok"):
                 self._consecutive_failures = 0
                 self._backoff_minutes = self.refresh_minutes
             else:
@@ -36,6 +57,13 @@ k,
                 duration_ms,
                 result.get("error"),
             )
+        elif result.get("skipped"):
+            logger.info(
+                "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=%s",
+                first_tick,
+                duration_ms,
+                result.get("skipped"),
+            )
         elif result.get("ok"):
             logger.info(
                 "resolver lifecycle event=success first=%s duration_ms=%.1f",
@@ -49,7 +77,7 @@ k,
                 duration_ms,
                 result.get("error"),
             )
-        if self._running:
+        if self._active:
             self._schedule_next(next_interval)
         return result
 
@@ -82,7 +110,6 @@ k,
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
         if not self._cycle_lock.acquire(blocking=False):
             result = {
-                "ok": True,
                 "run_at": _now_iso(),
                 "resolved_now": 0,
                 "expired_now": 0,
@@ -122,42 +149,4 @@ k,
                     "run_at": _now_iso(),
                     "resolved_now": 0,
                     "expired_now": 0,
-                    "pending": 0,
-                    "error": f"cycle_timeout_{timeout}s",
-                }
-                self._persist_cycle_summary(result)
-                return result
-        except BaseException:
-            if not submitted:
-                self._cycle_lock.release()
-            raise
-        finally:
-            pool.shutdown(wait=False, cancel_futures=True)
-
-    def _run_refresh_cycle(self) -> Dict[str, Any]:
-        """Grade due predictions, expire stale ones, persist a cycle summary."""
-        run_at = _now_iso()
-        result: Dict[str, Any] = {
-            "ok": False,
-            "run_at": run_at,
-            "resolved_now": 0,
-            "expired_now": 0,
-            "pending": 0,
-            "error": None,
-        }
-
-        try:
-            try:
-                from internal.learning.ledger_heal import heal_daily_pick_ledger
-
-                heal_daily_pick_ledger(dry_run=False)
-            except Exception as heal_exc:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "ledger heal in resolver tick failed: %s", heal_exc
-                )
-
-            subnets = self._subnet_provider() or []
-
-            soul_data = _load_json(self.soul_map_path)
-         
+      

@@ -1,4 +1,4 @@
-ce_price": 100.0,
+              "reference_price": 100.0,
                 "predicted_pct": 10.0,
                 "direction": "up",
                 "expert": "quant",
@@ -7,6 +7,25 @@ ce_price": 100.0,
         ],
         "resolved": [],
     })
+
+    # Hourly OHLCV is the canonical grading source; hydrate the cache the
+    # autouse fixture points resolver at so this test grades deterministically
+    # instead of depending on spot-price fallback behavior.
+    (tmp_path / "price_cache.json").write_text(
+        json.dumps(
+            {
+                "1": {
+                    "candles": [
+                        {
+                            "timestamp": _iso(now - timedelta(hours=1)),
+                            "close": 115.0,
+                            "volume": 10.0,
+                        }
+                    ]
+                }
+            }
+        )
+    )
 
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=_static_subnets
@@ -171,21 +190,4 @@ def test_singleton_start_stop_state(fresh_scheduler):
     assert state["running"] is False
 
 
-def test_singleton_state_when_not_started(fresh_scheduler):
-    state = resolver_scheduler.get_prediction_resolver_scheduler_state()
-    assert state["running"] is False
-    assert state["last_run_at"] is None
-
-
-def test_default_subnets_fallback_returns_list():
-    """The default subnet provider must never raise -- it returns a list."""
-    result = resolver_scheduler._default_subnets()
-    assert isinstance(result, list)
-
-
-def test_default_subnets_uses_worker_cache(monkeypatch):
-    monkeypatch.setattr(
-        "internal.live_subnets.get_live_subnets",
-        lambda: [{"netuid": 7, "price": 1.0}],
-    )
-    result = resolver_scheduler._default_subnet
+def
