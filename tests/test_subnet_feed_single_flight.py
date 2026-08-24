@@ -51,6 +51,7 @@ def test_load_subnets_source_skips_nested_pool_on_worker_thread(monkeypatch):
             pass
 
     monkeypatch.setattr("internal.subnets.feed._load_subnets_inner", _inner)
+    monkeypatch.setattr("internal.subnets.feed.load_subnets_snapshot_rows", lambda: [])
     monkeypatch.setattr("internal.subnets.feed._on_pool_thread", lambda: True)
     monkeypatch.setattr("internal.subnets.feed.ThreadPoolExecutor", _BoomPool)
 
@@ -67,6 +68,7 @@ def test_load_subnets_source_uses_pool_on_main_thread(monkeypatch):
         "internal.subnets.feed._load_subnets_inner",
         lambda: [{"netuid": 2}],
     )
+    monkeypatch.setattr("internal.subnets.feed.load_subnets_snapshot_rows", lambda: [])
     monkeypatch.setattr("internal.subnets.feed._on_pool_thread", lambda: False)
 
     rows = load_subnets_source(timeout=2)

@@ -1779,13 +1779,24 @@ async def list_subnets(request: Request):
 def _list_subnets_base_rows() -> Dict[str, Any]:
     """Unfiltered enriched rows for /api/subnets cache (query applied per request)."""
     from internal.subnet_names import enrich_subnet_row
+    from internal.subnet_universe import ensure_background_refresh, get_snapshot
 
-    source_rows = load_subnets_source(timeout=2)
-    used_registry = False
-    if not source_rows:
-        source_rows = registry_subnet_rows()
-        used_registry = True
+    ensure_background_refresh()
+    snap = get_snapshot()
+    source_rows = list(snap.rows)
+    used_registry = snap.status == "emergency_registry"
     feed_meta = _subnet_feed_meta(source_rows)
+    if snap.status == "emergency_registry":
+        feed_meta = {
+            "source": "registry",
+            "sources": ["registry"],
+            "universe_status": snap.status,
+        }
+    else:
+        feed_meta = dict(feed_meta)
+        feed_meta["universe_status"] = snap.status
+        if snap.degraded:
+            feed_meta["degraded"] = True
     items = []
     for s in source_rows:
         item = _tag_subnet_row(s, feed_meta)
@@ -1795,7 +1806,7 @@ def _list_subnets_base_rows() -> Dict[str, Any]:
         if used_registry:
             row = _null_unfetched_metrics(row)
         items.append(row)
-    return {"items": items, "feed_meta": feed_meta}
+    return {"items": items, "feed_meta": feed_meta, "universe_snapshot": snap}
 
 
 def _apply_subnets_query(
@@ -1862,6 +1873,7 @@ def _apply_subnets_query(
             "offset": offset,
             "source": feed_meta.get("source", "registry"),
             "sources": feed_meta.get("sources", ["registry"]),
+            "universe_status": feed_meta.get("universe_status"),
             "handler_status": handler_status
             or ("timeout" if status == "timeout" else "ok"),
             "enrichment_status": enrichment_status
@@ -1899,22 +1911,33 @@ def _null_unfetched_metrics(item: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _list_subnets_registry_fallback(request: Request, *, status: str = "success") -> Dict[str, Any]:
-    """Instant registry rows when cache miss under load or handler timeout."""
+    """Instant universe LKG rows when cache miss under load or handler timeout."""
     from internal.subnet_names import enrich_subnet_row
+    from internal.subnet_universe import get_lkg_or_emergency
 
-    source_rows = registry_subnet_rows()
+    snap = get_lkg_or_emergency()
+    source_rows = list(snap.rows)
+    used_registry = snap.status == "emergency_registry"
     feed_meta = _subnet_feed_meta(source_rows)
+    feed_meta = dict(feed_meta)
+    feed_meta["universe_status"] = snap.status
+    if used_registry:
+        feed_meta = {"source": "registry", "sources": ["registry"], "universe_status": snap.status}
     items = []
     for s in source_rows:
         item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
-        items.append(_null_unfetched_metrics(enrich_subnet_row(item, use_taostats=False)))
+        row = enrich_subnet_row(item, use_taostats=False)
+        if used_registry:
+            row = _null_unfetched_metrics(row)
+        items.append(row)
+    enrichment_status = "names_only" if used_registry else "live"
     return _apply_subnets_query(
         {"items": items, "feed_meta": feed_meta},
         request,
         status=status,
-        enrichment_status="names_only",
+        enrichment_status=enrichment_status,
         handler_status="timeout" if status == "timeout" else "ok",
     )
 

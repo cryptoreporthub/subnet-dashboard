@@ -448,6 +448,14 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     defer_boot("subnet-name-cache", _warm_subnet_name_cache, delay=0)
 
     try:
+        from internal.subnet_universe import ensure_background_refresh
+
+        defer_boot("subnet-universe-refresh", ensure_background_refresh, delay=0)
+        logger.info("subnet universe background refresh scheduled")
+    except Exception as exc:
+        logger.warning("subnet universe refresh failed to start: %s", exc)
+
+    try:
         from internal.freshness import start_background_sync
 
         boot_sync = os.environ.get("BOOT_BACKGROUND_SYNC_IMMEDIATE", "off").strip().lower() in (
