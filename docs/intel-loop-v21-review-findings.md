@@ -173,3 +173,35 @@ Initial BLOCK: report HEAD/`living_focus` wording. Corrected in `docs/intel-loop
 **Sentry Path A:** unlocked for read-only production verification (SENTRY_DSN set/alert activation still separately gated).
 
 Log: `/opt/cursor/artifacts/post_deploy_probes.log`
+
+---
+
+## Post-deploy verification — formal plan run (2026-08-24T16:34Z)
+
+**Evidence tier:** confirmed in production (plan implementation; Fly Deploy run `32740425371`)
+
+| Item | Value |
+|------|-------|
+| Deploy run | https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/32740425371 |
+| Deployed SHA | `95f7e0c4` (`headSha` = merge commit) |
+| Deploy completed | 2026-08-24T14:47:24Z |
+| Probe window | 2026-08-24T16:23:31Z – 16:34:54Z |
+| Verdict | **POST-DEPLOY PASS** |
+
+**Step 0:** PR #1034 MERGED @ `95f7e0c4`; post-merge deploy success; no secrets changed.
+
+**Step 1 subnets:** HTTP 200; `status=timeout`, `handler_status=timeout`, `enrichment_status=live`, `generated_at` present, `data_available=true`, n=75 (0–74), source=blockmachine. Honesty meta **PASS**. Null-metric spot check on blockmachine timeout path: `emission=0.0`, `emission_available` absent — registry-fallback `_null_unfetched_metrics` path **not exercised** (`unavailable-pending` for that specific check).
+
+**Step 2 pump-alerts:** `freshness=fresh`, `freshness_scope=rows`, `data_available=true`, `max_row_age_seconds=1206`, `status=empty`, oldest row ~20m — **PASS** (freshness metadata present; rows < 6h threshold). Degraded proxy: **unavailable-pending** (circuit closed; no outage induced).
+
+**Step 3 ladder:** `coverage_known=true`, `signal_row_count=200`, `missing_from_feed_count=0`, `feed_stalled=false`, frozen `{75,80,87,90,118}` all present, `missing_frozen=[]` — union **PASS**.
+
+**Step 4:** listener HTTP 308 → `/subnetsummer`. Summer probes (300s spacing): all HTTP 200, rendered HTML (sizes 45310/45310/45310) — **PASS**.
+
+**Step 5 browser:** unavailable-pending (API verification sufficient).
+
+**Sentry Path A:** unlocked for read-only production verification.
+
+**Confirmations:** no membership/topology change, no scan-loop restart, Telegram not enabled, API fields additive-only, hydration untouched, dirty runtime data preserved, no unrelated changes during verification.
+
+Log: `/opt/cursor/artifacts/post_deploy_probes.log`
