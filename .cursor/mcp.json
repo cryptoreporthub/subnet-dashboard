@@ -3,6 +3,9 @@
     "flyctl": {
       "command": "flyctl",
       "args": ["mcp", "server"]
+    },
+    "sentry": {
+      "url": "https://mcp.sentry.dev/mcp"
     }
   }
 }

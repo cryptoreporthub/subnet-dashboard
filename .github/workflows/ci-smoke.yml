@@ -44,6 +44,7 @@ jobs:
           grep -qi uvicorn Procfile
           test ! -d server
           test ! -f server_original.py
+          python -c "import json; json.load(open('.cursor/mcp.json'))"
       - name: Compile server entrypoint
         run: python -m py_compile server.py
       - name: Endpoint contract + server + learning loop tests
