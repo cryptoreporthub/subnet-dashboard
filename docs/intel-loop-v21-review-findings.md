@@ -111,7 +111,7 @@ Default outcome: **review report only**.
 
 ## Remaining human decisions
 
-Frozen netuids `{75,80,87,90,118}`: display-only vs true exclusion vs leave-as-is.
+Frozen netuids `{75,80,87,90,118}`: **fix shipped** — `load_subnets_for_pump_signals()` now unions committed registry + ladder keys missing from merged/TMC clip (human authorized "Fix" after policy question). Display-only vs true exclusion vs leave-as-is is resolved as **true feed inclusion** for registry/ladder gaps, not a pinned drop list.
 
 Prod `/subnetsummer` 500 fixed on PR branch locally; requires merge + deploy to Fly.
 
