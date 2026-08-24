@@ -32,6 +32,8 @@ from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map
 
+from internal.liveness import LivenessTracker
+
 logger = logging.getLogger(__name__)
 
 # Ensure the data directory exists at module load time. Fly.io root filesystems
@@ -143,11 +145,17 @@ class PredictionResolverScheduler:
 
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
-        self._running = False
+        # Control-flow flag only (start/stop); health reporting goes through
+        # the tracker below, never through stored booleans (spec §2).
+        self._active = False
+        self.liveness = LivenessTracker(
+            name="prediction_resolver",
+            interval_seconds=max(60, int(refresh_minutes) * 60),
+            staleness_factor=2,
+            persist=True,
+        )
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
-        self._last_run_at: Optional[str] = None
-        self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None
         self._last_resolved = 0
@@ -164,9 +172,9 @@ class PredictionResolverScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         """Start the scheduler. Idempotent."""
         with self._lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
             self._lifecycle = "starting"
@@ -209,7 +217,7 @@ class PredictionResolverScheduler:
     def stop(self) -> Dict[str, Any]:
         """Stop the scheduler and cancel any pending tick."""
         with self._lock:
-            self._running = False
+            self._active = False
             self._next_run_at = None
             self._lifecycle = "stopped"
             self._first_tick_pending = False
@@ -227,12 +235,12 @@ class PredictionResolverScheduler:
         """Return the current scheduler state for health checks."""
         with self._lock:
             return {
-                "running": self._running,
+                "running": self._active,
                 "refresh_minutes": self.refresh_minutes,
                 "backoff_minutes": self._backoff_minutes,
                 "consecutive_failures": self._consecutive_failures,
-                "last_run_at": self._last_run_at,
-                "last_run_ok": self._last_run_ok,
+                "last_run_at": self.liveness.snapshot().get("last_event_at"),
+                "last_run_ok": self._liveness_ok(),
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
                 "last_resolved": self._last_resolved,
@@ -250,8 +258,12 @@ class PredictionResolverScheduler:
         """Execute a single resolution cycle synchronously."""
         return self._tick()
 
+    def _liveness_ok(self) -> bool:
+        """True iff the age-derived tracker status is currently ok."""
+        return self.liveness.snapshot()["status"] == "ok"
+
     def should_refresh(self) -> bool:
-        if not self._running:
+        if not self._active:
             return False
         return True
 
@@ -260,10 +272,10 @@ class PredictionResolverScheduler:
         if self.should_refresh():
             return self._tick()
         return {
-            "ok": True,
             "skipped": True,
             "reason": "not running",
-            "last_run_at": self._last_run_at,
+            "status": self.liveness.snapshot()["status"],
+            "last_run_at": self.liveness.snapshot().get("last_event_at"),
         }
 
     def _schedule_next(self, minutes: int) -> None:
@@ -271,7 +283,7 @@ class PredictionResolverScheduler:
 
     def _schedule_next_seconds(self, seconds: float) -> None:
         with self._lock:
-            if not self._running:
+            if not self._active:
                 return
             self._next_run_at = time.time() + seconds
             if self._first_tick_pending:
@@ -293,7 +305,6 @@ class PredictionResolverScheduler:
         with heavy_job_slot("prediction_resolver") as acquired:
             if not acquired:
                 skipped = {
-                    "ok": True,
                     "run_at": _now_iso(),
                     "skipped": "heavy_job_busy",
                     "resolved_now": 0,
@@ -301,33 +312,43 @@ class PredictionResolverScheduler:
                     "pending": 0,
                 }
                 self._persist_cycle_summary(skipped)
-                # Keep tick freshness visible to loop_health even when skipped.
+                # Skips are recorded honestly; they never produce ok (spec §2).
+                self.liveness.record_skip(reason="heavy_job_busy")
                 with self._lock:
-                    self._last_run_at = skipped["run_at"]
-                    self._last_run_ok = True
                     self._last_run_error = None
                     self._mark_first_tick(skipped)
                 logger.info(
-                    "resolver lifecycle event=success first=%s duration_ms=%.1f skipped=heavy_job_busy",
+                    "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=heavy_job_busy",
                     first_tick,
                     (time.perf_counter() - tick_started) * 1000,
                 )
-                if self._running:
+                if self._active:
                     # Retry sooner so pending_past_grace doesn't rot behind long snapshots.
                     self._schedule_next(min(2, max(1, self.refresh_minutes)))
                 return skipped
             result = self._run_refresh_cycle_with_timeout()
 
+        if result.get("ok"):
+            self.liveness.record_success(
+                evidence={
+                    "resolved_now": result.get("resolved_now", 0),
+                    "expired_now": result.get("expired_now", 0),
+                    "pending": result.get("pending", 0),
+                }
+            )
+        elif result.get("error"):
+            self.liveness.record_failure(error=str(result.get("error")))
+        else:
+            self.liveness.record_skip(reason=str(result.get("skipped") or "cycle_skipped"))
+
         with self._lock:
-            self._last_run_at = result["run_at"]
-            self._last_run_ok = result["ok"]
             self._last_run_error = result.get("error")
             self._last_resolved = result.get("resolved_now", 0)
             self._last_expired = result.get("expired_now", 0)
             self._last_pending = result.get("pending", 0)
             self._lifecycle = "running" if result.get("ok") else "degraded"
             self._lifecycle_error = result.get("error")
-            if result["ok"]:
+            if result.get("ok"):
                 self._consecutive_failures = 0
                 self._backoff_minutes = self.refresh_minutes
             else:
@@ -347,6 +368,13 @@ class PredictionResolverScheduler:
                 duration_ms,
                 result.get("error"),
             )
+        elif result.get("skipped"):
+            logger.info(
+                "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=%s",
+                first_tick,
+                duration_ms,
+                result.get("skipped"),
+            )
         elif result.get("ok"):
             logger.info(
                 "resolver lifecycle event=success first=%s duration_ms=%.1f",
@@ -360,7 +388,7 @@ class PredictionResolverScheduler:
                 duration_ms,
                 result.get("error"),
             )
-        if self._running:
+        if self._active:
             self._schedule_next(next_interval)
         return result
 
@@ -393,7 +421,6 @@ class PredictionResolverScheduler:
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
         if not self._cycle_lock.acquire(blocking=False):
             result = {
-                "ok": True,
                 "run_at": _now_iso(),
                 "resolved_now": 0,
                 "expired_now": 0,
@@ -524,7 +551,7 @@ class PredictionResolverScheduler:
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
         summary = {
             "run_at": result["run_at"],
-            "ok": result["ok"],
+            "ok": result.get("ok", False),
             "resolved_now": result.get("resolved_now", 0),
             "expired_now": result.get("expired_now", 0),
             "pending": result.get("pending", 0),
@@ -629,6 +656,19 @@ def stop_prediction_resolver_scheduler() -> Dict[str, Any]:
     return sched.stop()
 
 
+def _stopped_liveness_ok() -> Optional[bool]:
+    """Registry-derived ok for the stopped singleton (honest persisted view)."""
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("prediction_resolver")
+        if t is not None:
+            return t.snapshot()["status"] == "ok"
+    except Exception:
+        pass
+    return None
+
+
 def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level prediction resolver scheduler."""
     with _scheduler_lock:
@@ -639,7 +679,7 @@ def get_prediction_resolver_scheduler_state() -> Dict[str, Any]:
                 "backoff_minutes": RESOLVER_REFRESH_MINUTES,
                 "consecutive_failures": 0,
                 "last_run_at": None,
-                "last_run_ok": None,
+                "last_run_ok": _stopped_liveness_ok(),
                 "last_run_error": None,
                 "next_run_at": None,
                 "last_resolved": 0,

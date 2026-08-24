@@ -1,0 +1,144 @@
+s False
+    assert "resolver lifecycle event=timeout" in caplog.text
+
+
+def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
+    monkeypatch, fresh_scheduler
+):
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        finished.set()
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+
+    timed_out = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(timed_out["error"])
+
+    skipped = sched._run_refresh_cycle_with_timeout()
+    assert skipped["skipped"] == "cycle_in_flight"
+    assert not finished.is_set()
+
+    release.set()
+    assert finished.wait(timeout=1)
+
+
+def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
+    caplog.set_level("INFO", logger="internal.council.resolver_scheduler")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+    monkeypatch.setattr(
+        sched,
+        "_run_refresh_cycle_with_timeout",
+        lambda: {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        },
+    )
+    monkeypatch.setattr(sched, "_persist_cycle_summary", lambda _result: None)
+    monkeypatch.setattr(sched, "_schedule_next", lambda _minutes: None)
+
+    result = sched._tick()
+
+    assert result["ok"] is True
+    assert sched.state()["first_tick_ok"] is True
+    assert sched.state()["lifecycle"] == "running"
+    assert "resolver lifecycle event=success" in caplog.text
+
+# ---------------------------------------------------------------------------
+# Tracker persistence isolation (spec §3): trackers must read/write a
+# tmp-backed soul map so prior CI runs can never leak into fresh instances.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file."""
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        sm_path.parent.mkdir(parents=True, exist_ok=True)
+        sm_path.write_text(json.dumps(blob), encoding="utf-8")
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+
+
+# ---------------------------------------------------------------------------
+# LivenessTracker conformance + honest-skip contract (spec §4)
+# ---------------------------------------------------------------------------
+
+
+def test_resolver_scheduler_liveness_conformance():
+    """The scheduler's tracker satisfies every contract check."""
+    from liveness_conformance import assert_liveness_compliant
+
+    def factory():
+        s = resolver_scheduler.PredictionResolverScheduler(
+            refresh_minutes=1, subnet_provider=_static_subnets
+        )
+        # Persistence is tmp-isolated by autouse fixture, so a fresh
+        # tracker genuinely starts with no prior state.
+        return s.liveness
+
+    assert_liveness_compliant(factory)
+
+
+def test_skip_burst_never_produces_ok(monkeypatch, fresh_scheduler):
+    """The laundering inversion: repeated heavy-job skips must not read healthy."""
+    from contextlib import contextmanager
+
+    @contextmanager
+    def _always_busy(_name):
+        yield False
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _always_busy)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    sched._active = True
+    for _ in range(3):
+        sched._tick()
+
+    snap = sched.liveness.snapshot()
+    assert snap["status"] != "ok"
+    assert snap["consecutive_skips"] >= 3

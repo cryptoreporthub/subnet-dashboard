@@ -69,6 +69,8 @@ class LivenessTracker:
         self._lock = threading.Lock()
         self._lifecycle = "new"
         self._last_success_epoch: Optional[float] = None
+
+        self._last_event_epoch: Optional[float] = None
         self._consecutive_failures = 0
         self._consecutive_skips = 0
         self._backoff_seconds = 0
@@ -92,6 +94,9 @@ class LivenessTracker:
                     ts = prior.get("last_success_epoch")
                     if ts is not None:
                         self._last_success_epoch = float(ts)
+                    ets = prior.get("last_event_epoch")
+                    if ets is not None:
+                        self._last_event_epoch = float(ets)
                     self._lifecycle = str(prior.get("lifecycle", "new"))
                     self._consecutive_failures = int(
                         prior.get("consecutive_failures", 0)
@@ -122,12 +127,14 @@ class LivenessTracker:
         """First-class skip. Never merged into ok or failure."""
         with self._lock:
             self._consecutive_skips += 1
+            self._last_event_epoch = time.time()
             self._last_skip_reason = str(reason)
         self._save()
 
     def record_failure(self, error: Any = "") -> None:
         with self._lock:
             self._consecutive_failures += 1
+            self._last_event_epoch = time.time()
             self._last_error = str(error)[:500]
             self._backoff_seconds = min(
                 self.interval_seconds * (2 ** min(self._consecutive_failures, 10)),
@@ -145,6 +152,7 @@ class LivenessTracker:
             )
         with self._lock:
             self._last_success_epoch = time.time()
+            self._last_event_epoch = time.time()
             self._consecutive_failures = 0
             self._consecutive_skips = 0
             self._backoff_seconds = 0
@@ -180,6 +188,13 @@ class LivenessTracker:
                 lsa = datetime.fromtimestamp(
                     self._last_success_epoch, timezone.utc
                 ).isoformat()
+            lea = None
+            ea = None
+            if self._last_event_epoch is not None:
+                lea = datetime.fromtimestamp(
+                    self._last_event_epoch, timezone.utc
+                ).isoformat()
+                ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,
                 "lifecycle": self._lifecycle,
@@ -193,6 +208,8 @@ class LivenessTracker:
                 "last_error": self._last_error,
                 "last_skip_reason": self._last_skip_reason,
                 "last_evidence": self._last_evidence,
+                "last_event_at": lea,
+                "event_age_seconds": ea,
                 "source": self._source,
             }
 
@@ -207,6 +224,7 @@ class LivenessTracker:
             bucket = blob.setdefault(_PERSIST_PREFIX, {})
             bucket[self.name] = {
                 "last_success_epoch": self._last_success_epoch,
+                "last_event_epoch": self._last_event_epoch,
                 "lifecycle": snap["lifecycle"],
                 "consecutive_failures": snap["consecutive_failures"],
                 "consecutive_skips": snap["consecutive_skips"],
