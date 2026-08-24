@@ -112,8 +112,21 @@ def coverage_meta(
             if age is not None:
                 ages.append(age)
     tracked_set = set(tracked)
+    meta_block = data.get("meta") if isinstance(data.get("meta"), dict) else {}
     if signal_netuids is None:
-        raw = (data.get("meta") or {}).get("last_signal_netuids")
+        if "last_signal_netuids" not in meta_block:
+            max_age = max(ages) if ages else None
+            stalled = max_age is not None and max_age >= _FEED_STALL_SECONDS
+            return {
+                "signal_row_count": 0,
+                "missing_from_feed": [],
+                "missing_from_feed_count": 0,
+                "max_row_age_seconds": int(max_age) if max_age is not None else None,
+                "feed_stalled": stalled,
+                "tracked_subnet_count": len(tracked_set),
+                "coverage_known": False,
+            }
+        raw = meta_block.get("last_signal_netuids")
         signal_netuids = []
         if isinstance(raw, list):
             for item in raw:
@@ -131,6 +144,7 @@ def coverage_meta(
         "max_row_age_seconds": int(max_age) if max_age is not None else None,
         "feed_stalled": stalled,
         "tracked_subnet_count": len(tracked_set),
+        "coverage_known": True,
     }
 
 

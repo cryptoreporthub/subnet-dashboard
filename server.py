@@ -1781,15 +1781,20 @@ def _list_subnets_base_rows() -> Dict[str, Any]:
     from internal.subnet_names import enrich_subnet_row
 
     source_rows = load_subnets_source(timeout=2)
+    used_registry = False
     if not source_rows:
         source_rows = registry_subnet_rows()
+        used_registry = True
     feed_meta = _subnet_feed_meta(source_rows)
     items = []
     for s in source_rows:
         item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
-        items.append(enrich_subnet_row(item, use_taostats=False))
+        row = enrich_subnet_row(item, use_taostats=False)
+        if used_registry:
+            row = _null_unfetched_metrics(row)
+        items.append(row)
     return {"items": items, "feed_meta": feed_meta}
 
 
@@ -2385,17 +2390,21 @@ async def _fetch_pump_alerts_payload() -> Dict[str, Any]:
             stale = _PUMP_ALERTS_CACHE.get("payload")
             if isinstance(stale, dict) and stale.get("status") not in ("timeout", "unavailable", None):
                 return stale
-        return {
-            "status": "timeout",
-            "count": 0,
-            "early_count": 0,
-            "confirmed_count": 0,
-            "alerts": [],
-            "empty_message": "Pump desk busy — retry shortly.",
-            "error": "timeout",
-            "trust": {"ready": False, "line": ""},
-            "desk": True,
-        }
+        from internal.pump.desk_payload import attach_pump_freshness
+
+        return attach_pump_freshness(
+            {
+                "status": "timeout",
+                "count": 0,
+                "early_count": 0,
+                "confirmed_count": 0,
+                "alerts": [],
+                "empty_message": "Pump desk busy — retry shortly.",
+                "error": "timeout",
+                "trust": {"ready": False, "line": ""},
+                "desk": True,
+            }
+        )
 
     if payload.get("status") in ("timeout", "unavailable"):
         return payload

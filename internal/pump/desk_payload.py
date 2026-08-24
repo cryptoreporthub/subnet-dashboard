@@ -98,14 +98,12 @@ def attach_pump_freshness(
     max_age = max(ages) if ages else None
     status = str(out.get("status") or "").lower()
     data_available = bool(alerts)
-    if status in ("unavailable", "error") and not data_available:
+    if not data_available and status in ("unavailable", "error", "timeout", "empty"):
         freshness, scope = "unavailable", "handler"
     elif max_age is not None and max_age > _ROW_STALE_SECONDS:
         freshness, scope = "stale", "rows"
-    elif handler_stale or out.get("stale"):
+    elif handler_stale or out.get("stale") or status in ("timeout", "error", "unavailable"):
         freshness, scope = "stale", "handler"
-    elif not data_available and status in ("timeout", "error", "unavailable", "empty"):
-        freshness, scope = "unavailable" if status != "empty" else "unavailable", "handler"
     else:
         freshness, scope = "fresh", "rows" if data_available else "handler"
     out.setdefault("generated_at", _utcnow_iso())

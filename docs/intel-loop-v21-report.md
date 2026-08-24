@@ -11,14 +11,14 @@ Membership of the pump feed was **not** changed. Pump scan loop was **not** rest
 |---|---|
 | P0-A gate | `docs/intel-loop-p0a-universe-gate.md` — no membership edit |
 | P0-A obs | Ladder `meta`: `signal_row_count`, `missing_from_feed` (bounded), `missing_from_feed_count`, `max_row_age_seconds`, `feed_stalled`, `tracked_subnet_count`. `GET /api/pump-ladder/state?summary=1` drops per-row `transitions`. `status` stays `success`. |
-| P0-B | Additive `generated_at`, `max_row_age_seconds`, `data_available`, `freshness`, `freshness_scope`. `_mark_stale` still maps timeout/error/unavailable → `ok` but keeps `prior_status` and sets `freshness=stale`. Persist-TTL path stamps **row** age, not payload TTL. SSR + `/api/pump-alerts` share `load_pump_alerts_desk_payload`. Visible banner on `/pump` + hydrate. |
+| P0-B | Additive `generated_at`, `max_row_age_seconds`, `data_available`, `freshness`, `freshness_scope`. `_mark_stale` still maps timeout/error/unavailable → `ok` but keeps `prior_status` and sets `freshness=stale`. Handler timeout/error with rows is `freshness=stale` (`handler`), not `fresh`. Hard timeout JSON is stamped. Persist-TTL path stamps **row** age. Shared SSR/API payload. Visible banner on `/pump` SSR plus a banner-only hydrate update from those API fields (directive allowed banner after API fields; not a data-path rewrite). |
 | P0-C | `/listener` remains 308 → `/subnetsummer`. Context catches non-timeout failures. Outer try around context **and** `TemplateResponse`. Honest fallback HTML. Conviction coerced to float in feed/trending/mi rows; Jinja uses `|float` + jury numeric guard. |
 | P1 | `/api/subnets` `meta` keeps `status` (top-level). Adds `handler_status`, `enrichment_status`, `generated_at`, `data_available`. Registry fallback nulls missing emission/stake/apy instead of `0.0`. Universe vs timeout stay separate. |
 | P2 | `docs/intel-loop-p2-telegram-listener.md` — document only. |
 
 ## Tests (confirmed from tests)
 
-`PYTHONPATH=. pytest tests/test_intel_loop_v21.py tests/test_pump_desk_payload.py tests/test_subnets_source_meta.py tests/test_summers_telegram_desk.py` → **23 passed**.
+`PYTHONPATH=. pytest tests/test_intel_loop_v21.py tests/test_pump_desk_payload.py tests/test_subnets_source_meta.py tests/test_summers_telegram_desk.py tests/test_pump_alert.py::test_api_pump_alerts_route` → **26 passed** (re-run after Luna follow-ups).
 
 Not a full-suite claim. `server_original` / unported modules remain out of scope.
 

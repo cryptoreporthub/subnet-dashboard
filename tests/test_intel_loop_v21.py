@@ -15,6 +15,28 @@ from server import _null_unfetched_metrics, app
 client = TestClient(app)
 
 
+def test_coverage_meta_unknown_feed_does_not_mark_all_missing():
+    fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    data = {"subnets": {"10": {"netuid": 10, "updated_at": fresh}}, "meta": {}}
+    meta = coverage_meta(data, None)
+    assert meta["coverage_known"] is False
+    assert meta["missing_from_feed"] == []
+    assert meta["feed_stalled"] is False
+
+
+def test_timeout_with_rows_is_handler_stale_not_fresh():
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    out = attach_pump_freshness(
+        {
+            "status": "timeout",
+            "alerts": [{"netuid": 1, "updated_at": now}],
+        }
+    )
+    assert out["status"] == "timeout"
+    assert out["freshness"] == "stale"
+    assert out["freshness_scope"] == "handler"
+
+
 def test_coverage_meta_flags_missing_and_stale_rows():
     stale = (datetime.now(timezone.utc) - timedelta(hours=8)).isoformat().replace("+00:00", "Z")
     fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
