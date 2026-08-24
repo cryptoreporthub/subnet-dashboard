@@ -64,7 +64,7 @@ Not a full-suite claim.
 | `/listener` | 308 → `/subnetsummer` |
 | `/subnetsummer` | 200 |
 | `/pump` | 200 |
-| `/api/pump-alerts` | success, freshness=fresh, data_available=true |
+| `/api/pump-alerts` | success, freshness=fresh, data_available=true (max_row_age_seconds=8415 ≈ 2.3h; threshold `PUMP_ROW_STALE_SECONDS` default **21600** (6h) in `desk_payload.py` — age below threshold ⇒ `freshness=fresh`, not stale) |
 | `/api/subnets?limit=500` | success, n=75 0..74, handler_status=ok, enrichment_status=live |
 | `/api/pump-ladder/state?summary=1` | coverage_known=true, feed_stalled=true |
 
@@ -133,3 +133,17 @@ Initial BLOCK: report HEAD/`living_focus` wording. Corrected in `docs/intel-loop
 **Evidence tier:** confirmed from current tests + code — report-only; no scoped implementation gap.
 
 **Draft → ready:** Luna SHIP on report-only completion after doc fixes (2026-08-24). Awaits human authorization to mark draft ready.
+
+---
+
+## Closeout acceptance (2026-08-24)
+
+**Verdict:** Accepted as Intel Loop **review closeout** (not an implementation plan). Human decisions pending: frozen-netuid policy, merge/deploy authorization, draft→ready.
+
+**Live HEAD re-check:** `62d0c25da691dd146b3af0ccd4bea53ba7967f57` — matches GitHub PR #1034 at closeout time. Re-verify before any action.
+
+**Luna SHIP:** reported external review evidence from this agent session; does not replace current code/test re-verification.
+
+**Artifact paths** (`/opt/cursor/artifacts/pr1034_*.log`): session-local; another Cursor VM may not have them — rely on repo docs and re-run probes if needed.
+
+**Sentry Path A:** read-only repo/config review and local SDK discovery may proceed. Do not set Fly `SENTRY_DSN` secrets, deploy, or activate prod alerting during active Intel Loop merge/deploy decision; secret sets restart Fly machines. Do not push Sentry or doc changes to `main` concurrently with Intel Loop merge/deploy.
