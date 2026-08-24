@@ -209,28 +209,97 @@ def test_t9_source_disagreement_retains_member(universe_tmp):
 
 
 def test_negative_validity_removal_after_grace(universe_tmp):
-  """Continuous negative validity removes member only after 48h grace."""
-  old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
-  prior = UniverseSnapshot(
-      netuids=(99,),
-      rows=({"netuid": 99, "name": "SN99"},),
-      resolved_at=datetime.now(timezone.utc).isoformat(),
-      status="ok",
-      degraded=False,
-      validity_map={
-          "99": _validity_entry(
-              validity="negative",
-              sources=["taomarketcap", "blockmachine_probe"],
-              negative_since=old,
-          )
-      },
-  )
-  builder = SnapshotBuilder(
-      tmc_fetch=lambda: (set(), {}, True),
-      probe_fetch=lambda netuids, deadline: ({99: False}, True),
-  )
-  built = builder.build(prior)
-  assert 99 not in built.netuids
+    """Continuous negative validity removes member only after 48h grace."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(99,),
+        rows=({"netuid": 99, "name": "SN99"},),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "99": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap", "blockmachine_probe"],
+                negative_since=old,
+            )
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, True),
+        probe_fetch=lambda netuids, deadline: ({99: False}, True),
+    )
+    built = builder.build(prior)
+    assert 99 not in built.netuids
+
+
+def test_provider_grace_removal_via_refresh_once(universe_tmp, monkeypatch):
+    """Provider.refresh_once() must publish grace-eligible removals."""
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(99, 100),
+        rows=(
+            {"netuid": 99, "name": "SN99"},
+            {"netuid": 100, "name": "SN100"},
+        ),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "99": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap"],
+                negative_since=old,
+            ),
+            "100": _validity_entry(validity="positive", sources=["taomarketcap"]),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({100}, {100: {"netuid": 100, "name": "SN100"}}, True),
+        probe_fetch=lambda netuids, deadline: ({99: False, 100: True}, True),
+    )
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior)
+    provider.set_builder(builder)
+    result = provider.refresh_once()
+    assert 99 not in result.netuids
+    assert 100 in result.netuids
+    assert provider.get_snapshot().netuids == result.netuids
+
+
+def test_web_reader_does_not_publish_refresh(universe_tmp, monkeypatch):
+    """Web process reloads disk only — refresh_once must not run builder publish."""
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    monkeypatch.setenv("RUN_MODE", "web")
+    prior = _prior_snapshot([1, 2, 3])
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior, persist=True)
+    provider.set_builder(
+        SnapshotBuilder(
+            tmc_fetch=lambda: (set(range(75)), {}, True),
+            probe_fetch=lambda netuids, deadline: ({n: False for n in netuids}, True),
+        )
+    )
+    result = provider.refresh_once()
+    assert list(result.netuids) == [1, 2, 3]
+
+
+def test_web_reader_reload_picks_worker_snapshot(universe_tmp, monkeypatch):
+    """Worker publishes snapshot file; web reader reloads without writing."""
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    path = str(universe_tmp)
+    monkeypatch.setenv("RUN_MODE", "web")
+    reader = SubnetUniverseProvider(persist_file=path)
+
+    monkeypatch.setenv("RUN_MODE", "worker")
+    writer = SubnetUniverseProvider(persist_file=path)
+    writer.replace_snapshot_for_tests(_prior_snapshot([10, 11, 12]), persist=True)
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    reloaded = reader.reload_from_disk_if_stale()
+    assert list(reloaded.netuids) == [10, 11, 12]
 
 
 def test_get_lkg_or_emergency_uses_provider_singleton(universe_tmp):

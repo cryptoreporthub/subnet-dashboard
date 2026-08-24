@@ -188,8 +188,39 @@ def apply_taostats_overlay(
     return out
 
 
+def _merge_market_fields_onto_universe(
+    universe_rows: List[Dict[str, Any]],
+    market_rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Overlay market/flow fields from feed rows onto shared-universe membership."""
+    by_netuid: Dict[int, Dict[str, Any]] = {}
+    for row in universe_rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row.get("netuid"))
+        except (TypeError, ValueError):
+            continue
+        by_netuid[netuid] = dict(row)
+    for row in market_rows:
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row.get("netuid"))
+        except (TypeError, ValueError):
+            continue
+        if netuid not in by_netuid:
+            continue
+        merged = dict(by_netuid[netuid])
+        for key, value in row.items():
+            if value is not None and value != "":
+                merged[key] = value
+        by_netuid[netuid] = merged
+    return sorted(by_netuid.values(), key=lambda r: int(r.get("netuid") or 0))
+
+
 def _union_pump_feed_netuids(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Union committed registry + ladder keys missing from merged/TMC clip."""
+    """Legacy registry/ladder union — superseded by shared universe membership (D5)."""
     seen: set[int] = set()
     out = list(subnets)
     for row in subnets:
@@ -255,37 +286,45 @@ def _union_pump_feed_netuids(subnets: List[Dict[str, Any]]) -> List[Dict[str, An
 
 
 def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
-    """Merged feed when cached, else fast TMC — then optional merge warm, TaoStats overlay."""
-    subnets: List[Dict[str, Any]] = []
+    """Merged feed when cached, else fast TMC — membership from shared universe (D5)."""
+    from internal.subnet_universe import get_pump_membership_rows
+
+    universe_rows = get_pump_membership_rows()
+    market_rows: List[Dict[str, Any]] = []
     try:
         from fetchers.merged_data import _get_cached, get_merged_subnet_data
 
         cached = _get_cached("all_merged")
         if isinstance(cached, dict):
-            subnets = list(cached.get("subnets") or [])
-        # ponytail: cold worker boot — TMC before blocking merge (90s scan timeout wedge).
-        if not subnets:
+            market_rows = list(cached.get("subnets") or [])
+        if not market_rows:
             try:
                 from fetchers.taomarketcap import get_all_subnets
 
-                subnets = list(get_all_subnets() or [])
+                market_rows = list(get_all_subnets() or [])
             except Exception as exc:
                 logger.debug("TMC fast path for pump failed: %s", exc)
-        if not subnets:
-            subnets = list(get_merged_subnet_data() or [])
+        if not market_rows:
+            market_rows = list(get_merged_subnet_data() or [])
     except Exception as exc:
         logger.debug("merged feed unavailable for pump: %s", exc)
 
-    if not subnets:
+    if not market_rows:
         try:
             from fetchers.taomarketcap import get_all_subnets
 
-            subnets = list(get_all_subnets() or [])
+            market_rows = list(get_all_subnets() or [])
         except Exception as exc:
             logger.warning("TMC feed unavailable for pump: %s", exc)
-            return []
+            if universe_rows:
+                subnets = list(universe_rows)
+            else:
+                return []
 
-    subnets = _union_pump_feed_netuids(subnets)
+    if universe_rows:
+        subnets = _merge_market_fields_onto_universe(universe_rows, market_rows)
+    else:
+        subnets = list(market_rows or [])
 
     if _rows_lack_pump_flow_fields(subnets):
         subnets = _overlay_tmc_market_fields(subnets)

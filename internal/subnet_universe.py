@@ -26,9 +26,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(BASE_DIR)
 REGISTRY_PATH = os.path.join(REPO_ROOT, "config", "registry.json")
 
-_in_ci_or_test = bool(
-    os.environ.get("GITHUB_ACTIONS") or os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI")
-)
+def _ci_or_test() -> bool:
+    return bool(
+        os.environ.get("GITHUB_ACTIONS") or os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI")
+    )
 
 
 def _data_dir() -> str:
@@ -209,6 +210,35 @@ def _eligible_for_removal(entry: Dict[str, Any], now: datetime) -> bool:
     except Exception:
         return False
     return (now - started).total_seconds() >= STALE_GRACE_SECONDS
+
+
+def is_universe_refresh_writer() -> bool:
+    """Only worker processes may refresh/publish; web reloads persisted snapshots."""
+    if _ci_or_test():
+        return True
+    try:
+        from internal.run_mode import is_worker_mode
+
+        return is_worker_mode()
+    except Exception:
+        return False
+
+
+def _shrink_allowed(prior: UniverseSnapshot, built: UniverseSnapshot) -> bool:
+    """True when a smaller built snapshot may replace prior (grace removals only)."""
+    if not prior.netuids or len(built.netuids) >= len(prior.netuids):
+        return True
+    if built.refresh_incomplete:
+        return False
+    removed = set(prior.netuids) - set(built.netuids)
+    if not removed:
+        return True
+    now = datetime.now(timezone.utc)
+    for netuid in removed:
+        entry = prior.validity_map.get(str(netuid)) or {}
+        if not _eligible_for_removal(entry, now):
+            return False
+    return True
 
 
 def _compute_membership(
@@ -444,6 +474,7 @@ class SubnetUniverseProvider:
     def __init__(self, *, persist_file: Optional[str] = None) -> None:
         self._persist_file = persist_file or persist_path()
         self._write_lock = threading.Lock()
+        self._disk_mtime: float = 0.0
         self._snapshot: UniverseSnapshot = self._load_initial_snapshot()
         self._builder = SnapshotBuilder()
         self._refresh_lock = threading.Lock()
@@ -454,6 +485,7 @@ class SubnetUniverseProvider:
     def _load_initial_snapshot(self) -> UniverseSnapshot:
         try:
             if os.path.isfile(self._persist_file):
+                self._disk_mtime = os.path.getmtime(self._persist_file)
                 with open(self._persist_file, "r") as handle:
                     payload = json.load(handle)
                 if isinstance(payload, dict) and payload.get("netuids"):
@@ -464,6 +496,30 @@ class SubnetUniverseProvider:
             logger.warning("subnet_universe corrupt/missing persistence: %s", exc)
         return UniverseSnapshot.emergency_registry()
 
+    def reload_from_disk_if_stale(self) -> UniverseSnapshot:
+        """Reader path: pick up worker-published snapshot without refreshing."""
+        if not os.path.isfile(self._persist_file):
+            return self._snapshot
+        try:
+            mtime = os.path.getmtime(self._persist_file)
+        except OSError:
+            return self._snapshot
+        if mtime <= self._disk_mtime:
+            return self._snapshot
+        try:
+            with open(self._persist_file, "r") as handle:
+                payload = json.load(handle)
+            if not isinstance(payload, dict) or not payload.get("netuids"):
+                return self._snapshot
+            snap = UniverseSnapshot.from_dict(payload)
+        except Exception as exc:
+            logger.warning("subnet_universe disk reload failed: %s", exc)
+            return self._snapshot
+        with self._write_lock:
+            self._disk_mtime = mtime
+            self._snapshot = snap
+        return snap
+
     def _atomic_persist(self, snap: UniverseSnapshot) -> None:
         if snap.status == "emergency_registry":
             return
@@ -473,6 +529,7 @@ class SubnetUniverseProvider:
             with open(tmp, "w") as handle:
                 json.dump(snap.to_dict(), handle)
             os.replace(tmp, self._persist_file)
+            self._disk_mtime = os.path.getmtime(self._persist_file)
         except Exception as exc:
             logger.warning("subnet_universe persist failed: %s", exc)
 
@@ -483,6 +540,8 @@ class SubnetUniverseProvider:
                 self._atomic_persist(snap)
 
     def refresh_once(self) -> UniverseSnapshot:
+        if not is_universe_refresh_writer():
+            return self.reload_from_disk_if_stale()
         if not self._refresh_lock.acquire(blocking=False):
             return self._snapshot
         try:
@@ -500,13 +559,9 @@ class SubnetUniverseProvider:
                     refresh_incomplete=True,
                     message="Refresh failed — retained last-known-good universe",
                 )
-            if (
-                self._snapshot.netuids
-                and len(built.netuids) < len(self._snapshot.netuids)
-                and not all(n in built.netuids for n in self._snapshot.netuids)
-            ):
+            elif not _shrink_allowed(self._snapshot, built):
                 logger.warning(
-                    "subnet_universe forbidden shrink blocked (%d -> %d)",
+                    "subnet_universe unsafe shrink blocked (%d -> %d)",
                     len(self._snapshot.netuids),
                     len(built.netuids),
                 )
@@ -519,7 +574,7 @@ class SubnetUniverseProvider:
                     validity_map=dict(self._snapshot.validity_map),
                     cap_reached=self._snapshot.cap_reached,
                     refresh_incomplete=True,
-                    message="Forbidden shrink blocked — retained last-known-good universe",
+                    message="Unsafe shrink blocked — retained last-known-good universe",
                 )
             self._publish(built)
             return built
@@ -527,7 +582,7 @@ class SubnetUniverseProvider:
             self._refresh_lock.release()
 
     def ensure_refresh_loop(self) -> None:
-        if _in_ci_or_test:
+        if _ci_or_test() or not is_universe_refresh_writer():
             return
         with self._loop_lock:
             if self._loop_started:
@@ -545,7 +600,10 @@ class SubnetUniverseProvider:
                 logger.warning("subnet_universe refresh loop error: %s", exc)
 
     def kick_refresh_async(self) -> None:
-        if _in_ci_or_test:
+        if _ci_or_test():
+            return
+        if not is_universe_refresh_writer():
+            self.reload_from_disk_if_stale()
             return
 
         def _run() -> None:
@@ -599,10 +657,26 @@ def get_lkg_or_emergency() -> UniverseSnapshot:
     return get_provider().get_lkg_or_emergency()
 
 
+def get_pump_membership_rows() -> List[Dict[str, Any]]:
+    """Shared universe rows for pump signal membership (D5 field ix)."""
+    snap = get_snapshot()
+    if snap.rows:
+        return [dict(row) for row in snap.rows]
+    return []
+
+
+def ensure_universe_reader() -> None:
+    """Web/read-only path: reload persisted snapshot; never refresh/publish."""
+    get_provider().reload_from_disk_if_stale()
+
+
 def ensure_background_refresh() -> None:
-    provider = get_provider()
-    provider.ensure_refresh_loop()
-    provider.kick_refresh_async()
+    if is_universe_refresh_writer():
+        provider = get_provider()
+        provider.ensure_refresh_loop()
+        provider.kick_refresh_async()
+    else:
+        ensure_universe_reader()
 
 
 def _reset_provider_for_tests() -> None:
