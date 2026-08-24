@@ -2967,6 +2967,25 @@
     var body = document.getElementById('pump-alert-body');
     if (!body || !payload) return;
     var payloadStatus = String(payload.status || '').toLowerCase();
+    var freshnessBanner = document.getElementById('pump-freshness-banner');
+    if (freshnessBanner) {
+      var fr = String(payload.freshness || '').toLowerCase();
+      if (fr === 'stale' || fr === 'unavailable') {
+        freshnessBanner.hidden = false;
+        if (fr === 'unavailable') {
+          freshnessBanner.textContent = 'Pump rows unavailable.';
+        } else {
+          var ageHrs = payload.max_row_age_seconds != null
+            ? ' · oldest ' + (Math.round(payload.max_row_age_seconds / 360) / 10) + 'h'
+            : '';
+          var scope = payload.freshness_scope ? ' (' + payload.freshness_scope + ')' : '';
+          freshnessBanner.textContent = 'Pump rows stale' + ageHrs + scope;
+        }
+      } else {
+        freshnessBanner.hidden = true;
+        freshnessBanner.textContent = '';
+      }
+    }
     if (
       payloadStatus === 'timeout' ||
       payloadStatus === 'error' ||

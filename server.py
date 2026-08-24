@@ -1798,6 +1798,8 @@ def _apply_subnets_query(
     request: Request,
     *,
     status: str = "success",
+    handler_status: Optional[str] = None,
+    enrichment_status: Optional[str] = None,
 ) -> Dict[str, Any]:
     items = list(base.get("items") or [])
     feed_meta = base.get("feed_meta") or {}
@@ -1855,9 +1857,40 @@ def _apply_subnets_query(
             "offset": offset,
             "source": feed_meta.get("source", "registry"),
             "sources": feed_meta.get("sources", ["registry"]),
+            "handler_status": handler_status
+            or ("timeout" if status == "timeout" else "ok"),
+            "enrichment_status": enrichment_status
+            or (
+                "names_only"
+                if str(feed_meta.get("source") or "registry") == "registry"
+                else "live"
+            ),
+            "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "data_available": total > 0,
         },
         "subnets": items,
     }
+
+
+def _null_unfetched_metrics(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Registry fallback never fetched chain metrics — don't paint missing as 0.0."""
+    row = dict(item)
+    if row.get("emission") in (None, 0, 0.0):
+        row["emission"] = None
+        row["emission_available"] = False
+    sd = row.get("staking_data")
+    if not isinstance(sd, dict):
+        sd = {}
+    else:
+        sd = dict(sd)
+    if sd.get("total_stake") in (None, 0, 0.0):
+        sd["total_stake"] = None
+        sd["stake_available"] = False
+    if sd.get("apy") in (None, 0, 0.0):
+        sd["apy"] = None
+        sd["apy_available"] = False
+    row["staking_data"] = sd
+    return row
 
 
 def _list_subnets_registry_fallback(request: Request, *, status: str = "success") -> Dict[str, Any]:
@@ -1871,8 +1904,14 @@ def _list_subnets_registry_fallback(request: Request, *, status: str = "success"
         item = _tag_subnet_row(s, feed_meta)
         item.setdefault("id", s.get("netuid", 0))
         item.setdefault("netuid", item.get("id"))
-        items.append(enrich_subnet_row(item, use_taostats=False))
-    return _apply_subnets_query({"items": items, "feed_meta": feed_meta}, request, status=status)
+        items.append(_null_unfetched_metrics(enrich_subnet_row(item, use_taostats=False)))
+    return _apply_subnets_query(
+        {"items": items, "feed_meta": feed_meta},
+        request,
+        status=status,
+        enrichment_status="names_only",
+        handler_status="timeout" if status == "timeout" else "ok",
+    )
 
 
 @app.get("/api/subnet/{subnet_id}")

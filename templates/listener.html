@@ -39,6 +39,10 @@
       <span class="lsn-cal" id="lsnCal" title="Calibration drift surfaces HERE — not just Fly logs"><span id="lsnCalLabel">cal ✓</span></span>
     </div>
 
+    {% if ssr_degraded %}
+    <p class="lsn-ssr-note" role="status">This page is a degraded shell{% if ssr_error %} ({{ ssr_error }}){% endif %}. Empty tiles are empty, not live zeros.</p>
+    {% endif %}
+
     <a class="lsn-site" href="/" title="Open the full website">
       <span class="lsn-site__orb" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="lsn-site__copy">
@@ -193,7 +197,7 @@
       {% if trending %}
       <div class="lsn-cons">
         {% for t in trending[:4] %}
-        {% set cnum = t["conviction"] if t["conviction"] is not none else 50 %}
+        {% set cnum = t["conviction"]|float(50) if t["conviction"] is not none else 50 %}
         {% set pos_w = cnum %}
         {% set neg_w = 100 - cnum %}
         <div class="lsn-crowd">
@@ -228,7 +232,8 @@
       {% if "bull" in v %}{% set ns.bull = ns.bull + 1 %}
       {% elif "bear" in v %}{% set ns.bear = ns.bear + 1 %}
       {% else %}{% set ns.neutral = ns.neutral + 1 %}{% endif %}
-      {% if m["conviction"] is not none %}{% set ns.s = ns.s + m["conviction"] %}{% set ns.n = ns.n + 1 %}{% endif %}
+      {% set cval = m["conviction"]|float(none) if m["conviction"] is not none else none %}
+      {% if cval is number %}{% set ns.s = ns.s + cval %}{% set ns.n = ns.n + 1 %}{% endif %}
     {% endfor %}
     {% set jury_total = ns.bull + ns.bear + ns.neutral %}
     {% set jury_score = (ns.s / ns.n)|round|int if ns.n > 0 else none %}

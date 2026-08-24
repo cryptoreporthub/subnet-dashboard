@@ -35,6 +35,18 @@
     </div>
 
     <div class="pd-proof" id="pd-meta-wrap">
+      {% if pa.freshness == 'stale' or pa.freshness == 'unavailable' %}
+      <p class="pd-freshness" id="pump-freshness-banner" role="status">
+        {% if pa.freshness == 'unavailable' %}
+        Pump rows unavailable.
+        {% else %}
+        Pump rows stale{% if pa.max_row_age_seconds is not none %} · oldest {{ (pa.max_row_age_seconds / 3600)|round(1) }}h{% endif %}
+        {% if pa.freshness_scope %} ({{ pa.freshness_scope }}){% endif %}
+        {% endif %}
+      </p>
+      {% else %}
+      <p class="pd-freshness" id="pump-freshness-banner" hidden role="status"></p>
+      {% endif %}
       {% if trust.ready and trust.headline_pct is not none %}
       <div class="pd-proof__ready" id="pump-alert-proof">
         <span class="pd-proof__pct" id="pump-alert-proof-pct">{{ trust.headline_pct }}%</span>

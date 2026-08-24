@@ -29,6 +29,9 @@ _fetch_thread_lock = threading.Lock()
 _fetch_thread: Optional[threading.Thread] = None
 # ponytail: ring buffer only — upgrade path is SQLite trail if scans go sub-minute
 _SCORE_TRAIL_MAX = 36
+# Health is row age + coverage, not scan count. 6h matches "days-old alerts with scanned:75".
+_FEED_STALL_SECONDS = int(os.environ.get("PUMP_FEED_STALL_SECONDS", str(6 * 3600)))
+_MISSING_FROM_FEED_SAMPLE = 24
 
 
 def _append_score_trail(entry: Dict[str, Any], score: float) -> None:
@@ -66,6 +69,69 @@ def _resolve_path(path: Optional[str] = None) -> str:
     from internal.pump.constants import STATE_PATH as _path
 
     return _path
+
+
+def _netuid_int(value: Any) -> Optional[int]:
+    try:
+        if value is None or value == "":
+            return None
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _row_age_seconds(entry: Dict[str, Any], now: Optional[datetime] = None) -> Optional[float]:
+    ts = _parse_ts(entry.get("updated_at") or entry.get("last_updated"))
+    if ts is None:
+        return None
+    now = now or datetime.now(timezone.utc)
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - ts).total_seconds())
+
+
+def coverage_meta(
+    data: Dict[str, Any],
+    signal_netuids: Optional[List[int]] = None,
+    *,
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """Additive ladder health: coverage + max row age, not scan-count success."""
+    now = now or datetime.now(timezone.utc)
+    subnets = data.get("subnets") if isinstance(data.get("subnets"), dict) else {}
+    tracked: List[int] = []
+    ages: List[float] = []
+    for key, entry in subnets.items():
+        nu = _netuid_int(entry.get("netuid") if isinstance(entry, dict) else None)
+        if nu is None:
+            nu = _netuid_int(key)
+        if nu is not None:
+            tracked.append(nu)
+        if isinstance(entry, dict):
+            age = _row_age_seconds(entry, now)
+            if age is not None:
+                ages.append(age)
+    tracked_set = set(tracked)
+    if signal_netuids is None:
+        raw = (data.get("meta") or {}).get("last_signal_netuids")
+        signal_netuids = []
+        if isinstance(raw, list):
+            for item in raw:
+                n = _netuid_int(item)
+                if n is not None:
+                    signal_netuids.append(n)
+    signal_set = set(signal_netuids)
+    missing = sorted(tracked_set - signal_set)
+    max_age = max(ages) if ages else None
+    stalled = bool(missing) or (max_age is not None and max_age >= _FEED_STALL_SECONDS)
+    return {
+        "signal_row_count": len(signal_set),
+        "missing_from_feed": missing[:_MISSING_FROM_FEED_SAMPLE],
+        "missing_from_feed_count": len(missing),
+        "max_row_age_seconds": int(max_age) if max_age is not None else None,
+        "feed_stalled": stalled,
+        "tracked_subnet_count": len(tracked_set),
+    }
 
 
 def load_state(path: Optional[str] = None) -> Dict[str, Any]:
@@ -326,7 +392,11 @@ def _scan_all_subnets_locked(
     # ponytail: transition loop off lock — GET /api/pump-alerts load_state() must not
     # wedge behind a full ~129-subnet scan holding _lock (Fly health 503 wedge).
     transitions: List[Dict[str, Any]] = []
+    signal_netuids: List[int] = []
     for row in rows:
+        nu = _netuid_int(row.get("netuid") if isinstance(row, dict) else None)
+        if nu is not None:
+            signal_netuids.append(nu)
         event, changed = transition_subnet(data, row)
         if changed and event:
             transitions.append(event)
@@ -335,6 +405,8 @@ def _scan_all_subnets_locked(
     data["meta"]["last_scan_at"] = _now_z()
     data["meta"]["tracked_subnets"] = len(data.get("subnets", {}))
     data["meta"]["last_transition_count"] = len(transitions)
+    data["meta"]["last_signal_netuids"] = sorted(set(signal_netuids))
+    data["meta"].update(coverage_meta(data, signal_netuids))
 
     phase_counts: Dict[str, int] = {p: 0 for p in PHASE_ORDER}
     for entry in data.get("subnets", {}).values():
@@ -447,6 +519,7 @@ def _build_ladder_payload(path: Optional[str] = None) -> Dict[str, Any]:
     meta.setdefault("total_subnets", len(subnets))
     meta.setdefault("tracked_subnets", len(subnets))
     meta.setdefault("updated_at", meta.get("last_scan_at"))
+    meta.update(coverage_meta(data))
     return {
         "status": "success",
         "source": "internal.pump.state",

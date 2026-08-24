@@ -125,7 +125,10 @@
   {% for row in messages[:12] %}
   {% set verdict = row.verdict if row.verdict is mapping else {} %}
   {% set analysis = row.analysis if row.analysis is mapping else {} %}
-  {% set conv = verdict.conviction if verdict.conviction is not none else none %}
+  {% set conv = none %}
+  {% if verdict is mapping and verdict.conviction is defined and verdict.conviction is not none %}
+    {% set conv = verdict.conviction|float(none) %}
+  {% endif %}
   {% set label = analysis.sentiment|default(verdict.verdict|default('neutral'))|string|lower %}
   <article class="message-intel__feed-row message-intel__feed-row--enter {% if label in ['bullish','positive','long','buy'] %}is-bull{% elif label in ['bearish','negative','short','sell'] %}is-bear{% else %}is-neu{% endif %}{% if conv is not none and conv|float >= 60 %} message-intel__feed-row--hot{% endif %}" style="--mi-i: {{ loop.index0 }}{% if conv is not none %}; --pct: {{ '%.0f'|format(conv|float) }}{% endif %}">
     {% if conv is not none %}

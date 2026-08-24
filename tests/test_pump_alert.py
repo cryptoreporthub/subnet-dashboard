@@ -510,9 +510,10 @@ def test_transition_subnet_appends_score_trail():
 
 def test_api_pump_alerts_route():
     ladder = {"subnets": {"29": _ladder_entry("PUMPING", score=0.81)}}
-    with patch("internal.pump.state.load_state", return_value=ladder):
-        with TestClient(app) as client:
-            body = client.get("/api/pump-alerts").json()
+    with patch("internal.pump.desk_payload._load_persisted_payload", return_value=None):
+        with patch("internal.pump.state.load_state", return_value=ladder):
+            with TestClient(app) as client:
+                body = client.get("/api/pump-alerts").json()
     assert body["confirmed_count"] == 1
     assert body["alerts"][0]["badge"] == "CHASE RISK"
     assert body.get("desk") is True

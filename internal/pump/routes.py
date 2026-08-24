@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, Request
+from typing import Any, Dict
+
+from fastapi import APIRouter, Query, Request
 
 from internal.api_errors import public_error
 from internal.pump.pattern_ledger import active_patterns, pattern_payload
@@ -18,12 +20,31 @@ logger = logging.getLogger(__name__)
 pump_ladder_router = APIRouter(tags=["pump-ladder"])
 
 
+def _summarize_ladder_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Drop per-subnet transition histories; keep meta + phase counts."""
+    out = dict(payload)
+    rows = out.get("subnets")
+    if isinstance(rows, list):
+        slim = []
+        for row in rows:
+            if isinstance(row, dict):
+                item = dict(row)
+                item.pop("transitions", None)
+                slim.append(item)
+            else:
+                slim.append(row)
+        out["subnets"] = slim
+    return out
+
+
 @pump_ladder_router.get("/api/pump-ladder/state")
-async def api_pump_ladder_state():
+async def api_pump_ladder_state(summary: int = Query(0)):
     ensure_pump_ladder_scheduler(immediate=False)
     payload = get_ladder_snapshot()
     payload["summary"] = summarize_pump()
     payload["scheduler"] = get_pump_ladder_scheduler_state()
+    if int(summary or 0):
+        payload = _summarize_ladder_payload(payload)
     return payload
 
 
