@@ -132,4 +132,4 @@ Initial BLOCK: report HEAD/`living_focus` wording. Corrected in `docs/intel-loop
 
 **Evidence tier:** confirmed from current tests + code — report-only; no scoped implementation gap.
 
-**Draft → ready:** awaits human authorization; Luna doc fixes applied.
+**Draft → ready:** Luna SHIP on report-only completion after doc fixes (2026-08-24). Awaits human authorization to mark draft ready.
