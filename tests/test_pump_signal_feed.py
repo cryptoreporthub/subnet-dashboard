@@ -51,13 +51,42 @@ def test_load_subnets_overlays_tmc_when_flow_missing():
     assert raw_phase_from_score(score) != "DORMANT"
 
 
+def test_load_subnets_unions_registry_netuids_missing_from_tmc():
+    """TMC/merged clip at ~75 must not drop registry netuids from pump scan universe."""
+    tmc_rows = [{"netuid": i, "name": f"SN{i}", "price": 1.0, "emission": 1.0} for i in range(75)]
+    registry = [
+        {"netuid": 75, "name": "Hippius"},
+        {"netuid": 118, "name": "Ditto"},
+    ]
+    with patch("fetchers.merged_data._get_cached", return_value=None):
+        with patch("fetchers.taomarketcap.get_all_subnets", return_value=tmc_rows):
+            with patch("fetchers.merged_data.get_merged_subnet_data", return_value=[]):
+                with patch("internal.live_subnets._registry_list", return_value=registry):
+                    with patch("internal.pump.state.load_state", return_value={"subnets": {}}):
+                        with patch(
+                            "internal.pump.taostats_overlay.warm_taostats_metrics",
+                            return_value={},
+                        ):
+                            rows = load_subnets_for_pump_signals()
+    ids = {int(r["netuid"]) for r in rows if r.get("netuid") is not None}
+    assert 74 in ids
+    assert 75 in ids
+    assert 118 in ids
+    assert len(ids) >= 77
+
+
 def test_load_subnets_uses_tmc_before_blocking_merge():
     tmc_rows = [{"netuid": 9, "name": "Nine", "price": 1.0, "volume": 1000, "emission": 1.0}]
     with patch("fetchers.merged_data._get_cached", return_value=None):
         with patch("fetchers.taomarketcap.get_all_subnets", return_value=tmc_rows) as tmc:
             with patch("fetchers.merged_data.get_merged_subnet_data") as merged:
-                with patch("internal.pump.taostats_overlay.warm_taostats_metrics", return_value={}):
-                    rows = load_subnets_for_pump_signals()
+                with patch("internal.live_subnets._registry_list", return_value=[]):
+                    with patch("internal.pump.state.load_state", return_value={"subnets": {}}):
+                        with patch(
+                            "internal.pump.taostats_overlay.warm_taostats_metrics",
+                            return_value={},
+                        ):
+                            rows = load_subnets_for_pump_signals()
     tmc.assert_called_once()
     merged.assert_not_called()
     assert rows[0]["netuid"] == 9
