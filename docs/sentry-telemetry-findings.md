@@ -1,7 +1,11 @@
 # Sentry Telemetry Findings
 
-**Directive:** Sentry Telemetry Review v1.1  
-**Evidence tiers:** Confirmed from code | Confirmed from tests | Confirmed locally at runtime | Confirmed in production | Confirmed in production via MCP | Historical evidence | Unavailable/pending
+**Directive:** Sentry Telemetry Review v1.1
+**Evidence tiers:** Confirmed from code | Confirmed from tests | Confirmed locally at runtime | Confirmed in production | Confirmed via Sentry MCP | Confirmed in production via MCP | Historical evidence | Unavailable/pending
+
+**Tier usage:**
+- **Confirmed via Sentry MCP** — account/project queries, issue inventory via MCP API, alert-rule inspection, intentional verify-issue resolution.
+- **Confirmed in production via MCP** — production telemetry facts: event environment, counts, route context, production issue/event data.
 
 ---
 
@@ -75,15 +79,15 @@
 
 ## Phase boundary — Wave 2 MCP-confirmed (2026-08-24)
 
-**Scope:** Sentry MCP read-only probe, alert-rule design, verify-issue cleanup. No Path B code changes, no Fly secrets/deploy.
+**Scope:** Read-only telemetry inspection plus resolution of two intentional verification issues. No application code, Fly secret, or deployment changes.
 
 ### MCP authentication
 
 | Check | Tier | Result |
 |-------|------|--------|
-| Sentry MCP `whoami` | Confirmed in production via MCP | User **Cryptonic** (`cryptoreporthub@gmail.com`, id 4912988) |
-| `find_organizations` | Confirmed in production via MCP | Org **simivision** → [simivision.sentry.io](https://simivision.sentry.io), region `https://us.sentry.io` |
-| `find_projects` | Confirmed in production via MCP | Project **python-fastapi** (sole project) |
+| Sentry MCP `whoami` | Confirmed via Sentry MCP | Authenticated account confirmed; personal account identifiers omitted |
+| `find_organizations` | Confirmed via Sentry MCP | Org **simivision** → [simivision.sentry.io](https://simivision.sentry.io), region `https://us.sentry.io` |
+| `find_projects` | Confirmed via Sentry MCP | Project **python-fastapi** (sole project) |
 
 ### Production issue inventory (MCP, last 7d, `environment:production`)
 
@@ -110,7 +114,7 @@
 
 **Discover aggregate:** [24h count by issue](https://simivision.sentry.io/explore/discover/homepage/?dataset=errors&queryDataset=error-events&query=environment%3Aproduction&field=issue&field=count%28%29&sort=-count%28%29&statsPeriod=24h&mode=aggregate&yAxis=count%28%29)
 
-**Grouping observations:**
+**Grouping observations (Confirmed in production via MCP):**
 
 - Issues group cleanly by logger message / route (TaoStats 404, cold-cache ratio, daily-pick timeout, resolver timeout, loop-stall guard).
 - Production events carry `environment:production`, `server_name` (Fly machine), runtime tags — **no `release` tag** on any production event.
@@ -120,8 +124,8 @@
 
 | Issue | Tier | Action |
 |-------|------|--------|
-| PYTHON-FASTAPI-1 (`sentry-agent-verify-local`) | Confirmed in production via MCP | **Resolved** — intentional local transport test |
-| PYTHON-FASTAPI-8 (`prod-agent-verify-wave2`) | Confirmed in production via MCP | **Resolved** — intentional prod transport test |
+| PYTHON-FASTAPI-1 (`sentry-agent-verify-local`) | Confirmed via Sentry MCP | **Resolved** — intentional local transport test |
+| PYTHON-FASTAPI-8 (`prod-agent-verify-wave2`) | Confirmed via Sentry MCP | **Resolved** — intentional prod transport test |
 
 ### Saga gate (P1 amended)
 
@@ -140,16 +144,16 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 | Item | Tier | Notes |
 |------|------|-------|
-| Observed production volume | Confirmed in production via MCP | 39 events / 24h, 41 / 7d (all since transport went live ~1h window) |
-| TaoStats storm risk | Confirmed in production via MCP | PYTHON-FASTAPI-5 alone = **20/39 (51%)** of 24h volume; worker-side, recurring |
-| Code risk estimate (~423 `logger.warning` sites) | Confirmed from code | Still a ceiling, not measured — but prod already shows warning-level ingest at scale |
+| Observed production volume | Confirmed in production via MCP | 39 events / 24h, 41 / 7d (observation window shortly after transport enable) |
+| TaoStats initial rate signal | Confirmed in production via MCP | During the approximately one-hour post-enable observation window, 20 TaoStats events were observed ([PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5), 51% of 24h volume). This is an **initial rate signal**, not a stable 24-hour baseline. |
+| Code risk estimate (~423 `logger.warning` sites) | Confirmed from code | Ceiling estimate, not measured — prod already shows warning-level ingest at scale |
 | Sentry plan/tier/quota limits | **Unavailable/pending** | No MCP tool exposes org billing/quota; manual dashboard check required |
 
-**Storm assessment:** At current rates (~20 TaoStats warnings/hour from one worker loop), alerting on all `level:warning` production events would fatigue quickly. Path B should add logger-level or `before_send` filtering for known-noise patterns (TaoStats 404, cold-cache ratio) before enabling notifications.
+**Storm assessment:** During the short post-enable window, TaoStats warnings dominated ingest. Alerting on all `level:warning` production events without filtering would likely cause notification fatigue. Path B should add logger-level or `before_send` filtering for known-noise patterns (TaoStats 404, cold-cache ratio) before enabling notifications.
 
 ### Alert rules
 
-**Existing (MCP `find_alert_rules`):** One enabled issue alert — [“Send a notification for high priority issues”](https://simivision.sentry.io/monitors/alerts/3892979/) (Sentry default template). **Never triggered.** No metric alerts.
+**Existing (MCP `find_alert_rules`, Confirmed via Sentry MCP):** One enabled issue alert — [“Send a notification for high priority issues”](https://simivision.sentry.io/monitors/alerts/3892979/) (Sentry default template). **Never triggered.** No metric alerts.
 
 **Recommended design (NOT activated — requires Path B filtering first):**
 
@@ -159,7 +163,7 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
    - Action frequency / cooldown: **60 minutes** per issue (storm-safe baseline)
 
 2. **Do NOT alert on (until Path B `before_send` / logger filter):**
-   - `logger:fetchers.taostats_client` — TaoStats 404 warnings ([PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5)); 51% of current volume
+   - `logger:fetchers.taostats_client` — TaoStats 404 warnings ([PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5)); 51% of observed volume in the short window
    - Cold-cache ratio warnings ([PYTHON-FASTAPI-4](https://simivision.sentry.io/issues/PYTHON-FASTAPI-4)) — operational noise unless ratio sustained > threshold across multiple cycles
 
 3. **Scrubbing notes (Path B):**
@@ -181,17 +185,19 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 ## Blocking gates before Path B
 
-1. P3 quota/tier review with real volume data — **partial:** volume observed (39/24h); plan/tier still unavailable via MCP  
-2. P2 build-time `SENTRY_RELEASE` from git SHA in Dockerfile/deploy workflow  
-3. Production or natural saga-route failure evidence for `/subnetsummer` and `/api/pump-alerts` — **still pending**  
-4. Explicit Path B approval  
-5. Alert rule grouping verified — **done via MCP**; activation blocked until noise filters  
+1. P3 quota/tier review with real volume data — **partial:** volume observed (39/24h in short window); plan/tier still unavailable via MCP
+2. P2 build-time `SENTRY_RELEASE` from git SHA in Dockerfile/deploy workflow
+3. Production or natural saga-route failure evidence for `/subnetsummer` and `/api/pump-alerts` — **still pending**
+4. Explicit Path B approval
+5. Alert rule grouping verified — **done via Sentry MCP**; activation blocked until noise filters
 
 ---
 
-## Single next action
+## Recommended next gated actions (not authorized by this PR)
 
-**Implement P2 build-time `SENTRY_RELEASE`** (Dockerfile ARG → image env) so production events carry deploy SHA — unblocks regression detection and alert rule `#by release` filters. Alternative if Path B approved first: add TaoStats 404 `before_send` drop in `sentry_setup.py` to cap storm risk before activating alerts.
+**Recommended next gated action:** approve and implement P2 build-time `SENTRY_RELEASE` from the deployed Git SHA (Dockerfile ARG → image env) so production events carry deploy SHA. This is **not** authorized by this PR and requires separate Path B approval.
+
+**Alternative (also gated):** approve Path B `before_send` filtering to drop TaoStats 404 warnings before activating Sentry alert rules. Requires explicit Path B approval and is not authorized by this PR.
 
 ---
 
