@@ -147,3 +147,29 @@ Initial BLOCK: report HEAD/`living_focus` wording. Corrected in `docs/intel-loop
 **Artifact paths** (`/opt/cursor/artifacts/pr1034_*.log`): session-local; another Cursor VM may not have them — rely on repo docs and re-run probes if needed.
 
 **Sentry Path A:** read-only repo/config review and local SDK discovery may proceed. Do not set Fly `SENTRY_DSN` secrets, deploy, or activate prod alerting during active Intel Loop merge/deploy decision; secret sets restart Fly machines. Do not push Sentry or doc changes to `main` concurrently with Intel Loop merge/deploy.
+
+---
+
+## Post-deploy verification (2026-08-24T15:00Z)
+
+**Evidence tier:** confirmed in production (after Fly Deploy run `32740425371`)
+
+| Item | Value |
+|------|-------|
+| Deploy run | https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/32740425371 |
+| Deployed SHA | `95f7e0c4` (matches merge commit) |
+| Deploy completed | 2026-08-24T14:47:24Z |
+| First probe | 2026-08-24T14:48:27Z (~1 min post-green) |
+| Verdict | **POST-DEPLOY PASS** |
+
+**Step 1 subnets:** `handler_status=ok`, `enrichment_status=live`, `generated_at` present, `data_available=true`, source=blockmachine, n=75 (0–74). Null-metric registry-fallback path not observed this window (live blockmachine only).
+
+**Step 2 pump-alerts:** `freshness=stale`, `freshness_scope=rows`, `max_row_age_seconds=607131`, `status=success` (7d-old rows honestly stale).
+
+**Step 3 ladder (rerun 15:00Z):** `coverage_known=true`, `signal_row_count=200`, `missing_from_feed_count=0`, frozen `{75,80,87,90,118}` tracked, `missing_frozen=[]`, `feed_stalled=false`.
+
+**Step 4:** listener 308→/subnetsummer; three summer probes (300s apart) all HTTP 200.
+
+**Sentry Path A:** unlocked for read-only production verification (SENTRY_DSN set/alert activation still separately gated).
+
+Log: `/opt/cursor/artifacts/post_deploy_probes.log`
