@@ -467,14 +467,19 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             },
         )
     if path == "/api/pump-alerts":
+        from internal.pump.desk_payload import attach_pump_freshness
+
         return JSONResponse(
             status_code=200,
-            content={
-                "status": "degraded",
-                "count": 0,
-                "alerts": [],
-                "detail": "Worker volume temporarily unavailable",
-            },
+            content=attach_pump_freshness(
+                {
+                    "status": "degraded",
+                    "count": 0,
+                    "alerts": [],
+                    "detail": "Worker volume temporarily unavailable",
+                },
+                handler_stale=True,
+            ),
         )
     if path.startswith("/api/message-intel"):
         return JSONResponse(

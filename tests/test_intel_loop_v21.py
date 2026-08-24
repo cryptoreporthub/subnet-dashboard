@@ -24,6 +24,22 @@ def test_coverage_meta_unknown_feed_does_not_mark_all_missing():
     assert meta["feed_stalled"] is False
 
 
+def test_split_v2_degraded_pump_alerts_stamp_freshness(monkeypatch):
+    """Live split_v2 circuit-open path must not omit freshness (independent of /api/subnets timeout)."""
+    import json
+
+    import internal.worker_proxy as wp
+
+    monkeypatch.setattr(wp, "_LAST_GOOD_PAYLOADS", {})
+    response = wp._proxy_degraded_response("/api/pump-alerts")
+    body = json.loads(response.body)
+    assert body["status"] == "degraded"
+    assert body["freshness"] == "stale"
+    assert body["freshness_scope"] == "handler"
+    assert body["data_available"] is False
+    assert body.get("generated_at")
+
+
 def test_timeout_with_rows_is_handler_stale_not_fresh():
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     out = attach_pump_freshness(
