@@ -188,6 +188,72 @@ def apply_taostats_overlay(
     return out
 
 
+def _union_pump_feed_netuids(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Union committed registry + ladder keys missing from merged/TMC clip."""
+    seen: set[int] = set()
+    out = list(subnets)
+    for row in subnets:
+        if not isinstance(row, dict):
+            continue
+        try:
+            seen.add(int(row.get("netuid")))
+        except (TypeError, ValueError):
+            continue
+
+    added = 0
+    try:
+        from internal.live_subnets import _netuid_of, _registry_list
+
+        for rec in _registry_list():
+            if not isinstance(rec, dict):
+                continue
+            n = _netuid_of(rec)
+            if n is None or n in seen:
+                continue
+            seen.add(n)
+            stub: Dict[str, Any] = {"netuid": n}
+            name = rec.get("name")
+            if name:
+                stub["name"] = name
+            stub["sources"] = ["registry"]
+            out.append(stub)
+            added += 1
+    except Exception as exc:
+        logger.debug("registry union for pump feed failed: %s", exc)
+
+    try:
+        from internal.pump.state import load_state
+
+        ladder = load_state().get("subnets") or {}
+        for key, entry in ladder.items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                n = int(entry.get("netuid", key))
+            except (TypeError, ValueError):
+                continue
+            if n in seen:
+                continue
+            seen.add(n)
+            stub = {"netuid": n}
+            name = entry.get("name")
+            if name:
+                stub["name"] = name
+            stub["sources"] = ["ladder_state"]
+            out.append(stub)
+            added += 1
+    except Exception as exc:
+        logger.debug("ladder union for pump feed failed: %s", exc)
+
+    if added:
+        logger.info(
+            "pump signals: unioned %d registry/ladder netuids into feed (had %d)",
+            added,
+            len(subnets),
+        )
+    return out
+
+
 def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
     """Merged feed when cached, else fast TMC — then optional merge warm, TaoStats overlay."""
     subnets: List[Dict[str, Any]] = []
@@ -218,6 +284,8 @@ def load_subnets_for_pump_signals() -> List[Dict[str, Any]]:
         except Exception as exc:
             logger.warning("TMC feed unavailable for pump: %s", exc)
             return []
+
+    subnets = _union_pump_feed_netuids(subnets)
 
     if _rows_lack_pump_flow_fields(subnets):
         subnets = _overlay_tmc_market_fields(subnets)

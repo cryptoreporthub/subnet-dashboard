@@ -349,6 +349,8 @@ def _listener_page_fallback_ctx() -> Dict[str, Any]:
         "display_mode": "warming",
         "live": False,
         "last_msg_label": "—",
+        "ssr_degraded": True,
+        "ssr_error": "unavailable",
     }
 
 
@@ -361,6 +363,28 @@ def _safe_int(v):
         return int(v)
     except (TypeError, ValueError):
         return None
+
+
+def _safe_float(v):
+    try:
+        if v is None or isinstance(v, bool):
+            return None
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_intel_message(msg: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(msg)
+    verdict = out.get("verdict")
+    if isinstance(verdict, dict):
+        verdict = dict(verdict)
+        if "conviction" in verdict:
+            verdict["conviction"] = _safe_float(verdict.get("conviction"))
+        out["verdict"] = verdict
+    if out.get("conviction") is not None:
+        out["conviction"] = _safe_float(out.get("conviction"))
+    return out
 
 
 def _listener_engine():
@@ -418,7 +442,16 @@ async def _listener_page_context() -> Dict[str, Any]:
             "listener page SSR exceeded %.0fs budget",
             budget,
         )
-        return _listener_page_fallback_ctx()
+        ctx = _listener_page_fallback_ctx()
+        ctx["ssr_degraded"] = True
+        ctx["ssr_error"] = "timeout"
+        return ctx
+    except Exception as exc:
+        logger.exception("listener page context failed: %s", exc)
+        ctx = _listener_page_fallback_ctx()
+        ctx["ssr_degraded"] = True
+        ctx["ssr_error"] = type(exc).__name__
+        return ctx
 
 
 async def _listener_page_context_body() -> Dict[str, Any]:
@@ -508,7 +541,7 @@ async def _listener_page_context_body() -> Dict[str, Any]:
                 "author": m.get("author_name") or m.get("author") or m.get("author_id") or "—",
                 "author_id": m.get("author_id"),
                 "text": m.get("text") or m.get("message") or m.get("content") or "",
-                "conviction": (
+                "conviction": _safe_float(
                     m.get("conviction")
                     if m.get("conviction") is not None
                     else (
@@ -530,7 +563,9 @@ async def _listener_page_context_body() -> Dict[str, Any]:
             }
         )
     ctx["feed"] = feed_rows
-    ctx["mi_messages"] = [m for m in msgs[:12] if isinstance(m, dict)]
+    ctx["mi_messages"] = [
+        _coerce_intel_message(m) for m in msgs[:12] if isinstance(m, dict)
+    ]
 
     # Trending, conviction, callers, etc. are independent worker rollups — fetch together.
     (
@@ -637,7 +672,7 @@ async def _listener_page_context_body() -> Dict[str, Any]:
             {
                 "netuid": netuid,
                 "name": r.get("name") or (f"SN{netuid}" if netuid else "—"),
-                "conviction": conv,
+                "conviction": _safe_float(conv),
                 "sent": sent_tag,
                 "mentions": r.get("mentions"),
                 "chatter_power": r.get("chatter_power") or r.get("heat"),
@@ -904,10 +939,25 @@ async def listener_page(request: Request):
     return RedirectResponse(url="/subnetsummer", status_code=308)
 
 
+_LISTENER_STATIC_FALLBACK_HTML = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Subnet Summer Bot</title></head>
+<body>
+<p>Subnet Summer is temporarily unable to render this page. No live grades or conviction figures are shown.</p>
+<p><a href="/">Open the full website</a></p>
+</body></html>
+"""
+
+
 @share_router.get("/subnetsummer")
 async def subnet_summer_page(request: Request):
     """§28-3 — SimiVision Telegram Listener page (SSR + JS hydration)."""
-    ctx = await _listener_page_context()
+    try:
+        ctx = await _listener_page_context()
+    except Exception as exc:
+        logger.exception("listener page context outer failed: %s", exc)
+        ctx = _listener_page_fallback_ctx()
+        ctx["ssr_degraded"] = True
+        ctx["ssr_error"] = type(exc).__name__
     base = _public_base(request)
     page_url = f"{base}/subnetsummer"
     title = "Subnet Summer Bot"
@@ -915,18 +965,27 @@ async def subnet_summer_page(request: Request):
         "Powered by SimiVision — live-graded Telegram signal for the Bittensor subnet group."
     )[:200]
     og_image = f"{base}/static/og-subnet-summer.png"
-    # §28 canonical/OG: derived from APP_BASE_URL or request.base_url — never localhost.
-    ctx.update(
-        {
-            "page_title": title,
-            "page_description": desc,
-            "page_url": page_url,
-            "og_image_url": og_image,
-            "public_base_url": base,
-            "request": request,
-        }
-    )
-    return templates.TemplateResponse(request, "listener.html", ctx)
+    page_fields = {
+        "page_title": title,
+        "page_description": desc,
+        "page_url": page_url,
+        "og_image_url": og_image,
+        "public_base_url": base,
+        "request": request,
+    }
+    ctx.update(page_fields)
+    try:
+        return templates.TemplateResponse(request, "listener.html", ctx)
+    except Exception as exc:
+        logger.exception("listener page render failed: %s", exc)
+        fallback = _listener_page_fallback_ctx()
+        fallback.update(page_fields)
+        fallback["ssr_degraded"] = True
+        fallback["ssr_error"] = type(exc).__name__
+        try:
+            return templates.TemplateResponse(request, "listener.html", fallback)
+        except Exception:
+            return HTMLResponse(_LISTENER_STATIC_FALLBACK_HTML, status_code=200)
 
 
 @share_router.get("/subnetsummers", include_in_schema=False)
