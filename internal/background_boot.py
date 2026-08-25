@@ -445,7 +445,23 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     if heavy is None:
         heavy = worker_heavy_feeds_enabled() if is_worker_mode() else background_heavy_on_web()
 
+    from internal.run_mode import is_worker_mode
+
     defer_boot("subnet-name-cache", _warm_subnet_name_cache, delay=0)
+
+    try:
+        if is_worker_mode():
+            from internal.subnet_universe import ensure_background_refresh
+
+            defer_boot("subnet-universe-refresh", ensure_background_refresh, delay=0)
+            logger.info("subnet universe background refresh scheduled (worker writer)")
+        else:
+            from internal.subnet_universe import ensure_universe_reader
+
+            defer_boot("subnet-universe-reload", ensure_universe_reader, delay=0)
+            logger.info("subnet universe disk reload scheduled (web reader)")
+    except Exception as exc:
+        logger.warning("subnet universe refresh failed to start: %s", exc)
 
     try:
         from internal.freshness import start_background_sync

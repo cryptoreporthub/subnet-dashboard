@@ -89,8 +89,26 @@ def _on_pool_thread() -> bool:
     return threading.current_thread() is not threading.main_thread()
 
 
+def load_subnets_snapshot_rows() -> List[Dict[str, Any]]:
+    """Snapshot-first subnet rows from the shared universe (no outbound network)."""
+    try:
+        from internal.subnet_universe import get_snapshot
+
+        snap = get_snapshot()
+        if snap.status == "emergency_registry":
+            return []
+        if snap.rows:
+            return [dict(row) for row in snap.rows]
+    except Exception as exc:
+        logger.debug("universe snapshot unavailable: %s", exc)
+    return []
+
+
 def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     """Return subnets for /api/subnets with a hard timeout and registry fallback."""
+    snapshot_rows = load_subnets_snapshot_rows()
+    if snapshot_rows:
+        return snapshot_rows
     limit = SUBNETS_LOAD_TIMEOUT if timeout is None else timeout
     if limit <= 0:
         return _load_subnets_inner()

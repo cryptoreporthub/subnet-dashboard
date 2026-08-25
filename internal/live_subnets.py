@@ -184,8 +184,10 @@ def _fetch_chain_data():
     def _run():
         try:
             from internal.chain_client import get_default_client
+            from internal.subnet_universe import get_netuids
+
             client = get_default_client()
-            netuids = _registry_netuids()
+            netuids = get_netuids() or _registry_netuids()
             mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
             if mode in ("lite", "price"):
                 result["data"] = client.get_subnet_price_rows(netuids)
