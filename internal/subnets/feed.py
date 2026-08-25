@@ -47,6 +47,20 @@ def subnet_feed_meta(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"source": "registry", "sources": ["registry"]}
 
 
+def subnet_enrichment_status(rows: List[Dict[str, Any]]) -> str:
+    """Honest enrichment label — independent of membership source attribution."""
+    if not rows:
+        return "names_only"
+    live_bm = sum(
+        1
+        for r in rows
+        if r.get("live") or str(r.get("source") or "").lower() == "blockmachine"
+    )
+    if live_bm > len(rows) // 2:
+        return "live"
+    return "names_only"
+
+
 def _registry_rows() -> List[Dict[str, Any]]:
     path = os.environ.get("REGISTRY_PATH", "config/registry.json")
     try:

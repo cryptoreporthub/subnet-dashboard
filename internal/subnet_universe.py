@@ -334,9 +334,27 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
 
     rows: List[Dict[str, Any]] = []
     for netuid in netuids:
-        row = dict(tmc_rows.get(netuid) or registry_by_netuid.get(netuid) or {"netuid": netuid})
-        row.setdefault("netuid", netuid)
-        row.setdefault("id", netuid)
+        tmc_row = tmc_rows.get(netuid)
+        registry_row = registry_by_netuid.get(netuid)
+        if tmc_row is not None:
+            row = dict(tmc_row)
+            row.setdefault("netuid", netuid)
+            row.setdefault("id", netuid)
+            row["source"] = "taomarketcap"
+            sources = list(row.get("sources") or [])
+            if "taomarketcap" not in sources:
+                sources.insert(0, "taomarketcap")
+            if registry_row is not None and "registry" not in sources:
+                sources.append("registry")
+            row["sources"] = sources
+        elif registry_row is not None:
+            row = dict(registry_row)
+            row.setdefault("netuid", netuid)
+            row.setdefault("id", netuid)
+            row["source"] = "registry"
+            row["sources"] = list(row.get("sources") or ["registry"])
+        else:
+            row = {"netuid": netuid, "id": netuid}
         try:
             from internal.subnet_names import enrich_subnet_row
 
@@ -345,6 +363,36 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
             pass
         rows.append(row)
     return rows
+
+
+def universe_snapshot_feed_meta(snap: UniverseSnapshot) -> Dict[str, Any]:
+    """Honest /api/subnets source labels for a shared-universe snapshot."""
+    from internal.subnets.feed import subnet_feed_meta
+
+    if snap.status == "emergency_registry":
+        return {"source": "registry", "sources": ["registry"]}
+    rows = list(snap.rows)
+    meta = subnet_feed_meta(rows)
+    if meta.get("source") != "registry":
+        return meta
+    # Persisted rows may predate source tagging — infer from validity_map membership.
+    validity = snap.validity_map or {}
+    if not validity:
+        return meta
+    tmc_members = sum(
+        1 for entry in validity.values() if "taomarketcap" in (entry.get("sources") or [])
+    )
+    if tmc_members > len(snap.netuids) // 2:
+        return {"source": "taomarketcap", "sources": ["taomarketcap", "registry"]}
+    probe_members = sum(
+        1 for entry in validity.values() if "blockmachine_probe" in (entry.get("sources") or [])
+    )
+    if probe_members > len(snap.netuids) // 2:
+        sources = ["blockmachine"]
+        if tmc_members:
+            sources.append("taomarketcap")
+        return {"source": "blockmachine", "sources": sources}
+    return meta
 
 
 @dataclass(frozen=True)
