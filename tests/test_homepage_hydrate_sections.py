@@ -88,3 +88,14 @@ def test_index_has_h_full_section_ids_and_hour_watch():
     assert 'id="chatLog"' in html
     assert 'id="cpol-netflow"' in html
     assert 'id="market-pulse-breadth"' in html
+
+
+def test_priority_panels_self_hydrate_even_when_cockpit_owns_flag():
+    brain = Path("static/js/brain_letter.js").read_text(encoding="utf-8")
+    drivers = Path("static/js/market_drivers_ui.js").read_text(encoding="utf-8")
+    hydrate = HYDRATE.read_text(encoding="utf-8")
+    assert 'dataset.hydrate !== "1"' not in brain
+    assert 'dataset.hydrate !== "1"' not in drivers
+    assert "return gradedCountFromDom() > 0" not in brain
+    assert "function kickPriorityPanels" in hydrate
+    assert "kickPriorityPanels()" in hydrate

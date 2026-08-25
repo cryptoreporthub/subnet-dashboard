@@ -140,12 +140,10 @@
     loadDriverCard(currentNetuid());
   }
 
-  if (document.documentElement.dataset.hydrate !== "1") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", refresh);
-    } else {
-      refresh();
-    }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", refresh);
+  } else {
+    refresh();
   }
 
   document.addEventListener("home-daily-call-updated", function () {

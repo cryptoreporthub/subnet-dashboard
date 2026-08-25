@@ -4528,9 +4528,35 @@
       });
     }
     
+  function kickPriorityPanels() {
+    if (window.BrainLetter && window.BrainLetter.hydrate) {
+      Promise.resolve(window.BrainLetter.hydrate()).catch(function (e) {
+        console.warn('[cockpit_hydrate] brain letter failed', e);
+      });
+    }
+    if (window.SimiMarketDrivers && window.SimiMarketDrivers.refresh) {
+      try { window.SimiMarketDrivers.refresh(); } catch (e) {
+        console.warn('[cockpit_hydrate] market drivers failed', e);
+      }
+    }
+    if (window.SimiStoryPath && window.SimiStoryPath.refresh) {
+      try { window.SimiStoryPath.refresh(); } catch (e) {
+        console.warn('[cockpit_hydrate] story path failed', e);
+      }
+    }
+    fetchJsonRetry('/api/ops/evidence', 12000, 1)
+      .then(function (evidence) {
+        syncAccuracyLiftPanel(evidence && evidence.accuracy_lift);
+      })
+      .catch(function (e) {
+        console.warn('[cockpit_hydrate] evidence failed', e);
+      });
+  }
+
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
     showHydrateSkeletons();
+    kickPriorityPanels();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
     connectCockpitStream();
 
