@@ -116,6 +116,18 @@ def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
 # --- fly.yml (v1 inline deploy — from PR #999) ---
 
 
+def test_dockerfile_bakes_sentry_release_from_git_sha():
+    docker = Path("Dockerfile").read_text(encoding="utf-8")
+    assert "ARG GIT_SHA" in docker
+    assert "ENV SENTRY_RELEASE=${GIT_SHA}" in docker
+
+
+def test_fly_yml_passes_sentry_release_build_arg():
+    yml = _fly_yml()
+    assert "git rev-parse HEAD" in yml
+    assert "--build-arg" in yml and "GIT_SHA=" in yml
+
+
 def test_fly_yml_scales_v1_inline():
     yml = _fly_yml()
     assert "flyctl scale count web=1" in yml

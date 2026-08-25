@@ -86,8 +86,10 @@ jobs:
       - name: Deploy to Fly (v1 inline fly.toml, region sjc)
         run: |
           set -e
-          echo "deploying fly.toml (v1 inline worker, volume on web)"
-          flyctl deploy --config fly.toml --remote-only --no-cache --yes --regions sjc --ha=false
+          GIT_SHA="$(git rev-parse HEAD)"
+          echo "deploying fly.toml (v1 inline worker, volume on web) SENTRY_RELEASE=${GIT_SHA}"
+          flyctl deploy --config fly.toml --remote-only --no-cache --yes --regions sjc --ha=false \
+            --build-arg "GIT_SHA=${GIT_SHA}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       # REQUIRED after every v1 deploy. Removing worker from fly.toml does not
