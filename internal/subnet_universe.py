@@ -104,6 +104,9 @@ def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
                 continue
             netuids.add(netuid)
             by_netuid[netuid] = dict(row)
+        if not netuids:
+            logger.warning("subnet_universe TMC returned zero subnets — treating as incomplete")
+            return set(), {}, False
         return netuids, by_netuid, True
     except Exception as exc:
         logger.warning("subnet_universe TMC fetch failed: %s", exc)
@@ -439,17 +442,55 @@ class SnapshotBuilder:
             probe_complete=probe_complete,
         )
 
-        if not netuids and prior and prior.netuids and refresh_incomplete:
+        if not netuids:
+            had_verified_resolution = bool(
+                tmc_positive
+                or any(v is not None for v in probe_map.values())
+                or (prior_map and (tmc_complete or probe_complete))
+            )
+            if not had_verified_resolution:
+                if prior and prior.netuids:
+                    retain_status = (
+                        "emergency_registry"
+                        if prior.status == "emergency_registry"
+                        else "degraded"
+                    )
+                    return UniverseSnapshot(
+                        netuids=prior.netuids,
+                        rows=prior.rows,
+                        resolved_at=prior.resolved_at,
+                        status=retain_status,
+                        degraded=True,
+                        validity_map=dict(prior.validity_map),
+                        cap_reached=prior.cap_reached,
+                        refresh_incomplete=True,
+                        message="Empty membership from sources — retained prior universe",
+                    )
+                return UniverseSnapshot.emergency_registry(
+                    "Empty membership from sources — emergency registry fallback"
+                )
+            if prior and prior.netuids and refresh_incomplete:
+                return UniverseSnapshot(
+                    netuids=prior.netuids,
+                    rows=prior.rows,
+                    resolved_at=prior.resolved_at,
+                    status="degraded",
+                    degraded=True,
+                    validity_map=dict(prior.validity_map),
+                    cap_reached=prior.cap_reached,
+                    refresh_incomplete=True,
+                    message="Refresh incomplete — retained last-known-good universe",
+                )
             return UniverseSnapshot(
-                netuids=prior.netuids,
-                rows=prior.rows,
-                resolved_at=prior.resolved_at,
+                netuids=tuple(),
+                rows=tuple(),
+                resolved_at=_now_iso(),
                 status="degraded",
                 degraded=True,
-                validity_map=dict(prior.validity_map),
-                cap_reached=prior.cap_reached,
-                refresh_incomplete=True,
-                message="Refresh incomplete — retained last-known-good universe",
+                validity_map=validity_map,
+                cap_reached=cap_reached,
+                refresh_incomplete=False,
+                message="Membership resolved empty after validation",
             )
 
         rows = _build_rows(netuids, tmc_rows)

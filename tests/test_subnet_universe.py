@@ -303,7 +303,63 @@ def test_web_reader_reload_picks_worker_snapshot(universe_tmp, monkeypatch):
 
 
 def test_get_lkg_or_emergency_uses_provider_singleton(universe_tmp):
-  provider = get_provider()
-  provider.replace_snapshot_for_tests(_prior_snapshot([7, 8, 9]))
-  snap = get_lkg_or_emergency()
-  assert list(snap.netuids) == [7, 8, 9]
+    provider = get_provider()
+    provider.replace_snapshot_for_tests(_prior_snapshot([7, 8, 9]))
+    snap = get_lkg_or_emergency()
+    assert list(snap.netuids) == [7, 8, 9]
+
+
+def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
+    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok."""
+    built = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, True),
+        probe_fetch=lambda netuids, deadline: ({}, True),
+    ).build(None)
+    assert built.status == "emergency_registry"
+    assert len(built.netuids) > 0
+    assert built.degraded is True
+
+
+def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monkeypatch):
+    """Provider on cold start must not publish zero-member ok snapshot."""
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    assert provider.get_snapshot().status == "emergency_registry"
+    provider.set_builder(
+        SnapshotBuilder(
+            tmc_fetch=lambda: (set(), {}, True),
+            probe_fetch=lambda netuids, deadline: ({}, True),
+        )
+    )
+    result = provider.refresh_once()
+    assert len(result.netuids) > 0
+    assert result.degraded is True
+    assert result.status != "ok"
+
+
+def test_lkg_empty_tmc_retains_full_snapshot_via_provider(universe_tmp, monkeypatch):
+    """Existing LKG + empty successful TMC must not publish zero-member ok snapshot."""
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    prior = UniverseSnapshot(
+        netuids=tuple(range(100, 160)),
+        rows=tuple({"netuid": n, "name": f"SN{n}"} for n in range(100, 160)),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={},
+    )
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior, persist=True)
+    provider.set_builder(
+        SnapshotBuilder(
+            tmc_fetch=lambda: (set(), {}, True),
+            probe_fetch=lambda netuids, deadline: ({}, True),
+        )
+    )
+    result = provider.refresh_once()
+    assert len(result.netuids) == 60
+    assert result.degraded is True
+    assert result.status == "degraded"
+    assert provider.get_snapshot().netuids == prior.netuids
