@@ -30,7 +30,7 @@
 - Fly secret names (flyctl not on VM initially)
 - Production event arrival
 
-**Saga (Wave 1):** Local mechanism verified; production capture pending.
+**Saga (Wave 1):** Local mechanism verified; production natural capture pending; local automated saga gate added 2026-08-25 (`tests/test_sentry_saga_gate.py`).
 
 ---
 
@@ -136,9 +136,9 @@
 | `/api/daily-pick` | Yes — [PYTHON-FASTAPI-6](https://simivision.sentry.io/issues/PYTHON-FASTAPI-6) (timeout warnings, 4 events) | Confirmed in production via MCP |
 | listener / message-intel | **No** | Confirmed in production via MCP |
 
-**Status:** *Transport and initialization verified in production; saga-relevant route capture remains pending for `/subnetsummer` and `/api/pump-alerts` (no production or natural failure events observed).*
+**Status (2026-08-25):** Transport and initialization verified in production. **No natural prod failure events** yet for `/subnetsummer` or `/api/pump-alerts` (routes healthy when checked). **Local saga gate cleared** via `tests/test_sentry_saga_gate.py` — TestClient synthetic failures confirm Starlette request URLs attach for both routes (`Confirmed locally at runtime`). Synthetic prod verify (`fly machine exec`) skipped — flyctl MCP unavailable on agent VM.
 
-Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** only.
+Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** (automated tests + before_send matrix in `tests/test_sentry_setup.py`).
 
 ### P3 quota / tier gate
 
@@ -177,7 +177,7 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 1. Sentry org plan/tier/quota via MCP (manual: Settings → Subscription)
 2. `SENTRY_RELEASE` on production (no release tag on any prod event)
-3. Saga production capture for `/subnetsummer` and `/api/pump-alerts`
+3. Saga production capture for `/subnetsummer` and `/api/pump-alerts` — **local gate cleared** (`tests/test_sentry_saga_gate.py`); **prod natural events still pending**
 4. Path B baseline (not approved)
 5. Alert rule activation (blocked until TaoStats / cold-cache filtering designed in Path B)
 
@@ -187,7 +187,7 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 1. P3 quota/tier review with real volume data — **partial:** volume observed (39/24h in short window); plan/tier still unavailable via MCP
 2. P2 build-time `SENTRY_RELEASE` from git SHA in Dockerfile/deploy workflow
-3. Production or natural saga-route failure evidence for `/subnetsummer` and `/api/pump-alerts` — **still pending**
+3. Production or natural saga-route failure evidence for `/subnetsummer` and `/api/pump-alerts` — **local synthetic cleared**; **prod natural still pending**
 4. Explicit Path B approval
 5. Alert rule grouping verified — **done via Sentry MCP**; activation blocked until noise filters
 
