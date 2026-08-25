@@ -36,8 +36,10 @@
       <div class="sub">registry source</div>
     </div>
   </div>
-  <!-- NET FLOW hero slot (council polish 2026-08-11) — hydrated by static/js/council_polish.js
-       from /api/whales/flow-signals; skel replaced once data lands. -->
+  {% else %}
+  <div class="card card-muted"><p class="empty">Market snapshot warming up — subnet registry populates after the first data fetch.</p></div>
+  {% endif %}
+  <!-- NET FLOW always mounted so council_polish.js can hydrate after empty SSR. -->
   <div class="cpol-netflow" id="cpol-netflow" data-api="/api/whales/flow-signals?hours=24&limit=10">
     <div class="cpol-nf-kicker">NET FLOW · 24h — whale money in vs out</div>
     <div class="cpol-nf-main">
@@ -45,7 +47,4 @@
     </div>
     <div class="cpol-nf-meta cpol-skel" style="width:62%;height:12px;border-radius:6px;margin-top:10px"></div>
   </div>
-  {% else %}
-  <div class="card card-muted"><p class="empty">Market snapshot warming up — subnet registry populates after the first data fetch.</p></div>
-  {% endif %}
 </section>

@@ -74,6 +74,10 @@ def test_hydrate_patches_ssr_only_ribs():
 
 
 def test_index_has_h_full_section_ids_and_hour_watch():
+    import server as srv
+
+    srv._prime_emergency_home_html()
+    srv._warm_homepage_cache(None)
     with TestClient(app) as client:
         html = client.get("/").text
     assert "read_links truncated" not in html
