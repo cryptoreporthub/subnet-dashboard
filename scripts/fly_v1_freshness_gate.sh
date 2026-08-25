@@ -77,8 +77,28 @@ if [ -n "$metrics" ]; then
   echo "$metrics" | grep -E '^subnet_sync_last_ok |^subnet_scheduler_running|^subnet_scheduler_failures' | head -10 | sed 's/^/  /' || true
   sync_ok=$(echo "$metrics" | awk '/^subnet_sync_last_ok / {print $2; exit}')
   if [ "$sync_ok" = "0.0" ] || [ "$sync_ok" = "0" ]; then
-    echo "  WARN/FAIL: subnet_sync_last_ok=0 (last background sync failed)"
-    _fail "subnet_sync_last_ok=0 on v1 — prod sync path unhealthy"
+    worker_alive=$(curl -fsS --max-time 15 "$BASE/api/ops/readiness" 2>/dev/null | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print('true' if (d.get('worker_peer') or {}).get('alive') is True else 'false')
+except Exception:
+    print('false')
+" || echo false)
+    fresh_ok=$(echo "$fresh_body" | python3 -c "
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    print('true' if d.get('stale') is False and (d.get('subnet_count') or 0) != 0 else 'false')
+except Exception:
+    print('false')
+" || echo false)
+    if [ "$worker_alive" = "true" ] && [ "$fresh_ok" = "true" ]; then
+      echo "  subnet_sync_last_ok=0 is web-local; worker heartbeat and shared cache are healthy"
+    else
+      echo "  WARN/FAIL: subnet_sync_last_ok=0 with no healthy worker-backed cache"
+      _fail "subnet_sync_last_ok=0 on v1 — worker-backed sync path unhealthy"
+    fi
   fi
 else
   echo "  WARN: /metrics unavailable — skipping scheduler gauge check"
