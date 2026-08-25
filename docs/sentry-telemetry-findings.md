@@ -30,7 +30,7 @@
 - Fly secret names (flyctl not on VM initially)
 - Production event arrival
 
-**Saga (Wave 1):** Local mechanism verified; production capture pending.
+**Saga (Wave 1):** Local mechanism verified; production natural capture pending; local automated saga gate added 2026-08-25 (`tests/test_sentry_saga_gate.py`).
 
 ---
 
@@ -131,14 +131,14 @@
 
 | Route / path | Prod/natural Sentry events? | Tier |
 |--------------|----------------------------|------|
-| `/subnetsummer` | **No** | Confirmed in production via MCP |
-| `/api/pump-alerts` | **No** | Confirmed in production via MCP |
+| `/subnetsummer` | **No** (7d) | Confirmed in production via MCP |
+| `/api/pump-alerts` | **Yes** — timeout warnings (`pump-alerts timed out after 12s`, culprit `/api/pump-alerts`) | Confirmed in production via MCP |
 | `/api/daily-pick` | Yes — [PYTHON-FASTAPI-6](https://simivision.sentry.io/issues/PYTHON-FASTAPI-6) (timeout warnings, 4 events) | Confirmed in production via MCP |
 | listener / message-intel | **No** | Confirmed in production via MCP |
 
-**Status:** *Transport and initialization verified in production; saga-relevant route capture remains pending for `/subnetsummer` and `/api/pump-alerts` (no production or natural failure events observed).*
+**Status (2026-08-25):** Transport and initialization verified in production. **No natural prod failure events** yet for `/subnetsummer` or `/api/pump-alerts` (routes healthy when checked). **Local saga gate cleared** via `tests/test_sentry_saga_gate.py` — TestClient synthetic failures confirm Starlette request URLs attach for both routes (`Confirmed locally at runtime`). Synthetic prod verify (`fly machine exec`) skipped — flyctl MCP unavailable on agent VM.
 
-Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** only.
+Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** (automated tests + before_send matrix in `tests/test_sentry_setup.py`).
 
 ### P3 quota / tier gate
 
@@ -176,8 +176,8 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 ### Unavailable/pending (Wave 2 MCP) — historical snapshot
 
 1. Sentry org plan/tier/quota via MCP (manual: Settings → Subscription) — **still pending**
-2. `SENTRY_RELEASE` on production — **was** `release=null` pre-Stage C; **Stage C PR #1042** adds build-time injection
-3. Saga production capture for `/subnetsummer` and `/api/pump-alerts` — **still pending**
+2. `SENTRY_RELEASE` on production — **was** `release=null` pre-Stage C; **merged #1042** (2026-08-25); deploy + post-deploy verify pending
+3. Saga production capture — `/api/pump-alerts` **confirmed in prod** (timeout warnings); `/subnetsummer` **local gate cleared** (`tests/test_sentry_saga_gate.py`); prod natural `/subnetsummer` still pending
 4. Path B scrub/filter — **authorized and merged** (#1038, 2026-08-24)
 5. Alert rule activation — **deferred** (Stage D; see below)
 
@@ -189,12 +189,36 @@ Historical Wave 2 gates above reflected pre-approval state. Current status:
 
 | Gate | Status |
 |------|--------|
-| Path B scrub/filter (#1038) | **MERGED**; live on prod Fly `v2008` |
+| Path B scrub/filter (#1038) | **MERGED**; live on prod; TaoStats pool-latest 404 **0 events / 1h** post-deploy |
 | Path B explicit approval | **Granted** 2026-08-24 |
-| Stage C release build | **PR #1042** (Dockerfile + fly.yml; owner-authorized full B+C+D scope) |
+| Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
+| Saga gate tests (#1044) | **Merge in progress** (agent-owned) |
+| P5 browser plan (#1043) | **Merge in progress** (docs only; not implementation approval) |
 | P3 quota/tier | Manual dashboard — **still pending** |
-| Saga `/subnetsummer` | **Pending** |
+| Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
+| Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
 | Stage D alerts | **Documented**; activate ≥24h post-scrub in Sentry UI |
+| D5 #1041 parallel work | **No file collision** with Sentry PRs (`server.py` only on #1041) |
+
+---
+
+## Execution plan — agent-owned merges (2026-08-25)
+
+Owner authorized agent to merge Sentry PRs. **Parallel D5 #1041** is orthogonal (`server.py` / universe feed only).
+
+| Step | Action | Owner | Status |
+|------|--------|-------|--------|
+| 1 | Merge **#1042** Stage C (`SENTRY_RELEASE`) | Agent | **DONE** (`19fbb126`) |
+| 2 | Fly deploy (push to `main` or `workflow_dispatch`) | CI auto on push | **Pending** — follows merge |
+| 3 | Post-deploy: machine `SENTRY_RELEASE` == deploy SHA; new events carry `release` | Agent/human verify | Pending after deploy |
+| 4 | Merge **#1044** saga gate tests (rebase findings doc) | Agent | In progress |
+| 5 | Merge **#1043** P5 browser plan (docs only) | Agent | After #1044 |
+| 6 | Stage D alert rules in Sentry UI | Human | ≥24h post-scrub + quota check |
+| 7 | P5 Browser SDK **implementation** | Separate approval | **Not authorized** |
+
+**Do not** bundle Browser SDK runtime code, Session Replay, or hydration/`cockpit_hydrate.js` changes into Sentry merges.
+
+**Conflict surface (rebase only):** `docs/sentry-telemetry-findings.md` across #1042/#1043/#1044 — no `server.py` overlap with #1041.
 
 ---
 
@@ -219,11 +243,11 @@ Do not treat the historical “not authorized by this PR” wording as current p
 
 ---
 
-## Stage C — release build (PR in flight)
+## Stage C — release build (**merged #1042**, 2026-08-25)
 
-Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. No `sentry_setup.py` changes. Deploy via authorized `workflow_dispatch` after merge.
+Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. Merged to `main` (`19fbb126`).
 
-Post-deploy verify: fly.yml compares machine `SENTRY_RELEASE` to deploy `git rev-parse HEAD`; new prod events should carry matching `release` tag.
+**Next:** Fly deploy (CI on push to `main`); post-deploy verify machine `SENTRY_RELEASE` matches deploy SHA; confirm new prod events carry `release` tag.
 
 ---
 
