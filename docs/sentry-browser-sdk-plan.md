@@ -17,20 +17,21 @@ The Subnet Dashboard ships **vanilla static JavaScript** (no bundler, no `packag
 
 | Gate | Status (2026-08-25) | Required for P5 |
 |------|---------------------|-----------------|
-| Path B server scrub/filter (#1038) | **MERGED** — live prod `v2008` | Yes |
-| Stage C release tags (#1042) | **PR open** — Dockerfile `SENTRY_RELEASE` + fly.yml verify | **Yes** — browser `release` must match server deploy SHA for regression detection |
-| Stage C deployed to prod | Pending merge + authorized deploy | Yes — verify `release` tag on prod events before browser rollout |
+| Path B server scrub/filter (#1038) | **MERGED** 2026-08-24 — live prod | Yes |
+| Stage C release tags (#1042) | **MERGED** 2026-08-25 — Dockerfile `SENTRY_RELEASE` + fly.yml verify | **Yes** — browser `release` must match server deploy SHA for regression detection |
+| Stage C deployed to prod | **DONE** — `workflow_dispatch` deploy; `SENTRY_RELEASE` verify step passed | Yes — verify `release` tag on prod events before browser rollout |
 | P3 quota/tier check | **Pending** — manual Sentry Settings → Subscription | Yes — browser errors add ingest; confirm headroom |
 | Explicit owner approval for P5 implementation | **Not granted** | Yes — this doc is not approval |
 | Session Replay privacy/quota gate | Not started | No for initial Browser SDK (Replay is a separate track) |
-| Saga `/subnetsummer` server capture | Pending | No blocker for browser SDK (orthogonal) |
+| Saga `/subnetsummer` server capture | Pending (local tests only) | No blocker for browser SDK (orthogonal) |
+| Server tracing | **Off** — `traces_sample_rate=0.0` | N/A for P5 (browser is separate) |
 
 **Recommended merge order**
 
-1. Merge **#1042** (Stage C) and complete authorized deploy + `SENTRY_RELEASE` verify on machine.
+1. ~~Merge **#1042** (Stage C) and complete authorized deploy + `SENTRY_RELEASE` verify on machine.~~ **DONE** (2026-08-25).
 2. Wait ≥24h post-scrub baseline; complete manual quota check.
 3. Owner approves P5 implementation explicitly (reference this doc).
-4. Open implementation PR on `cursor/sentry-browser-sdk-*` — **no overlap with #1042**.
+4. Open implementation PR on `cursor/sentry-browser-sdk-*` — **no overlap with completed Stage C work**.
 
 **Do not** bundle Browser SDK changes into #1042 or any Saga/hydration PR.
 
@@ -45,7 +46,7 @@ The Subnet Dashboard ships **vanilla static JavaScript** (no bundler, no `packag
 | Error surfaces | No `window.onerror`, `unhandledrejection`, or `captureException` in `static/` |
 | CSP | `internal/security_headers.py` — default report-only policy |
 | Sentry project | Single project **python-fastapi** (org simivision); server DSN is Fly secret |
-| Release attribution | Server reads `SENTRY_RELEASE` env (Stage C adds build-time bake) |
+| Release attribution | Server reads `SENTRY_RELEASE` env (Stage C build-time bake — **merged #1042**, deployed) |
 
 ### Template / script load spine
 
@@ -257,8 +258,8 @@ Document as **P5b** follow-up after browser error baseline is stable ≥7d.
 | Item | Value |
 |------|-------|
 | Branch | `cursor/sentry-browser-sdk-<suffix>` (e.g. `cursor/sentry-browser-sdk-72e0`) |
-| Base | `main` after #1042 merged |
-| Overlap | **None** with #1042 (`cursor/sentry-release-docker-72e0`) |
+| Base | `main` after #1042 merged (**done** 2026-08-25) |
+| Overlap | **None** with Stage C (`cursor/sentry-release-docker-72e0`, merged) |
 | Scope | Browser loader + init + CSP verify + tests/docs — no Replay, no tracing |
 | Deploy | Requires explicit `workflow_dispatch` / owner approval per AGENTS.md |
 | Feature flag | `SENTRY_BROWSER_ENABLED=0` default until post-deploy verify |
@@ -318,3 +319,4 @@ Browser SDK rollback is **independent** of server Sentry (Path B) and Stage D al
 | Date | Change |
 |------|--------|
 | 2026-08-25 | Initial P5 plan — documentation only (`cursor/sentry-browser-plan-72e0`) |
+| 2026-08-25 | Prerequisites updated — #1042 merged + deployed; P5 implementation still **NOT STARTED** |
