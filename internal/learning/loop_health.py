@@ -248,6 +248,7 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     """Prefer soul_map cycle summary — survives split web/worker processes."""
     candidates: List[tuple] = []
     state: Dict[str, Any] = {}
+    persisted_lifecycle: Optional[str] = None
     try:
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
@@ -269,8 +270,16 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         sched = soul.get("prediction_resolver_scheduler") or {}
         if isinstance(sched, dict):
             last = sched.get("last_cycle") or {}
-            if sched.get("lifecycle"):
-                lifecycle = sched.get("lifecycle")
+            lifecycle_value = (
+                sched.get("lifecycle")
+                or (
+                    last.get("lifecycle")
+                    if isinstance(last, dict) and last.get("lifecycle")
+                    else None
+                )
+            )
+            if isinstance(lifecycle_value, str) and lifecycle_value:
+                persisted_lifecycle = lifecycle_value
             if isinstance(last, dict) and last.get("run_at"):
                 run_at = last.get("run_at")
                 candidates.append(
@@ -284,16 +293,33 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     except Exception:
         pass
     tick, ok, mem_running = None, None, False
-    lifecycle = state.get("lifecycle") or "stopped"
     if candidates:
         candidates.sort(key=lambda row: row[0], reverse=True)
         _, tick, ok, mem_running = candidates[0]
+    if persisted_lifecycle is None and tick is not None:
+        # Older cycle summaries did not persist lifecycle. A successful worker
+        # cycle is still authoritative evidence that the resolver was running,
+        # so never combine it with the web singleton's default ``stopped``.
+        persisted_lifecycle = "running" if ok else "degraded"
+    # In web mode the local scheduler singleton is intentionally absent, so its
+    # lifecycle is always ``stopped``. The worker persists its lifecycle beside
+    # the cycle summary; prefer that cross-process evidence to avoid reporting
+    # the impossible state ``running=true, lifecycle=stopped``. In the worker,
+    # however, the live singleton is authoritative and must not be masked by a
+    # stale volume value from an earlier process.
+    local_lifecycle = state.get("lifecycle")
+    lifecycle = (
+        local_lifecycle
+        if is_worker_mode()
+        else persisted_lifecycle or local_lifecycle
+    ) or "stopped"
     peer = _worker_peer()
-    running = mem_running or lifecycle in {"starting", "scheduled", "ticking", "running"}
-    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
-        running = bool(peer.get("alive")) or mem_running
-    else:
-        running = bool(mem_running)
+    # The worker heartbeat only establishes that the process is alive. Resolver
+    # liveness must come from its own lifecycle/cycle evidence; otherwise a
+    # healthy worker can falsely report a stopped resolver as running.
+    running = lifecycle in {"starting", "scheduled", "ticking", "running"}
+    if is_worker_mode():
+        running = bool(state.get("running"))
     refresh_m = RESOLVER_REFRESH_MINUTES
     try:
         refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)

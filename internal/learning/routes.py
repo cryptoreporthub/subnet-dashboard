@@ -1206,6 +1206,7 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
 
     peer = tick.get("worker_peer") if isinstance(tick.get("worker_peer"), dict) else {}
     state["running"] = bool(tick.get("running"))
+    state["lifecycle"] = tick.get("lifecycle") or state.get("lifecycle")
     if tick.get("at"):
         state["last_run_at"] = tick.get("at")
         state["last_run_ok"] = tick.get("ok")

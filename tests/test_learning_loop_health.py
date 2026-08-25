@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from internal.learning.loop_health import build_learning_loop_health
+from internal.learning.loop_health import _last_resolver_tick, build_learning_loop_health
 from server import app
 
 
@@ -166,6 +166,7 @@ def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
         soul,
         {
             "prediction_resolver_scheduler": {
+                "lifecycle": "running",
                 "last_cycle": {"run_at": tick, "ok": True, "pending": 0},
             }
         },
@@ -190,8 +191,94 @@ def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
         soul_path=str(soul),
     )
     assert report["resolver"]["running"] is True
+    assert report["resolver"]["lifecycle"] == "running"
     assert report["worker_peer"]["alive"] is True
     assert report["status"] == "ok"
+
+
+def test_worker_lifecycle_is_not_masked_by_stale_persisted_state(tmp_path, monkeypatch):
+    tick = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    soul = tmp_path / "soul_map.json"
+    _write_json(
+        soul,
+        {
+            "prediction_resolver_scheduler": {
+                "lifecycle": "running",
+                "last_cycle": {"run_at": tick, "ok": True},
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {
+            "running": True,
+            "lifecycle": "degraded",
+            "last_run_at": tick,
+            "last_run_ok": False,
+            "refresh_minutes": 15,
+        },
+    )
+    monkeypatch.setattr("internal.learning.loop_health.is_worker_mode", lambda: True)
+    monkeypatch.setattr("internal.learning.loop_health._worker_peer", lambda: {})
+
+    resolver = _last_resolver_tick(str(soul))
+
+    assert resolver["lifecycle"] == "degraded"
+
+
+def test_inline_worker_infers_running_lifecycle_from_legacy_cycle(tmp_path, monkeypatch):
+    tick = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    soul = tmp_path / "soul_map.json"
+    _write_json(
+        soul,
+        {"prediction_resolver_scheduler": {"last_cycle": {"run_at": tick, "ok": True}}},
+    )
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "lifecycle": "stopped", "refresh_minutes": 15},
+    )
+    monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
+    monkeypatch.setattr(
+        "internal.worker_heartbeat.read_heartbeat",
+        lambda: {"ts": tick, "run_mode": "worker"},
+    )
+
+    resolver = _last_resolver_tick(str(soul))
+
+    assert resolver["running"] is True
+    assert resolver["lifecycle"] == "running"
+
+
+def test_inline_worker_does_not_mask_persisted_stopped_resolver(tmp_path, monkeypatch):
+    tick = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    soul = tmp_path / "soul_map.json"
+    _write_json(
+        soul,
+        {
+            "prediction_resolver_scheduler": {
+                "lifecycle": "stopped",
+                "last_cycle": {"run_at": tick, "ok": True},
+            }
+        },
+    )
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "lifecycle": "stopped", "refresh_minutes": 15},
+    )
+    monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
+    monkeypatch.setattr(
+        "internal.worker_heartbeat.read_heartbeat",
+        lambda: {"ts": tick, "run_mode": "worker"},
+    )
+
+    resolver = _last_resolver_tick(str(soul))
+
+    assert resolver["running"] is False
+    assert resolver["lifecycle"] == "stopped"
 
 
 def test_young_pending_not_stalled_without_watchdog(tmp_path, monkeypatch):

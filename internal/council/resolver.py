@@ -769,13 +769,14 @@ def resolve_prediction_at_horizon(
     if resolve_at is None:
         return _expire_prediction(prediction, now)
 
-    if _is_expired(prediction, resolve_at, now, grace_multiple):
-        return _expire_prediction(prediction, now)
-
     if now < resolve_at:
         prediction["status"] = "pending"
         return prediction
 
+    # Always attempt an authoritative horizon-price lookup before retiring a
+    # late row. The grace deadline bounds *pending* work, not truthful grading:
+    # a delayed resolver may still have the exact historical candle required to
+    # settle the prediction correctly.
     status, price, meta = lookup_horizon_price(
         prediction,
         resolve_at=resolve_at,

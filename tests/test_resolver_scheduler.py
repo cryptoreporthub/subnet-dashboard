@@ -741,6 +741,9 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert sched.state()["lifecycle"] == "degraded"
     assert sched.state()["first_tick_ok"] is False
     assert "resolver lifecycle event=timeout" in caplog.text
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    assert soul["prediction_resolver_scheduler"]["lifecycle"] == "degraded"
 
 
 def test_resolver_cycle_timeout_does_not_overlap_inflight_work(

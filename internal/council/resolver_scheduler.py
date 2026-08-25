@@ -359,6 +359,10 @@ class PredictionResolverScheduler:
                 )
             next_interval = self._backoff_minutes
             self._mark_first_tick(result)
+            # The web process reads lifecycle from the worker-owned soul map.
+            # Persist every terminal transition, not only the first tick, so a
+            # stale ``running`` value cannot hide a later degraded cycle.
+            self._persist_lifecycle_state()
 
         duration_ms = (time.perf_counter() - tick_started) * 1000
         if result.get("error") and "timeout" in str(result.get("error")).lower():

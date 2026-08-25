@@ -5,19 +5,20 @@ process only when the worker heartbeat goes stale. A live process whose
 internal scheduler threads have died still touches the heartbeat, so the
 supervisor never restarts it and data goes stale overnight.
 
-This guard runs inside the worker process and watches the artifact the
+This guard runs inside the worker process and watches both the artifact the
 council score snapshot scheduler is supposed to produce —
 ``data/score_snapshots.json`` (probe: ``loop_health._snapshot_age_seconds``,
-producer: ``internal.council.score_snapshots``):
+producer: ``internal.council.score_snapshots``) — and the prediction resolver
+cycle timestamp:
 
   * every tick it logs the observed snapshot age (diagnosable),
   * on the first stale observation it attempts a safe in-place revive via
     ``revive_score_snapshot_scheduler`` (recycle whenever the scheduler claims
     running, then one synchronous cycle so the guarded mtime moves),
-  * if the snapshot stays stale for LOOP_STALL_GUARD_CONSECUTIVE_CHECKS
-    consecutive ticks it logs CRITICAL and exits(1) so the supervisor
-    restarts the worker fresh (which re-runs background_boot and revives
-    every scheduler).
+   * if either signal stays stale for LOOP_STALL_GUARD_CONSECUTIVE_CHECKS
+     consecutive ticks it logs CRITICAL and exits(1) so the supervisor
+     restarts the worker fresh (which re-runs background_boot and revives
+     every scheduler).
 
 All knobs are env-gated so behavior can be tuned or disabled from Fly
 secrets without a code change.
@@ -117,6 +118,61 @@ def _try_revive() -> None:
         logger.warning("loop stall guard: revive attempt failed: %s", exc)
 
 
+def _request_supervisor_restart(
+    *,
+    signal: str,
+    age_seconds: Optional[float],
+    threshold_seconds: float,
+    strikes: int,
+) -> None:
+    """Log an explicit recovery request before asking Fly to restart the worker."""
+    age = int(age_seconds) if age_seconds is not None else "unknown"
+    logger.critical(
+        "loop stall guard: %s stale for %s checks (age=%ss, threshold=%ss) — "
+        "requesting worker restart (kill=%s)",
+        signal,
+        strikes,
+        age,
+        int(threshold_seconds),
+        KILL_ENABLED,
+    )
+    if KILL_ENABLED:
+        try:
+            import sys
+
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except Exception:
+            pass
+        os._exit(1)
+    logger.warning("loop stall guard: kill disabled, restart request recorded")
+
+
+def _next_resolver_stale_strikes(
+    resolver_age: Optional[float],
+    current_strikes: int,
+) -> int:
+    """Count a missing or overdue resolver tick as a recoverable stale signal."""
+    if resolver_age is None:
+        logger.warning(
+            "loop stall guard: resolver tick missing (threshold=%ss, strike=%s/%s)",
+            MAX_RESOLVER_AGE_SECONDS,
+            current_strikes + 1,
+            CONSECUTIVE_CHECKS,
+        )
+        return current_strikes + 1
+    if resolver_age > MAX_RESOLVER_AGE_SECONDS:
+        logger.warning(
+            "loop stall guard: resolver tick STALE (age=%ss, threshold=%ss, strike=%s/%s)",
+            int(resolver_age),
+            MAX_RESOLVER_AGE_SECONDS,
+            current_strikes + 1,
+            CONSECUTIVE_CHECKS,
+        )
+        return current_strikes + 1
+    return 0
+
+
 def _guard_loop() -> None:
     if not ENABLED:
         logger.info("loop stall guard: disabled (LOOP_STALL_GUARD_ENABLED=0)")
@@ -126,7 +182,8 @@ def _guard_loop() -> None:
         return
 
     started = time.monotonic()
-    consecutive_stale = 0
+    consecutive_snapshot_stale = 0
+    consecutive_resolver_stale = 0
     revived = False
 
     logger.info(
@@ -144,55 +201,48 @@ def _guard_loop() -> None:
         age = _snapshot_age_seconds()
         resolver_age = _resolver_tick_age_seconds()
 
-        if resolver_age is not None and resolver_age > MAX_RESOLVER_AGE_SECONDS:
-            logger.warning(
-                "loop stall guard: resolver tick stale (age=%ss, threshold=%ss) — warn only",
-                int(resolver_age),
-                MAX_RESOLVER_AGE_SECONDS,
+        consecutive_resolver_stale = _next_resolver_stale_strikes(
+            resolver_age,
+            consecutive_resolver_stale,
+        )
+        if consecutive_resolver_stale >= CONSECUTIVE_CHECKS:
+            _request_supervisor_restart(
+                signal="resolver tick",
+                age_seconds=resolver_age,
+                threshold_seconds=MAX_RESOLVER_AGE_SECONDS,
+                strikes=consecutive_resolver_stale,
             )
 
         if age is None:
-            consecutive_stale = 0
+            consecutive_snapshot_stale = 0
             logger.info("loop stall guard: no snapshot age signal (boot/feature-off), resetting")
             continue
 
         if age <= MAX_SNAPSHOT_AGE_SECONDS:
-            consecutive_stale = 0
+            consecutive_snapshot_stale = 0
             logger.info("loop stall guard: snapshot fresh (age=%ss)", int(age))
             continue
 
-        consecutive_stale += 1
+        consecutive_snapshot_stale += 1
         logger.warning(
             "loop stall guard: snapshot STALE (age=%ss, threshold=%ss, strike=%s/%s)",
             int(age),
             MAX_SNAPSHOT_AGE_SECONDS,
-            consecutive_stale,
+            consecutive_snapshot_stale,
             CONSECUTIVE_CHECKS,
         )
 
-        if consecutive_stale == 1 and not revived:
+        if consecutive_snapshot_stale == 1 and not revived:
             revived = True
             _try_revive()
 
-        if consecutive_stale >= CONSECUTIVE_CHECKS:
-            logger.critical(
-                "loop stall guard: snapshot stale for %s checks (age=%ss) — worker schedulers "
-                "appear wedged; exiting for supervisor restart (kill=%s)",
-                consecutive_stale,
-                int(age),
-                KILL_ENABLED,
+        if consecutive_snapshot_stale >= CONSECUTIVE_CHECKS:
+            _request_supervisor_restart(
+                signal="score snapshot",
+                age_seconds=age,
+                threshold_seconds=MAX_SNAPSHOT_AGE_SECONDS,
+                strikes=consecutive_snapshot_stale,
             )
-            if KILL_ENABLED:
-                try:
-                    import sys
-
-                    sys.stdout.flush()
-                    sys.stderr.flush()
-                except Exception:
-                    pass
-                os._exit(1)
-            else:
-                logger.warning("loop stall guard: kill disabled, would have exited")
 
 
 def start_loop_stall_guard() -> None:

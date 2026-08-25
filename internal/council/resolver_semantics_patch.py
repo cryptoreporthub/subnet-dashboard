@@ -11,7 +11,10 @@ logger = logging.getLogger(__name__)
 
 _PATCH_ATTR = "_resolver_semantics_patch_applied"
 _RETRY_CAP = max(1, int(os.environ.get("RESOLVER_PRICE_RETRY_CAP", "3")))
-_GRACE_MULTIPLE = float(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE", "4.0"))
+# The watchdog treats two horizon windows as the stale boundary. Keep the
+# resolver's default expiry policy aligned so a missing-price row cannot remain
+# pending after the watchdog has correctly declared it past grace.
+_GRACE_MULTIPLE = float(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE", "2.0"))
 
 
 def apply_resolver_semantics_patch() -> None:
@@ -32,6 +35,22 @@ def apply_resolver_semantics_patch() -> None:
         now: datetime,
         grace_multiple: float = _GRACE_MULTIPLE,
     ) -> bool:
+        if now < resolve_at:
+            return False
+        try:
+            horizon = float(prediction.get("horizon_hours", 0) or 0)
+        except (TypeError, ValueError):
+            horizon = 0.0
+        if horizon <= 0:
+            horizon = float(getattr(resolver, "_EXPIRY_DEFAULT_HORIZON_HOURS", 24.0))
+        grace_hours = horizon * grace_multiple
+
+        # Retries are a best-effort recovery while a row remains inside its
+        # grace window. Never let a missing-price retry create new pending work
+        # after the watchdog's expiry deadline.
+        if now >= resolve_at + timedelta(hours=grace_hours):
+            return True
+
         attempts = int(prediction.get("resolve_attempts") or 0)
         # The second expiry check in one resolve pass must not consume the
         # final retry; the next scheduler tick gets the bounded final attempt.
@@ -41,16 +60,7 @@ def apply_resolver_semantics_patch() -> None:
         # price before classifying them as genuine expiry.
         if attempts < _RETRY_CAP and ("id" in prediction or "resolve_at" in prediction):
             return False
-        if now < resolve_at:
-            return False
-        try:
-            horizon = float(prediction.get("horizon_hours", 0) or 0)
-        except (TypeError, ValueError):
-            horizon = 0.0
-        if horizon <= 0:
-            horizon = float(getattr(resolver, "_EXPIRY_DEFAULT_HORIZON_HOURS", 24.0))
-        grace_hours = horizon * _GRACE_MULTIPLE
-        return now >= resolve_at + timedelta(hours=grace_hours)
+        return False
 
     def _patched_lookup_horizon_price(
         prediction: Dict[str, Any],
@@ -69,6 +79,12 @@ def apply_resolver_semantics_patch() -> None:
         )
         if status == "ok" and price > 0:
             prediction.pop("price_data_unavailable", None)
+            return status, price, meta
+
+        # A late cycle may still grade from a historical price, but an
+        # ungradeable lookup at or beyond the deadline must retire immediately
+        # rather than consuming a fourth, unusable retry.
+        if resolver._is_expired(prediction, resolve_at, now):
             return status, price, meta
 
         prediction["resolve_attempts"] = int(prediction.get("resolve_attempts") or 0) + 1

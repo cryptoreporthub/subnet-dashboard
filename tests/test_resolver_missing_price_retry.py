@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
+from internal.council.watchdog import check_resolver_watchdog
 
 
 @pytest.fixture
@@ -41,7 +42,7 @@ def _prediction(resolve_at: datetime, **overrides):
 
 def test_missing_price_stays_pending_and_expires_after_cap(resolver, monkeypatch):
     now = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
-    resolve_at = now - timedelta(hours=6)
+    resolve_at = now - timedelta(hours=1)
     monkeypatch.setattr(
         resolver,
         "price_at_resolve_at",
@@ -56,7 +57,7 @@ def test_missing_price_stays_pending_and_expires_after_cap(resolver, monkeypatch
         assert pred["resolve_attempts"] == attempt
         assert pred["price_data_unavailable"] is True
 
-    expired = resolver.resolve_prediction_at_horizon(pred, now=now + timedelta(hours=5), live_prices={})
+    expired = resolver.resolve_prediction_at_horizon(pred, now=now + timedelta(hours=2), live_prices={})
     assert expired["status"] == "expired"
     assert expired["expired_reason"] == "price_data_unavailable"
     assert expired["retirement_reason"] == "missing_price_at_horizon"
@@ -65,7 +66,7 @@ def test_missing_price_stays_pending_and_expires_after_cap(resolver, monkeypatch
 
 def test_real_snapshot_miss_grades_normally(resolver, monkeypatch):
     now = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
-    resolve_at = now - timedelta(hours=6)
+    resolve_at = now - timedelta(hours=49)
     monkeypatch.setattr(
         resolver,
         "price_at_resolve_at",
@@ -83,14 +84,31 @@ def test_real_snapshot_miss_grades_normally(resolver, monkeypatch):
     assert "resolve_attempts" not in result or result["resolve_attempts"] in (0, None)
 
 
-def test_expiry_grace_is_four_horizon_hours(resolver):
-    assert resolver._EXPIRY_GRACE_MULTIPLE == 4.0
+def test_expiry_grace_matches_watchdog_boundary(resolver):
+    assert resolver._EXPIRY_GRACE_MULTIPLE == 2.0
 
     resolve_at = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
     pred = {"horizon_hours": 1}
 
-    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=3), 2.0) is False
-    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=5), 2.0) is True
+    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=1), 2.0) is False
+    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=3), 2.0) is True
+
+
+def test_expiry_and_watchdog_agree_at_default_48_hour_boundary(resolver):
+    resolve_at = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
+    deadline = resolve_at + timedelta(hours=48)
+    pred = {
+        "id": "boundary",
+        "resolve_at": resolve_at.isoformat().replace("+00:00", "Z"),
+        "horizon_hours": 24,
+        "resolve_attempts": 3,
+    }
+
+    assert resolver._is_expired(pred, resolve_at, deadline) is True
+    watchdog = check_resolver_watchdog([pred], now=deadline)
+    assert watchdog["warning"] is True
+    assert watchdog["reason"] == "pending_past_grace"
+    assert watchdog["threshold_hours"] == 48.0
 
 
 def test_stats_expose_council_and_pump_pending_separately(resolver):

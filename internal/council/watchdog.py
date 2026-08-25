@@ -60,13 +60,13 @@ def check_resolver_watchdog(
 
         if resolve_at is not None and now > resolve_at:
             overdue_hours = (now - resolve_at).total_seconds() / 3600.0
-            if overdue_hours > grace_hours and overdue_hours > worst_overdue_hours:
+            if overdue_hours >= grace_hours and overdue_hours > worst_overdue_hours:
                 worst_overdue_hours = overdue_hours
                 worst_threshold_hours = grace_hours
                 stale_id = pred.get("id")
         elif created is not None and resolve_at is None:
             age_hours = (now - created).total_seconds() / 3600.0
-            if age_hours > grace_hours and age_hours > worst_overdue_hours:
+            if age_hours >= grace_hours and age_hours > worst_overdue_hours:
                 worst_overdue_hours = age_hours
                 worst_threshold_hours = grace_hours
                 stale_id = pred.get("id")

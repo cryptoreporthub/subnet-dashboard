@@ -7,9 +7,16 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from internal.council import score_snapshots as snaps
 from internal.learning import loop_health
-from internal.loop_stall_guard import MAX_SNAPSHOT_AGE_SECONDS, _try_revive
+from internal import loop_stall_guard
+from internal.loop_stall_guard import (
+    MAX_SNAPSHOT_AGE_SECONDS,
+    _next_resolver_stale_strikes,
+    _try_revive,
+)
 
 
 def _make_stale_snapshot(path, *, age_seconds: float = 100_000) -> None:
@@ -271,3 +278,62 @@ def test_try_revive_contract_uses_score_snapshot_revive():
     assert "from internal.council.score_snapshots import revive_score_snapshot_scheduler" in src
     assert "desk_snapshot_scheduler" not in src
     assert "start_pump_desk" not in src
+
+
+def test_resolver_stall_restart_request_is_observable(monkeypatch, caplog):
+    exits = []
+    monkeypatch.setattr(loop_stall_guard, "KILL_ENABLED", True)
+    monkeypatch.setattr(loop_stall_guard.os, "_exit", lambda code: exits.append(code))
+
+    loop_stall_guard._request_supervisor_restart(
+        signal="resolver tick",
+        age_seconds=21_601,
+        threshold_seconds=21_600,
+        strikes=2,
+    )
+
+    assert exits == [1]
+    assert "resolver tick stale for 2 checks" in caplog.text
+
+
+def test_missing_resolver_tick_counts_toward_recovery(caplog):
+    strikes = _next_resolver_stale_strikes(None, 0)
+
+    assert strikes == 1
+    assert "resolver tick missing" in caplog.text
+
+
+def test_guard_restarts_after_boot_grace_for_missing_resolver_tick(monkeypatch):
+    monotonic_values = iter((0.0, 100.0, 201.0, 202.0))
+    sleep_calls = {"count": 0}
+    restart_requests = []
+
+    def _sleep(_seconds):
+        sleep_calls["count"] += 1
+        if sleep_calls["count"] > 3:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(loop_stall_guard, "_worker_mode", lambda: True)
+    monkeypatch.setattr(loop_stall_guard, "BOOT_GRACE_SECONDS", 200)
+    monkeypatch.setattr(loop_stall_guard, "CONSECUTIVE_CHECKS", 2)
+    monkeypatch.setattr(loop_stall_guard, "_resolver_tick_age_seconds", lambda: None)
+    monkeypatch.setattr(loop_stall_guard, "_snapshot_age_seconds", lambda: None)
+    monkeypatch.setattr(loop_stall_guard.time, "monotonic", lambda: next(monotonic_values))
+    monkeypatch.setattr(loop_stall_guard.time, "sleep", _sleep)
+    monkeypatch.setattr(
+        loop_stall_guard,
+        "_request_supervisor_restart",
+        lambda **kwargs: restart_requests.append(kwargs),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        loop_stall_guard._guard_loop()
+
+    assert restart_requests == [
+        {
+            "signal": "resolver tick",
+            "age_seconds": None,
+            "threshold_seconds": loop_stall_guard.MAX_RESOLVER_AGE_SECONDS,
+            "strikes": 2,
+        }
+    ]
