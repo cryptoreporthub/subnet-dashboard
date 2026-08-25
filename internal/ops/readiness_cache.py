@@ -90,14 +90,19 @@ def _busy_payload(*, stale: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 
     if stale is not None:
         issues = list(stale.get("issues") or [])
+        advisories = list(stale.get("advisories") or [])
         if "readiness_build_slow" not in issues:
             issues = issues + ["readiness_build_slow"]
+        if "readiness_build_slow" not in advisories:
+            advisories = advisories + ["readiness_build_slow"]
         return {
             **stale,
             "cached": True,
             "serving_stale": True,
             "cache_age_seconds": round(_cache_age(), 1),
             "issues": issues,
+            "blocking_issues": list(stale.get("blocking_issues") or []),
+            "advisories": advisories,
         }
 
     lite = build_liveness_report(probe_worker=False)
@@ -107,6 +112,8 @@ def _busy_payload(*, stale: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         "ready": False,
         "cached": False,
         "issues": ["readiness_build_timeout"],
+        "blocking_issues": ["readiness_build_timeout"],
+        "advisories": [],
         "next_levers": ["retry_after_worker_idle"],
     }
 

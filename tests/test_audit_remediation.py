@@ -105,6 +105,8 @@ def test_readiness_timeout_serves_stale_primary(monkeypatch):
     assert out.get("serving_stale") is True
     assert out.get("cached") is True
     assert "readiness_build_slow" in (out.get("issues") or [])
+    assert "readiness_build_slow" in (out.get("advisories") or [])
+    assert out.get("blocking_issues") == []
     assert out.get("status") == "ready"
 
 

@@ -9,6 +9,13 @@ from typing import Any, Dict, List
 
 from internal.subnets.feed import probe_feed_layers, subnet_feed_meta
 
+_BLOCKING_ISSUES = frozenset(
+    {
+        "prediction_resolver_not_running",
+        "subnet_feed_empty",
+    }
+)
+
 
 def _utcnow_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -217,14 +224,9 @@ def build_readiness_report() -> Dict[str, Any]:
 
     thin_ui = feed.get("likely_total", 0) <= 0 or feed.get("effective_source") == "none"
 
-    ready = not any(
-        i in issues
-        for i in (
-            "learning_loop_has_no_graded_picks",
-            "prediction_resolver_not_running",
-            "subnet_feed_empty",
-        )
-    )
+    blocking_issues = [issue for issue in issues if issue in _BLOCKING_ISSUES]
+    advisories = [issue for issue in issues if issue not in _BLOCKING_ISSUES]
+    ready = not blocking_issues
 
     return {
         "status": "ready" if ready else "degraded",
@@ -234,6 +236,8 @@ def build_readiness_report() -> Dict[str, Any]:
         "worker_peer": worker_peer,
         "thin_ui_likely": thin_ui,
         "issues": issues,
+        "blocking_issues": blocking_issues,
+        "advisories": advisories,
         "learning": learning,
         "learning_loop_health": loop_health,
         "resolver": resolver,

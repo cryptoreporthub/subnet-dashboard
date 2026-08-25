@@ -157,3 +157,67 @@ def test_data_freshness_effective_fields():
     body = resp.json()
     assert "effective_source" in body
     assert "effective_total" in body
+
+
+def _patch_healthy_readiness_dependencies(monkeypatch, *, resolver_running=True, graded=1):
+    monkeypatch.setattr(
+        "internal.live_subnets.live_data_freshness",
+        lambda: {"stale": False, "subnet_count": 96},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.feed.probe_feed_layers",
+        lambda: {"likely_total": 96, "effective_source": "blockmachine"},
+    )
+    monkeypatch.setattr(
+        "internal.freshness.get_sync_state",
+        lambda: {"background_running": True, "last_sync_at": "2026-08-25T00:00:00Z", "last_sync_ok": True},
+    )
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"running": resolver_running},
+    )
+    monkeypatch.setattr(
+        "internal.ops.readiness._learning_summary",
+        lambda: {"graded": graded, "pending": 0, "accuracy": None, "trust_ready": None},
+    )
+    monkeypatch.setattr("internal.ops.readiness._daily_pick_summary", lambda: {})
+    monkeypatch.setattr(
+        "internal.ops.readiness._learning_loop_health",
+        lambda: {"status": "ok", "ledger": {"gap": False}},
+    )
+    monkeypatch.setattr(
+        "internal.worker_peer.get_worker_peer",
+        lambda: {"expected": False, "alive": None},
+    )
+    monkeypatch.setattr("internal.run_mode.inline_worker_expected", lambda: False)
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: False)
+    monkeypatch.setattr("internal.run_mode.split_worker_v2_enabled", lambda: False)
+    monkeypatch.setattr("internal.run_mode.worker_mode_label", lambda: "combined")
+    monkeypatch.setattr("fetchers.taostats_client.is_available", lambda: True)
+
+
+def test_readiness_keeps_no_graded_picks_visible_but_nonblocking(monkeypatch):
+    _patch_healthy_readiness_dependencies(monkeypatch, graded=0)
+
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+
+    assert report["ready"] is True
+    assert report["status"] == "ready"
+    assert "learning_loop_has_no_graded_picks" in report["issues"]
+    assert "learning_loop_has_no_graded_picks" in report["advisories"]
+    assert report["blocking_issues"] == []
+
+
+def test_readiness_keeps_resolver_failure_blocking_when_no_picks_are_graded(monkeypatch):
+    _patch_healthy_readiness_dependencies(monkeypatch, resolver_running=False, graded=0)
+
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+
+    assert report["ready"] is False
+    assert report["status"] == "degraded"
+    assert "prediction_resolver_not_running" in report["blocking_issues"]
+    assert "learning_loop_has_no_graded_picks" in report["advisories"]

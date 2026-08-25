@@ -15,6 +15,8 @@
     var ready = payload.ready === true;
     var status = String(payload.status || '').toLowerCase();
     var issues = payload.issues || [];
+    var blockingIssues = payload.blocking_issues || [];
+    var advisories = payload.advisories || [];
     var issueCount = issues.length;
     var thin = payload.thin_ui_likely === true;
 
@@ -34,7 +36,11 @@
     el.hidden = false;
     el.textContent = grade;
     el.className = 'ops-readiness-badge ' + stateClass;
-    if (issueCount) {
+    if (ready && advisories.length) {
+      el.title = grade + ' · ' + advisories.length + ' advisory(s): ' + advisories.slice(0, 4).join(', ');
+    } else if (blockingIssues.length) {
+      el.title = grade + ' · ' + blockingIssues.length + ' blocking issue(s): ' + blockingIssues.slice(0, 4).join(', ');
+    } else if (issueCount) {
       el.title = grade + ' · ' + issueCount + ' issue(s): ' + issues.slice(0, 4).join(', ');
     } else {
       el.title = grade + ' · production readiness';
