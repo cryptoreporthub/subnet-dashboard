@@ -1,6 +1,6 @@
 # Sentry Telemetry Findings
 
-**Status 2026-08-25:** Stage A/B/C **merged and deployed** via `workflow_dispatch` (not push-to-main). Stage D custom alerts **not created**. Browser SDK **not started** (plan only, #1043). Server tracing **off** (`traces_sample_rate=0.0`). Known gap: [PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5) TaoStats pool-latest 404 noise still ingesting — filter broadening tracked in separate PR (`cursor/sentry-taostats-filter-fix-ade3`).
+**Status 2026-08-25:** Stage A/B/C **merged and deployed** via `workflow_dispatch` (not push-to-main). Stage D custom alerts **not created**. Browser SDK **not started** (plan only, #1043). Server tracing **off** (`traces_sample_rate=0.0`). Known gap: [PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5) TaoStats pool-latest 404 noise still ingesting — filter broadening tracked in [#1046](https://github.com/cryptoreporthub/subnet-dashboard/pull/1046).
 
 **Directive:** Sentry Telemetry Review v1.1
 **Evidence tiers:** Confirmed from code | Confirmed from tests | Confirmed locally at runtime | Confirmed in production | Confirmed via Sentry MCP | Confirmed in production via MCP | Historical evidence | Unavailable/pending
@@ -218,7 +218,7 @@ Owner authorized agent to merge Sentry PRs. **Parallel D5 #1041** is orthogonal 
 | 6 | Merge **#1045** finalize execution plan | Agent | **DONE** (`5015b4da`) |
 | 7 | Stage D alert rules in Sentry UI | Human | **Not started** — ≥24h post-scrub + quota check |
 | 8 | P5 Browser SDK **implementation** | Separate approval | **Not authorized** |
-| 9 | TaoStats PYTHON-FASTAPI-5 filter broadening | Agent | **In flight** — `cursor/sentry-taostats-filter-fix-ade3` |
+| 9 | TaoStats PYTHON-FASTAPI-5 filter broadening | Agent | **In flight** — [#1046](https://github.com/cryptoreporthub/subnet-dashboard/pull/1046) |
 
 **Do not** bundle Browser SDK runtime code, Session Replay, or hydration/`cockpit_hydrate.js` changes into Sentry merges.
 
@@ -259,7 +259,7 @@ Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg
 
 | Gap | Status | Notes |
 |-----|--------|-------|
-| PYTHON-FASTAPI-5 TaoStats pool-latest 404 noise | **Open** | Filter fix PR `cursor/sentry-taostats-filter-fix-ade3`; do not claim group closed until 24h with no new events post-deploy |
+| PYTHON-FASTAPI-5 TaoStats pool-latest 404 noise | **Open** | Filter fix PR [#1046](https://github.com/cryptoreporthub/subnet-dashboard/pull/1046); do not claim group closed until 24h with no new events post-deploy |
 | Stage D custom alerts | **Not created** | Default high-priority rule exists but never triggered; saga-adjacent rules documented only |
 | Saga prod natural capture | **Unproven** | `tests/test_sentry_saga_gate.py` is TestClient + noop transport — does not prove prod `/subnetsummer` capture |
 | Browser SDK (P5) | **Not started** | Plan merged (#1043); implementation awaits explicit owner approval |
