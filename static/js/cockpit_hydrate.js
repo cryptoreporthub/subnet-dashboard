@@ -9,6 +9,7 @@
   var lastSimivisionMeta = null;
   var lastHourPicks = [];
   var lastDayPicks = [];
+  var lastSubnets = [];
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -61,6 +62,7 @@
   }
 
   function indexRegistry(subnets) {
+    lastSubnets = subnets || [];
     registryByNetuid = {};
     (subnets || []).forEach(function (sn) {
       var nu = subnetNetuid(sn);
@@ -629,6 +631,8 @@
     if (section.dataset) section.dataset.wrBound = '';
     document.dispatchEvent(new CustomEvent('weighing-room-updated'));
     renderCautionCells(meta.caution_cells || []);
+    patchSimileads(top, lastSubnets);
+    patchTodaysIntel(lastSubnets, meta.caution_cells || []);
   }
 
   function renderCautionCells(cells) {
@@ -652,6 +656,253 @@
           '</span><span class="caution-cell__line">' +
           esc(cell.line || cell.name || '') +
           '</span></li>'
+        );
+      })
+      .join('');
+  }
+
+  function subnetStats(subnets) {
+    var gainers = 0;
+    var losers = 0;
+    var chgSum = 0;
+    var top = null;
+    var bot = null;
+    (subnets || []).forEach(function (sn) {
+      var chg = Number(sn.price_change_24h) || 0;
+      chgSum += chg;
+      if (chg > 0) gainers += 1;
+      else if (chg < 0) losers += 1;
+      if (!top || chg > (Number(top.price_change_24h) || 0)) top = sn;
+      if (!bot || chg < (Number(bot.price_change_24h) || 0)) bot = sn;
+    });
+    var n = (subnets || []).length;
+    var breadth = gainers > losers ? 'bullish' : (losers > gainers ? 'bearish' : 'neutral');
+    return {
+      n: n,
+      gainers: gainers,
+      losers: losers,
+      avgChg: n ? chgSum / n : 0,
+      breadth: breadth,
+      top: top,
+      bot: bot,
+    };
+  }
+
+  function patchMarketPulse(subnets, signalCount, alertCount) {
+    var st = subnetStats(subnets);
+    var breadthEl = document.getElementById('market-pulse-breadth');
+    if (breadthEl && st.n) {
+      breadthEl.className =
+        'sr-pulse__oneline-part sr-pulse__oneline-part--' + st.breadth;
+      breadthEl.textContent =
+        'Breadth ' + st.breadth.charAt(0).toUpperCase() + st.breadth.slice(1) +
+        ' · ' + st.gainers + '↑ ' + st.losers + '↓';
+    }
+    var ratio = document.getElementById('market-pulse-ratio');
+    if (ratio && st.n) {
+      ratio.style.setProperty('--pulse-up', String(st.gainers));
+      ratio.style.setProperty('--pulse-down', String(st.losers));
+    }
+    var avgEl = document.getElementById('market-pulse-avg');
+    if (avgEl && st.n) {
+      avgEl.className =
+        'sr-pulse__oneline-part' + (st.avgChg > 0 ? ' pos' : (st.avgChg < 0 ? ' neg' : ''));
+      avgEl.textContent = 'Avg 24h ' + fmtSigned(st.avgChg);
+    }
+    var sigEl = document.getElementById('market-pulse-signals');
+    if (sigEl && (signalCount != null || alertCount != null)) {
+      sigEl.textContent =
+        (signalCount || 0) + ' signals · ' + (alertCount || 0) + ' alerts';
+    }
+  }
+
+  function patchTodaysIntel(subnets, cautionCells) {
+    var grid = document.querySelector('#section-todays-intel .sr-intel__grid');
+    if (!grid) return;
+    var st = subnetStats(subnets);
+    var html = '';
+    var topChg = st.top ? Number(st.top.price_change_24h) || 0 : 0;
+    if (st.top && topChg !== 0) {
+      var nu = subnetNetuid(st.top);
+      html +=
+        '<article class="sr-intel__card sr-glow-live">' +
+        '<p class="sr-intel__card-lbl">Biggest mover</p>' +
+        '<p class="sr-intel__card-val pos">' +
+        esc(subnetName(st.top)) + ' ' + fmtSigned(topChg, 1) +
+        '</p>' +
+        '<p class="sr-intel__card-sub">24h · SN' + esc(nu) + '</p></article>';
+    }
+    if (cautionCells && cautionCells.length) {
+      var cell = cautionCells[0];
+      html +=
+        '<article class="sr-intel__card">' +
+        '<p class="sr-intel__card-lbl">Risk watch</p>' +
+        '<p class="sr-intel__card-val">' +
+        esc(String(cell.line || cell.name || '').slice(0, 56)) +
+        '</p>' +
+        '<p class="sr-intel__card-sub">' + esc(cell.label || 'CAUTION') + '</p></article>';
+    } else if (st.breadth === 'bearish') {
+      html +=
+        '<article class="sr-intel__card">' +
+        '<p class="sr-intel__card-lbl">Risk watch</p>' +
+        '<p class="sr-intel__card-val neg">Bearish breadth</p>' +
+        '<p class="sr-intel__card-sub">Tape leaning down across registry</p></article>';
+    }
+    grid.innerHTML = html;
+  }
+
+  function patchSimileads(top, subnets) {
+    var section = document.getElementById('section-simileads');
+    if (!section) return;
+    var prices = {};
+    (subnets || []).forEach(function (sn) {
+      var nu = subnetNetuid(sn);
+      if (nu != null) prices[Number(nu)] = Number(sn.price_change_24h) || 0;
+    });
+    var rows = [];
+    (top || []).forEach(function (pick) {
+      var nu = Number(pick.netuid);
+      if (!nu && nu !== 0) return;
+      var scoreDelta = Number(pick.conviction_delta) || Number(pick.delta_value) || 0;
+      if (scoreDelta <= 0) return;
+      var priceDelta = prices[nu] || 0;
+      if (Math.abs(priceDelta) > 2) return;
+      if (scoreDelta < 3) return;
+      rows.push({
+        netuid: nu,
+        name: pick.name || ('SN' + nu),
+        score_delta: Math.round(scoreDelta * 10) / 10,
+        price_delta: Math.round(priceDelta * 100) / 100,
+        lag_index: Math.round((scoreDelta - Math.abs(priceDelta)) * 10) / 10,
+      });
+    });
+    rows.sort(function (a, b) {
+      return b.lag_index - a.lag_index || b.score_delta - a.score_delta;
+    });
+    rows = rows.slice(0, 3);
+    var empty = section.querySelector('.sr-simileads__empty');
+    var list = section.querySelector('.sr-simileads__list');
+    if (!rows.length) {
+      if (list) list.remove();
+      if (!empty) {
+        empty = document.createElement('p');
+        empty.className = 'sr-simileads__empty';
+        section.appendChild(empty);
+      }
+      empty.textContent =
+        'No score–price divergence right now — fills when council warms ahead of tape.';
+      return;
+    }
+    if (empty) empty.remove();
+    if (!list) {
+      list = document.createElement('ul');
+      list.className = 'sr-simileads__list';
+      section.appendChild(list);
+    }
+    list.innerHTML = rows
+      .map(function (row) {
+        var scoreW = Math.min(100, Math.round((row.score_delta / 15) * 100));
+        var priceW = Math.min(100, Math.round((Math.abs(row.price_delta) / 5) * 100));
+        var priceCls =
+          row.price_delta > 0 ? ' pos' : row.price_delta < 0 ? ' neg' : '';
+        return (
+          '<li class="sr-simileads__row sr-glow-live">' +
+          '<div class="sr-simileads__top">' +
+          '<a class="sr-simileads__name" href="/subnet/' +
+          esc(row.netuid) +
+          '">' +
+          esc(row.name) +
+          ' <span class="sr-simileads__sn">SN' +
+          esc(row.netuid) +
+          '</span></a>' +
+          '<span class="sr-simileads__lag" title="Lag index">λ ' +
+          esc(row.lag_index) +
+          '</span></div>' +
+          '<div class="sr-simileads__bars" aria-hidden="true">' +
+          '<div class="sr-simileads__bar"><span class="sr-simileads__bar-lbl">Score Δ</span>' +
+          '<span class="sr-simileads__bar-track"><span class="sr-simileads__bar-fill sr-simileads__bar-fill--score" style="width: ' +
+          scoreW +
+          '%"></span></span>' +
+          '<span class="sr-simileads__bar-val pos">+' +
+          esc(row.score_delta) +
+          '</span></div>' +
+          '<div class="sr-simileads__bar"><span class="sr-simileads__bar-lbl">Price 24h</span>' +
+          '<span class="sr-simileads__bar-track"><span class="sr-simileads__bar-fill sr-simileads__bar-fill--price" style="width: ' +
+          priceW +
+          '%"></span></span>' +
+          '<span class="sr-simileads__bar-val' +
+          priceCls +
+          '">' +
+          (row.price_delta >= 0 ? '+' : '') +
+          Number(row.price_delta).toFixed(1) +
+          '%</span></div></div></li>'
+        );
+      })
+      .join('');
+  }
+
+  function patchDevSignalsDesk(signals) {
+    var section = document.getElementById('section-dev-signals-desk');
+    if (!section) return;
+    var rows = (signals || []).slice().sort(function (a, b) {
+      return (Number(b.confidence) || 0) - (Number(a.confidence) || 0);
+    }).slice(0, 3);
+    var empty = section.querySelector('.sr-dev-desk__empty');
+    var list = section.querySelector('.sr-dev-desk__list');
+    if (!rows.length) {
+      if (list) list.remove();
+      if (!empty) {
+        empty = document.createElement('p');
+        empty.className = 'sr-dev-desk__empty';
+        section.appendChild(empty);
+      }
+      empty.textContent =
+        'Signal desk warming up — council posture cards appear after the pipeline scores subnets.';
+      return;
+    }
+    if (empty) empty.remove();
+    if (!list) {
+      list = document.createElement('ul');
+      list.className = 'sr-dev-desk__list';
+      section.appendChild(list);
+    }
+    list.innerHTML = rows
+      .map(function (sig) {
+        var st = String(sig.signal_type || 'neutral').toLowerCase();
+        var badge = st === 'buy' ? 'buy' : st === 'sell' ? 'sell' : 'neutral';
+        var conf = confPercent(sig.confidence);
+        var evidence = String(sig.evidence || 'No evidence text on this signal yet.');
+        if (evidence.length > 140) evidence = evidence.slice(0, 139) + '…';
+        return (
+          '<li class="sr-dev-desk__card sr-glow-live">' +
+          '<div class="sr-dev-desk__top">' +
+          '<span class="sr-dev-desk__name">' +
+          esc(sig.name || ('SN' + sig.subnet_id)) +
+          ' <span class="sr-dev-desk__conf-lbl">SN' +
+          esc(sig.subnet_id) +
+          '</span></span>' +
+          '<span class="sr-dev-desk__badge sr-dev-desk__badge--' +
+          badge +
+          '">' +
+          esc(st.toUpperCase()) +
+          '</span></div>' +
+          '<p class="sr-dev-desk__evidence">' +
+          esc(evidence) +
+          '</p>' +
+          '<div class="sr-dev-desk__meta">' +
+          '<div class="sr-dev-desk__conf" aria-hidden="true"><span class="sr-dev-desk__conf-fill" style="width: ' +
+          conf +
+          '%"></span></div>' +
+          '<span class="sr-dev-desk__conf-lbl">' +
+          Math.round(conf) +
+          '% conf</span>' +
+          '<span class="sr-dev-desk__status">' +
+          esc(sig.outcome || 'PENDING') +
+          '</span>' +
+          (sig.source_expert
+            ? '<span class="sr-dev-desk__status">' + esc(sig.source_expert) + '</span>'
+            : '') +
+          '</div></li>'
         );
       })
       .join('');
@@ -3939,6 +4190,8 @@
       el.textContent = sourceLabel;
     });
     patchDataFreshnessFromSubnetMeta(subnets, meta);
+    patchMarketPulse(subnets);
+    patchTodaysIntel(subnets);
   }
 
   function renderJudges(judges) {
@@ -3971,6 +4224,8 @@
   }
 
   function renderSignals(signals, alerts) {
+    patchDevSignalsDesk(signals);
+    patchMarketPulse(lastSubnets, (signals || []).length, (alerts || []).length);
     if (typeof window.__applySignalsPayload === 'function') {
       window.__applySignalsPayload(signals, alerts);
       return;
@@ -3984,6 +4239,8 @@
         '<td>' + confPercent(sig.confidence).toFixed(1) + '%</td></tr>';
     }).join('');
     root.innerHTML = '<table class="tbl"><thead><tr><th>Subnet</th><th>Type</th><th>Conf</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    patchDevSignalsDesk(signals);
+    patchMarketPulse(lastSubnets, signals.length, (alerts || []).length);
   }
 
   function radarPayloadFromSubnets(subnets) {
