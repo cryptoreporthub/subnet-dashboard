@@ -193,7 +193,7 @@ Historical Wave 2 gates above reflected pre-approval state. Current status:
 | Path B explicit approval | **Granted** 2026-08-24 |
 | Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
 | Saga gate tests (#1044) | **MERGED** 2026-08-25 |
-| P5 browser plan (#1043) | **Merge pending** CI (agent-owned; docs only) |
+| P5 browser plan (#1043) | **MERGED** 2026-08-25 (docs only; not implementation approval) |
 | P3 quota/tier | Manual dashboard — **still pending** |
 | Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
 | Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
@@ -218,7 +218,7 @@ Owner authorized agent to merge Sentry PRs. **Parallel D5 #1041** is orthogonal 
 
 **Do not** bundle Browser SDK runtime code, Session Replay, or hydration/`cockpit_hydrate.js` changes into Sentry merges.
 
-**Conflict surface (rebase only):** `docs/sentry-telemetry-findings.md` across #1042/#1043/#1044 — no `server.py` overlap with #1041.
+**Conflict surface:** Resolved — all Sentry PRs merged. **D5 #1041** remains independent (`server.py` only).
 
 ---
 
