@@ -70,8 +70,7 @@ def _inline_worker_peer() -> Optional[Dict[str, Any]]:
             return None
         from internal.worker_peer import get_worker_peer
 
-        peer = get_worker_peer()
-        return peer if peer.get("alive") is True else None
+        return get_worker_peer()
     except Exception:
         return None
 
@@ -79,6 +78,8 @@ def _inline_worker_peer() -> Optional[Dict[str, Any]]:
 def refresh_from_state() -> None:
     """Populate gauges from existing state APIs (read-only, scrape-time only)."""
     inline_peer = _inline_worker_peer()
+    inline_worker = inline_peer is not None
+    inline_worker_alive = bool(inline_peer and inline_peer.get("alive") is True)
 
     try:
         from internal.live_subnets import live_data_freshness
@@ -87,12 +88,12 @@ def refresh_from_state() -> None:
         _set_optional(LIVE_AGE_SECONDS, live.get("age_seconds"))
         if live.get("stale") is not None:
             LIVE_STALE.set(1 if live.get("stale") else 0)
-        if inline_peer:
+        if inline_worker:
             # In v1 the web process intentionally does not run freshness sync.
             # Pair the worker heartbeat with the shared cache result instead of
             # exposing the web process's never-started local sync state.
-            SYNC_RUNNING.set(1)
-            SYNC_LAST_OK.set(0 if live.get("stale") else 1)
+            SYNC_RUNNING.set(1 if inline_worker_alive else 0)
+            SYNC_LAST_OK.set(1 if inline_worker_alive and not live.get("stale") else 0)
     except Exception:
         pass
 
@@ -100,7 +101,7 @@ def refresh_from_state() -> None:
         from internal.freshness import get_sync_state
 
         sync = get_sync_state()
-        if not inline_peer:
+        if not inline_worker:
             SYNC_RUNNING.set(1 if sync.get("background_running") else 0)
             last_ok = sync.get("last_sync_ok")
             if last_ok is not None:
@@ -120,11 +121,11 @@ def refresh_from_state() -> None:
     ):
         try:
             info = getter()
-            if inline_peer:
+            if inline_worker:
                 # The worker heartbeat is deliberately paused when its guarded
                 # scheduler is unhealthy, so it is the authoritative running
                 # signal for the sibling worker in v1.
-                info = {**info, "running": True}
+                info = {**info, "running": inline_worker_alive}
             SCHEDULER_RUNNING.labels(scheduler=scheduler).set(1 if info.get("running") else 0)
             last_ok = info.get("last_run_ok")
             if last_ok is not None:
@@ -140,7 +141,7 @@ def refresh_from_state() -> None:
 
         js = job_scheduler_state()
         SCHEDULER_RUNNING.labels(scheduler="apscheduler").set(
-            1 if (inline_peer or js.get("running")) else 0
+            1 if (inline_worker_alive or (not inline_worker and js.get("running"))) else 0
         )
         SCHEDULER_JOB_COUNT.set(js.get("job_count", 0))
     except Exception:
