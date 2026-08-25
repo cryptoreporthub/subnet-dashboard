@@ -201,6 +201,52 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 ---
 
+## Stage B status (2026-08-25)
+
+| Item | Tier | Notes |
+|------|------|-------|
+| Scrub/filter on `main` | CI | Merged #1038 (`c0494297`) |
+| Prod scrub active | production | Fly `v2008`; `before_send` drops TaoStats pool-latest 404 via SSH verify |
+| TaoStats 404 ingest post-scrub | production | Monitor via Sentry MCP; baseline clock from deploy ~2026-08-25T06:04 UTC |
+
+---
+
+## Stage C — release build (PR in flight)
+
+Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. No `sentry_setup.py` changes. Deploy via authorized `workflow_dispatch` after merge.
+
+Post-deploy verify: `printenv SENTRY_RELEASE` on machine; new prod events carry `release` tag matching deploy SHA.
+
+---
+
+## Stage D — alert activation (manual UI; ≥24h after scrub baseline)
+
+Sentry MCP has no alert-create tool. Configure in Sentry UI after 24h stable post-scrub volume + quota check (Settings → Subscription).
+
+### Before activating
+
+1. Disable or narrow default rule “Send a notification for high priority issues” (0 min cooldown — storms on warnings).
+2. Confirm TaoStats `PYTHON-FASTAPI-5` ingest `count() = 0` over 24h window.
+3. Confirm quota headroom manually.
+
+### Create: `prod-errors-saga-adjacent`
+
+- Filter: `environment:production` AND `level:error`
+- Optional: `transaction:/subnetsummer` OR `/api/pump-alerts` OR `/api/daily-pick`
+- Cooldown: **60 minutes** per issue
+- **Do not** alert on: `logger:fetchers.taostats_client`, broad `level:warning`, cold-cache ratio, `/api/learning/health` timeouts during deploy
+
+### Optional after Stage C release tags stable
+
+- `prod-loop-stall-guard`: loop-stall messages, 30 min cooldown
+- `prod-regression-new-issue`: `level:error` + `is:new` + `release:latest`, 60 min cooldown
+
+### Rollback (alerts only)
+
+Disable new rules; re-enable only after volume re-baselined. No Saga/runtime state changes.
+
+---
+
 ## Security
 
 - DSN stored only as Fly secret — never committed to repo.
