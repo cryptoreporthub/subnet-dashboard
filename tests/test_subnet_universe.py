@@ -415,6 +415,15 @@ def test_build_rows_tags_tmc_source():
     assert subnet_enrichment_status(rows) == "names_only"
 
 
+def test_build_rows_preserves_membership_netuids():
+    """Source tagging must not add, drop, or reorder universe membership."""
+    netuids = [1, 74, 75, 80, 87, 90, 118]
+    tmc = {n: {"netuid": n, "volume": 1.0} for n in netuids}
+    rows = _build_rows(netuids, tmc)
+    assert [int(r["netuid"]) for r in rows] == netuids
+    assert len(rows) == len(netuids)
+
+
 def test_universe_snapshot_feed_meta_tmc_backed_129_rows():
     """129-row TMC membership must not report source=registry when rows lack markers."""
     netuids = list(range(129))
@@ -432,6 +441,8 @@ def test_universe_snapshot_feed_meta_tmc_backed_129_rows():
     meta = universe_snapshot_feed_meta(snap)
     assert meta["source"] == "taomarketcap"
     assert "taomarketcap" in meta["sources"]
+    assert snap.netuids == tuple(netuids)
+    assert len(snap.rows) == 129
 
 
 def test_emergency_registry_feed_meta_names_only():
