@@ -192,8 +192,8 @@ Historical Wave 2 gates above reflected pre-approval state. Current status:
 | Path B scrub/filter (#1038) | **MERGED**; live on prod; TaoStats pool-latest 404 **0 events / 1h** post-deploy |
 | Path B explicit approval | **Granted** 2026-08-24 |
 | Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
-| Saga gate tests (#1044) | **Merge in progress** (agent-owned) |
-| P5 browser plan (#1043) | **Merge in progress** (docs only; not implementation approval) |
+| Saga gate tests (#1044) | **MERGED** 2026-08-25 |
+| P5 browser plan (#1043) | **Merge pending** CI (agent-owned; docs only) |
 | P3 quota/tier | Manual dashboard — **still pending** |
 | Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
 | Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
