@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# Build-time release attribution for Sentry (read by internal/sentry_setup.py).
+ARG GIT_SHA=unknown
+ENV SENTRY_RELEASE=${GIT_SHA}
+
 WORKDIR /app
 
 COPY requirements.txt .
