@@ -37,7 +37,8 @@
 
   function fmtSigned(n) {
     n = Number(n) || 0;
-    return (n >= 0 ? "+" : "") + n.toFixed(1) + "%";
+    var digits = Math.abs(n) > 0 && Math.abs(n) < 0.15 ? 2 : 1;
+    return (n >= 0 ? "+" : "") + n.toFixed(digits) + "%";
   }
 
   function badgeClass(act) {
@@ -66,14 +67,23 @@
   }
 
   function outcomeFromPred(pred) {
-    if (pred.correct === true) return "correct";
-    if (pred.correct === false) return "wrong";
     var actual = Number(pred.actual_pct);
-    if (isNaN(actual)) return null;
+    if (isNaN(actual)) {
+      if (pred.correct === true) return "correct";
+      if (pred.correct === false) return "wrong";
+      return null;
+    }
+    var src = String(pred.pick_source || "").toLowerCase();
+    if (src === "pump_lead" || src === "pump_combined_exp") {
+      var th = Number(pred.predicted_pct);
+      if (!(th > 0)) th = 2;
+      return actual >= th ? "correct" : "wrong";
+    }
     var dir = String(pred.direction || "").toLowerCase();
-    if (dir === "up") return actual >= 0 ? "correct" : "wrong";
-    if (dir === "down") return actual <= 0 ? "correct" : "wrong";
-    return null;
+    if (dir === "down" || Number(pred.predicted_pct) < 0) {
+      return actual < 0 ? "correct" : "wrong";
+    }
+    return actual > 0 ? "correct" : "wrong";
   }
 
   function contextTags(pred) {

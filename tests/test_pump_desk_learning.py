@@ -73,14 +73,16 @@ def test_pump_lead_hit_requires_two_pct_for_early():
     assert correct is False and outcome == "miss"
 
 
-def test_just_started_grades_still_positive():
+def test_just_started_needs_predicted_move_not_a_tick():
     pred = {
         "pick_source": "pump_lead",
         "predicted_pct": 2.0,
         "pump_claim": "JUST_STARTED",
         "pump_badge": "JUST STARTED",
     }
-    assert pump_lead_hit(pred, 0.5) is True
+    assert pump_lead_hit(pred, 0.0308) is False
+    assert pump_lead_hit(pred, 0.5) is False
+    assert pump_lead_hit(pred, 2.0) is True
     assert pump_lead_hit(pred, -0.1) is False
 
 

@@ -741,7 +741,18 @@
     // Paint the required judge surface from its own request. Calibration,
     // explainability, daily-pick refresh, and trail are enrichments and must
     // never make a healthy /api/judges response disappear behind the skeleton.
-    return fetchJson('/api/judges/' + focusNetuid, 15000).then(function (judges) {
+    function fetchJudges() {
+      return fetchJson('/api/judges/' + focusNetuid, 15000).then(function (judges) {
+        if (!judges || judges.error || !judges.consensus) {
+          throw new Error((judges && judges.error) || 'judges empty');
+        }
+        return judges;
+      });
+    }
+
+    return fetchJudges().catch(function () {
+      return new Promise(function (resolve) { setTimeout(resolve, 600); }).then(fetchJudges);
+    }).then(function (judges) {
       action = focusActionBadge(initialDp, judges);
       updateIdentityChip(initialDp);
       renderJudges(judges, action, {}, {}, initialTrail);
@@ -834,9 +845,10 @@
       renderSwitcher(top);
       scrollToFocus();
       return refreshFocus();
-    }).catch(function () {
+    }).catch(function (err) {
+      console.warn('[living_focus] cold bootstrap failed', err);
       setBrainState('quiet');
-      if (bodyEl) bodyEl.innerHTML = '<p class="living-focus__empty">Judges quiet — last try failed.</p>';
+      renderJudgesQuiet('Quiet — lane judges unavailable right now.', cachedTrail, {});
     });
   }
 

@@ -193,11 +193,9 @@
 
   window.PaperPortfolio = { hydrate: hydrate, render: render };
 
-  if (document.documentElement.dataset.hydrate !== "1") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { hydrate(); });
-    } else {
-      hydrate();
-    }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+  } else {
+    hydrate();
   }
 })();

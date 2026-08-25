@@ -58,7 +58,7 @@ def _context_tags(pred: Dict[str, Any]) -> List[str]:
 def build_story_strip(limit: int = 8, focus_netuid: int | None = None) -> Dict[str, Any]:
     """Last N gradeable resolved predictions with right/wrong labels."""
     try:
-        from internal.council.grading import direction_correct
+        from internal.council.grading import direction_correct, effective_correct
         from internal.learning.predictions_store import load_predictions
 
         data = load_predictions()
@@ -73,12 +73,15 @@ def build_story_strip(limit: int = 8, focus_netuid: int | None = None) -> Dict[s
             actual = pred.get("actual_pct")
             if actual is None:
                 continue
-            correct = pred.get("correct")
-            if correct is None:
-                try:
-                    correct = direction_correct(pred, float(actual))
-                except Exception:
-                    correct = None
+            try:
+                correct = effective_correct(pred)
+            except Exception:
+                correct = pred.get("correct")
+                if correct is None:
+                    try:
+                        correct = direction_correct(pred, float(actual))
+                    except Exception:
+                        correct = None
             if correct is None:
                 continue
             netuid = pred.get("netuid")

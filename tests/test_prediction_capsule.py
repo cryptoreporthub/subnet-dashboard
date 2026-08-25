@@ -137,3 +137,31 @@ def test_og_svg_route_and_share_page(tmp_path, monkeypatch):
 
     missing_page = client.get("/share/call/missing-id")
     assert missing_page.status_code == 200
+
+
+def test_capsule_recomputes_just_started_flat_as_miss(tmp_path, monkeypatch):
+    pred_path = tmp_path / "predictions.json"
+    pred_path.write_text(
+        """{
+      "predictions": [],
+      "resolved": [{
+        "id": "pred_flat_1",
+        "netuid": 64,
+        "name": "TensorUSD",
+        "statement": "pump lead +2% within 1h from JUST STARTED entry",
+        "predicted_pct": 2.0,
+        "actual_pct": 0.0308,
+        "correct": true,
+        "outcome": "hit",
+        "pick_source": "pump_lead",
+        "pump_claim": "JUST_STARTED",
+        "pump_badge": "JUST STARTED"
+      }],
+      "stats": {}
+    }"""
+    )
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_PATH", str(pred_path))
+    out = get_prediction_capsule("pred_flat_1")
+    assert out["capsule"]["correct"] is False
+    share = build_share_card(out["prediction"])
+    assert "✗" in share

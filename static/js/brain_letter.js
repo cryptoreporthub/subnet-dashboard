@@ -22,7 +22,7 @@
   function hasSsrDigest(root, section) {
     if (root && root.querySelector(".weekly-letter__digest")) return true;
     if (section && section.getAttribute("data-ssr") === "1") return true;
-    return gradedCountFromDom() > 0;
+    return false;
   }
 
   function block(title, id, body) {
@@ -316,12 +316,10 @@
 
   window.BrainLetter = { hydrate: hydrate, render: render };
 
-  if (document.documentElement.dataset.hydrate !== "1") {
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", function () { hydrate(); });
-    } else {
-      hydrate();
-    }
-    document.addEventListener("home-daily-call-updated", hydrate);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+  } else {
+    hydrate();
   }
+  document.addEventListener("home-daily-call-updated", hydrate);
 })();
