@@ -30,7 +30,7 @@
 - Fly secret names (flyctl not on VM initially)
 - Production event arrival
 
-**Saga (Wave 1):** Local mechanism verified; production capture pending.
+**Saga (Wave 1):** Local mechanism verified; production natural capture pending; local automated saga gate added 2026-08-25 (`tests/test_sentry_saga_gate.py`).
 
 ---
 
@@ -131,14 +131,14 @@
 
 | Route / path | Prod/natural Sentry events? | Tier |
 |--------------|----------------------------|------|
-| `/subnetsummer` | **No** | Confirmed in production via MCP |
-| `/api/pump-alerts` | **No** | Confirmed in production via MCP |
+| `/subnetsummer` | **No** (7d) | Confirmed in production via MCP |
+| `/api/pump-alerts` | **Yes** — timeout warnings (`pump-alerts timed out after 12s`, culprit `/api/pump-alerts`) | Confirmed in production via MCP |
 | `/api/daily-pick` | Yes — [PYTHON-FASTAPI-6](https://simivision.sentry.io/issues/PYTHON-FASTAPI-6) (timeout warnings, 4 events) | Confirmed in production via MCP |
 | listener / message-intel | **No** | Confirmed in production via MCP |
 
-**Status:** *Transport and initialization verified in production; saga-relevant route capture remains pending for `/subnetsummer` and `/api/pump-alerts` (no production or natural failure events observed).*
+**Status (2026-08-25):** Transport and initialization verified in production. **No natural prod failure events** yet for `/subnetsummer` or `/api/pump-alerts` (routes healthy when checked). **Local saga gate cleared** via `tests/test_sentry_saga_gate.py` — TestClient synthetic failures confirm Starlette request URLs attach for both routes (`Confirmed locally at runtime`). Synthetic prod verify (`fly machine exec`) skipped — flyctl MCP unavailable on agent VM.
 
-Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** only.
+Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **Confirmed locally at runtime** (automated tests + before_send matrix in `tests/test_sentry_setup.py`).
 
 ### P3 quota / tier gate
 
@@ -173,31 +173,109 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 4. **Escalation (post-filter):**
    - Loop-stall guard ([PYTHON-FASTAPI-9](https://simivision.sentry.io/issues/PYTHON-FASTAPI-9), [PYTHON-FASTAPI-A](https://simivision.sentry.io/issues/PYTHON-FASTAPI-A)) — consider separate alert with 30-min cooldown once release tagging enables regression detection
 
-### Unavailable/pending (Wave 2 MCP)
+### Unavailable/pending (Wave 2 MCP) — historical snapshot
 
-1. Sentry org plan/tier/quota via MCP (manual: Settings → Subscription)
-2. `SENTRY_RELEASE` on production (no release tag on any prod event)
-3. Saga production capture for `/subnetsummer` and `/api/pump-alerts`
-4. Path B baseline (not approved)
-5. Alert rule activation (blocked until TaoStats / cold-cache filtering designed in Path B)
-
----
-
-## Blocking gates before Path B
-
-1. P3 quota/tier review with real volume data — **partial:** volume observed (39/24h in short window); plan/tier still unavailable via MCP
-2. P2 build-time `SENTRY_RELEASE` from git SHA in Dockerfile/deploy workflow
-3. Production or natural saga-route failure evidence for `/subnetsummer` and `/api/pump-alerts` — **still pending**
-4. Explicit Path B approval
-5. Alert rule grouping verified — **done via Sentry MCP**; activation blocked until noise filters
+1. Sentry org plan/tier/quota via MCP (manual: Settings → Subscription) — **still pending**
+2. `SENTRY_RELEASE` on production — **was** `release=null` pre-Stage C; **merged #1042** (2026-08-25); deploy + post-deploy verify pending
+3. Saga production capture — `/api/pump-alerts` **confirmed in prod** (timeout warnings); `/subnetsummer` **local gate cleared** (`tests/test_sentry_saga_gate.py`); prod natural `/subnetsummer` still pending
+4. Path B scrub/filter — **authorized and merged** (#1038, 2026-08-24)
+5. Alert rule activation — **deferred** (Stage D; see below)
 
 ---
 
-## Recommended next gated actions (not authorized by this PR)
+## Blocking gates — superseded timeline (2026-08-25)
 
-**Recommended next gated action:** approve and implement P2 build-time `SENTRY_RELEASE` from the deployed Git SHA (Dockerfile ARG → image env) so production events carry deploy SHA. This is **not** authorized by this PR and requires separate Path B approval.
+Historical Wave 2 gates above reflected pre-approval state. Current status:
 
-**Alternative (also gated):** approve Path B `before_send` filtering to drop TaoStats 404 warnings before activating Sentry alert rules. Requires explicit Path B approval and is not authorized by this PR.
+| Gate | Status |
+|------|--------|
+| Path B scrub/filter (#1038) | **MERGED**; live on prod; TaoStats pool-latest 404 **0 events / 1h** post-deploy |
+| Path B explicit approval | **Granted** 2026-08-24 |
+| Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
+| Saga gate tests (#1044) | **MERGED** 2026-08-25 |
+| P5 browser plan (#1043) | **MERGED** 2026-08-25 (docs only; not implementation approval) |
+| P3 quota/tier | Manual dashboard — **still pending** |
+| Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
+| Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
+| Stage D alerts | **Documented**; activate ≥24h post-scrub in Sentry UI |
+| D5 #1041 parallel work | **No file collision** with Sentry PRs (`server.py` only on #1041) |
+
+---
+
+## Execution plan — agent-owned merges (2026-08-25)
+
+Owner authorized agent to merge Sentry PRs. **Parallel D5 #1041** is orthogonal (`server.py` / universe feed only).
+
+| Step | Action | Owner | Status |
+|------|--------|-------|--------|
+| 1 | Merge **#1042** Stage C (`SENTRY_RELEASE`) | Agent | **DONE** (`19fbb126`) |
+| 2 | Fly deploy (push to `main` or `workflow_dispatch`) | CI auto on push | **Pending** — follows merge |
+| 3 | Post-deploy: machine `SENTRY_RELEASE` == deploy SHA; new events carry `release` | Agent/human verify | Pending after deploy |
+| 4 | Merge **#1044** saga gate tests (rebase findings doc) | Agent | In progress |
+| 5 | Merge **#1043** P5 browser plan (docs only) | Agent | After #1044 |
+| 6 | Stage D alert rules in Sentry UI | Human | ≥24h post-scrub + quota check |
+| 7 | P5 Browser SDK **implementation** | Separate approval | **Not authorized** |
+
+**Do not** bundle Browser SDK runtime code, Session Replay, or hydration/`cockpit_hydrate.js` changes into Sentry merges.
+
+**Conflict surface:** Resolved — all Sentry PRs merged. **D5 #1041** remains independent (`server.py` only).
+
+---
+
+## Historical recommendations (Wave 2 — pre-approval)
+
+These items were **not authorized** when Wave 2 findings were first written. They are **superseded** by merges and owner authorization on 2026-08-24/25:
+
+- P2 build-time `SENTRY_RELEASE` → implemented in **Stage C PR #1042**
+- Path B `before_send` filtering → **merged #1038**
+
+Do not treat the historical “not authorized by this PR” wording as current policy.
+
+---
+
+## Stage B status (2026-08-25)
+
+| Item | Tier | Notes |
+|------|------|-------|
+| Scrub/filter on `main` | CI | Merged #1038 (`c0494297`) |
+| Prod scrub active | production | Fly `v2008`; `before_send` drops TaoStats pool-latest 404 via SSH verify |
+| TaoStats 404 ingest post-scrub | production | Monitor via Sentry MCP; baseline clock from deploy ~2026-08-25T06:04 UTC |
+
+---
+
+## Stage C — release build (**merged #1042**, 2026-08-25)
+
+Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. Merged to `main` (`19fbb126`).
+
+**Next:** Fly deploy (CI on push to `main`); post-deploy verify machine `SENTRY_RELEASE` matches deploy SHA; confirm new prod events carry `release` tag.
+
+---
+
+## Stage D — alert activation (manual UI; ≥24h after scrub baseline)
+
+Sentry MCP has no alert-create tool. Configure in Sentry UI after 24h stable post-scrub volume + quota check (Settings → Subscription).
+
+### Before activating
+
+1. Disable or narrow default rule “Send a notification for high priority issues” (0 min cooldown — storms on warnings).
+2. Confirm TaoStats `PYTHON-FASTAPI-5` ingest `count() = 0` over 24h window.
+3. Confirm quota headroom manually.
+
+### Create: `prod-errors-saga-adjacent`
+
+- Filter: `environment:production` AND `level:error`
+- Optional: `transaction:/subnetsummer` OR `/api/pump-alerts` OR `/api/daily-pick`
+- Cooldown: **60 minutes** per issue
+- **Do not** alert on: `logger:fetchers.taostats_client`, broad `level:warning`, cold-cache ratio, `/api/learning/health` timeouts during deploy
+
+### Optional after Stage C release tags stable
+
+- `prod-loop-stall-guard`: loop-stall messages, 30 min cooldown
+- `prod-regression-new-issue`: `level:error` + `is:new` + `release:latest`, 60 min cooldown
+
+### Rollback (alerts only)
+
+Disable new rules; re-enable only after volume re-baselined. No Saga/runtime state changes.
 
 ---
 
@@ -205,3 +283,25 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 
 - DSN stored only as Fly secret — never committed to repo.
 - If DSN was exposed in chat, rotate in Sentry Project Settings → Client Keys and update Fly secret.
+
+---
+
+## P5 — Browser SDK (plan only; implementation gated)
+
+**Status (2026-08-25):** Phase 0 discovery complete in Wave 1 (`Browser SDK not installed; static JS + CSP documented`). Full implementation blueprint in **[`docs/sentry-browser-sdk-plan.md`](sentry-browser-sdk-plan.md)** — documentation-only PR; no runtime changes.
+
+| Topic | Plan location |
+|-------|---------------|
+| Prerequisites (Stage C #1042, quota, explicit approval) | `sentry-browser-sdk-plan.md` § Prerequisites |
+| Loader placement (`base.html` vs `scripts.html`) | § Loader placement options — recommend `base.html` + shared partial |
+| Public DSN / separate client key | § Public DSN strategy |
+| CSP (`connect-src`, vendored vs CDN SDK) | § CSP changes |
+| Source maps (none initially) | § Source maps strategy |
+| Client `beforeSend` scrubbing | § Client-side scrubbing |
+| Server+browser deduplication | § Duplicate event deduplication |
+| Session Replay | § Separate gated track (P5b — not initial) |
+| Conflict surface (`cockpit_hydrate.js`, templates) | § Conflict surface |
+| PR branch `cursor/sentry-browser-sdk-*` | § PR strategy — no overlap with #1042 |
+| Testing / rollback | § Testing plan, § Rollback plan |
+
+**Do not implement** until Stage C release tags are live on prod, quota gate is checked, and owner grants separate P5 approval.
