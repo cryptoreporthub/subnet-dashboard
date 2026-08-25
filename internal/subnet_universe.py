@@ -89,11 +89,15 @@ def _emergency_rows() -> List[Dict[str, Any]]:
 
 
 def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
-    """Return (positive netuids, rows by netuid, source_complete)."""
-    try:
-        from fetchers.taomarketcap import get_all_subnets
+    """Return (positive netuids, rows by netuid, source_complete).
 
-        rows = get_all_subnets() or []
+    Use TaoMarketCap pagination directly — not get_all_subnets(), which prefers the
+  clipped live_subnets cache (often 75 rows) and would pin the shared universe.
+    """
+    try:
+        from fetchers.taomarketcap import _get_all_subnets_tao
+
+        rows = _get_all_subnets_tao() or []
         netuids: Set[int] = set()
         by_netuid: Dict[int, Dict[str, Any]] = {}
         for row in rows:
@@ -420,11 +424,16 @@ class SnapshotBuilder:
         prior_map = dict((prior.validity_map if prior else {}) or {})
         tmc_positive, tmc_rows, tmc_complete = self._tmc_fetch()
 
-        probe_candidates = sorted(set(tmc_positive) | {int(k) for k in prior_map})
+        prior_keys = {int(k) for k in prior_map if str(k).isdigit()}
+        candidates = set(tmc_positive) | prior_keys
         if not tmc_complete and not prior_map:
             probe_candidates = list(range(MAX_NETUIDS))
         elif not tmc_complete and prior_map:
-            probe_candidates = sorted({int(k) for k in prior_map})
+            probe_candidates = sorted(prior_keys)
+        else:
+            if tmc_complete:
+                candidates |= set(range(MAX_NETUIDS))
+            probe_candidates = sorted(candidates)
         deadline = time.monotonic() + self._probe_budget_seconds
         if self._probe_fetch is not None:
             probe_map, probe_complete = self._probe_fetch(probe_candidates, deadline)
