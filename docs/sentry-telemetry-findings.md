@@ -1,5 +1,7 @@
 # Sentry Telemetry Findings
 
+**Status 2026-08-25:** Stage A/B/C **merged and deployed** via `workflow_dispatch` (not push-to-main). Stage D custom alerts **not created**. Browser SDK **not started** (plan only, #1043). Server tracing **off** (`traces_sample_rate=0.0`). Known gap: [PYTHON-FASTAPI-5](https://simivision.sentry.io/issues/PYTHON-FASTAPI-5) TaoStats pool-latest 404 noise still ingesting — filter broadening tracked in separate PR (`cursor/sentry-taostats-filter-fix-ade3`).
+
 **Directive:** Sentry Telemetry Review v1.1
 **Evidence tiers:** Confirmed from code | Confirmed from tests | Confirmed locally at runtime | Confirmed in production | Confirmed via Sentry MCP | Confirmed in production via MCP | Historical evidence | Unavailable/pending
 
@@ -176,7 +178,7 @@ Wave 1 local mock capture for `/subnetsummer` and `/api/pump-alerts` remains **C
 ### Unavailable/pending (Wave 2 MCP) — historical snapshot
 
 1. Sentry org plan/tier/quota via MCP (manual: Settings → Subscription) — **still pending**
-2. `SENTRY_RELEASE` on production — **was** `release=null` pre-Stage C; **merged #1042** (2026-08-25); deploy + post-deploy verify pending
+2. `SENTRY_RELEASE` on production — **was** `release=null` pre-Stage C; **merged #1042** (2026-08-25); **deployed** via workflow_dispatch + post-deploy verify **done**
 3. Saga production capture — `/api/pump-alerts` **confirmed in prod** (timeout warnings); `/subnetsummer` **local gate cleared** (`tests/test_sentry_saga_gate.py`); prod natural `/subnetsummer` still pending
 4. Path B scrub/filter — **authorized and merged** (#1038, 2026-08-24)
 5. Alert rule activation — **deferred** (Stage D; see below)
@@ -189,16 +191,16 @@ Historical Wave 2 gates above reflected pre-approval state. Current status:
 
 | Gate | Status |
 |------|--------|
-| Path B scrub/filter (#1038) | **MERGED**; live on prod; TaoStats pool-latest 404 **0 events / 1h** post-deploy |
+| Path B scrub/filter (#1038) | **MERGED** 2026-08-24 (`c0494297`); live on prod; TaoStats pool-latest 404 filter **partial** — PYTHON-FASTAPI-5 still ingesting (logger-gate bug; fix in flight) |
 | Path B explicit approval | **Granted** 2026-08-24 |
-| Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
-| Saga gate tests (#1044) | **MERGED** 2026-08-25 |
-| P5 browser plan (#1043) | **MERGED** 2026-08-25 (docs only; not implementation approval) |
+| Stage C release build (#1042) | **MERGED + DEPLOYED** 2026-08-25 (`19fbb126`); `SENTRY_RELEASE` post-deploy verify passed (fly.yml step; e.g. run `32836257537` @ `983babfc`) |
+| Saga gate tests (#1044) | **MERGED** 2026-08-25 (`9335deb1`) |
+| P5 browser plan (#1043) | **MERGED** 2026-08-25 (`52550c74`) — docs only; **not implementation approval** |
 | P3 quota/tier | Manual dashboard — **still pending** |
 | Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
 | Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
-| Stage D alerts | **Documented**; activate ≥24h post-scrub in Sentry UI |
-| D5 #1041 parallel work | **No file collision** with Sentry PRs (`server.py` only on #1041) |
+| Stage D alerts | **Not created** — documented; activate ≥24h post-scrub in Sentry UI |
+| D5 #1041 parallel work | **MERGED** — no file collision with Sentry PRs |
 
 ---
 
@@ -209,12 +211,14 @@ Owner authorized agent to merge Sentry PRs. **Parallel D5 #1041** is orthogonal 
 | Step | Action | Owner | Status |
 |------|--------|-------|--------|
 | 1 | Merge **#1042** Stage C (`SENTRY_RELEASE`) | Agent | **DONE** (`19fbb126`) |
-| 2 | Fly deploy (push to `main` or `workflow_dispatch`) | CI auto on push | **Pending** — follows merge |
-| 3 | Post-deploy: machine `SENTRY_RELEASE` == deploy SHA; new events carry `release` | Agent/human verify | Pending after deploy |
-| 4 | Merge **#1044** saga gate tests (rebase findings doc) | Agent | In progress |
-| 5 | Merge **#1043** P5 browser plan (docs only) | Agent | After #1044 |
-| 6 | Stage D alert rules in Sentry UI | Human | ≥24h post-scrub + quota check |
-| 7 | P5 Browser SDK **implementation** | Separate approval | **Not authorized** |
+| 2 | Fly deploy via **`workflow_dispatch`** only | Human/agent | **DONE** — e.g. run `32836257537` @ `983babfc` (2026-08-25); push-to-main deploy **disabled** since 2026-08-19 |
+| 3 | Post-deploy: machine `SENTRY_RELEASE` == deploy SHA | Agent/human verify | **DONE** — fly.yml `Verify SENTRY_RELEASE on deployed machine` step |
+| 4 | Merge **#1044** saga gate tests | Agent | **DONE** (`9335deb1`) |
+| 5 | Merge **#1043** P5 browser plan (docs only) | Agent | **DONE** (`52550c74`) |
+| 6 | Merge **#1045** finalize execution plan | Agent | **DONE** (`5015b4da`) |
+| 7 | Stage D alert rules in Sentry UI | Human | **Not started** — ≥24h post-scrub + quota check |
+| 8 | P5 Browser SDK **implementation** | Separate approval | **Not authorized** |
+| 9 | TaoStats PYTHON-FASTAPI-5 filter broadening | Agent | **In flight** — `cursor/sentry-taostats-filter-fix-ade3` |
 
 **Do not** bundle Browser SDK runtime code, Session Replay, or hydration/`cockpit_hydrate.js` changes into Sentry merges.
 
@@ -238,16 +242,29 @@ Do not treat the historical “not authorized by this PR” wording as current p
 | Item | Tier | Notes |
 |------|------|-------|
 | Scrub/filter on `main` | CI | Merged #1038 (`c0494297`) |
-| Prod scrub active | production | Fly `v2008`; `before_send` drops TaoStats pool-latest 404 via SSH verify |
-| TaoStats 404 ingest post-scrub | production | Monitor via Sentry MCP; baseline clock from deploy ~2026-08-25T06:04 UTC |
+| Prod scrub active | production | `before_send` in `internal/sentry_setup.py`; TaoStats pool-latest 404 drop requires message match (logger gate removed in filter-fix PR) |
+| TaoStats 404 ingest post-scrub | production | **Known gap:** PYTHON-FASTAPI-5 still receiving events (~350/24h as of 2026-08-25 audit); await filter-fix deploy + 24h ingest confirmation |
 
 ---
 
-## Stage C — release build (**merged #1042**, 2026-08-25)
+## Stage C — release build (**merged + deployed #1042**, 2026-08-25)
 
-Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. Merged to `main` (`19fbb126`).
+Build-time `GIT_SHA` → `SENTRY_RELEASE` in Dockerfile + `fly.yml` `--build-arg`. Merged to `main` (`19fbb126`). Deployed via **`workflow_dispatch`**; post-deploy step asserts machine `SENTRY_RELEASE` matches deploy SHA.
 
-**Next:** Fly deploy (CI on push to `main`); post-deploy verify machine `SENTRY_RELEASE` matches deploy SHA; confirm new prod events carry `release` tag.
+**Tracing:** `traces_sample_rate=0.0` in `internal/sentry_setup.py` — performance tracing **not enabled**.
+
+---
+
+## Known gaps (2026-08-25)
+
+| Gap | Status | Notes |
+|-----|--------|-------|
+| PYTHON-FASTAPI-5 TaoStats pool-latest 404 noise | **Open** | Filter fix PR `cursor/sentry-taostats-filter-fix-ade3`; do not claim group closed until 24h with no new events post-deploy |
+| Stage D custom alerts | **Not created** | Default high-priority rule exists but never triggered; saga-adjacent rules documented only |
+| Saga prod natural capture | **Unproven** | `tests/test_sentry_saga_gate.py` is TestClient + noop transport — does not prove prod `/subnetsummer` capture |
+| Browser SDK (P5) | **Not started** | Plan merged (#1043); implementation awaits explicit owner approval |
+| Server tracing | **Off** | `traces_sample_rate=0.0` |
+| P3 quota/tier | **Pending** | Manual Sentry Settings → Subscription |
 
 ---
 
