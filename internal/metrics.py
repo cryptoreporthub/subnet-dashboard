@@ -78,8 +78,20 @@ def _inline_worker_peer() -> Optional[Dict[str, Any]]:
 def refresh_from_state() -> None:
     """Populate gauges from existing state APIs (read-only, scrape-time only)."""
     inline_peer = _inline_worker_peer()
-    inline_worker = inline_peer is not None
+    try:
+        from internal.run_mode import inline_worker_expected, is_worker_mode
+
+        inline_worker = not is_worker_mode() and inline_worker_expected()
+    except Exception:
+        inline_worker = False
     inline_worker_alive = bool(inline_peer and inline_peer.get("alive") is True)
+
+    if inline_worker:
+        # Prometheus keeps its last value until explicitly overwritten. Start
+        # every inline-worker scrape as unhealthy so a missing peer or failed
+        # shared-cache read cannot preserve a prior successful sample.
+        SYNC_RUNNING.set(0)
+        SYNC_LAST_OK.set(0)
 
     try:
         from internal.live_subnets import live_data_freshness
@@ -93,7 +105,7 @@ def refresh_from_state() -> None:
             # Pair the worker heartbeat with the shared cache result instead of
             # exposing the web process's never-started local sync state.
             SYNC_RUNNING.set(1 if inline_worker_alive else 0)
-            SYNC_LAST_OK.set(1 if inline_worker_alive and not live.get("stale") else 0)
+            SYNC_LAST_OK.set(1 if inline_worker_alive and live.get("stale") is False else 0)
     except Exception:
         pass
 

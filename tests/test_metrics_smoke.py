@@ -90,3 +90,39 @@ def test_inline_worker_metrics_mark_stale_shared_cache_unhealthy(monkeypatch):
 
     assert metrics.SYNC_RUNNING._value.get() == 1
     assert metrics.SYNC_LAST_OK._value.get() == 0
+
+
+def test_inline_worker_metrics_fail_closed_when_shared_cache_read_fails(monkeypatch):
+    from internal import metrics
+
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+    monkeypatch.setattr(
+        "internal.worker_peer.get_worker_peer",
+        lambda: {"alive": True, "peer": "inline_worker", "source": "file"},
+    )
+    monkeypatch.setattr(
+        "internal.live_subnets.live_data_freshness",
+        lambda: {"age_seconds": 12, "stale": False},
+    )
+
+    metrics.refresh_from_state()
+    assert metrics.SYNC_RUNNING._value.get() == 1
+    assert metrics.SYNC_LAST_OK._value.get() == 1
+
+    def _cache_read_failed():
+        raise OSError("shared cache unavailable")
+
+    monkeypatch.setattr("internal.live_subnets.live_data_freshness", _cache_read_failed)
+    metrics.refresh_from_state()
+    assert metrics.SYNC_RUNNING._value.get() == 0
+    assert metrics.SYNC_LAST_OK._value.get() == 0
+
+    monkeypatch.setattr(
+        "internal.live_subnets.live_data_freshness",
+        lambda: {"age_seconds": None, "stale": None},
+    )
+    metrics.refresh_from_state()
+    assert metrics.SYNC_RUNNING._value.get() == 1
+    assert metrics.SYNC_LAST_OK._value.get() == 0
