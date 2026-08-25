@@ -54,7 +54,11 @@ def _prior_snapshot(netuids: list[int]) -> UniverseSnapshot:
 
 
 def test_t1_empty_state_emergency_registry(universe_tmp):
-  """Cold boot with no disk file serves emergency_registry."""
+  """Cold boot with no disk file serves emergency_registry.
+
+  Env: needs config/registry.json (gitignored). Empty checkout ⇒ len(netuids)==0.
+  See docs/pr-1041-env-setup-failures.md — not a #1041 metadata regression.
+  """
   provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
   snap = provider.get_snapshot()
   assert snap.status == "emergency_registry"
@@ -313,7 +317,10 @@ def test_get_lkg_or_emergency_uses_provider_singleton(universe_tmp):
 
 
 def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
-    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok."""
+    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok.
+
+    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
+    """
     built = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({}, True),
@@ -324,7 +331,10 @@ def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
 
 
 def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monkeypatch):
-    """Provider on cold start must not publish zero-member ok snapshot."""
+    """Provider on cold start must not publish zero-member ok snapshot.
+
+    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
+    """
     monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
     monkeypatch.setenv("RUN_MODE", "worker")
     provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
