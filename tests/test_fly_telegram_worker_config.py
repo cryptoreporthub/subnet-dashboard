@@ -128,6 +128,13 @@ def test_fly_yml_passes_sentry_release_build_arg():
     assert "--build-arg" in yml and "GIT_SHA=" in yml
 
 
+def test_fly_yml_verifies_sentry_release_on_machine():
+    yml = _fly_yml()
+    assert "Verify SENTRY_RELEASE on deployed machine" in yml
+    assert "printenv SENTRY_RELEASE" in yml
+    assert "does not match deploy SHA" in yml
+
+
 def test_fly_yml_scales_v1_inline():
     yml = _fly_yml()
     assert "flyctl scale count web=1" in yml

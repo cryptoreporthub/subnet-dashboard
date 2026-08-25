@@ -194,6 +194,23 @@ jobs:
           fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify SENTRY_RELEASE on deployed machine
+        run: |
+          set -e
+          EXPECTED="$(git rev-parse HEAD)"
+          ACTUAL="$(flyctl ssh console -a subnet-dashboard -C 'printenv SENTRY_RELEASE' 2>/dev/null | tr -d '\r\n')"
+          echo "expected SENTRY_RELEASE=${EXPECTED}"
+          echo "actual SENTRY_RELEASE=${ACTUAL}"
+          if [ -z "$ACTUAL" ] || [ "$ACTUAL" = "unknown" ]; then
+            echo "GUARD FAIL: SENTRY_RELEASE unset or unknown on machine"
+            exit 1
+          fi
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "GUARD FAIL: SENTRY_RELEASE on machine does not match deploy SHA"
+            exit 1
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Warm production caches
         run: |
           chmod +x scripts/warm_prod.sh
