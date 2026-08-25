@@ -47,11 +47,38 @@ def test_drop_taostats_pool_latest_404():
     assert before_send(event, {}) is None
 
 
+def test_drop_taostats_pool_latest_404_uvicorn_logger():
+    event = _taostats_event("/dtao/pool/latest/v1", 404)
+    event["logger"] = "uvicorn.error"
+    assert before_send(event, {}) is None
+
+
+def test_drop_taostats_pool_latest_404_no_logger():
+    event = _taostats_event("/dtao/pool/latest/v1", 404)
+    del event["logger"]
+    assert before_send(event, {}) is None
+
+
+def test_retain_taostats_pool_latest_500():
+    event = _taostats_event("/dtao/pool/latest/v1", 500)
+    assert before_send(event, {}) is not None
+
+
+def test_retain_taostats_pool_latest_500_body_mentions_404():
+    event = _taostats_event("/dtao/pool/latest/v1", 500, "upstream 404 cached")
+    assert before_send(event, {}) is not None
+
+
 def test_retain_other_taostats_404():
     event = _taostats_event("/other/path", 404)
     result = before_send(event, {})
     assert result is not None
     assert result["logentry"]["params"][0] == "/other/path"
+
+
+def test_retain_other_taostats_404_body_mentions_pool_path():
+    event = _taostats_event("/other/path", 404, "see /dtao/pool/latest/v1 docs")
+    assert before_send(event, {}) is not None
 
 
 def test_retain_non_taostats_404():

@@ -28,6 +28,9 @@ _HANDLE_RE = re.compile(r"@[a-zA-Z0-9_]{3,32}")
 _BEARER_RE = re.compile(r"(Bearer\s+)[^\s]+", re.IGNORECASE)
 _AUTH_HEADER_RE = re.compile(r"(Authorization:\s*)([^\s,]+)", re.IGNORECASE)
 _TAOSTATS_BODY_RE = re.compile(r"(body=).{0,200}", re.IGNORECASE)
+_POOL_LATEST_404_RE = re.compile(
+    r"TaoStats\s+" + re.escape(_TAOSTATS_POOL_LATEST_PATH) + r"\s+returned\s+404\b"
+)
 
 
 def _format_logentry(logentry: dict[str, Any] | None) -> str:
@@ -43,34 +46,39 @@ def _format_logentry(logentry: dict[str, Any] | None) -> str:
         return str(message)
 
 
+def _event_log_text(event: dict[str, Any]) -> str:
+    """Best-effort formatted log text from logentry and top-level message."""
+    parts: list[str] = []
+    logentry = event.get("logentry")
+    if isinstance(logentry, dict):
+        formatted = _format_logentry(logentry)
+        if formatted:
+            parts.append(formatted)
+    message = event.get("message")
+    if isinstance(message, str) and message:
+        parts.append(message)
+    return " ".join(parts)
+
+
 def _is_known_taostats_pool_latest_404(event: dict[str, Any]) -> bool:
     """Drop ingest for the known noisy TaoStats pool-latest 404 pattern only."""
-    if event.get("logger") != "fetchers.taostats_client":
-        return False
     logentry = event.get("logentry")
-    if not isinstance(logentry, dict):
-        formatted = event.get("message") or ""
-        return (
-            "TaoStats" in formatted
-            and _TAOSTATS_POOL_LATEST_PATH in formatted
-            and "404" in formatted
-        )
-    message = logentry.get("message") or ""
-    if message == _TAOSTATS_STATUS_MSG:
-        params = logentry.get("params") or ()
-        if len(params) >= 2:
-            path, status = params[0], params[1]
-            try:
-                status_int = int(status)
-            except (TypeError, ValueError):
-                status_int = None
-            return path == _TAOSTATS_POOL_LATEST_PATH and status_int == 404
-    formatted = _format_logentry(logentry)
-    return (
-        "TaoStats" in formatted
-        and _TAOSTATS_POOL_LATEST_PATH in formatted
-        and "404" in formatted
-    )
+    if isinstance(logentry, dict):
+        message = logentry.get("message") or ""
+        if message == _TAOSTATS_STATUS_MSG:
+            params = logentry.get("params") or ()
+            if len(params) >= 2:
+                path, status = params[0], params[1]
+                try:
+                    status_int = int(status)
+                except (TypeError, ValueError):
+                    status_int = None
+                return path == _TAOSTATS_POOL_LATEST_PATH and status_int == 404
+        formatted = _format_logentry(logentry)
+        if _POOL_LATEST_404_RE.search(formatted):
+            return True
+    text = _event_log_text(event)
+    return _POOL_LATEST_404_RE.search(text) is not None
 
 
 def _scrub_string(value: str) -> str:
