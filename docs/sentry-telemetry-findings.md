@@ -192,8 +192,8 @@ Historical Wave 2 gates above reflected pre-approval state. Current status:
 | Path B scrub/filter (#1038) | **MERGED**; live on prod; TaoStats pool-latest 404 **0 events / 1h** post-deploy |
 | Path B explicit approval | **Granted** 2026-08-24 |
 | Stage C release build (#1042) | **MERGED** 2026-08-25 — deploy + `SENTRY_RELEASE` verify pending |
-| Saga gate tests (#1044) | **Merge in progress** (agent-owned) |
-| P5 browser plan (#1043) | **Merge in progress** (docs only; not implementation approval) |
+| Saga gate tests (#1044) | **MERGED** 2026-08-25 |
+| P5 browser plan (#1043) | **Merge pending** CI (agent-owned; docs only) |
 | P3 quota/tier | Manual dashboard — **still pending** |
 | Saga `/subnetsummer` prod natural | **Pending** (route healthy; local tests pass) |
 | Saga `/api/pump-alerts` prod | **Confirmed** (timeout warnings in Sentry) |
@@ -283,3 +283,25 @@ Disable new rules; re-enable only after volume re-baselined. No Saga/runtime sta
 
 - DSN stored only as Fly secret — never committed to repo.
 - If DSN was exposed in chat, rotate in Sentry Project Settings → Client Keys and update Fly secret.
+
+---
+
+## P5 — Browser SDK (plan only; implementation gated)
+
+**Status (2026-08-25):** Phase 0 discovery complete in Wave 1 (`Browser SDK not installed; static JS + CSP documented`). Full implementation blueprint in **[`docs/sentry-browser-sdk-plan.md`](sentry-browser-sdk-plan.md)** — documentation-only PR; no runtime changes.
+
+| Topic | Plan location |
+|-------|---------------|
+| Prerequisites (Stage C #1042, quota, explicit approval) | `sentry-browser-sdk-plan.md` § Prerequisites |
+| Loader placement (`base.html` vs `scripts.html`) | § Loader placement options — recommend `base.html` + shared partial |
+| Public DSN / separate client key | § Public DSN strategy |
+| CSP (`connect-src`, vendored vs CDN SDK) | § CSP changes |
+| Source maps (none initially) | § Source maps strategy |
+| Client `beforeSend` scrubbing | § Client-side scrubbing |
+| Server+browser deduplication | § Duplicate event deduplication |
+| Session Replay | § Separate gated track (P5b — not initial) |
+| Conflict surface (`cockpit_hydrate.js`, templates) | § Conflict surface |
+| PR branch `cursor/sentry-browser-sdk-*` | § PR strategy — no overlap with #1042 |
+| Testing / rollback | § Testing plan, § Rollback plan |
+
+**Do not implement** until Stage C release tags are live on prod, quota gate is checked, and owner grants separate P5 approval.
