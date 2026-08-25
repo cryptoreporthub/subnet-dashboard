@@ -66,7 +66,8 @@ def test_t1_empty_state_emergency_registry(universe_tmp):
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
   ).build(None)
   assert built.status == "ok"
-  assert list(built.netuids) == [1, 2, 3]
+  assert len(built.netuids) == MAX_NETUIDS
+  assert built.netuids[:4] == (0, 1, 2, 3)
 
 
 def test_t2_shrink_regression_blocked(universe_tmp):
@@ -336,6 +337,38 @@ def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monk
     assert len(result.netuids) > 0
     assert result.degraded is True
     assert result.status != "ok"
+
+
+def test_tmc_fetch_bypasses_live_subnet_clip(monkeypatch):
+    """Universe membership must not inherit live_subnets 75-row clip."""
+    live_stub = [{"netuid": i} for i in range(75)]
+    tmc_stub = [{"netuid": i} for i in range(130)]
+    monkeypatch.setattr("fetchers.taomarketcap.get_all_subnets", lambda: live_stub)
+    monkeypatch.setattr("fetchers.taomarketcap._get_all_subnets_tao", lambda: tmc_stub)
+    from internal.subnet_universe import _default_tmc_fetch
+
+    netuids, _, complete = _default_tmc_fetch()
+    assert complete
+    assert len(netuids) == 130
+    assert max(netuids) >= 129
+
+
+def test_build_probes_full_range_when_tmc_complete():
+    """TMC-complete refresh probes 0..MAX_NETUIDS-1 for subnets beyond TMC pagination."""
+    prior = UniverseSnapshot.emergency_registry()
+    probed: list[int] = []
+
+    def probe_fetch(netuids, deadline):
+        probed.extend(netuids)
+        return {n: True for n in netuids if n >= 125}, True
+
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(range(75)), {n: {"netuid": n} for n in range(75)}, True),
+        probe_fetch=probe_fetch,
+    )
+    built = builder.build(prior)
+    assert max(probed) >= MAX_NETUIDS - 1
+    assert len(built.netuids) > 75
 
 
 def test_lkg_empty_tmc_retains_full_snapshot_via_provider(universe_tmp, monkeypatch):
