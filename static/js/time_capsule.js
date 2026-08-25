@@ -39,6 +39,13 @@
     if (modal) modal.hidden = true;
   }
 
+  function fmtMovePct(n) {
+    n = Number(n);
+    if (isNaN(n)) return "—";
+    var digits = Math.abs(n) > 0 && Math.abs(n) < 0.15 ? 2 : 1;
+    return n.toFixed(digits) + "%";
+  }
+
   function renderGradedCallCard(payload) {
     var cap = payload.capsule || {};
     var pred = payload.prediction || {};
@@ -65,12 +72,11 @@
       html +=
         '<p class="graded-call-card__move">' +
         '<span class="graded-call-card__k">Expected</span> ' +
-        Number(cap.predicted_pct).toFixed(1) +
-        "%" +
+        fmtMovePct(cap.predicted_pct) +
         '<span class="graded-call-card__arrow">→</span>' +
         '<span class="graded-call-card__k">Actual</span> ' +
-        Number(cap.actual_pct).toFixed(1) +
-        "%</p>";
+        fmtMovePct(cap.actual_pct) +
+        "</p>";
     }
 
     if (cap.statement) {

@@ -30,8 +30,18 @@ def capsule_share_urls(prediction_id: str) -> Dict[str, str]:
     }
 
 
+def _display_correct(pred: Dict[str, Any]) -> Optional[bool]:
+    try:
+        from internal.council.grading import effective_correct
+
+        return effective_correct(pred)
+    except Exception:
+        flag = pred.get("correct")
+        return bool(flag) if isinstance(flag, bool) else None
+
+
 def _og_verdict(pred: Dict[str, Any]) -> Tuple[str, str, Tuple[int, int, int]]:
-    correct = pred.get("correct")
+    correct = _display_correct(pred)
     if correct is True:
         return "HIT", "#00ff41", (0, 255, 65)
     if correct is False:
@@ -65,7 +75,8 @@ def build_share_card(pred: Dict[str, Any]) -> str:
     name = pred.get("name") or f"SN{pred.get('netuid', '?')}"
     predicted = pred.get("predicted_pct")
     actual = pred.get("actual_pct")
-    outcome = "✓" if pred.get("correct") else "✗" if pred.get("correct") is False else "?"
+    flag = _display_correct(pred)
+    outcome = "✓" if flag is True else "✗" if flag is False else "?"
     lines = [
         f"SimiVision graded call — {name}",
         f"Prediction: {pred.get('statement') or '—'}",
@@ -260,7 +271,7 @@ def get_prediction_capsule(prediction_id: str) -> Dict[str, Any]:
             "resolved_at": pred.get("resolved_at"),
             "predicted_pct": pred.get("predicted_pct"),
             "actual_pct": pred.get("actual_pct"),
-            "correct": pred.get("correct"),
+            "correct": _display_correct(pred),
             "subnet_snapshot": snap,
             "active_signals": pred.get("active_signals"),
             "weights_at_creation": pred.get("weights_at_creation"),

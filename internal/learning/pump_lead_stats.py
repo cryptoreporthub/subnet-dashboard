@@ -1,6 +1,6 @@
 """Pump desk hit-rate stats — separate from council trust banner.
 
-Claim graded: early alerts hit +2% within 1h (JUST STARTED = still-positive).
+Claim graded: pump-desk alerts hit +predicted_pct within 1h (default 2%). Flat is a miss.
 Honesty gate before adaptive knobs (LOCK step 3).
 """
 

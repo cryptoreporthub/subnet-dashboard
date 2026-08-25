@@ -61,14 +61,10 @@ def is_pump_desk_claim(prediction: Dict[str, Any]) -> bool:
 def pump_lead_hit(prediction: Dict[str, Any], actual_pct: float) -> bool:
     """Grade pump desk claim — not council direction-only.
 
-    Early (WARMING UP / BUILDING / STIRRING / ACCUMULATING): +predicted_pct
-    within 1h (default 2%). JUST STARTED: still-positive capture.
+    Every pump-lead / combined claim (including JUST STARTED) hits only when
+    actual >= predicted_pct (default 2%). Flat or a 0.03% tick is a miss —
+    "it didn't go down" is not a pass on a +2% claim.
     """
-    claim = str(prediction.get("pump_claim") or "").upper()
-    badge = str(prediction.get("pump_badge") or "").upper()
-    just_started = claim in {"JUST_STARTED", "JUST STARTED"} or badge == "JUST STARTED"
-    if just_started:
-        return float(actual_pct) > 0
     try:
         threshold = float(prediction.get("predicted_pct") or 2.0)
     except (TypeError, ValueError):
@@ -76,6 +72,20 @@ def pump_lead_hit(prediction: Dict[str, Any], actual_pct: float) -> bool:
     if threshold <= 0:
         threshold = 2.0
     return float(actual_pct) >= threshold
+
+
+def effective_correct(prediction: Dict[str, Any]) -> Optional[bool]:
+    """Hit/miss from actual_pct via the live rule. Stored `correct` is fallback only."""
+    actual = prediction.get("actual_pct")
+    if actual is None:
+        flag = prediction.get("correct")
+        return bool(flag) if isinstance(flag, bool) else None
+    try:
+        ok, _outcome = grade_prediction(prediction, float(actual))
+        return ok
+    except (TypeError, ValueError):
+        flag = prediction.get("correct")
+        return bool(flag) if isinstance(flag, bool) else None
 
 
 def classify_outcome_pump_lead(prediction: Dict[str, Any], actual_pct: float) -> str:

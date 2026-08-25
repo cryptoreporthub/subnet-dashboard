@@ -115,6 +115,41 @@ def test_build_story_strip_labels_outcomes(tmp_path, monkeypatch):
     assert strip["stats"]["wrong"] == 1
 
 
+def test_story_strip_flat_pump_lead_is_wrong_even_if_stored_hit(tmp_path, monkeypatch):
+    preds = tmp_path / "predictions.json"
+    preds.write_text(
+        json.dumps(
+            {
+                "predictions": [],
+                "resolved": [
+                    {
+                        "id": "a37f",
+                        "netuid": 64,
+                        "name": "TensorUSD",
+                        "direction": "up",
+                        "predicted_pct": 2.0,
+                        "actual_pct": 0.0308,
+                        "status": "resolved",
+                        "correct": True,
+                        "outcome": "hit",
+                        "pick_source": "pump_lead",
+                        "pump_claim": "JUST_STARTED",
+                        "pump_badge": "JUST STARTED",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    import internal.learning.predictions_store as ps
+
+    monkeypatch.setattr(ps, "PREDICTIONS_PATH", str(preds))
+    strip = build_story_strip(limit=5)
+    assert strip["items"][0]["outcome"] == "wrong"
+    assert strip["stats"]["correct"] == 0
+    assert strip["stats"]["wrong"] == 1
+
+
 def test_story_strip_focus_scopes_netuid(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     preds.write_text(
