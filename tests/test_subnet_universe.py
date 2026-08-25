@@ -16,11 +16,13 @@ from internal.subnet_universe import (
     SnapshotBuilder,
     SubnetUniverseProvider,
     UniverseSnapshot,
+    _build_rows,
     _reset_provider_for_tests,
     _validity_entry,
     get_lkg_or_emergency,
     get_provider,
     persist_path,
+    universe_snapshot_feed_meta,
 )
 
 
@@ -52,7 +54,11 @@ def _prior_snapshot(netuids: list[int]) -> UniverseSnapshot:
 
 
 def test_t1_empty_state_emergency_registry(universe_tmp):
-  """Cold boot with no disk file serves emergency_registry."""
+  """Cold boot with no disk file serves emergency_registry.
+
+  Env: needs config/registry.json (gitignored). Empty checkout ⇒ len(netuids)==0.
+  See docs/pr-1041-env-setup-failures.md — not a #1041 metadata regression.
+  """
   provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
   snap = provider.get_snapshot()
   assert snap.status == "emergency_registry"
@@ -311,7 +317,10 @@ def test_get_lkg_or_emergency_uses_provider_singleton(universe_tmp):
 
 
 def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
-    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok."""
+    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok.
+
+    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
+    """
     built = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({}, True),
@@ -322,7 +331,10 @@ def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
 
 
 def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monkeypatch):
-    """Provider on cold start must not publish zero-member ok snapshot."""
+    """Provider on cold start must not publish zero-member ok snapshot.
+
+    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
+    """
     monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
     monkeypatch.setenv("RUN_MODE", "worker")
     provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
@@ -396,3 +408,106 @@ def test_lkg_empty_tmc_retains_full_snapshot_via_provider(universe_tmp, monkeypa
     assert result.degraded is True
     assert result.status == "degraded"
     assert provider.get_snapshot().netuids == prior.netuids
+
+
+def test_build_rows_tags_tmc_source():
+    """TMC-backed universe rows carry taomarketcap source markers for feed meta."""
+    from internal.subnets.feed import subnet_enrichment_status, subnet_feed_meta
+
+    rows = _build_rows(
+        [1, 2],
+        {1: {"netuid": 1, "volume": 10}, 2: {"netuid": 2, "price": 0.01}},
+    )
+    assert all(r["source"] == "taomarketcap" for r in rows)
+    meta = subnet_feed_meta(rows)
+    assert meta["source"] == "taomarketcap"
+    assert "taomarketcap" in meta["sources"]
+    assert subnet_enrichment_status(rows) == "names_only"
+
+
+def test_build_rows_preserves_membership_netuids():
+    """Source tagging must not add, drop, or reorder universe membership."""
+    netuids = [1, 74, 75, 80, 87, 90, 118]
+    tmc = {n: {"netuid": n, "volume": 1.0} for n in netuids}
+    rows = _build_rows(netuids, tmc)
+    assert [int(r["netuid"]) for r in rows] == netuids
+    assert len(rows) == len(netuids)
+
+
+def test_universe_snapshot_feed_meta_tmc_backed_129_rows():
+    """129-row TMC membership must not report source=registry when rows lack markers."""
+    netuids = list(range(129))
+    validity = {
+        str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in netuids
+    }
+    snap = UniverseSnapshot(
+        netuids=tuple(netuids),
+        rows=tuple({"netuid": n, "name": f"SN{n}"} for n in netuids),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="degraded",
+        degraded=True,
+        validity_map=validity,
+    )
+    meta = universe_snapshot_feed_meta(snap)
+    assert meta["source"] == "taomarketcap"
+    assert "taomarketcap" in meta["sources"]
+    assert snap.netuids == tuple(netuids)
+    assert len(snap.rows) == 129
+
+
+def test_emergency_registry_feed_meta_names_only():
+    """Emergency registry fallback stays source=registry."""
+    from internal.subnets.feed import subnet_enrichment_status
+
+    snap = UniverseSnapshot.emergency_registry()
+    meta = universe_snapshot_feed_meta(snap)
+    assert meta == {"source": "registry", "sources": ["registry"]}
+    rows = list(snap.rows)
+    assert subnet_enrichment_status(rows) == "names_only"
+
+
+def test_blockmachine_feed_meta_live_enrichment():
+    """Live/blockmachine row metadata behavior unchanged."""
+    from internal.subnets.feed import subnet_enrichment_status, subnet_feed_meta
+
+    rows = [{"netuid": i, "live": True, "source": "blockmachine"} for i in range(5)]
+    meta = subnet_feed_meta(rows)
+    assert meta["source"] == "blockmachine"
+    assert subnet_enrichment_status(rows) == "live"
+
+
+def test_list_subnets_meta_tmc_backed_snapshot(monkeypatch):
+    """_list_subnets_base_rows + _apply_subnets_query report honest TMC metadata."""
+    from starlette.requests import Request
+
+    from server import _apply_subnets_query, _list_subnets_base_rows
+
+    netuids = list(range(129))
+    validity = {
+        str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in netuids
+    }
+    snap = UniverseSnapshot(
+        netuids=tuple(netuids),
+        rows=tuple({"netuid": n, "name": f"SN{n}", "volume": 1.0} for n in netuids),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="degraded",
+        degraded=True,
+        validity_map=validity,
+    )
+    monkeypatch.setattr("internal.subnet_universe.get_snapshot", lambda: snap)
+    monkeypatch.setattr("internal.subnet_universe.ensure_background_refresh", lambda: None)
+    base = _list_subnets_base_rows()
+    assert base["feed_meta"]["source"] == "taomarketcap"
+    assert base["feed_meta"]["enrichment_status"] == "names_only"
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/subnets",
+        "headers": [],
+        "query_string": b"limit=3",
+    }
+    out = _apply_subnets_query(base, Request(scope))
+    assert out["meta"]["total"] == 129
+    assert out["meta"]["source"] == "taomarketcap"
+    assert "taomarketcap" in out["meta"]["sources"]
+    assert out["meta"]["enrichment_status"] == "names_only"

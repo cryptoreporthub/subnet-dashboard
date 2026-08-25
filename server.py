@@ -539,7 +539,7 @@ def load_data(filename):
     return {}
 
 
-from internal.subnets.feed import load_subnets_source, registry_subnet_rows, subnet_feed_meta as _subnet_feed_meta
+from internal.subnets.feed import load_subnets_source, registry_subnet_rows, subnet_feed_meta as _subnet_feed_meta, subnet_enrichment_status
 
 
 def _tag_subnet_row(row: Dict[str, Any], feed_meta: Dict[str, Any]) -> Dict[str, Any]:
@@ -1779,24 +1779,17 @@ async def list_subnets(request: Request):
 def _list_subnets_base_rows() -> Dict[str, Any]:
     """Unfiltered enriched rows for /api/subnets cache (query applied per request)."""
     from internal.subnet_names import enrich_subnet_row
-    from internal.subnet_universe import ensure_background_refresh, get_snapshot
+    from internal.subnet_universe import ensure_background_refresh, get_snapshot, universe_snapshot_feed_meta
 
     ensure_background_refresh()
     snap = get_snapshot()
     source_rows = list(snap.rows)
     used_registry = snap.status == "emergency_registry"
-    feed_meta = _subnet_feed_meta(source_rows)
-    if snap.status == "emergency_registry":
-        feed_meta = {
-            "source": "registry",
-            "sources": ["registry"],
-            "universe_status": snap.status,
-        }
-    else:
-        feed_meta = dict(feed_meta)
-        feed_meta["universe_status"] = snap.status
-        if snap.degraded:
-            feed_meta["degraded"] = True
+    feed_meta = universe_snapshot_feed_meta(snap)
+    feed_meta = dict(feed_meta)
+    feed_meta["universe_status"] = snap.status
+    if snap.degraded:
+        feed_meta["degraded"] = True
     items = []
     for s in source_rows:
         item = _tag_subnet_row(s, feed_meta)
@@ -1806,6 +1799,7 @@ def _list_subnets_base_rows() -> Dict[str, Any]:
         if used_registry:
             row = _null_unfetched_metrics(row)
         items.append(row)
+    feed_meta["enrichment_status"] = subnet_enrichment_status(items)
     return {"items": items, "feed_meta": feed_meta, "universe_snapshot": snap}
 
 
@@ -1877,6 +1871,7 @@ def _apply_subnets_query(
             "handler_status": handler_status
             or ("timeout" if status == "timeout" else "ok"),
             "enrichment_status": enrichment_status
+            or feed_meta.get("enrichment_status")
             or (
                 "names_only"
                 if str(feed_meta.get("source") or "registry") == "registry"
@@ -1913,16 +1908,14 @@ def _null_unfetched_metrics(item: Dict[str, Any]) -> Dict[str, Any]:
 def _list_subnets_registry_fallback(request: Request, *, status: str = "success") -> Dict[str, Any]:
     """Instant universe LKG rows when cache miss under load or handler timeout."""
     from internal.subnet_names import enrich_subnet_row
-    from internal.subnet_universe import get_lkg_or_emergency
+    from internal.subnet_universe import get_lkg_or_emergency, universe_snapshot_feed_meta
 
     snap = get_lkg_or_emergency()
     source_rows = list(snap.rows)
     used_registry = snap.status == "emergency_registry"
-    feed_meta = _subnet_feed_meta(source_rows)
+    feed_meta = universe_snapshot_feed_meta(snap)
     feed_meta = dict(feed_meta)
     feed_meta["universe_status"] = snap.status
-    if used_registry:
-        feed_meta = {"source": "registry", "sources": ["registry"], "universe_status": snap.status}
     items = []
     for s in source_rows:
         item = _tag_subnet_row(s, feed_meta)
@@ -1932,12 +1925,12 @@ def _list_subnets_registry_fallback(request: Request, *, status: str = "success"
         if used_registry:
             row = _null_unfetched_metrics(row)
         items.append(row)
-    enrichment_status = "names_only" if used_registry else "live"
+    feed_meta["enrichment_status"] = subnet_enrichment_status(items)
     return _apply_subnets_query(
         {"items": items, "feed_meta": feed_meta},
         request,
         status=status,
-        enrichment_status=enrichment_status,
+        enrichment_status=feed_meta.get("enrichment_status"),
         handler_status="timeout" if status == "timeout" else "ok",
     )
 

@@ -7,6 +7,11 @@ client = TestClient(app)
 
 
 def test_subnets_meta_includes_source():
+    """Live /api/subnets must expose source meta and a non-empty universe.
+
+    Env: meta.total>0 needs config/registry.json or a persisted universe snapshot
+    (both absent in a fresh Cloud Agent checkout). See docs/pr-1041-env-setup-failures.md.
+    """
     resp = client.get("/api/subnets?limit=2")
     assert resp.status_code == 200
     data = resp.json()
