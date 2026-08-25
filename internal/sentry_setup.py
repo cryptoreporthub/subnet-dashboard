@@ -43,33 +43,46 @@ def _format_logentry(logentry: dict[str, Any] | None) -> str:
         return str(message)
 
 
+def _event_log_text(event: dict[str, Any]) -> str:
+    """Best-effort formatted log text from logentry and top-level message."""
+    parts: list[str] = []
+    logentry = event.get("logentry")
+    if isinstance(logentry, dict):
+        formatted = _format_logentry(logentry)
+        if formatted:
+            parts.append(formatted)
+    message = event.get("message")
+    if isinstance(message, str) and message:
+        parts.append(message)
+    return " ".join(parts)
+
+
 def _is_known_taostats_pool_latest_404(event: dict[str, Any]) -> bool:
     """Drop ingest for the known noisy TaoStats pool-latest 404 pattern only."""
-    if event.get("logger") != "fetchers.taostats_client":
-        return False
     logentry = event.get("logentry")
-    if not isinstance(logentry, dict):
-        formatted = event.get("message") or ""
-        return (
+    if isinstance(logentry, dict):
+        message = logentry.get("message") or ""
+        if message == _TAOSTATS_STATUS_MSG:
+            params = logentry.get("params") or ()
+            if len(params) >= 2:
+                path, status = params[0], params[1]
+                try:
+                    status_int = int(status)
+                except (TypeError, ValueError):
+                    status_int = None
+                return path == _TAOSTATS_POOL_LATEST_PATH and status_int == 404
+        formatted = _format_logentry(logentry)
+        if (
             "TaoStats" in formatted
             and _TAOSTATS_POOL_LATEST_PATH in formatted
             and "404" in formatted
-        )
-    message = logentry.get("message") or ""
-    if message == _TAOSTATS_STATUS_MSG:
-        params = logentry.get("params") or ()
-        if len(params) >= 2:
-            path, status = params[0], params[1]
-            try:
-                status_int = int(status)
-            except (TypeError, ValueError):
-                status_int = None
-            return path == _TAOSTATS_POOL_LATEST_PATH and status_int == 404
-    formatted = _format_logentry(logentry)
+        ):
+            return True
+    text = _event_log_text(event)
     return (
-        "TaoStats" in formatted
-        and _TAOSTATS_POOL_LATEST_PATH in formatted
-        and "404" in formatted
+        "TaoStats" in text
+        and _TAOSTATS_POOL_LATEST_PATH in text
+        and "404" in text
     )
 
 
