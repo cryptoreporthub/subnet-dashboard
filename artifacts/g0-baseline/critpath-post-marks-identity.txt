@@ -1,0 +1,48 @@
+# Identity probe after Fly Deploy SUCCESS
+UTC: 2026-08-26T23:13:50Z
+Expected SHA: 77395892
+Deploy run: https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/33022098902
+
+=== GET /health ===
+HTTP/2 200 
+date: Wed, 26 Aug 2026 23:13:50 GMT
+server: Fly/e93089d61 (2026-08-20)
+content-type: text/plain; charset=utf-8
+content-length: 2
+cache-control: no-store, max-age=0
+x-content-type-options: nosniff
+referrer-policy: strict-origin-when-cross-origin
+permissions-policy: camera=(), microphone=(), geolocation=(), payment=()
+x-frame-options: SAMEORIGIN
+strict-transport-security: max-age=31536000; includeSubDomains
+content-security-policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https: wss:; font-src 'self' data: https://fonts.gstatic.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'
+via: 2 fly.io, 2 fly.io
+fly-request-id: 01M105KVJZES410VJ17MA39V7G-ord
+
+ttfb=0.195582s total=0.195660s
+
+=== GET / headers (identity) ===
+status=200 ttfb=0.189631s total=0.387955s size=133900
+date: Wed, 26 Aug 2026 23:13:50 GMT
+content-type: text/html; charset=utf-8
+content-length: 133900
+server-timing: app;dur=0.4
+
+html-parse count: 1
+hydrate-start count: /tmp/home.body:0
+/workspace/static/js/cockpit_hydrate.js:4
+body bytes: 133900
+
+--- first 12 lines of HTML ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script>performance.mark('html-parse')</script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>SimiVision — Council</title>
+    <meta name="description" content="Bittensor subnet council dashboard — picks, paper portfolio, and SimiVision intelligence.">
+    
+    <link rel="canonical" href="https://subnet-dashboard.fly.dev/">
+    <meta property="og:url" content="https://subnet-dashboard.fly.dev/">
