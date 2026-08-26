@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 
 from internal.learning import routes as learning_routes
@@ -122,3 +123,95 @@ def test_learning_stats_payload_tolerates_partial_cached_snapshot():
     assert payload["status"] == "success"
     assert payload["data"]["total_records"] == 0
     assert payload["data"]["pending"] == 0
+
+
+def _stale_stats_snap(**extra):
+    snap = {
+        "engine_stats": {
+            "expert_weights": {"quant": 1.0},
+            "total_records": 5,
+            "accuracy": 0.6,
+            "pending": 0,
+            "last_updated": "2026-08-05T00:00:00Z",
+            "resolved": 5,
+        },
+        "resolver_stats": {
+            "correct": 3,
+            "wrong": 2,
+            "total": 5,
+            "accuracy": 0.6,
+            "expired": 0,
+            "duplicate": 0,
+            "pending": 0,
+        },
+        "watchdog": {},
+        "trust_banner": {
+            "ready": True,
+            "graded": 5,
+            "accuracy": 0.6,
+            "expired_rate": 0.0,
+            "integrity_gate": {},
+        },
+        "judge_weights": {},
+        "judge_last5": {},
+        "council_last5": [],
+        "scenario": {},
+        "predictions_data": {"predictions": [], "resolved": []},
+    }
+    snap.update(extra)
+    return snap
+
+
+@pytest.mark.parametrize(
+    "label,stale,fresh,expected",
+    [
+        ("fresh_success", None, True, None),
+        (
+            "stale_preserve",
+            _stale_stats_snap(
+                loop_learned={"status": "ready", "graded": 5, "weight_updates": 7}
+            ),
+            False,
+            7,
+        ),
+        (
+            "stale_missing_field",
+            _stale_stats_snap(loop_learned={"status": "ready", "graded": 5}),
+            False,
+            0,
+        ),
+        ("stale_missing_object", _stale_stats_snap(), False, 0),
+        ("cold", None, False, 0),
+    ],
+)
+def test_learning_stats_degraded_weight_updates_is_int(
+    monkeypatch, label, stale, fresh, expected
+):
+    """Four /api/learning/stats paths: success, stale preserve, stale missing, cold."""
+    learning_routes._learning_snapshot_cache["data"] = stale
+    learning_routes._learning_snapshot_cache["at"] = 0.0
+    if fresh:
+        monkeypatch.setattr(
+            "internal.learning.weight_deltas.collect_weight_trail_events",
+            lambda limit=500: [
+                {
+                    "event_type": "weight_change",
+                    "judge": "hype",
+                    "evidence": {"delta": -0.03, "dial": "hype"},
+                }
+            ],
+        )
+        body = TestClient(app).get("/api/learning/stats").json()
+        loop = body["data"]["loop_learned"]
+        assert isinstance(loop.get("weight_updates"), int), label
+        assert loop["weight_updates"] > 0, label
+        return
+
+    async def _boom(*_a, **_k):
+        raise TimeoutError()
+
+    monkeypatch.setattr(learning_routes, "_to_thread_timeout", _boom)
+    body = TestClient(app).get("/api/learning/stats").json()
+    loop = body["data"]["loop_learned"]
+    assert isinstance(loop.get("weight_updates"), int), label
+    assert loop["weight_updates"] == expected, label

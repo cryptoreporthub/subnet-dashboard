@@ -377,35 +377,32 @@ def _learning_snapshot() -> Dict[str, Any]:
             "expired": resolver_stats.get("expired", 0),
             "gate_reason": trust_banner.get("gate_reason"),
         }
+        # Weight dials read the mindmap trail (soul map + ledger + dev signals).
+        # That scan costs seconds on a warm volume, so it belongs in this cached
+        # snapshot — the request handlers must never run it on the event loop.
+        from internal.learning.weight_deltas import (
+            collect_weight_trail_events,
+            count_weight_trail_updates,
+            expert_graded_counts,
+            is_alignment_diagnostic,
+            recent_expert_weight_deltas,
+            recent_judge_weight_deltas,
+        )
+
+        trail_events = collect_weight_trail_events()
         loop_learned = {
             "status": "ready" if trust_banner.get("ready") else "building",
             "graded": trust_banner.get("graded", 0),
             "pending": resolver_state["pending"],
             "retryable": retryable,
             "gate_reason": trust_banner.get("gate_reason"),
-            "weight_updates": 0,
+            "weight_updates": count_weight_trail_updates(trail_events),
             "evaluation_status": pump_evaluation.get("status"),
         }
-        # Weight dials read the mindmap trail (soul map + ledger + dev signals).
-        # That scan costs seconds on a warm volume, so it belongs in this cached
-        # snapshot — the request handlers must never run it on the event loop.
-        from internal.learning.weight_deltas import (
-            collect_weight_trail_events,
-            expert_graded_counts,
-            recent_expert_weight_deltas,
-            recent_judge_weight_deltas,
-        )
-
-        trail_events = collect_weight_trail_events()
         alignment_diagnostic_events = sum(
             1
             for event in trail_events
-            if isinstance(event, dict)
-            and (
-                str(event.get("decision") or "").startswith("alignment_")
-                or (isinstance(event.get("evidence"), dict)
-                    and event["evidence"].get("outcome_weight_changed") is False)
-            )
+            if isinstance(event, dict) and is_alignment_diagnostic(event)
         )
         snapshot = {
             "engine_stats": engine_stats,
@@ -437,6 +434,22 @@ def _learning_snapshot() -> Dict[str, Any]:
 
 def _utcnow_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _loop_learned_with_weight_updates(loop_learned: Any) -> Dict[str, Any]:
+    """Guarantee ``loop_learned.weight_updates`` is an int. No trail I/O.
+
+    Compatible cached integer is preserved. Missing / non-int field becomes 0.
+    A missing or non-object ``loop_learned`` becomes ``{"weight_updates": 0}``.
+    """
+    if not isinstance(loop_learned, dict):
+        return {"weight_updates": 0}
+    out = dict(loop_learned)
+    raw = out.get("weight_updates")
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return out
+    out["weight_updates"] = 0
+    return out
 
 
 def _learning_stats_payload(
@@ -492,7 +505,7 @@ def _learning_stats_payload(
             "pump_desk_trust": snap.get("pump_desk_trust"),
             "pump_evaluation": snap.get("pump_evaluation"),
             "resolver_state": snap.get("resolver_state"),
-            "loop_learned": snap.get("loop_learned"),
+            "loop_learned": _loop_learned_with_weight_updates(snap.get("loop_learned")),
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": trust_banner.get("ready"),
             "alignment_diagnostic_events": snap.get("alignment_diagnostic_events", 0),
@@ -568,13 +581,16 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
                 "expired": 0,
                 "gate_reason": "learning_stats_timeout",
             },
-            "loop_learned": {
-                "status": "warming_up",
-                "graded": 0,
-                "pending": 0,
-                "retryable": 0,
-                "gate_reason": "learning_stats_timeout",
-            },
+            "loop_learned": _loop_learned_with_weight_updates(
+                {
+                    "status": "warming_up",
+                    "graded": 0,
+                    "pending": 0,
+                    "retryable": 0,
+                    "gate_reason": "learning_stats_timeout",
+                    "weight_updates": 0,
+                }
+            ),
             "integrity": trust_banner.get("integrity_gate"),
             "brain_ui_ready": False,
             "alignment_diagnostic_events": 0,
