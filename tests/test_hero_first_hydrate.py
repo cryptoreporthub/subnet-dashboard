@@ -46,6 +46,11 @@ def test_letters_and_judges_wait_for_hero_gate():
     for path in LETTER_SCRIPTS:
         text = path.read_text(encoding="utf-8")
         assert "afterHeroCritical" in text, path
+    brain = Path("static/js/brain_letter.js").read_text(encoding="utf-8")
+    assert 'home-daily-call-updated' in brain
+    listener = brain.split("home-daily-call-updated")[1].split("});")[0]
+    assert "afterHeroCritical" in listener
+    assert "afterHeroCritical(hydrate)" in brain
 
 
 def test_run_starts_hero_before_trail_story_strip_evidence():

@@ -326,5 +326,8 @@
   } else {
     hydrate();
   }
-  document.addEventListener("home-daily-call-updated", hydrate);
+  document.addEventListener("home-daily-call-updated", function () {
+    if (window.afterHeroCritical) window.afterHeroCritical(hydrate);
+    else hydrate();
+  });
 })();
