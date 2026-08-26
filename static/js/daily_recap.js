@@ -171,7 +171,12 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hydrate);
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.afterHeroCritical) window.afterHeroCritical(hydrate);
+      else hydrate();
+    });
+  } else if (window.afterHeroCritical) {
+    window.afterHeroCritical(hydrate);
   } else {
     hydrate();
   }

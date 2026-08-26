@@ -1631,6 +1631,15 @@
     } catch (e) {}
   }
 
+  function armHeroCriticalRelease(heroPromise) {
+    if (window.__heroCriticalArmed) return;
+    window.__heroCriticalArmed = true;
+    Promise.resolve(heroPromise).then(
+      function () { if (window.releaseHeroCritical) window.releaseHeroCritical(); },
+      function () { if (window.releaseHeroCritical) window.releaseHeroCritical(); }
+    );
+  }
+
   function maybeMarkHydrateEnd() {
     try {
       if (performance.getEntriesByName('hydrate-end').length) return;
@@ -4601,10 +4610,12 @@
   }
 
   async function run() {
-    if (document.documentElement.dataset.hydrate !== '1') return;
+    if (document.documentElement.dataset.hydrate !== '1') {
+      if (window.releaseHeroCritical) window.releaseHeroCritical();
+      return;
+    }
     markHydrateStart('run');
     showHydrateSkeletons();
-    kickPriorityPanels();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
     connectCockpitStream();
 
@@ -4614,17 +4625,11 @@
     var hourPicks = [];
     var dayPicks = [];
     var trail = [];
-    // Start independently of the tier-1 burst. A slow daily/council request
-    // must not leave a real trail hidden behind its SSR placeholder.
-    window.__homeTrailHydratePending = true;
-    var trailPromise = startTrailHydration();
+    var trailPromise = null;
 
     try {
-      // Tier 1 — start every critical request together. Previously the daily
-      // pick blocked pump, roster, learning, and story hydration in a serial
-      // waterfall; one slow council scorer could leave the whole page below
-      // the Telegram desk looking frozen.
-      // Tier 1a — daily call first (parallel request; legacy marker)
+      // Hero-critical first: stats + daily-pick only. Trail / story-strip /
+      // evidence / letters / judges wait until those two settle (#1058).
       var dailyPickRequest = fetchDailyPickForHero()
         .then(function (dpResult) {
           renderDailyPick(dpResult);
@@ -4633,7 +4638,6 @@
           window.HomeHydrateCache = window.HomeHydrateCache || {};
           window.HomeHydrateCache.dailyPick = lastDailyPickPayload;
           window.HomeHydrateCache.at = Date.now();
-          prefetchFocusJudges(dpResult);
           return dpResult;
         })
         .catch(function (e) {
@@ -4646,6 +4650,16 @@
           hydrateWeighedAlternatives(dpResult && dpResult.shortlist);
           return dpResult;
         });
+
+      var statsRequest = loadLearningStats();
+      armHeroCriticalRelease(Promise.allSettled([dailyPickRequest, statsRequest]));
+      await Promise.allSettled([dailyPickRequest, statsRequest]);
+      var dpResult = await dailyPickRequest;
+
+      kickPriorityPanels();
+      window.__homeTrailHydratePending = true;
+      trailPromise = startTrailHydration();
+      if (dpResult) prefetchFocusJudges(dpResult);
 
       // Tier 1b — pump desk (parallel request)
       var pumpAlertsRequest = fetchJsonRetry('/api/pump-alerts', 12000, 2)
@@ -4663,14 +4677,13 @@
           return null;
         });
 
-      // This batch is intentionally independent of both hero requests.
       var tierBatchPromise = Promise.allSettled([
         fetchJsonRetry(
           '/api/subnets?fields=' + encodeURIComponent(SUBNET_FIELDS),
           28000,
           2
         ),
-        loadLearningStats(),
+        Promise.resolve(statsRequest),
         fetchJsonRetry(storyStripUrl(), 22000, 2).then(function (strip) {
           if (window.HomeLiveRefresh && window.HomeLiveRefresh.patchStoryStrip) {
             window.HomeLiveRefresh.patchStoryStrip(strip);
@@ -4678,7 +4691,6 @@
         })
       ]);
       var tierBatch = await tierBatchPromise;
-      var dpResult = await dailyPickRequest;
 
       // Keep promise rejections observed even when a slow hero request
       // resolves after the rest of the homepage has already painted.
@@ -5911,7 +5923,7 @@
 
   function fetchDailyPickForHero(opts) {
     opts = opts || {};
-    if (opts.force || tribunalHeroNeedsHydrate()) invalidateDailyPickFetch();
+    if (opts.force) invalidateDailyPickFetch();
     return fetchJsonRetry('/api/daily-pick', 35000, 3, 0).then(function (dp) {
       if (!dp) return dp;
       var best = dp;
@@ -5988,13 +6000,15 @@
   function bootstrapCouncilHeroHydrate() {
     if (!document.getElementById('tribunal-hero')) return;
     markHydrateStart('bootstrap');
-    Promise.all([
+    var hero = Promise.all([
       fetchDailyPickForHero().catch(function (err) {
         console.warn('[cockpit_hydrate] tribunal bootstrap daily-pick failed', err);
         return null;
       }),
       loadLearningStats(),
-    ]).then(function (results) {
+    ]);
+    armHeroCriticalRelease(hero);
+    hero.then(function (results) {
       hydrateCouncilHeroShell(results[1], results[0]);
       scheduleCouncilHeroRetry();
     });
