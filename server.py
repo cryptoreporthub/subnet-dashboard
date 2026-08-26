@@ -3110,17 +3110,22 @@ def _daily_pick_pending_hold() -> Dict[str, Any]:
 
 @app.get("/api/daily-pick")
 async def api_daily_pick(full: bool = False):
-    """Today's pick from stored JSON. Hydrate GET never waits on scoring."""
+    """Today's pick from stored JSON. Hydrate GET never waits on scoring.
+
+    ``full`` is accepted so old clients do not 422, then ignored. Shortlist
+    scoring lives on ``/api/daily-pick/weighed`` — this path stays lite.
+    """
+    _ = full
     started = time.monotonic()
-    from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
+    from internal.whales.enrichment_badge import empty_whale_flow_badge
 
     def _read_stored() -> Optional[Dict[str, Any]]:
         from internal.council.daily_pick_engine import _find_today, _load
 
         return _find_today(_load())
 
-    timeout_s = PICK_HANDLER_TIMEOUT if full else PICK_READ_TIMEOUT
-    pool = _DASHBOARD_EXECUTOR if full else _PICK_READ_EXECUTOR
+    timeout_s = PICK_READ_TIMEOUT
+    pool = _PICK_READ_EXECUTOR
     try:
         existing = await _to_thread_timeout(
             _read_stored, timeout_s, label="daily-pick-read", executor=pool
@@ -3149,22 +3154,8 @@ async def api_daily_pick(full: bool = False):
         return _daily_pick_pending_hold()
 
     def _enrich() -> Dict[str, Any]:
-        result = dict(existing)
-        if full:
-            try:
-                subnets, _ = _get_subnets_hydrate()
-                market_context = _market_context_with_weights(subnets)
-                result = _enrich_daily_pick_payload(result, subnets, market_context)
-            except Exception as exc:
-                logger.warning("daily-pick full enrich skipped: %s", exc)
-                result = _enrich_daily_pick_payload_lite(result)
-            netuid = _pick_netuid_from_daily_payload(result)
-            result["enrichment_badge"] = (
-                whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-            )
-        else:
-            result = _enrich_daily_pick_payload_lite(result)
-            result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+        result = _enrich_daily_pick_payload_lite(dict(existing))
+        result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
         return _attach_daily_pick_meta(result)
 
     try:

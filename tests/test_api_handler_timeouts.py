@@ -870,6 +870,51 @@ def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
             fut.result(timeout=6)
 
 
+def test_daily_pick_full_query_stays_on_pick_read_pool(monkeypatch):
+    """?full=true must not opt back into the 8s scoring executor or subnet hydrate."""
+    import server as srv
+
+    def _boom(*_a, **_k):
+        raise AssertionError("full=true must not hydrate subnets or full-enrich")
+
+    monkeypatch.setattr(srv, "_get_subnets_hydrate", _boom)
+    monkeypatch.setattr(srv, "_enrich_daily_pick_payload", _boom)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _boom,
+    )
+    release = threading.Event()
+
+    def _block():
+        release.wait(timeout=5)
+
+    futs = [srv._DASHBOARD_EXECUTOR.submit(_block) for _ in range(8)]
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine._find_today",
+        lambda _rows: {
+            "date": "2099-01-01",
+            "action": "HOLD",
+            "candidate": {"subnet": {"netuid": 3}},
+        },
+    )
+    try:
+        t0 = time.time()
+        with TestClient(app) as client:
+            resp = client.get("/api/daily-pick", params={"full": "true"})
+            health = client.get("/health")
+        elapsed = time.time() - t0
+        assert elapsed < 1.0
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body.get("status") != "timeout"
+        assert body.get("candidate") or body.get("pick")
+        assert health.status_code == 200
+    finally:
+        release.set()
+        for fut in futs:
+            fut.result(timeout=6)
+
+
 def test_daily_pick_stage_timing_on_fast_degraded(monkeypatch, caplog):
     import logging
 
