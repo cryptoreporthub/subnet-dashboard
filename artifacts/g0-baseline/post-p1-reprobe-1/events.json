@@ -1,0 +1,1284 @@
+[
+  {
+    "t_s": 0.403,
+    "kind": "request",
+    "id": 1,
+    "path": "/"
+  },
+  {
+    "t_s": 0.536,
+    "kind": "request",
+    "id": 2,
+    "path": "/api/pump-alerts"
+  },
+  {
+    "t_s": 0.537,
+    "kind": "request",
+    "id": 3,
+    "path": "/css2"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 4,
+    "path": "/static/css/smoke-tokens.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 5,
+    "path": "/static/css/base.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 6,
+    "path": "/static/css/ui.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 7,
+    "path": "/static/css/tribunal-hero-layout.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 8,
+    "path": "/static/css/council-polish.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 9,
+    "path": "/npm/driver.js@1.3.1/dist/driver.css"
+  },
+  {
+    "t_s": 0.538,
+    "kind": "request",
+    "id": 10,
+    "path": "/static/css/chat.css"
+  },
+  {
+    "t_s": 0.539,
+    "kind": "request",
+    "id": 11,
+    "path": "/static/vendor/uplot/uPlot.min.css"
+  },
+  {
+    "t_s": 0.543,
+    "kind": "request",
+    "id": 12,
+    "path": "/static/css/dev_pulse.css"
+  },
+  {
+    "t_s": 0.543,
+    "kind": "request",
+    "id": 13,
+    "path": "/static/js/dev_pulse.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 14,
+    "path": "/static/js/mindmap_graph.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 15,
+    "path": "/static/js/conviction_tiers.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 16,
+    "path": "/static/js/empty_state.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 17,
+    "path": "/static/js/weighing_room.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 18,
+    "path": "/static/js/data_freshness.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 19,
+    "path": "/static/js/api_fetch.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 20,
+    "path": "/static/js/ops_readiness_badge.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 21,
+    "path": "/static/js/subnet_integrations.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 22,
+    "path": "/static/js/trust_banner_ui.js"
+  },
+  {
+    "t_s": 0.544,
+    "kind": "request",
+    "id": 23,
+    "path": "/static/js/market_drivers_ui.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 24,
+    "path": "/static/js/brain_letter.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 25,
+    "path": "/static/js/story_path_ui.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 26,
+    "path": "/static/js/paper_portfolio.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 27,
+    "path": "/static/js/weekly_letter.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 28,
+    "path": "/static/js/daily_recap.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 29,
+    "path": "/static/js/watchlist_alerts.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 30,
+    "path": "/static/js/letter_export.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 31,
+    "path": "/static/js/time_capsule.js"
+  },
+  {
+    "t_s": 0.545,
+    "kind": "request",
+    "id": 32,
+    "path": "/static/js/hour_watch_ui.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 33,
+    "path": "/static/js/premium_judges.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 34,
+    "path": "/static/js/pump_map.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 35,
+    "path": "/static/js/cockpit_hydrate.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 36,
+    "path": "/static/js/message_intel_feed.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 37,
+    "path": "/static/js/home_live_refresh.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 38,
+    "path": "/static/js/living_focus.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 39,
+    "path": "/static/js/home_deferred.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 40,
+    "path": "/static/js/thumb_dock.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 41,
+    "path": "/static/js/app.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 42,
+    "path": "/static/js/chat_stream.js"
+  },
+  {
+    "t_s": 0.546,
+    "kind": "request",
+    "id": 43,
+    "path": "/static/judge_panel.js"
+  },
+  {
+    "t_s": 0.547,
+    "kind": "request",
+    "id": 44,
+    "path": "/static/js/command_palette.js"
+  },
+  {
+    "t_s": 0.547,
+    "kind": "request",
+    "id": 45,
+    "path": "/npm/driver.js@1.3.1/dist/driver.js.iife.js"
+  },
+  {
+    "t_s": 0.547,
+    "kind": "request",
+    "id": 46,
+    "path": "/static/js/onboarding_tour.js"
+  },
+  {
+    "t_s": 0.547,
+    "kind": "request",
+    "id": 47,
+    "path": "/static/js/council_polish.js"
+  },
+  {
+    "t_s": 0.548,
+    "kind": "finish",
+    "id": 1,
+    "path": "/",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.567,
+    "kind": "finish",
+    "id": 45,
+    "path": "/npm/driver.js@1.3.1/dist/driver.js.iife.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.568,
+    "kind": "finish",
+    "id": 9,
+    "path": "/npm/driver.js@1.3.1/dist/driver.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.649,
+    "kind": "finish",
+    "id": 3,
+    "path": "/css2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.782,
+    "kind": "finish",
+    "id": 6,
+    "path": "/static/css/ui.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.829,
+    "kind": "finish",
+    "id": 35,
+    "path": "/static/js/cockpit_hydrate.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.852,
+    "kind": "finish",
+    "id": 14,
+    "path": "/static/js/mindmap_graph.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.186,
+    "kind": "finish",
+    "id": 5,
+    "path": "/static/css/base.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.314,
+    "kind": "finish",
+    "id": 4,
+    "path": "/static/css/smoke-tokens.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.332,
+    "kind": "finish",
+    "id": 7,
+    "path": "/static/css/tribunal-hero-layout.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.357,
+    "kind": "finish",
+    "id": 39,
+    "path": "/static/js/home_deferred.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.377,
+    "kind": "finish",
+    "id": 12,
+    "path": "/static/css/dev_pulse.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.418,
+    "kind": "finish",
+    "id": 19,
+    "path": "/static/js/api_fetch.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.441,
+    "kind": "finish",
+    "id": 23,
+    "path": "/static/js/market_drivers_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.452,
+    "kind": "finish",
+    "id": 25,
+    "path": "/static/js/story_path_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.49,
+    "kind": "finish",
+    "id": 38,
+    "path": "/static/js/living_focus.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.517,
+    "kind": "finish",
+    "id": 16,
+    "path": "/static/js/empty_state.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.517,
+    "kind": "finish",
+    "id": 41,
+    "path": "/static/js/app.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.54,
+    "kind": "finish",
+    "id": 32,
+    "path": "/static/js/hour_watch_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.585,
+    "kind": "finish",
+    "id": 20,
+    "path": "/static/js/ops_readiness_badge.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.586,
+    "kind": "finish",
+    "id": 33,
+    "path": "/static/js/premium_judges.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.602,
+    "kind": "finish",
+    "id": 44,
+    "path": "/static/js/command_palette.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.64,
+    "kind": "finish",
+    "id": 18,
+    "path": "/static/js/data_freshness.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.677,
+    "kind": "finish",
+    "id": 27,
+    "path": "/static/js/weekly_letter.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.694,
+    "kind": "finish",
+    "id": 13,
+    "path": "/static/js/dev_pulse.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.732,
+    "kind": "finish",
+    "id": 10,
+    "path": "/static/css/chat.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.766,
+    "kind": "finish",
+    "id": 43,
+    "path": "/static/judge_panel.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.77,
+    "kind": "finish",
+    "id": 36,
+    "path": "/static/js/message_intel_feed.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.78,
+    "kind": "finish",
+    "id": 34,
+    "path": "/static/js/pump_map.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.791,
+    "kind": "finish",
+    "id": 8,
+    "path": "/static/css/council-polish.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.806,
+    "kind": "request",
+    "id": 48,
+    "path": "/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2"
+  },
+  {
+    "t_s": 1.857,
+    "kind": "request",
+    "id": 49,
+    "path": "/s/syne/v24/8vIH7w4qzmVxm2BL9A.woff2"
+  },
+  {
+    "t_s": 1.857,
+    "kind": "request",
+    "id": 50,
+    "path": "/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2"
+  },
+  {
+    "t_s": 2.201,
+    "kind": "finish",
+    "id": 11,
+    "path": "/static/vendor/uplot/uPlot.min.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 50,
+    "path": "/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 48,
+    "path": "/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 49,
+    "path": "/s/syne/v24/8vIH7w4qzmVxm2BL9A.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 28,
+    "path": "/static/js/daily_recap.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 17,
+    "path": "/static/js/weighing_room.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 26,
+    "path": "/static/js/paper_portfolio.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 22,
+    "path": "/static/js/trust_banner_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.202,
+    "kind": "finish",
+    "id": 24,
+    "path": "/static/js/brain_letter.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.254,
+    "kind": "finish",
+    "id": 15,
+    "path": "/static/js/conviction_tiers.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.268,
+    "kind": "request",
+    "id": 51,
+    "path": "/api/dev-radar"
+  },
+  {
+    "t_s": 2.268,
+    "kind": "request",
+    "id": 52,
+    "path": "/api/mindmap/graph"
+  },
+  {
+    "t_s": 2.268,
+    "kind": "request",
+    "id": 53,
+    "path": "/api/data-freshness"
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 47,
+    "path": "/static/js/council_polish.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 40,
+    "path": "/static/js/thumb_dock.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 31,
+    "path": "/static/js/time_capsule.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 30,
+    "path": "/static/js/letter_export.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 29,
+    "path": "/static/js/watchlist_alerts.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 21,
+    "path": "/static/js/subnet_integrations.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 37,
+    "path": "/static/js/home_live_refresh.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 42,
+    "path": "/static/js/chat_stream.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.269,
+    "kind": "finish",
+    "id": 46,
+    "path": "/static/js/onboarding_tour.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.271,
+    "kind": "request",
+    "id": 54,
+    "path": "/api/ops/readiness"
+  },
+  {
+    "t_s": 2.273,
+    "kind": "request",
+    "id": 55,
+    "path": "/api/subnet-integrations"
+  },
+  {
+    "t_s": 2.274,
+    "kind": "request",
+    "id": 56,
+    "path": "/api/market-drivers"
+  },
+  {
+    "t_s": 2.276,
+    "kind": "request",
+    "id": 57,
+    "path": "/api/letter/brain"
+  },
+  {
+    "t_s": 2.277,
+    "kind": "request",
+    "id": 58,
+    "path": "/api/mindmap/story-path"
+  },
+  {
+    "t_s": 2.279,
+    "kind": "request",
+    "id": 59,
+    "path": "/api/portfolio/status"
+  },
+  {
+    "t_s": 2.28,
+    "kind": "request",
+    "id": 60,
+    "path": "/api/letter/weekly"
+  },
+  {
+    "t_s": 2.281,
+    "kind": "request",
+    "id": 61,
+    "path": "/api/letter/daily"
+  },
+  {
+    "t_s": 2.283,
+    "kind": "request",
+    "id": 62,
+    "path": "/api/judges"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 63,
+    "path": "/api/daily-pick"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 64,
+    "path": "/api/learning/stats"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 65,
+    "path": "/api/ops/evidence"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 66,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 67,
+    "path": "/api/daily-pick"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 68,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 2.297,
+    "kind": "request",
+    "id": 69,
+    "path": "/api/story-strip"
+  },
+  {
+    "t_s": 2.306,
+    "kind": "request",
+    "id": 70,
+    "path": "/api/watchlist"
+  },
+  {
+    "t_s": 2.306,
+    "kind": "request",
+    "id": 71,
+    "path": "/api/message-intel/status"
+  },
+  {
+    "t_s": 2.306,
+    "kind": "request",
+    "id": 72,
+    "path": "/api/message-intel/calibration"
+  },
+  {
+    "t_s": 2.307,
+    "kind": "request",
+    "id": 73,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 2.311,
+    "kind": "request",
+    "id": 74,
+    "path": "/api/whales/flow-signals"
+  },
+  {
+    "t_s": 2.33,
+    "kind": "request",
+    "id": 75,
+    "path": "/api/cockpit/stream"
+  },
+  {
+    "t_s": 2.726,
+    "kind": "request",
+    "id": 76,
+    "path": "/static/vendor/uplot/uPlot.iife.min.js"
+  },
+  {
+    "t_s": 4.308,
+    "kind": "request",
+    "id": 77,
+    "path": "/api/daily-pick"
+  },
+  {
+    "t_s": 4.309,
+    "kind": "request",
+    "id": 78,
+    "path": "/api/simivision"
+  },
+  {
+    "t_s": 8.309,
+    "kind": "abort",
+    "id": 74,
+    "path": "/api/whales/flow-signals",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 9.602,
+    "kind": "finish",
+    "id": 51,
+    "path": "/api/dev-radar",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 12.308,
+    "kind": "abort",
+    "id": 77,
+    "path": "/api/daily-pick",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.261,
+    "kind": "abort",
+    "id": 52,
+    "path": "/api/mindmap/graph",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.275,
+    "kind": "abort",
+    "id": 56,
+    "path": "/api/market-drivers",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.277,
+    "kind": "abort",
+    "id": 58,
+    "path": "/api/mindmap/story-path",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.293,
+    "kind": "abort",
+    "id": 65,
+    "path": "/api/ops/evidence",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.597,
+    "kind": "request",
+    "id": 79,
+    "path": "/api/ops/evidence"
+  },
+  {
+    "t_s": 16.309,
+    "kind": "abort",
+    "id": 78,
+    "path": "/api/simivision",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.271,
+    "kind": "abort",
+    "id": 55,
+    "path": "/api/subnet-integrations",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.279,
+    "kind": "abort",
+    "id": 60,
+    "path": "/api/letter/weekly",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.28,
+    "kind": "abort",
+    "id": 61,
+    "path": "/api/letter/daily",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.295,
+    "kind": "abort",
+    "id": 66,
+    "path": "/api/mindmap/trail",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.562,
+    "kind": "request",
+    "id": 80,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 20.283,
+    "kind": "abort",
+    "id": 62,
+    "path": "/api/judges",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 20.3,
+    "kind": "abort",
+    "id": 70,
+    "path": "/api/watchlist",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 20.303,
+    "kind": "abort",
+    "id": 71,
+    "path": "/api/message-intel/status",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 20.901,
+    "kind": "request",
+    "id": 81,
+    "path": "/api/watchlist"
+  },
+  {
+    "t_s": 20.904,
+    "kind": "request",
+    "id": 82,
+    "path": "/api/message-intel/status"
+  },
+  {
+    "t_s": 24.296,
+    "kind": "abort",
+    "id": 69,
+    "path": "/api/story-strip",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 24.608,
+    "kind": "request",
+    "id": 83,
+    "path": "/api/story-strip"
+  },
+  {
+    "t_s": 25.296,
+    "kind": "finish",
+    "id": 2,
+    "path": "/api/pump-alerts",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 27.276,
+    "kind": "abort",
+    "id": 57,
+    "path": "/api/letter/brain",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 27.278,
+    "kind": "abort",
+    "id": 59,
+    "path": "/api/portfolio/status",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 27.577,
+    "kind": "request",
+    "id": 84,
+    "path": "/api/portfolio/status"
+  },
+  {
+    "t_s": 27.617,
+    "kind": "request",
+    "id": 85,
+    "path": "/api/letter/brain"
+  },
+  {
+    "t_s": 30.292,
+    "kind": "abort",
+    "id": 64,
+    "path": "/api/learning/stats",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 30.296,
+    "kind": "abort",
+    "id": 68,
+    "path": "/api/subnets",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 30.562,
+    "kind": "request",
+    "id": 86,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 30.567,
+    "kind": "request",
+    "id": 87,
+    "path": "/api/learning/stats"
+  },
+  {
+    "t_s": 30.597,
+    "kind": "abort",
+    "id": 79,
+    "path": "/api/ops/evidence",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 36.563,
+    "kind": "abort",
+    "id": 80,
+    "path": "/api/mindmap/trail",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 37.285,
+    "kind": "abort",
+    "id": 63,
+    "path": "/api/daily-pick",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 37.295,
+    "kind": "abort",
+    "id": 67,
+    "path": "/api/daily-pick",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 37.59,
+    "kind": "request",
+    "id": 88,
+    "path": "/api/daily-pick"
+  },
+  {
+    "t_s": 38.9,
+    "kind": "abort",
+    "id": 81,
+    "path": "/api/watchlist",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 38.904,
+    "kind": "abort",
+    "id": 82,
+    "path": "/api/message-intel/status",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 40.101,
+    "kind": "request",
+    "id": 89,
+    "path": "/api/watchlist"
+  },
+  {
+    "t_s": 40.104,
+    "kind": "request",
+    "id": 90,
+    "path": "/api/message-intel/status"
+  },
+  {
+    "t_s": 47.741,
+    "kind": "finish",
+    "id": 53,
+    "path": "/api/data-freshness",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 48.269,
+    "kind": "finish",
+    "id": 54,
+    "path": "/api/ops/readiness",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 48.348,
+    "kind": "finish",
+    "id": 73,
+    "path": "/api/subnets",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 48.405,
+    "kind": "request",
+    "id": 91,
+    "path": "/api/market-drivers/65"
+  },
+  {
+    "t_s": 48.405,
+    "kind": "request",
+    "id": 92,
+    "path": "/api/mindmap/story-path"
+  },
+  {
+    "t_s": 48.438,
+    "kind": "HERO_DOM_READY",
+    "title": "Closest \u00b7 SN65 \u00b7 True Performance Network"
+  },
+  {
+    "t_s": 48.571,
+    "kind": "request",
+    "id": 93,
+    "path": "/api/message-intel"
+  },
+  {
+    "t_s": 48.571,
+    "kind": "finish",
+    "id": 90,
+    "path": "/api/message-intel/status",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 49.123,
+    "kind": "finish",
+    "id": 91,
+    "path": "/api/market-drivers/65",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 49.199,
+    "kind": "finish",
+    "id": 88,
+    "path": "/api/daily-pick",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 49.32,
+    "kind": "finish",
+    "id": 76,
+    "path": "/static/vendor/uplot/uPlot.iife.min.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 49.322,
+    "kind": "request",
+    "id": 94,
+    "path": "/static/js/uplot_charts.js"
+  },
+  {
+    "t_s": 49.701,
+    "kind": "finish",
+    "id": 87,
+    "path": "/api/learning/stats",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 49.719,
+    "kind": "STATS_PARSED"
+  },
+  {
+    "t_s": 49.719,
+    "kind": "HERO_COMPLETE_AT",
+    "stats_parsed_at": 49.719,
+    "hero_dom_ready_at": 48.438,
+    "title": "Closest \u00b7 SN65 \u00b7 True Performance Network",
+    "verdict": "gated",
+    "statsGraded": 44
+  },
+  {
+    "t_s": 49.721,
+    "kind": "finish",
+    "id": 86,
+    "path": "/api/subnets",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 50.039,
+    "kind": "finish",
+    "id": 83,
+    "path": "/api/story-strip",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 50.046,
+    "kind": "request",
+    "id": 95,
+    "path": "/api/message-intel"
+  },
+  {
+    "t_s": 50.046,
+    "kind": "request",
+    "id": 96,
+    "path": "/api/ops/evidence"
+  }
+]

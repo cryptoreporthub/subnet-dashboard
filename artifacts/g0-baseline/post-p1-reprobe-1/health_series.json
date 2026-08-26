@@ -1,0 +1,93 @@
+[
+  {
+    "t_unix": 1787775791.181786,
+    "latency_ms": 136.9,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775791.4320133,
+    "latency_ms": 113.94,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775791.6822042,
+    "latency_ms": 556.58,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775792.2387872,
+    "latency_ms": 481.16,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775792.7199562,
+    "latency_ms": 155.97,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775792.9700463,
+    "latency_ms": 116.61,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775793.2201347,
+    "latency_ms": 95.16,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787775793.4702203,
+    "latency_ms": 8034.58,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787775801.5048091,
+    "latency_ms": 8039.09,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787775809.543909,
+    "latency_ms": 8037.62,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787775817.581536,
+    "latency_ms": 8036.29,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787775825.6178386,
+    "latency_ms": 8033.44,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787775833.6512825,
+    "latency_ms": 8034.84,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  }
+]
