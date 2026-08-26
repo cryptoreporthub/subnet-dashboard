@@ -269,5 +269,6 @@ def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
 def test_try_revive_contract_uses_score_snapshot_revive():
     src = Path("internal/loop_stall_guard.py").read_text(encoding="utf-8")
     assert "from internal.council.score_snapshots import revive_score_snapshot_scheduler" in src
+    assert "from internal.council.resolver_scheduler import revive_prediction_resolver_scheduler" in src
     assert "desk_snapshot_scheduler" not in src
     assert "start_pump_desk" not in src

@@ -194,6 +194,47 @@ def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
     assert report["status"] == "ok"
 
 
+def test_inline_worker_alive_stale_tick_shows_resolver_not_running(tmp_path, monkeypatch):
+    """Stale soul_map tick must not report running=true just because worker heartbeat is alive."""
+    from datetime import timedelta
+
+    monkeypatch.setenv("INLINE_WORKER", "1")
+    monkeypatch.setenv("RUN_MODE", "web")
+    daily = tmp_path / "daily_picks.json"
+    preds = tmp_path / "predictions.json"
+    soul = tmp_path / "soul_map.json"
+    now = datetime.now(timezone.utc)
+    old_tick = (now - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    fresh_hb = now.isoformat().replace("+00:00", "Z")
+    _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
+    _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
+    _write_json(
+        soul,
+        {
+            "prediction_resolver_scheduler": {
+                "last_cycle": {"run_at": old_tick, "ok": True, "lifecycle": "running"},
+                "lifecycle": "running",
+            }
+        },
+    )
+    monkeypatch.setattr(
+        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "last_run_at": None, "refresh_minutes": 15, "lifecycle": "stopped"},
+    )
+    monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
+    monkeypatch.setattr(
+        "internal.worker_heartbeat.read_heartbeat",
+        lambda: {"ts": fresh_hb, "run_mode": "worker"},
+    )
+    report = build_learning_loop_health(
+        daily_picks_path=str(daily),
+        predictions_path=str(preds),
+        soul_path=str(soul),
+    )
+    assert report["resolver"]["running"] is False
+    assert report["worker_peer"]["alive"] is True
+
+
 def test_young_pending_not_stalled_without_watchdog(tmp_path, monkeypatch):
     from datetime import timedelta
 

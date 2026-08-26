@@ -565,6 +565,10 @@ class PredictionResolverScheduler:
         def _mutator(data: Dict[str, Any]) -> None:
             sched = data.setdefault("prediction_resolver_scheduler", {})
             sched["last_cycle"] = summary
+            sched["lifecycle"] = self._lifecycle
+            sched["lifecycle_error"] = self._lifecycle_error
+            if self._first_tick_at is not None:
+                sched["first_tick_at"] = self._first_tick_at
             if result.get("round_robin_cursor") is not None:
                 sched["round_robin_cursor"] = result["round_robin_cursor"]
 
@@ -699,3 +703,76 @@ def get_prediction_resolver_scheduler() -> Optional[PredictionResolverScheduler]
     """Return the scheduler singleton for direct access."""
     with _scheduler_lock:
         return _scheduler
+
+
+def _resolver_tick_age_seconds() -> Optional[float]:
+    """Age in seconds since the resolver last persisted a cycle (None if unknown)."""
+    try:
+        from internal.learning.loop_health import _last_resolver_tick
+
+        raw = _last_resolver_tick()
+        tick_at = raw.get("at") if isinstance(raw, dict) else None
+        if not tick_at:
+            return None
+        dt = datetime.fromisoformat(str(tick_at).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()
+    except Exception:
+        return None
+
+
+def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, Any]:
+    """Best-effort in-place revive when periodic resolver ticks stop.
+
+    Loop stall guard calls this on strike 1 for stale resolver ticks. Recycle
+    whenever ``_active`` (stop + cancel JOB_ID + start), then run one synchronous
+    ``run_once`` so soul_map ``last_cycle.run_at`` actually moves.
+    """
+    age_before = _resolver_tick_age_seconds()
+    stall_after_s = max(60, RESOLVER_REFRESH_MINUTES * 2 * 60)
+    if not force and age_before is not None and age_before <= stall_after_s:
+        return {
+            "revived": False,
+            "reason": "tick_fresh",
+            "recycled": False,
+            "age_before": age_before,
+            "age_after": age_before,
+        }
+
+    recycled = False
+    global _scheduler
+    with _scheduler_lock:
+        sched = _scheduler
+        if sched is not None and not sched._cycle_lock.acquire(blocking=False):
+            return {
+                "revived": False,
+                "reason": "tick_in_progress",
+                "recycled": False,
+                "age_before": age_before,
+                "age_after": _resolver_tick_age_seconds(),
+            }
+        if sched is not None:
+            sched._cycle_lock.release()
+        if sched is not None and sched._active:
+            sched.stop()
+            _scheduler = None
+            recycled = True
+
+    start_out = start_prediction_resolver_scheduler(immediate=False)
+    tick_out: Dict[str, Any] = {"ok": False, "error": "no_scheduler"}
+    with _scheduler_lock:
+        sched = _scheduler
+    if sched is not None:
+        tick_out = sched.run_once()
+
+    age_after = _resolver_tick_age_seconds()
+    revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))
+    return {
+        "revived": revived,
+        "recycled": recycled,
+        "age_before": age_before,
+        "age_after": age_after,
+        "start": start_out,
+        "tick": tick_out,
+    }
