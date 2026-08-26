@@ -410,3 +410,74 @@ def test_scan_all_subnets_soul_map_write_outside_state_lock(tmp_path, monkeypatc
             release_apply.set()
             t.join(timeout=3.0)
             assert not t.is_alive()
+
+
+def test_daily_pick_read_path_does_not_block_health(monkeypatch):
+    """GET /api/daily-pick must not wait on get_or_create_today_pick."""
+    import server as srv
+
+    def _boom(*_a, **_k):
+        raise AssertionError("hydrate GET must not call get_or_create_today_pick")
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _boom,
+    )
+    monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine._find_today",
+        lambda _rows: {
+            "date": "2099-01-01",
+            "action": "HOLD",
+            "candidate": {"subnet": {"netuid": 11}},
+        },
+    )
+
+    with TestClient(app) as client:
+        started = threading.Event()
+        release = threading.Event()
+        result = {}
+
+        def _call():
+            started.set()
+            result["resp"] = client.get("/api/daily-pick")
+
+        t = threading.Thread(target=_call, daemon=True)
+        t.start()
+        assert started.wait(timeout=2.0)
+        t0 = time.monotonic()
+        health = client.get("/health")
+        elapsed = time.monotonic() - t0
+        t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+    assert result["resp"].json().get("status") != "timeout"
+
+
+def test_home_hero_and_pick_sections_do_not_call_engine(monkeypatch):
+    import server as srv
+    from internal.learning.dashboard_context import _pick_sections
+
+    def _boom(*_a, **_k):
+        raise AssertionError("homepage SSR must not call get_or_create_today_pick")
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        _boom,
+    )
+    monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine._find_today",
+        lambda _rows: {
+            "action": "HOLD",
+            "pick": {"subnet": {"netuid": 4, "name": "Delta"}, "score": 0.1, "confidence": 0.2},
+        },
+    )
+
+    hero = srv._home_hero_context([{"netuid": 4}])
+    assert hero["daily_pick_stage"].get("action") == "HOLD"
+    with patch("server._ordered_hour_picks", return_value=[]):
+        picks = _pick_sections([], {})
+    assert picks["day_picks"][0]["netuid"] == 4
