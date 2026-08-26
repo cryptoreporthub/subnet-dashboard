@@ -1,0 +1,324 @@
+{
+  "run_id": "post-offload-prod-3",
+  "base_url": "https://subnet-dashboard.fly.dev",
+  "captured_at": "2026-08-26T22:00:39.726051Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": 15.245,
+  "stats_parsed_at_s": 15.245,
+  "hero_dom_ready_at_s": 15.245,
+  "hydrates_in_budget": false,
+  "starvation_shape": true,
+  "nav_domcontentloaded_s": 11.602,
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 4117.5999999996275,
+    "domContentLoadedEventEnd": 11597.400000000373,
+    "loadEventEnd": 11598,
+    "responseStart": 253.2999999988824,
+    "responseEnd": 267.19999999925494,
+    "duration": 11598,
+    "transferSize": 34272,
+    "encodedBodySize": 33972
+  },
+  "final_hero": {
+    "title": "Closest \u00b7 SN65 \u00b7 True Performance Network",
+    "verdict": "gated",
+    "warming": false,
+    "hydrate": "0",
+    "graded": "44",
+    "accSub": "Last 44 graded: 64% directionally right",
+    "badgeText": "GATED",
+    "placeholderTitle": false,
+    "cold": false,
+    "statsParsed": true,
+    "statsGraded": 44,
+    "needsHydrate": false,
+    "heroPresent": true,
+    "t_s": 50.182
+  },
+  "aborted_endpoints": [
+    {
+      "path": "/api/mindmap/graph",
+      "class": "secondary",
+      "start_s": 4.451,
+      "end_s": 16.449,
+      "duration_ms": 11998.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 11.347,
+      "end_s": 23.345,
+      "duration_ms": 11998.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 11.359,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel",
+      "class": "secondary",
+      "start_s": 15.622,
+      "end_s": 27.622,
+      "duration_ms": 12000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/top-picks",
+      "class": "secondary",
+      "start_s": 40.916,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "class": "secondary",
+      "start_s": 40.917,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/signals",
+      "class": "secondary",
+      "start_s": 40.917,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/alerts",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/signals/summary",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/backtest",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/formula-lineage",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    }
+  ],
+  "aborted_hero_critical": [],
+  "health": {
+    "n": 107,
+    "ok": 106,
+    "errors": 1,
+    "p50_ms": 129.22,
+    "p95_ms": 550.36,
+    "p100_ms": 8036.08,
+    "min_ms": 88.84,
+    "mean_ms": 368.98
+  },
+  "health_p95_over_budget": true,
+  "max_concurrent_inflight": 47,
+  "max_concurrent_inflight_api": 26,
+  "pending_api_at_45s": [
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 11.359,
+      "end_s": null
+    },
+    {
+      "path": "/api/top-picks",
+      "class": "secondary",
+      "start_s": 40.916,
+      "end_s": null
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "class": "secondary",
+      "start_s": 40.917,
+      "end_s": null
+    },
+    {
+      "path": "/api/signals",
+      "class": "secondary",
+      "start_s": 40.917,
+      "end_s": null
+    },
+    {
+      "path": "/api/alerts",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/signals/summary",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/backtest",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/formula-lineage",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 40.918,
+      "end_s": null
+    }
+  ],
+  "still_open_at_close": [
+    {
+      "path": "/api/cockpit/stream",
+      "start_s": 11.359
+    },
+    {
+      "path": "/api/top-picks",
+      "start_s": 40.916
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "start_s": 40.917
+    },
+    {
+      "path": "/api/signals",
+      "start_s": 40.917
+    },
+    {
+      "path": "/api/alerts",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/signals/summary",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/backtest",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/formula-lineage",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "start_s": 40.918
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "start_s": 40.918
+    }
+  ],
+  "api_request_count": 60,
+  "homepage_curl_sanity": {
+    "status": null,
+    "ttfb_ms": 20050.6,
+    "error": "TimeoutError: The read operation timed out",
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "artifacts/g0-baseline/post-offload-prod-3/session.har",
+    "screenshot_t10s": "artifacts/g0-baseline/post-offload-prod-3/hero_t10s.png",
+    "screenshot_t45s": "artifacts/g0-baseline/post-offload-prod-3/hero_t45s.png"
+  }
+}
