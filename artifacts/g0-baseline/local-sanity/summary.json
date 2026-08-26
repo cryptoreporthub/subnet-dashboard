@@ -1,0 +1,94 @@
+{
+  "run_id": "local-sanity",
+  "base_url": "http://127.0.0.1:50745",
+  "captured_at": "2026-08-26T18:00:38.731282Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": null,
+  "stats_parsed_at_s": 2.335,
+  "hero_dom_ready_at_s": null,
+  "hydrates_in_budget": false,
+  "starvation_shape": true,
+  "nav_domcontentloaded_s": 0.639,
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 598.9000000000233,
+    "domContentLoadedEventEnd": 631.7999999999302,
+    "loadEventEnd": 1013,
+    "responseStart": 5.599999999976717,
+    "responseEnd": 6.799999999930151,
+    "duration": 1013,
+    "transferSize": 142360,
+    "encodedBodySize": 142060
+  },
+  "final_hero": {
+    "title": "Awaiting subnet",
+    "verdict": "forming",
+    "warming": false,
+    "hydrate": "0",
+    "graded": "0",
+    "accSub": "Not enough graded picks yet (0/30)",
+    "badgeText": "FORMING",
+    "placeholderTitle": true,
+    "cold": false,
+    "statsParsed": true,
+    "statsGraded": 0,
+    "needsHydrate": true,
+    "heroPresent": true,
+    "t_s": 50.023
+  },
+  "aborted_endpoints": [
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 1.003,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    }
+  ],
+  "aborted_hero_critical": [],
+  "health": {
+    "n": 198,
+    "ok": 198,
+    "errors": 0,
+    "p50_ms": 1.14,
+    "p95_ms": 1.39,
+    "p100_ms": 1060.17,
+    "min_ms": 0.67,
+    "mean_ms": 6.64
+  },
+  "health_p95_over_budget": false,
+  "max_concurrent_inflight": 47,
+  "max_concurrent_inflight_api": 25,
+  "pending_api_at_45s": [
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 1.003,
+      "end_s": null
+    }
+  ],
+  "still_open_at_close": [
+    {
+      "path": "/api/cockpit/stream",
+      "start_s": 1.003
+    }
+  ],
+  "api_request_count": 63,
+  "homepage_curl_sanity": {
+    "status": 200,
+    "ttfb_ms": 1.5,
+    "error": null,
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "/workspace/artifacts/g0-baseline/local-sanity/session.har",
+    "screenshot_t10s": "/workspace/artifacts/g0-baseline/local-sanity/hero_t10s.png",
+    "screenshot_t45s": "/workspace/artifacts/g0-baseline/local-sanity/hero_t45s.png"
+  }
+}

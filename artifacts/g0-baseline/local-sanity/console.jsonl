@@ -1,0 +1,2 @@
+{"t_s": 2.255, "type": "log", "text": "[cockpit_hydrate] tier-1/2 panels updated", "location": "{'url': 'http://127.0.0.1:50745/static/js/cockpit_hydrate.js?v=6232b939', 'line': 4785, 'column': 14, 'lineNumber': 4785, 'columnNumber': 14}"}
+{"t_s": 2.708, "type": "log", "text": "[cockpit_hydrate] deferred panels updated", "location": "{'url': 'http://127.0.0.1:50745/static/js/cockpit_hydrate.js?v=6232b939', 'line': 4962, 'column': 14, 'lineNumber': 4962, 'columnNumber': 14}"}

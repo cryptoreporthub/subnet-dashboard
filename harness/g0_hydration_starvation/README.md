@@ -50,3 +50,7 @@ python harness/g0_hydration_starvation/run_g0.py \
 
 `HERO_COMPLETE_AT` fires when `/api/learning/stats` is parsed **and** the
 tribunal hero is no longer the placeholder (`Awaiting subnet` / `data-verdict-kind=cold`).
+
+Local empty-pick: stats may parse and `/health` stay fast while the title stays
+`Awaiting subnet`. That is **not** prod starvation. Prod G0 required hero-critical
+aborts plus `/health` dying during the burst.
