@@ -17,6 +17,7 @@ from starlette.concurrency import run_in_threadpool
 
 from internal.api_errors import public_error
 from internal.rate_limit import limit_or_noop, strict_limit
+from internal.request_executor import to_thread_timeout as _to_thread_timeout
 
 from datastore.learning_engine import LearningEngine, create_feedback_router
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
@@ -49,6 +50,8 @@ _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
 _LEARNING_HEALTH_BUILDING = False
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
+MINDMAP_TRAIL_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_TRAIL_HANDLER_TIMEOUT_SECONDS", "8"))
+STORY_STRIP_HANDLER_TIMEOUT = float(os.environ.get("STORY_STRIP_HANDLER_TIMEOUT_SECONDS", "8"))
 _MINDMAP_SUMMARY_TTL = float(os.environ.get("MINDMAP_SUMMARY_CACHE_SECONDS", "60"))
 _MINDMAP_SUMMARY_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 MINDMAP_STORY_PATH_HANDLER_TIMEOUT = float(
@@ -56,20 +59,6 @@ MINDMAP_STORY_PATH_HANDLER_TIMEOUT = float(
 )
 _STORY_PATH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _STORY_PATH_CACHE_TTL = float(os.environ.get("MINDMAP_STORY_PATH_CACHE_SECONDS", "30"))
-
-
-async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
-    try:
-        from internal.request_executor import REQUEST_EXECUTOR
-
-        loop = asyncio.get_running_loop()
-        return await asyncio.wait_for(
-            loop.run_in_executor(REQUEST_EXECUTOR, fn),
-            timeout=timeout_s,
-        )
-    except asyncio.TimeoutError:
-        logger.warning("%s timed out after %.1fs", label, timeout_s)
-        raise
 
 
 def _learning_health_cacheable(payload: Any) -> bool:
@@ -824,9 +813,9 @@ def _build_mindmap_summary() -> Dict[str, Any]:
 @learning_router.get("/api/mindmap/trail")
 async def api_mindmap_trail(limit: int = Query(default=100, ge=1, le=500)):
     """Populated Mindmap trail from Soul-Map, predictions, and scenario memory."""
-    try:
-        from internal.learning.mindmap_aggregator import collect_trail_events, event_type_counts
+    from internal.learning.mindmap_aggregator import collect_trail_events, event_type_counts
 
+    def _build():
         trail = collect_trail_events(limit=limit)
         return {
             "status": "success",
@@ -834,6 +823,13 @@ async def api_mindmap_trail(limit: int = Query(default=100, ge=1, le=500)):
             "count": len(trail),
             "event_type_counts": event_type_counts(trail),
         }
+
+    try:
+        return await _to_thread_timeout(
+            _build, MINDMAP_TRAIL_HANDLER_TIMEOUT, label="mindmap-trail"
+        )
+    except asyncio.TimeoutError:
+        return {"status": "timeout", "trail": [], "count": 0, "error": "timeout"}
     except Exception as exc:
         logger.warning("mindmap trail failed: %s", exc)
         return {"status": "error", "trail": [], "count": 0, "error": str(exc)}
@@ -884,7 +880,19 @@ async def api_story_strip(
     """Compact recent call outcomes for proof-band hydrate."""
     from internal.analytics.story_strip import build_story_strip
 
-    return build_story_strip(limit=limit, focus_netuid=focus)
+    try:
+        return await _to_thread_timeout(
+            lambda: build_story_strip(limit=limit, focus_netuid=focus),
+            STORY_STRIP_HANDLER_TIMEOUT,
+            label="story-strip",
+        )
+    except asyncio.TimeoutError:
+        return {
+            "data_available": False,
+            "reason": "timeout",
+            "items": [],
+            "stats": {"correct": 0, "wrong": 0},
+        }
 
 
 @learning_router.get("/api/mindmap/story-path")

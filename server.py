@@ -624,6 +624,14 @@ HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
+# Hydrate GET must not wait on the scoring pool. Sequential prod #1058 burned
+# the full 8s PICK_HANDLER_TIMEOUT on a queued/stuck _build.
+PICK_READ_TIMEOUT = float(os.environ.get("PICK_READ_TIMEOUT_SECONDS", "0.5"))
+_PICK_READ_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=2,
+    thread_name_prefix="pick-read",
+)
+atexit.register(_PICK_READ_EXECUTOR.shutdown, wait=False, cancel_futures=True)
 SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "3"))
 _SUBNETS_TTL = float(os.environ.get("SUBNETS_CACHE_SECONDS", "30"))
 _SUBNETS_LOCK = threading.Lock()
@@ -650,17 +658,25 @@ _TOP_PICKS_BG_LOCK = threading.Lock()
 _TOP_PICKS_BG_REFRESHING = False
 
 
-async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+async def _to_thread_timeout(fn, timeout_s: float, *, label: str, executor=None):
     """Run dashboard work in its bounded pool, never the default request executor."""
+    pool = executor if executor is not None else _DASHBOARD_EXECUTOR
     try:
         loop = asyncio.get_running_loop()
         return await asyncio.wait_for(
-            loop.run_in_executor(_DASHBOARD_EXECUTOR, fn),
+            loop.run_in_executor(pool, fn),
             timeout=timeout_s,
         )
     except asyncio.TimeoutError:
         logger.warning("%s timed out after %.1fs", label, timeout_s)
         raise
+
+
+def _daily_pick_stage_timing(stage: str, elapsed_ms: float) -> None:
+    """Optional hydrate GET timing. Set DAILY_PICK_STAGE_TIMING=1 — no scoring."""
+    if not os.environ.get("DAILY_PICK_STAGE_TIMING"):
+        return
+    logger.info("daily_pick_stage stage=%s elapsed_ms=%.1f", stage, elapsed_ms)
 
 
 _DEGRADED_INDEX_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
@@ -1254,16 +1270,14 @@ def _home_hero_context(subnets: List[Dict[str, Any]]) -> Dict[str, Any]:
     pick_payload: Optional[Dict[str, Any]] = None
     pick_netuid: Optional[int] = None
     try:
-        if _PICKS_ENGINE:
-            market_context = _market_context_with_weights(subnets)
-            pick_payload = get_or_create_today_pick(subnets, market_context)
+        pick_payload = _read_shell_daily_pick()
+        if isinstance(pick_payload, dict) and pick_payload:
             pick_netuid = _pick_netuid_from_daily_payload(pick_payload)
-            if isinstance(pick_payload, dict):
-                pick_payload = _enrich_daily_pick_payload(
-                    pick_payload, subnets, market_context
-                )
+        else:
+            pick_payload = {}
     except Exception as exc:
         logger.warning("home hero context failed: %s", exc)
+        pick_payload = {}
     story_path: Dict[str, Any] = {}
     try:
         from internal.learning.story_path import build_story_path
@@ -3069,57 +3083,97 @@ async def api_daily_pick_weighed():
         return {"shortlist": [], "error": str(exc)}
 
 
-@app.get("/api/daily-pick")
-async def api_daily_pick(full: bool = False):
-    """Today's audited daily pick from the Council engine."""
-
-    def _build() -> Dict[str, Any]:
-        from internal.council.daily_pick_engine import _find_today, _load
-        from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
-
-        existing = _find_today(_load())
-        if existing is not None:
-            result = dict(existing)
-            if full:
-                try:
-                    subnets, _ = _get_subnets_hydrate()
-                    market_context = _market_context_with_weights(subnets)
-                    result = _enrich_daily_pick_payload(result, subnets, market_context)
-                except Exception as exc:
-                    logger.warning("daily-pick full enrich skipped: %s", exc)
-                    result = _enrich_daily_pick_payload_lite(result)
-                netuid = _pick_netuid_from_daily_payload(result)
-                result["enrichment_badge"] = (
-                    whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-                )
-            else:
-                result = _enrich_daily_pick_payload_lite(result)
-                result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-            return _attach_daily_pick_meta(result)
-
-        # ponytail: never run pick engine on hydrate API — wedges single-worker Fly.
-        return _attach_daily_pick_meta(
-            {
-            "status": "pending",
-            "date": datetime.now(timezone.utc).date().isoformat(),
-            "action": "HOLD",
-            "reason": "today's pick forming",
-            "pick": None,
-            }
-        )
-
-    try:
-        return await _to_thread_timeout(_build, PICK_HANDLER_TIMEOUT, label="daily-pick")
-    except asyncio.TimeoutError:
-        return _attach_daily_pick_meta(
-            {
+def _daily_pick_timeout_hold() -> Dict[str, Any]:
+    """Busy/timeout hydrate payload — never a clean scheduler HOLD."""
+    return _attach_daily_pick_meta(
+        {
             "status": "timeout",
             "date": datetime.now(timezone.utc).date().isoformat(),
             "action": "HOLD",
             "reason": "pick handler busy — retry shortly",
             "pick": None,
+        }
+    )
+
+
+def _daily_pick_pending_hold() -> Dict[str, Any]:
+    return _attach_daily_pick_meta(
+        {
+            "status": "pending",
+            "date": datetime.now(timezone.utc).date().isoformat(),
+            "action": "HOLD",
+            "reason": "today's pick forming",
+            "pick": None,
+        }
+    )
+
+
+@app.get("/api/daily-pick")
+async def api_daily_pick(full: bool = False):
+    """Today's pick from stored JSON. Hydrate GET never waits on scoring.
+
+    ``full`` is accepted so old clients do not 422, then ignored. Shortlist
+    scoring lives on ``/api/daily-pick/weighed`` — this path stays lite.
+    """
+    _ = full
+    started = time.monotonic()
+    from internal.whales.enrichment_badge import empty_whale_flow_badge
+
+    def _read_stored() -> Optional[Dict[str, Any]]:
+        from internal.council.daily_pick_engine import _find_today, _load
+
+        return _find_today(_load())
+
+    timeout_s = PICK_READ_TIMEOUT
+    pool = _PICK_READ_EXECUTOR
+    try:
+        existing = await _to_thread_timeout(
+            _read_stored, timeout_s, label="daily-pick-read", executor=pool
+        )
+    except asyncio.TimeoutError:
+        _daily_pick_stage_timing(
+            "hydrate_get_timeout", (time.monotonic() - started) * 1000
+        )
+        return _daily_pick_timeout_hold()
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        return _attach_daily_pick_meta(
+            {
+            "status": "error",
+            "date": datetime.now(timezone.utc).date().isoformat(),
+            "action": "HOLD",
+            "reason": str(e),
+            "pick": None,
             }
         )
+
+    if existing is None:
+        _daily_pick_stage_timing(
+            "hydrate_get_miss", (time.monotonic() - started) * 1000
+        )
+        return _daily_pick_pending_hold()
+
+    def _enrich() -> Dict[str, Any]:
+        result = _enrich_daily_pick_payload_lite(dict(existing))
+        result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+        return _attach_daily_pick_meta(result)
+
+    try:
+        payload = await _to_thread_timeout(
+            _enrich, timeout_s, label="daily-pick-enrich", executor=pool
+        )
+        _daily_pick_stage_timing(
+            "hydrate_get_hit", (time.monotonic() - started) * 1000
+        )
+        return payload
+    except asyncio.TimeoutError:
+        # Stored scheduler HOLD/LONG is not a timeout HOLD.
+        _daily_pick_stage_timing(
+            "hydrate_get_enrich_timeout", (time.monotonic() - started) * 1000
+        )
+        raw = dict(existing)
+        raw["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+        return _attach_daily_pick_meta(raw)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return _attach_daily_pick_meta(

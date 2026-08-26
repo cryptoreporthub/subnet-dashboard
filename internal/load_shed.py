@@ -20,15 +20,10 @@ _BYPASS_PREFIXES = ("/static/",)
 _LIGHT_API_PREFIXES = (
     "/api/learning/",
     "/api/learning-metrics",
-    "/api/story-strip",
     "/api/data-freshness",
-    "/api/ops/",
-    "/api/subnet-integrations",
     "/api/letter/",
-    "/api/portfolio/",
     "/api/pump-alerts",
     "/api/mindmap/story-path",
-    "/api/mindmap/trail",
     "/api/cockpit/sections",
     "/api/indicators-convergence",
     "/api/judges/",  # single-netuid only — /api/judges (all) stays shedable

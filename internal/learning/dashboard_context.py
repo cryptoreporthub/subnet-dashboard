@@ -364,11 +364,12 @@ def _pick_sections(
     day_picks: List[Dict[str, Any]] = []
     daily_pick: Dict[str, Any] = {}
     try:
-        from internal.council.daily_pick_engine import get_or_create_today_pick
+        from internal.council.daily_pick_engine import _find_today, _load
         from server import _ordered_hour_picks
 
         hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
-        raw = get_or_create_today_pick(subnets, market_context)
+        existing = _find_today(_load())
+        raw = existing if isinstance(existing, dict) else {}
         daily_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
         if not isinstance(daily_pick, dict):
             daily_pick = {}

@@ -9,10 +9,16 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query
 
+from internal.request_executor import to_thread_timeout
+
 health_router = APIRouter(tags=["health"])
 logger = logging.getLogger(__name__)
 
 OPS_LIVE_HANDLER_TIMEOUT = float(os.environ.get("OPS_LIVE_HANDLER_TIMEOUT_SECONDS", "8"))
+SUBNET_INTEGRATIONS_HANDLER_TIMEOUT = float(
+    os.environ.get("SUBNET_INTEGRATIONS_HANDLER_TIMEOUT_SECONDS", "8")
+)
+OPS_EVIDENCE_HANDLER_TIMEOUT = float(os.environ.get("OPS_EVIDENCE_HANDLER_TIMEOUT_SECONDS", "8"))
 
 
 async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
@@ -87,7 +93,26 @@ async def api_ops_evidence():
     """Ops evidence bundle: pick audit + pump desk + learning outcomes artifacts."""
     from internal.ops.evidence import build_evidence_report
 
-    return build_evidence_report()
+    try:
+        return await to_thread_timeout(
+            build_evidence_report, OPS_EVIDENCE_HANDLER_TIMEOUT, label="ops-evidence"
+        )
+    except asyncio.TimeoutError:
+        return {
+            "status": "timeout",
+            "error": "timeout",
+            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "alerts": [],
+            "paths": {},
+            "combined_angles": None,
+            "pick_audit": {},
+            "pump_desk": {},
+            "learning_outcomes": {},
+            "accuracy_lift": {"data_available": False},
+            "attribution_quality": {},
+            "weight_audit": {},
+            "capture": {},
+        }
 
 
 @health_router.get("/api/ops/desearch-spend")
@@ -103,7 +128,25 @@ async def api_subnet_integrations():
     """Live Bittensor subnet integration status (Finney + SN19/22/64/118)."""
     from internal.integrations.status import build_integrations_status
 
-    return build_integrations_status()
+    try:
+        return await to_thread_timeout(
+            build_integrations_status,
+            SUBNET_INTEGRATIONS_HANDLER_TIMEOUT,
+            label="subnet-integrations",
+        )
+    except asyncio.TimeoutError:
+        return {
+            "integrations": [],
+            "candidates": [],
+            "catalog": {},
+            "connected_count": 0,
+            "integration_total": 0,
+            "target_minimum": 3,
+            "ready_for_launch": False,
+            "desearch_spend": {},
+            "error": "timeout",
+            "cached": False,
+        }
 
 
 @health_router.get("/api/subnet-integrations/signals")

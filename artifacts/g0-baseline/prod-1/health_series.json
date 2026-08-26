@@ -1,0 +1,100 @@
+[
+  {
+    "t_unix": 1787766735.8402603,
+    "latency_ms": 223.98,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766736.090525,
+    "latency_ms": 198.98,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766736.3406334,
+    "latency_ms": 1247.17,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766737.5878253,
+    "latency_ms": 626.17,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766738.2140002,
+    "latency_ms": 151.51,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766738.4640832,
+    "latency_ms": 129.78,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766738.7143126,
+    "latency_ms": 106.41,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766738.9645042,
+    "latency_ms": 96.22,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787766739.2145963,
+    "latency_ms": 8040.84,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787766747.255448,
+    "latency_ms": 8035.15,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787766755.2906127,
+    "latency_ms": 8037.31,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787766763.3279328,
+    "latency_ms": 8035.52,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787766771.36346,
+    "latency_ms": 8035.14,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  },
+  {
+    "t_unix": 1787766779.398612,
+    "latency_ms": 8035.81,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  }
+]

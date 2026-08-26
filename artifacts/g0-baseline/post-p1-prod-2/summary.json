@@ -1,0 +1,605 @@
+{
+  "run_id": "post-p1-prod-2",
+  "base_url": "https://subnet-dashboard.fly.dev",
+  "captured_at": "2026-08-26T19:33:02.318151Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": null,
+  "stats_parsed_at_s": null,
+  "hero_dom_ready_at_s": null,
+  "hydrates_in_budget": false,
+  "starvation_shape": true,
+  "nav_domcontentloaded_s": 2.7,
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 2675.600000000559,
+    "domContentLoadedEventEnd": 2697.2000000001863,
+    "loadEventEnd": 2697.7999999998137,
+    "responseStart": 139.6000000005588,
+    "responseEnd": 154.20000000018626,
+    "duration": 2697.7999999998137,
+    "transferSize": 34116,
+    "encodedBodySize": 33816
+  },
+  "final_hero": {
+    "title": "Awaiting subnet",
+    "verdict": "cold",
+    "warming": false,
+    "hydrate": "1",
+    "graded": "0",
+    "accSub": "Building sample",
+    "badgeText": "COLD",
+    "placeholderTitle": true,
+    "cold": true,
+    "statsParsed": false,
+    "statsGraded": null,
+    "needsHydrate": true,
+    "heroPresent": true,
+    "t_s": 50.231
+  },
+  "aborted_endpoints": [
+    {
+      "path": "/api/dev-radar",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": 15.01,
+      "duration_ms": 11997.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/graph",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": 15.01,
+      "duration_ms": 11997.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/subnet-integrations",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": 18.012,
+      "duration_ms": 14999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/data-freshness",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/ops/readiness",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/market-drivers",
+      "class": "secondary",
+      "start_s": 3.014,
+      "end_s": 15.013,
+      "duration_ms": 11999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/letter/brain",
+      "class": "secondary",
+      "start_s": 3.014,
+      "end_s": 28.014,
+      "duration_ms": 25000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 3.014,
+      "end_s": 15.015,
+      "duration_ms": 12001.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/portfolio/status",
+      "class": "secondary",
+      "start_s": 3.015,
+      "end_s": 28.015,
+      "duration_ms": 25000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/letter/weekly",
+      "class": "secondary",
+      "start_s": 3.016,
+      "end_s": 18.016,
+      "duration_ms": 15000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/letter/daily",
+      "class": "secondary",
+      "start_s": 3.016,
+      "end_s": 18.016,
+      "duration_ms": 15000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/judges",
+      "class": "secondary",
+      "start_s": 3.017,
+      "end_s": 21.017,
+      "duration_ms": 18000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/daily-pick",
+      "class": "hero-critical",
+      "start_s": 3.023,
+      "end_s": 38.018,
+      "duration_ms": 34995.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": true
+    },
+    {
+      "path": "/api/learning/stats",
+      "class": "hero-critical",
+      "start_s": 3.024,
+      "end_s": 31.023,
+      "duration_ms": 27999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": true
+    },
+    {
+      "path": "/api/ops/evidence",
+      "class": "secondary",
+      "start_s": 3.024,
+      "end_s": 15.023,
+      "duration_ms": 11999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 3.024,
+      "end_s": 18.023,
+      "duration_ms": 14999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/daily-pick",
+      "class": "hero-critical",
+      "start_s": 3.024,
+      "end_s": 38.023,
+      "duration_ms": 34999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": true
+    },
+    {
+      "path": "/api/subnets",
+      "class": "hero-supporting",
+      "start_s": 3.024,
+      "end_s": 31.023,
+      "duration_ms": 27999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/story-strip",
+      "class": "secondary",
+      "start_s": 3.024,
+      "end_s": 25.024,
+      "duration_ms": 22000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/watchlist",
+      "class": "secondary",
+      "start_s": 3.028,
+      "end_s": 21.028,
+      "duration_ms": 18000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/status",
+      "class": "secondary",
+      "start_s": 3.029,
+      "end_s": 21.028,
+      "duration_ms": 17999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/calibration",
+      "class": "secondary",
+      "start_s": 3.029,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/subnets",
+      "class": "hero-supporting",
+      "start_s": 3.029,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/whales/flow-signals",
+      "class": "secondary",
+      "start_s": 3.031,
+      "end_s": 9.03,
+      "duration_ms": 5999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 3.055,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/daily-pick",
+      "class": "hero-critical",
+      "start_s": 5.03,
+      "end_s": 13.03,
+      "duration_ms": 8000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": true
+    },
+    {
+      "path": "/api/simivision",
+      "class": "secondary",
+      "start_s": 5.03,
+      "end_s": 17.03,
+      "duration_ms": 12000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/ops/evidence",
+      "class": "secondary",
+      "start_s": 15.385,
+      "end_s": 31.386,
+      "duration_ms": 16001.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 18.298,
+      "end_s": 37.299,
+      "duration_ms": 19001.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/watchlist",
+      "class": "secondary",
+      "start_s": 21.627,
+      "end_s": 39.627,
+      "duration_ms": 18000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/status",
+      "class": "secondary",
+      "start_s": 21.63,
+      "end_s": 39.63,
+      "duration_ms": 18000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/story-strip",
+      "class": "secondary",
+      "start_s": 25.361,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/letter/brain",
+      "class": "secondary",
+      "start_s": 28.276,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/portfolio/status",
+      "class": "secondary",
+      "start_s": 28.389,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/learning/stats",
+      "class": "hero-critical",
+      "start_s": 31.353,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": true
+    },
+    {
+      "path": "/api/subnets",
+      "class": "hero-supporting",
+      "start_s": 31.387,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/daily-pick",
+      "class": "hero-critical",
+      "start_s": 38.301,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": true
+    },
+    {
+      "path": "/api/watchlist",
+      "class": "secondary",
+      "start_s": 40.827,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/status",
+      "class": "secondary",
+      "start_s": 40.831,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    }
+  ],
+  "aborted_hero_critical": [
+    "/api/daily-pick",
+    "/api/learning/stats",
+    "/api/daily-pick",
+    "/api/daily-pick",
+    "/api/learning/stats",
+    "/api/daily-pick"
+  ],
+  "health": {
+    "n": 14,
+    "ok": 8,
+    "errors": 6,
+    "p50_ms": 811.99,
+    "p95_ms": 8037.96,
+    "p100_ms": 8041.14,
+    "min_ms": 95.68,
+    "mean_ms": 3629.96
+  },
+  "health_p95_over_budget": true,
+  "max_concurrent_inflight": 47,
+  "max_concurrent_inflight_api": 27,
+  "pending_api_at_45s": [
+    {
+      "path": "/api/data-freshness",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": null
+    },
+    {
+      "path": "/api/ops/readiness",
+      "class": "secondary",
+      "start_s": 3.013,
+      "end_s": null
+    },
+    {
+      "path": "/api/message-intel/calibration",
+      "class": "secondary",
+      "start_s": 3.029,
+      "end_s": null
+    },
+    {
+      "path": "/api/subnets",
+      "class": "hero-supporting",
+      "start_s": 3.029,
+      "end_s": null
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 3.055,
+      "end_s": null
+    },
+    {
+      "path": "/api/story-strip",
+      "class": "secondary",
+      "start_s": 25.361,
+      "end_s": null
+    },
+    {
+      "path": "/api/letter/brain",
+      "class": "secondary",
+      "start_s": 28.276,
+      "end_s": null
+    },
+    {
+      "path": "/api/portfolio/status",
+      "class": "secondary",
+      "start_s": 28.389,
+      "end_s": null
+    },
+    {
+      "path": "/api/learning/stats",
+      "class": "hero-critical",
+      "start_s": 31.353,
+      "end_s": null
+    },
+    {
+      "path": "/api/subnets",
+      "class": "hero-supporting",
+      "start_s": 31.387,
+      "end_s": null
+    },
+    {
+      "path": "/api/daily-pick",
+      "class": "hero-critical",
+      "start_s": 38.301,
+      "end_s": null
+    },
+    {
+      "path": "/api/watchlist",
+      "class": "secondary",
+      "start_s": 40.827,
+      "end_s": null
+    },
+    {
+      "path": "/api/message-intel/status",
+      "class": "secondary",
+      "start_s": 40.831,
+      "end_s": null
+    }
+  ],
+  "still_open_at_close": [
+    {
+      "path": "/api/data-freshness",
+      "start_s": 3.013
+    },
+    {
+      "path": "/api/ops/readiness",
+      "start_s": 3.013
+    },
+    {
+      "path": "/api/message-intel/calibration",
+      "start_s": 3.029
+    },
+    {
+      "path": "/api/subnets",
+      "start_s": 3.029
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "start_s": 3.055
+    },
+    {
+      "path": "/static/vendor/uplot/uPlot.iife.min.js",
+      "start_s": 3.069
+    },
+    {
+      "path": "/api/story-strip",
+      "start_s": 25.361
+    },
+    {
+      "path": "/api/letter/brain",
+      "start_s": 28.276
+    },
+    {
+      "path": "/api/portfolio/status",
+      "start_s": 28.389
+    },
+    {
+      "path": "/api/learning/stats",
+      "start_s": 31.353
+    },
+    {
+      "path": "/api/subnets",
+      "start_s": 31.387
+    },
+    {
+      "path": "/api/daily-pick",
+      "start_s": 38.301
+    },
+    {
+      "path": "/api/watchlist",
+      "start_s": 40.827
+    },
+    {
+      "path": "/api/message-intel/status",
+      "start_s": 40.831
+    }
+  ],
+  "api_request_count": 40,
+  "homepage_curl_sanity": {
+    "status": null,
+    "ttfb_ms": 20049.9,
+    "error": "TimeoutError: The read operation timed out",
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "artifacts/g0-baseline/post-p1-prod-2/session.har",
+    "screenshot_t10s": "artifacts/g0-baseline/post-p1-prod-2/hero_t10s.png",
+    "screenshot_t45s": "artifacts/g0-baseline/post-p1-prod-2/hero_t45s.png"
+  }
+}
