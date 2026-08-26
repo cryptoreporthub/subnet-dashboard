@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Optional
 
 _CANONICAL = frozenset({"quant", "hype", "dark_horse", "technical"})
@@ -54,10 +55,9 @@ def expert_graded_counts() -> Dict[str, int]:
 
 
 
-# collect_trail_events returns oldest-first and truncates at limit, so a small
-# window silently drops the newest weight_change rows. Scan a window wider than
-# the persisted trail (capped at 200 rows) and walk it newest-first so the
-# first delta seen per dial really is the latest.
+# collect_trail_events dedupes, sorts newest-first, then truncates at limit.
+# Scan wider than the persisted trail (capped at 200) so delta builders still
+# see recent weight_change rows after merge with derived events.
 _TRAIL_SCAN_LIMIT = 500
 
 
@@ -76,6 +76,58 @@ def collect_weight_trail_events(limit: int = _TRAIL_SCAN_LIMIT) -> list:
         return collect_trail_events(limit)
     except Exception:
         return []
+
+
+def is_alignment_diagnostic(event: dict) -> bool:
+    """True when a trail row is an alignment diagnostic, not an applied nudge."""
+    if str(event.get("decision") or "").startswith("alignment_"):
+        return True
+    evidence = event.get("evidence")
+    return isinstance(evidence, dict) and evidence.get("outcome_weight_changed") is False
+
+
+def _finite_nonzero_delta(evidence: Any) -> bool:
+    if not isinstance(evidence, dict):
+        return False
+    try:
+        delta = float(evidence.get("delta"))
+    except (TypeError, ValueError):
+        return False
+    return math.isfinite(delta) and delta != 0.0
+
+
+def count_weight_trail_updates(events: Any) -> int:
+    """Count valid ``weight_change`` events in an already-collected trail list.
+
+    Event count (not unique-dial). Dial is not required. Includes every dial
+    ``emit_weight_change`` records: expert, judge, rogue, impact_strength,
+    signal-weight (``horizon:signal``), and any other valid dial.
+
+    Valid: normalized ``event_type`` is ``weight_change``; ``evidence`` is a
+    mapping; ``evidence.delta`` is a finite numeric nonzero value.
+    Excluded: alignment diagnostics, zero-delta, malformed rows.
+    Window: whatever list the caller passed — snapshot uses
+    ``collect_weight_trail_events()`` (``_TRAIL_SCAN_LIMIT`` newest merged events).
+    No I/O — never collects the trail itself.
+    """
+    if not isinstance(events, list):
+        return 0
+    try:
+        from internal.learning.trail_bus import normalize_event_type
+    except Exception:
+        return 0
+    total = 0
+    for row in events:
+        if not isinstance(row, dict):
+            continue
+        if normalize_event_type(row.get("event_type")) != "weight_change":
+            continue
+        if is_alignment_diagnostic(row):
+            continue
+        if not _finite_nonzero_delta(row.get("evidence")):
+            continue
+        total += 1
+    return total
 
 
 def recent_expert_weight_deltas(
