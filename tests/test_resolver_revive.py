@@ -22,6 +22,7 @@ def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
     preds.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}), encoding="utf-8")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
 
     old_tick = _iso(datetime.now(timezone.utc) - timedelta(hours=4))
@@ -99,6 +100,7 @@ def test_revive_honest_when_tick_fresh(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
     try:
         out = rs.revive_prediction_resolver_scheduler()
         assert out["revived"] is False
