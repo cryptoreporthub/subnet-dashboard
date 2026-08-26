@@ -24,6 +24,32 @@ def _fresh_enough(ts: Optional[str], max_age_seconds: float = 1200.0) -> bool:
     return age <= max_age_seconds
 
 
+def _source_is_fresh(source: str, ts: Optional[str]) -> bool:
+    from internal.ops.bot_policy import classify_freshness
+
+    return classify_freshness(source, ts).get("status") == "fresh"
+
+
+def _source_envelope(
+    source: str,
+    captured_at: Optional[str],
+    *,
+    available: bool,
+    degraded: bool = False,
+    mode: Optional[str] = None,
+    authoritative: bool = True,
+) -> Dict[str, Any]:
+    from internal.ops.bot_policy import classify_freshness
+
+    return classify_freshness(
+        source,
+        captured_at if available else None,
+        degraded=degraded,
+        mode=mode,
+        authoritative=authoritative,
+    )
+
+
 def _read_json(path: str) -> Optional[Dict[str, Any]]:
     if not os.path.isfile(path):
         return None
@@ -60,10 +86,12 @@ def build_evidence_report() -> Dict[str, Any]:
     alerts: list[str] = []
     if pick and pick.get("verdict") == "MISS":
         alerts.append(f"pick_audit MISS category={pick.get('category')}")
-    pump_fresh = pump and _fresh_enough(pump.get("captured_at"))
+    pump_fresh = bool(pump and _source_is_fresh("pump_desk", pump.get("captured_at")))
     if pump_fresh and pump.get("alert_level") == "alert":
         alerts.append("pump_desk alert")
-    outcomes_fresh = outcomes and _fresh_enough(outcomes.get("captured_at"))
+    outcomes_fresh = bool(
+        outcomes and _source_is_fresh("learning_outcomes", outcomes.get("captured_at"))
+    )
     if outcomes_fresh and outcomes.get("alert_level") == "alert":
         alerts.append("learning_outcomes alert")
 
@@ -83,6 +111,36 @@ def build_evidence_report() -> Dict[str, Any]:
     accuracy_lift = _build_accuracy_lift()
     weight_audit = _build_weight_audit()
     capture = _build_capture_evidence()
+    from internal.ops.bot_policy import aggregate_freshness, bot_contract
+
+    evidence_sources = [
+        _source_envelope(
+            "learning_outcomes",
+            outcomes.get("captured_at") if outcomes else None,
+            available=outcomes is not None,
+            degraded=bool(outcomes and str(outcomes.get("status")).lower() == "degraded"),
+        ),
+        _source_envelope(
+            "pump_desk",
+            pump.get("captured_at") if pump else None,
+            available=pump is not None,
+            degraded=bool(pump and str(pump.get("status")).lower() == "degraded"),
+        ),
+        _source_envelope(
+            "pick_audit",
+            pick.get("captured_at") if pick else None,
+            available=pick is not None,
+        ),
+    ]
+    if combined_angles is not None:
+        evidence_sources.append(
+            _source_envelope(
+                "combined_angles",
+                combined_angles.get("captured_at"),
+                available=True,
+            )
+        )
+    evidence_freshness = aggregate_freshness(evidence_sources)
 
     return {
         "status": status,
@@ -113,6 +171,8 @@ def build_evidence_report() -> Dict[str, Any]:
         "attribution_quality": accuracy_lift.get("attribution_quality") or {},
         "weight_audit": weight_audit,
         "capture": capture,
+        "evidence_sources": evidence_sources,
+        **bot_contract(freshness=evidence_freshness),
     }
 
 

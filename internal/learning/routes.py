@@ -90,7 +90,9 @@ def _learning_health_degraded(
         daily_pick = _daily_pick_today()
     except Exception:
         pass
-    return {
+    from internal.ops.bot_policy import with_bot_contract
+
+    return with_bot_contract({
         "status": "degraded",
         "meta": {"source": source},
         "checked_at": _utcnow_z(),
@@ -111,7 +113,7 @@ def _learning_health_degraded(
         "snapshot_age_seconds": None,
         "score_snapshot": {},
         "error": error or source,
-    }
+    }, source="learning_health", degraded=True)
 
 
 def _valid_learning_health(payload: Any) -> bool:
@@ -174,6 +176,16 @@ def _stale_learning_health(payload: Dict[str, Any]) -> Dict[str, Any]:
     meta = dict(stale.get("meta") or {})
     meta.update({"source": "stale_timeout", "stale": True})
     stale["meta"] = meta
+    from internal.ops.bot_policy import with_bot_contract
+
+    stale.update(
+        with_bot_contract(
+            {},
+            source="learning_health",
+            captured_at=stale.get("checked_at"),
+        )
+    )
+    stale["freshness"]["status"] = "stale"
     return stale
 
 
@@ -507,16 +519,26 @@ def _learning_stats_payload(
 
 def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
     from internal.learning.trust_stats import build_trust_banner
+    from internal.ops.bot_policy import with_bot_contract
 
     stale = _learning_snapshot_cache.get("data")
     if isinstance(stale, dict):
-        return _learning_stats_payload(stale, status="degraded", meta={"source": source})
+        payload = _learning_stats_payload(stale, status="degraded", meta={"source": source})
+        payload.update(
+            with_bot_contract(
+                {},
+                source="learning_outcomes",
+                captured_at=(payload.get("data") or {}).get("last_updated"),
+                degraded=True,
+            )
+        )
+        return payload
     trust_banner = build_trust_banner(
         {"correct": 0, "wrong": 0, "expired": 0, "duplicate": 0, "pending": 0, "total": 0}
     )
     trust_banner["ready"] = False
     trust_banner["message"] = "Learning stats warming up"
-    return {
+    return with_bot_contract({
         "status": "degraded",
         "meta": {"source": source},
         "data": {
@@ -584,7 +606,7 @@ def _learning_stats_degraded(*, source: str = "timeout") -> Dict[str, Any]:
             "brain_ui_ready": False,
             "alignment_diagnostic_events": 0,
         },
-    }
+    }, source="learning_outcomes", captured_at=None, degraded=True)
 
 
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1072,7 +1094,17 @@ async def api_learning_loop_health():
     """Phase 0 — pick→ledger→resolver loop status (no scoring)."""
     cached = _get_cached_learning_health()
     if cached is not None:
-        return cached
+        from internal.ops.bot_policy import with_bot_contract
+
+        return {
+            **cached,
+            **with_bot_contract(
+                {},
+                source="learning_health",
+                captured_at=cached.get("checked_at"),
+                degraded=cached.get("status") == "degraded",
+            ),
+        }
     if _learning_health_build_in_flight():
         stale = _get_cached_learning_health(allow_stale=True)
         return _stale_learning_health(stale) if stale is not None else _learning_health_degraded(source="refreshing")
@@ -1086,7 +1118,17 @@ async def api_learning_loop_health():
             return _stale_learning_health(stale) if stale is not None else _learning_health_degraded(source="refreshing")
         if _valid_learning_health(payload):
             _set_learning_health_cache(payload)
-            return payload
+            from internal.ops.bot_policy import with_bot_contract
+
+            return {
+                **payload,
+                **with_bot_contract(
+                    {},
+                    source="learning_health",
+                    captured_at=payload.get("checked_at"),
+                    degraded=payload.get("status") == "degraded",
+                ),
+            }
         logger.warning("learning health returned malformed payload")
         return _learning_health_degraded(source="invalid_payload", error="invalid_payload")
     except asyncio.TimeoutError:
@@ -1106,7 +1148,17 @@ async def api_learning_stats():
         snap = await _to_thread_timeout(
             _learning_snapshot, LEARNING_STATS_TIMEOUT, label="learning-stats"
         )
-        return _learning_stats_payload(snap)
+        payload = _learning_stats_payload(snap)
+        from internal.ops.bot_policy import with_bot_contract
+
+        return {
+            **payload,
+            **with_bot_contract(
+                {},
+                source="learning_outcomes",
+                captured_at=(payload.get("data") or {}).get("last_updated"),
+            ),
+        }
     except asyncio.TimeoutError:
         return _learning_stats_degraded(source="timeout")
     except Exception as exc:

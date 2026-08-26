@@ -217,6 +217,39 @@ def build_readiness_report() -> Dict[str, Any]:
 
     thin_ui = feed.get("likely_total", 0) <= 0 or feed.get("effective_source") == "none"
 
+    from internal.ops.bot_policy import bot_contract, classify_freshness
+
+    heartbeat = worker_peer.get("heartbeat")
+    heartbeat_ts = heartbeat.get("ts") if isinstance(heartbeat, dict) else None
+    freshness_sources = [
+        classify_freshness(
+            "live_feed",
+            (feed.get("live_cache") or {}).get("synced_at")
+            or live.get("last_sync")
+            or sync.get("last_sync_at"),
+            degraded=feed.get("effective_source") in (None, "none"),
+        ),
+        classify_freshness(
+            "resolver",
+            resolver.get("last_run_at") or loop_health.get("last_resolver_tick"),
+            degraded=bool(resolver.get("running") is False and (inline_worker or split_v2)),
+        ),
+        classify_freshness(
+            "learning_health",
+            loop_health.get("checked_at") if isinstance(loop_health, dict) else None,
+            degraded=loop_health.get("status") == "degraded",
+        ),
+    ]
+    if worker_peer.get("expected"):
+        freshness_sources.append(
+            classify_freshness(
+                "worker_heartbeat",
+                heartbeat_ts,
+                degraded=worker_peer.get("alive") is False,
+            )
+        )
+    readiness_contract = bot_contract(sources=freshness_sources)
+
     ready = not any(
         i in issues
         for i in (
@@ -251,6 +284,8 @@ def build_readiness_report() -> Dict[str, Any]:
         "taostats": {"configured": taostats},
         "daily_pick": daily,
         "next_levers": _next_levers(issues, taostats),
+        "evidence_sources": freshness_sources,
+        **readiness_contract,
     }
 
 

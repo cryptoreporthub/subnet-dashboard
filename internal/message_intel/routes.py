@@ -32,6 +32,18 @@ def _upgrade_response(feature: str, tier: str, route: str = "") -> Dict[str, Any
     }
 
 
+def _message_contract(*, live: bool, captured_at: Optional[str], degraded: bool = False) -> Dict[str, Any]:
+    from internal.ops.bot_policy import bot_contract
+
+    return bot_contract(
+        source="message_intel_live" if live else "message_intel_archive",
+        captured_at=captured_at,
+        degraded=degraded,
+        mode="live" if live else "archive",
+        authoritative=live,
+    )
+
+
 @message_intel_router.post("/api/message-intel/ingest")
 async def api_message_intel_ingest(request: Request):
     """Ingest one message or a batch (``messages`` array)."""
@@ -85,6 +97,16 @@ async def api_message_intel(
             author_id=author_id,
         )
         payload["entitlement"] = entitlement_payload(ent)
+        listener = (payload.get("meta") or {}).get("listener") or {}
+        stats = payload.get("meta") or {}
+        live = bool(listener.get("live"))
+        payload.update(
+            _message_contract(
+                live=live,
+                captured_at=stats.get("last_message_at"),
+                degraded=not bool(stats.get("ok", True)),
+            )
+        )
         return payload
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
@@ -97,6 +119,7 @@ async def api_message_intel(
             "empty": True,
             "meta": {"total_messages": 0, "ok": False, "error": str(exc), "listener": listener_status()},
             "sources": {},
+            **_message_contract(live=False, captured_at=None, degraded=True),
         }
 
 
@@ -113,6 +136,11 @@ async def api_message_intel_status():
     except Exception as exc:
         stats = {"ok": False, "error": str(exc), "total_messages": 0}
     listener = listener_status()
+    contract = _message_contract(
+        live=bool(listener.get("live")),
+        captured_at=stats.get("last_message_at"),
+        degraded=not bool(stats.get("ok", True)),
+    )
     return {
         "status": "success",
         "listener": listener,
@@ -121,6 +149,7 @@ async def api_message_intel_status():
         "outcomes": outcome_loop_status(),
         "live": bool(listener.get("live")),
         "empty": int(stats.get("total_messages") or 0) == 0,
+        **contract,
     }
 
 

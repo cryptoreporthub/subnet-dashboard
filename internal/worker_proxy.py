@@ -384,6 +384,16 @@ def _cached_payload_response(path: str) -> Optional[JSONResponse]:
     content["status"] = "cached"
     content["detail"] = "Serving last-good worker payload while the volume reconnects."
     content["path"] = path
+    from internal.ops.bot_policy import bot_contract
+
+    content.update(
+        bot_contract(
+            source="worker_heartbeat",
+            degraded=True,
+            mode="cached_worker",
+            authoritative=False,
+        )
+    )
     return JSONResponse(status_code=200, content=content)
 
 
@@ -395,7 +405,19 @@ def _mindmap_degraded_response(path: str) -> JSONResponse:
             "Serving last-good trail — worker reconnecting."
         )
         content["path"] = path
+        from internal.ops.bot_policy import bot_contract
+
+        content.update(
+            bot_contract(
+                source="worker_heartbeat",
+                degraded=True,
+                mode="cached_worker",
+                authoritative=False,
+            )
+        )
         return JSONResponse(status_code=200, content=content)
+    from internal.ops.bot_policy import bot_contract
+
     return JSONResponse(
         status_code=200,
         content={
@@ -404,11 +426,19 @@ def _mindmap_degraded_response(path: str) -> JSONResponse:
             "edges": [],
             "detail": "Worker volume temporarily unavailable — trail will refill when the learning loop reconnects.",
             "path": path,
+            **bot_contract(
+                source="worker_heartbeat",
+                degraded=True,
+                mode="worker_unavailable",
+                authoritative=False,
+            ),
         },
     )
 
 
 def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
+    from internal.ops.bot_policy import bot_contract
+
     if _mindmap_path(path):
         return _mindmap_degraded_response(path)
     cached = _cached_payload_response(path)
@@ -423,6 +453,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "ledger": {"required": False, "present": False, "gap": False},
                 "resolver": {"stale": True, "detail": "worker_proxy_degraded"},
                 "worker_proxy": True,
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/data-freshness":
@@ -432,6 +468,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "status": "degraded",
                 "files": {},
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/learning/stats" or path == "/api/learning-metrics":
@@ -454,6 +496,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                     },
                 },
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/daily-pick":
@@ -464,22 +512,37 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "action": "HOLD",
                 "pick": None,
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/pump-alerts":
         from internal.pump.desk_payload import attach_pump_freshness
 
+        pump_payload = attach_pump_freshness(
+            {
+                "status": "degraded",
+                "count": 0,
+                "alerts": [],
+                "detail": "Worker volume temporarily unavailable",
+            },
+            handler_stale=True,
+        )
+        pump_payload.update(
+            bot_contract(
+                source="worker_heartbeat",
+                degraded=True,
+                mode="worker_unavailable",
+                authoritative=False,
+            )
+        )
         return JSONResponse(
             status_code=200,
-            content=attach_pump_freshness(
-                {
-                    "status": "degraded",
-                    "count": 0,
-                    "alerts": [],
-                    "detail": "Worker volume temporarily unavailable",
-                },
-                handler_stale=True,
-            ),
+            content=pump_payload,
         )
     if path.startswith("/api/message-intel"):
         return JSONResponse(
@@ -490,6 +553,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "meta": {"total_messages": 0, "ok": False},
                 "sources": {},
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/council/weights":
@@ -509,6 +578,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "predictions": [],
                 "resolved": [],
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     if path == "/api/dev-radar":
@@ -518,6 +593,12 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
                 "status": "degraded",
                 "items": [],
                 "detail": "Worker volume temporarily unavailable",
+                **bot_contract(
+                    source="worker_heartbeat",
+                    degraded=True,
+                    mode="worker_unavailable",
+                    authoritative=False,
+                ),
             },
         )
     return None
