@@ -13,6 +13,7 @@ resolve (Option C — two-tier weighted scoring architecture).
 
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -245,15 +246,34 @@ def replay_weights_from_predictions(
     include_archive: bool = True,
 ) -> Dict[str, float]:
     """Rebuild council weights by replaying graded prediction nudges from defaults."""
+    from internal.council.capture import (
+        BAND_HIT,
+        BAND_MISS,
+        BAND_NEAR_HIT,
+        capture_from_row,
+        capture_mode_enabled,
+    )
     from internal.council.signal_expert import expert_for_replay_row
 
     rows, _ = merged_replay_rows(predictions_path, include_archive=include_archive)
     weights = dict(DEFAULT_WEIGHTS)
+    capture_on = capture_mode_enabled()
     for row in rows:
         expert = expert_for_replay_row(row)
         if not expert or expert not in weights:
             continue
-        delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+        if capture_on:
+            cap = capture_from_row(row)
+            if cap.band == BAND_HIT:
+                delta = _LEARNING_DELTA_CORRECT
+            elif cap.band == BAND_NEAR_HIT:
+                delta = _LEARNING_DELTA_CORRECT * float(cap.capture_capped or 0.0)
+            elif cap.band == BAND_MISS:
+                delta = _LEARNING_DELTA_WRONG
+            else:
+                continue
+        else:
+            delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
         weights[expert] = round(
             max(
                 _LEARNING_MIN_WEIGHT,
@@ -279,6 +299,80 @@ def soft_blend_weights(
         p = float(base.get(name, DEFAULT_WEIGHTS[name]))
         out[name] = round(share * r + (1.0 - share) * p, 4)
     return normalize_council_weights(out)
+
+
+def apply_rebase_guards(
+    proposed: Dict[str, float],
+    rows: List[Dict[str, Any]],
+    *,
+    now_iso: Optional[str] = None,
+) -> Dict[str, float]:
+    """§2.4 cert-gated rebase: data-derived targets, no-evidence-no-leverage, stale decay.
+
+    - Expert may not leave ±25% of 1.0 without ≥10 published graded rows.
+    - Stale (no published graded row within GRADING_STALE_DAYS=14) decays 50%
+      of remaining distance toward 1.0 per rebalance cycle.
+    - Empty evidence population clamps straight to 1.0.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from internal.accuracy_lift.populations import is_council_trust_row
+
+    stale_days = int(_env_int("GRADING_STALE_DAYS", 14))
+    now = datetime.now(timezone.utc)
+    if now_iso:
+        try:
+            now = datetime.fromisoformat(str(now_iso).replace("Z", "+00:00"))
+        except ValueError:
+            pass
+    cutoff = now - timedelta(days=stale_days)
+
+    counts: Dict[str, int] = {name: 0 for name in DEFAULT_WEIGHTS}
+    last_ts: Dict[str, datetime] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not is_council_trust_row(row):
+            continue
+        from internal.council.signal_expert import expert_for_replay_row
+
+        expert = expert_for_replay_row(row)
+        if expert not in counts:
+            continue
+        counts[expert] += 1
+        ts_raw = row.get("resolved_at") or row.get("created_at")
+        if ts_raw:
+            try:
+                ts = datetime.fromisoformat(str(ts_raw).replace("Z", "+00:00"))
+                prev = last_ts.get(expert)
+                if prev is None or ts > prev:
+                    last_ts[expert] = ts
+            except ValueError:
+                pass
+
+    out = dict(DEFAULT_WEIGHTS)
+    for name in DEFAULT_WEIGHTS:
+        target = float(proposed.get(name, 1.0))
+        n = counts[name]
+        if n == 0:
+            out[name] = 1.0
+            continue
+        if n < 10:
+            target = max(0.75, min(1.25, target))
+        last = last_ts.get(name)
+        if last is None or last < cutoff:
+            # 50% of remaining distance toward 1.0
+            target = target + 0.5 * (1.0 - target)
+        out[name] = round(max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, target)), 4)
+    return out
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(float(raw))
+    except (TypeError, ValueError):
+        return default
 
 
 def rebalance_council_weights(
@@ -321,6 +415,8 @@ def rebalance_council_weights(
     trail_emitted = True
     warnings: List[str] = []
     if save:
+        if os.environ.get("GRADING_REBASE", "").strip().lower() in {"1", "true", "yes", "on"}:
+            blended = apply_rebase_guards(blended, merged_rows)
         save_weights(blended, soul)
         try:
             from internal.learning.trail_bus import emit_weight_change
@@ -389,8 +485,12 @@ def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     return dict(DEFAULT_WEIGHTS)
 
 
-def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, float]:
-    """split_v2 web — read council weights from worker volume when local data is absent."""
+def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, Any]:
+    """split_v2 web — read council weights from worker volume when local data is absent.
+
+    Proxy failure must not look like learned 1.0 weights. Callers map
+    ``_proxy_degraded`` to the Part 0 degraded payload.
+    """
     from internal.data_volume import needs_worker_volume_proxy
 
     if needs_worker_volume_proxy():
@@ -401,8 +501,9 @@ def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, float]:
             expert_weights = data.get("expert_weights")
             if isinstance(expert_weights, dict) and expert_weights:
                 return normalize_council_weights(expert_weights)
+            return {"_proxy_degraded": True}
         except Exception:
-            pass
+            return {"_proxy_degraded": True}
     return load_weights(path)
 
 
@@ -482,6 +583,7 @@ def nudge_expert(
     *,
     delta_correct: Optional[float] = None,
     delta_wrong: Optional[float] = None,
+    scale: float = 1.0,
 ) -> Optional[float]:
     """Single nudge path for resolver + feedback (§27-4). Returns new weight."""
     if not expert:
@@ -490,11 +592,12 @@ def nudge_expert(
     weights = load_weights(path)
     if expert not in weights:
         return None
-    delta = (
+    base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
+    delta = round(base * max(0.0, float(scale)), 4)
     before = float(weights[expert])
     after = round(
         max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
@@ -615,17 +718,17 @@ def _now_iso() -> str:
 
 def load_signal_weights(path: str = SOUL_MAP_PATH) -> Dict[str, Dict[str, float]]:
     """Read learned signal weights from soul_map.json, defaulting to DEFAULT_SIGNAL_WEIGHTS."""
+    signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
     data = _load_raw(path, copy_blob=False)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and isinstance(adv.get("signal_weights"), dict):
         raw = adv["signal_weights"]
-        signal_weights = dict(DEFAULT_SIGNAL_WEIGHTS)
         for horizon in ("hour", "day"):
             if isinstance(raw.get(horizon), dict):
                 for signal_name, default_val in DEFAULT_SIGNAL_WEIGHTS[horizon].items():
                     signal_weights[horizon][signal_name] = float(raw[horizon].get(signal_name, default_val))
         return signal_weights
-    return dict(DEFAULT_SIGNAL_WEIGHTS)
+    return signal_weights
 
 
 def save_signal_weights(
@@ -650,11 +753,15 @@ def nudge_signal_weight(
     signal_name: str,
     correct: bool,
     path: str = SOUL_MAP_PATH,
+    *,
+    scale: float = 1.0,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
     signal_weights = load_signal_weights(path)
     horizon_weights = signal_weights.setdefault(horizon_type, {})
-    delta = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
+    delta = base * max(0.0, float(scale))
     current = horizon_weights.get(signal_name, 1.0)
     before = float(current)
     new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, current + delta))
@@ -663,17 +770,66 @@ def nudge_signal_weight(
     try:
         from internal.learning.trail_bus import emit_weight_change
 
+        payload = {"horizon_type": horizon_type, "signal_name": signal_name}
+        if extra:
+            payload.update(extra)
         emit_weight_change(
             f"{horizon_type}:{signal_name}",
             before=before,
             after=float(new_val),
             reason="signal_resolve",
             correct=correct,
-            extra={"horizon_type": horizon_type, "signal_name": signal_name},
+            extra=payload,
         )
     except Exception:
         pass
     return float(new_val)
+
+
+def replay_signal_weights_from_predictions(
+    predictions_path: Optional[str] = None,
+    *,
+    include_archive: bool = True,
+) -> Dict[str, Dict[str, float]]:
+    """Replay per-signal nudges. Capture mode uses stored/derived band+capture."""
+    from internal.council.capture import (
+        BAND_HIT,
+        BAND_MISS,
+        BAND_NEAR_HIT,
+        capture_from_row,
+        capture_mode_enabled,
+    )
+
+    rows, _ = merged_replay_rows(predictions_path, include_archive=include_archive)
+    signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
+    capture_on = capture_mode_enabled()
+    for row in rows:
+        contrib = row.get("signal_contributions")
+        if not isinstance(contrib, dict):
+            continue
+        horizon = str(row.get("horizon_type") or "hour")
+        if horizon not in signal_weights:
+            signal_weights[horizon] = {}
+        if capture_on:
+            cap = capture_from_row(row)
+            if cap.band == BAND_HIT:
+                delta = _LEARNING_DELTA_CORRECT
+            elif cap.band == BAND_NEAR_HIT:
+                delta = _LEARNING_DELTA_CORRECT * float(cap.capture_capped or 0.0)
+            elif cap.band == BAND_MISS:
+                delta = _LEARNING_DELTA_WRONG
+            else:
+                continue
+        else:
+            delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+        names = row.get("active_signals") or list(contrib.keys())
+        for signal_name in names:
+            current = float(signal_weights[horizon].get(signal_name, 1.0))
+            signal_weights[horizon][signal_name] = round(
+                max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, current + delta)),
+                4,
+            )
+    return signal_weights
 
 
 def load_impact_strength(path: Optional[str] = None) -> float:

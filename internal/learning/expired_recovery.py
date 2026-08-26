@@ -108,7 +108,12 @@ def recover_expired_predictions(
             recovered += 1
             continue
 
-        expert, _ = resolver._stamp_and_nudge_expert(row, correct=bool(correct))
+        from internal.council.capture import stamp_capture_fields
+
+        capture = stamp_capture_fields(row, actual_pct)
+        expert, _ = resolver._stamp_and_nudge_expert(
+            row, correct=bool(correct), capture=capture
+        )
         resolver._ensure_subnet_snapshot(row)
         if not resolver._skip_council_learning(row):
             resolver._nudge_impact_strength(row, bool(correct))
@@ -126,7 +131,7 @@ def recover_expired_predictions(
             resolver._record_scenario_outcome(
                 row, actual_pct, new_outcome, bool(correct), expert
             )
-            resolver._nudge_signal_weights(row, bool(correct))
+            resolver._nudge_signal_weights(row, bool(correct), capture=capture)
         else:
             try:
                 from internal.learning.pump_calibration import maybe_adapt_after_resolve

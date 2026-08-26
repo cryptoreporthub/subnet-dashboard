@@ -31,11 +31,16 @@
   }
 
   function renderRows(payload) {
-    if (!payload || payload.data_available === false) {
+    if (!payload || payload.status === "degraded" || payload.data_available === false) {
       list.innerHTML =
         '<li class="sr-dev-pulse__empty">' +
         esc(payload && payload.message ? payload.message : "Dev pulse warming up.") +
         "</li>";
+      return;
+    }
+    if (payload.empty) {
+      list.innerHTML = '<li class="sr-dev-pulse__empty">No subnets in registry yet.</li>';
+      section.classList.remove("is-error");
       return;
     }
     var rows = payload.subnets || [];
@@ -106,12 +111,14 @@
         });
     fetchJson
       .then(function (payload) {
+        section.classList.remove("is-error");
         renderSummary(payload);
         renderRows(payload);
       })
       .catch(function () {
+        section.classList.add("is-error");
         list.innerHTML =
-          '<li class="sr-dev-pulse__empty">No registry economics — dev pulse warming up</li>';
+          '<li class="sr-dev-pulse__empty is-error">Could not load Dev Pulse — try again shortly.</li>';
       });
   }
 

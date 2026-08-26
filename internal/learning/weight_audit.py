@@ -11,12 +11,14 @@ _KNOWN_GAPS: List[Dict[str, Any]] = [
     {
         "id": "judge-pump-shadow",
         "severity": "P2",
-        "detail": "Judge nudges still fire on pump/shadow rows that council expert nudges skip.",
+        "detail": "Judge nudges skip pump/shadow rows (mirrors council skip).",
+        "fixed": True,
     },
     {
         "id": "streaks-mixed-pop",
         "severity": "P1",
-        "detail": "Streak whisper counts all resolved rows, not council_trust only.",
+        "detail": "Streak whisper counts council_trust-published rows only.",
+        "fixed": True,
     },
     {
         "id": "combined-frozen",
@@ -24,6 +26,38 @@ _KNOWN_GAPS: List[Dict[str, Any]] = [
         "detail": "Combined 0.70/0.30 weights frozen until soak GO + graded_30d >= 20.",
     },
 ]
+
+
+def _post_flip_drift_watch(expert_weights: Dict[str, float]) -> Dict[str, Any]:
+    """7-day post Phase B watch: alert if any expert/signal crosses ratio 2.0."""
+    alerts: List[str] = []
+    for name, val in (expert_weights or {}).items():
+        try:
+            if abs(float(val)) >= 2.0 - 1e-9:
+                alerts.append(f"expert:{name}={val}")
+        except (TypeError, ValueError):
+            continue
+    try:
+        from internal.council.weights import load_signal_weights
+
+        signals = load_signal_weights()
+        for horizon, bucket in (signals or {}).items():
+            if not isinstance(bucket, dict):
+                continue
+            for sig, val in bucket.items():
+                try:
+                    if abs(float(val)) >= 2.0 - 1e-9:
+                        alerts.append(f"signal:{horizon}:{sig}={val}")
+                except (TypeError, ValueError):
+                    continue
+    except Exception:
+        pass
+    return {
+        "window_days": 7,
+        "ratio_alert": 2.0,
+        "includes_signal_weights": True,
+        "alerts": alerts,
+    }
 
 
 def _recent_resolve_population(limit: int = 100) -> Dict[str, int]:
@@ -78,6 +112,7 @@ def build_weight_audit_report() -> Dict[str, Any]:
         "combined_weights_frozen": True,
         "recent_resolve_population": _recent_resolve_population(),
         "known_gaps": list(_KNOWN_GAPS),
+        "post_flip_drift_watch": _post_flip_drift_watch(expert_weights),
         "tune_gate": {
             "published_graded_30d_min": 20,
             "recommendation": "HOLD weight/calibration tune until soak GO and published sample clears gate.",

@@ -17,6 +17,10 @@ from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.judges import all_judges
 
 
+class _SkipJudgeNudge(Exception):
+    """Internal: skip this judge nudge without treating it as an error."""
+
+
 def _actual_pct(prediction: Dict[str, Any]) -> float:
     if "actual_pct" in prediction:
         return float(prediction["actual_pct"] or 0)
@@ -74,11 +78,21 @@ def on_prediction_resolved(
         closed = judge.close_position(prediction, actual_pct=actual_pct, outcome=outcome)
         if closed and apply_judge_nudge:
             try:
+                from internal.council.grading import is_pump_desk_claim
                 from internal.judges.grading import (
                     judge_nudge_correct,
                     judge_nudge_magnitude_scale,
                 )
                 from internal.judges.weights import nudge_judge
+
+                if is_pump_desk_claim(prediction) or prediction.get("shadow") or prediction.get("counterfactual"):
+                    raise _SkipJudgeNudge()
+                from internal.council.capture import (
+                    capture_from_row,
+                    capture_mode_enabled,
+                    capture_nudge_correct,
+                    nudge_multiplier,
+                )
 
                 correct = judge_nudge_correct(
                     prediction,
@@ -86,18 +100,34 @@ def on_prediction_resolved(
                     actual_pct,
                     pnl_pct=closed.get("pnl_pct"),
                 )
+                scale = judge_nudge_magnitude_scale(
+                    prediction,
+                    actual_pct,
+                    correct,
+                    judge.name,
+                    pnl_pct=closed.get("pnl_pct"),
+                )
+                extra = None
+                if capture_mode_enabled():
+                    cap = capture_from_row(prediction)
+                    flag = capture_nudge_correct(cap)
+                    if flag is None:
+                        raise _SkipJudgeNudge()
+                    correct = flag
+                    mult = nudge_multiplier(cap)
+                    if mult is None:
+                        raise _SkipJudgeNudge()
+                    scale = float(scale) * float(mult)
+                    extra = {"band": cap.band, "capture": cap.capture_capped}
                 nudge_judge(
                     judge.name,
                     correct=correct,
-                    scale=judge_nudge_magnitude_scale(
-                        prediction,
-                        actual_pct,
-                        correct,
-                        judge.name,
-                        pnl_pct=closed.get("pnl_pct"),
-                    ),
+                    scale=scale,
                     actual_pct=actual_pct,
+                    extra=extra,
                 )
+            except _SkipJudgeNudge:
+                pass
             except Exception:
                 pass
         postmortem = None

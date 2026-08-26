@@ -67,6 +67,7 @@ def nudge_judge(
     delta_wrong: Optional[float] = None,
     scale: float = 1.0,
     actual_pct: Optional[float] = None,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Optional[float]:
     if not judge_name or judge_name not in DEFAULT_JUDGE_WEIGHTS:
         return None
@@ -99,6 +100,7 @@ def nudge_judge(
                 extra={
                     "scale": move_scale,
                     "actual_pct": actual_pct,
+                    **(extra or {}),
                 },
             )
         except Exception:

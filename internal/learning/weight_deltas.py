@@ -165,7 +165,15 @@ def _gradeable_resolved_rows():
                 continue
             if pred.get("correct") is None:
                 continue
-            yield pred, bool(pred.get("correct"))
+            from internal.council.capture import BAND_HIT, BAND_MISS, capture_from_row
+
+            cap = capture_from_row(pred)
+            # Rogue/benchmark stay STRICT: HIT-band only. Near-hit/noise never
+            # decide seats (leniency neither helps nor hurts promotion).
+            if cap.band == BAND_HIT:
+                yield pred, True
+            elif cap.band == BAND_MISS:
+                yield pred, False
     except Exception:
         return
 

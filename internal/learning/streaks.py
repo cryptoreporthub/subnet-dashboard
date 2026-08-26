@@ -21,6 +21,8 @@ _EXPERT_LABEL = {
 
 def _resolved_hits(data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     raw = data if isinstance(data, dict) else load_predictions()
+    from internal.accuracy_lift.populations import is_council_trust_row
+
     rows: List[Dict[str, Any]] = []
     for pred in raw.get("resolved") or []:
         if not isinstance(pred, dict):
@@ -28,6 +30,8 @@ def _resolved_hits(data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]
         if pred.get("outcome") in _SKIP:
             continue
         if pred.get("correct") is not True and pred.get("correct") is not False:
+            continue
+        if not is_council_trust_row(pred):
             continue
         rows.append(pred)
     rows.sort(key=lambda p: str(p.get("resolved_at") or p.get("created_at") or ""))

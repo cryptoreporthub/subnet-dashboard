@@ -81,16 +81,30 @@ def weighted_expert_blend(
     if not scores:
         return None, {}
     weights = (market_context or {}).get("weights")
-    if not isinstance(weights, dict):
+    blend_degraded = False
+    if isinstance(weights, dict) and weights.get("_proxy_degraded"):
+        blend_degraded = True
+        weights = {}
+    elif not isinstance(weights, dict):
         try:
             from internal.council.weights import effective_weights
 
             weights = effective_weights(market_context)
+            if isinstance(weights, dict) and weights.get("_proxy_degraded"):
+                blend_degraded = True
+                weights = {}
         except Exception:
-            weights = {name: 1.0 for name in CANONICAL_EXPERTS}
+            blend_degraded = True
+            weights = {}
     blended: Dict[str, float] = {}
     for name, score in scores.items():
-        blended[name] = round(score * float(weights.get(name, 1.0)), 4)
+        if blend_degraded:
+            blended[name] = round(score, 4)
+        else:
+            blended[name] = round(score * float(weights.get(name, 1.0)), 4)
+    if blend_degraded:
+        blended["_blend_degraded"] = True  # type: ignore[assignment]
+        return None, blended
     leader = max(blended.items(), key=lambda row: (row[1], row[0]))[0]
     return leader, blended
 
@@ -110,8 +124,9 @@ def leading_expert_for_pick(
     if signal_leader:
         return signal_leader, expert_label(signal_leader), scores.get(signal_leader, 0.0)
     leader, blended = weighted_expert_blend(pick.get("expert_contributions"), market_context)
+    numeric = {k: v for k, v in blended.items() if k != "_blend_degraded"}
     if leader:
-        return leader, expert_label(leader), blended.get(leader, scores.get(leader, 0.0))
+        return leader, expert_label(leader), numeric.get(leader, scores.get(leader, 0.0))
     return ROGUE_EXPERT, expert_label(ROGUE_EXPERT), scores.get(ROGUE_EXPERT, 0.0)
 
 

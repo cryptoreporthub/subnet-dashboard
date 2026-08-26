@@ -284,11 +284,16 @@ def test_h_full_footer_status_strip_counts():
 
 
 def test_h_full_premium_scanner_and_judges_js():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "/static/js/premium_scanner.js" in html
-    assert "/static/js/cockpit_hydrate.js" in html
-    assert "/static/js/premium_judges.js" not in html
+    """Judges load eager; scanner stays in the idle deferred bundle."""
+    from pathlib import Path
+
+    scripts = Path("templates/partials/premium/scripts.html").read_text(encoding="utf-8")
+    deferred = Path("static/js/home_deferred.js").read_text(encoding="utf-8")
+    assert "premium_judges.js" in scripts
+    assert "cockpit_hydrate.js" in scripts
+    assert "home_deferred.js" in scripts
+    assert "premium_scanner.js" in deferred
+    assert "premium_judges.js" not in deferred
 
 
 def test_subnet_grouping_optional_lane():

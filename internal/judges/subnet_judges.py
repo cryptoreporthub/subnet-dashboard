@@ -167,24 +167,30 @@ def score_subnet(
     name = subnet.get("name", f"Subnet {netuid}")
     flat = _flat_subnet_for_judges(subnet)
     chg = float(flat.get("price_change_24h", 0) or 0)
-    predicted_pct = chg if chg != 0 else 0.5
+    predicted_pct = chg
+    ungradeable = chg == 0
     direction = "up" if predicted_pct >= 0 else "down"
     signal_impact = _signal_impact_from_subnet(subnet)
     prediction = _prediction_for_judges(
         subnet, predicted_pct=predicted_pct, direction=direction
     )
+    oracle_error = echo_error = pulse_error = None
 
     try:
         oracle_result = ORACLE.evaluate(
             prediction, signal_impact=signal_impact, subnet=flat
         )
-        oracle_score = oracle_result.get("score", 0.5)
-        oracle_confidence = oracle_result.get("confidence", 0.5)
+        oracle_score = oracle_result.get("score")
+        oracle_confidence = oracle_result.get("confidence", 0.0)
         oracle_degraded = False
-    except Exception:
-        oracle_score = 0.5
-        oracle_confidence = 0.0
+        oracle_error = None
+        if oracle_score is None:
+            oracle_degraded = True
+    except Exception as exc:
+        oracle_score = None
+        oracle_confidence = None
         oracle_degraded = True
+        oracle_error = str(exc)
 
     if not any(
         subnet.get(k)
@@ -196,15 +202,19 @@ def score_subnet(
         echo_result = ECHO.evaluate(
             prediction, signal_impact=signal_impact, expert_weights=None
         )
-        echo_score = echo_result.get("score", 0.5)
-        echo_confidence = echo_result.get("confidence", 0.5)
+        echo_score = echo_result.get("score")
+        echo_confidence = echo_result.get("confidence", 0.0)
         echo_degraded = False
+        echo_error = None
+        if echo_score is None:
+            echo_degraded = True
         if not subnet.get("social_mentions") and not subnet.get("mentions"):
             echo_degraded = True
-    except Exception:
-        echo_score = 0.5
-        echo_confidence = 0.0
+    except Exception as exc:
+        echo_score = None
+        echo_confidence = None
         echo_degraded = True
+        echo_error = str(exc)
 
     pulse_subnet = dict(flat)
     on_chain_price_delta = None
@@ -242,17 +252,24 @@ def score_subnet(
         pulse_result = PULSE.evaluate(
             prediction, signal_impact=signal_impact, subnet=pulse_subnet
         )
-        pulse_score = pulse_result.get("score", 0.5)
-        pulse_confidence = pulse_result.get("confidence", 0.5)
+        pulse_score = pulse_result.get("score")
+        pulse_confidence = pulse_result.get("confidence", 0.0)
         pulse_degraded = False
+        pulse_error = None
+        if pulse_score is None:
+            pulse_degraded = True
         if chain_client and (on_chain_price_delta is None):
             pulse_degraded = True
-    except Exception:
-        pulse_score = 0.5
-        pulse_confidence = 0.0
+    except Exception as exc:
+        pulse_score = None
+        pulse_confidence = None
         pulse_degraded = True
+        pulse_error = str(exc)
 
-    scores = [oracle_score, echo_score, pulse_score]
+    numeric_scores = [
+        float(s) for s in (oracle_score, echo_score, pulse_score) if s is not None
+    ]
+    weights_degraded = False
     try:
         from internal.judges.weights import normalized_judge_weights
 
@@ -261,60 +278,106 @@ def score_subnet(
         from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
 
         jw = dict(DEFAULT_JUDGE_WEIGHTS)
-    consensus_score = (
-        oracle_score * jw["oracle"]
-        + echo_score * jw["echo"]
-        + pulse_score * jw["pulse"]
-    )
-    if len(scores) > 1:
-        stddev = statistics.stdev(scores)
+        weights_degraded = True
+
+    usable = {
+        "oracle": oracle_score is not None,
+        "echo": echo_score is not None,
+        "pulse": pulse_score is not None,
+    }
+    if all(usable.values()):
+        consensus_score = (
+            float(oracle_score) * jw["oracle"]
+            + float(echo_score) * jw["echo"]
+            + float(pulse_score) * jw["pulse"]
+        )
+        stddev = statistics.stdev(numeric_scores) if len(numeric_scores) > 1 else 0.0
         agreement = max(0.0, min(1.0, 1.0 - stddev / 0.5))
-    else:
-        agreement = 1.0
-    if all(s > 0.65 for s in scores):
-        verdict = "long"
-    elif all(s < 0.35 for s in scores):
-        verdict = "short"
-    else:
-        verdict = "neutral"
-    contested = agreement < 0.5
-    consensus_confidence = (
-        oracle_confidence * jw["oracle"]
-        + echo_confidence * jw["echo"]
-        + pulse_confidence * jw["pulse"]
-    )
-    return {
-        "netuid": netuid,
-        "name": name,
-        "oracle": {
-            "score": round(oracle_score, 4),
-            "confidence": round(oracle_confidence, 4),
-            "signals": _oracle_signals(flat, signal_impact, prediction),
-            "degraded": oracle_degraded,
-        },
-        "echo": {
-            "score": round(echo_score, 4),
-            "confidence": round(echo_confidence, 4),
-            "signals": {"signal_count": len(signal_impact.get("impacts") or [])},
-            "degraded": echo_degraded,
-        },
-        "pulse": {
-            "score": round(pulse_score, 4),
-            "confidence": round(pulse_confidence, 4),
-            "signals": {
-                "on_chain_price_delta": on_chain_price_delta,
-                "on_chain_degraded": pulse_degraded if chain_client else False,
-            },
-            "degraded": pulse_degraded,
-        },
-        "consensus": {
+        if all(s > 0.65 for s in numeric_scores):
+            verdict = "long"
+        elif all(s < 0.35 for s in numeric_scores):
+            verdict = "short"
+        else:
+            verdict = "neutral"
+        contested = agreement < 0.5
+        consensus_confidence = (
+            float(oracle_confidence or 0) * jw["oracle"]
+            + float(echo_confidence or 0) * jw["echo"]
+            + float(pulse_confidence or 0) * jw["pulse"]
+        )
+        consensus_block: Dict[str, Any] = {
             "score": round(consensus_score, 4),
             "agreement": round(agreement, 4),
             "verdict": verdict,
             "confidence": round(consensus_confidence, 4),
             "contested": contested,
-        },
+        }
+    else:
+        consensus_block = {
+            "score": None,
+            "agreement": None,
+            "verdict": "unavailable",
+            "confidence": None,
+            "contested": False,
+            "status": "degraded",
+        }
+    if weights_degraded:
+        consensus_block["weights_degraded"] = True
+
+    def _judge_out(score, confidence, signals, degraded, error, name):
+        if score is None:
+            return {
+                "status": "degraded",
+                "score": None,
+                "confidence": None,
+                f"{name}_degraded": True,
+                "degraded": True,
+                "error": error or "score unavailable",
+                "signals": signals,
+            }
+        return {
+            "score": round(float(score), 4),
+            "confidence": round(float(confidence or 0), 4),
+            "signals": signals,
+            "degraded": bool(degraded),
+        }
+
+    out = {
+        "netuid": netuid,
+        "name": name,
+        "oracle": _judge_out(
+            oracle_score,
+            oracle_confidence,
+            _oracle_signals(flat, signal_impact, prediction),
+            oracle_degraded,
+            oracle_error,
+            "oracle",
+        ),
+        "echo": _judge_out(
+            echo_score,
+            echo_confidence,
+            {"signal_count": len(signal_impact.get("impacts") or [])},
+            echo_degraded,
+            echo_error,
+            "echo",
+        ),
+        "pulse": _judge_out(
+            pulse_score,
+            pulse_confidence,
+            {
+                "on_chain_price_delta": on_chain_price_delta,
+                "on_chain_degraded": pulse_degraded if chain_client else False,
+            },
+            pulse_degraded,
+            pulse_error,
+            "pulse",
+        ),
+        "consensus": consensus_block,
     }
+    if ungradeable:
+        out["band"] = "ungradeable"
+        out["predicted_pct"] = 0.0
+    return out
 
 
 def score_all_subnets(
@@ -351,23 +414,53 @@ def score_all_subnets(
         try:
             result = score_subnet(netuid, subnet, market_context, chain_client)
             results.append(result)
-        except Exception:
+        except Exception as exc:
             results.append(
                 {
                     "netuid": netuid,
                     "name": subnet.get("name", f"Subnet {netuid}"),
-                    "oracle": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
-                    "echo": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
-                    "pulse": {"score": 0.5, "confidence": 0, "signals": {}, "degraded": True},
+                    "status": "degraded",
+                    "oracle": {
+                        "status": "degraded",
+                        "score": None,
+                        "oracle_degraded": True,
+                        "degraded": True,
+                        "error": str(exc),
+                        "signals": {},
+                    },
+                    "echo": {
+                        "status": "degraded",
+                        "score": None,
+                        "echo_degraded": True,
+                        "degraded": True,
+                        "error": str(exc),
+                        "signals": {},
+                    },
+                    "pulse": {
+                        "status": "degraded",
+                        "score": None,
+                        "pulse_degraded": True,
+                        "degraded": True,
+                        "error": str(exc),
+                        "signals": {},
+                    },
                     "consensus": {
-                        "score": 0.5,
-                        "agreement": 1,
-                        "verdict": "neutral",
-                        "confidence": 0,
+                        "status": "degraded",
+                        "score": None,
+                        "agreement": None,
+                        "verdict": "unavailable",
+                        "confidence": None,
                         "contested": False,
                     },
                 }
             )
 
-    results.sort(key=lambda r: r["consensus"]["score"], reverse=True)
+    results.sort(
+        key=lambda r: (
+            r.get("consensus") or {}
+        ).get("score")
+        if isinstance((r.get("consensus") or {}).get("score"), (int, float))
+        else float("-inf"),
+        reverse=True,
+    )
     return results

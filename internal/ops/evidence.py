@@ -82,6 +82,7 @@ def build_evidence_report() -> Dict[str, Any]:
 
     accuracy_lift = _build_accuracy_lift()
     weight_audit = _build_weight_audit()
+    capture = _build_capture_evidence()
 
     return {
         "status": status,
@@ -111,6 +112,7 @@ def build_evidence_report() -> Dict[str, Any]:
         "accuracy_lift": accuracy_lift,
         "attribution_quality": accuracy_lift.get("attribution_quality") or {},
         "weight_audit": weight_audit,
+        "capture": capture,
     }
 
 
@@ -152,6 +154,35 @@ def _build_accuracy_lift() -> Dict[str, Any]:
             "window_actual_days": {"w7": None, "w30": None},
             "small_move_miss_share": {"misses": 0, "small_move_misses": 0, "share": None},
             "note": "honest empty until graded>0",
+        }
+
+
+def _build_capture_evidence() -> Dict[str, Any]:
+    try:
+        from internal.council.capture import build_capture_telemetry
+        from internal.learning.predictions_store import load_predictions
+
+        rows = load_predictions().get("resolved") or []
+        return build_capture_telemetry(rows)
+    except Exception:
+        return {
+            "outcomes": {
+                "hit": 0,
+                "near_hit": 0,
+                "noise": 0,
+                "ungradeable": 0,
+                "miss": 0,
+            },
+            "epsilon_hit_share": None,
+            "near_hit_rate": None,
+            "capture_histogram": {"0-25": 0, "25-50": 0, "50-100": 0, ">100": 0},
+            "avg_capture_by_expert": {},
+            "hit_rate_strict": None,
+            "hit_rate_sign_only_legacy": None,
+            "volatility_deadband": {},
+            "rows": [],
+            "headline_mode": "legacy",
+            "note": "capture window capped at last 500 resolved",
         }
 
 

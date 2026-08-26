@@ -134,28 +134,50 @@ def compute_proposed_weights(
     ceiling: float = WEIGHT_CEILING,
     max_ratio: float = MAX_EXPERT_RATIO,
 ) -> Dict[str, float]:
-    """Laplace-smoothed per-expert accuracy scaled to [floor, ceiling]."""
-    stats: Dict[str, Dict[str, int]] = {
-        name: {"correct": 0, "total": 0} for name in DEFAULT_WEIGHTS
+    """Laplace-smoothed per-expert accuracy scaled to [floor, ceiling].
+
+    Capture mode uses ``sum(min(c,1))/n``; legacy keeps direction-only counts.
+    """
+    from internal.council.capture import (
+        BAND_HIT,
+        BAND_MISS,
+        BAND_NEAR_HIT,
+        capture_from_row,
+        capture_mode_enabled,
+    )
+
+    capture_on = capture_mode_enabled()
+    stats: Dict[str, Dict[str, float]] = {
+        name: {"correct": 0.0, "capture_sum": 0.0, "total": 0.0} for name in DEFAULT_WEIGHTS
     }
     for row in rows:
         expert = _normalize_expert(row)
         if not expert or expert not in stats:
             continue
-        try:
-            actual_pct = float(row.get("actual_pct", 0) or 0)
-        except (TypeError, ValueError):
-            continue
-        stats[expert]["total"] += 1
-        if direction_correct(row, actual_pct):
-            stats[expert]["correct"] += 1
+        if capture_on:
+            cap = capture_from_row(row)
+            if cap.band not in {BAND_HIT, BAND_NEAR_HIT, BAND_MISS}:
+                continue
+            stats[expert]["total"] += 1
+            if cap.capture_capped is not None:
+                stats[expert]["capture_sum"] += min(float(cap.capture_capped), 1.0)
+        else:
+            try:
+                actual_pct = float(row.get("actual_pct", 0) or 0)
+            except (TypeError, ValueError):
+                continue
+            stats[expert]["total"] += 1
+            if direction_correct(row, actual_pct):
+                stats[expert]["correct"] += 1
 
     proposed: Dict[str, float] = {}
     span = ceiling - floor
     for name in DEFAULT_WEIGHTS:
-        correct = stats[name]["correct"]
         total = stats[name]["total"]
-        accuracy = (correct + 1) / (total + 2)
+        if capture_on:
+            accuracy = (stats[name]["capture_sum"] + 1) / (total + 2)
+        else:
+            accuracy = (stats[name]["correct"] + 1) / (total + 2)
         proposed[name] = round(floor + accuracy * span, 4)
 
     proposed = _compress_ratio(proposed, max_ratio)
@@ -183,7 +205,17 @@ def _cert_row_score(
     *,
     hybrid_sample_n: Optional[int] = None,
 ) -> float:
-    """J4 phase 2: hybrid score for signal_impact rows when gated; else direction-only."""
+    """Capture-capped score in capture mode; else J4 hybrid / direction-only."""
+    from internal.council.capture import capture_from_row, capture_mode_enabled
+
+    if capture_mode_enabled():
+        probe = dict(row)
+        if probe.get("actual_pct") is None:
+            probe["actual_pct"] = actual_pct
+        cap = capture_from_row(probe)
+        if cap.capture_capped is not None:
+            return min(float(cap.capture_capped), 1.0)
+        return 0.0
     try:
         actual = float(actual_pct)
     except (TypeError, ValueError):

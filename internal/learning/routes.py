@@ -249,9 +249,9 @@ _learning_snapshot_cache: Dict[str, Any] = {"at": 0.0, "data": None}
 
 def _judge_weights_for_snapshot() -> Dict[str, float]:
     try:
-        from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS, load_judge_weights
+        from internal.judges.weights import normalized_judge_weights
 
-        return load_judge_weights()
+        return normalized_judge_weights()
     except Exception as exc:
         logger.warning("judge weights load failed: %s", exc)
         from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
@@ -711,9 +711,23 @@ def _mindmap_conviction_block(daily_payload: Dict[str, Any] | None) -> Dict[str,
     }
 
 
+def _canonical_ui_weights(raw: Any) -> Dict[str, float]:
+    if not isinstance(raw, dict) or raw.get("_proxy_degraded"):
+        return {}
+    out: Dict[str, float] = {}
+    for key, val in raw.items():
+        if str(key).startswith("_"):
+            continue
+        try:
+            out[str(key)] = float(val)
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def _mindmap_summary_degraded(*, source: str = "timeout") -> Dict[str, Any]:
     try:
-        expert_weights = load_weights_for_ui()
+        expert_weights = _canonical_ui_weights(load_weights_for_ui())
     except Exception:
         expert_weights = {}
     return {
@@ -766,7 +780,7 @@ def _build_mindmap_summary() -> Dict[str, Any]:
     conviction_block = _mindmap_conviction_block(daily_payload)
 
     try:
-        expert_weights = load_weights_for_ui()
+        expert_weights = _canonical_ui_weights(load_weights_for_ui())
     except Exception as exc:
         logger.warning("Could not load expert weights for mindmap summary: %s", exc)
         expert_weights = {}
@@ -1461,12 +1475,21 @@ async def api_freshness():
 async def api_council_weights():
     """Return the current Council expert weights."""
     try:
-        return {"status": "success", "data": load_weights_for_ui()}
+        weights = load_weights_for_ui()
+        if isinstance(weights, dict) and weights.get("_proxy_degraded"):
+            return {
+                "status": "degraded",
+                "data": None,
+                "weights_degraded": True,
+                "error": "worker unreachable",
+            }
+        return {"status": "success", "data": weights}
     except Exception as exc:
         logger.warning("load_weights failed: %s", exc)
         return {
-            "status": "stub",
-            "data": {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
+            "status": "degraded",
+            "data": None,
+            "weights_degraded": True,
             "error": str(exc),
         }
 

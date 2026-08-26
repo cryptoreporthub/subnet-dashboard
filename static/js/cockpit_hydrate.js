@@ -1243,6 +1243,33 @@
     return true;
   }
 
+  function patchDualHitRates(capture) {
+    if (!capture) return;
+    var mode = capture.headline_mode || 'legacy';
+    var strict = capture.hit_rate_strict;
+    var legacy = capture.hit_rate_sign_only_legacy;
+    function pct(v) {
+      return v == null ? null : Math.round(Number(v) * 1000) / 10;
+    }
+    var strictPct = pct(strict);
+    var legacyPct = pct(legacy);
+    var label = null;
+    if (mode === 'strict' && strictPct != null) {
+      label = strictPct + '%';
+    } else if (mode === 'dual' && legacyPct != null && strictPct != null) {
+      label = legacyPct + '% legacy · strict ' + strictPct + '%';
+    } else if (mode === 'dual' && strictPct != null) {
+      label = 'strict ' + strictPct + '%';
+    }
+    if (!label) return;
+    var kpi = document.getElementById('kpi-accuracy');
+    if (kpi && mode !== 'legacy') kpi.textContent = label;
+    var proof = document.getElementById('proof-band-pct');
+    if (proof && mode !== 'legacy') proof.textContent = label;
+    var pump = document.getElementById('pump-alert-proof-pct');
+    if (pump && mode !== 'legacy') pump.textContent = label;
+  }
+
   function syncAccuracyLiftPanel(block) {
     var summary = document.getElementById('accuracy-lift-summary');
     var expertsEl = document.getElementById('accuracy-lift-experts');
@@ -4650,11 +4677,15 @@
       if (tierBatch[1].status === 'fulfilled' && tierBatch[1].value) {
         stats = tierBatch[1].value;
         renderKpi(stats);
-        renderCouncilWeights(
-          stats.expert_weights || {},
-          stats.expert_weight_deltas || {},
-          stats.expert_graded_counts || {}
-        );
+        if (stats.weights_degraded || stats.status === 'degraded') {
+          markSectionFailed('section-council', 'Weights unavailable — worker unreachable');
+        } else {
+          renderCouncilWeights(
+            stats.expert_weights || {},
+            stats.expert_weight_deltas || {},
+            stats.expert_graded_counts || {}
+          );
+        }
         if (document.getElementById('tribunal-hero')) {
           var heroDailyPick = richerDailyPickPayload(dpResult, lastDailyPickPayload) || dpResult || lastDailyPickPayload;
           if (heroDailyPick) {
@@ -4683,6 +4714,7 @@
         fetchJsonRetry('/api/ops/evidence', 12000, 1)
           .then(function (evidence) {
             syncAccuracyLiftPanel(evidence && evidence.accuracy_lift);
+            patchDualHitRates(evidence && evidence.capture);
           })
           .catch(function () {});
       } else {
