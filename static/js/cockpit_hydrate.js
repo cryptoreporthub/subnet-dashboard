@@ -1624,6 +1624,26 @@
     return !!(title && String(title.textContent || '').trim() === 'Awaiting subnet');
   }
 
+  function markHydrateStart(source) {
+    try {
+      if (performance.getEntriesByName('hydrate-start').length) return;
+      performance.mark('hydrate-start', { detail: source || 'run' });
+    } catch (e) {}
+  }
+
+  function maybeMarkHydrateEnd() {
+    try {
+      if (performance.getEntriesByName('hydrate-end').length) return;
+      if (!(window.SimiLearning && window.SimiLearning.stats)) return;
+      if (!document.getElementById('tribunal-hero')) return;
+      if (tribunalHeroNeedsHydrate()) return;
+      performance.mark('hydrate-end');
+      if (performance.getEntriesByName('hydrate-start').length) {
+        performance.measure('hydrate', 'hydrate-start', 'hydrate-end');
+      }
+    } catch (e) {}
+  }
+
   function dailyPickPayloadRank(payload) {
     if (!payload || typeof payload !== 'object') return 0;
     var status = String(payload.status || 'ok').toLowerCase();
@@ -4582,6 +4602,7 @@
 
   async function run() {
     if (document.documentElement.dataset.hydrate !== '1') return;
+    markHydrateStart('run');
     showHydrateSkeletons();
     kickPriorityPanels();
     // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
@@ -5863,6 +5884,7 @@
       patchTribunalPanels(dailyPick, learningStats);
     }
     patchTribunalHoldReason(dailyPick);
+    maybeMarkHydrateEnd();
     return true;
   }
 
@@ -5965,6 +5987,7 @@
 
   function bootstrapCouncilHeroHydrate() {
     if (!document.getElementById('tribunal-hero')) return;
+    markHydrateStart('bootstrap');
     Promise.all([
       fetchDailyPickForHero().catch(function (err) {
         console.warn('[cockpit_hydrate] tribunal bootstrap daily-pick failed', err);
