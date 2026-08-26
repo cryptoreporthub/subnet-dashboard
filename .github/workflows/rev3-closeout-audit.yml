@@ -1,0 +1,21 @@
+name: REV3 closeout audit
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Volume + dry_run recover + resolver logs
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: REV3 prod audit (read-only)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          REV3_DEPLOY_SHA: "35b1bf34f5e0af086cfbb1910567ef9796ca49ef"
+          REV3_ROW_ID: "dd13cfb298"
+        run: bash scripts/rev3_prod_audit.sh
