@@ -1,0 +1,954 @@
+[
+  {
+    "t_unix": 1787786408.7680633,
+    "latency_ms": 102.78,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786409.0181537,
+    "latency_ms": 135.56,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786409.268253,
+    "latency_ms": 2427.88,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786411.696146,
+    "latency_ms": 257.93,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786411.9540775,
+    "latency_ms": 245.03,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786412.2041767,
+    "latency_ms": 204.9,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786412.454261,
+    "latency_ms": 242.42,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786412.704354,
+    "latency_ms": 429.61,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786413.13397,
+    "latency_ms": 291.8,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786413.4257731,
+    "latency_ms": 158.18,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786413.6759107,
+    "latency_ms": 119.34,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786413.9260137,
+    "latency_ms": 7938.24,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786421.8642576,
+    "latency_ms": 166.5,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786422.1143456,
+    "latency_ms": 114.59,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786422.3644848,
+    "latency_ms": 88.38,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786422.6145623,
+    "latency_ms": 162.58,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786422.8646605,
+    "latency_ms": 135.87,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786423.114738,
+    "latency_ms": 1051.19,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786424.1659317,
+    "latency_ms": 689.44,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786424.8553743,
+    "latency_ms": 103.68,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786425.1054757,
+    "latency_ms": 113.56,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786425.355576,
+    "latency_ms": 122.5,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786425.6056747,
+    "latency_ms": 368.48,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786425.9741561,
+    "latency_ms": 96.18,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786426.224258,
+    "latency_ms": 113.81,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786426.4743462,
+    "latency_ms": 105.44,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786426.7244282,
+    "latency_ms": 91.69,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786426.9745188,
+    "latency_ms": 87.77,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786427.224608,
+    "latency_ms": 91.05,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786427.47469,
+    "latency_ms": 125.2,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786427.7248428,
+    "latency_ms": 125.38,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786427.9749768,
+    "latency_ms": 113.29,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786428.2251701,
+    "latency_ms": 384.77,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786428.609948,
+    "latency_ms": 135.55,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786428.8600273,
+    "latency_ms": 88.2,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786429.1101344,
+    "latency_ms": 110.01,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786429.360234,
+    "latency_ms": 119.65,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786429.6103172,
+    "latency_ms": 94.29,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786429.8603997,
+    "latency_ms": 457.95,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786430.3183596,
+    "latency_ms": 342.53,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786430.660891,
+    "latency_ms": 197.18,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786430.91097,
+    "latency_ms": 143.5,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786431.1610527,
+    "latency_ms": 121.18,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786431.411152,
+    "latency_ms": 94.73,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786431.6612523,
+    "latency_ms": 107.64,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786431.9113884,
+    "latency_ms": 138.18,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786432.1614878,
+    "latency_ms": 124.45,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786432.4116013,
+    "latency_ms": 115.2,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786432.6617963,
+    "latency_ms": 111.57,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786432.9119093,
+    "latency_ms": 309.76,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786433.2216794,
+    "latency_ms": 106.72,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786433.4717672,
+    "latency_ms": 95.81,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786433.7218459,
+    "latency_ms": 115.26,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786433.9719443,
+    "latency_ms": 114.88,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786434.2220464,
+    "latency_ms": 118.86,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786434.472174,
+    "latency_ms": 113.79,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786434.7222555,
+    "latency_ms": 96.38,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786434.972377,
+    "latency_ms": 117.96,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786435.2224612,
+    "latency_ms": 112.82,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786435.472564,
+    "latency_ms": 122.88,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786435.722666,
+    "latency_ms": 95.25,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786435.972769,
+    "latency_ms": 124.05,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786436.222871,
+    "latency_ms": 269.82,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786436.492699,
+    "latency_ms": 125.47,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786436.7428284,
+    "latency_ms": 125.37,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786436.992928,
+    "latency_ms": 97.24,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786437.2430124,
+    "latency_ms": 135.19,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786437.4930897,
+    "latency_ms": 271.73,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786437.7648294,
+    "latency_ms": 438.71,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786438.2035484,
+    "latency_ms": 111.54,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786438.4536479,
+    "latency_ms": 112.15,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786438.7037508,
+    "latency_ms": 124.47,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786438.9538288,
+    "latency_ms": 109.54,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786439.2039351,
+    "latency_ms": 104.45,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786439.4540477,
+    "latency_ms": 123.86,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786439.7041478,
+    "latency_ms": 312.83,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786440.0169861,
+    "latency_ms": 100.33,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786440.2671115,
+    "latency_ms": 143.69,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786440.5172117,
+    "latency_ms": 164.35,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786440.7674208,
+    "latency_ms": 119.7,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786441.0175223,
+    "latency_ms": 109.94,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786441.2676032,
+    "latency_ms": 108.25,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786441.5178018,
+    "latency_ms": 93.74,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786441.7680047,
+    "latency_ms": 419.82,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786442.1878324,
+    "latency_ms": 105.11,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786442.4379356,
+    "latency_ms": 97.62,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786442.6881242,
+    "latency_ms": 229.48,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786442.938214,
+    "latency_ms": 99.28,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786443.188315,
+    "latency_ms": 475.19,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786443.6635063,
+    "latency_ms": 101.42,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786443.9136057,
+    "latency_ms": 129.91,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786444.1637583,
+    "latency_ms": 151.26,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786444.4138794,
+    "latency_ms": 109.19,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786444.6639907,
+    "latency_ms": 149.48,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786444.9141154,
+    "latency_ms": 140.93,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786445.1642172,
+    "latency_ms": 152.16,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786445.4142997,
+    "latency_ms": 432.06,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786445.8463652,
+    "latency_ms": 156.64,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786446.0964646,
+    "latency_ms": 113.78,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786446.3467155,
+    "latency_ms": 103.76,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786446.596816,
+    "latency_ms": 122.48,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786446.8468935,
+    "latency_ms": 131.35,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786447.09701,
+    "latency_ms": 95.84,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786447.3470988,
+    "latency_ms": 161.67,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786447.5972126,
+    "latency_ms": 364.57,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786447.9617994,
+    "latency_ms": 102.55,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786448.2120006,
+    "latency_ms": 123.15,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786448.4620502,
+    "latency_ms": 117.81,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786448.7121522,
+    "latency_ms": 118.22,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786448.9622972,
+    "latency_ms": 327.25,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786449.2895558,
+    "latency_ms": 480.23,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786449.7697918,
+    "latency_ms": 107.33,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786450.019876,
+    "latency_ms": 96.9,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786450.2699792,
+    "latency_ms": 129.78,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786450.5200777,
+    "latency_ms": 130.0,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786450.7701786,
+    "latency_ms": 96.32,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786451.0202973,
+    "latency_ms": 115.56,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786451.2703977,
+    "latency_ms": 108.78,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786451.5205197,
+    "latency_ms": 132.21,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786451.7706025,
+    "latency_ms": 373.06,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786452.1436732,
+    "latency_ms": 143.01,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786452.3937573,
+    "latency_ms": 106.35,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786452.644101,
+    "latency_ms": 140.2,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786452.8941784,
+    "latency_ms": 105.62,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786453.1442537,
+    "latency_ms": 148.88,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786453.3943317,
+    "latency_ms": 182.47,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786453.644411,
+    "latency_ms": 89.93,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786453.8944924,
+    "latency_ms": 160.77,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786454.1445916,
+    "latency_ms": 246.51,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786454.3946602,
+    "latency_ms": 572.59,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786454.9672546,
+    "latency_ms": 219.69,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786455.2173336,
+    "latency_ms": 141.65,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786455.4674177,
+    "latency_ms": 103.14,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786455.7176523,
+    "latency_ms": 112.75,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786455.967752,
+    "latency_ms": 117.02,
+    "status": 200,
+    "ok": true,
+    "error": null
+  },
+  {
+    "t_unix": 1787786456.21785,
+    "latency_ms": 8033.38,
+    "status": null,
+    "ok": false,
+    "error": "TimeoutError: The read operation timed out"
+  }
+]

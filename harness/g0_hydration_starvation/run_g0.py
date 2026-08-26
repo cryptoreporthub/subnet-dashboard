@@ -41,6 +41,188 @@ WAIT_S = 50.0
 HEALTH_INTERVAL_S = 0.25
 HERO_BUDGET_S = 10.0
 PENDING_CUTOFF_S = 45.0
+MACHINE_WARM_MS = 500.0
+MACHINE_COLD_MS = 1000.0
+
+
+def probe_machine_state(base_url: str, *, probes: int = 3) -> Dict[str, Any]:
+    """Pre-navigation /health probes — warm vs cold/contended host."""
+    health_url = base_url.rstrip("/") + "/health"
+    samples: List[Dict[str, Any]] = []
+    for _ in range(probes):
+        t0 = time.perf_counter()
+        status = None
+        ok = False
+        err = None
+        try:
+            req = urllib.request.Request(
+                health_url,
+                headers={"Accept": "text/plain", "Cache-Control": "no-cache"},
+                method="GET",
+            )
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
+                status = resp.status
+                body = resp.read(32).decode("utf-8", errors="replace")
+                ok = status == 200 and body.strip() == "OK"
+        except Exception as exc:  # noqa: BLE001
+            err = f"{type(exc).__name__}: {exc}"
+        elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        samples.append(
+            {
+                "latency_ms": elapsed_ms,
+                "status": status,
+                "ok": ok,
+                "error": err,
+            }
+        )
+
+    latencies = [s["latency_ms"] for s in samples]
+    errors = [s for s in samples if not s["ok"]]
+    timed_out = any(
+        s["error"] and "timeout" in str(s["error"]).lower() for s in samples
+    )
+    slow = any(ms >= MACHINE_COLD_MS for ms in latencies)
+    warm = bool(latencies) and all(ms < MACHINE_WARM_MS for ms in latencies) and not errors
+
+    if timed_out or slow:
+        state = "contended" if len(errors) >= 2 or timed_out else "cold"
+    elif warm:
+        state = "warm"
+    elif errors:
+        state = "cold"
+    else:
+        state = "contended"
+
+    return {
+        "machine_state": state,
+        "probes": samples,
+        "p50_ms": round(percentile(latencies, 50) or 0.0, 2) if latencies else None,
+        "max_ms": round(max(latencies), 2) if latencies else None,
+    }
+
+
+def _first_hero_api_timing(requests: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for path_prefix, key in (
+        ("/api/learning/stats", "learning_stats"),
+        ("/api/daily-pick", "daily_pick"),
+    ):
+        matches = [
+            r
+            for r in requests.values()
+            if r.get("path", "").startswith(path_prefix)
+        ]
+        if not matches:
+            continue
+        first = min(matches, key=lambda x: x["start_s"])
+        out[key] = {
+            "path": first["path"],
+            "start_s": first["start_s"],
+            "end_s": first["end_s"],
+            "duration_ms": first["duration_ms"],
+            "status": first["status"],
+        }
+    return out
+
+
+def _collect_critical_path_timing(page) -> Dict[str, Any]:
+    return page.evaluate(
+        """() => {
+          const nav = performance.getEntriesByType('navigation')[0];
+          const resources = performance.getEntriesByType('resource');
+          const scripts = resources.filter((r) => {
+            const name = String(r.name || '');
+            return r.initiatorType === 'script' || /\\/static\\/js\\/.*\\.js(\\?|$)/.test(name);
+          });
+          let firstScript = null;
+          for (const s of scripts) {
+            if (!firstScript || s.startTime < firstScript.startTime) {
+              firstScript = {
+                name: s.name,
+                startTime: s.startTime,
+                responseEnd: s.responseEnd,
+                duration: s.duration,
+              };
+            }
+          }
+          const dcl = nav ? nav.domContentLoadedEventEnd : null;
+          let scriptWallBeforeDcl = null;
+          if (dcl != null) {
+            for (const s of scripts) {
+              const end = s.responseEnd || (s.startTime + s.duration);
+              if (end <= dcl && (!scriptWallBeforeDcl || end > scriptWallBeforeDcl.responseEnd)) {
+                scriptWallBeforeDcl = {
+                  name: s.name,
+                  startTime: s.startTime,
+                  responseEnd: end,
+                  duration: s.duration,
+                };
+              }
+            }
+          }
+          const marks = {};
+          for (const name of ['html-parse', 'hydrate-start', 'hydrate-end']) {
+            const entries = performance.getEntriesByName(name, 'mark');
+            if (entries.length) {
+              marks[name] = round(entries[0].startTime, 3);
+            }
+          }
+          const measures = {};
+          for (const name of ['hydrate']) {
+            const entries = performance.getEntriesByName(name, 'measure');
+            if (entries.length) {
+              measures[name] = {
+                startTime: round(entries[0].startTime, 3),
+                duration: round(entries[0].duration, 3),
+              };
+            }
+          }
+          function round(n, d) {
+            d = d == null ? 3 : d;
+            return Math.round(Number(n) * Math.pow(10, d)) / Math.pow(10, d);
+          }
+          return {
+            marks,
+            measures,
+            first_script: firstScript,
+            script_wall_before_dcl: scriptWallBeforeDcl,
+            dom_interactive: nav ? round(nav.domInteractive, 3) : null,
+            dom_content_loaded: nav ? round(nav.domContentLoadedEventEnd, 3) : null,
+            load_event_end: nav ? round(nav.loadEventEnd, 3) : null,
+            html_ttfb: nav ? round(nav.responseStart, 3) : null,
+          };
+        }"""
+    )
+
+
+def _median(values: List[Optional[float]]) -> Optional[float]:
+    nums = [v for v in values if v is not None]
+    if not nums:
+        return None
+    return round(statistics.median(nums), 3)
+
+
+def critpath_median_table(crit_id: str, summaries: List[Dict[str, Any]]) -> str:
+    dcl = [s.get("navigation_timing", {}).get("domContentLoadedEventEnd") for s in summaries]
+    stats = [
+        (s.get("hero_api_timing") or {}).get("learning_stats", {}).get("start_s")
+        for s in summaries
+    ]
+    hero = [s.get("hero_complete_at_s") for s in summaries]
+    states = [s.get("machine_state") for s in summaries]
+    return f"""# Critical path median — `{crit_id}`
+
+Runs: {len(summaries)}
+
+| Metric | Median |
+|--------|--------|
+| DCL (domContentLoadedEventEnd ms) | {_median(dcl)} |
+| /api/learning/stats start (probe s) | {_median(stats)} |
+| Hero complete (probe s) | {_median(hero)} |
+| machine_state (mode) | {max(set(states), key=states.count) if states else 'n/a'} |
+
+Per-run dirs: `artifacts/g0-baseline/critpath-{crit_id}-{{1,2,3}}/`
+"""
 
 
 def _utc_now() -> str:
@@ -191,7 +373,7 @@ def run_probe(args: argparse.Namespace) -> Dict[str, Any]:
     health_url = base + "/health"
     page_url = base + "/"
 
-    health = HealthPoller(health_url)
+    machine_probe = probe_machine_state(base)
     requests: Dict[int, Dict[str, Any]] = {}
     events: List[Dict[str, Any]] = []
     console_lines: List[Dict[str, Any]] = []
@@ -266,6 +448,7 @@ def run_probe(args: argparse.Namespace) -> Dict[str, Any]:
             }
         )
 
+    health = HealthPoller(health_url)
     health.start()
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -328,8 +511,11 @@ def run_probe(args: argparse.Namespace) -> Dict[str, Any]:
         )
 
         nav_started = elapsed()
-        page.goto(page_url, wait_until="domcontentloaded", timeout=60000)
+        nav_response = page.goto(page_url, wait_until="domcontentloaded", timeout=60000)
         nav_dcl = elapsed()
+        document_server_timing = None
+        if nav_response is not None:
+            document_server_timing = nav_response.headers.get("server-timing")
 
         deadline = t_origin + WAIT_S
         t10_shot = False
@@ -399,6 +585,8 @@ def run_probe(args: argparse.Namespace) -> Dict[str, Any]:
               };
             }"""
         )
+        critical_path = _collect_critical_path_timing(page)
+        hero_api_timing = _first_hero_api_timing(requests)
         final_hero = _hero_snapshot(page)
         final_hero["t_s"] = round(elapsed(), 3)
 
@@ -462,6 +650,11 @@ def run_probe(args: argparse.Namespace) -> Dict[str, Any]:
         "hydrates_in_budget": hydrates_in_budget,
         "starvation_shape": starvation,
         "nav_domcontentloaded_s": round(nav_dcl - nav_started, 3),
+        "machine_state": machine_probe.get("machine_state"),
+        "machine_probe": machine_probe,
+        "document_server_timing": document_server_timing,
+        "critical_path": critical_path,
+        "hero_api_timing": hero_api_timing,
         "navigation_timing": nav_timing,
         "final_hero": final_hero,
         "aborted_endpoints": [
@@ -553,17 +746,88 @@ Shape: **{shape}**
 | Pending API still outstanding at t=45s | {pending_paths} |
 | API request count | {s.get("api_request_count")} |
 | Homepage curl TTFB (sanity) | {((s.get("homepage_curl_sanity") or {}).get("ttfb_ms"))} ms status={((s.get("homepage_curl_sanity") or {}).get("status"))} |
+| machine_state | {s.get("machine_state")} |
+| document Server-Timing | {s.get("document_server_timing")} |
+| html-parse mark (ms) | {((s.get("critical_path") or {}).get("marks") or {}).get("html-parse")} |
+| hydrate-start / hydrate-end (ms) | {((s.get("critical_path") or {}).get("marks") or {}).get("hydrate-start")} / {((s.get("critical_path") or {}).get("marks") or {}).get("hydrate-end")} |
+| stats / daily-pick start (probe s) | {((s.get("hero_api_timing") or {}).get("learning_stats") or {}).get("start_s")} / {((s.get("hero_api_timing") or {}).get("daily_pick") or {}).get("start_s")} |
 
 Starvation shape (critical abort/hang >45s AND hero misses 10s budget): `{s.get("starvation_shape")}`
 """
 
 
+def run_critpath_batch(args: argparse.Namespace) -> int:
+    crit_id = args.critpath_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    base_out = Path(args.critpath_out or "artifacts/g0-baseline")
+    summaries: List[Dict[str, Any]] = []
+    for i in range(1, args.critpath_n + 1):
+        run_args = argparse.Namespace(
+            base_url=args.base_url,
+            run_id=f"critpath-{crit_id}-{i}",
+            out_dir=str(base_out / f"critpath-{crit_id}-{i}"),
+        )
+        print(f"\n=== critpath run {i}/{args.critpath_n} → {run_args.out_dir} ===\n")
+        summaries.append(run_probe(run_args))
+    median_md = critpath_median_table(crit_id, summaries)
+    median_path = base_out / f"critpath-{crit_id}-median.md"
+    median_path.parent.mkdir(parents=True, exist_ok=True)
+    median_path.write_text(median_md)
+    median_json = base_out / f"critpath-{crit_id}-median.json"
+    median_json.write_text(
+        json.dumps(
+            {
+                "crit_id": crit_id,
+                "runs": [s.get("run_id") for s in summaries],
+                "machine_state": [s.get("machine_state") for s in summaries],
+                "median": {
+                    "dcl_ms": _median(
+                        [
+                            s.get("navigation_timing", {}).get("domContentLoadedEventEnd")
+                            for s in summaries
+                        ]
+                    ),
+                    "stats_start_s": _median(
+                        [
+                            (s.get("hero_api_timing") or {})
+                            .get("learning_stats", {})
+                            .get("start_s")
+                            for s in summaries
+                        ]
+                    ),
+                    "hero_complete_s": _median([s.get("hero_complete_at_s") for s in summaries]),
+                },
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    print(median_md)
+    print(f"\nWrote {median_path} and {median_json}")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="G0 hydration starvation harness (#1058)")
     parser.add_argument("--base-url", required=True)
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--run-id", default=None)
+    parser.add_argument("--out-dir", default=None)
+    parser.add_argument(
+        "--critpath",
+        action="store_true",
+        help="Run n sequential cold loads and write critpath median table",
+    )
+    parser.add_argument("--critpath-id", default=None, help="ID for critpath-{id}-{1,2,3}/ dirs")
+    parser.add_argument("--critpath-n", type=int, default=3, help="Sequential runs for --critpath")
+    parser.add_argument(
+        "--critpath-out",
+        default="artifacts/g0-baseline",
+        help="Base output dir for --critpath runs",
+    )
     args = parser.parse_args()
+    if args.critpath:
+        return run_critpath_batch(args)
+    if not args.run_id or not args.out_dir:
+        parser.error("--run-id and --out-dir are required unless --critpath is set")
     run_probe(args)
     return 0
 
