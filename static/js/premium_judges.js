@@ -40,22 +40,28 @@
     opts = opts || {};
     var verdict = (j.consensus && j.consensus.verdict) || 'neutral';
     var score = j.consensus ? j.consensus.score : null;
-    var oracle = j.oracle ? j.oracle.score.toFixed(2) : '—';
-    var echo = j.echo ? j.echo.score.toFixed(2) : '—';
-    var pulse = j.pulse ? j.pulse.score.toFixed(2) : '—';
+    var oracle = (j.oracle && j.oracle.score != null) ? Number(j.oracle.score).toFixed(2) : 'unavailable';
+    var echo = (j.echo && j.echo.score != null) ? Number(j.echo.score).toFixed(2) : 'unavailable';
+    var pulse = (j.pulse && j.pulse.score != null) ? Number(j.pulse.score).toFixed(2) : 'unavailable';
     var title = opts.link
       ? '<a href="/subnet/' + esc(j.netuid) + '">' + esc(j.name || ('SN' + j.netuid)) + '</a>'
       : esc(j.name || ('SN' + j.netuid));
-    var meta = 'SN' + esc(j.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : '');
+    var meta = 'SN' + esc(j.netuid) + (score != null ? ' · consensus ' + Number(score).toFixed(2) : ' · consensus unavailable');
     if (opts.focus) meta += ' · Living Focus';
+    if (j.consensus && j.consensus.weights_degraded) meta += ' · weights unavailable';
+    function chip(label, block) {
+      if (block && (block.score == null || block.status === 'degraded' || block[label + '_degraded'])) {
+        return '<div class="kpi-cell"><div class="k">' + label.charAt(0).toUpperCase() + label.slice(1) + '</div><div class="v">score unavailable</div></div>';
+      }
+      var val = block && block.score != null ? Number(block.score).toFixed(2) : '—';
+      return '<div class="kpi-cell"><div class="k">' + label.charAt(0).toUpperCase() + label.slice(1) + '</div><div class="v">' + val + '</div></div>';
+    }
     return '<article class="card judge-summary" style="margin-bottom:10px;">' +
       '<div class="card-head"><h3>' + title + '</h3>' +
       '<span class="badge ' + verdictClass(verdict) + '">' + esc(String(verdict).toUpperCase()) + '</span></div>' +
       '<div class="pick-meta">' + meta + '</div>' +
       '<div class="kpi-grid" style="grid-template-columns:repeat(3,1fr);margin-top:8px;">' +
-      '<div class="kpi-cell"><div class="k">Oracle</div><div class="v">' + oracle + '</div></div>' +
-      '<div class="kpi-cell"><div class="k">Echo</div><div class="v">' + echo + '</div></div>' +
-      '<div class="kpi-cell"><div class="k">Pulse</div><div class="v">' + pulse + '</div></div>' +
+      chip('oracle', j.oracle) + chip('echo', j.echo) + chip('pulse', j.pulse) +
       '</div></article>';
   }
 
@@ -115,12 +121,11 @@
       });
   }
 
+  loadJudges();
   if (drawer) {
     drawer.addEventListener('toggle', function () {
       if (drawer.open) loadJudges();
     });
-  } else {
-    loadJudges();
   }
 
   document.addEventListener('living-focus:change', function () {

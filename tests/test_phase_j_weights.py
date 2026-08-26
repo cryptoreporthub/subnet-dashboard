@@ -30,6 +30,7 @@ def isolate_weights(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul_path)
+    monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", soul_path)
 
 
 def test_symmetric_weight_deltas():
@@ -45,6 +46,12 @@ def test_replay_mode_pauses_weight_nudges():
         "predicted_pct": 5.0,
         "direction": "up",
         "expert": "quant",
+        "pick_source": "council",
+        "signal_source": "emission_momentum",
+        "active_signals": ["emission_momentum"],
+        "signal_impact": {
+            "impacts": [{"signal_type": "emission_momentum", "magnitude_pct": 1.0}]
+        },
     }
     with resolver.replay_mode(True):
         resolver.resolve_prediction(pred, current_price=105.0)
@@ -59,8 +66,14 @@ def test_wrong_pick_applies_symmetric_penalty():
         "predicted_pct": 5.0,
         "direction": "up",
         "expert": "quant",
+        "pick_source": "council",
+        "signal_source": "emission_momentum",
+        "active_signals": ["emission_momentum"],
+        "signal_impact": {
+            "impacts": [{"signal_type": "emission_momentum", "magnitude_pct": 1.0}]
+        },
     }
     resolver.resolve_prediction(pred, current_price=95.0)
     after = weights.load_weights()["quant"]
-    assert after == pytest.approx(before - 0.02, abs=1e-4)
+    assert after == pytest.approx(before + weights._LEARNING_DELTA_WRONG, abs=1e-4)
     assert after >= resolver._LEARNING_MIN_WEIGHT

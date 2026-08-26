@@ -54,7 +54,11 @@
     <p class="council-cap-note">ⓘ An expert is at the learned cap (≤2.0) — legacy fallback misattribution credited unresolved rows; corrected via the Rogue bucket + one soft reblend (see PR).</p>
     {% endif %}
   </div>
-  {% if council_weights %}
+  {% if weights_degraded|default(false) %}
+  <div class="card card-muted" data-testid="council-weights-degraded" role="status">
+    <p class="empty empty--quiet is-error">Weights unavailable — worker unreachable</p>
+  </div>
+  {% elif council_weights %}
   <div class="council-grid council-bench" data-testid="council-bench" aria-live="polite">
     {% for cw in council_weights %}
     {% set w = (cw.weight|default(0))|float %}

@@ -11,7 +11,6 @@
     '/static/js/subnet_grouping.js',
     '/static/js/premium_scanner.js',
     '/static/js/investigation_panel.js',
-    '/static/js/premium_judges.js',
     '/static/js/subnet_report.js',
     '/static/js/social_sentiment.js',
   ];
@@ -59,7 +58,8 @@
     bindDrawer('pro-cockpit');
     bindDrawer('market-drawer');
     bindDrawer('intel-ribs');
-    var idle = window.requestIdleCallback || function (cb) { setTimeout(cb, 2000); };
+    var idle = window.requestIdleCallback
+      || function (cb) { setTimeout(cb, 2500); };
     idle(function () { loadDeferred().catch(function () {}); }, { timeout: 2500 });
   });
 

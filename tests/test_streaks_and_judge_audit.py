@@ -90,7 +90,7 @@ def test_trust_banner_includes_streak_whisper(monkeypatch):
 
     monkeypatch.setattr(
         "internal.learning.streaks.compute_streaks",
-        lambda: {
+        lambda *_a, **_k: {
             "council": {"length": 4, "active": True, "label": "Council · 4 in a row"},
             "experts": {},
             "whisper": "Council · 4 in a row",

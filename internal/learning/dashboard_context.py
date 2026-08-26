@@ -40,10 +40,16 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
         return cached
 
     ctx = default_learning_dashboard_context()
+    ctx["grading_headline_mode"] = _grading_headline_mode()
     try:
         weights = load_weights_for_ui() or {}
-        ctx["expert_weights"] = weights
-        ctx["council_weights"] = _council_weights_list(weights, _recent_council_deltas())
+        if isinstance(weights, dict) and weights.get("_proxy_degraded"):
+            ctx["expert_weights"] = {}
+            ctx["council_weights"] = []
+            ctx["weights_degraded"] = True
+        else:
+            ctx["expert_weights"] = weights
+            ctx["council_weights"] = _council_weights_list(weights, _recent_council_deltas())
     except Exception as exc:
         logger.warning("fast shell weights failed: %s", exc)
     try:
@@ -121,6 +127,15 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
     return ctx
 
 
+def _grading_headline_mode() -> str:
+    try:
+        from internal.council.capture import grading_headline_mode
+
+        return grading_headline_mode()
+    except Exception:
+        return "legacy"
+
+
 def default_learning_dashboard_context() -> Dict[str, Any]:
     """Safe fallbacks when learning/council sections fail to load."""
     return {
@@ -147,6 +162,8 @@ def default_learning_dashboard_context() -> Dict[str, Any]:
         "expert_weights": {},
         "impact_strength": 1.0,
         "council_weights": [],
+        "weights_degraded": False,
+        "grading_headline_mode": "legacy",
         "predictions": [],
         "patterns": [],
         "mindmap_trail": [],
@@ -440,6 +457,9 @@ def build_learning_dashboard_context(
     market_context = market_context if isinstance(market_context, dict) else {"tao_change_24h": 0.0}
 
     weights = load_weights_for_ui()
+    weights_degraded = isinstance(weights, dict) and bool(weights.get("_proxy_degraded"))
+    if weights_degraded:
+        weights = {}
     try:
         from internal.council.weights import load_impact_strength
 
@@ -459,6 +479,8 @@ def build_learning_dashboard_context(
             "expert_weights": expert_weights,
             "impact_strength": impact_strength,
             "council_weights": _council_weights_list(weights, _recent_council_deltas()),
+            "weights_degraded": weights_degraded,
+            "grading_headline_mode": _grading_headline_mode(),
             "predictions": _predictions_panel(),
             "patterns": rotation.get("patterns", []),
             "hour_picks": picks["hour_picks"],

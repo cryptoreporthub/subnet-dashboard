@@ -21,9 +21,15 @@
         Avg 24h {% if mi_total %}{{ '%+.2f'|format(mi_avg_chg) }}%{% else %}—{% endif %}
       </span>
       <span class="sr-pulse__oneline-sep" aria-hidden="true">·</span>
-      <span class="sr-pulse__oneline-part sr-pulse__oneline-part--cyan" id="market-pulse-signals">
-        {{ sig_list|length if sig_list else 0 }} signals · {{ alert_list|length if alert_list else 0 }} alerts
+      {% if mi_total %}
+      <span class="sr-pulse__ticker" id="registry-ticker" aria-label="Subnet registry">
+        {% for sn in sn_list[:12] %}
+        <span class="sr-pulse__tick">SN{{ sn.netuid|default(sn.id) }} {{ sn.name|default('') }}</span>
+        {% endfor %}
       </span>
+      {% else %}
+      <span class="sr-pulse__ticker sr-pulse__ticker--empty" id="registry-ticker">Registry empty — waiting on live subnet data.</span>
+      {% endif %}
     </p>
   </div>
   <div class="subnet-integrations-bar" id="subnetIntegrationsBar" aria-label="Bittensor subnet integrations">

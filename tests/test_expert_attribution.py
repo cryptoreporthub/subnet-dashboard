@@ -119,7 +119,7 @@ def test_resolve_stamps_and_nudges_same_replay_expert(tmp_path, monkeypatch):
 
     nudged = []
 
-    def _capture(correct, expert):
+    def _capture(correct, expert, **_kwargs):
         nudged.append((expert, correct))
 
     monkeypatch.setattr(resolver, "_nudge_weights", _capture)
@@ -131,6 +131,7 @@ def test_resolve_stamps_and_nudges_same_replay_expert(tmp_path, monkeypatch):
         "predicted_pct": 2.0,
         "reference_price": 10.0,
         "horizon_type": "hour",
+        "pick_source": "council",
         "signal_impact": {
             "impacts": [{"signal_type": "hot", "magnitude_pct": 4.0, "learned_weight": 1.0}],
         },

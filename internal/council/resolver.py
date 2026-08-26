@@ -18,6 +18,13 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 from internal.council.deduplication import dedupe_predictions
+from internal.council.capture import (
+    CaptureResult,
+    capture_mode_enabled,
+    capture_nudge_correct,
+    nudge_multiplier,
+    stamp_capture_fields,
+)
 from internal.council.grading import (
     classify_outcome_direction_only,
     compute_actual_pct,
@@ -128,6 +135,17 @@ def _skip_council_learning(prediction: Dict[str, Any]) -> bool:
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
 
+def _already_graded(prediction: Dict[str, Any]) -> bool:
+    """True when this row already resolved — a second pass must not re-nudge."""
+    from internal.council.capture import BANDS
+
+    if prediction.get("band") in BANDS:
+        return True
+    if prediction.get("correct") is not None:
+        return True
+    return str(prediction.get("status") or "") == "resolved"
+
+
 def _is_shadow(prediction: Dict[str, Any]) -> bool:
     return bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
@@ -200,7 +218,12 @@ def _normalize_expert(prediction: Dict[str, Any]) -> Optional[str]:
     return normalize_expert(prediction)
 
 
-def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tuple[Optional[str], Optional[str]]:
+def _stamp_and_nudge_expert(
+    prediction: Dict[str, Any],
+    *,
+    correct: bool,
+    capture: Optional[CaptureResult] = None,
+) -> Tuple[Optional[str], Optional[str]]:
     """Stamp rich attribution on the row; nudge the SAME attributed expert so
     attribution stamping and weight nudging stay in agreement (fixes quant
     sink / dark_horse starvation where legacy string normalization diverged)."""
@@ -224,18 +247,37 @@ def _stamp_and_nudge_expert(prediction: Dict[str, Any], *, correct: bool) -> Tup
         else None
     )
     if nudge_expert and not _skip_council_learning(prediction):
-        _nudge_weights(bool(correct), nudge_expert)
+        _nudge_weights(bool(correct), nudge_expert, capture=capture)
     return stamped_expert, nudge_expert
 
 
-def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
+def _nudge_weights(
+    correct: bool,
+    expert: Optional[str],
+    *,
+    capture: Optional[CaptureResult] = None,
+) -> None:
     if _in_replay_mode() or not expert:
         return
 
     from internal.council.weights import load_weights, nudge_expert
 
+    nudge_correct = bool(correct)
+    scale = 1.0
+    extra: Dict[str, Any] = {}
+    if capture_mode_enabled() and capture is not None:
+        flag = capture_nudge_correct(capture)
+        if flag is None:
+            return
+        nudge_correct = bool(flag)
+        mult = nudge_multiplier(capture)
+        if mult is None:
+            return
+        scale = float(mult)
+        extra = {"band": capture.band, "capture": capture.capture_capped}
+
     before = float(load_weights().get(expert, 1.0))
-    after = nudge_expert(expert, bool(correct))
+    after = nudge_expert(expert, nudge_correct, scale=scale)
     if after is None:
         return
     try:
@@ -246,7 +288,8 @@ def _nudge_weights(correct: bool, expert: Optional[str]) -> None:
             before=before,
             after=float(after),
             reason="prediction_resolve",
-            correct=correct,
+            correct=nudge_correct,
+            extra=extra or None,
         )
     except Exception:
         pass
@@ -651,6 +694,7 @@ def atomic_finalize_resolution(
         prediction["status"] = "resolved"
     prediction["resolved_at"] = resolved_at
     prediction["resolved_price"] = resolved_price
+    stamp_capture_fields(prediction, actual_pct)
     if price_meta:
         prediction["price_source"] = price_meta.get("price_source")
         prediction["price_lag_seconds"] = price_meta.get("price_lag_seconds")
@@ -698,6 +742,8 @@ def resolve_prediction(
     tolerance: float = 0.5,
 ) -> Dict[str, Any]:
     """Resolve using an explicit price (tests) or horizon lookup when omitted."""
+    if _already_graded(prediction):
+        return prediction
     now = datetime.now(timezone.utc)
     if current_price is not None and current_price > 0:
         ref = float(prediction.get("reference_price", 0) or 0)
@@ -706,8 +752,11 @@ def resolve_prediction(
             return _mark_ungradeable(prediction, now)
         actual_pct = compute_actual_pct(ref, current_price)
         correct, outcome = grade_prediction(prediction, actual_pct)
+        capture = stamp_capture_fields(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
-        expert, _nudge_expert = _stamp_and_nudge_expert(prediction, correct=bool(correct))
+        expert, _nudge_expert = _stamp_and_nudge_expert(
+            prediction, correct=bool(correct), capture=capture
+        )
         _ensure_subnet_snapshot(prediction)
         # Impact dial before finalize so prediction_resolved trail includes after value.
         if not _skip_council_learning(prediction):
@@ -722,7 +771,7 @@ def resolve_prediction(
         )
         if not _skip_council_learning(prediction):
             _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
-            _nudge_signal_weights(prediction, bool(correct))
+            _nudge_signal_weights(prediction, bool(correct), capture=capture)
         else:
             try:
                 from internal.learning.pump_calibration import maybe_adapt_after_resolve
@@ -734,9 +783,17 @@ def resolve_prediction(
     return resolve_prediction_at_horizon(prediction, now=now)
 
 
-def _nudge_signal_weights(prediction: Dict[str, Any], correct: bool) -> None:
+def _nudge_signal_weights(
+    prediction: Dict[str, Any],
+    correct: bool,
+    *,
+    capture: Optional[CaptureResult] = None,
+) -> None:
     if _in_replay_mode():
         return
+    if capture_mode_enabled() and capture is not None:
+        if capture_nudge_correct(capture) is None:
+            return
     signal_contributions = prediction.get("signal_contributions")
     horizon_type = prediction.get("horizon_type", "hour")
     if not isinstance(signal_contributions, dict):
@@ -747,9 +804,28 @@ def _nudge_signal_weights(prediction: Dict[str, Any], correct: bool) -> None:
             k for k, v in signal_contributions.items()
             if isinstance(v, dict) and (v.get("score", 0.5) > 0.55 or v.get("score", 0.5) < 0.45)
         ]
+    nudge_correct = bool(correct)
+    scale = 1.0
+    extra: Dict[str, Any] = {}
+    if capture_mode_enabled() and capture is not None:
+        flag = capture_nudge_correct(capture)
+        if flag is None:
+            return
+        nudge_correct = bool(flag)
+        mult = nudge_multiplier(capture)
+        if mult is None:
+            return
+        scale = float(mult)
+        extra = {"band": capture.band, "capture": capture.capture_capped}
     for signal_name in active_signals:
         try:
-            nudge_signal_weight(horizon_type, signal_name, correct)
+            nudge_signal_weight(
+                horizon_type,
+                signal_name,
+                nudge_correct,
+                scale=scale,
+                extra=extra or None,
+            )
         except Exception:
             pass
 
@@ -764,6 +840,8 @@ def resolve_prediction_at_horizon(
     apply_judge_nudge: bool = True,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
+    if _already_graded(prediction):
+        return prediction
     now = now or datetime.now(timezone.utc)
     resolve_at = _parse_resolve_at(prediction)
     if resolve_at is None:
@@ -797,8 +875,11 @@ def resolve_prediction_at_horizon(
         return _mark_ungradeable(prediction, now)
     actual_pct = compute_actual_pct(ref, price)
     correct, outcome = grade_prediction(prediction, actual_pct)
+    capture = stamp_capture_fields(prediction, actual_pct)
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
-    expert, _nudge_expert = _stamp_and_nudge_expert(prediction, correct=bool(correct))
+    expert, _nudge_expert = _stamp_and_nudge_expert(
+        prediction, correct=bool(correct), capture=capture
+    )
 
     _ensure_subnet_snapshot(prediction, subnet_row=subnet_row)
     # Impact dial before finalize so prediction_resolved trail includes after value.
@@ -816,7 +897,7 @@ def resolve_prediction_at_horizon(
     )
     if not _skip_council_learning(prediction):
         _record_scenario_outcome(prediction, actual_pct, outcome, bool(correct), expert)
-        _nudge_signal_weights(prediction, bool(correct))
+        _nudge_signal_weights(prediction, bool(correct), capture=capture)
     else:
         try:
             from internal.learning.pump_calibration import maybe_adapt_after_resolve
@@ -1105,6 +1186,9 @@ def _resolve_due_predictions(
     expired_now: List[Dict[str, Any]] = []
 
     for pred in pending:
+        if _already_graded(pred):
+            resolved.append(pred)
+            continue
         uid = pred.get("netuid")
         resolve_at = _parse_resolve_at(pred)
         if resolve_at is None:
@@ -1159,8 +1243,11 @@ def _resolve_due_predictions(
                             continue
                         actual_pct = compute_actual_pct(ref, p_price)
                         correct, outcome = grade_prediction(pred, actual_pct)
+                        capture = stamp_capture_fields(pred, actual_pct)
                         resolved_at_str = resolve_at.isoformat().replace("+00:00", "Z")
-                        expert, _ = _stamp_and_nudge_expert(pred, correct=bool(correct))
+                        expert, _ = _stamp_and_nudge_expert(
+                            pred, correct=bool(correct), capture=capture
+                        )
                         _ensure_subnet_snapshot(pred, subnet_row=subnet_by_uid.get(uid))
                         if not _skip_council_learning(pred):
                             _nudge_impact_strength(pred, bool(correct))
@@ -1175,7 +1262,7 @@ def _resolve_due_predictions(
                         )
                         if not _skip_council_learning(pred):
                             _record_scenario_outcome(pred, actual_pct, outcome, bool(correct), expert)
-                            _nudge_signal_weights(pred, bool(correct))
+                            _nudge_signal_weights(pred, bool(correct), capture=capture)
                         resolved.append(pred)
                         resolved_now.append(pred)
                         continue

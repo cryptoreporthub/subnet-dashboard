@@ -50,7 +50,7 @@
       {% if trust.ready and trust.headline_pct is not none %}
       <div class="pd-proof__ready" id="pump-alert-proof">
         <span class="pd-proof__pct" id="pump-alert-proof-pct">{{ trust.headline_pct }}%</span>
-        <span class="pd-proof__copy">early alerts hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }}</span>
+        <span class="pd-proof__copy" id="pump-alert-proof-copy">early alerts hit +2% in 1h · n={{ trust.headline_n|default((trust.early.n if trust.early is mapping else 0)|default(0)) }}{% if grading_headline_mode|default('legacy') == 'dual' %} · dual display (legacy · strict){% endif %}{% if grading_headline_mode|default('legacy') == 'strict' %} · strict (legacy deprecated){% endif %}</span>
       </div>
       {% else %}
       <p class="pd-proof__building" id="pump-alert-trust">{{ trust.line|default('Early alerts: grading starts once lead phase entries resolve (1h).') }}</p>
