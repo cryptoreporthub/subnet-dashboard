@@ -580,9 +580,9 @@ async def add_cors_headers(request: Request, call_next):
     started = time.perf_counter()
     response = await call_next(request)
     elapsed_ms = (time.perf_counter() - started) * 1000
-    # Browser DevTools exposes this directly and structured logs retain the
-    # route-level baseline without adding a second telemetry dependency.
-    response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
+    # GET / sets Server-Timing inside index() (handler-only dur for G0 critpath).
+    if request.url.path != "/":
+        response.headers["Server-Timing"] = f"app;dur={elapsed_ms:.1f}"
     if request.url.path.startswith("/api/"):
         logger.info(
             "dashboard_request path=%s status=%s duration_ms=%.1f",
@@ -696,6 +696,7 @@ _INSTANT_HOME_SHELL = """<!DOCTYPE html>
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:image" content="/static/og-share.png">
 <style>html,body{margin:0;min-height:100%;background:#04060e;color:#e8f0e9;font-family:system-ui,sans-serif}</style>
+<script>performance.mark('html-parse')</script>
 </head>
 <body><p style="padding:1.5rem;font-family:JetBrains Mono,monospace;font-size:14px;color:#8cb39f">Loading council desk…</p>
 <p style="margin:12px auto 0;max-width:960px;padding:0 16px 8px;font-size:11px;line-height:1.4;color:#7a9186;text-align:center;">SimiVision calls are scored council output, not financial advice. Do your own research.</p>
@@ -1642,11 +1643,17 @@ def _schedule_homepage_warm(request: Optional[Request] = None) -> None:
     ).start()
 
 
+def _index_server_timing_header(started: float) -> dict[str, str]:
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    return {"Server-Timing": f"app;dur={elapsed_ms:.1f}"}
+
+
 @app.get("/")
 async def index(request: Request):
     """Instant shell on cache miss — never block the Starlette thread pool on Jinja."""
     from fastapi.responses import HTMLResponse
 
+    started = time.perf_counter()
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -1654,7 +1661,7 @@ async def index(request: Request):
         and cached_html
         and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
     ):
-        return HTMLResponse(cached_html)
+        return HTMLResponse(cached_html, headers=_index_server_timing_header(started))
 
     _schedule_homepage_warm(request)
     if _EMERGENCY_HOME_HTML:
@@ -1675,7 +1682,10 @@ async def index(request: Request):
             html = _INSTANT_HOME_SHELL
     return HTMLResponse(
         html,
-        headers={"Cache-Control": "no-store, max-age=0"},
+        headers={
+            "Cache-Control": "no-store, max-age=0",
+            **_index_server_timing_header(started),
+        },
     )
 
 
