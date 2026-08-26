@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+# ``pytest`` launched from its venv entry point puts ``tests/`` on sys.path,
+# not the repository root where the script-only harness namespace lives.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from harness.g0_hydration_starvation import run_g0
 from server import app
