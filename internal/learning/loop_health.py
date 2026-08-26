@@ -269,8 +269,6 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
         sched = soul.get("prediction_resolver_scheduler") or {}
         if isinstance(sched, dict):
             last = sched.get("last_cycle") or {}
-            if sched.get("lifecycle"):
-                lifecycle = sched.get("lifecycle")
             if isinstance(last, dict) and last.get("run_at"):
                 run_at = last.get("run_at")
                 candidates.append(
@@ -278,7 +276,7 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
                         _parse_iso(run_at) or datetime.min.replace(tzinfo=timezone.utc),
                         run_at,
                         last.get("ok"),
-                        True,
+                        False,
                     )
                 )
     except Exception:
@@ -288,23 +286,43 @@ def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
     if candidates:
         candidates.sort(key=lambda row: row[0], reverse=True)
         _, tick, ok, mem_running = candidates[0]
-    peer = _worker_peer()
-    running = mem_running or lifecycle in {"starting", "scheduled", "ticking", "running"}
-    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
-        running = bool(peer.get("alive")) or mem_running
-    else:
-        running = bool(mem_running)
+    try:
+        soul = _load_raw(soul_path or SOUL_MAP_PATH)
+        sched = soul.get("prediction_resolver_scheduler") or {}
+        if isinstance(sched, dict):
+            if sched.get("lifecycle"):
+                lifecycle = sched.get("lifecycle")
+            last = sched.get("last_cycle") or {}
+            if isinstance(last, dict) and last.get("lifecycle"):
+                lifecycle = last.get("lifecycle")
+    except Exception:
+        pass
     refresh_m = RESOLVER_REFRESH_MINUTES
     try:
         refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)
     except Exception:
         pass
+    tick_age_s: Optional[float] = None
+    if tick:
+        tick_dt = _parse_iso(tick)
+        if tick_dt is not None:
+            tick_age_s = max(0.0, (_utcnow() - tick_dt).total_seconds())
+    stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
+    tick_fresh = tick_age_s is not None and tick_age_s <= stall_after_s
+    peer = _worker_peer()
+    warming = lifecycle in {"starting", "scheduled", "ticking"} and tick is None
+    running = bool(mem_running) or (
+        lifecycle in {"starting", "scheduled", "ticking", "running"} and (tick_fresh or warming)
+    )
+    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
+        # Worker heartbeat alone must not mask a stale resolver tick on web.
+        running = (bool(peer.get("alive")) and tick_fresh) or bool(mem_running)
     return {
         "at": tick,
         "ok": ok,
         "running": running,
         "lifecycle": lifecycle,
-        "warming": lifecycle in {"starting", "scheduled", "ticking"} and tick is None,
+        "warming": warming,
         "refresh_minutes": refresh_m,
         "worker_peer": peer,
     }

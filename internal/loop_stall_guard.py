@@ -58,6 +58,10 @@ MAX_SNAPSHOT_AGE_SECONDS = max(
 MAX_RESOLVER_AGE_SECONDS = max(
     1800, _env_int("LOOP_STALL_GUARD_MAX_RESOLVER_AGE_SECONDS", 21600)
 )
+RESOLVER_REVIVE_AFTER_SECONDS = max(
+    900,
+    _env_int("LOOP_STALL_GUARD_RESOLVER_REVIVE_SECONDS", 1800),
+)
 CONSECUTIVE_CHECKS = max(1, _env_int("LOOP_STALL_GUARD_CONSECUTIVE_CHECKS", 2))
 # ponytail: loop_health snapshot boot grace defaults 900s; guard waits 1500s — intentional dual, no knob change
 BOOT_GRACE_SECONDS = max(60, _env_int("LOOP_STALL_GUARD_BOOT_GRACE_SECONDS", 1500))
@@ -117,6 +121,16 @@ def _try_revive() -> None:
         logger.warning("loop stall guard: revive attempt failed: %s", exc)
 
 
+def _try_revive_resolver() -> None:
+    try:
+        from internal.council.resolver_scheduler import revive_prediction_resolver_scheduler
+
+        result = revive_prediction_resolver_scheduler()
+        logger.warning("loop stall guard: resolver revive attempt -> %s", result)
+    except Exception as exc:
+        logger.warning("loop stall guard: resolver revive failed: %s", exc)
+
+
 def _guard_loop() -> None:
     if not ENABLED:
         logger.info("loop stall guard: disabled (LOOP_STALL_GUARD_ENABLED=0)")
@@ -128,11 +142,13 @@ def _guard_loop() -> None:
     started = time.monotonic()
     consecutive_stale = 0
     revived = False
+    resolver_revived = False
 
     logger.info(
-        "loop stall guard started (interval=%ss, max_snapshot_age=%ss, consecutive=%s, kill=%s)",
+        "loop stall guard started (interval=%ss, max_snapshot_age=%ss, resolver_revive_after=%ss, consecutive=%s, kill=%s)",
         INTERVAL_SECONDS,
         MAX_SNAPSHOT_AGE_SECONDS,
+        RESOLVER_REVIVE_AFTER_SECONDS,
         CONSECUTIVE_CHECKS,
         KILL_ENABLED,
     )
@@ -150,6 +166,14 @@ def _guard_loop() -> None:
                 int(resolver_age),
                 MAX_RESOLVER_AGE_SECONDS,
             )
+
+        if (
+            resolver_age is not None
+            and resolver_age > RESOLVER_REVIVE_AFTER_SECONDS
+            and not resolver_revived
+        ):
+            resolver_revived = True
+            _try_revive_resolver()
 
         if age is None:
             consecutive_stale = 0
