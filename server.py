@@ -628,7 +628,7 @@ PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8")
 # the full 8s PICK_HANDLER_TIMEOUT on a queued/stuck _build.
 PICK_READ_TIMEOUT = float(os.environ.get("PICK_READ_TIMEOUT_SECONDS", "0.5"))
 _PICK_READ_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
-    max_workers=1,
+    max_workers=2,
     thread_name_prefix="pick-read",
 )
 atexit.register(_PICK_READ_EXECUTOR.shutdown, wait=False, cancel_futures=True)
@@ -3112,50 +3112,77 @@ def _daily_pick_pending_hold() -> Dict[str, Any]:
 async def api_daily_pick(full: bool = False):
     """Today's pick from stored JSON. Hydrate GET never waits on scoring."""
     started = time.monotonic()
+    from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
 
-    def _build() -> Dict[str, Any]:
+    def _read_stored() -> Optional[Dict[str, Any]]:
         from internal.council.daily_pick_engine import _find_today, _load
-        from internal.whales.enrichment_badge import empty_whale_flow_badge, whale_flow_badge
 
-        existing = _find_today(_load())
-        if existing is not None:
-            result = dict(existing)
-            if full:
-                try:
-                    subnets, _ = _get_subnets_hydrate()
-                    market_context = _market_context_with_weights(subnets)
-                    result = _enrich_daily_pick_payload(result, subnets, market_context)
-                except Exception as exc:
-                    logger.warning("daily-pick full enrich skipped: %s", exc)
-                    result = _enrich_daily_pick_payload_lite(result)
-                netuid = _pick_netuid_from_daily_payload(result)
-                result["enrichment_badge"] = (
-                    whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
-                )
-            else:
-                result = _enrich_daily_pick_payload_lite(result)
-                result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-            return _attach_daily_pick_meta(result)
-
-        # ponytail: never run pick engine on hydrate API — wedges single-worker Fly.
-        return _daily_pick_pending_hold()
+        return _find_today(_load())
 
     timeout_s = PICK_HANDLER_TIMEOUT if full else PICK_READ_TIMEOUT
     pool = _DASHBOARD_EXECUTOR if full else _PICK_READ_EXECUTOR
     try:
-        payload = await _to_thread_timeout(
-            _build, timeout_s, label="daily-pick", executor=pool
+        existing = await _to_thread_timeout(
+            _read_stored, timeout_s, label="daily-pick-read", executor=pool
         )
-        _daily_pick_stage_timing(
-            "hydrate_get_hit" if payload.get("status") != "pending" else "hydrate_get_miss",
-            (time.monotonic() - started) * 1000,
-        )
-        return payload
     except asyncio.TimeoutError:
         _daily_pick_stage_timing(
             "hydrate_get_timeout", (time.monotonic() - started) * 1000
         )
         return _daily_pick_timeout_hold()
+    except Exception as e:
+        logger.error("Error fetching daily pick: %s", e)
+        return _attach_daily_pick_meta(
+            {
+            "status": "error",
+            "date": datetime.now(timezone.utc).date().isoformat(),
+            "action": "HOLD",
+            "reason": str(e),
+            "pick": None,
+            }
+        )
+
+    if existing is None:
+        _daily_pick_stage_timing(
+            "hydrate_get_miss", (time.monotonic() - started) * 1000
+        )
+        return _daily_pick_pending_hold()
+
+    def _enrich() -> Dict[str, Any]:
+        result = dict(existing)
+        if full:
+            try:
+                subnets, _ = _get_subnets_hydrate()
+                market_context = _market_context_with_weights(subnets)
+                result = _enrich_daily_pick_payload(result, subnets, market_context)
+            except Exception as exc:
+                logger.warning("daily-pick full enrich skipped: %s", exc)
+                result = _enrich_daily_pick_payload_lite(result)
+            netuid = _pick_netuid_from_daily_payload(result)
+            result["enrichment_badge"] = (
+                whale_flow_badge(netuid) if netuid is not None else empty_whale_flow_badge()
+            )
+        else:
+            result = _enrich_daily_pick_payload_lite(result)
+            result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+        return _attach_daily_pick_meta(result)
+
+    try:
+        payload = await _to_thread_timeout(
+            _enrich, timeout_s, label="daily-pick-enrich", executor=pool
+        )
+        _daily_pick_stage_timing(
+            "hydrate_get_hit", (time.monotonic() - started) * 1000
+        )
+        return payload
+    except asyncio.TimeoutError:
+        # Stored scheduler HOLD/LONG is not a timeout HOLD.
+        _daily_pick_stage_timing(
+            "hydrate_get_enrich_timeout", (time.monotonic() - started) * 1000
+        )
+        raw = dict(existing)
+        raw["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+        return _attach_daily_pick_meta(raw)
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return _attach_daily_pick_meta(

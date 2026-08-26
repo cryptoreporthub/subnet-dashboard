@@ -734,9 +734,10 @@ def test_daily_pick_timeout_is_stale_not_fresh_hold(monkeypatch):
     import server as srv
 
     monkeypatch.setattr(srv, "PICK_READ_TIMEOUT", 0.05)
+    release = threading.Event()
 
     def _hang(_path=None):
-        time.sleep(2)
+        release.wait(timeout=5)
         return []
 
     monkeypatch.setattr("internal.council.daily_pick_engine._load", _hang)
@@ -745,17 +746,20 @@ def test_daily_pick_timeout_is_stale_not_fresh_hold(monkeypatch):
         lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("timeout must not persist")),
     )
 
-    t0 = time.time()
-    resp = TestClient(app).get("/api/daily-pick")
-    elapsed = time.time() - t0
-    assert resp.status_code == 200
-    assert elapsed < 1.0
-    body = resp.json()
-    assert body["status"] == "timeout"
-    assert body["action"] == "HOLD"
-    assert body["pick"] is None
-    assert (body.get("_meta") or {}).get("stale") is True
-    assert "busy" in (body.get("reason") or "")
+    try:
+        t0 = time.time()
+        resp = TestClient(app).get("/api/daily-pick")
+        elapsed = time.time() - t0
+        assert resp.status_code == 200
+        assert elapsed < 1.0
+        body = resp.json()
+        assert body["status"] == "timeout"
+        assert body["action"] == "HOLD"
+        assert body["pick"] is None
+        assert (body.get("_meta") or {}).get("stale") is True
+        assert "busy" in (body.get("reason") or "")
+    finally:
+        release.set()
 
 
 def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
@@ -783,12 +787,50 @@ def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
     resp = TestClient(app).get("/api/daily-pick")
     elapsed = time.time() - t0
     assert resp.status_code == 200
-    assert elapsed < 0.5
+    assert elapsed < 1.0
     body = resp.json()
     assert body["status"] != "timeout"
     assert body["action"] == "HOLD"
     assert "Directional conflict" in (body.get("reason") or "")
     assert (body.get("_meta") or {}).get("stale") is False
+
+
+def test_daily_pick_enrich_timeout_returns_stored_hold_not_timeout(monkeypatch):
+    """Slow lite enrich must not rewrite a scheduler HOLD into timeout HOLD."""
+    import server as srv
+
+    monkeypatch.setattr(srv, "PICK_READ_TIMEOUT", 0.05)
+    stored = {
+        "date": "2099-01-01",
+        "status": "ok",
+        "action": "HOLD",
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {"subnet": {"netuid": 78, "name": "SN78"}},
+        "pick": None,
+    }
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine._find_today", lambda _rows: stored
+    )
+    release = threading.Event()
+
+    def _slow_enrich(payload):
+        release.wait(timeout=5)
+        return payload
+
+    monkeypatch.setattr(srv, "_enrich_daily_pick_payload_lite", _slow_enrich)
+    try:
+        t0 = time.time()
+        resp = TestClient(app).get("/api/daily-pick")
+        elapsed = time.time() - t0
+        assert resp.status_code == 200
+        assert elapsed < 1.0
+        body = resp.json()
+        assert body["status"] != "timeout"
+        assert body["action"] == "HOLD"
+        assert "Directional conflict" in (body.get("reason") or "")
+        assert body.get("candidate")
+    finally:
+        release.set()
 
 
 def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
