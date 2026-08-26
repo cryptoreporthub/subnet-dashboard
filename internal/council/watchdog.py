@@ -22,12 +22,20 @@ def _parse_dt(raw: Any) -> Optional[datetime]:
         return None
 
 
+def _is_shadow(pred: Dict[str, Any]) -> bool:
+    return bool(pred.get("shadow") or pred.get("counterfactual"))
+
+
 def _horizon_hours(pred: Dict[str, Any]) -> float:
     try:
         horizon = float(pred.get("horizon_hours", 0) or 0)
     except (TypeError, ValueError):
         horizon = 0.0
-    return horizon if horizon > 0 else _DEFAULT_HORIZON_HOURS
+    if horizon > 0:
+        return horizon
+    if str(pred.get("horizon_type") or "").lower() == "hour":
+        return 1.0
+    return _DEFAULT_HORIZON_HOURS
 
 
 def check_resolver_watchdog(
@@ -47,6 +55,10 @@ def check_resolver_watchdog(
     stale_id: Any = None
 
     for pred in pending:
+        # Council health gate tracks council_pending; shadow counterfactuals are
+        # research rows and are retired on their own resolver path.
+        if _is_shadow(pred):
+            continue
         resolve_at = _parse_dt(pred.get("resolve_at"))
         created = _parse_dt(pred.get("created_at")) or resolve_at
         horizon = _horizon_hours(pred)

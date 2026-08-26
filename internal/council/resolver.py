@@ -457,7 +457,11 @@ def _horizon_hours(prediction: Dict[str, Any]) -> float:
         horizon = float(prediction.get("horizon_hours", 0) or 0)
     except (TypeError, ValueError):
         horizon = 0.0
-    return horizon if horizon > 0 else _EXPIRY_DEFAULT_HORIZON_HOURS
+    if horizon > 0:
+        return horizon
+    if str(prediction.get("horizon_type") or "").lower() == "hour":
+        return 1.0
+    return _EXPIRY_DEFAULT_HORIZON_HOURS
 
 
 def _is_expired(
@@ -1198,6 +1202,15 @@ def _resolve_due_predictions(
             continue
 
         if _is_expired(pred, resolve_at, now):
+            # HOLD counterfactual shadows are research rows — retire past grace without
+            # the council late-grade hydrate path so they cannot rot in pending.
+            if _is_shadow(pred):
+                if pred.get("price_data_unavailable"):
+                    pred["price_data_unavailable"] = True
+                _expire_prediction(pred, now)
+                resolved.append(pred)
+                expired_now.append(pred)
+                continue
             # Pump leads past grace: candle-grade if quality sample, else ungradeable.
             # Never expire with a late live price (would falsify +2%/1h).
             if is_pump_desk_claim(pred):
