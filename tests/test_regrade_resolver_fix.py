@@ -28,7 +28,7 @@ def isolate_data_paths(tmp_path, monkeypatch):
 def nudge_spy(monkeypatch):
     calls = []
 
-    def _fake_nudge(correct, expert):
+    def _fake_nudge(correct, expert, **_kwargs):
         calls.append((correct, expert))
 
     monkeypatch.setattr(resolver, "_nudge_weights", _fake_nudge)
