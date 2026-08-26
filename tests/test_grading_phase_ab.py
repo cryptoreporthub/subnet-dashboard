@@ -288,6 +288,45 @@ def test_nudge_judge_capture_scale(tmp_path, monkeypatch):
     assert after == pytest.approx(1.0 + 0.02 * near.capture_capped, abs=1e-4)
 
 
+def test_capture_mode_judge_tracker_scale_is_capture_only(monkeypatch, tmp_path):
+    """NEAR-HIT judge nudge is c×delta, not (move-scale)×c×delta."""
+    from internal.judges import tracker
+    from internal.judges.weights import load_judge_weights as _load
+
+    monkeypatch.setenv("GRADING_MODE", "capture")
+    path = str(tmp_path / "soul_map.json")
+    save_judge_weights({"oracle": 1.0, "echo": 1.0, "pulse": 1.0}, path=path)
+    monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", path)
+
+    class _FakeJudge:
+        name = "oracle"
+
+        def close_position(self, *_a, **_k):
+            return {"pnl_pct": 1.0}
+
+        def record_postmortem(self, *_a, **_k):
+            return None
+
+    monkeypatch.setattr(tracker, "all_judges", lambda: [_FakeJudge()])
+    near = compute_capture(4.0, 1.0)
+    assert near.band == BAND_NEAR_HIT
+    tracker.on_prediction_resolved(
+        {
+            "id": "j-near",
+            "pick_source": "council",
+            "predicted_pct": 4.0,
+            "actual_pct": 1.0,
+            "correct": True,
+            "outcome": "hit",
+            "band": near.band,
+            "capture_capped": near.capture_capped,
+            "capture_raw": near.capture_raw,
+        }
+    )
+    after = _load(path)["oracle"]
+    assert after == pytest.approx(1.0 + 0.02 * near.capture_capped, abs=1e-4)
+
+
 def test_judge_skips_pump_and_shadow(monkeypatch, tmp_path):
     from internal.judges import tracker
     from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
