@@ -52,19 +52,11 @@ print(json.dumps({
 }, indent=2))
 '
 
-echo "=== volume row + ledger hash (read-only) ==="
-flyctl machine exec "$MID" --app "$APP" --timeout 180 \
-  "cd /app && REV3_DEPLOY_SHA=${DEPLOY_SHA} REV3_ROW_ID=${ROW_ID} python3 -c \"${AUDIT_PY}\"" || true
-
-echo "=== recover_expired_predictions dry_run=True (no ledger mutation) ==="
 RECOVER_PY='from internal.learning.expired_recovery import recover_expired_predictions
 import json
 print(json.dumps(recover_expired_predictions(dry_run=True), indent=2))
 '
-flyctl machine exec "$MID" --app "$APP" --timeout 180 \
-  "cd /app && python3 -c \"${RECOVER_PY}\"" || true
 
-echo "=== regrade observation-only (counts; no regrade_expired_predictions call) ==="
 REGRADE_OBS='import json
 from internal.learning.predictions_store import load_predictions
 data = load_predictions()
@@ -77,8 +69,15 @@ print(json.dumps({
   "note": "Did not invoke regrade_expired_predictions (would mutate resolved rows)",
 }, indent=2))
 '
-flyctl machine exec "$MID" --app "$APP" --timeout 120 \
-  "cd /app && python3 -c \"${REGRADE_OBS}\"" || true
+
+echo "=== volume row + ledger hash (read-only) ==="
+flyctl ssh console -a "$APP" -C "cd /app && REV3_DEPLOY_SHA=${DEPLOY_SHA} REV3_ROW_ID=${ROW_ID} python3 -c \"${AUDIT_PY}\"" || true
+
+echo "=== recover_expired_predictions dry_run=True (no ledger mutation) ==="
+flyctl ssh console -a "$APP" -C "cd /app && python3 -c \"${RECOVER_PY}\"" || true
+
+echo "=== regrade observation-only (counts; no regrade_expired_predictions call) ==="
+flyctl ssh console -a "$APP" -C "cd /app && python3 -c \"${REGRADE_OBS}\"" || true
 
 echo "=== resolver / revive log lines (post-deploy window) ==="
 flyctl logs -a "$APP" --no-tail 2>&1 \
