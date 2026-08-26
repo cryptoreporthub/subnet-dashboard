@@ -16,7 +16,7 @@ from server import app
 _HYDRATE_OFFLOAD_ROUTES = (
     ("/api/mindmap/trail", "internal.learning.mindmap_aggregator.collect_trail_events"),
     ("/api/story-strip", "internal.analytics.story_strip.build_story_strip"),
-    ("/api/portfolio/status", "internal.portfolio.engine.build_portfolio_status"),
+    ("/api/portfolio/status", "internal.portfolio.routes.build_portfolio_status"),
     ("/api/subnet-integrations", "internal.integrations.status.build_integrations_status"),
     ("/api/ops/evidence", "internal.ops.evidence.build_evidence_report"),
 )
@@ -77,7 +77,7 @@ def test_offloaded_hydrate_routes_do_not_block_health():
 def test_mindmap_trail_timeout_is_honest(monkeypatch):
     monkeypatch.setattr(learning_routes, "MINDMAP_TRAIL_HANDLER_TIMEOUT", 0.05)
 
-    def _slow():
+    def _slow(**_k):
         time.sleep(0.2)
         return []
 
@@ -109,7 +109,7 @@ def test_portfolio_status_timeout_is_honest(monkeypatch):
         time.sleep(0.2)
         return {"status": "ok", "empty": False, "benchmark": "hold_tao", "summary": {}}
 
-    with patch("internal.portfolio.engine.build_portfolio_status", side_effect=_slow):
+    with patch("internal.portfolio.routes.build_portfolio_status", side_effect=_slow):
         body = TestClient(app).get("/api/portfolio/status").json()
     assert body["status"] == "timeout"
     assert body.get("error") == "timeout"
