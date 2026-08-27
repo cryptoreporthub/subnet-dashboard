@@ -1,4 +1,4 @@
-"""Pump ladder scheduler — persisted run meta + skip-path recording."""
+"""Pump ladder scheduler - tracker health + persisted run meta."""
 
 from __future__ import annotations
 
@@ -7,12 +7,18 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.liveness_conformance import assert_liveness_compliant
 
-def test_heavy_job_skip_records_last_run_at():
+
+def _make_scheduler():
     from internal.pump.scheduler import PumpLadderScheduler
 
-    sched = PumpLadderScheduler(refresh_minutes=20)
-    sched._running = True
+    return PumpLadderScheduler(refresh_minutes=20)
+
+
+def test_heavy_job_skip_records_tracker_skip():
+    sched = _make_scheduler()
+    sched._active = True
 
     @contextmanager
     def _busy(_name: str):
@@ -24,7 +30,9 @@ def test_heavy_job_skip_records_last_run_at():
                 result = sched._tick()
 
     assert result.get("skipped") == "heavy_job_busy"
-    assert sched._last_run_at is not None
+    assert sched._last_tick_at is not None
+    assert sched.liveness.snapshot()["consecutive_skips"] >= 1
+    assert sched.state()["last_run_ok"] is not True
     persist.assert_called_once()
     schedule_next.assert_called_once_with(result)
 
@@ -38,10 +46,8 @@ def test_fast_retry_on_shutdown_error():
 
 
 def test_schedule_next_uses_retry_minutes_on_transient_failure():
-    from internal.pump.scheduler import PumpLadderScheduler
-
-    sched = PumpLadderScheduler(refresh_minutes=20)
-    sched._running = True
+    sched = _make_scheduler()
+    sched._active = True
     with patch.object(sched, "_schedule") as schedule:
         sched._schedule_next({"ok": False, "error": "scan_in_progress"})
     schedule.assert_called_once_with(3)
@@ -61,7 +67,9 @@ def test_get_scheduler_state_falls_back_to_persisted_meta(tmp_path, monkeypatch)
 
     state = get_pump_ladder_scheduler_state()
     assert state["last_run_at"] == "2026-07-30T02:00:00Z"
-    assert state["last_run_ok"] is True
+    # last_run_ok is NEVER backfilled from persisted state (issue #1029)
+    assert state.get("last_run_ok") is not True
+    assert "liveness" not in state
 
 
 def test_get_scheduler_state_falls_back_to_last_scan_at(tmp_path, monkeypatch):
@@ -100,5 +108,11 @@ def test_record_ladder_scan_run_persists_meta(tmp_path, monkeypatch):
 
     meta = safe_read_json(str(ladder), default={}).get("meta") or {}
     assert meta.get("scheduler_last_run_at") == "2026-07-30T04:00:00Z"
-    assert meta.get("scheduler_last_run_ok") is True
     assert meta.get("scheduler_last_result", {}).get("phase_counts") == {"STIRRING": 2}
+    # ok is never persisted as a scalar health signal (issue #1029)
+    assert "scheduler_last_run_ok" not in meta
+
+
+def test_tracker_is_liveness_compliant():
+    sched = _make_scheduler()
+    assert_liveness_compliant(lambda: sched.liveness)
