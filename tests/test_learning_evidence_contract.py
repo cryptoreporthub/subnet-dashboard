@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from internal.learning.evidence import evidence_population, evidence_source, stamp_evidence
+from internal.learning.evidence import (
+    SOURCE_POPULATIONS,
+    evidence_population,
+    evidence_source,
+    stamp_evidence,
+)
 from internal.learning.pump_calibration import maybe_adapt_after_resolve
 
 
@@ -14,6 +19,7 @@ def test_evidence_contract_separates_council_pump_shadow_and_archive():
         ({"archived": True}, "archived", "archive"),
     ]
     for row, population, source in cases:
+        assert evidence_source(row) in SOURCE_POPULATIONS
         assert evidence_population(row) == population
         assert evidence_source(row) == source
         assert stamp_evidence(row) is True
