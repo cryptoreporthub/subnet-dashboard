@@ -13,6 +13,8 @@ deployment state.
 Policy mapping (no numbered policy file is in-repo):
 - §2.3 — source-specific freshness envelopes via ``internal.ops.bot_policy``
 - §3.3 — observations, interpretations, and unknowns as distinct lists
+- Conflicting sources go in ``contradictions``; they are never averaged or dropped
+- Explain-only: ``recommended_action`` is always null; no trade advice
 """
 
 from __future__ import annotations
@@ -27,7 +29,6 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from internal.ops.bot_policy import (
     aggregate_freshness,
-    approval_for,
     classify_freshness,
     with_bot_contract,
 )
@@ -47,7 +48,10 @@ def analyze(
 
     ``snapshots`` is an optional injected read model (tests / orchestrator).
     When omitted, this function reads persisted artifacts and never writes.
+    ``proposed_action`` is accepted for call compatibility and ignored:
+    Market Desk never recommends or mutates.
     """
+    _ = proposed_action
     started = time.perf_counter()
     clock = now or datetime.now(timezone.utc)
     parsed = _parse_subject(subject)
@@ -83,12 +87,25 @@ def analyze(
     )
     _add_message_intel_evidence(parsed, collected, clock, evidence, envelopes, unknowns)
 
-    comparison = _comparison_report(live_row, pump_row, collected, observations)
+    contradictions = _collect_contradictions(observations)
+    contradicted_metrics = {
+        item.get("metric") for item in contradictions if item.get("metric")
+    }
+    comparison = _comparison_report(
+        live_row, pump_row, collected, observations, contradicted_metrics
+    )
     signal_change = _signal_change_explanation(
         pump_row, signal_row, live_row, collected, observations
     )
     _add_interpretations(
-        parsed, live_row, pump_row, comparison, signal_change, observations, interpretations
+        parsed,
+        live_row,
+        pump_row,
+        comparison,
+        signal_change,
+        observations,
+        interpretations,
+        contradictions,
     )
 
     current_envelopes = _current_claim_envelopes(envelopes, observations)
@@ -112,10 +129,15 @@ def analyze(
 
     status = _status(parsed, freshness, observations, envelopes)
     summary = _plain_summary(
-        parsed, observations, interpretations, unknowns, freshness, status, observational_only
+        parsed,
+        observations,
+        interpretations,
+        unknowns,
+        freshness,
+        status,
+        observational_only,
+        contradictions,
     )
-    approval_kwargs = _approval_kwargs(proposed_action)
-
     payload = {
         "bot": BOT,
         "run_id": uuid.uuid4().hex,
@@ -126,12 +148,11 @@ def analyze(
         "interpretations": interpretations,
         "evidence": evidence,
         "unknowns": unknowns,
+        "contradictions": contradictions,
         "comparison": comparison,
         "signal_change": signal_change,
         "uncertainty": uncertainty,
-        "recommended_action": None
-        if not (proposed_action or {}).get("state_changing")
-        else (proposed_action or {}).get("action"),
+        "recommended_action": None,
         "audit": {
             "sources_read": sources_read,
             "duration_ms": round((time.perf_counter() - started) * 1000.0, 1),
@@ -142,7 +163,7 @@ def analyze(
         payload,
         sources=current_envelopes,
         confidence=raw_confidence,
-        **approval_kwargs,
+        state_changing=False,
     )
     result["freshness"] = freshness
     return result
@@ -503,6 +524,37 @@ def _add_pump_observations(
                 value=float(score),
             )
         )
+    else:
+        unknowns.append(
+            _claim(
+                "unknown",
+                "Pump ladder composite_score is unknown; none was invented.",
+                population="pump",
+                freshness=env,
+                metric="composite_score",
+            )
+        )
+    last_tx = None
+    for tx in reversed(list(pump_row.get("transitions") or [])):
+        if isinstance(tx, dict):
+            last_tx = tx
+            break
+    pump_change = _number(
+        last_tx.get("signals") if isinstance((last_tx or {}).get("signals"), dict) else None,
+        "price_change_24h",
+        "change_24h",
+    )
+    if pump_change is not None:
+        observations.append(
+            _claim(
+                "observation",
+                f"Pump transition snapshot 24h price change is {pump_change:.4f}.",
+                population="pump",
+                freshness=env,
+                metric="price_change_24h",
+                value=pump_change,
+            )
+        )
 
 
 def _add_market_observations(
@@ -536,30 +588,48 @@ def _add_market_observations(
             )
         )
         return
-    change = live_row.get("price_change_24h")
-    if change is None:
-        change = live_row.get("change_24h")
+    change = _number(live_row, "price_change_24h", "change_24h")
     if change is not None:
         observations.append(
             _claim(
                 "observation",
-                f"24h price change is {float(change):.4f}.",
+                f"24h price change is {change:.4f}.",
                 population="market_data",
                 freshness=env,
                 metric="price_change_24h",
-                value=float(change),
+                value=change,
             )
         )
-    price = live_row.get("price")
+    else:
+        unknowns.append(
+            _claim(
+                "unknown",
+                "Live market row price_change_24h is unknown; none was invented.",
+                population="market_data",
+                freshness=env,
+                metric="price_change_24h",
+            )
+        )
+    price = _number(live_row, "price")
     if price is not None:
         observations.append(
             _claim(
                 "observation",
-                f"Last observed price is {float(price)}.",
+                f"Last observed price is {price}.",
                 population="market_data",
                 freshness=env,
                 metric="price",
-                value=float(price),
+                value=price,
+            )
+        )
+    else:
+        unknowns.append(
+            _claim(
+                "unknown",
+                "Live market row price is unknown; none was invented.",
+                population="market_data",
+                freshness=env,
+                metric="price",
             )
         )
 
@@ -599,11 +669,24 @@ def _add_signal_observations(
         observations.append(
             _claim(
                 "observation",
-                f"Stored signal type is {signal_type}.",
+                (
+                    "Signals store records signal_type as a source field "
+                    f"({signal_type!r}); this is not a Market Desk action."
+                ),
                 population="signals",
                 freshness=env,
                 metric="signal_type",
                 value=signal_type,
+            )
+        )
+    else:
+        unknowns.append(
+            _claim(
+                "unknown",
+                "Stored signal_type is unknown; none was invented.",
+                population="signals",
+                freshness=env,
+                metric="signal_type",
             )
         )
 
@@ -648,7 +731,7 @@ def _add_council_observations(
         observations.append(
             _claim(
                 "observation",
-                f"Council pick history records {action} for this subnet.",
+                f"Council pick history source field is {action!r}; this is not a Market Desk action.",
                 population="council",
                 freshness=hist_env,
                 metric="council_history",
@@ -890,11 +973,155 @@ def _number(row: Optional[Mapping[str, Any]], *keys: str) -> Optional[float]:
     return None
 
 
+_UP_LABELS = {"buy", "long", "bullish", "accumulate"}
+_DOWN_LABELS = {"sell", "short", "bearish", "reduce"}
+_FLAT_LABELS = {"hold", "neutral", "flat"}
+
+
+def _direction_from_change(value: Optional[float]) -> Optional[str]:
+    if value is None:
+        return None
+    if value > 0:
+        return "up"
+    if value < 0:
+        return "down"
+    return "flat"
+
+
+def _direction_from_label(value: Any) -> Optional[str]:
+    label = str(value or "").strip().lower()
+    if label in _UP_LABELS:
+        return "up"
+    if label in _DOWN_LABELS:
+        return "down"
+    if label in _FLAT_LABELS:
+        return "flat"
+    return None
+
+
+def _values_conflict(left: float, right: float) -> bool:
+    if (left > 0 and right < 0) or (left < 0 and right > 0):
+        return True
+    scale = max(abs(left), abs(right), 0.01)
+    return abs(left - right) > 0.25 * scale
+
+
+def _observation_direction(obs: Mapping[str, Any]) -> Optional[str]:
+    metric = obs.get("metric")
+    value = obs.get("value")
+    if metric == "price_change_24h":
+        try:
+            return _direction_from_change(float(value))
+        except (TypeError, ValueError):
+            return None
+    if metric in {"signal_type", "council_history"}:
+        return _direction_from_label(value)
+    return None
+
+
+def _collect_contradictions(observations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Surface incompatible source values. Never average them into one claim."""
+    items: List[Dict[str, Any]] = []
+    by_metric: Dict[str, List[Dict[str, Any]]] = {}
+    for obs in observations:
+        metric = obs.get("metric")
+        if not metric or obs.get("value") is None:
+            continue
+        by_metric.setdefault(str(metric), []).append(obs)
+
+    for metric, rows in by_metric.items():
+        numeric: List[Tuple[Dict[str, Any], float]] = []
+        for row in rows:
+            try:
+                numeric.append((row, float(row["value"])))
+            except (TypeError, ValueError):
+                continue
+        conflict_bits = []
+        for i, (left_row, left_val) in enumerate(numeric):
+            for right_row, right_val in numeric[i + 1 :]:
+                if left_row.get("population") == right_row.get("population"):
+                    continue
+                if _values_conflict(left_val, right_val):
+                    conflict_bits.append(
+                        f"{left_row.get('population')}={left_val} vs "
+                        f"{right_row.get('population')}={right_val}"
+                    )
+        if not conflict_bits:
+            continue
+        supporting = [row.get("freshness") for row, _ in numeric if row.get("freshness")]
+        items.append(
+            _claim(
+                "contradiction",
+                (
+                    f"{metric} disagrees across sources: "
+                    + "; ".join(conflict_bits)
+                    + ". All values are kept; none were averaged."
+                ),
+                population="market_desk",
+                freshness=aggregate_freshness(supporting)
+                if supporting
+                else classify_freshness("market_data"),
+                metric=metric,
+                extra={
+                    "sides": [
+                        {
+                            "population": row.get("population"),
+                            "value": value,
+                            "observation_id": row.get("id"),
+                        }
+                        for row, value in numeric
+                    ]
+                },
+            )
+        )
+
+    direction_sides: List[Tuple[Dict[str, Any], str, Any]] = []
+    for obs in observations:
+        direction = _observation_direction(obs)
+        if direction:
+            direction_sides.append((obs, direction, obs.get("value")))
+    if len({direction for _, direction, _ in direction_sides}) > 1:
+        supporting = [obs.get("freshness") for obs, _, _ in direction_sides if obs.get("freshness")]
+        bits = [
+            f"{obs.get('population')} {obs.get('metric')}={value!r} ({direction})"
+            for obs, direction, value in direction_sides
+        ]
+        items.append(
+            _claim(
+                "contradiction",
+                (
+                    "Source directions disagree: "
+                    + "; ".join(bits)
+                    + ". All values are kept; none were blended into a single call."
+                ),
+                population="market_desk",
+                freshness=aggregate_freshness(supporting)
+                if supporting
+                else classify_freshness("market_data"),
+                metric="direction",
+                extra={
+                    "sides": [
+                        {
+                            "population": obs.get("population"),
+                            "metric": obs.get("metric"),
+                            "value": value,
+                            "direction": direction,
+                            "observation_id": obs.get("id"),
+                        }
+                        for obs, direction, value in direction_sides
+                    ]
+                },
+            )
+        )
+    return items
+
+
 def _comparison_report(
     live_row: Optional[Dict[str, Any]],
     pump_row: Optional[Dict[str, Any]],
     collected: Mapping[str, Any],
     observations: List[Dict[str, Any]],
+    contradicted_metrics: Optional[set] = None,
 ) -> Dict[str, Any]:
     current = {
         "price_change_24h": _number(live_row, "price_change_24h", "change_24h"),
@@ -939,7 +1166,12 @@ def _comparison_report(
         )
     current_change = current.get("price_change_24h")
     weekly = current.get("price_change_7d")
-    if current_change is not None and weekly is not None:
+    skipped = contradicted_metrics or set()
+    if (
+        current_change is not None
+        and weekly is not None
+        and "price_change_24h" not in skipped
+    ):
         deltas.append(
             {
                 "metric": "price_change_24h_vs_7d_daily",
@@ -959,13 +1191,17 @@ def _comparison_report(
                 "delta": round(current_score - prior_score, 6),
             }
         )
-    supporting = [item.get("freshness") for item in observations if item.get("freshness")]
+    current_envs = _current_claim_envelopes([], observations)
     return {
         "current": current,
         "historical": historical,
         "deltas": deltas,
         "observation_ids": [item["id"] for item in observations if item.get("kind") == "observation"],
-        "freshness": aggregate_freshness(supporting) if supporting else classify_freshness("market_data"),
+        "freshness": (
+            aggregate_freshness(current_envs)
+            if current_envs
+            else classify_freshness("market_data")
+        ),
     }
 
 
@@ -1048,13 +1284,32 @@ def _add_interpretations(
     signal_change: Mapping[str, Any],
     observations: List[Dict[str, Any]],
     interpretations: List[Dict[str, Any]],
+    contradictions: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     obs_ids = [item["id"] for item in observations]
     supporting = [item["freshness"] for item in observations if item.get("freshness")]
     freshness = aggregate_freshness(supporting) if supporting else classify_freshness("market_data")
+    contradicted = {item.get("metric") for item in (contradictions or []) if item.get("metric")}
+    if contradictions:
+        interpretations.append(
+            _claim(
+                "interpretation",
+                (
+                    f"{parsed.get('label') or 'This subnet'} has "
+                    f"{len(contradictions)} source contradiction(s) that were not "
+                    "averaged into a single claim. See the contradictions list."
+                ),
+                population="market_desk",
+                freshness=freshness,
+                based_on=obs_ids,
+                extra={"capability": "contradictions"},
+            )
+        )
     if comparison.get("deltas"):
         delta_bits = []
         for delta in comparison["deltas"]:
+            if delta.get("metric") in contradicted:
+                continue
             if delta.get("metric") == "phase":
                 delta_bits.append(f"phase {delta.get('from')} → {delta.get('to')}")
             elif delta.get("metric") == "price_change_24h_vs_7d_daily":
@@ -1064,20 +1319,21 @@ def _add_interpretations(
                 )
             elif delta.get("metric") == "composite_score":
                 delta_bits.append(f"composite score delta {delta.get('delta')}")
-        interpretations.append(
-            _claim(
-                "interpretation",
-                (
-                    f"{parsed.get('label') or 'This subnet'} current vs historical: "
-                    + "; ".join(delta_bits)
-                    + ". Inference only — not a guaranteed market conclusion."
-                ),
-                population="market_desk",
-                freshness=freshness,
-                based_on=obs_ids,
-                extra={"capability": "comparison"},
+        if delta_bits:
+            interpretations.append(
+                _claim(
+                    "interpretation",
+                    (
+                        f"{parsed.get('label') or 'This subnet'} current vs historical: "
+                        + "; ".join(delta_bits)
+                        + ". Inference only — not a guaranteed market conclusion."
+                    ),
+                    population="market_desk",
+                    freshness=freshness,
+                    based_on=obs_ids,
+                    extra={"capability": "comparison"},
+                )
             )
-        )
     if signal_change.get("changed"):
         interpretations.append(
             _claim(
@@ -1200,6 +1456,7 @@ def _plain_summary(
     freshness: Mapping[str, Any],
     status: str,
     observational_only: bool,
+    contradictions: Optional[List[Dict[str, Any]]] = None,
 ) -> str:
     label = parsed.get("label") or "This subnet"
     parts: List[str] = []
@@ -1221,21 +1478,14 @@ def _plain_summary(
     )
     if unknowns:
         parts.append(f"{len(unknowns)} unknown(s) remain, including {unknowns[0]['text']}")
+    if contradictions:
+        parts.append(
+            f"{len(contradictions)} contradiction(s) between sources are listed separately "
+            "and were not averaged."
+        )
     parts.append(
-        "Market Desk does not override SimiVision or Council and does not issue "
-        "guaranteed financial conclusions."
+        "Market Desk explains recorded signals only; it does not override SimiVision "
+        "or Council, does not issue guaranteed financial conclusions, and does not "
+        "make a recommendation."
     )
     return " ".join(parts)
-
-
-def _approval_kwargs(proposed_action: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
-    action = dict(proposed_action or {})
-    state_changing = bool(action.get("state_changing"))
-    category = action.get("action_category")
-    if state_changing:
-        approval = approval_for(category, state_changing=True)
-        return {
-            "state_changing": True,
-            "action_category": approval.get("action_category"),
-        }
-    return {"state_changing": False}

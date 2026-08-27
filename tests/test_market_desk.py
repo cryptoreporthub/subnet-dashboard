@@ -1,4 +1,6 @@
 from datetime import datetime, timezone, timedelta
+import json
+import re
 from unittest.mock import patch
 
 from internal.bots.market_desk import analyze, report
@@ -112,6 +114,7 @@ def _contract_keys(result):
         "observations",
         "evidence",
         "unknowns",
+        "contradictions",
         "confidence",
         "freshness",
         "recommended_action",
@@ -316,6 +319,7 @@ def test_archive_freshness_does_not_make_current_claim_fresh():
     }
     result = analyze("SN65", now=NOW, snapshots=snapshots)
     assert result["freshness"]["status"] != "fresh"
+    assert result["comparison"]["freshness"]["status"] != "fresh"
     archive = [item for item in result["evidence"] if item.get("claim_scope") == "historical"]
     assert archive
     assert all(item["authoritative"] is False for item in archive)
@@ -397,3 +401,172 @@ def test_signal_without_transition_stays_observational():
     assert result["confidence"] is None
     assert result["uncertainty"] is None
     assert "observational only" in result["summary"].lower()
+
+
+def test_disagreeing_sources_produce_visible_contradiction():
+    snapshots = _fresh_snapshots(
+        live_subnet={
+            "netuid": 65,
+            "name": "TAOHash",
+            "price": 0.042,
+            "price_change_24h": 0.08,
+            "price_change_7d": 0.07,
+        },
+        pump_state={
+            "meta": {"last_scan_at": _iso(timedelta(minutes=10))},
+            "subnets": {
+                "65": {
+                    "netuid": 65,
+                    "phase": "ACCUMULATING",
+                    "composite_score": 0.62,
+                    "updated_at": _iso(timedelta(minutes=10)),
+                    "transitions": [
+                        {
+                            "time": _iso(timedelta(minutes=12)),
+                            "from_phase": "STIRRING",
+                            "to_phase": "ACCUMULATING",
+                            "composite_score": 0.41,
+                            "signals": {
+                                "price_change_24h": -0.06,
+                                "volume_intensity": 0.7,
+                            },
+                        }
+                    ],
+                }
+            },
+        },
+        signals={
+            "updated_at": _iso(timedelta(minutes=8)),
+            "entries": [
+                {
+                    "subnet_id": 65,
+                    "signal_type": "sell",
+                    "timestamp": _iso(timedelta(minutes=8)),
+                }
+            ],
+        },
+    )
+    result = analyze("SN65", now=NOW, snapshots=snapshots)
+    assert result["contradictions"]
+    assert all(item["kind"] == "contradiction" for item in result["contradictions"])
+    changes = [
+        item["value"]
+        for item in result["observations"]
+        if item.get("metric") == "price_change_24h"
+    ]
+    assert 0.08 in changes
+    assert -0.06 in changes
+    assert 0.01 not in changes
+    texts = " ".join(item["text"] for item in result["contradictions"]).lower()
+    assert "disagrees" in texts or "direction" in texts
+    assert "averaged" in texts or "blended" in texts or "kept" in texts
+    assert "contradiction" in result["summary"].lower()
+
+
+def test_missing_data_is_unknown_not_invented():
+    snapshots = {
+        "live_subnet": {"netuid": 65, "name": "TAOHash"},
+        "live_synced_at": _iso(timedelta(minutes=3)),
+        "pump_state": {
+            "subnets": {
+                "65": {
+                    "netuid": 65,
+                    "phase": "DORMANT",
+                    "composite_score": None,
+                    "updated_at": _iso(timedelta(minutes=3)),
+                }
+            }
+        },
+    }
+    result = analyze("SN65", now=NOW, snapshots=snapshots)
+    unknown_metrics = {item.get("metric") for item in result["unknowns"]}
+    unknown_text = " ".join(item["text"] for item in result["unknowns"]).lower()
+    assert "price_change_24h" in unknown_metrics
+    assert "price" in unknown_metrics
+    assert "composite_score" in unknown_metrics
+    assert "unknown" in unknown_text
+    assert "none was invented" in unknown_text
+    invented = [
+        item.get("value")
+        for item in result["observations"]
+        if item.get("metric") in {"price", "price_change_24h", "composite_score"}
+    ]
+    assert 0 not in invented and 0.0 not in invented
+    assert all(item.get("kind") == "unknown" for item in result["unknowns"])
+
+
+def test_report_never_emits_a_recommendation():
+    advice = re.compile(
+        r"\b(?:we recommend|recommended action|should buy|should sell|should hold|"
+        r"buy now|sell now|hold this|trade advice)\b",
+        re.I,
+    )
+    proposed = analyze(
+        "SN65",
+        now=NOW,
+        snapshots=_fresh_snapshots(),
+        proposed_action={
+            "state_changing": True,
+            "action": "restart worker",
+            "action_category": "infrastructure",
+        },
+    )
+    empty = analyze("SN65", now=NOW, snapshots={})
+    for result in (proposed, empty):
+        assert result["recommended_action"] is None
+        assert result["approval_required"] is False
+        assert result["approval"]["status"] == "not_required"
+        blob = json.dumps(result)
+        assert advice.search(blob) is None
+        assert "restart worker" not in blob
+        assert result["summary"].lower().count("recommend") <= 1
+        assert "does not make a recommendation" in result["summary"].lower()
+
+
+def test_categorical_specialist_disagreement_is_a_contradiction():
+    def _run(council_action: str) -> dict:
+        return analyze(
+            "SN65",
+            now=NOW,
+            snapshots={
+                "signals": {
+                    "updated_at": _iso(timedelta(minutes=3)),
+                    "entries": [
+                        {
+                            "subnet_id": 65,
+                            "signal_type": "buy",
+                            "timestamp": _iso(timedelta(minutes=3)),
+                        }
+                    ],
+                },
+                "council_history": {
+                    "active": None,
+                    "history": [
+                        {
+                            "netuid": 65,
+                            "action": council_action,
+                            "resolved_at": _iso(timedelta(hours=2)),
+                        }
+                    ],
+                },
+            },
+        )
+
+    for council_action in ("short", "reduce", "hold"):
+        result = _run(council_action)
+        assert result["contradictions"]
+        texts = " ".join(item["text"] for item in result["contradictions"]).lower()
+        assert "buy" in texts
+        assert council_action in texts
+        assert "blended" in texts or "kept" in texts
+        obs = " ".join(item["text"] for item in result["observations"]).lower()
+        assert "source field" in obs
+        assert "not a market desk action" in obs
+        values = {
+            (item.get("population"), item.get("value"))
+            for item in result["observations"]
+            if item.get("metric") in {"signal_type", "council_history"}
+        }
+        assert ("signals", "buy") in values
+        assert ("council", council_action) in values
+
