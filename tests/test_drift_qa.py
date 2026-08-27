@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
@@ -393,7 +394,7 @@ def test_notify_log_event_and_emit_are_importable():
     assert log_sig.parameters["fields"].kind is inspect.Parameter.VAR_KEYWORD
     assert list(emit_sig.parameters) == list(log_sig.parameters)
 
-    notify_fn("bot_observe", bot="drift_qa", observation_only=True)
+    observed = notify_fn("bot_observe", bot="drift_qa", observation_only=True)
     recorded = log_event(
         "mission_control.route",
         run_id="r1",
@@ -409,24 +410,29 @@ def test_notify_log_event_and_emit_are_importable():
     assert emitted["event"] == "mission_control.decision"
     assert emitted["status"] == "ok"
     assert emitted["approval_required"] is False
-    assert notify_mod.notify("bot_observe", bot="drift_qa") is None
+    assert isinstance(observed, dict)
+    assert observed["event"] == "bot_observe"
+    assert observed["bot"] == "drift_qa"
+    alias = notify_mod.notify("bot_observe", bot="drift_qa")
+    assert isinstance(alias, dict)
+    assert alias["event"] == "bot_observe"
 
 
 def test_notify_keeps_nested_payload_instead_of_flattening(caplog):
     """Drift/QA ``notify(..., payload={})`` must not hit log_event's payload merge."""
     caplog.set_level("INFO", logger="internal.ops.notify")
     nested = {"status": "degraded", "flagged": ["stale_data"], "observation_only": True}
-    notify_fn("bot_observe", bot="drift_qa", run_id="r2", payload=nested)
+    recorded = notify_fn("bot_observe", bot="drift_qa", run_id="r2", payload=nested)
+    assert recorded["event"] == "bot_observe"
+    assert recorded["payload"] == nested
+    assert recorded["bot"] == "drift_qa"
+    assert "flagged" not in recorded
     messages = [record.getMessage() for record in caplog.records]
     assert messages, "notify() must write the process log"
-    last = messages[-1]
-    assert "bot_observe" in last
-    assert "payload" in last
-    # Flattening would merge nested keys onto the record and drop the payload key.
-    extras = caplog.records[-1].args[1]
-    assert extras["payload"] == nested
-    assert extras["bot"] == "drift_qa"
-    assert "flagged" not in extras
+    last = json.loads(messages[-1])
+    assert last["event"] == "bot_observe"
+    assert last["payload"] == nested
+    assert "bot_event event=" not in messages[-1]
 
 
 def test_empty_snapshot_is_not_ok():
