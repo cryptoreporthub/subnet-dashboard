@@ -2,6 +2,11 @@
 
 Composes existing health/freshness/ops signals into an immutable HealthReport.
 Does not mutate application state, caches, workers, deployments, or artifacts.
+
+Standing spec: ten predicates, each classified healthy / unhealthy / UNKNOWN,
+with Policy §2.2 freshness (age, confidence, last_updated, source) on every
+report and finding. Observations only — notify/evidence logging of the report
+is the only allowed side effect.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ from internal.ops.bot_policy import (
     classify_freshness,
 )
 from internal.ops.evidence import build_evidence_report
-from internal.ops.notify import log_event
+from internal.ops.notify import log_event, log_status, log_status
 
 BOT_NAME = "sentinel"
 PREDICATE_NAMES: Tuple[str, ...] = (
@@ -38,10 +43,19 @@ PREDICATE_NAMES: Tuple[str, ...] = (
     "deployment",
 )
 
+STATUS_HEALTHY = "healthy"
+STATUS_UNHEALTHY = "unhealthy"
+STATUS_UNKNOWN = "UNKNOWN"
+FINDING_STATUSES: Tuple[str, ...] = (STATUS_HEALTHY, STATUS_UNHEALTHY, STATUS_UNKNOWN)
+
 # Live-handler budget from internal/health/routes.py (same env default).
 _LIVE_TIMEOUT_MS = float(os.environ.get("OPS_LIVE_HANDLER_TIMEOUT_SECONDS", "8")) * 1000.0
 
-_STATUS_RANK = {"ok": 0, "warn": 1, "unknown": 2, "fail": 3}
+_STATUS_RANK = {STATUS_HEALTHY: 0, STATUS_UNKNOWN: 1, STATUS_UNHEALTHY: 2}
+
+# Freshness-bucket confidence only — never a health-score. missing/degraded stay None.
+_FRESHNESS_CONFIDENCE = {"fresh": 1.0, "aging": 0.5, "stale": 0.25}
+_FRESHNESS_ORDER = {"fresh": 0, "aging": 1, "stale": 2, "missing": 3, "degraded": 4}
 
 
 def _utcnow_z() -> str:
@@ -79,6 +93,8 @@ class PredicateResult:
     detail: str
     freshness: Mapping[str, Any]
     evidence: Mapping[str, Any]
+    metrics: Mapping[str, Any]
+    reason: Optional[str]
 
 
 @dataclass(frozen=True)
@@ -279,6 +295,55 @@ def _envelope(
     return classify_freshness(source, captured_at, now=now, degraded=degraded)
 
 
+def _policy_freshness(envelope: Mapping[str, Any]) -> Dict[str, Any]:
+    """Policy §2.2 envelope plus standing-spec aliases: age, confidence, last_updated, source."""
+    env = dict(envelope)
+    nested = env.get("sources")
+    if isinstance(nested, list):
+        env["sources"] = [
+            _policy_freshness(item) if isinstance(item, Mapping) else item for item in nested
+        ]
+    age = env.get("age_seconds")
+    last_updated = env.get("captured_at") or env.get("observed_at")
+    source = env.get("source")
+    if not source:
+        items = [item for item in (env.get("sources") or []) if isinstance(item, Mapping)]
+        if items:
+            worst = max(
+                items,
+                key=lambda item: _FRESHNESS_ORDER.get(str(item.get("status")), 4),
+            )
+            source = worst.get("source")
+    env["age"] = age
+    env["confidence"] = _FRESHNESS_CONFIDENCE.get(str(env.get("status") or ""))
+    env["last_updated"] = last_updated
+    env["source"] = source
+    return env
+
+
+def _finding(
+    name: str,
+    status: str,
+    detail: str,
+    freshness: Mapping[str, Any],
+    metrics: Optional[Mapping[str, Any]] = None,
+    *,
+    reason: Optional[str] = None,
+) -> PredicateResult:
+    frozen_metrics = _freeze(metrics or {})
+    if status == STATUS_UNKNOWN:
+        reason = str(reason or detail)
+    return PredicateResult(
+        name=name,
+        status=status,
+        detail=detail,
+        freshness=_freeze(_policy_freshness(freshness)),
+        evidence=frozen_metrics,
+        metrics=frozen_metrics,
+        reason=reason,
+    )
+
+
 def _has_error(payload: Any) -> bool:
     return isinstance(payload, dict) and bool(payload.get("_error"))
 
@@ -286,100 +351,135 @@ def _has_error(payload: Any) -> bool:
 def _api_health(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     live = snapshot.get("liveness") or {}
     if not live or _has_error(live):
-        return PredicateResult(
+        reason = live.get("_error") if isinstance(live, dict) else "liveness signal missing"
+        return _finding(
             "api_health",
-            "unknown",
-            live.get("_error") if isinstance(live, dict) else "liveness signal missing",
+            STATUS_UNKNOWN,
+            str(reason or "liveness signal missing"),
             _envelope("learning_health", None, now=now),
-            _freeze({"liveness": live}),
+            {"liveness": live} if isinstance(live, dict) else {},
+            reason=str(reason or "liveness signal missing"),
         )
     volume = live.get("volume") if isinstance(live.get("volume"), dict) else {}
     ok = bool(live.get("live")) and str(live.get("status") or "").lower() in ("ok", "degraded")
+    metrics = {"status": live.get("status"), "live": live.get("live"), "volume": volume}
     if not ok:
-        status = "fail"
-        detail = f"liveness status={live.get('status')} live={live.get('live')}"
-    elif str(live.get("status")).lower() == "degraded" or volume.get("writable") is False:
-        status = "warn"
-        detail = f"process live; volume writable={volume.get('writable')}"
-    else:
-        status = "ok"
-        detail = "liveness report ok"
-    return PredicateResult(
+        return _finding(
+            "api_health",
+            STATUS_UNHEALTHY,
+            f"liveness status={live.get('status')} live={live.get('live')}",
+            _envelope("learning_health", None, now=now),
+            metrics,
+        )
+    if str(live.get("status")).lower() == "degraded" or volume.get("writable") is False:
+        return _finding(
+            "api_health",
+            STATUS_UNHEALTHY,
+            f"process live; volume writable={volume.get('writable')}",
+            _envelope("learning_health", None, now=now),
+            metrics,
+        )
+    return _finding(
         "api_health",
-        status,
-        detail,
+        STATUS_HEALTHY,
+        "liveness report ok",
         _envelope("learning_health", None, now=now),
-        _freeze({"status": live.get("status"), "live": live.get("live"), "volume": volume}),
+        metrics,
     )
 
 
 def _latency(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     ms = snapshot.get("latency_ms")
     if ms is None:
-        return PredicateResult(
+        return _finding(
             "latency",
-            "unknown",
+            STATUS_UNKNOWN,
             "no in-process health-path timing",
             _envelope("learning_health", None, now=now),
-            _freeze({}),
+            {},
+            reason="no in-process health-path timing",
         )
     try:
         value = float(ms)
     except (TypeError, ValueError):
-        return PredicateResult(
+        return _finding(
             "latency",
-            "unknown",
+            STATUS_UNKNOWN,
             f"unreadable latency_ms={ms!r}",
             _envelope("learning_health", None, now=now, degraded=True),
-            _freeze({"latency_ms": ms}),
+            {"latency_ms": ms},
+            reason=f"unreadable latency_ms={ms!r}",
         )
     timeout_ms = _LIVE_TIMEOUT_MS
+    metrics = {"latency_ms": value, "budget_ms": timeout_ms}
     if value <= timeout_ms:
-        status = "ok"
-        detail = f"liveness path {value:.1f}ms (budget {timeout_ms:.0f}ms OPS_LIVE_HANDLER_TIMEOUT)"
-    else:
-        status = "fail"
-        detail = f"liveness path {value:.1f}ms exceeded {timeout_ms:.0f}ms live-handler budget"
-    return PredicateResult(
+        return _finding(
+            "latency",
+            STATUS_HEALTHY,
+            f"liveness path {value:.1f}ms (budget {timeout_ms:.0f}ms OPS_LIVE_HANDLER_TIMEOUT)",
+            _envelope("learning_health", None, now=now),
+            metrics,
+        )
+    return _finding(
         "latency",
-        status,
-        detail,
+        STATUS_UNHEALTHY,
+        f"liveness path {value:.1f}ms exceeded {timeout_ms:.0f}ms live-handler budget",
         _envelope("learning_health", None, now=now),
-        _freeze({"latency_ms": value, "budget_ms": timeout_ms}),
+        metrics,
     )
 
 
 def _worker(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     peer = snapshot.get("worker_peer") or {}
     if not peer or _has_error(peer):
-        return PredicateResult(
+        return _finding(
             "worker",
-            "unknown",
+            STATUS_UNKNOWN,
             "worker_peer signal missing",
             _envelope("worker_heartbeat", None, now=now),
-            _freeze({"worker_peer": peer}),
+            {"worker_peer": peer} if isinstance(peer, dict) else {},
+            reason="worker_peer signal missing",
         )
     heartbeat = peer.get("heartbeat") if isinstance(peer.get("heartbeat"), dict) else {}
     ts = heartbeat.get("ts")
+    metrics = {"alive": peer.get("alive"), "expected": peer.get("expected"), "peer": peer.get("peer")}
+    freshness = _envelope(
+        "worker_heartbeat",
+        ts,
+        now=now,
+        degraded=peer.get("alive") is False,
+    )
     if peer.get("expected") is False:
-        status, detail = "ok", "worker not required in this process"
-    elif peer.get("alive") is True:
-        status, detail = "ok", f"peer={peer.get('peer')} source={peer.get('source')}"
-    elif peer.get("alive") is False:
-        status, detail = "fail", peer.get("note") or "worker peer not alive"
-    else:
-        status, detail = "unknown", "worker liveness deferred (no HTTP probe)"
-    return PredicateResult(
+        return _finding(
+            "worker",
+            STATUS_HEALTHY,
+            "worker not required in this process",
+            freshness,
+            metrics,
+        )
+    if peer.get("alive") is True:
+        return _finding(
+            "worker",
+            STATUS_HEALTHY,
+            f"peer={peer.get('peer')} source={peer.get('source')}",
+            freshness,
+            metrics,
+        )
+    if peer.get("alive") is False:
+        return _finding(
+            "worker",
+            STATUS_UNHEALTHY,
+            peer.get("note") or "worker peer not alive",
+            freshness,
+            metrics,
+        )
+    return _finding(
         "worker",
-        status,
-        detail,
-        _envelope(
-            "worker_heartbeat",
-            ts,
-            now=now,
-            degraded=peer.get("alive") is False,
-        ),
-        _freeze({"alive": peer.get("alive"), "expected": peer.get("expected"), "peer": peer.get("peer")}),
+        STATUS_UNKNOWN,
+        "worker liveness deferred (no HTTP probe)",
+        freshness,
+        metrics,
+        reason="worker liveness deferred (no HTTP probe)",
     )
 
 
@@ -388,12 +488,13 @@ def _resolver(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     loop_resolver = loop.get("resolver") if isinstance(loop.get("resolver"), dict) else {}
     resolver = snapshot.get("resolver") or {}
     if (_has_error(loop) and _has_error(resolver)) or (not loop_resolver and not resolver):
-        return PredicateResult(
+        return _finding(
             "resolver",
-            "unknown",
+            STATUS_UNKNOWN,
             "resolver scheduler state missing",
             _envelope("resolver", None, now=now),
-            _freeze({}),
+            {},
+            reason="resolver scheduler state missing",
         )
     running = loop_resolver.get("running")
     if running is None:
@@ -409,45 +510,51 @@ def _resolver(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     try:
         failures = int(resolver.get("consecutive_failures") or 0)
     except (TypeError, ValueError):
-        return PredicateResult(
+        return _finding(
             "resolver",
-            "unknown",
+            STATUS_UNKNOWN,
             f"unreadable consecutive_failures={resolver.get('consecutive_failures')!r}",
             _envelope("resolver", last_at, now=now),
-            _freeze({"consecutive_failures": resolver.get("consecutive_failures")}),
+            {"consecutive_failures": resolver.get("consecutive_failures")},
+            reason=f"unreadable consecutive_failures={resolver.get('consecutive_failures')!r}",
         )
     lifecycle = loop_resolver.get("lifecycle") or resolver.get("lifecycle")
+    metrics = {
+        "running": running,
+        "last_ok": last_ok,
+        "lifecycle": lifecycle,
+        "consecutive_failures": failures,
+    }
     if failures > 0 or last_ok is False:
-        status = "fail"
+        status = STATUS_UNHEALTHY
         detail = f"last_ok={last_ok} consecutive_failures={failures}"
     elif loop_resolver.get("warming") or lifecycle in {"starting", "scheduled"}:
-        status = "warn"
+        status = STATUS_UNHEALTHY
         detail = f"lifecycle={lifecycle} warming={loop_resolver.get('warming')}"
     elif running is True and last_at:
-        status = "ok"
+        status = STATUS_HEALTHY
         detail = f"running lifecycle={lifecycle}"
     elif running is True:
-        status = "unknown"
+        status = STATUS_UNKNOWN
         detail = "resolver marked running but no last tick"
     elif running is False:
-        status = "fail"
+        status = STATUS_UNHEALTHY
         detail = "resolver not running"
     else:
-        status = "unknown"
+        status = STATUS_UNKNOWN
         detail = "resolver running flag absent"
-    return PredicateResult(
+    return _finding(
         "resolver",
         status,
         detail,
-        _envelope("resolver", last_at, now=now, degraded=status == "fail" and last_ok is False),
-        _freeze(
-            {
-                "running": running,
-                "last_ok": last_ok,
-                "lifecycle": lifecycle,
-                "consecutive_failures": failures,
-            }
+        _envelope(
+            "resolver",
+            last_at,
+            now=now,
+            degraded=status == STATUS_UNHEALTHY and last_ok is False,
         ),
+        metrics,
+        reason=detail if status == STATUS_UNKNOWN else None,
     )
 
 
@@ -455,23 +562,24 @@ def _watchdog(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     loop = snapshot.get("loop_health") or {}
     watchdog = snapshot.get("watchdog") or loop.get("watchdog") or {}
     captured = loop.get("last_resolver_tick")
+    metrics = watchdog if isinstance(watchdog, dict) else {}
     if not watchdog or "warning" not in watchdog:
-        return PredicateResult(
+        return _finding(
             "watchdog",
-            "unknown",
+            STATUS_UNKNOWN,
             "resolver watchdog payload missing",
             _envelope("resolver", None, now=now),
-            _freeze(watchdog if isinstance(watchdog, dict) else {}),
+            metrics,
+            reason="resolver watchdog payload missing",
         )
     warning = bool(watchdog.get("warning"))
-    status = "fail" if warning else "ok"
     detail = watchdog.get("reason") or f"warning={warning} pending={watchdog.get('pending_count')}"
-    return PredicateResult(
+    return _finding(
         "watchdog",
-        status,
+        STATUS_UNHEALTHY if warning else STATUS_HEALTHY,
         str(detail),
         _envelope("resolver", captured, now=now, degraded=warning),
-        _freeze(watchdog if isinstance(watchdog, dict) else {}),
+        metrics,
     )
 
 
@@ -480,12 +588,14 @@ def _feed_sync(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     live = snapshot.get("live") or {}
     sync = snapshot.get("sync") or {}
     if _has_error(feed) and _has_error(live):
-        return PredicateResult(
+        reason = feed.get("_error") or live.get("_error") or "feed signals missing"
+        return _finding(
             "feed_sync",
-            "unknown",
-            feed.get("_error") or live.get("_error") or "feed signals missing",
+            STATUS_UNKNOWN,
+            str(reason),
             _envelope("live_feed", None, now=now),
-            _freeze({}),
+            {},
+            reason=str(reason),
         )
     live_cache = feed.get("live_cache") if isinstance(feed.get("live_cache"), dict) else {}
     captured = (
@@ -496,34 +606,44 @@ def _feed_sync(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     effective = feed.get("effective_source")
     likely = int(feed.get("likely_total") or 0)
     degraded = effective in (None, "none") or _has_error(feed)
+    metrics = {
+        "effective_source": effective,
+        "likely_total": likely,
+        "stale": live.get("stale"),
+        "last_sync_ok": sync.get("last_sync_ok"),
+    }
     if degraded:
-        status = "fail" if effective == "none" else "unknown"
-        detail = f"effective_source={effective} likely_total={likely}"
+        if effective == "none":
+            status = STATUS_UNHEALTHY
+            detail = f"effective_source={effective} likely_total={likely}"
+            reason = None
+        else:
+            status = STATUS_UNKNOWN
+            detail = f"effective_source={effective} likely_total={likely}"
+            reason = "live feed effective_source missing"
     elif effective == "registry":
-        status = "warn"
+        status = STATUS_UNHEALTHY
         detail = "subnet feed registry-only"
+        reason = None
     elif live.get("stale") and int(live.get("subnet_count") or 0) == 0 and likely <= 0:
-        status = "fail"
+        status = STATUS_UNHEALTHY
         detail = "live cache empty and stale"
+        reason = None
     elif sync.get("last_sync_ok") is False:
-        status = "fail"
+        status = STATUS_UNHEALTHY
         detail = "freshness background sync last_sync_ok=false"
+        reason = None
     else:
-        status = "ok"
+        status = STATUS_HEALTHY
         detail = f"effective_source={effective} likely_total={likely}"
-    return PredicateResult(
+        reason = None
+    return _finding(
         "feed_sync",
         status,
         detail,
         _envelope("live_feed", captured, now=now, degraded=degraded),
-        _freeze(
-            {
-                "effective_source": effective,
-                "likely_total": likely,
-                "stale": live.get("stale"),
-                "last_sync_ok": sync.get("last_sync_ok"),
-            }
-        ),
+        metrics,
+        reason=reason,
     )
 
 
@@ -538,12 +658,13 @@ def _cache_age(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     has_file_flag = "any_stale" in overall
     has_live_flag = "stale" in live
     if not has_file_flag and not has_live_flag and snap_age is None:
-        return PredicateResult(
+        return _finding(
             "cache_age",
-            "unknown",
+            STATUS_UNKNOWN,
             "file freshness snapshot missing",
             _envelope("market_data", None, now=now),
-            _freeze({}),
+            {},
+            reason="file freshness snapshot missing",
         )
     stale_flags = []
     if overall.get("any_stale"):
@@ -552,24 +673,25 @@ def _cache_age(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         stale_flags.append("live_cache")
     if isinstance(snap_age, (int, float)) and snap_age > 2700:
         stale_flags.append("score_snapshot")
+    metrics = {
+        "any_stale": overall.get("any_stale"),
+        "live_age_seconds": live.get("age_seconds"),
+        "snapshot_age_seconds": snap_age,
+    }
     if stale_flags:
-        status = "fail"
-        detail = "stale: " + ",".join(stale_flags)
-    else:
-        status = "ok"
-        detail = f"any_stale={overall.get('any_stale')} live_age={live.get('age_seconds')}"
-    return PredicateResult(
+        return _finding(
+            "cache_age",
+            STATUS_UNHEALTHY,
+            "stale: " + ",".join(stale_flags),
+            _envelope("market_data", captured, now=now, degraded=not captured),
+            metrics,
+        )
+    return _finding(
         "cache_age",
-        status,
-        detail,
-        _envelope("market_data", captured, now=now, degraded=bool(stale_flags) and not captured),
-        _freeze(
-            {
-                "any_stale": overall.get("any_stale"),
-                "live_age_seconds": live.get("age_seconds"),
-                "snapshot_age_seconds": snap_age,
-            }
-        ),
+        STATUS_HEALTHY,
+        f"any_stale={overall.get('any_stale')} live_age={live.get('age_seconds')}",
+        _envelope("market_data", captured, now=now),
+        metrics,
     )
 
 
@@ -604,24 +726,39 @@ def _scheduler(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         or loop.get("last_resolver_tick")
     )
     saw_any = bool(jobs) or bool(pick) or bool(pump) or bool(resolver)
+    metrics = {"last_failures": failures, "failed": failed, "running": jobs.get("running")}
     if failed:
-        status = "fail"
-        detail = "failures: " + ",".join(failed)
-    elif not saw_any:
-        status = "unknown"
-        detail = "no scheduler state in this process"
-    elif jobs.get("running") is False and not captured:
-        status = "unknown"
-        detail = "background scheduler not running in this process"
-    else:
-        status = "ok"
-        detail = f"apscheduler running={jobs.get('running')} jobs={jobs.get('job_count')}"
-    return PredicateResult(
+        return _finding(
+            "scheduler",
+            STATUS_UNHEALTHY,
+            "failures: " + ",".join(failed),
+            _envelope("resolver", captured, now=now, degraded=True),
+            metrics,
+        )
+    if not saw_any:
+        return _finding(
+            "scheduler",
+            STATUS_UNKNOWN,
+            "no scheduler state in this process",
+            _envelope("resolver", captured, now=now),
+            metrics,
+            reason="no scheduler state in this process",
+        )
+    if jobs.get("running") is False and not captured:
+        return _finding(
+            "scheduler",
+            STATUS_UNKNOWN,
+            "background scheduler not running in this process",
+            _envelope("resolver", captured, now=now),
+            metrics,
+            reason="background scheduler not running in this process",
+        )
+    return _finding(
         "scheduler",
-        status,
-        detail,
-        _envelope("resolver", captured, now=now, degraded=status == "fail"),
-        _freeze({"last_failures": failures, "failed": failed, "running": jobs.get("running")}),
+        STATUS_HEALTHY,
+        f"apscheduler running={jobs.get('running')} jobs={jobs.get('job_count')}",
+        _envelope("resolver", captured, now=now),
+        metrics,
     )
 
 
@@ -629,31 +766,43 @@ def _learning(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     loop = snapshot.get("loop_health") or {}
     evidence = snapshot.get("evidence") or {}
     if not loop or _has_error(loop):
-        return PredicateResult(
+        reason = loop.get("_error") if isinstance(loop, dict) else "learning health missing"
+        return _finding(
             "learning",
-            "unknown",
-            loop.get("_error") if isinstance(loop, dict) else "learning health missing",
+            STATUS_UNKNOWN,
+            str(reason or "learning health missing"),
             _envelope("learning_health", None, now=now),
-            _freeze({}),
+            {},
+            reason=str(reason or "learning health missing"),
         )
     status_raw = str(loop.get("status") or "").lower()
     captured = loop.get("checked_at")
     alerts = list(evidence.get("alerts") or [])
     council = ((evidence.get("learning_outcomes") or {}) if isinstance(evidence, dict) else {})
     council_health = (council.get("council_health") or {}) if isinstance(council, dict) else {}
+    metrics = {
+        "status": loop.get("status"),
+        "pending": loop.get("pending"),
+        "ledger": loop.get("ledger"),
+        "alerts": alerts,
+    }
     if status_raw == "stalled" or "council_health ALERT" in alerts:
-        status = "fail"
+        status = STATUS_UNHEALTHY
         detail = f"loop_health={status_raw} alerts={alerts[:3]}"
+        reason = None
     elif status_raw in {"degraded", "warming"} or str(council_health.get("escalation") or "") == "WATCH":
-        status = "warn"
+        status = STATUS_UNHEALTHY
         detail = f"loop_health={status_raw} escalation={council_health.get('escalation')}"
+        reason = None
     elif status_raw == "ok":
-        status = "ok"
+        status = STATUS_HEALTHY
         detail = f"loop_health=ok pending={loop.get('pending')}"
+        reason = None
     else:
-        status = "unknown"
+        status = STATUS_UNKNOWN
         detail = f"loop_health status={status_raw or 'missing'}"
-    return PredicateResult(
+        reason = f"loop_health status={status_raw or 'missing'}"
+    return _finding(
         "learning",
         status,
         detail,
@@ -661,16 +810,10 @@ def _learning(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
             "learning_health",
             captured,
             now=now,
-            degraded=status_raw in {"degraded", "stalled"} or status == "fail",
+            degraded=status_raw in {"degraded", "stalled"} or status == STATUS_UNHEALTHY,
         ),
-        _freeze(
-            {
-                "status": loop.get("status"),
-                "pending": loop.get("pending"),
-                "ledger": loop.get("ledger"),
-                "alerts": alerts,
-            }
-        ),
+        metrics,
+        reason=reason,
     )
 
 
@@ -680,29 +823,30 @@ def _deployment(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     peer = snapshot.get("worker_peer") or {}
     captured = None
     if guard.get("installed") and guard.get("cold"):
-        return PredicateResult(
+        return _finding(
             "deployment",
-            "fail",
+            STATUS_UNHEALTHY,
             "learning snapshot guard serving cold fallback",
             _envelope("github", captured, now=now, degraded=True),
-            _freeze({"signal": "snapshot_guard", **dict(guard)}),
+            {"signal": "snapshot_guard", **dict(guard)},
         )
     snap_age = loop.get("snapshot_age_seconds")
     worker_alive = peer.get("alive") is True
     if worker_alive and isinstance(snap_age, (int, float)) and snap_age > 2700:
-        return PredicateResult(
+        return _finding(
             "deployment",
-            "warn",
+            STATUS_UNHEALTHY,
             f"score snapshot age {snap_age:.0f}s while worker alive",
             _envelope("github", captured, now=now),
-            _freeze({"signal": "score_snapshot", "snapshot_age_seconds": snap_age, "worker_alive": True}),
+            {"signal": "score_snapshot", "snapshot_age_seconds": snap_age, "worker_alive": True},
         )
-    return PredicateResult(
+    return _finding(
         "deployment",
-        "unknown",
+        STATUS_UNKNOWN,
         "no GitHub/CI revision timestamp in this process",
         _envelope("github", None, now=now),
-        _freeze({"installed": bool(guard.get("installed")), "cold": guard.get("cold")}),
+        {"installed": bool(guard.get("installed")), "cold": guard.get("cold")},
+        reason="no GitHub/CI revision timestamp in this process",
     )
 
 
@@ -727,26 +871,60 @@ def evaluate_predicates(
 ) -> Tuple[PredicateResult, ...]:
     """Pure evaluation of the ten predicates against a collected snapshot."""
     reference = now or datetime.now(timezone.utc)
-    return tuple(
-        PredicateResult(
-            name=item.name,
-            status=item.status,
-            detail=item.detail,
-            freshness=_freeze(item.freshness),
-            evidence=_freeze(item.evidence),
-        )
-        for item in (fn(snapshot, reference) for fn in _EVALUATORS)
-    )
+    return tuple(fn(snapshot, reference) for fn in _EVALUATORS)
 
 
 def _report_status(predicates: Tuple[PredicateResult, ...]) -> str:
-    worst = "ok"
+    worst = STATUS_HEALTHY
     for item in predicates:
-        if _STATUS_RANK.get(item.status, 2) > _STATUS_RANK.get(worst, 0):
+        if _STATUS_RANK.get(item.status, 1) > _STATUS_RANK.get(worst, 0):
             worst = item.status
-    if worst == "ok":
-        return "ok"
-    return "degraded"
+    return worst
+
+
+def _notify_level(status: str) -> str:
+    if status == STATUS_UNHEALTHY:
+        return "error"
+    if status == STATUS_UNKNOWN:
+        return "warning"
+    return "info"
+
+
+def _log_checks_and_findings(
+    run_id: str,
+    predicates: Tuple[PredicateResult, ...],
+    *,
+    status: str,
+    summary: str,
+    freshness: Mapping[str, Any],
+) -> None:
+    for item in predicates:
+        log_event(
+            "sentinel_predicate",
+            message=item.detail,
+            level=_notify_level(item.status),
+            run_id=run_id,
+            predicate=item.name,
+            status=item.status,
+            reason=item.reason,
+        )
+    log_status(
+        summary,
+        level=_notify_level(status),
+        run_id=run_id,
+        bot=BOT_NAME,
+        status=status,
+        freshness=freshness.get("status"),
+    )
+    log_event(
+        "sentinel_health",
+        summary=summary,
+        level=_notify_level(status),
+        run_id=run_id,
+        status=status,
+        freshness=freshness.get("status"),
+    )
+    log_event("bot_observe", message=f"sentinel {status}", level="info", run_id=run_id, bot=BOT_NAME)
 
 
 def observe(*, snapshot: Optional[Mapping[str, Any]] = None) -> HealthReport:
@@ -757,7 +935,7 @@ def observe(*, snapshot: Optional[Mapping[str, Any]] = None) -> HealthReport:
     checked_at = str(collected.get("checked_at") or _utcnow_z())
     now = datetime.now(timezone.utc)
     predicates = evaluate_predicates(collected, now=now)
-    unknowns = tuple(item.name for item in predicates if item.status == "unknown")
+    unknowns = tuple(item.name for item in predicates if item.status == STATUS_UNKNOWN)
     freshness_sources: list[Dict[str, Any]] = []
     skip_aggregate = {"api_health", "latency", "deployment"}
     for item in predicates:
@@ -778,30 +956,24 @@ def observe(*, snapshot: Optional[Mapping[str, Any]] = None) -> HealthReport:
         if extra.get("captured_at") is None and extra.get("status") != "degraded":
             continue
         freshness_sources.append(dict(extra))
-    freshness = aggregate_freshness(freshness_sources)
+    freshness = _policy_freshness(aggregate_freshness(freshness_sources))
     contract = bot_contract(freshness=freshness, state_changing=False)
     confidence = None
     status = _report_status(predicates)
-    failed = [item.name for item in predicates if item.status == "fail"]
-    warned = [item.name for item in predicates if item.status == "warn"]
-    if failed:
-        summary = "failing: " + ", ".join(failed)
-    elif warned:
-        summary = "warnings: " + ", ".join(warned)
+    unhealthy = [item.name for item in predicates if item.status == STATUS_UNHEALTHY]
+    if unhealthy:
+        summary = "unhealthy: " + ", ".join(unhealthy)
     elif unknowns:
         summary = "unknown: " + ", ".join(unknowns)
     else:
-        summary = "all ten health predicates ok"
-    level = "error" if failed else ("warning" if status == "degraded" else "info")
-    log_event(
-        "sentinel_health",
-        summary=summary,
-        level=level,
-        run_id=run_id,
+        summary = "all ten health predicates healthy"
+    _log_checks_and_findings(
+        run_id,
+        predicates,
         status=status,
-        freshness=freshness.get("status"),
+        summary=summary,
+        freshness=freshness,
     )
-    log_event("bot_observe", message=f"sentinel {status}", level="info", run_id=run_id, bot=BOT_NAME)
     report = HealthReport(
         bot=BOT_NAME,
         run_id=run_id,
