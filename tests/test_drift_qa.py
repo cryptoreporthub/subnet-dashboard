@@ -299,6 +299,21 @@ def test_policy_section_4_classes():
     }
     assert CHECK_HYDRATION_FAILS in unavailable
     assert any("WARNING: source unavailable" in " ".join(item.details) for item in report.checks)
+    null_body = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/api/summary",
+                    source="fixture",
+                    http_status=200,
+                    body=None,
+                    expected_keys=("status", "summary"),
+                ),
+            )
+        )
+    )
+    missing_details = " ".join(_by_name(null_body)[CHECK_MISSING_FIELDS].details)
+    assert "WARNING: source unavailable" in missing_details
 
 
 def test_notify_is_the_only_side_effect():
@@ -439,6 +454,7 @@ def test_every_finding_uses_policy_3_1_severity():
     assert RISK_CLASSES == ("low", "medium", "high", "critical")
     assert classify_severity("info") == "critical"
     assert classify_severity("unknown") == "critical"
+    assert severity_for_check("unknown_check", flagged=True) == "critical"
     assert severity_for_check(CHECK_STALE_DATA, flagged=True) == "critical"
     assert severity_for_check(CHECK_DEGRADED_HTTP_200S, flagged=True) == "medium"
     assert severity_for_check(CHECK_MISSING_FIELDS, flagged=False) == "low"
@@ -573,6 +589,12 @@ def test_freshness_disclosure_on_every_claim():
         {"source": "pump_desk", "status": "stale", "age_seconds": 383}
     )
     assert line == "Evidence freshness: pump-desk is stale (6m23s). Degraded confidence."
+    missing_line = freshness_disclosure({"source": "fixture", "status": "missing"})
+    assert missing_line == (
+        "Evidence freshness: fixture is missing (age unknown). Degraded confidence."
+    )
+    for text in (*report.observations, *report.unknowns):
+        assert "Evidence freshness:" in text
 
 
 def test_significant_drift_builds_supporting_and_contradictory_bundle():

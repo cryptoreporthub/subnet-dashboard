@@ -359,7 +359,7 @@ def severity_for_check(
         return SEVERITY_LOW
     if unavailable:
         return SEVERITY_MEDIUM
-    return classify_severity(_FLAGGED_SEVERITY.get(check_name, SEVERITY_HIGH))
+    return classify_severity(_FLAGGED_SEVERITY.get(check_name, SEVERITY_CRITICAL))
 
 
 def _freeze(value: Any) -> Any:
@@ -422,8 +422,9 @@ def freshness_disclosure(envelope: Mapping[str, Any]) -> str:
                 status = str(worst.get("status") or "missing")
     source_label = str(source or "unknown").replace("_", "-")
     age_label = format_age_seconds(age)
-    age_bit = f" ({age_label})" if age_label else ""
-    line = f"Evidence freshness: {source_label} is {status}{age_bit}."
+    if age_label is None:
+        age_label = "age unknown"
+    line = f"Evidence freshness: {source_label} is {status} ({age_label})."
     if status != "fresh":
         line += " Degraded confidence."
     return line
@@ -687,7 +688,7 @@ def missing_required_fields(
         attributions.append(_attr(payload, "body"))
         if payload.body is None:
             unavailable = True
-            missing.append(f"{payload.name}: body unavailable")
+            missing.append(f"WARNING: source unavailable: {payload.name} body")
             continue
         if not isinstance(payload.body, Mapping):
             missing.append(f"{payload.name}: body is not an object")
@@ -735,7 +736,7 @@ def api_shape_changed(
         attributions.append(_attr(payload, "shape"))
         if payload.body is None:
             unavailable = True
-            changes.append(f"{payload.name}: body unavailable")
+            changes.append(f"WARNING: source unavailable: {payload.name} body")
             continue
         if not isinstance(payload.body, Mapping):
             changes.append(f"{payload.name}: expected object, got {type(payload.body).__name__}")
@@ -1062,7 +1063,7 @@ def readiness_drops(payloads: Sequence[ObservedPayload]) -> Tuple[CheckResult, T
         attributions.append(_attr(payload, "readiness"))
         body = payload.body
         if body is None:
-            flags.append(f"{payload.name}: readiness body unavailable")
+            flags.append(f"WARNING: source unavailable: {payload.name} readiness body")
             continue
         if not isinstance(body, Mapping):
             flags.append(f"{payload.name}: readiness body is not an object")
@@ -1288,7 +1289,9 @@ def observe(snapshot: DriftSnapshot) -> DriftReport:
 
     flagged = [item for item in checks if item.flagged]
     unknowns = tuple(
-        item.summary for item in checks if item.evidence_class == EVIDENCE_UNAVAILABLE
+        f"{item.summary} {item.freshness_disclosure}"
+        for item in checks
+        if item.evidence_class == EVIDENCE_UNAVAILABLE
     )
     if not payloads:
         status = "degraded"
@@ -1328,7 +1331,9 @@ def observe(snapshot: DriftSnapshot) -> DriftReport:
         evidence_bundles=bundles,
         freshness=freshness,
         freshness_disclosure=freshness_disclosure(freshness),
-        observations=tuple(item.summary for item in flagged),
+        observations=tuple(
+            f"{item.summary} {item.freshness_disclosure}" for item in flagged
+        ),
         unknowns=unknowns,
         confidence=contract.get("confidence"),
         recommended_action=None,
