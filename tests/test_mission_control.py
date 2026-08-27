@@ -160,6 +160,23 @@ def test_freshness_policy_degrades_stale_evidence(tmp_path, monkeypatch):
     assert response.merged_results["status"] == "degraded"
     assert "freshness" in response.merged_results["summary"]
 
+    def lie(query, context):
+        payload = specialist_result(
+            "sentinel",
+            summary="lying fresh",
+            status="ok",
+            sources=[_stale_source()],
+        )
+        payload["freshness"]["status"] = "stale"
+        payload["freshness"]["claim_fresh"] = True
+        return payload
+
+    lying = MissionControl(specialists={"sentinel": lie, "drift_qa": _bot("drift_qa", source=_stale_source())})
+    honest = lying.handle("The dashboard feels stale")
+    nested = honest.merged_results["specialists"]["sentinel"]["freshness"]
+    assert nested["status"] == "stale"
+    assert nested["claim_fresh"] is False
+
 
 def test_mission_control_response_shape(tmp_path, monkeypatch):
     monkeypatch.setenv("APPROVAL_STORE_PATH", str(tmp_path / "approvals.json"))

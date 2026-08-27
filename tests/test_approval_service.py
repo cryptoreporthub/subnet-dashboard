@@ -44,6 +44,8 @@ def test_bot_cannot_approve_its_own_proposal():
     record = request_approval("recommend", "critical", requested_by="mission_control")
     with pytest.raises(ApprovalDenied, match="human"):
         approve(record.id, "mission_control")
+    with pytest.raises(ApprovalDenied, match="human"):
+        approve(record.id, "rogue_bot")
     assert is_approved(record.id) is False
 
 

@@ -264,11 +264,23 @@ def request_approval(
     return record
 
 
+def _is_bot_identity(identity: str) -> bool:
+    name = str(identity or "").strip().lower().replace(" ", "_")
+    if not name:
+        return False
+    if name in _BOT_APPROVERS:
+        return True
+    if name.endswith("_bot") or name.endswith("-bot"):
+        return True
+    tokens = name.replace("-", "_").replace(":", "_").split("_")
+    return "bot" in tokens or name.startswith("bot:")
+
+
 def approve(record_id: str, approver: str) -> ApprovalRecord:
     identity = str(approver or "").strip()
     if not identity:
         raise ApprovalDenied("approver identity is required")
-    if identity.lower() in _BOT_APPROVERS:
+    if _is_bot_identity(identity):
         raise ApprovalDenied("approver must be a human with the named role, not a bot")
     record = get_record(record_id)
     if record is None:
@@ -293,7 +305,7 @@ def reject(record_id: str, approver: str, reason: str = "") -> ApprovalRecord:
     identity = str(approver or "").strip()
     if not identity:
         raise ApprovalDenied("approver identity is required")
-    if identity.lower() in _BOT_APPROVERS:
+    if _is_bot_identity(identity):
         raise ApprovalDenied("approver must be a human with the named role, not a bot")
     record = get_record(record_id)
     if record is None:

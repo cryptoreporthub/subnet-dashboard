@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
@@ -251,14 +251,34 @@ def detect_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str
     return contradictions
 
 
+def _canonicalize_freshness(envelope: Mapping[str, Any]) -> Dict[str, Any]:
+    """A non-fresh status can never claim freshness (Policy §5)."""
+    result = dict(envelope)
+    status = str(result.get("status") or "missing").lower()
+    result["status"] = status
+    result["claim_fresh"] = status == "fresh"
+    result["enforced"] = True
+    return result
+
+
 def enforce_freshness(sources: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Policy §5: a stale/missing/degraded source cannot yield a fresh conclusion."""
     envelope = aggregate_freshness(sources) if sources else classify_freshness("learning_health")
-    status = str(envelope.get("status") or "missing")
-    degraded = status in {"stale", "missing", "degraded"}
-    envelope["enforced"] = True
-    envelope["claim_fresh"] = status == "fresh" and not degraded
-    return envelope
+    return _canonicalize_freshness(envelope)
+
+
+def _normalize_specialist_freshness(result: Mapping[str, Any]) -> Dict[str, Any]:
+    payload = dict(result)
+    freshness = payload.get("freshness")
+    if isinstance(freshness, dict):
+        payload["freshness"] = _canonicalize_freshness(freshness)
+        nested = payload["freshness"].get("sources")
+        if isinstance(nested, list):
+            payload["freshness"]["sources"] = [
+                _canonicalize_freshness(item) if isinstance(item, dict) else item
+                for item in nested
+            ]
+    return payload
 
 
 def _run_one(
@@ -273,15 +293,17 @@ def _run_one(
         if not isinstance(result, dict):
             raise TypeError(f"{name} returned {type(result)!r}")
         result.setdefault("bot", name)
-        return result
+        return _normalize_specialist_freshness(result)
     except Exception as exc:
         logger.warning("specialist %s failed: %s", name, exc)
-        return specialist_result(
-            name,
-            summary=f"{name} failed: {exc}",
-            status="degraded",
-            unknowns=[str(exc)],
-            sources=[classify_freshness("learning_health", degraded=True)],
+        return _normalize_specialist_freshness(
+            specialist_result(
+                name,
+                summary=f"{name} failed: {exc}",
+                status="degraded",
+                unknowns=[str(exc)],
+                sources=[classify_freshness("learning_health", degraded=True)],
+            )
         )
 
 
@@ -294,22 +316,41 @@ def _run_parallel(
     if not names:
         return {}
     ordered: Dict[str, Dict[str, Any]] = {}
-    with ThreadPoolExecutor(max_workers=max(1, len(names))) as pool:
-        futures = {
-            pool.submit(_run_one, name, query, context, runners): name for name in names
-        }
-        for future in as_completed(futures):
+    pool = ThreadPoolExecutor(max_workers=max(1, len(names)))
+    futures = {
+        pool.submit(_run_one, name, query, context, runners): name for name in names
+    }
+    try:
+        done, not_done = wait(list(futures), timeout=SPECIALIST_TIMEOUT_SECONDS)
+        for future in done:
             name = futures[future]
             try:
-                ordered[name] = future.result(timeout=SPECIALIST_TIMEOUT_SECONDS)
+                ordered[name] = future.result()
             except Exception as exc:
-                ordered[name] = specialist_result(
+                ordered[name] = _normalize_specialist_freshness(
+                    specialist_result(
+                        name,
+                        summary=f"{name} failed: {exc}",
+                        status="degraded",
+                        unknowns=[str(exc)],
+                        sources=[classify_freshness("learning_health", degraded=True)],
+                    )
+                )
+        for future in not_done:
+            name = futures[future]
+            ordered[name] = _normalize_specialist_freshness(
+                specialist_result(
                     name,
-                    summary=f"{name} timed out or failed: {exc}",
+                    summary=f"{name} timed out after {SPECIALIST_TIMEOUT_SECONDS}s",
                     status="degraded",
-                    unknowns=[str(exc)],
+                    unknowns=["timeout"],
                     sources=[classify_freshness("learning_health", degraded=True)],
                 )
+            )
+    finally:
+        # ponytail: in-flight specialists keep running; we do not block /health
+        # on them. Upgrade path: per-bot timeouts inside the adapters.
+        pool.shutdown(wait=False, cancel_futures=True)
     return {name: ordered[name] for name in names if name in ordered}
 
 
