@@ -378,3 +378,41 @@ def test_worker_deferred_probe_is_unknown_not_alive():
     assert result.reason
     assert result.freshness["status"] == "missing"
     _assert_freshness_aliases(result.freshness)
+
+
+def test_scheduler_error_payload_is_unknown_not_healthy():
+    results = _by_name(
+        evaluate_predicates(
+            {
+                "job_scheduler": {"_error": "job_scheduler: boom"},
+                "pump_scheduler": {"_error": "pump: boom"},
+                "resolver": {"_error": "resolver: boom"},
+                "loop_health": {"_error": "loop: boom"},
+            },
+            now=NOW,
+        )
+    )
+    assert results["scheduler"].status == STATUS_UNKNOWN
+    assert results["scheduler"].reason
+
+
+def test_malformed_payloads_are_unknown_with_reason_not_crashes():
+    snap = {
+        "latency_ms": object(),
+        "liveness": ["not", "a", "dict"],
+        "worker_peer": "nope",
+        "resolver": [],
+        "loop_health": 3,
+        "watchdog": 1,
+        "feed": {"likely_total": {"x": 1}, "effective_source": "blockmachine"},
+        "live": {"stale": False},
+        "job_scheduler": {"last_failures": ["a", "b"], "running": True},
+        "snapshot_guard": "cold",
+    }
+    results = evaluate_predicates(snap, now=NOW)
+    assert tuple(item.name for item in results) == PREDICATE_NAMES
+    for item in results:
+        assert item.status in FINDING_STATUSES, item.name
+        if item.status == STATUS_UNKNOWN:
+            assert item.reason, item.name
+            _assert_freshness_aliases(item.freshness)

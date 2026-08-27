@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 import uuid
 from dataclasses import dataclass
@@ -169,18 +170,22 @@ def _live_cache_freshness() -> Dict[str, Any]:
     return info
 
 
+_EVIDENCE_LOCK = threading.Lock()
+
+
 def _evidence_readonly() -> Dict[str, Any]:
     # ponytail: capture telemetry calls load_predictions, which can migrate and
     # write predictions.json. Swap in a json.load-only loader for this call.
     # Upgrade: add read_only=True on load_predictions / build_evidence_report.
     import internal.learning.predictions_store as pred_store
 
-    saved = pred_store.load_predictions
-    pred_store.load_predictions = _read_predictions_readonly
-    try:
-        return build_evidence_report()
-    finally:
-        pred_store.load_predictions = saved
+    with _EVIDENCE_LOCK:
+        saved = pred_store.load_predictions
+        pred_store.load_predictions = _read_predictions_readonly
+        try:
+            return build_evidence_report()
+        finally:
+            pred_store.load_predictions = saved
 
 
 def collect_snapshot() -> Dict[str, Any]:
@@ -346,6 +351,10 @@ def _finding(
 
 def _has_error(payload: Any) -> bool:
     return isinstance(payload, dict) and bool(payload.get("_error"))
+
+
+def _usable(payload: Any) -> bool:
+    return isinstance(payload, dict) and bool(payload) and not _has_error(payload)
 
 
 def _api_health(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
@@ -604,7 +613,17 @@ def _feed_sync(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         or sync.get("last_sync_at")
     )
     effective = feed.get("effective_source")
-    likely = int(feed.get("likely_total") or 0)
+    try:
+        likely = int(feed.get("likely_total") or 0)
+    except (TypeError, ValueError):
+        return _finding(
+            "feed_sync",
+            STATUS_UNKNOWN,
+            f"unreadable likely_total={feed.get('likely_total')!r}",
+            _envelope("live_feed", captured, now=now),
+            {"likely_total": feed.get("likely_total")},
+            reason=f"unreadable likely_total={feed.get('likely_total')!r}",
+        )
     degraded = effective in (None, "none") or _has_error(feed)
     metrics = {
         "effective_source": effective,
@@ -701,7 +720,17 @@ def _scheduler(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     resolver = snapshot.get("resolver") or {}
     loop = snapshot.get("loop_health") or {}
     pick = loop.get("pick_scheduler") if isinstance(loop.get("pick_scheduler"), dict) else {}
-    failures = dict(jobs.get("last_failures") or {})
+    try:
+        failures = dict(jobs.get("last_failures") or {})
+    except (TypeError, ValueError):
+        return _finding(
+            "scheduler",
+            STATUS_UNKNOWN,
+            f"unreadable last_failures={jobs.get('last_failures')!r}",
+            _envelope("resolver", None, now=now),
+            {"last_failures": jobs.get("last_failures") if isinstance(jobs, dict) else None},
+            reason=f"unreadable last_failures={jobs.get('last_failures')!r}",
+        )
     failed: list[str] = list(failures.keys())
     try:
         resolver_failures = int(resolver.get("consecutive_failures") or 0)
@@ -725,7 +754,7 @@ def _scheduler(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         or resolver.get("last_run_at")
         or loop.get("last_resolver_tick")
     )
-    saw_any = bool(jobs) or bool(pick) or bool(pump) or bool(resolver)
+    saw_any = _usable(jobs) or bool(pick) or _usable(pump) or _usable(resolver)
     metrics = {"last_failures": failures, "failed": failed, "running": jobs.get("running")}
     if failed:
         return _finding(
@@ -871,7 +900,23 @@ def evaluate_predicates(
 ) -> Tuple[PredicateResult, ...]:
     """Pure evaluation of the ten predicates against a collected snapshot."""
     reference = now or datetime.now(timezone.utc)
-    return tuple(fn(snapshot, reference) for fn in _EVALUATORS)
+    results: list[PredicateResult] = []
+    for fn in _EVALUATORS:
+        name = fn.__name__[1:] if fn.__name__.startswith("_") else fn.__name__
+        try:
+            results.append(fn(snapshot, reference))
+        except Exception as exc:
+            results.append(
+                _finding(
+                    name,
+                    STATUS_UNKNOWN,
+                    f"predicate could not be evaluated: {exc}",
+                    _envelope("learning_health", None, now=reference),
+                    {},
+                    reason=f"predicate could not be evaluated: {exc}",
+                )
+            )
+    return tuple(results)
 
 
 def _report_status(predicates: Tuple[PredicateResult, ...]) -> str:
