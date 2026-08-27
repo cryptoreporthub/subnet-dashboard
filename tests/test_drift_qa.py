@@ -37,7 +37,7 @@ from internal.bots.drift_qa import (
     observe,
     severity_for_check,
 )
-from internal.ops.notify import notify as notify_fn
+from internal.ops.notify import emit, log_event, notify as notify_fn
 
 
 NOW = datetime(2026, 8, 27, tzinfo=timezone.utc)
@@ -374,6 +374,41 @@ def test_notify_module_does_not_write_state(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     notify_fn("bot_observe", bot="drift_qa", observation_only=True)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_notify_log_event_and_emit_are_importable():
+    """Dual API: Drift/QA ``notify`` and #1063 ``log_event``/``emit`` share this file."""
+    import internal.ops.notify as notify_mod
+
+    assert callable(notify_mod.notify)
+    assert callable(notify_mod.log_event)
+    assert callable(notify_mod.emit)
+    notify_sig = inspect.signature(notify_mod.notify)
+    log_sig = inspect.signature(notify_mod.log_event)
+    emit_sig = inspect.signature(notify_mod.emit)
+    assert list(notify_sig.parameters) == ["event", "fields"]
+    assert notify_sig.parameters["fields"].kind is inspect.Parameter.VAR_KEYWORD
+    assert list(log_sig.parameters) == ["event", "payload", "fields"]
+    assert log_sig.parameters["payload"].default is None
+    assert log_sig.parameters["fields"].kind is inspect.Parameter.VAR_KEYWORD
+    assert list(emit_sig.parameters) == list(log_sig.parameters)
+
+    notify_fn("bot_observe", bot="drift_qa", observation_only=True)
+    recorded = log_event(
+        "mission_control.route",
+        run_id="r1",
+        intent="monitor",
+        payload={"routed_to": ["drift_qa"]},
+    )
+    emitted = emit("mission_control.decision", status="ok", approval_required=False)
+    assert recorded["event"] == "mission_control.route"
+    assert recorded["run_id"] == "r1"
+    assert recorded["intent"] == "monitor"
+    assert recorded["routed_to"] == ["drift_qa"]
+    assert emitted["event"] == "mission_control.decision"
+    assert emitted["status"] == "ok"
+    assert emitted["approval_required"] is False
+    assert notify_mod.notify("bot_observe", bot="drift_qa") is None
 
 
 def test_empty_snapshot_is_not_ok():
