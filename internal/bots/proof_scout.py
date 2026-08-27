@@ -1,9 +1,10 @@
 """Proof Scout — read-only evidence gathering for one subnet.
 
-Populates and classifies an ``EvidenceBundle`` from existing learning and ops
-evidence. It does not invent a second lineage model: coarse populations come
-from ``internal.learning.evidence.evidence_source``, and Policy §2 freshness
-comes from ``internal.ops.bot_policy.classify_freshness``.
+Populates and classifies an ``EvidenceBundle``. It does not conclude: no
+recommendation, no net-support score, no inferred thesis. Coarse populations
+come from ``internal.learning.evidence.evidence_source``. Policy §2 age
+cutoffs come from ``internal.ops.bot_policy.FRESHNESS_THRESHOLDS``; Proof Scout
+labels those cutoffs ``fresh`` / ``stale`` / ``expired``.
 """
 
 from __future__ import annotations
@@ -37,6 +38,16 @@ _FRESHNESS_SOURCE_BY_POPULATION = {
     "shadow": "learning_outcomes",
     "pump": "pump_desk",
     "archive": "message_intel_archive",
+}
+
+# Proof Scout age buckets. Same numeric cutoffs as ``classify_freshness``:
+# fresh bound → fresh, aging bound → stale, older than aging → expired.
+SCOUT_FRESHNESS_BUCKETS = ("fresh", "stale", "expired")
+_OPPOSITE_TAGS = {
+    "supporting": "contradictory",
+    "contradictory": "supporting",
+    "bull": "bear",
+    "bear": "bull",
 }
 
 _BULL = frozenset(
@@ -121,23 +132,24 @@ class EvidenceItem:
 
 @dataclass(frozen=True)
 class EvidenceBundle:
-    """Per-subnet classified evidence. Distinct from the global ops report dict."""
+    """Per-subnet classified evidence. Distinct from the global ops report dict.
+
+    This is a gather/classify record, not a verdict.
+    """
 
     bot: str
     run_id: str
     status: str
     subject: str
     subnet_id: int
-    claim: Optional[str]
-    summary: str
+    thesis: Optional[str]
     items: Tuple[EvidenceItem, ...]
     unknowns: Tuple[str, ...]
     populations: Dict[str, int]
     freshness: Dict[str, Any]
-    confidence: Optional[float]
+    contradiction_flags: Tuple[Dict[str, Any], ...]
     approval: Dict[str, Any]
     approval_required: bool
-    recommended_action: None
     audit: Dict[str, Any]
 
     @property
@@ -159,8 +171,7 @@ class EvidenceBundle:
             "status": self.status,
             "subject": self.subject,
             "subnet_id": self.subnet_id,
-            "claim": self.claim,
-            "summary": self.summary,
+            "thesis": self.thesis,
             "observations": [item.to_dict() for item in self.observations],
             "evidence": [item.to_dict() for item in self.items],
             "supporting": [item.to_dict() for item in self.supporting],
@@ -168,8 +179,7 @@ class EvidenceBundle:
             "unknowns": list(self.unknowns),
             "populations": dict(self.populations),
             "freshness": dict(self.freshness),
-            "confidence": self.confidence,
-            "recommended_action": self.recommended_action,
+            "contradiction_flags": [dict(flag) for flag in self.contradiction_flags],
             "approval": dict(self.approval),
             "approval_required": self.approval_required,
             "audit": dict(self.audit),
@@ -178,41 +188,40 @@ class EvidenceBundle:
 
 def gather_evidence(
     subnet_id: Any,
+    thesis: Optional[str] = None,
     *,
-    claim: Optional[str] = None,
     now: Optional[datetime] = None,
 ) -> EvidenceBundle:
-    """Gather, classify, and package evidence for ``subnet_id``.
+    """Gather and classify evidence for ``subnet_id`` against an optional thesis.
 
-    Read-only: does not write predictions, ops artifacts, or approvals.
+    ``thesis`` is caller-supplied. This bot does not infer one and does not
+    conclude whether the thesis holds. Read-only: no prediction or ops writes.
     """
     started = time.monotonic()
     run_id = uuid.uuid4().hex
-    checked_at = datetime.now(timezone.utc)
-    reference = now or checked_at
+    reference = now or datetime.now(timezone.utc)
     unknowns: List[str] = []
     sources_read: List[str] = []
     items: List[EvidenceItem] = []
+    thesis_text = _clean_thesis(thesis)
+    contract = bot_contract(state_changing=False, confidence=None)
 
     parsed = parse_subnet_id(subnet_id)
     if parsed is None:
-        contract = bot_contract(source="learning_outcomes", degraded=True, confidence=None)
         return EvidenceBundle(
             bot=BOT_NAME,
             run_id=run_id,
             status="degraded",
             subject=str(subnet_id),
             subnet_id=-1,
-            claim=_clean_claim(claim),
-            summary=f"invalid subnet_id={subnet_id!r}",
+            thesis=thesis_text,
             items=(),
             unknowns=("invalid subnet_id",),
             populations={name: 0 for name in SOURCE_POPULATIONS},
-            freshness=contract["freshness"],
-            confidence=None,
+            freshness=_freshness_inventory(()),
+            contradiction_flags=(),
             approval=contract["approval"],
             approval_required=contract["approval_required"],
-            recommended_action=None,
             audit={
                 "sources_read": [],
                 "duration_ms": _duration_ms(started),
@@ -236,7 +245,7 @@ def gather_evidence(
             _items_from_predictions(
                 parsed,
                 ledger,
-                claim_hint=claim,
+                thesis=thesis_text,
                 now=reference,
             )
         )
@@ -249,7 +258,7 @@ def gather_evidence(
             _items_from_ops_report(
                 parsed,
                 ops_report,
-                claim_hint=claim,
+                thesis=thesis_text,
                 now=reference,
                 sources_read=sources_read,
             )
@@ -258,50 +267,24 @@ def gather_evidence(
     items.extend(
         _items_from_message_intel(
             parsed,
-            claim_hint=claim,
+            thesis=thesis_text,
             now=reference,
             sources_read=sources_read,
             unknowns=unknowns,
         )
     )
 
-    resolved_claim = _clean_claim(claim) or _infer_claim(items)
-    classified = tuple(
-        _reclassify_item(item, resolved_claim) if resolved_claim else item for item in items
-    )
-
-    envelopes = [
-        item.freshness
-        for item in classified
-        if item.freshness.get("authoritative") is True
-    ]
-    contract = bot_contract(
-        sources=envelopes,
-        confidence=_confidence(classified),
-        state_changing=False,
-    )
-    freshness = contract["freshness"]
-    worst = str(freshness.get("status") or "missing")
-    if ops_degraded or worst == "degraded":
-        status = "degraded"
-    elif not classified:
-        status = "ok"
+    classified = tuple(items)
+    if not classified:
         unknowns.append("no subnet-specific evidence found")
-    elif worst == "stale":
-        status = "degraded"
-    else:
-        status = "ok"
-
-    counts = _population_counts(classified)
-    summary = _summarize(parsed, resolved_claim, classified, worst)
-    duration_ms = _duration_ms(started)
+    flags = _contradiction_flags(classified, thesis_text)
+    status = "degraded" if ops_degraded else "ok"
     logger.info(
-        "proof_scout SN%s items=%s supporting=%s contradictory=%s freshness=%s",
+        "proof_scout SN%s items=%s flags=%s thesis=%s",
         parsed,
         len(classified),
-        sum(1 for item in classified if item.relation == "supporting"),
-        sum(1 for item in classified if item.relation == "contradictory"),
-        worst,
+        len(flags),
+        thesis_text,
     )
     return EvidenceBundle(
         bot=BOT_NAME,
@@ -309,19 +292,17 @@ def gather_evidence(
         status=status,
         subject=f"SN{parsed}",
         subnet_id=parsed,
-        claim=resolved_claim,
-        summary=summary,
+        thesis=thesis_text,
         items=classified,
         unknowns=tuple(unknowns),
-        populations=counts,
-        freshness=freshness,
-        confidence=contract["confidence"],
+        populations=_population_counts(classified),
+        freshness=_freshness_inventory(classified),
+        contradiction_flags=flags,
         approval=contract["approval"],
         approval_required=contract["approval_required"],
-        recommended_action=None,
         audit={
             "sources_read": sources_read,
-            "duration_ms": duration_ms,
+            "duration_ms": _duration_ms(started),
             "ops_status": None if ops_report is None else ops_report.get("status"),
         },
     )
@@ -346,8 +327,8 @@ def _duration_ms(started: float) -> int:
     return int(max(0.0, (time.monotonic() - started) * 1000))
 
 
-def _clean_claim(claim: Optional[str]) -> Optional[str]:
-    text = str(claim or "").strip()
+def _clean_thesis(thesis: Optional[str]) -> Optional[str]:
+    text = str(thesis or "").strip()
     return text or None
 
 
@@ -394,14 +375,14 @@ def _stance_from_row(row: Mapping[str, Any]) -> Optional[str]:
 
 def _relation(
     item_stance: Optional[str],
-    claim: Optional[str],
+    thesis: Optional[str],
     *,
     correct: Any = None,
 ) -> str:
-    claim_stance = _stance_of(claim)
-    if not claim_stance or not item_stance:
+    thesis_stance = _stance_of(thesis)
+    if not thesis_stance or not item_stance:
         return "observation"
-    agrees = item_stance == claim_stance
+    agrees = item_stance == thesis_stance
     if correct is False:
         agrees = not agrees
     return "supporting" if agrees else "contradictory"
@@ -426,16 +407,100 @@ def _freshness_for(
     # Unknown lineage has no Policy §2 table. Do not borrow another source's
     # thresholds or treat its timestamp as a live-current claim.
     if unknown and policy_source is None:
-        captured_at = None
+        return {
+            "source": "unknown",
+            "status": "missing",
+            "captured_at": None,
+            "age_seconds": None,
+            "authoritative": False,
+            "thresholds_seconds": {},
+        }
     source = policy_source or _FRESHNESS_SOURCE_BY_POPULATION.get(population, "learning_outcomes")
-    return classify_freshness(
-        source,
-        captured_at,
-        now=now,
-        degraded=degraded,
-        mode="archive" if archive else None,
-        authoritative=not (archive or unknown),
+    return _as_scout_freshness(
+        classify_freshness(
+            source,
+            captured_at,
+            now=now,
+            degraded=degraded,
+            mode="archive" if archive else None,
+            authoritative=not (archive or unknown),
+        )
     )
+
+
+def _as_scout_freshness(envelope: Mapping[str, Any]) -> Dict[str, Any]:
+    """Label Policy §2 cutoffs as fresh / stale / expired without new thresholds."""
+    out = dict(envelope)
+    status = str(out.get("status") or "")
+    if status in {"missing", "degraded"}:
+        return out
+    try:
+        age = float(out["age_seconds"]) if out.get("age_seconds") is not None else None
+    except (TypeError, ValueError):
+        age = None
+    thresholds = out.get("thresholds_seconds") if isinstance(out.get("thresholds_seconds"), dict) else {}
+    if age is None:
+        out["status"] = "missing"
+        return out
+    fresh_s = int(thresholds.get("fresh") or 0)
+    aging_s = int(thresholds.get("aging") or 0)
+    if age <= fresh_s:
+        out["status"] = "fresh"
+    elif age <= aging_s:
+        out["status"] = "stale"
+    else:
+        out["status"] = "expired"
+    return out
+
+
+def _freshness_inventory(items: Sequence[EvidenceItem]) -> Dict[str, Any]:
+    counts = {name: 0 for name in (*SCOUT_FRESHNESS_BUCKETS, "missing", "degraded")}
+    sources = []
+    for item in items:
+        envelope = dict(item.freshness)
+        sources.append(envelope)
+        bucket = str(envelope.get("status") or "missing")
+        if bucket in counts:
+            counts[bucket] += 1
+        else:
+            counts["missing"] += 1
+    return {
+        "buckets": list(SCOUT_FRESHNESS_BUCKETS),
+        "counts": counts,
+        "sources": sources,
+    }
+
+
+def _contradiction_flags(
+    items: Sequence[EvidenceItem],
+    thesis: Optional[str],
+) -> Tuple[Dict[str, Any], ...]:
+    tags_by_pop: Dict[str, set] = {}
+    for item in items:
+        if thesis:
+            tag = item.relation if item.relation in {"supporting", "contradictory"} else None
+        else:
+            stance = _stance_from_row(item.payload)
+            tag = stance if stance in {"bull", "bear"} else None
+        if not tag:
+            continue
+        tags_by_pop.setdefault(item.population, set()).add(tag)
+    flags: List[Dict[str, Any]] = []
+    names = sorted(tags_by_pop)
+    for i, left in enumerate(names):
+        for right in names[i + 1 :]:
+            left_tags = tags_by_pop[left]
+            right_tags = tags_by_pop[right]
+            opposed = any(_OPPOSITE_TAGS.get(tag) in right_tags for tag in left_tags)
+            if opposed:
+                flags.append(
+                    {
+                        "kind": "cross_source",
+                        "populations": [left, right],
+                        "tags": sorted(left_tags | right_tags),
+                    }
+                )
+    return tuple(flags)
 
 
 def _slice_payload(row: Mapping[str, Any]) -> Dict[str, Any]:
@@ -515,7 +580,7 @@ def _items_from_predictions(
     subnet_id: int,
     ledger: Mapping[str, Any],
     *,
-    claim_hint: Optional[str],
+    thesis: Optional[str],
     now: datetime,
 ) -> List[EvidenceItem]:
     items: List[EvidenceItem] = []
@@ -532,7 +597,7 @@ def _items_from_predictions(
             fine = str(row.get("evidence_population") or evidence_population(row))
             captured_at = row.get("resolved_at") or row.get("created_at")
             stance = _stance_from_row(row)
-            relation = _relation(stance, claim_hint, correct=row.get("correct"))
+            relation = _relation(stance, thesis, correct=row.get("correct"))
             label = stance or str(row.get("status") or "record")
             summary = (
                 f"{population} {bucket[:-1]} {label}"
@@ -560,7 +625,7 @@ def _items_from_ops_report(
     subnet_id: int,
     report: Mapping[str, Any],
     *,
-    claim_hint: Optional[str],
+    thesis: Optional[str],
     now: datetime,
     sources_read: List[str],
 ) -> List[EvidenceItem]:
@@ -595,7 +660,7 @@ def _items_from_ops_report(
         stamp_evidence(row)
         population = _population_of(row)
         correct = False if str(pick.get("verdict") or "").upper() == "MISS" else None
-        relation = _relation(_stance_from_row(row), claim_hint, correct=correct)
+        relation = _relation(_stance_from_row(row), thesis, correct=correct)
         items.append(
             _make_item(
                 row=row,
@@ -630,7 +695,7 @@ def _items_from_ops_report(
     pump_path = (report.get("paths") or {}).get("pump_desk")
     if pump_path:
         sources_read.append(str(pump_path))
-        items.extend(_items_from_pump_artifact(subnet_id, pump_path, claim_hint=claim_hint, now=now))
+        items.extend(_items_from_pump_artifact(subnet_id, pump_path, thesis=thesis, now=now))
     return items
 
 
@@ -654,7 +719,7 @@ def _items_from_pump_artifact(
     subnet_id: int,
     path: str,
     *,
-    claim_hint: Optional[str],
+    thesis: Optional[str],
     now: datetime,
 ) -> List[EvidenceItem]:
     data = _read_json(path)
@@ -674,7 +739,7 @@ def _items_from_pump_artifact(
         }
         stamp_evidence(row)
         population = _population_of(row)
-        relation = _relation(_stance_from_row(row), claim_hint)
+        relation = _relation(_stance_from_row(row), thesis)
         items.append(
             _make_item(
                 row=row,
@@ -695,7 +760,7 @@ def _items_from_pump_artifact(
 def _items_from_message_intel(
     subnet_id: int,
     *,
-    claim_hint: Optional[str],
+    thesis: Optional[str],
     now: datetime,
     sources_read: List[str],
     unknowns: List[str],
@@ -722,7 +787,7 @@ def _items_from_message_intel(
         "mentions": social.get("mentions"),
         "captured_at": captured_at,
     }
-    relation = _relation(_stance_from_row(row), claim_hint)
+    relation = _relation(_stance_from_row(row), thesis)
     return [
         _make_item(
             row=row,
@@ -740,37 +805,6 @@ def _items_from_message_intel(
     ]
 
 
-def _infer_claim(items: Sequence[EvidenceItem]) -> Optional[str]:
-    for item in items:
-        if item.population != "council":
-            continue
-        stance = _stance_from_row(item.payload)
-        if stance == "bull":
-            return "LONG"
-        if stance == "bear":
-            return "SHORT"
-        if stance == "flat":
-            return "HOLD"
-    return None
-
-
-def _reclassify_item(item: EvidenceItem, claim: Optional[str]) -> EvidenceItem:
-    if not claim or item.relation != "observation":
-        return item
-    relation = _relation(_stance_from_row(item.payload), claim, correct=item.payload.get("correct"))
-    if relation == item.relation:
-        return item
-    return EvidenceItem(
-        relation=relation,
-        population=item.population,
-        evidence_population=item.evidence_population,
-        summary=item.summary,
-        freshness=item.freshness,
-        attribution=item.attribution,
-        payload=item.payload,
-    )
-
-
 def _population_counts(items: Iterable[EvidenceItem]) -> Dict[str, int]:
     counts = {name: 0 for name in SOURCE_POPULATIONS}
     for item in items:
@@ -778,32 +812,3 @@ def _population_counts(items: Iterable[EvidenceItem]) -> Dict[str, int]:
         counts[key] += 1
     return counts
 
-
-def _confidence(items: Sequence[EvidenceItem]) -> Optional[float]:
-    decided = [
-        item
-        for item in items
-        if item.relation in {"supporting", "contradictory"}
-        and item.freshness.get("authoritative") is True
-        and item.population not in {"archive", "unknown"}
-    ]
-    if not decided:
-        return None
-    supporting = sum(1 for item in decided if item.relation == "supporting")
-    return round(supporting / len(decided), 3)
-
-
-def _summarize(
-    subnet_id: int,
-    claim: Optional[str],
-    items: Sequence[EvidenceItem],
-    freshness_status: str,
-) -> str:
-    supporting = sum(1 for item in items if item.relation == "supporting")
-    contradictory = sum(1 for item in items if item.relation == "contradictory")
-    observations = sum(1 for item in items if item.relation == "observation")
-    claim_bit = f" claim={claim}" if claim else ""
-    return (
-        f"SN{subnet_id}{claim_bit}: {supporting} supporting, {contradictory} contradictory, "
-        f"{observations} observations; freshness={freshness_status}"
-    )

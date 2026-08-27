@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from internal.bots.proof_scout import EvidenceBundle, gather_evidence, parse_subnet_id
+from internal.bots.proof_scout import (
+    EvidenceBundle,
+    SCOUT_FRESHNESS_BUCKETS,
+    gather_evidence,
+    parse_subnet_id,
+)
 from internal.learning.evidence import SOURCE_POPULATIONS
 from internal.ops.bot_policy import FRESHNESS_THRESHOLDS
 
@@ -14,6 +19,19 @@ def _iso(delta: timedelta) -> str:
     return (NOW - delta).isoformat().replace("+00:00", "Z")
 
 
+def _patch_sources(monkeypatch, ledger, ops_report=None):
+    monkeypatch.setattr("internal.bots.proof_scout.load_predictions", lambda **_kwargs: ledger)
+    monkeypatch.setattr(
+        "internal.bots.proof_scout.build_evidence_report",
+        lambda: ops_report
+        or {"status": "ok", "paths": {}, "pick_audit": {}, "evidence_sources": []},
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.context.lookup_social_sentiment_for_netuid",
+        lambda netuid: None,
+    )
+
+
 def test_parse_subnet_id_accepts_sn_prefix():
     assert parse_subnet_id(65) == 65
     assert parse_subnet_id("SN65") == 65
@@ -21,7 +39,7 @@ def test_parse_subnet_id_accepts_sn_prefix():
     assert parse_subnet_id("nope") is None
 
 
-def test_gather_evidence_classifies_support_contradiction_and_populations(monkeypatch):
+def test_gather_evidence_classifies_thesis_without_concluding(monkeypatch):
     ledger = {
         "predictions": [
             {
@@ -84,37 +102,30 @@ def test_gather_evidence_classifies_support_contradiction_and_populations(monkey
             }
         ],
     }
-    monkeypatch.setattr("internal.bots.proof_scout.load_predictions", lambda **_kwargs: ledger)
-    monkeypatch.setattr("internal.bots.proof_scout.build_evidence_report", lambda: ops_report)
-    monkeypatch.setattr(
-        "internal.message_intel.context.lookup_social_sentiment_for_netuid",
-        lambda netuid: None,
-    )
-
+    _patch_sources(monkeypatch, ledger, ops_report)
     original_shadow = dict(ledger["resolved"][0])
-    bundle = gather_evidence(65, claim="LONG", now=NOW)
+    bundle = gather_evidence(65, "LONG", now=NOW)
     payload = bundle.to_dict()
 
     assert isinstance(bundle, EvidenceBundle)
     assert payload["bot"] == "proof_scout"
     assert payload["subnet_id"] == 65
-    assert payload["subject"] == "SN65"
+    assert payload["thesis"] == "LONG"
+    assert "claim" not in payload
+    assert "summary" not in payload
+    assert "confidence" not in payload
+    assert "recommended_action" not in payload
     assert payload["approval_required"] is False
-    assert payload["approval"]["status"] == "not_required"
     assert set(payload["populations"]) == set(SOURCE_POPULATIONS)
     assert payload["populations"]["council"] >= 1
     assert payload["populations"]["shadow"] == 1
     assert payload["populations"]["pump"] == 1
     assert payload["populations"]["archive"] == 1
     assert payload["populations"]["unknown"] == 1
+    assert payload["freshness"]["buckets"] == list(SCOUT_FRESHNESS_BUCKETS)
     assert "ops.evidence" in payload["audit"]["sources_read"]
     assert "learning.predictions" in payload["audit"]["sources_read"]
-    assert payload["confidence"] is not None
-    assert all(item["population"] in SOURCE_POPULATIONS for item in payload["evidence"])
-    assert all(item["attribution"]["module"] for item in payload["evidence"])
-    assert all("captured_at" in item["attribution"] for item in payload["evidence"])
     assert ledger["resolved"][0] == original_shadow
-    assert "evidence_source" not in original_shadow
 
     by_id = {item["payload"].get("id"): item for item in payload["evidence"]}
     assert by_id["c1"]["relation"] == "supporting"
@@ -124,26 +135,48 @@ def test_gather_evidence_classifies_support_contradiction_and_populations(monkey
     assert by_id["p1"]["population"] == "pump"
     assert by_id["a1"]["population"] == "archive"
     assert by_id["a1"]["freshness"]["authoritative"] is False
-    assert by_id["a1"]["freshness"]["mode"] == "archive"
     assert by_id["u1"]["population"] == "unknown"
     assert by_id["u1"]["freshness"]["status"] == "missing"
-    assert by_id["u1"]["freshness"]["authoritative"] is False
+    assert by_id["u1"]["freshness"]["source"] == "unknown"
+    assert by_id["u1"]["freshness"]["thresholds_seconds"] == {}
     assert "other" not in by_id
-
-    # Policy §2: council uses pick_audit (fresh ≤24h); 12h old is still fresh.
-    assert by_id["c1"]["freshness"]["source"] == "pick_audit"
     assert by_id["c1"]["freshness"]["status"] == "fresh"
     assert by_id["c1"]["freshness"]["thresholds_seconds"] == FRESHNESS_THRESHOLDS["pick_audit"]
-    # Policy §2: pump uses pump_desk (fresh ≤20m); 10m old is fresh.
     assert by_id["p1"]["freshness"]["source"] == "pump_desk"
     assert by_id["p1"]["freshness"]["status"] == "fresh"
 
+    flag_pairs = {tuple(flag["populations"]) for flag in payload["contradiction_flags"]}
+    assert ("council", "shadow") in flag_pairs or ("shadow", "council") in flag_pairs
+    assert all(flag["kind"] == "cross_source" for flag in payload["contradiction_flags"])
 
-def test_policy_section_2_pump_aging_threshold(monkeypatch):
+
+def test_thesis_is_not_inferred(monkeypatch):
     ledger = {
         "predictions": [
             {
-                "id": "p_aging",
+                "id": "c1",
+                "netuid": 7,
+                "pick_source": "council",
+                "direction": "up",
+                "created_at": _iso(timedelta(minutes=1)),
+            }
+        ],
+        "resolved": [],
+    }
+    _patch_sources(monkeypatch, ledger)
+    bundle = gather_evidence(7, now=NOW)
+    payload = bundle.to_dict()
+    assert payload["thesis"] is None
+    assert payload["evidence"][0]["relation"] == "observation"
+    assert payload["supporting"] == []
+    assert payload["contradictory"] == []
+
+
+def test_policy_section_2_aging_cutoff_is_stale(monkeypatch):
+    ledger = {
+        "predictions": [
+            {
+                "id": "p_stale",
                 "netuid": 12,
                 "pick_source": "pump_lead",
                 "direction": "up",
@@ -152,48 +185,33 @@ def test_policy_section_2_pump_aging_threshold(monkeypatch):
         ],
         "resolved": [],
     }
-    monkeypatch.setattr("internal.bots.proof_scout.load_predictions", lambda **_kwargs: ledger)
-    monkeypatch.setattr(
-        "internal.bots.proof_scout.build_evidence_report",
-        lambda: {"status": "ok", "paths": {}, "pick_audit": {}, "evidence_sources": []},
-    )
-    monkeypatch.setattr(
-        "internal.message_intel.context.lookup_social_sentiment_for_netuid",
-        lambda netuid: None,
-    )
-    bundle = gather_evidence("SN12", claim="LONG", now=NOW)
-    item = bundle.to_dict()["evidence"][0]
+    _patch_sources(monkeypatch, ledger)
+    item = gather_evidence(12, "LONG", now=NOW).to_dict()["evidence"][0]
     assert item["freshness"]["source"] == "pump_desk"
-    assert item["freshness"]["status"] == "aging"
+    assert item["freshness"]["status"] == "stale"
     assert item["freshness"]["thresholds_seconds"]["fresh"] == 1200
     assert item["freshness"]["thresholds_seconds"]["aging"] == 3600
 
 
-def test_stale_authoritative_evidence_degrades_bundle(monkeypatch):
+def test_policy_section_2_past_aging_is_expired(monkeypatch):
     ledger = {
         "predictions": [
             {
-                "id": "old_council",
-                "netuid": 3,
-                "pick_source": "council",
+                "id": "p_expired",
+                "netuid": 12,
+                "pick_source": "pump_lead",
                 "direction": "up",
-                "created_at": _iso(timedelta(days=8)),
+                "created_at": _iso(timedelta(seconds=3601)),
             }
         ],
         "resolved": [],
     }
-    monkeypatch.setattr("internal.bots.proof_scout.load_predictions", lambda **_kwargs: ledger)
-    monkeypatch.setattr(
-        "internal.bots.proof_scout.build_evidence_report",
-        lambda: {"status": "ok", "paths": {}, "pick_audit": {}, "evidence_sources": []},
-    )
-    monkeypatch.setattr(
-        "internal.message_intel.context.lookup_social_sentiment_for_netuid",
-        lambda netuid: None,
-    )
-    bundle = gather_evidence(3, claim="LONG", now=NOW)
-    assert bundle.to_dict()["evidence"][0]["freshness"]["status"] == "stale"
-    assert bundle.status == "degraded"
+    _patch_sources(monkeypatch, ledger)
+    bundle = gather_evidence(12, "LONG", now=NOW)
+    item = bundle.to_dict()["evidence"][0]
+    assert item["freshness"]["status"] == "expired"
+    assert bundle.status == "ok"
+    assert bundle.freshness["counts"]["expired"] == 1
 
 
 def test_read_path_does_not_persist_prediction_migrations(monkeypatch):
@@ -224,4 +242,6 @@ def test_invalid_subnet_is_degraded_and_read_only(monkeypatch):
     bundle = gather_evidence("not-a-subnet", now=NOW)
     assert bundle.status == "degraded"
     assert bundle.approval_required is False
+    assert bundle.thesis is None
     assert "invalid subnet_id" in bundle.unknowns
+    assert bundle.contradiction_flags == ()
