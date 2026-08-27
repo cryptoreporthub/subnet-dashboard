@@ -1,0 +1,39 @@
+{
+  "crit_id": "hero-first",
+  "sha": "9f1059da",
+  "static_v": "7b9cae5e",
+  "fly_deploy": 1519,
+  "gate": "BLOCKED",
+  "product_round": 1,
+  "runs": [
+    "critpath-hero-first-1",
+    "critpath-hero-first-2",
+    "critpath-hero-first-3"
+  ],
+  "machine_state": [
+    "warm",
+    "contended",
+    "warm"
+  ],
+  "median": {
+    "dcl_ms": 2410.8,
+    "stats_start_s": 2.701,
+    "stats_end_s": 9.646,
+    "hero_complete_s": 14.774,
+    "ttfb_ms": 128.0,
+    "html_parse_ms": 136.3,
+    "first_script_responseEnd_ms": 1794.7,
+    "script_wall_responseEnd_ms": 1943.3,
+    "hydrate_start_ms": 2366.8,
+    "hydrate_end_ms": 14213.7,
+    "hydrate_duration_ms": 10395.1,
+    "health_p95_ms": 480.02
+  },
+  "vs_marks_median": {
+    "dcl_ms": 4375.7,
+    "stats_start_s": 4.71,
+    "stats_end_s": 13.453,
+    "hero_complete_s": 13.881,
+    "hydrate_end_ms": 13476.3
+  }
+}
