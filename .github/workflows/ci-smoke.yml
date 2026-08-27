@@ -1,3 +1,4 @@
+
 # Required PR/main gate — single job named "smoke" (branch protection).
 # Homepage hydration smoke is also registered below; this comment commit re-queues PR validation.
 # Replaces the old health-only smoke + duplicate ci-check + Phase K gate stack.
@@ -65,6 +66,7 @@ jobs:
             tests/test_liveness_tracker.py \
             tests/test_no_handrolled_liveness.py \
             tests/test_resolver_scheduler.py \
+            tests/test_pump_ladder_scheduler.py \
             tests/test_scheduler.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()

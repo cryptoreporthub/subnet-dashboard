@@ -7,6 +7,5 @@
   "internal/indicators/indicator_scheduler.py",
   "internal/learning/outcome_snapshot_scheduler.py",
   "internal/message_intel/calibration_snapshot_scheduler.py",
-  "internal/pump/desk_snapshot_scheduler.py",
-  "internal/pump/scheduler.py"
+  "internal/pump/desk_snapshot_scheduler.py"
 ]
