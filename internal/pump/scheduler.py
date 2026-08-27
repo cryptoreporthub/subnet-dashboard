@@ -1,3 +1,4 @@
+
 """Boot + periodic pump ladder scanner (mirrors selector scheduler pattern)."""
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker
 from internal.pump.state import scan_all_subnets
 
 logger = logging.getLogger(__name__)
@@ -47,7 +49,6 @@ def _persist_scheduler_meta(
         data = load_state()
         meta = data.setdefault("meta", {})
         meta["scheduler_last_run_at"] = run_at
-        meta["scheduler_last_run_ok"] = ok
         meta["scheduler_last_run_error"] = error
         if last_result:
             meta["scheduler_last_result"] = last_result
@@ -69,7 +70,6 @@ def _read_persisted_scheduler_meta() -> Dict[str, Any]:
             last_result = {"phase_counts": meta.get("phase_counts")}
         return {
             "last_run_at": last_run_at,
-            "last_run_ok": meta.get("scheduler_last_run_ok"),
             "last_run_error": meta.get("scheduler_last_run_error"),
             "last_result": last_result,
         }
@@ -106,31 +106,34 @@ def record_ladder_scan_run(
         with _lock:
             target = _scheduler
     if target is not None:
-        target._apply_run_result(run_at, ok, error, last_result)
+        target._apply_run_result(run_at, ok, error, last_result, result)
 
 
 class PumpLadderScheduler:
     def __init__(self, refresh_minutes: int = PUMP_LADDER_REFRESH_MINUTES):
         self.refresh_minutes = refresh_minutes
-        self._running = False
-        self._last_run_at: Optional[str] = None
-        self._last_ok: Optional[bool] = None
+        self._active = False
+        self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
+        self.liveness = LivenessTracker(
+            name="pump_ladder",
+            interval_seconds=max(60, int(refresh_minutes) * 60),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
+        self.liveness.start()
         persisted = _read_persisted_scheduler_meta()
         if persisted.get("last_run_at"):
-            self._apply_run_result(
-                str(persisted["last_run_at"]),
-                persisted.get("last_run_ok"),
-                persisted.get("last_run_error"),
-                persisted.get("last_result") or {},
-            )
+            self._last_tick_at = str(persisted["last_run_at"])
+            self._last_error = persisted.get("last_run_error")
+            self._last_result = persisted.get("last_result") or {}
         if immediate:
             threading.Thread(target=self._tick, daemon=True).start()
         else:
@@ -139,18 +142,20 @@ class PumpLadderScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._running = False
+            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
-            "running": self._running,
+            "running": self._active,
             "refresh_minutes": self.refresh_minutes,
-            "last_run_at": self._last_run_at,
-            "last_run_ok": self._last_ok,
+            "last_run_at": self._last_tick_at,
+            "last_run_ok": snap["status"] == "ok",
             "last_run_error": self._last_error,
             "last_result": self._last_result,
+            "liveness": snap,
         }
 
     def _apply_run_result(
@@ -159,19 +164,31 @@ class PumpLadderScheduler:
         ok: Optional[bool],
         error: Optional[str],
         last_result: Dict[str, Any],
+        result: Optional[Dict[str, Any]] = None,
     ) -> None:
+        result = result or {}
         with _lock:
-            self._last_run_at = run_at
-            self._last_ok = ok
+            self._last_tick_at = run_at
             self._last_error = error
             self._last_result = last_result
+
+        skipped = result.get("skipped")
+        if skipped:
+            self.liveness.record_skip(str(skipped))
+        elif ok:
+            self.liveness.record_success(evidence={
+                "scanned": last_result.get("scanned", 0),
+                "op": "pump_ladder_scan",
+            })
+        else:
+            self.liveness.record_failure(error or result.get("error") or "scan failed")
 
     def run_once(self) -> Dict[str, Any]:
         return self._tick()
 
     def _schedule(self, minutes: int) -> None:
         with _lock:
-            if not self._running:
+            if not self._active:
                 return
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
@@ -186,7 +203,7 @@ class PumpLadderScheduler:
 
         with heavy_job_slot("pump_ladder") as acquired:
             if not acquired:
-                result = {"ok": True, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
+                result = {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 record_ladder_scan_run(result, sched=self)
                 self._schedule_next(result)
                 return result
@@ -202,9 +219,7 @@ class PumpLadderScheduler:
             result["error"] = str(exc)
             logger.warning("Pump ladder scan failed: %s", exc)
 
-        if not result.get("ok"):
-            record_ladder_scan_run(result, sched=self)
-
+        record_ladder_scan_run(result, sched=self)
         self._schedule_next(result)
         return result
 
