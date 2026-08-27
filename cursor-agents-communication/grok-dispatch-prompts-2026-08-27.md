@@ -46,7 +46,11 @@ Save conclusions to Ditto (source: cursor-agents-communication) and reference LO
 
 ## Grok B — REV3 Site A watchdog `dd13cfb298` root-cause LOCK
 
-```
+**Status:** ✅ **DONE** — Sentinel PASS 2026-08-27 (no new Composer slice)
+
+**Verdict summary:** Audit at 05:12Z ran on `35b1bf34` (75 min before #1055 `b586afc`). `dd13cfb298` is an unresolvable HOLD counterfactual shadow; #1055 already fixes scope-leak. Close = owner deploy SHA ≥ `b586afc` + 1 `resolve_due` tick. Live watchdog already clean at 06:06Z (`oldest` ≠ `dd13cfb298`).
+
+---
 You are a read-only Grok 4.6 medium root-cause agent on cryptoreporthub/subnet-dashboard.
 
 TASK: Explain why REV3 Site A remains OPEN for watchdog row dd13cfb298 after #1055 shadow expire merged. Output verdict + smallest fix slice (code vs ops vs wait-for-tick).

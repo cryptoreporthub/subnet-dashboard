@@ -1,6 +1,6 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-27T03:10:00Z  
+**Last updated:** 2026-08-27T06:30:00Z  
 **main:** `688f0aef` — freshness policy contracts (#1058 P1 hydration, REV3 audit, resolver revive #1050–#1051, shadow expire #1055)  
 **Models:** `model-guide.md` — **Composer 2.5** builds · **Grok 4.6 medium** design/root-cause LOCK · **Luna high** AC/honesty final pass (no Sonnet 4.5/4.6)  
 **Active plans:** `grok-dispatch-prompts-2026-08-27.md` · `g0-1058-composer-p1-handoff.md` · `accuracy-lift-lock.md` · `gameplan-beyond-16.md` (§17 **COMPLETE**)
@@ -13,9 +13,9 @@
 | **#1058 hydration starvation** | **P1 MERGED** `64176d16` — SSR pick read-only + bounded `GET /api/daily-pick` · **issue OPEN** — post-P1 prod audit **FAIL** (hero >10s, `/health` p95 ~8s during burst) |
 | **#1058 Phase 2** | **GATED on Grok LOCK** — client stagger in `cockpit_hydrate.js` · prompts: `grok-dispatch-prompts-2026-08-27.md` (Grok A) |
 | **G0 harness** | **PASS** reproduced starvation (`artifacts/g0-baseline/G0_REPORT.md`) · post-P1 reprobe **FAIL** close bar |
-| **REV3 closeout** | **PARTIAL** — audit workflow **MERGED** #1053/#1054 · Site C PASS · **Site A OPEN** `dd13cfb298` · Site B watchdog open · Grok B prompt queued |
+| **REV3 closeout** | **PARTIAL** — audit **MERGED** #1053/#1054 · Site C PASS · **Site A: Sentinel PASS** (no code) — stale audit on pre-#1055 SHA; close after deploy ≥ `b586afc` + 1 `resolve_due` tick · Site B cosmetic `pending_count` only |
 | **Resolver / grading wave** | **MERGED** #1050 (degraded payloads + grading A–B) · #1051 (revive hung scheduler + honest running health) |
-| **Shadow expire (#1055)** | **MERGED** — past-grace shadows expire; excluded from watchdog · prod row `dd13cfb298` still under investigation |
+| **Shadow expire (#1055)** | **MERGED** `b586afc` — past-grace shadows expire; excluded from watchdog warning · `dd13cfb298` explainable HOLD shadow; row retires on tick post-deploy |
 | **Loop honesty (#1056/#1057)** | **MERGED** — `loop_learned.weight_updates` truthful |
 | **Freshness contracts** | **MERGED** `688f0aef` — source-specific freshness + human approval policy |
 | **Intel loop v2.1 (#1034)** | **DRAFT OPEN** — `docs/intel-loop-v21-review-findings.md` · 62 focused tests pass · merge readiness = Grok honesty review (queued) |
@@ -29,9 +29,8 @@
 
 | Run | Model | Task | Lock / prompt |
 |-----|-------|------|----------------|
-| **Grok A** | Grok medium | #1058 Phase 2 hydrate stagger LOCK | `grok-dispatch-prompts-2026-08-27.md` |
-| **Grok B** | Grok medium | REV3 Site A `dd13cfb298` root-cause LOCK | same |
-| **Composer** | 2.5 slow | Implement after Grok A LOCK lands | `cursor/hydrate-stagger-phase2-*` |
+| **Drift/QA** | Grok medium | #1058 Phase 2 hydrate stagger LOCK | `grok-dispatch-prompts-2026-08-27.md` |
+| **Composer** | 2.5 slow | Implement after Drift/QA LOCK lands | `cursor/hydrate-stagger-phase2-*` |
 | **Luna** | high | Final AC pass on #1058 Phase 2 PR | mandatory — do not skip |
 
 ## Infra STATUS
@@ -90,8 +89,8 @@
 
 | Track | Gate |
 |-------|------|
-| **#1058 Phase 2** | Grok A LOCK → Composer → Luna → owner deploy → G0 ×2 on prod |
-| **REV3 Site A/B** | Grok B LOCK → smallest fix or ops closeout |
+| **#1058 Phase 2** | Drift/QA LOCK → Composer → Luna → owner deploy → G0 ×2 on prod |
+| **REV3 Site A** | Sentinel PASS — owner deploy SHA ≥ `b586afc` + 1 `resolve_due` tick; no volume edit |
 | **Intel #1034** | Grok honesty review → merge when green |
 | **Accuracy lift 7b/7c** | `graded_30d ≥ 20` + human GO |
 | **Phase L3/L4** | Grok design LOCK before Composer build |
@@ -104,7 +103,8 @@
 - Sequential `GET /api/daily-pick` improved post-P1 (~0.75s stored HOLD vs G0 8.3s timeout HOLD)
 - Browser cold load still starves: stats aborted at 28s retry budget; `/health` p95 ~8s during fan-out
 - Pump desk automation (Ditto 2026-08-25): no BUILDING alerts; daily-pick may HOLD when handler busy
-- **Next:** run Grok A+B in parallel per `grok-dispatch-prompts-2026-08-27.md`
+- REV3 Site A: Sentinel PASS 2026-08-27 — `dd13cfb298` was audited on pre-#1055 SHA; live watchdog already clean (`oldest` ≠ `dd13cfb298`)
+- **Next:** Drift/QA LOCK for #1058 Phase 2; owner REV3 closeout deploy if prod still on `35b1bf34`
 
 ## Out of scope
 
