@@ -19,6 +19,15 @@ LETTER_SCRIPTS = (
     Path("static/js/premium_judges.js"),
 )
 MINDMAP_GRAPH = Path("static/js/mindmap_graph.js")
+DATA_FRESHNESS = Path("static/js/data_freshness.js")
+DEV_PULSE = Path("static/js/dev_pulse.js")
+
+# Scripts whose <script defer> tag appears before api_fetch.js on the homepage.
+PRE_API_FETCH_SELF_STARTERS = (
+    DATA_FRESHNESS,
+    DEV_PULSE,
+    MINDMAP_GRAPH,
+)
 
 # #1058 stats-window occupants — initial self-start must wait on afterHeroCritical.
 STATS_WINDOW_GATED = {
@@ -156,6 +165,157 @@ if (!ran) throw new Error('waiter did not run after release');
 let late = false;
 ctx.afterHeroCritical(function () { late = true; });
 if (!late) throw new Error('post-release waiter must run immediately');
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_pre_api_fetch_self_starters_wait_for_dcl_then_gate():
+    """Defer evaluate at interactive must not fetch before api_fetch.js loads."""
+    gate_names = {
+        DATA_FRESHNESS: "startPollWhenHeroReady",
+        DEV_PULSE: "startLoadWhenHeroReady",
+        MINDMAP_GRAPH: "refreshGraph",
+    }
+    for path in PRE_API_FETCH_SELF_STARTERS:
+        text = path.read_text(encoding="utf-8")
+        gate_fn = gate_names[path]
+        gate_block = text.split(f"function {gate_fn}(")[1].split("function ")[0]
+        assert "DOMContentLoaded" in gate_block, path
+        assert (
+            "document.readyState === 'complete'" in gate_block
+            or 'document.readyState === "complete"' in gate_block
+        ), path
+        assert f"function {gate_fn}" in text, path
+
+
+def test_data_freshness_fetch_queued_until_hero_release():
+    """Prod order: data_freshness.js evaluates before api_fetch.js (scripts partial)."""
+    script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const fetches = [];
+const dcl = [];
+const ctx = {
+  fetch: function (url) {
+    fetches.push(String(url));
+    return Promise.resolve({
+      ok: true,
+      json: function () { return Promise.resolve({ sync_enabled: true, effective_source: 'blockmachine', subnet_count: 1 }); },
+    });
+  },
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout,
+  setInterval: function () { return 0; },
+  clearInterval: clearInterval,
+  document: {
+    readyState: 'interactive',
+    getElementById: function (id) {
+      if (id === 'dataFreshnessBadge') return { className: '', textContent: 'Loading', setAttribute: function () {} };
+      if (id === 'liveFeedPill') return { className: '', innerHTML: '' };
+      if (id === 'headerDataSource') return { textContent: 'cache' };
+      return null;
+    },
+    addEventListener: function (ev, fn) { if (ev === 'DOMContentLoaded') dcl.push(fn); },
+    removeEventListener: function (ev, fn) {
+      if (ev !== 'DOMContentLoaded') return;
+      const i = dcl.indexOf(fn);
+      if (i >= 0) dcl.splice(i, 1);
+    },
+    visibilityState: 'visible',
+  },
+};
+ctx.window = ctx;
+(async function () {
+  vm.runInNewContext(fs.readFileSync('static/js/data_freshness.js', 'utf8'), ctx);
+  if (fetches.length) throw new Error('freshness fetched before api_fetch loaded: ' + fetches);
+  vm.runInNewContext(fs.readFileSync('static/js/api_fetch.js', 'utf8'), ctx);
+  dcl.slice().forEach(function (fn) { fn(); });
+  if (fetches.length) throw new Error('freshness fetched before release: ' + fetches);
+  ctx.releaseHeroCritical();
+  for (let i = 0; i < 20; i++) {
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    if (fetches.some(function (u) { return u.indexOf('/api/data-freshness') >= 0; })) break;
+  }
+  if (!fetches.some(function (u) { return u.indexOf('/api/data-freshness') >= 0; })) {
+    throw new Error('freshness did not fetch after release: ' + JSON.stringify(fetches));
+  }
+  process.exit(0);
+})().catch(function (err) {
+  console.error(err && err.stack ? err.stack : err);
+  process.exit(1);
+});
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_dev_pulse_fetch_queued_until_hero_release():
+    """Prod order: dev_pulse.js body tag evaluates before api_fetch.js."""
+    script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const fetches = [];
+const dcl = [];
+const section = { classList: { remove: function () {}, add: function () {} } };
+const list = { innerHTML: '' };
+const ctx = {
+  fetch: function (url) {
+    fetches.push(String(url));
+    return Promise.resolve({
+      ok: true,
+      json: function () { return Promise.resolve({ status: 'success', subnets: [], summary: {} }); },
+    });
+  },
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout,
+  AbortController: AbortController,
+  document: {
+    readyState: 'interactive',
+    getElementById: function (id) {
+      if (id === 'section-dev-pulse') return section;
+      if (id === 'dev-pulse-list') return list;
+      if (id === 'dev-pulse-summary') return { textContent: '', hidden: true };
+      return null;
+    },
+    addEventListener: function (ev, fn) { if (ev === 'DOMContentLoaded') dcl.push(fn); },
+    removeEventListener: function (ev, fn) {
+      if (ev !== 'DOMContentLoaded') return;
+      const i = dcl.indexOf(fn);
+      if (i >= 0) dcl.splice(i, 1);
+    },
+  },
+};
+ctx.window = ctx;
+(async function () {
+  vm.runInNewContext(fs.readFileSync('static/js/dev_pulse.js', 'utf8'), ctx);
+  if (fetches.length) throw new Error('dev pulse fetched before api_fetch loaded: ' + fetches);
+  vm.runInNewContext(fs.readFileSync('static/js/api_fetch.js', 'utf8'), ctx);
+  dcl.slice().forEach(function (fn) { fn(); });
+  if (fetches.length) throw new Error('dev pulse fetched before release: ' + fetches);
+  ctx.releaseHeroCritical();
+  for (let i = 0; i < 20; i++) {
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    if (fetches.some(function (u) { return u.indexOf('/api/dev-radar') >= 0; })) break;
+  }
+  if (!fetches.some(function (u) { return u.indexOf('/api/dev-radar') >= 0; })) {
+    throw new Error('dev pulse did not fetch after release: ' + JSON.stringify(fetches));
+  }
+  process.exit(0);
+})().catch(function (err) {
+  console.error(err && err.stack ? err.stack : err);
+  process.exit(1);
+});
 """
     result = subprocess.run(
         ["node", "-e", script],

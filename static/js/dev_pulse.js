@@ -122,9 +122,21 @@
       });
   }
 
+  // #1058: body partial tag runs before api_fetch.js — wait for DCL then queue.
   function startLoadWhenHeroReady() {
-    if (window.afterHeroCritical) window.afterHeroCritical(loadDevPulse);
-    else loadDevPulse();
+    if (window.afterHeroCritical) {
+      window.afterHeroCritical(loadDevPulse);
+      return;
+    }
+    if (document.readyState === "complete") {
+      loadDevPulse();
+      return;
+    }
+    document.addEventListener("DOMContentLoaded", function onDclForDevPulse() {
+      document.removeEventListener("DOMContentLoaded", onDclForDevPulse);
+      if (window.afterHeroCritical) window.afterHeroCritical(loadDevPulse);
+      else loadDevPulse();
+    });
   }
 
   if (document.readyState === "loading") {
