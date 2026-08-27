@@ -941,7 +941,12 @@ def stale_data_labeled_live(
                 Contradiction(
                     TAG_LIVE_VS_FRESHNESS,
                     payload.name,
-                    source,
+                    str(
+                        envelope.get("source")
+                        or payload.freshness_source
+                        or payload.source
+                        or "unknown"
+                    ),
                     detail,
                 )
             )

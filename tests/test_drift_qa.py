@@ -219,6 +219,32 @@ def test_stuck_panel_and_stale_live_label():
     assert by_name[CHECK_STALE_DATA].flagged is True
     assert by_name[CHECK_STALE_DATA].severity == "critical"
     assert any(item.tag == "live_label_vs_freshness" for item in report.contradictions)
+    live_vs = next(
+        item for item in report.contradictions if item.tag == "live_label_vs_freshness"
+    )
+    assert live_vs.right == "live_feed"
+
+
+def test_live_vs_freshness_names_source_when_freshness_source_missing():
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="live",
+                    source="internal/subnets",
+                    labeled_live=True,
+                    captured_at=(NOW - timedelta(hours=3)).isoformat(),
+                    http_status=200,
+                    body={"status": "success"},
+                ),
+            ),
+            now=NOW,
+        )
+    )
+    live_vs = next(
+        item for item in report.contradictions if item.tag == "live_label_vs_freshness"
+    )
+    assert live_vs.right == "internal/subnets"
     assert report.freshness["status"] in {"stale", "degraded", "missing"}
     assert report.freshness.get("sources") or report.freshness.get("source")
 
