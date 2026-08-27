@@ -23,7 +23,7 @@ import re
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, List, Mapping, Optional
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from internal.ops.bot_policy import (
     aggregate_freshness,
@@ -204,11 +204,22 @@ def _collect(
 ) -> Dict[str, Any]:
     if snapshots is not None:
         sources_read.append("snapshots")
-        return dict(snapshots)
+        payload = dict(snapshots)
+        payload.setdefault("_degraded", set())
+        return payload
     return _read_live(netuid, sources_read)
 
 
-def _read_json(path: str) -> Optional[Dict[str, Any]]:
+def _read_json(path: str) -> Tuple[Optional[Dict[str, Any]], bool]:
+    """Return ``(payload, degraded)``. Missing files are not degraded."""
+    try:
+        if not os.path.isfile(path):
+            return None, False
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return (data if isinstance(data, dict) else None), False
+    except Exception:
+        return None, True
     try:
         if not os.path.isfile(path):
             return None
@@ -220,7 +231,7 @@ def _read_json(path: str) -> Optional[Dict[str, Any]]:
 
 
 def _read_live(netuid: Optional[int], sources_read: List[str]) -> Dict[str, Any]:
-    collected: Dict[str, Any] = {}
+    collected: Dict[str, Any] = {"_degraded": set()}
     try:
         from internal.pump.state import load_state
 
@@ -228,15 +239,22 @@ def _read_live(netuid: Optional[int], sources_read: List[str]) -> Dict[str, Any]
         sources_read.append("internal.pump.state.load_state")
     except Exception:
         collected["pump_state"] = None
+        collected["_degraded"].add("pump_desk")
         sources_read.append("internal.pump.state.load_state:error")
 
-    collected["pump_desk"] = _read_json(os.path.join("data", "pump_desk", "latest.json"))
+    pump_desk, pump_desk_degraded = _read_json(os.path.join("data", "pump_desk", "latest.json"))
+    collected["pump_desk"] = pump_desk
+    if pump_desk_degraded:
+        collected["_degraded"].add("pump_desk")
     sources_read.append("data/pump_desk/latest.json")
 
-    collected["signals"] = _read_json(os.path.join("data", "signals.json"))
+    signals, signals_degraded = _read_json(os.path.join("data", "signals.json"))
+    collected["signals"] = signals
+    if signals_degraded:
+        collected["_degraded"].add("market_data")
     sources_read.append("data/signals.json")
 
-    live_cache = _read_live_cache(netuid)
+    live_cache = _read_live_cache(netuid, collected)
     collected["live_subnet"] = live_cache.get("subnet")
     collected["live_synced_at"] = live_cache.get("synced_at")
     sources_read.append("data/live_subnets.json")
@@ -248,6 +266,7 @@ def _read_live(netuid: Optional[int], sources_read: List[str]) -> Dict[str, Any]
         sources_read.append("internal.council.pick_history.get_history")
     except Exception:
         collected["council_history"] = None
+        collected["_degraded"].add("pick_audit")
         sources_read.append("internal.council.pick_history.get_history:error")
 
     try:
@@ -257,25 +276,34 @@ def _read_live(netuid: Optional[int], sources_read: List[str]) -> Dict[str, Any]
         sources_read.append("internal.council.score_snapshots.load_score_snapshot")
     except Exception:
         collected["score_snapshot"] = None
+        collected["_degraded"].add("learning_health")
         sources_read.append("internal.council.score_snapshots.load_score_snapshot:error")
 
-    collected["learning_outcomes"] = _read_json(
+    outcomes, outcomes_degraded = _read_json(
         os.path.join("data", "learning_outcomes", "latest.json")
     )
+    collected["learning_outcomes"] = outcomes
+    if outcomes_degraded:
+        collected["_degraded"].add("learning_outcomes")
     sources_read.append("data/learning_outcomes/latest.json")
-    collected["predictions"] = _read_json(os.path.join("data", "predictions.json"))
+    predictions, predictions_degraded = _read_json(os.path.join("data", "predictions.json"))
+    collected["predictions"] = predictions
+    if predictions_degraded:
+        collected["_degraded"].add("learning_outcomes")
     sources_read.append("data/predictions.json")
     return collected
 
 
-def _read_live_cache(netuid: Optional[int]) -> Dict[str, Any]:
+def _read_live_cache(netuid: Optional[int], collected: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     try:
         from internal.live_subnets import _cache_path
 
         path = _cache_path()
     except Exception:
         path = os.path.join("data", "live_subnets.json")
-    data = _read_json(path)
+    data, degraded = _read_json(path)
+    if degraded and isinstance(collected, dict):
+        collected.setdefault("_degraded", set()).add("market_data")
     if not data:
         return {}
     subnet = None
@@ -329,13 +357,22 @@ def _signal_row(netuid: Optional[int], collected: Mapping[str, Any]) -> Optional
         row = latest.get(str(netuid)) or latest.get(netuid)
         if isinstance(row, dict):
             return row
-    for entry in payload.get("entries") or []:
-        if isinstance(entry, dict) and _same_netuid(
+    matches = [
+        entry
+        for entry in payload.get("entries") or []
+        if isinstance(entry, dict)
+        and _same_netuid(
             entry.get("subnet_id") if entry.get("subnet_id") is not None else entry.get("netuid"),
             netuid,
-        ):
-            return entry
-    return None
+        )
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda entry: str(entry.get("timestamp") or ""))
+
+
+def _is_degraded(collected: Mapping[str, Any], source: str) -> bool:
+    return source in (collected.get("_degraded") or set())
 
 
 def _envelope(
@@ -424,7 +461,12 @@ def _add_pump_observations(
         or desk.get("captured_at")
     )
     degraded = bool(desk and str(desk.get("status") or "").lower() in {"error", "timeout"})
-    env = _envelope("pump_desk", captured, now=now, degraded=degraded)
+    env = _envelope(
+        "pump_desk",
+        captured,
+        now=now,
+        degraded=degraded or _is_degraded(collected, "pump_desk"),
+    )
     envelopes.append(env)
     evidence.append(_evidence_item(population="pump", source="pump_desk", freshness=env, ref="pump_desk"))
     if not pump_row:
@@ -474,7 +516,12 @@ def _add_market_observations(
     unknowns: List[Dict[str, Any]],
 ) -> None:
     captured = collected.get("live_synced_at") or (live_row or {}).get("updated_at")
-    env = _envelope("market_data", captured, now=now)
+    env = _envelope(
+        "market_data",
+        captured,
+        now=now,
+        degraded=_is_degraded(collected, "market_data"),
+    )
     envelopes.append(env)
     evidence.append(
         _evidence_item(population="market_data", source="market_data", freshness=env, ref="live_subnets")
@@ -529,7 +576,12 @@ def _add_signal_observations(
 ) -> None:
     payload = collected.get("signals") if isinstance(collected.get("signals"), dict) else {}
     captured = (signal_row or {}).get("timestamp") or payload.get("updated_at") or payload.get("refreshed_at")
-    env = _envelope("market_data", captured, now=now)
+    env = _envelope(
+        "market_data",
+        captured,
+        now=now,
+        degraded=_is_degraded(collected, "market_data"),
+    )
     envelopes.append(env)
     evidence.append(_evidence_item(population="signals", source="market_data", freshness=env, ref="signals"))
     if not signal_row:
@@ -570,12 +622,17 @@ def _add_council_observations(
     captured = None
     active = history.get("active") if isinstance(history.get("active"), dict) else None
     if active:
-        captured = active.get("created_at") or active.get("recorded_at")
+        captured = active.get("picked_at") or active.get("created_at") or active.get("recorded_at")
     elif history.get("history"):
         first = history["history"][0]
         if isinstance(first, dict):
-            captured = first.get("resolved_at") or first.get("created_at")
-    hist_env = _envelope("pick_audit", captured, now=now)
+            captured = first.get("resolved_at") or first.get("picked_at") or first.get("created_at")
+    hist_env = _envelope(
+        "pick_audit",
+        captured,
+        now=now,
+        degraded=_is_degraded(collected, "pick_audit"),
+    )
     envelopes.append(hist_env)
     evidence.append(
         _evidence_item(population="council", source="pick_audit", freshness=hist_env, ref="pick_history")
@@ -608,7 +665,12 @@ def _add_council_observations(
             )
         )
 
-    snap_env = _envelope("learning_health", snap.get("written_at"), now=now)
+    snap_env = _envelope(
+        "learning_health",
+        snap.get("written_at"),
+        now=now,
+        degraded=_is_degraded(collected, "learning_health"),
+    )
     envelopes.append(snap_env)
     evidence.append(
         _evidence_item(
@@ -655,11 +717,16 @@ def _add_learning_observations(
     envelopes: List[Dict[str, Any]],
     unknowns: List[Dict[str, Any]],
 ) -> None:
-    from internal.learning.evidence import evidence_population, evidence_source
+    from internal.learning.evidence import evidence_population
 
     outcomes = collected.get("learning_outcomes") if isinstance(collected.get("learning_outcomes"), dict) else {}
     predictions = collected.get("predictions") if isinstance(collected.get("predictions"), dict) else {}
-    env = _envelope("learning_outcomes", outcomes.get("captured_at"), now=now)
+    env = _envelope(
+        "learning_outcomes",
+        outcomes.get("captured_at"),
+        now=now,
+        degraded=_is_degraded(collected, "learning_outcomes"),
+    )
     envelopes.append(env)
     evidence.append(
         _evidence_item(
@@ -691,9 +758,7 @@ def _add_learning_observations(
         for row in predictions.get(bucket) or []:
             if not isinstance(row, dict) or netuid is None or not _same_netuid(row.get("netuid"), netuid):
                 continue
-            population = evidence_population(row)
-            source = evidence_source(row)
-            if population == "archived" or source == "archive":
+            if _is_archive_row(row):
                 archive_hit = row
             elif live_hit is None:
                 live_hit = row
@@ -802,6 +867,15 @@ def _add_message_intel_evidence(
         )
 
 
+def _is_archive_row(row: Mapping[str, Any]) -> bool:
+    from internal.learning.evidence import evidence_population, evidence_source
+
+    if row.get("archived") or row.get("archive_source"):
+        return True
+    copied = dict(row)
+    return evidence_population(copied) == "archived" or evidence_source(copied) == "archive"
+
+
 def _number(row: Optional[Mapping[str, Any]], *keys: str) -> Optional[float]:
     if not row:
         return None
@@ -840,6 +914,20 @@ def _comparison_report(
     if health:
         historical["learning_graded"] = health.get("graded")
         historical["learning_correct"] = health.get("correct")
+    history = collected.get("council_history") if isinstance(collected.get("council_history"), dict) else {}
+    council_row = history.get("active") if isinstance(history.get("active"), dict) else None
+    if council_row is None:
+        for row in history.get("history") or []:
+            if isinstance(row, dict):
+                council_row = row
+                break
+    if council_row:
+        historical["council_action"] = council_row.get("action") or council_row.get("outcome")
+        historical["council_at"] = (
+            council_row.get("resolved_at")
+            or council_row.get("picked_at")
+            or council_row.get("created_at")
+        )
     deltas: List[Dict[str, Any]] = []
     if current.get("phase") and historical.get("phase") and current["phase"] != historical["phase"]:
         deltas.append(
@@ -871,11 +959,13 @@ def _comparison_report(
                 "delta": round(current_score - prior_score, 6),
             }
         )
+    supporting = [item.get("freshness") for item in observations if item.get("freshness")]
     return {
         "current": current,
         "historical": historical,
         "deltas": deltas,
         "observation_ids": [item["id"] for item in observations if item.get("kind") == "observation"],
+        "freshness": aggregate_freshness(supporting) if supporting else classify_freshness("market_data"),
     }
 
 
@@ -902,12 +992,26 @@ def _signal_change_explanation(
         change = _number(live_row, "price_change_24h", "change_24h")
         if change is not None:
             drivers.append(f"price_change_24h={change}")
+    council_obs = [item for item in observations if item.get("population") == "council"]
+    learning_obs = [item for item in observations if item.get("population") == "learning"]
+    if council_obs:
+        drivers.append("council_history_present")
+    if learning_obs:
+        drivers.append("learning_outcomes_present")
     if changed:
+        context_bits = []
+        if council_obs:
+            context_bits.append(council_obs[0]["text"].rstrip("."))
+        if learning_obs:
+            context_bits.append(learning_obs[0]["text"].rstrip("."))
         explanation = (
             f"The pump ladder moved {from_phase} → {to_phase}"
             + (f" with {', '.join(drivers[:3])}" if drivers else "")
-            + ". This explains the observed signal change; it is not a new Council pick."
+            + ". This explains the observed signal change using pump, signal, council, "
+            "and learning reads; it is not a new Council pick."
         )
+        if context_bits:
+            explanation += " Separate populations: " + "; ".join(context_bits) + "."
     elif signal_row and signal_row.get("signal_type"):
         explanation = (
             f"No pump phase transition is on file; the stored signal remains "
@@ -915,16 +1019,23 @@ def _signal_change_explanation(
         )
     else:
         explanation = "No signal-change transition is available to explain."
+    supporting = [
+        item.get("freshness")
+        for item in observations
+        if item.get("population") in {"pump", "signals", "market_data", "council", "learning"}
+        and item.get("freshness")
+    ]
     return {
         "changed": changed,
         "from_phase": from_phase,
         "to_phase": to_phase,
         "drivers": drivers,
         "explanation": explanation,
+        "freshness": aggregate_freshness(supporting) if supporting else classify_freshness("pump_desk"),
         "observation_ids": [
             item["id"]
             for item in observations
-            if item.get("population") in {"pump", "signals", "market_data"}
+            if item.get("population") in {"pump", "signals", "market_data", "council", "learning"}
         ],
     }
 
@@ -967,13 +1078,13 @@ def _add_interpretations(
                 extra={"capability": "comparison"},
             )
         )
-    if signal_change.get("changed") or signal_change.get("drivers"):
+    if signal_change.get("changed"):
         interpretations.append(
             _claim(
                 "interpretation",
                 str(signal_change.get("explanation")),
                 population="market_desk",
-                freshness=freshness,
+                freshness=signal_change.get("freshness") or freshness,
                 based_on=signal_change.get("observation_ids") or obs_ids,
                 extra={"capability": "signal_change"},
             )

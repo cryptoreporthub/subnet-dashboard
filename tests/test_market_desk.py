@@ -251,10 +251,13 @@ def test_comparison_signal_change_and_plain_language_summary():
     assert result["comparison"]["current"]["phase"] == "ACCUMULATING"
     assert result["comparison"]["historical"]["phase"] == "STIRRING"
     assert result["comparison"]["deltas"]
+    assert result["comparison"]["freshness"]["status"] in {"fresh", "aging", "stale", "missing", "degraded"}
     assert result["signal_change"]["changed"] is True
     assert result["signal_change"]["from_phase"] == "STIRRING"
     assert result["signal_change"]["to_phase"] == "ACCUMULATING"
+    assert result["signal_change"]["freshness"]["status"] in {"fresh", "aging", "stale", "missing", "degraded"}
     assert "volume_intensity" in " ".join(result["signal_change"]["drivers"])
+    assert "council" in result["signal_change"]["explanation"].lower() or "learning" in result["signal_change"]["explanation"].lower()
     assert "SN65" in result["summary"]
     assert "observation" in result["summary"].lower()
     assert "does not override" in result["summary"].lower()
@@ -316,3 +319,81 @@ def test_archive_freshness_does_not_make_current_claim_fresh():
     archive = [item for item in result["evidence"] if item.get("claim_scope") == "historical"]
     assert archive
     assert all(item["authoritative"] is False for item in archive)
+
+
+def test_archived_council_row_is_not_a_live_learning_observation():
+    snapshots = _fresh_snapshots(
+        predictions={
+            "resolved": [
+                {
+                    "netuid": 65,
+                    "pick_source": "council",
+                    "archived": True,
+                    "outcome": "hit",
+                    "resolved_at": _iso(timedelta(hours=2)),
+                }
+            ]
+        }
+    )
+    result = analyze("SN65", now=NOW, snapshots=snapshots)
+    live_learning = [
+        item
+        for item in result["observations"]
+        if item.get("population") == "learning" and item.get("metric") == "learning_row"
+    ]
+    archive_obs = [
+        item for item in result["observations"] if item.get("population") == "archive"
+    ]
+    assert not live_learning
+    assert archive_obs
+    assert archive_obs[0]["freshness"]["authoritative"] is False
+    assert archive_obs[0]["freshness"].get("claim_scope") == "historical"
+
+
+def test_signal_row_uses_latest_timestamp():
+    snapshots = _fresh_snapshots(
+        signals={
+            "updated_at": _iso(timedelta(minutes=2)),
+            "entries": [
+                {
+                    "subnet_id": 65,
+                    "signal_type": "sell",
+                    "timestamp": _iso(timedelta(hours=5)),
+                },
+                {
+                    "subnet_id": 65,
+                    "signal_type": "buy",
+                    "timestamp": _iso(timedelta(minutes=2)),
+                },
+            ],
+        }
+    )
+    result = analyze("SN65", now=NOW, snapshots=snapshots)
+    signal_obs = [
+        item
+        for item in result["observations"]
+        if item.get("population") == "signals" and item.get("metric") == "signal_type"
+    ]
+    assert signal_obs
+    assert signal_obs[0]["value"] == "buy"
+
+
+def test_signal_without_transition_stays_observational():
+    snapshots = {
+        "signals": {
+            "updated_at": _iso(timedelta(minutes=3)),
+            "entries": [
+                {
+                    "subnet_id": 65,
+                    "signal_type": "buy",
+                    "timestamp": _iso(timedelta(minutes=3)),
+                }
+            ],
+        }
+    }
+    result = analyze("SN65", now=NOW, snapshots=snapshots)
+    assert result["signal_change"]["changed"] is False
+    assert result["interpretations"] == []
+    assert result["confidence"] is None
+    assert result["uncertainty"] is None
+    assert "observational only" in result["summary"].lower()
