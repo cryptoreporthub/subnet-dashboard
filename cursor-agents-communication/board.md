@@ -1,161 +1,113 @@
 # Subnet Dashboard Coordination Board
 
-**Last updated:** 2026-08-05T19:05:00Z  
-**main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
-**Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
-**Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
-**Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
+**Last updated:** 2026-08-27T06:30:00Z  
+**main:** `688f0aef` — freshness policy contracts (#1058 P1 hydration, REV3 audit, resolver revive #1050–#1051, shadow expire #1055)  
+**Models:** `model-guide.md` — **Composer 2.5** builds · **Grok 4.6 medium** design/root-cause LOCK · **Luna high** AC/honesty final pass (no Sonnet 4.5/4.6)  
+**Active plans:** `grok-dispatch-prompts-2026-08-27.md` · `g0-1058-composer-p1-handoff.md` · `accuracy-lift-lock.md` · `gameplan-beyond-16.md` (§17 **COMPLETE**)
 
-## STATUS SNAPSHOT (2026-08-03)
-
-| Item | Status |
-|------|--------|
-| Phase 1–2 soul_map I/O + read cache | **MERGED** #718 · #719 |
-| Phase A/B Judges + Telegram Pulse loops | **MERGED** #720 · #721 |
-| Phase C mindmap display wiring | **MERGED** #741 (+ M1–M5 #725–#735) |
-| Hero H1/H2 + A-tier ACs | **MERGED** #724 · #727 · #732 · #736 |
-| Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
-| API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 · #759–#761 |
-| API timeout wrappers + mindmap bounds | **MERGED** #734 · #737 · #751 · #753 · #754 |
-| Finish queue Steps 0–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
-| Frontend mist/pewter wave | **MERGED** #767–#779 (thumb dock, ui.css shell, dead CSS purge) |
-| Hydrate desk P1–P3 | **CLOSED** #781–#787 — honest HOLD, trust banner, judges no naked busy |
-| **Ditto transition** | **ACTIVE** — `ditto-opus-transition-handoff-2026-08-03.md` (#789) |
-| Opus tribunal hero | **PARKED** PR #788 — preview seen; no live wire until explicit ask |
-| Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
-| Agent babysit + g0 (2026-08-02) | **PASS** — re-run after major merges |
-| **Phase 3 CSS purge (P3-3m–4)** | **MERGED** #844–#845 — ui-legacy retired; `ui.css` sole spine |
-| **Pump desk hardening (Track B)** | **MERGED** #846 — lock scope + fast GET |
-| **Mindmap honesty (Track C3)** | **MERGED** #847 — `source: registry_heuristic` on graph |
-| Human 390px glance (AC7) | **PENDING** — prod deployed; g0 blocked on instant bailout shell (separate) |
-| Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
-| Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
-
-## Infra STATUS (launch blocker)
+## STATUS SNAPSHOT (2026-08-27)
 
 | Item | Status |
 |------|--------|
-| **Root cause (v2 rollback)** | split_v2 web→worker private HTTP unreachable; volume APIs soft-degraded for weeks |
-| **Rollback fix** | Stop forcing `fly.worker-v2.toml` / `FORCE_WORKER_SPLIT_V2` in Fly Deploy; auto-rollback to `fly.toml` + inline worker |
-| **Bandaids** | Soft stubs / local fallthrough (#698–#705) — keep as defense only; do not treat as product fix |
-| **Do not** | Re-enable v2 without proven peer probe soak + human approve |
-| **Post-rollback wedge (AUDIT_HANDOFF #709)** | Root-caused live via `py-spy dump` on prod: `GET /api/mindmap/graph` walked the full pump ladder and re-resolved every subnet name with `use_taostats_fallback=True` — TaoStats is rate-limited to 5 calls/min and `_rate_limit()` sleeps synchronously, blocking the single asyncio event-loop thread (incl. `/health`) for minutes → Fly marks the machine unhealthy → 503 whole site. This was the "data isn't hydrating / empty spaces" bug. |
-| **Wedge fix** | PR #710 — dropped `use_taostats_fallback=True` from the 3 hot read paths (`internal/pump/state.py::_normalize_ladder_subnet`, `internal/pump/signals.py::_signal_display_name`, `internal/learning/pump_alert.py::_resolve_name`); names are already resolved once in the background by `transition_subnet`. Added negative-result caching in `internal/subnet_names.py`. This answers `AUDIT_HANDOFF.md` Option C ("fix v1 properly... never block event loop on mindmap/homepage") — **no worker-split/Fly topology change needed**, it was a code bug. |
+| **§17 beyond trust gap** | **COMPLETE** on main — S/U/F slices shipped (bands, magnitude, badge, home, watchlist, alerts, portfolio, letter, chat, message-intel) |
+| **#1058 hydration starvation** | **P1 MERGED** `64176d16` — SSR pick read-only + bounded `GET /api/daily-pick` · **issue OPEN** — post-P1 prod audit **FAIL** (hero >10s, `/health` p95 ~8s during burst) |
+| **#1058 Phase 2** | **GATED on Grok LOCK** — client stagger in `cockpit_hydrate.js` · prompts: `grok-dispatch-prompts-2026-08-27.md` (Grok A) |
+| **G0 harness** | **PASS** reproduced starvation (`artifacts/g0-baseline/G0_REPORT.md`) · post-P1 reprobe **FAIL** close bar |
+| **REV3 closeout** | **PARTIAL** — audit **MERGED** #1053/#1054 · Site C PASS · **Site A: Sentinel PASS** (no code) — stale audit on pre-#1055 SHA; close after deploy ≥ `b586afc` + 1 `resolve_due` tick · Site B cosmetic `pending_count` only |
+| **Resolver / grading wave** | **MERGED** #1050 (degraded payloads + grading A–B) · #1051 (revive hung scheduler + honest running health) |
+| **Shadow expire (#1055)** | **MERGED** `b586afc` — past-grace shadows expire; excluded from watchdog warning · `dd13cfb298` explainable HOLD shadow; row retires on tick post-deploy |
+| **Loop honesty (#1056/#1057)** | **MERGED** — `loop_learned.weight_updates` truthful |
+| **Freshness contracts** | **MERGED** `688f0aef` — source-specific freshness + human approval policy |
+| **Intel loop v2.1 (#1034)** | **DRAFT OPEN** — `docs/intel-loop-v21-review-findings.md` · 62 focused tests pass · merge readiness = Grok honesty review (queued) |
+| **Accuracy lift experiments** | **GATED** — PREP on main; Slice 7b/7c after soak GO + `graded_30d ≥ 20` (`accuracy-lift-lock.md`) |
+| **Opus tribunal #788** | **PARKED** — superseded by Council Hero v4 handoff; no live wire without explicit human ask |
+| **Phase L signals (B)** | Slice 1 done · L2–L4 **await Grok LOCK** for WebSocket + rules engine (`model-guide.md` §4) |
+| **Agent mode** | **One Cloud Agent + subagents** — Agent A (`-843d`) **retired** |
+| Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** |
+
+## Agent dispatch (now)
+
+| Run | Model | Task | Lock / prompt |
+|-----|-------|------|----------------|
+| **Drift/QA** | Grok medium | #1058 Phase 2 hydrate stagger LOCK | `grok-dispatch-prompts-2026-08-27.md` |
+| **Composer** | 2.5 slow | Implement after Drift/QA LOCK lands | `cursor/hydrate-stagger-phase2-*` |
+| **Luna** | high | Final AC pass on #1058 Phase 2 PR | mandatory — do not skip |
+
+## Infra STATUS
+
+| Item | Status |
+|------|--------|
+| **Runtime** | Fly v1 inline worker (`WORKER_SPLIT_V2=off`) · shared-cpu web+worker on one machine |
+| **v2 rollback** | split_v2 web→worker private HTTP unreachable — **do not re-enable** without soak + human approve |
+| **Mindmap event-loop wedge (#710)** | **FIXED** — dropped sync TaoStats fallback on hot read paths |
+| **Hydration occupancy (#1058)** | **ACTIVE** — 27–28 concurrent `/api/*` at DCL starves event loop; P1 cut sequential 8s daily-pick wait; Phase 2 JS stagger next |
+| **Deploy** | Human-gated `workflow_dispatch` for Fly · no agent deploy without owner GO |
+| **Sentry** | Stages B/C/D on main; release from Git SHA; TaoStats noise scrub |
 
 ## Full roadmap
 
 | Phase | Status |
 |-------|--------|
-| **0** Names | DONE (#554, #560) |
-| **1** Ditto playbook | **DONE** (human 2026-07-28) |
-| **2** Track 1 soak | ACTIVE — review **2026-08-04** / 2026-08-11 (`track1-soak-lock.md`) |
-| **3** SS-TG W1–W3 | **on main** (#557) — H1 **cleared** |
-| **4** Accuracy lift | Acc-0–2 **DONE**; PREP #740 on main; Slice 7b/7c + Combined tune **after H2 GO** | `accuracy-lift-lock.md` |
-
-- Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
-- Lock: `ditto-automation-migration-lock.md` (Gate 1 cleared)
-
-## Phase 3 — human gate
-
-- W0 #549 · W1–W3 #557 on prod (HTML markers live)
-- **H1:** cleared 2026-07-30 — agent SS-TG 390px + V5 polish in flight (`pre-aug4-polish-plan.md`)
+| **0** Names | DONE |
+| **1** Ditto playbook | DONE |
+| **2** Track 1 soak | H2/H3 dates passed — use `soak_review_snapshot.sh` + `accuracy_lift` block for ongoing monitor |
+| **3** SS-TG W1–W3 | on main |
+| **4** Accuracy lift | Acc-0–2 DONE; PREP merged; **7b/7c GATED** |
+| **§17** | **COMPLETE** |
+| **§18+** | Monitor / queued (see `s18-automated-build-plan.md`, `s19`–`s27` hygiene plans) |
 
 ## Master sprint (LC/LD + Acc + PP)
 
-**Lock:** `master-sprint-execution-plan.md` — merge → babysit → human review between every step
-
-| Step | Phase | Status |
-|------|-------|--------|
-| M0 | Merge plan PRs | **DONE** #647 |
-| 1 | Acc-0 ledger plumbing | **DONE** #649+#651 |
-| 2 | PP-0 segment ledger | **DONE** #651+#653 |
-| 3 | LC legal/trust/SEO | **DONE** #652 |
-| 4 | LD surface honesty | **DONE** #654 |
-| 5 | Acc-1 archive measure | **DONE** #655 |
-| 6 | PP-1 pattern classes | **DONE** #656 |
-| 7 | Acc-2 experiment (A+D blend) | **DONE** #659 |
-| 8 | PP-2 desk + council | **DONE** #661 |
-| 9 | FQ-4 combined angles | **DONE** #664+#665 — artifact + ops/evidence (strict babysit gated `graded>0`) |
-
-Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
+**DONE** — M0 through FQ-4 (#647–#670). Babysit: `./scripts/babysit_phase.sh sprint`
 
 ## Launch readiness (hero + integrations)
 
-| Phase | Status | Lock |
-|-------|--------|------|
-| **LA** Hero source-of-truth | **DONE** #640 | — |
-| **LB** Integrations + pulse rail | **DONE** #645 | — |
-| **LC** Legal / trust / SEO | **DONE** #652 | — |
-| **LD** Surface honesty | **DONE** #654 | — |
+| Phase | Status |
+|-------|--------|
+| LA–LD | **DONE** |
+| §16 trust gap | **DONE** |
+| §17 product waves | **DONE** |
 
-## Accuracy + pump pattern (parallel tracks)
+## Ops evidence
 
-| Phase | Status | Lock |
-|-------|--------|------|
-| **Acc-0** Ledger plumbing + epoch footgun | **DONE** #649+#650 (in PP-0 PR) | `accuracy-pump-pattern-plan.md` |
-| **Acc-1** Archive measurement | **DONE** #655 | `accuracy-pump-pattern-plan.md` |
-| **Acc-2** Horizon 24h + gate 50% | **DONE** #659 | same |
-| **PP-0** Segment ledger (waveform) | **DONE** #651+#653 | same |
-| **PP-1** Pattern taxonomy + classifier | **DONE** #656 | same |
-| **PP-2** Pump desk + council surfaces | **DONE** #661 | same |
-
-Babysit: `./scripts/babysit_phase.sh acc0` · `acc1` · `pp0` · `pp1` · `pp2`
-
-- Prod epoch reset 2026-07-29: prior 496 graded @ 33.7%; current graded=0; today's LONG has ledger gap until Acc-0
-
-## Post-audit sprint
-
-| Phase | Status | Lock |
-|-------|--------|------|
-| A Ops quick wins | DONE #562 | `ops-quick-wins-lock.md` |
-| B Outcome boot | DONE #563 | `outcome-boot-polish-lock.md` |
-| **C Worker split v2** | **DONE** (#598–#601 · peer alive · GHA green) | `fly-worker-split-v2-lock.md` |
-| D Security | DONE #567 | `security-housekeeping-lock.md` |
-| E SS-TG W4 | DONE #570 | `subnet-summers-telegram-lock.md` |
-| F SS-TG W5 | DONE #571 | |
-| G SS-TG W6 | DONE #569 (env-gated) | |
-| H Soak review | monitor #568 | `track-1-soak-review-lock.md` |
-
-Babysit: `./scripts/babysit_phase.sh <phase>`
-
-- Lock: `track1-soak-lock.md` — soak day 0 = 2026-07-28; review 2026-08-04 / 2026-08-11
-
-## Ops evidence — DONE
-
-| Piece | PR | Artifact |
-|-------|-----|----------|
-| Pick audit | #546 | `data/pick_audits/` |
-| Pump desk | #547 | `data/pump_desk/latest.json` |
-| Outcomes | #550 | `data/learning_outcomes/latest.json` |
-| API | #550 | `GET /api/ops/evidence` |
+| Piece | Artifact |
+|-------|----------|
+| Pick audit | `data/pick_audits/` nightly 23:45 UTC |
+| Pump desk | `data/pump_desk/latest.json` |
+| Outcomes | `data/learning_outcomes/latest.json` |
+| API | `GET /api/ops/evidence` (+ `accuracy_lift` PREP block) |
+| G0 hydration | `harness/g0_hydration_starvation/` + `artifacts/g0-baseline/` |
 
 ## Learning loop
 
-- Prod: `/api/learning/health` **ok** — resolver tick live on worker volume (proxy from web)
-- Readiness `learning_loop_health` fix **DONE** (#602) — orphan web `soul_map` no longer disables proxy
-- Track 1 soak running under #551 calibration
+- Prod: `/api/learning/health` expected ok when worker volume alive
+- Resolver scheduler revive **MERGED** #1051
+- Shadow/counterfactual expire **MERGED** #1055 — verify Site A close on prod
+- Track 1 calibration #551 — ongoing monitor, not blocking Phase 2 hydrate
 
 ## Active (monitor)
 
 | Track | Gate |
 |-------|------|
-| **Ditto orchestration** | **ACTIVE** — handoff `ditto-opus-transition-handoff-2026-08-03.md` |
-| Pick audit | 23:45 UTC nightly |
-| Health Monitor | Ditto artifact mode |
-| Track 1 soak | **H2 review 2026-08-04** / H3 2026-08-11 (`track-1-soak-review-lock.md`) |
-| SS-TG Gate 3 | H1 cleared — polish wave (#672–#674 open) |
-| Opus tribunal #788 | **PARKED** — preview seen; live wire on explicit human ask only |
-| Finish queue | Steps 0–6 **DONE**; Step 7 soak gated Aug 4 |
-| Human 390px glance | PENDING post-layout |
+| **#1058 Phase 2** | Drift/QA LOCK → Composer → Luna → owner deploy → G0 ×2 on prod |
+| **REV3 Site A** | Sentinel PASS — owner deploy SHA ≥ `b586afc` + 1 `resolve_due` tick; no volume edit |
+| **Intel #1034** | Grok honesty review → merge when green |
+| **Accuracy lift 7b/7c** | `graded_30d ≥ 20` + human GO |
+| **Phase L3/L4** | Grok design LOCK before Composer build |
+| **Opus tribunal #788** | PARKED |
+| **Pick audit / Health Monitor** | Ditto artifact mode |
+| **Human 390px glance** | PENDING when hero path stable post-#1058 |
 
-## Prod cache (2026-08-03 post-#787)
+## Prod notes (2026-08-27)
 
-- Hydrate desk P1–P3 **closed** — honest HOLD, trust `1/30` with shadow explanation, judges usable
-- Frontend mist/pewter stack live (#767–#779)
-- Mindmap graph/trail/state/story-path: **non-5xx**; latency 0.5–17s depending on cache warmth
-- `daily-pick` honest HOLD · `pump-alerts` success · `ops/live` worker alive
-- **Next:** H2 soak **2026-08-04** · human 390px glance · accuracy lift gated until H2 GO
+- Sequential `GET /api/daily-pick` improved post-P1 (~0.75s stored HOLD vs G0 8.3s timeout HOLD)
+- Browser cold load still starves: stats aborted at 28s retry budget; `/health` p95 ~8s during fan-out
+- Pump desk automation (Ditto 2026-08-25): no BUILDING alerts; daily-pick may HOLD when handler busy
+- REV3 Site A: Sentinel PASS 2026-08-27 — `dd13cfb298` was audited on pre-#1055 SHA; live watchdog already clean (`oldest` ≠ `dd13cfb298`)
+- **Next:** Drift/QA LOCK for #1058 Phase 2; owner REV3 closeout deploy if prod still on `35b1bf34`
 
 ## Out of scope
 
 - Chutes billing / live LLM chat replies
+- `fly.toml` / VM resize without human approve
+- split_v2 re-enable without proven soak
