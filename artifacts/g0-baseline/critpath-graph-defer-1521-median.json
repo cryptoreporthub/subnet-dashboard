@@ -1,0 +1,34 @@
+{
+  "crit_id": "graph-defer-1521",
+  "sha": "653ef795",
+  "static_v": "d7c4c971",
+  "fly_deploy": 1521,
+  "close": false,
+  "product_round": 2,
+  "graph_co_starts_with_stats": false,
+  "majority_in_budget": true,
+  "runs": [
+    "critpath-graph-defer-1521-1",
+    "critpath-graph-defer-1521-2",
+    "critpath-graph-defer-1521-3"
+  ],
+  "machine_state": ["warm", "warm", "warm"],
+  "graph_start_s": [9.509, 9.293, 10.772],
+  "stats_start_s": [2.793, 4.087, 3.046],
+  "hero_complete_s": [9.518, 6.707, 10.886],
+  "median": {
+    "dcl_ms": 2733.5,
+    "stats_start_s": 3.046,
+    "stats_end_s": 9.414,
+    "hero_complete_s": 9.518,
+    "hydrate_start_ms": 2707.8,
+    "hydrate_end_ms": 9022.8,
+    "hydrate_duration_ms": 6713,
+    "graph_start_s": 9.509,
+    "health_p95_ms": 518.74
+  },
+  "vs_marks_median": {
+    "hero_complete_s": 13.881,
+    "hydrate_duration_ms": 8613
+  }
+}
