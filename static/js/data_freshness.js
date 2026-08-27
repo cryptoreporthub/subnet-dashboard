@@ -140,9 +140,23 @@
       });
   }
 
+  // #1058: script tag sits before api_fetch.js — at defer evaluate readyState is
+  // often interactive while afterHeroCritical is still undefined. Wait for DCL
+  // (remaining deferred scripts, including the gate) then queue behind hero.
   function startPollWhenHeroReady() {
-    if (window.afterHeroCritical) window.afterHeroCritical(poll);
-    else poll();
+    if (window.afterHeroCritical) {
+      window.afterHeroCritical(poll);
+      return;
+    }
+    if (document.readyState === 'complete') {
+      poll();
+      return;
+    }
+    document.addEventListener('DOMContentLoaded', function onDclForFreshness() {
+      document.removeEventListener('DOMContentLoaded', onDclForFreshness);
+      if (window.afterHeroCritical) window.afterHeroCritical(poll);
+      else poll();
+    });
   }
 
   if (document.readyState === 'loading') {
