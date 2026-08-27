@@ -122,9 +122,14 @@
       });
   }
 
+  function startLoadWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(loadDevPulse);
+    else loadDevPulse();
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", loadDevPulse);
+    document.addEventListener("DOMContentLoaded", startLoadWhenHeroReady);
   } else {
-    loadDevPulse();
+    startLoadWhenHeroReady();
   }
 })();

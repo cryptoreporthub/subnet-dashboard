@@ -193,9 +193,14 @@
 
   window.PaperPortfolio = { hydrate: hydrate, render: render };
 
+  function startHydrateWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(function () { hydrate(); });
+    else hydrate();
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+    document.addEventListener("DOMContentLoaded", startHydrateWhenHeroReady);
   } else {
-    hydrate();
+    startHydrateWhenHeroReady();
   }
 })();

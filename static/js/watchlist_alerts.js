@@ -178,15 +178,20 @@
     });
   }
 
+  function startWatchlistWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(refreshWatchlistSummary);
+    else refreshWatchlistSummary();
+  }
+
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", function () {
       initPin();
       initAlerts();
-      refreshWatchlistSummary();
+      startWatchlistWhenHeroReady();
     });
   } else {
     initPin();
     initAlerts();
-    refreshWatchlistSummary();
+    startWatchlistWhenHeroReady();
   }
 })();

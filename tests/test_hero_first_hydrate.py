@@ -20,6 +20,20 @@ LETTER_SCRIPTS = (
 )
 MINDMAP_GRAPH = Path("static/js/mindmap_graph.js")
 
+# #1058 stats-window occupants — initial self-start must wait on afterHeroCritical.
+STATS_WINDOW_GATED = {
+    Path("static/js/data_freshness.js"): ("/api/data-freshness", "startPollWhenHeroReady"),
+    Path("static/js/ops_readiness_badge.js"): ("/api/ops/readiness", "startPollWhenHeroReady"),
+    Path("static/js/subnet_integrations.js"): ("/api/subnet-integrations", "startPollWhenHeroReady"),
+    Path("static/js/market_drivers_ui.js"): ("/api/market-drivers", "startRefreshWhenHeroReady"),
+    Path("static/js/story_path_ui.js"): ("/api/mindmap/story-path", "startLoadWhenHeroReady"),
+    Path("static/js/paper_portfolio.js"): ("/api/portfolio/status", "startHydrateWhenHeroReady"),
+    Path("static/js/watchlist_alerts.js"): ("/api/watchlist", "startWatchlistWhenHeroReady"),
+    Path("static/js/message_intel_feed.js"): ("/api/message-intel", "startFeedWhenHeroReady"),
+    Path("static/js/council_polish.js"): ("/api/whales/flow-signals", "afterHeroCritical"),
+    Path("static/js/dev_pulse.js"): ("/api/dev-radar", "startLoadWhenHeroReady"),
+}
+
 
 def test_after_hero_critical_gate_defined():
     js = API_FETCH.read_text(encoding="utf-8")
@@ -72,11 +86,36 @@ def test_run_starts_hero_before_trail_story_strip_evidence():
     await_at = run.index("await Promise.allSettled([dailyPickRequest, statsRequest])")
     assert run.index("kickPriorityPanels()") > await_at
     assert run.index("startTrailHydration()") > await_at
+    assert run.index("connectCockpitStream()") > await_at
     assert "prefetchFocusJudges(dpResult)" in run[await_at:]
     assert run.index("storyStripUrl()") > await_at
     assert "armHeroCriticalRelease" in run
     assert "if (opts.force) invalidateDailyPickFetch()" in js
     assert "opts.force || tribunalHeroNeedsHydrate()) invalidateDailyPickFetch" not in js
+    pre_hero = run[:await_at]
+    assert "connectCockpitStream()" not in pre_hero
+
+
+def test_stats_window_occupants_gate_initial_fetch():
+    for path, (api_path, gate_fn) in STATS_WINDOW_GATED.items():
+        text = path.read_text(encoding="utf-8")
+        assert api_path in text, path
+        assert gate_fn in text, path
+        assert "afterHeroCritical" in text, path
+        if gate_fn == "afterHeroCritical":
+            assert "afterHeroCritical(loadFlowSignals)" in text, path
+        else:
+            gate_block = text.split(f"function {gate_fn}")[1][:400]
+            assert "afterHeroCritical" in gate_block, path
+
+
+def test_cockpit_stream_gated_behind_hero_wait():
+    js = HYDRATE.read_text(encoding="utf-8")
+    assert "/api/cockpit/stream" in js
+    run = js.split("async function run()")[1].split("async function runDeferredPanels")[0]
+    await_at = run.index("await Promise.allSettled([dailyPickRequest, statsRequest])")
+    stream_at = run.index("connectCockpitStream()")
+    assert stream_at > await_at
 
 
 def test_served_homepage_loads_hydrate_before_letters():

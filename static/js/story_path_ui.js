@@ -100,10 +100,15 @@
       });
   }
 
+  function startLoadWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(loadStoryPath);
+    else loadStoryPath();
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", loadStoryPath);
+    document.addEventListener("DOMContentLoaded", startLoadWhenHeroReady);
   } else {
-    loadStoryPath();
+    startLoadWhenHeroReady();
   }
 
   document.addEventListener("home-daily-call-updated", loadStoryPath);
