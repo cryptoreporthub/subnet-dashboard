@@ -3,16 +3,29 @@
 Flags data and UI drift. Never blocks requests, never retries hydrations,
 never writes production state, and never auto-heals. Callers pass a snapshot;
 this module inspects it once and reports.
+
+Policy mapping (governance markdown is not in-repo; these are the in-repo
+surfaces — not a parallel scheme):
+- §2.3 freshness disclosure on every claim via ``classify_freshness``
+  envelopes (``internal.ops.bot_policy``), same string form as the approved
+  governance draft: ``Evidence freshness: {source} is {status} ({age}).``
+- §3.1 risk classes exactly ``low|medium|high|critical`` (Shield
+  ``RISK_CLASSES`` / Mission Control ``RISK_LEVELS``; no ``info``; unknown
+  labels fail closed to ``critical``).
+- §4 evidence hygiene: source attribution, supporting vs contradictory vs
+  observation (Proof Scout ``relation``), ``WARNING: source unavailable``
+  instead of silent fallback, contradiction tags that name *what disagreed*.
 """
 
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
+from types import MappingProxyType
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
-from internal.ops.bot_policy import bot_contract, classify_freshness
+from internal.ops.bot_policy import aggregate_freshness, bot_contract, classify_freshness
 
 BOT_NAME = "drift_qa"
 OBSERVATION_ONLY = True
@@ -20,18 +33,32 @@ MUTATIONS_ALLOWED = False
 RETRIES_ALLOWED = False
 STUCK_PANEL_TIMEOUT_SECONDS = 10.0
 
-# Policy §3.1 severity taxonomy (informational — this bot never acts).
+# Policy §3.1 — exact set. Every finding.severity is one of these four.
 SEVERITY_LOW = "low"
 SEVERITY_MEDIUM = "medium"
 SEVERITY_HIGH = "high"
 SEVERITY_CRITICAL = "critical"
+RISK_CLASSES: Tuple[str, ...] = (
+    SEVERITY_LOW,
+    SEVERITY_MEDIUM,
+    SEVERITY_HIGH,
+    SEVERITY_CRITICAL,
+)
+_RISK_ORDER = {SEVERITY_LOW: 0, SEVERITY_MEDIUM: 1, SEVERITY_HIGH: 2, SEVERITY_CRITICAL: 3}
 
 # Policy §4 evidence hygiene: supporting / contradictory / unavailable.
 # Unavailable is required so a missing source is disclosed instead of silently
-# filled from cache (no-silent-fallback).
+# filled from cache (no-silent-fallback). Bundle items use the Proof Scout
+# relation set (supporting | contradictory | observation).
 EVIDENCE_SUPPORTING = "supporting"
 EVIDENCE_CONTRADICTORY = "contradictory"
 EVIDENCE_UNAVAILABLE = "unavailable"
+EVIDENCE_OBSERVATION = "observation"
+EVIDENCE_RELATIONS: Tuple[str, ...] = (
+    EVIDENCE_SUPPORTING,
+    EVIDENCE_CONTRADICTORY,
+    EVIDENCE_OBSERVATION,
+)
 
 CHECK_MISSING_FIELDS = "missing_fields"
 CHECK_SHAPE_CHANGES = "shape_changes"
@@ -54,12 +81,35 @@ CHECKS: Tuple[str, ...] = (
 )
 
 # Policy §4 contradiction tags — names of *what disagreed*, not a root cause.
+# These are intra-snapshot drift tags (Mission Control's specialist-merge
+# types status|recommended_action are a different layer).
 TAG_SOURCES_DISAGREE = "sources_disagree"
 TAG_LIVE_VS_FRESHNESS = "live_label_vs_freshness"
 TAG_SHAPE_VS_SCHEMA = "shape_vs_schema"
 TAG_SSR_VS_CLIENT = "ssr_vs_client"
 TAG_HTTP_OK_VS_DEGRADED = "http_ok_vs_degraded_body"
 TAG_READINESS_VS_PRIOR = "readiness_vs_prior"
+CONTRADICTION_TAGS: Tuple[str, ...] = (
+    TAG_SOURCES_DISAGREE,
+    TAG_LIVE_VS_FRESHNESS,
+    TAG_SHAPE_VS_SCHEMA,
+    TAG_SSR_VS_CLIENT,
+    TAG_HTTP_OK_VS_DEGRADED,
+    TAG_READINESS_VS_PRIOR,
+)
+
+# §3.1 mapping for *flagged* drift (observation-only; never triggers approval).
+# Unobserved/unavailable checks stay low. Unknown labels fail closed to critical.
+_FLAGGED_SEVERITY = {
+    CHECK_MISSING_FIELDS: SEVERITY_HIGH,
+    CHECK_SHAPE_CHANGES: SEVERITY_HIGH,
+    CHECK_HYDRATION_FAILS: SEVERITY_HIGH,
+    CHECK_STUCK_PANELS: SEVERITY_HIGH,
+    CHECK_STALE_DATA: SEVERITY_CRITICAL,
+    CHECK_DISAGREEMENT: SEVERITY_HIGH,
+    CHECK_READINESS_DROPS: SEVERITY_HIGH,
+    CHECK_DEGRADED_HTTP_200S: SEVERITY_MEDIUM,
+}
 
 _READINESS_KEYS = ("status", "ready", "issues", "checked_at")
 _DEGRADED_FLAG_SUFFIX = "_degraded"
@@ -117,6 +167,10 @@ class DriftSnapshot:
     now: Optional[datetime] = None
 
 
+def _empty_map() -> Mapping[str, Any]:
+    return MappingProxyType({})
+
+
 @dataclass(frozen=True)
 class CheckResult:
     name: str
@@ -126,6 +180,8 @@ class CheckResult:
     summary: str
     details: Tuple[str, ...] = ()
     attributions: Tuple[SourceAttribution, ...] = ()
+    freshness: Mapping[str, Any] = field(default_factory=_empty_map)
+    freshness_disclosure: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -138,6 +194,8 @@ class CheckResult:
             "attributions": [
                 {"field": item.field, "source": item.source} for item in self.attributions
             ],
+            "freshness": _thaw(self.freshness),
+            "freshness_disclosure": self.freshness_disclosure,
         }
 
 
@@ -147,6 +205,8 @@ class Contradiction:
     left: str
     right: str
     detail: str
+    freshness: Mapping[str, Any] = field(default_factory=_empty_map)
+    freshness_disclosure: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -154,6 +214,67 @@ class Contradiction:
             "left": self.left,
             "right": self.right,
             "detail": self.detail,
+            "freshness": _thaw(self.freshness),
+            "freshness_disclosure": self.freshness_disclosure,
+        }
+
+
+@dataclass(frozen=True)
+class EvidenceItem:
+    """One attributed row inside an evidence bundle (Proof Scout ``relation``)."""
+
+    relation: str
+    summary: str
+    freshness: Mapping[str, Any]
+    freshness_disclosure: str
+    attribution: Mapping[str, Any]
+    payload: Mapping[str, Any] = field(default_factory=_empty_map)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "relation": self.relation,
+            "summary": self.summary,
+            "freshness": _thaw(self.freshness),
+            "freshness_disclosure": self.freshness_disclosure,
+            "attribution": _thaw(self.attribution),
+            "payload": _thaw(self.payload),
+        }
+
+
+@dataclass(frozen=True)
+class EvidenceBundle:
+    """Policy §4 bundle for significant drift. Supporting vs contradictory."""
+
+    subject: str
+    check: str
+    severity: str
+    items: Tuple[EvidenceItem, ...]
+    freshness: Mapping[str, Any]
+    freshness_disclosure: str
+
+    @property
+    def supporting(self) -> Tuple[EvidenceItem, ...]:
+        return tuple(item for item in self.items if item.relation == EVIDENCE_SUPPORTING)
+
+    @property
+    def contradictory(self) -> Tuple[EvidenceItem, ...]:
+        return tuple(item for item in self.items if item.relation == EVIDENCE_CONTRADICTORY)
+
+    @property
+    def observations(self) -> Tuple[EvidenceItem, ...]:
+        return tuple(item for item in self.items if item.relation == EVIDENCE_OBSERVATION)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "subject": self.subject,
+            "check": self.check,
+            "severity": self.severity,
+            "items": [item.to_dict() for item in self.items],
+            "supporting": [item.to_dict() for item in self.supporting],
+            "contradictory": [item.to_dict() for item in self.contradictory],
+            "observations": [item.to_dict() for item in self.observations],
+            "freshness": _thaw(self.freshness),
+            "freshness_disclosure": self.freshness_disclosure,
         }
 
 
@@ -165,7 +286,9 @@ class DriftReport:
     summary: str
     checks: Tuple[CheckResult, ...]
     contradictions: Tuple[Contradiction, ...]
+    evidence_bundles: Tuple[EvidenceBundle, ...]
     freshness: Mapping[str, Any]
+    freshness_disclosure: str
     observations: Tuple[str, ...]
     unknowns: Tuple[str, ...]
     confidence: Optional[float]
@@ -173,6 +296,10 @@ class DriftReport:
     approval_required: bool
     approval: Mapping[str, Any]
     audit: Mapping[str, Any]
+
+    @property
+    def findings(self) -> Tuple[CheckResult, ...]:
+        return self.checks
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -182,14 +309,16 @@ class DriftReport:
             "summary": self.summary,
             "checks": [item.to_dict() for item in self.checks],
             "contradictions": [item.to_dict() for item in self.contradictions],
-            "freshness": dict(self.freshness),
+            "evidence_bundles": [item.to_dict() for item in self.evidence_bundles],
+            "freshness": _thaw(self.freshness),
+            "freshness_disclosure": self.freshness_disclosure,
             "observations": list(self.observations),
             "unknowns": list(self.unknowns),
             "confidence": self.confidence,
             "recommended_action": self.recommended_action,
             "approval_required": self.approval_required,
-            "approval": dict(self.approval),
-            "audit": dict(self.audit),
+            "approval": _thaw(self.approval),
+            "audit": _thaw(self.audit),
         }
 
 
@@ -205,6 +334,321 @@ def classify_evidence(
     if flagged or contradicts:
         return EVIDENCE_CONTRADICTORY
     return EVIDENCE_SUPPORTING
+
+
+def classify_severity(value: str) -> str:
+    """Policy §3.1. Unknown labels are not a fifth class — fail closed."""
+    label = str(value or "").strip().lower()
+    if label not in _RISK_ORDER:
+        return SEVERITY_CRITICAL
+    return label
+
+
+def severity_for_check(
+    check_name: str,
+    *,
+    flagged: bool,
+    unavailable: bool = False,
+) -> str:
+    """Map one drift check onto Policy §3.1.
+
+    Unobserved/unavailable stays low (honest empty, not a finding). Body-gone
+    while a schema was supplied is medium. Flagged drift uses ``_FLAGGED_SEVERITY``.
+    """
+    if not flagged:
+        return SEVERITY_LOW
+    if unavailable:
+        return SEVERITY_MEDIUM
+    return classify_severity(_FLAGGED_SEVERITY.get(check_name, SEVERITY_HIGH))
+
+
+def _freeze(value: Any) -> Any:
+    """Deep-freeze mappings so callers cannot mutate a returned report."""
+    if isinstance(value, MappingProxyType):
+        return value
+    if isinstance(value, Mapping):
+        return MappingProxyType({str(key): _freeze(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze(item) for item in value)
+    return value
+
+
+def _thaw(value: Any) -> Any:
+    if isinstance(value, Mapping):
+        return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, tuple):
+        return [_thaw(item) for item in value]
+    return value
+
+
+def format_age_seconds(age: Any) -> Optional[str]:
+    """Render age as ``6m23s`` (Policy §2.3 example form)."""
+    if age is None:
+        return None
+    try:
+        total = int(round(float(age)))
+    except (TypeError, ValueError):
+        return None
+    total = max(0, total)
+    hours, rem = divmod(total, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if hours:
+        return f"{hours}h{minutes}m{seconds}s"
+    if minutes:
+        return f"{minutes}m{seconds}s"
+    return f"{seconds}s"
+
+
+def freshness_disclosure(envelope: Mapping[str, Any]) -> str:
+    """Policy §2.3 user-facing line. Required on every claim, including fresh."""
+    status = str(envelope.get("status") or "missing")
+    source = envelope.get("source")
+    age = envelope.get("age_seconds")
+    nested = envelope.get("sources")
+    if source is None and isinstance(nested, (list, tuple)) and nested:
+        def _rank(item: Mapping[str, Any]) -> int:
+            return _FRESHNESS_RANK.get(str(item.get("status")), 4)
+
+        worst = max(
+            (item for item in nested if isinstance(item, Mapping)),
+            key=_rank,
+            default=None,
+        )
+        if worst is not None:
+            source = worst.get("source")
+            if age is None:
+                age = worst.get("age_seconds")
+            if not envelope.get("status"):
+                status = str(worst.get("status") or "missing")
+    source_label = str(source or "unknown").replace("_", "-")
+    age_label = format_age_seconds(age)
+    age_bit = f" ({age_label})" if age_label else ""
+    line = f"Evidence freshness: {source_label} is {status}{age_bit}."
+    if status != "fresh":
+        line += " Degraded confidence."
+    return line
+
+
+_FRESHNESS_RANK = {"fresh": 0, "aging": 1, "stale": 2, "missing": 3, "degraded": 4}
+
+
+def _payload_degraded(payload: ObservedPayload) -> bool:
+    if payload.http_status is not None and payload.http_status != 200:
+        return True
+    if payload.body is None:
+        # Null HTTP/live bodies are untrusted. Panel-only observations (no HTTP,
+        # no live label, no timestamp) stay missing rather than degraded.
+        return (
+            payload.http_status is not None
+            or payload.labeled_live
+            or payload.captured_at is not None
+        )
+    if isinstance(payload.body, Mapping) and _degraded_markers(payload.body):
+        return True
+    return False
+
+
+def payload_envelope(
+    payload: ObservedPayload,
+    *,
+    now: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    """§2.2/§2.3 envelope for one already-collected payload."""
+    source = payload.freshness_source or payload.source or "unknown"
+    return classify_freshness(
+        source,
+        payload.captured_at,
+        now=now,
+        degraded=_payload_degraded(payload),
+        authoritative=not str(source).endswith("archive"),
+        mode="archive" if str(source).endswith("archive") else None,
+    )
+
+
+def _missing_envelope(*, now: Optional[datetime] = None, source: str = "unknown") -> Dict[str, Any]:
+    return classify_freshness(source, None, now=now)
+
+
+def _freshness_for_check(
+    check: CheckResult,
+    payloads: Sequence[ObservedPayload],
+    envelopes: Mapping[str, Mapping[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> Mapping[str, Any]:
+    if check.evidence_class == EVIDENCE_UNAVAILABLE and not check.flagged:
+        source = check.attributions[0].source if check.attributions else "unknown"
+        return _missing_envelope(now=now, source=source)
+    matched: list[Mapping[str, Any]] = []
+    details = " ".join(check.details)
+    attr_sources = {attr.source for attr in check.attributions}
+    for payload in payloads:
+        env = envelopes.get(payload.name)
+        if env is None:
+            continue
+        if payload.name in details or payload.source in attr_sources:
+            matched.append(env)
+    if not matched:
+        matched = [envelopes[payload.name] for payload in payloads if payload.name in envelopes]
+    if not matched:
+        attr_source = check.attributions[0].source if check.attributions else "unknown"
+        return _missing_envelope(now=now, source=attr_source)
+    if len(matched) == 1:
+        return dict(matched[0])
+    return aggregate_freshness(matched)
+
+
+def _stamp_check(
+    check: CheckResult,
+    payloads: Sequence[ObservedPayload],
+    envelopes: Mapping[str, Mapping[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> CheckResult:
+    freshness = _freeze(_freshness_for_check(check, payloads, envelopes, now=now))
+    unavailable = check.evidence_class == EVIDENCE_UNAVAILABLE
+    return CheckResult(
+        name=check.name,
+        flagged=check.flagged,
+        severity=severity_for_check(
+            check.name, flagged=check.flagged, unavailable=unavailable
+        ),
+        evidence_class=check.evidence_class,
+        summary=check.summary,
+        details=check.details,
+        attributions=check.attributions,
+        freshness=freshness,
+        freshness_disclosure=freshness_disclosure(freshness),
+    )
+
+
+def _stamp_contradiction(
+    item: Contradiction,
+    envelopes: Mapping[str, Mapping[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> Contradiction:
+    picked: list[Mapping[str, Any]] = []
+    for key in (item.left, item.right):
+        name = str(key).split(".", 1)[0].split(" ", 1)[0]
+        if name in envelopes:
+            picked.append(envelopes[name])
+        else:
+            for env_name, env in envelopes.items():
+                if env_name in str(key) or str(key).startswith(env_name):
+                    picked.append(env)
+                    break
+    if not picked:
+        freshness = _freeze(_missing_envelope(now=now, source="contradiction"))
+    elif len(picked) == 1:
+        freshness = _freeze(dict(picked[0]))
+    else:
+        freshness = _freeze(aggregate_freshness(picked))
+    return Contradiction(
+        tag=item.tag,
+        left=item.left,
+        right=item.right,
+        detail=item.detail,
+        freshness=freshness,
+        freshness_disclosure=freshness_disclosure(freshness),
+    )
+
+
+def _significant(check: CheckResult) -> bool:
+    return bool(check.flagged) and _RISK_ORDER.get(check.severity, 0) >= _RISK_ORDER[SEVERITY_MEDIUM]
+
+
+def _item_from(
+    *,
+    relation: str,
+    summary: str,
+    freshness: Mapping[str, Any],
+    field_name: str,
+    source: str,
+    payload: Optional[Mapping[str, Any]] = None,
+) -> EvidenceItem:
+    frozen = _freeze(dict(freshness))
+    return EvidenceItem(
+        relation=relation,
+        summary=summary,
+        freshness=frozen,
+        freshness_disclosure=freshness_disclosure(frozen),
+        attribution=_freeze({"field": field_name, "source": source}),
+        payload=_freeze(dict(payload or {})),
+    )
+
+
+def evidence_bundle_for(
+    check: CheckResult,
+    payloads: Sequence[ObservedPayload],
+    envelopes: Mapping[str, Mapping[str, Any]],
+    *,
+    now: Optional[datetime] = None,
+) -> EvidenceBundle:
+    """Build a §4 bundle: schema/prior as supporting, drift details as contradictory."""
+    items: list[EvidenceItem] = []
+    fallback = dict(check.freshness) or _missing_envelope(now=now, source=check.name)
+    mentioned = " ".join(check.details)
+    for payload in payloads:
+        env = envelopes.get(payload.name) or fallback
+        if payload.name in mentioned or any(
+            payload.name in detail or payload.source in detail for detail in check.details
+        ):
+            continue
+        items.append(
+            _item_from(
+                relation=EVIDENCE_SUPPORTING,
+                summary=f"{payload.name} consistent with {check.name} contract",
+                freshness=env,
+                field_name=payload.panel or "body",
+                source=payload.source,
+                payload={"name": payload.name, "http_status": payload.http_status},
+            )
+        )
+    if not any(item.relation == EVIDENCE_SUPPORTING for item in items):
+        schema_source = (
+            check.attributions[0].source if check.attributions else "schema"
+        )
+        items.append(
+            _item_from(
+                relation=EVIDENCE_SUPPORTING,
+                summary=f"expected contract for {check.name}",
+                freshness=fallback,
+                field_name="schema",
+                source=schema_source,
+            )
+        )
+    for detail in check.details:
+        relation = (
+            EVIDENCE_OBSERVATION
+            if detail.startswith("WARNING:")
+            else EVIDENCE_CONTRADICTORY
+        )
+        source = "snapshot"
+        env: Mapping[str, Any] = fallback
+        for payload in payloads:
+            if payload.name in detail or payload.source in detail:
+                source = payload.source
+                env = envelopes.get(payload.name) or fallback
+                break
+        items.append(
+            _item_from(
+                relation=relation,
+                summary=detail,
+                freshness=env,
+                field_name=check.name,
+                source=source,
+            )
+        )
+    frozen_freshness = _freeze(dict(check.freshness) or fallback)
+    return EvidenceBundle(
+        subject=check.name,
+        check=check.name,
+        severity=check.severity,
+        items=tuple(items),
+        freshness=frozen_freshness,
+        freshness_disclosure=check.freshness_disclosure or freshness_disclosure(frozen_freshness),
+    )
 
 
 def _dig(body: Optional[Mapping[str, Any]], path: str) -> Any:
@@ -482,20 +926,7 @@ def stale_data_labeled_live(
             and payload.body is None
         ):
             continue
-        source = source or payload.source or "unknown"
-        body_degraded = payload.body is None or (
-            isinstance(payload.body, Mapping) and bool(_degraded_markers(payload.body))
-        )
-        if payload.http_status is not None and payload.http_status != 200:
-            body_degraded = True
-        envelope = classify_freshness(
-            source,
-            payload.captured_at,
-            now=now,
-            degraded=body_degraded,
-            authoritative=not str(source).endswith("archive"),
-            mode="archive" if str(source).endswith("archive") else None,
-        )
+        envelope = payload_envelope(payload, now=now)
         envelopes.append(envelope)
         attributions.append(_attr(payload, "captured_at"))
         status = str(envelope.get("status"))
@@ -764,55 +1195,96 @@ def http_200_contains_degraded_data(
 def _log_report(report: DriftReport) -> None:
     from internal.ops.notify import notify
 
+    flagged = [item.name for item in report.checks if item.flagged]
+    payload = {
+        "status": report.status,
+        "flagged": flagged,
+        "contradiction_count": len(report.contradictions),
+        "bundle_count": len(report.evidence_bundles),
+        "observation_only": True,
+        "retries": 0,
+        "mutations": 0,
+        "freshness_disclosure": report.freshness_disclosure,
+    }
     notify(
         "bot_observe",
         bot=BOT_NAME,
         run_id=report.run_id,
         status=report.status,
-        flagged=[item.name for item in report.checks if item.flagged],
+        flagged=flagged,
         contradiction_count=len(report.contradictions),
         observation_only=True,
+        payload=payload,
     )
+    for check in report.checks:
+        notify(
+            "observation",
+            bot=BOT_NAME,
+            run_id=report.run_id,
+            observation_only=True,
+            payload={
+                "check": check.name,
+                "flagged": check.flagged,
+                "severity": check.severity,
+                "summary": check.summary,
+                "freshness_disclosure": check.freshness_disclosure,
+            },
+        )
 
 
 def observe(snapshot: DriftSnapshot) -> DriftReport:
     """Run all eight checks once against a caller-supplied snapshot.
 
-    Does not fetch, retry, write, or remediate. The only side effect is a
-    logging-only notify() call.
+    Does not fetch, retry, write, or remediate. The only side effect is
+    logging-only notify() calls.
     """
     payloads = snapshot.payloads
     now = snapshot.now
-    checks: list[CheckResult] = []
-    contradictions: list[Contradiction] = []
+    envelope_map: Dict[str, Dict[str, Any]] = {
+        payload.name: payload_envelope(payload, now=now) for payload in payloads
+    }
+    raw_checks: list[CheckResult] = []
+    raw_contradictions: list[Contradiction] = []
 
-    checks.append(missing_required_fields(payloads))
+    raw_checks.append(missing_required_fields(payloads))
 
     shape, shape_contra = api_shape_changed(payloads)
-    checks.append(shape)
-    contradictions.extend(shape_contra)
+    raw_checks.append(shape)
+    raw_contradictions.extend(shape_contra)
 
     hydrate, hydrate_contra = hydration_failed(payloads)
-    checks.append(hydrate)
-    contradictions.extend(hydrate_contra)
+    raw_checks.append(hydrate)
+    raw_contradictions.extend(hydrate_contra)
 
-    checks.append(panel_stuck_loading(payloads))
+    raw_checks.append(panel_stuck_loading(payloads))
 
-    stale, stale_contra, envelopes = stale_data_labeled_live(payloads, now=now)
-    checks.append(stale)
-    contradictions.extend(stale_contra)
+    stale, stale_contra, stale_envelopes = stale_data_labeled_live(payloads, now=now)
+    raw_checks.append(stale)
+    raw_contradictions.extend(stale_contra)
 
     disagree, disagree_contra = learning_totals_disagree(payloads, snapshot.pairs)
-    checks.append(disagree)
-    contradictions.extend(disagree_contra)
+    raw_checks.append(disagree)
+    raw_contradictions.extend(disagree_contra)
 
     ready, ready_contra = readiness_drops(payloads)
-    checks.append(ready)
-    contradictions.extend(ready_contra)
+    raw_checks.append(ready)
+    raw_contradictions.extend(ready_contra)
 
     degraded, degraded_contra = http_200_contains_degraded_data(payloads)
-    checks.append(degraded)
-    contradictions.extend(degraded_contra)
+    raw_checks.append(degraded)
+    raw_contradictions.extend(degraded_contra)
+
+    checks = tuple(
+        _stamp_check(item, payloads, envelope_map, now=now) for item in raw_checks
+    )
+    contradictions = tuple(
+        _stamp_contradiction(item, envelope_map, now=now) for item in raw_contradictions
+    )
+    bundles = tuple(
+        evidence_bundle_for(item, payloads, envelope_map, now=now)
+        for item in checks
+        if _significant(item)
+    )
 
     flagged = [item for item in checks if item.flagged]
     unknowns = tuple(
@@ -831,8 +1303,11 @@ def observe(snapshot: DriftSnapshot) -> DriftReport:
             if unknowns
             else "No drift flagged"
         )
+    contract_sources: Sequence[Mapping[str, Any]] = stale_envelopes or tuple(
+        envelope_map.values()
+    )
     contract = bot_contract(
-        sources=envelopes or None,
+        sources=contract_sources or None,
         source=(
             payloads[0].freshness_source or payloads[0].source
             if payloads
@@ -842,28 +1317,32 @@ def observe(snapshot: DriftSnapshot) -> DriftReport:
         state_changing=False,
         degraded=bool(flagged) or not payloads,
     )
-    freshness = contract["freshness"]
+    freshness = _freeze(contract["freshness"])
     report = DriftReport(
         bot=BOT_NAME,
         run_id=str(uuid.uuid4()),
         status=status,
         summary=summary,
-        checks=tuple(checks),
-        contradictions=tuple(contradictions),
+        checks=checks,
+        contradictions=contradictions,
+        evidence_bundles=bundles,
         freshness=freshness,
+        freshness_disclosure=freshness_disclosure(freshness),
         observations=tuple(item.summary for item in flagged),
         unknowns=unknowns,
         confidence=contract.get("confidence"),
         recommended_action=None,
         approval_required=False,
-        approval=contract["approval"],
-        audit={
-            "sources_read": [payload.source for payload in payloads],
-            "checks": list(CHECKS),
-            "observation_only": True,
-            "retries": 0,
-            "mutations": 0,
-        },
+        approval=_freeze(contract["approval"]),
+        audit=_freeze(
+            {
+                "sources_read": [payload.source for payload in payloads],
+                "checks": list(CHECKS),
+                "observation_only": True,
+                "retries": 0,
+                "mutations": 0,
+            }
+        ),
     )
     _log_report(report)
     return report

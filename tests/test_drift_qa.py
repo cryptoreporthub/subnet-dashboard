@@ -1,10 +1,13 @@
-"""Drift / QA observer — eight checks, Policy §4, observation-only."""
+"""Drift / QA observer — eight checks, Policy §2.3 / §3.1 / §4, observation-only."""
 
 from __future__ import annotations
 
 import inspect
+from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
+
+import pytest
 
 from internal.bots.drift_qa import (
     CHECKS,
@@ -16,17 +19,23 @@ from internal.bots.drift_qa import (
     CHECK_SHAPE_CHANGES,
     CHECK_STALE_DATA,
     CHECK_STUCK_PANELS,
+    CONTRADICTION_TAGS,
     EVIDENCE_CONTRADICTORY,
+    EVIDENCE_RELATIONS,
     EVIDENCE_SUPPORTING,
     EVIDENCE_UNAVAILABLE,
     MUTATIONS_ALLOWED,
     OBSERVATION_ONLY,
     RETRIES_ALLOWED,
+    RISK_CLASSES,
     DisagreementPair,
     DriftSnapshot,
     ObservedPayload,
     classify_evidence,
+    classify_severity,
+    freshness_disclosure,
     observe,
+    severity_for_check,
 )
 from internal.ops.notify import notify as notify_fn
 
@@ -105,9 +114,13 @@ def test_healthy_snapshot_is_ok():
     assert report.audit["observation_only"] is True
     assert report.audit["retries"] == 0
     assert report.audit["mutations"] == 0
+    assert report.evidence_bundles == ()
+    assert report.freshness_disclosure.startswith("Evidence freshness:")
     by_name = _by_name(report)
     for name in CHECKS:
         assert by_name[name].flagged is False, (name, by_name[name].details)
+        assert by_name[name].severity in RISK_CLASSES
+        assert by_name[name].freshness_disclosure.startswith("Evidence freshness:")
 
 
 def test_missing_fields_and_shape_changes():
@@ -302,12 +315,17 @@ def test_notify_is_the_only_side_effect():
                 )
             )
         )
-    mocked.assert_called_once()
-    args, kwargs = mocked.call_args
-    event = args[0] if args else kwargs.get("event")
-    assert event == "bot_observe"
-    assert kwargs["bot"] == "drift_qa"
-    assert kwargs["observation_only"] is True
+    mocked.assert_called()
+    events = [
+        (call.args[0] if call.args else call.kwargs.get("event"))
+        for call in mocked.call_args_list
+    ]
+    assert "bot_observe" in events
+    assert events.count("observation") == 8
+    for call in mocked.call_args_list:
+        kwargs = call.kwargs
+        assert kwargs["bot"] == "drift_qa"
+        assert kwargs["observation_only"] is True
     assert report.status == "degraded"
 
 
@@ -415,3 +433,238 @@ def test_import_is_safe():
     assert "build_evidence_report" not in src
     assert "import urllib" not in src
     assert "import requests" not in src
+
+
+def test_every_finding_uses_policy_3_1_severity():
+    assert RISK_CLASSES == ("low", "medium", "high", "critical")
+    assert classify_severity("info") == "critical"
+    assert classify_severity("unknown") == "critical"
+    assert severity_for_check(CHECK_STALE_DATA, flagged=True) == "critical"
+    assert severity_for_check(CHECK_DEGRADED_HTTP_200S, flagged=True) == "medium"
+    assert severity_for_check(CHECK_MISSING_FIELDS, flagged=False) == "low"
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/api/summary",
+                    source="fixture",
+                    http_status=200,
+                    body={"status": 1, "extra": True},
+                    expected_keys=("status", "summary"),
+                    expected_types=(("status", "str"),),
+                    labeled_live=True,
+                    freshness_source="live_feed",
+                    captured_at=(NOW - timedelta(hours=3)).isoformat(),
+                    hydration_ok=False,
+                    loading=True,
+                    loading_seconds=12.0,
+                ),
+            ),
+            now=NOW,
+        )
+    )
+    by_name = _by_name(report)
+    assert by_name[CHECK_MISSING_FIELDS].severity == "high"
+    assert by_name[CHECK_SHAPE_CHANGES].severity == "high"
+    assert by_name[CHECK_HYDRATION_FAILS].severity == "high"
+    assert by_name[CHECK_STUCK_PANELS].severity == "high"
+    assert by_name[CHECK_STALE_DATA].severity == "critical"
+    assert by_name[CHECK_DEGRADED_HTTP_200S].severity == "low"
+    for finding in report.findings:
+        assert finding.severity in RISK_CLASSES
+
+
+def test_contradiction_tags_are_policy_section_4():
+    assert CONTRADICTION_TAGS == (
+        "sources_disagree",
+        "live_label_vs_freshness",
+        "shape_vs_schema",
+        "ssr_vs_client",
+        "http_ok_vs_degraded_body",
+        "readiness_vs_prior",
+    )
+    snapshot = DriftSnapshot(
+        payloads=(
+            ObservedPayload(
+                name="/api/summary",
+                source="summary",
+                http_status=200,
+                body={"summary": {"total_subnets": 120}, "status": 1},
+                expected_keys=("status", "summary"),
+                expected_types=(("status", "str"),),
+                hydration_ok=True,
+                ssr_keys=("hero",),
+                client_keys=("hero", "daily-pick"),
+            ),
+            ObservedPayload(
+                name="/api/stats",
+                source="stats",
+                http_status=200,
+                body={"summary": {"total_subnets": 8}},
+            ),
+            ObservedPayload(
+                name="/api/ops/readiness",
+                source="internal/ops/readiness.py",
+                http_status=200,
+                body={"status": "degraded", "ready": False, "checked_at": NOW.isoformat()},
+                prior_body={"status": "ready", "ready": True, "issues": [], "checked_at": NOW.isoformat()},
+            ),
+            ObservedPayload(
+                name="/api/weights",
+                source="judges",
+                http_status=200,
+                body={"status": "degraded", "data": None},
+            ),
+            ObservedPayload(
+                name="/api/subnets",
+                source="subnets",
+                freshness_source="live_feed",
+                captured_at=(NOW - timedelta(hours=3)).isoformat(),
+                labeled_live=True,
+                http_status=200,
+                body={"status": "success"},
+            ),
+        ),
+        pairs=(DisagreementPair("/api/summary", "/api/stats", ("summary.total_subnets",)),),
+        now=NOW,
+    )
+    report = observe(snapshot)
+    tags = {item.tag for item in report.contradictions}
+    assert tags <= set(CONTRADICTION_TAGS)
+    assert "sources_disagree" in tags
+    assert "live_label_vs_freshness" in tags
+    assert "shape_vs_schema" in tags
+    assert "ssr_vs_client" in tags
+    assert "http_ok_vs_degraded_body" in tags
+    assert "readiness_vs_prior" in tags
+    for item in report.contradictions:
+        assert item.freshness_disclosure.startswith("Evidence freshness:")
+
+
+def test_freshness_disclosure_on_every_claim():
+    captured = (NOW - timedelta(seconds=30)).isoformat()
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/api/summary",
+                    source="internal/server.py#get_summary",
+                    freshness_source="live_feed",
+                    http_status=200,
+                    body={"status": "success", "summary": {"total_subnets": 1}},
+                    expected_keys=("status", "summary"),
+                    captured_at=captured,
+                    labeled_live=True,
+                ),
+            ),
+            now=NOW,
+        )
+    )
+    assert report.freshness_disclosure.startswith("Evidence freshness:")
+    assert "live-feed" in report.freshness_disclosure or "live_feed" in report.freshness_disclosure.replace("_", "-")
+    for check in report.checks:
+        assert check.freshness_disclosure.startswith("Evidence freshness:")
+        assert " is " in check.freshness_disclosure
+        status = check.freshness.get("status") or (
+            (check.freshness.get("sources") or [{}])[0].get("status")
+        )
+        assert status in {"fresh", "aging", "stale", "missing", "degraded"}
+    line = freshness_disclosure(
+        {"source": "pump_desk", "status": "stale", "age_seconds": 383}
+    )
+    assert line == "Evidence freshness: pump-desk is stale (6m23s). Degraded confidence."
+
+
+def test_significant_drift_builds_supporting_and_contradictory_bundle():
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/api/summary",
+                    source="summary",
+                    http_status=200,
+                    body={"summary": {"total_subnets": 120}},
+                ),
+                ObservedPayload(
+                    name="/api/stats",
+                    source="stats",
+                    http_status=200,
+                    body={"summary": {"total_subnets": 8}},
+                ),
+            ),
+            pairs=(DisagreementPair("/api/summary", "/api/stats", ("summary.total_subnets",)),),
+            now=NOW,
+        )
+    )
+    assert report.evidence_bundles
+    bundle = next(item for item in report.evidence_bundles if item.check == CHECK_DISAGREEMENT)
+    assert bundle.contradictory
+    assert bundle.supporting
+    relations = {item.relation for item in bundle.items}
+    assert relations <= set(EVIDENCE_RELATIONS)
+    assert "contradictory" in relations
+    assert "supporting" in relations
+    for item in bundle.items:
+        assert item.freshness_disclosure.startswith("Evidence freshness:")
+        assert item.attribution["source"]
+    dumped = bundle.to_dict()
+    assert dumped["contradictory"]
+    assert dumped["supporting"]
+
+
+def test_report_is_immutable():
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/api/x",
+                    source="fixture",
+                    http_status=200,
+                    body={"status": "degraded", "data": None},
+                    captured_at=NOW.isoformat(),
+                    freshness_source="learning_health",
+                ),
+            ),
+            now=NOW,
+        )
+    )
+    with pytest.raises(FrozenInstanceError):
+        report.status = "mutated"  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        report.freshness["status"] = "forged"
+    with pytest.raises(TypeError):
+        report.audit["retries"] = 9
+    with pytest.raises(TypeError):
+        report.checks[0].freshness["status"] = "forged"
+    with pytest.raises(FrozenInstanceError):
+        report.checks[0].severity = "info"  # type: ignore[misc]
+
+
+def test_never_retries_blocks_or_remediates():
+    report = observe(
+        DriftSnapshot(
+            payloads=(
+                ObservedPayload(
+                    name="/",
+                    source="ssr",
+                    hydration_ok=False,
+                    http_status=200,
+                    body={"status": "degraded", "data": None},
+                ),
+            )
+        )
+    )
+    assert report.recommended_action is None
+    assert report.approval_required is False
+    assert report.audit["retries"] == 0
+    assert report.audit["mutations"] == 0
+    assert report.audit["observation_only"] is True
+    dumped = report.to_dict()
+    assert dumped["recommended_action"] is None
+    source = inspect.getsource(observe)
+    assert "retry_hydration" not in source
+    assert "block_request" not in source
+    assert "auto-heal" not in source
+    assert "rate_limit" not in source
+    assert "for _ in range" not in source
+    assert "while " not in source
