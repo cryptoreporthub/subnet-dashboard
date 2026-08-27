@@ -1,17 +1,20 @@
 """Minimum specialist adapters so Mission Control can route for real.
 
 Dedicated bot modules (sentinel.py, market_desk.py, …) replace these when
-present: each adapter looks for ``internal.bots.<name>.run`` first.
+present: ``resolve_specialist`` prefers ``run(query, context)``, then wraps
+``observe(snapshot)`` (Drift/QA), then these adapters.
 Adapters wrap existing evidence modules — they are not a second prediction
 engine and they never mutate state.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import importlib
+import inspect
 import logging
 import uuid
-from typing import Any, Callable, Dict, List, Mapping, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from internal.ops.bot_policy import aggregate_freshness, bot_contract, classify_freshness
 
@@ -268,14 +271,166 @@ _ADAPTERS: Dict[str, Specialist] = {
     "shield": run_shield,
 }
 
+# Snapshot-layer tags (Drift/QA) stay a separate enum from merge CONTRADICTION_TAGS.
+# Only this mapping is clean enough to promote into the merge layer.
+SNAPSHOT_TO_MERGE_TAG = {"live_label_vs_freshness": "stale_labeled_live"}
+_STALE_LABELED_LIVE_FLAG = "stale_data_labeled_live"
+_STALE_DATA_CHECK = "stale_data"
+
+
+def _get(obj: Any, key: str, default: Any = None) -> Any:
+    if obj is None:
+        return default
+    if isinstance(obj, Mapping):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
+def _as_items(value: Any) -> List[Any]:
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        rows: List[Any] = []
+        for item in value:
+            dumped = getattr(item, "to_dict", None)
+            if callable(dumped):
+                rows.append(dumped())
+            elif isinstance(item, Mapping):
+                rows.append(dict(item))
+            else:
+                rows.append(item)
+        return rows
+    dumped = getattr(value, "to_dict", None)
+    if callable(dumped):
+        return [dumped()]
+    return [value]
+
+
+def _snapshot_field_names(snapshot_type: Any) -> List[str]:
+    try:
+        if dataclasses.is_dataclass(snapshot_type):
+            return [item.name for item in dataclasses.fields(snapshot_type)]
+    except TypeError:
+        pass
+    try:
+        return [
+            param.name
+            for param in inspect.signature(snapshot_type).parameters.values()
+            if param.kind in (
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.KEYWORD_ONLY,
+            )
+            and param.name != "self"
+        ]
+    except (TypeError, ValueError):
+        return []
+
+
+def _snapshot_from_context(module: Any, context: Mapping[str, Any]) -> Any:
+    """Build DriftSnapshot from context keys that already exist. Do not invent fields."""
+    existing = context.get("snapshot") if "snapshot" in context else context.get("drift_snapshot")
+    snapshot_type = getattr(module, "DriftSnapshot", None)
+    if existing is not None and (
+        snapshot_type is None or isinstance(existing, snapshot_type)
+    ):
+        return existing
+    if snapshot_type is None:
+        return existing
+    source: Mapping[str, Any]
+    if isinstance(existing, Mapping):
+        source = existing
+    else:
+        source = context
+    kwargs = {name: source[name] for name in _snapshot_field_names(snapshot_type) if name in source}
+    return snapshot_type(**kwargs)
+
+
+def _contradiction_tags(report: Any) -> List[str]:
+    tags: List[str] = []
+    seen = set()
+    for item in _get(report, "contradictions") or ():
+        if isinstance(item, str):
+            tag = item
+        elif isinstance(item, Mapping):
+            tag = item.get("tag")
+        else:
+            tag = getattr(item, "tag", None)
+        if not tag:
+            continue
+        label = str(tag)
+        if label in seen:
+            continue
+        seen.add(label)
+        tags.append(label)
+    return tags
+
+
+def _flags_from_report(report: Any, tags: Sequence[str]) -> List[str]:
+    flags: List[str] = []
+    stale_data_flagged = False
+    for check in _get(report, "checks") or ():
+        name = _get(check, "name")
+        flagged = bool(_get(check, "flagged"))
+        if flagged and name:
+            label = str(name)
+            flags.append(label)
+            if label == _STALE_DATA_CHECK:
+                stale_data_flagged = True
+    if "live_label_vs_freshness" in tags or stale_data_flagged:
+        if _STALE_LABELED_LIVE_FLAG not in flags:
+            flags.append(_STALE_LABELED_LIVE_FLAG)
+    return flags
+
+
+def specialist_result_from_observe(bot: str, report: Any) -> Dict[str, Any]:
+    """Map an observe() DriftReport onto the specialist_result envelope.
+
+    recommended_action is always None: observation is flag-only.
+    Unmapped snapshot tags stay on snapshot_contradictions, not merge CONTRADICTION_TAGS.
+    """
+    tags = _contradiction_tags(report)
+    snapshot_contradictions = [tag for tag in tags if tag not in SNAPSHOT_TO_MERGE_TAG]
+    freshness = _get(report, "freshness")
+    if isinstance(freshness, Mapping):
+        freshness = dict(freshness)
+    evidence = _as_items(_get(report, "evidence_bundles") or _get(report, "evidence"))
+    return specialist_result(
+        bot,
+        summary=str(_get(report, "summary") or ""),
+        status=str(_get(report, "status") or "ok"),
+        observations=_as_items(_get(report, "observations")),
+        evidence=evidence,
+        unknowns=_as_items(_get(report, "unknowns")),
+        recommended_action=None,
+        freshness=freshness,
+        confidence=_get(report, "confidence"),
+        extra={
+            "flags": _flags_from_report(report, tags),
+            "snapshot_contradictions": snapshot_contradictions,
+            "checks": _as_items(_get(report, "checks")),
+        },
+    )
+
+
+def _wrap_observe(name: str, module: Any, observe_fn: Callable[..., Any]) -> Specialist:
+    def run(query: str, context: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+        del query
+        snapshot = _snapshot_from_context(module, context or {})
+        return specialist_result_from_observe(name, observe_fn(snapshot))
+
+    return run
+
 
 def resolve_specialist(name: str) -> Specialist:
-    """Prefer a dedicated ``internal.bots.<name>.run`` if that module exists."""
+    """Prefer ``run(query, context)``; else wrap ``observe(snapshot)``; else adapter."""
     try:
         module = importlib.import_module(f"internal.bots.{name}")
         runner = getattr(module, "run", None)
         if callable(runner):
             return runner
+        observer = getattr(module, "observe", None)
+        if callable(observer):
+            return _wrap_observe(name, module, observer)
     except Exception:
         pass
     if name in _ADAPTERS:

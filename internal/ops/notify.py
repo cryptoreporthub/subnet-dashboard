@@ -30,3 +30,13 @@ def log_event(
 
 def emit(event: str, payload: Optional[Mapping[str, Any]] = None, **fields: Any) -> Dict[str, Any]:
     return log_event(event, payload, **fields)
+
+
+def notify(event: str, **fields: Any) -> Dict[str, Any]:
+    """Compatible alias for Drift/QA and other specialists that call ``notify``.
+
+    Same destination as ``log_event`` / ``emit`` (process log, no network).
+    Both APIs must exist so merge order with a sibling ``notify.py`` cannot
+    ImportError the coordinator (``log_event``) or the observer (``notify``).
+    """
+    return log_event(event, **fields)

@@ -10,14 +10,15 @@ from internal.bots.mission_control import (
     MissionControlResponse,
     assess_risk,
     classify_intent,
+    collect_snapshot_contradictions,
     detect_contradictions,
     enforce_freshness,
     gate_execution,
     handle,
     select_specialists,
 )
-from internal.bots.specialists import specialist_result
-from internal.ops.bot_policy import classify_freshness
+from internal.bots.specialists import resolve_specialist, specialist_result
+from internal.ops.bot_policy import CONTRADICTION_TAGS, classify_freshness
 
 
 def _fresh_source(now=None):
@@ -304,3 +305,146 @@ def test_notify_logs_routing_and_decision(tmp_path, monkeypatch, caplog):
     events = [r.getMessage() for r in caplog.records if "mission_control" in r.getMessage()]
     assert any("mission_control.route" in msg for msg in events)
     assert any("mission_control.decision" in msg for msg in events)
+
+
+def test_notify_dual_api_exports(caplog):
+    from internal.ops import notify as notify_mod
+
+    assert callable(notify_mod.notify)
+    assert callable(notify_mod.log_event)
+    assert callable(notify_mod.emit)
+    caplog.set_level("INFO", logger="internal.ops.notify")
+    via_notify = notify_mod.notify("dual.alias", bot="drift_qa", observation_only=True)
+    via_log = notify_mod.log_event("dual.log_event", specialist="sentinel")
+    via_emit = notify_mod.emit("dual.emit", source="mission_control")
+    assert via_notify["event"] == "dual.alias"
+    assert via_log["event"] == "dual.log_event"
+    assert via_emit["event"] == "dual.emit"
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("dual.alias" in msg for msg in messages)
+    assert any("dual.log_event" in msg for msg in messages)
+    assert any("dual.emit" in msg for msg in messages)
+
+
+def _observe_only_module(observe_fn, snapshot_type):
+    import types
+
+    module = types.ModuleType("internal.bots.drift_qa")
+    module.observe = observe_fn
+    module.DriftSnapshot = snapshot_type
+    return module
+
+
+class _FakeSnapshot:
+    def __init__(self, payloads=(), pairs=(), now=None):
+        self.payloads = payloads
+        self.pairs = pairs
+        self.now = now
+
+
+class _FakeContradiction:
+    def __init__(self, tag):
+        self.tag = tag
+
+
+class _FakeCheck:
+    def __init__(self, name, flagged):
+        self.name = name
+        self.flagged = flagged
+
+
+class _FakeReport:
+    def __init__(self, tags, stale_data=True):
+        self.status = "degraded"
+        self.summary = "observed drift"
+        self.checks = (_FakeCheck("stale_data", stale_data),)
+        self.contradictions = tuple(_FakeContradiction(tag) for tag in tags)
+        self.evidence_bundles = ({"kind": "fixture", "source": "live_feed"},)
+        self.freshness = {"source": "live_feed", "status": "stale"}
+        self.observations = ["stale labeled live"]
+        self.unknowns = ()
+        self.confidence = 0.5
+        self.recommended_action = "restart"
+
+
+_UNMAPPED_SNAPSHOT_TAGS = (
+    "sources_disagree",
+    "shape_vs_schema",
+    "ssr_vs_client",
+    "http_ok_vs_degraded_body",
+    "readiness_vs_prior",
+)
+
+
+def test_observe_only_specialist_is_wrapped(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPROVAL_STORE_PATH", str(tmp_path / "approvals.json"))
+    seen = {}
+
+    def observe(snapshot):
+        seen["snapshot"] = snapshot
+        return _FakeReport(("live_label_vs_freshness",) + _UNMAPPED_SNAPSHOT_TAGS)
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "internal.bots.drift_qa",
+        _observe_only_module(observe, _FakeSnapshot),
+    )
+    runner = resolve_specialist("drift_qa")
+    result = runner("dashboard stale", {"payloads": ("only-this",), "subject": "SN12"})
+    assert seen["snapshot"].payloads == ("only-this",)
+    assert seen["snapshot"].pairs == ()
+    assert seen["snapshot"].now is None
+    assert not hasattr(seen["snapshot"], "subject")
+    assert result["recommended_action"] is None
+    assert result["status"] == "degraded"
+    assert result["snapshot_contradictions"] == list(_UNMAPPED_SNAPSHOT_TAGS)
+    assert "live_label_vs_freshness" not in result["snapshot_contradictions"]
+    assert "stale_data_labeled_live" in result["flags"]
+    assert "stale_data" in result["flags"]
+
+    merge_tags = {item["tag"] for item in detect_contradictions([result])}
+    assert "stale_labeled_live" in merge_tags
+    assert merge_tags <= set(CONTRADICTION_TAGS)
+    for tag in _UNMAPPED_SNAPSHOT_TAGS:
+        assert tag not in merge_tags
+        assert tag not in CONTRADICTION_TAGS
+
+    surfaced = collect_snapshot_contradictions([result])
+    assert {item["tag"] for item in surfaced} == set(_UNMAPPED_SNAPSHOT_TAGS)
+
+    mc = MissionControl(
+        specialists={"sentinel": _bot("sentinel"), "drift_qa": runner},
+    )
+    response = mc.handle("The dashboard feels stale")
+    assert response.merged_results["snapshot_contradictions"]
+    assert {item["tag"] for item in response.merged_results["snapshot_contradictions"]} == set(
+        _UNMAPPED_SNAPSHOT_TAGS
+    )
+    public_tags = {item["tag"] for item in response.merged_results["contradictions"]}
+    assert public_tags <= set(CONTRADICTION_TAGS)
+    assert "stale_labeled_live" in public_tags
+    packet = response.merged_results["approval_packet"]
+    assert packet["specialists"]["drift_qa"]["recommended_action"] is None
+    assert packet["specialists"]["drift_qa"]["snapshot_contradictions"] == list(_UNMAPPED_SNAPSHOT_TAGS)
+
+
+def test_resolve_specialist_prefers_run_over_observe(monkeypatch):
+    def run(query, context):
+        return specialist_result(
+            "drift_qa",
+            summary=f"run-path {query}",
+            recommended_action="hold",
+            sources=[_fresh_source()],
+            extra={"flags": [], "snapshot_contradictions": []},
+        )
+
+    def observe(snapshot):
+        raise AssertionError("observe must not run when run() exists")
+
+    module = _observe_only_module(observe, _FakeSnapshot)
+    module.run = run
+    monkeypatch.setitem(__import__("sys").modules, "internal.bots.drift_qa", module)
+    runner = resolve_specialist("drift_qa")
+    result = runner("keep run", {})
+    assert result["summary"] == "run-path keep run"
+    assert result["recommended_action"] == "hold"

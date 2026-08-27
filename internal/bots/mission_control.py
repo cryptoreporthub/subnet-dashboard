@@ -318,6 +318,24 @@ def detect_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str
     return contradictions
 
 
+def collect_snapshot_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Surface unmapped Drift/QA snapshot tags without stuffing them into CONTRADICTION_TAGS."""
+    collected: List[Dict[str, Any]] = []
+    for result in results:
+        bot = str(result.get("bot") or "unknown")
+        for item in result.get("snapshot_contradictions") or []:
+            if isinstance(item, str):
+                tag = item
+            elif isinstance(item, Mapping):
+                tag = item.get("tag")
+            else:
+                tag = str(item) if item is not None else None
+            if not tag:
+                continue
+            collected.append({"tag": str(tag), "bot": bot})
+    return collected
+
+
 def _age_seconds(envelope: Mapping[str, Any]) -> Optional[float]:
     raw = envelope.get("age_seconds")
     try:
@@ -563,7 +581,9 @@ class MissionControl:
         for result in results.values():
             sources.extend(_sources_of(result))
         freshness = enforce_freshness(sources)
-        contradictions = detect_contradictions(list(results.values()))
+        specialist_payloads = list(results.values())
+        contradictions = detect_contradictions(specialist_payloads)
+        snapshot_contradictions = collect_snapshot_contradictions(specialist_payloads)
         incomplete = _incomplete_specialists(results)
         uncertain = _is_uncertain(results, freshness, contradictions, incomplete)
 
@@ -658,7 +678,12 @@ class MissionControl:
                 }
                 for name, item in results.items()
             }
-            approval_packet = {"specialists": results, "claims": claims, "contradictions": contradictions}
+            approval_packet = {
+                "specialists": results,
+                "claims": claims,
+                "contradictions": contradictions,
+                "snapshot_contradictions": snapshot_contradictions,
+            }
 
         merged = {
             "status": status,
@@ -668,6 +693,7 @@ class MissionControl:
             "routed_to": names,
             "specialists": public_specialists,
             "contradictions": contradictions,
+            "snapshot_contradictions": snapshot_contradictions,
             "incomplete_specialists": incomplete,
             "uncertain": uncertain,
             "shareable": shareable,
