@@ -29,6 +29,9 @@ FRESHNESS_THRESHOLDS: Dict[str, Dict[str, int]] = {
     "message_intel_live": {"fresh": 900, "aging": 3600, "stale": 7200},
     "message_intel_archive": {"fresh": 86400, "aging": 604800, "stale": 2592000},
     "github": {"fresh": 3600, "aging": 86400, "stale": 604800},
+    # Access-log batches consumed by Shield. Same envelope mechanism as other
+    # live ops sources — not a parallel freshness policy.
+    "request_logs": {"fresh": 300, "aging": 900, "stale": 3600},
 }
 
 _FRESHNESS_ORDER = {"fresh": 0, "aging": 1, "stale": 2, "missing": 3, "degraded": 4}
