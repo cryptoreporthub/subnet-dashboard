@@ -73,9 +73,22 @@ class ApprovalRecord:
     run_id: Optional[str] = None
     approver_role: Optional[str] = None
     surface: Optional[str] = None
+    freshness_status_at_request: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    def to_contract(self) -> Dict[str, Any]:
+        """bot_policy.approval_for shape plus the persisted approval_id."""
+        return {
+            "required": True,
+            "status": self.status,
+            "action_category": self.action_category,
+            "approver_role": self.approver_role,
+            "surface": self.surface,
+            "approval_id": self.id,
+            "approved_at": self.approved_at,
+        }
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any]) -> "ApprovalRecord":
@@ -150,11 +163,22 @@ def _normalize_risk(risk_level: str) -> str:
     return level if level in RISK_LEVELS else "high"
 
 
-def _freshness_blocks(freshness: Optional[Dict[str, Any]]) -> bool:
+def _freshness_blocks(record: ApprovalRecord) -> bool:
+    """Expire an approval only if evidence went stale *after* it was requested.
+
+    Findings that were already degraded/uncertain when queued can still be
+    human-approved for sharing; the clock TTL remains the backstop.
+    """
+    freshness = record.freshness
     if not freshness:
         return False
     status = str(freshness.get("status") or "").lower()
-    return status in {"stale", "missing", "degraded"}
+    if status not in {"stale", "missing", "degraded"}:
+        return False
+    at_request = str(record.freshness_status_at_request or "").lower()
+    if at_request in {"stale", "missing", "degraded"}:
+        return False
+    return True
 
 
 def _expired(record: ApprovalRecord, *, now: Optional[datetime] = None) -> bool:
@@ -166,7 +190,7 @@ def _expired(record: ApprovalRecord, *, now: Optional[datetime] = None) -> bool:
     expires = _parse_utc(record.expires_at)
     if expires is not None and clock >= expires:
         return True
-    return record.status == "approved" and _freshness_blocks(record.freshness)
+    return record.status == "approved" and _freshness_blocks(record)
 
 
 def _mark_expired(record: ApprovalRecord) -> ApprovalRecord:
@@ -257,6 +281,9 @@ def request_approval(
         run_id=run_id,
         approver_role=gate.get("approver_role"),
         surface=gate.get("surface"),
+        freshness_status_at_request=(
+            str((freshness or {}).get("status") or "") or None
+        ),
         audit_history=[{"event": "requested", "at": _utcnow_z(), "by": requested_by}],
     )
     _put(record)
@@ -276,15 +303,21 @@ def _is_bot_identity(identity: str) -> bool:
     return "bot" in tokens or name.startswith("bot:")
 
 
+def _require_human_role(identity: str, record: ApprovalRecord) -> None:
+    if _is_bot_identity(identity):
+        raise ApprovalDenied("approver must be a human with the named role, not a bot")
+    if record.approver_role and identity != record.approver_role:
+        raise ApprovalDenied(f"approver must have role {record.approver_role}")
+
+
 def approve(record_id: str, approver: str) -> ApprovalRecord:
     identity = str(approver or "").strip()
     if not identity:
         raise ApprovalDenied("approver identity is required")
-    if _is_bot_identity(identity):
-        raise ApprovalDenied("approver must be a human with the named role, not a bot")
     record = get_record(record_id)
     if record is None:
         raise ApprovalDenied(f"approval record not found: {record_id}")
+    _require_human_role(identity, record)
     if _expired(record):
         _put(_mark_expired(record))
         raise ApprovalDenied("approval has expired")
@@ -305,11 +338,10 @@ def reject(record_id: str, approver: str, reason: str = "") -> ApprovalRecord:
     identity = str(approver or "").strip()
     if not identity:
         raise ApprovalDenied("approver identity is required")
-    if _is_bot_identity(identity):
-        raise ApprovalDenied("approver must be a human with the named role, not a bot")
     record = get_record(record_id)
     if record is None:
         raise ApprovalDenied(f"approval record not found: {record_id}")
+    _require_human_role(identity, record)
     record.status = "rejected"
     record.rejected_reason = str(reason or "")
     record.audit_history.append(

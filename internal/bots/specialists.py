@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 Specialist = Callable[[str, Mapping[str, Any]], Dict[str, Any]]
 
-ADAPTER_NAMES = ("sentinel", "drift_qa", "proof_scout", "market_desk")
+ADAPTER_NAMES = ("sentinel", "drift_qa", "proof_scout", "market_desk", "shield")
 
 
 def _run_id() -> str:
@@ -106,7 +106,8 @@ def run_sentinel(query: str, context: Mapping[str, Any] | None = None) -> Dict[s
         observations=alerts,
         evidence=[{"kind": "ops_evidence", "status": report.get("status")}],
         sources=sources,
-        extra={"report_status": report.get("status"), "checked_at": report.get("checked_at")},
+        extra={"report_status": report.get("status"), "checked_at": report.get("checked_at"),
+               "source_attribution": {"ops_evidence": "internal/ops/evidence.py"}},
     )
 
 
@@ -138,7 +139,7 @@ def run_drift_qa(query: str, context: Mapping[str, Any] | None = None) -> Dict[s
         observations=flags,
         evidence=[{"freshness": fresh_status, "report_status": report_status}],
         sources=sources,
-        extra={"flags": flags},
+        extra={"flags": flags, "source_attribution": {"ops_evidence": "internal/ops/evidence.py"}},
     )
 
 
@@ -220,7 +221,42 @@ def run_market_desk(query: str, context: Mapping[str, Any] | None = None) -> Dic
             "captured_at": outcomes.get("captured_at"),
         }}],
         sources=list(report.get("evidence_sources") or []),
-        extra={"observation": observation, "interpretation": interpretation},
+        extra={"observation": observation, "interpretation": interpretation,
+               "source_attribution": {"ops_evidence": "internal/ops/evidence.py"}},
+    )
+
+
+def run_shield(query: str, context: Mapping[str, Any] | None = None) -> Dict[str, Any]:
+    """Security observer. Recommends only; never blocks. Does not invent abuse events."""
+    del context
+    from internal.write_auth import write_auth_enabled
+
+    text = str(query or "").lower()
+    observations = [
+        f"write_api_token={'enabled' if write_auth_enabled() else 'unset'}",
+    ]
+    unknowns = [
+        "no live request-log sample in this run; rate-limit/scrape/auth monitors need request context",
+    ]
+    in_scope = any(
+        token in text
+        for token in ("scrap", "rate limit", "auth", "abuse", "block user", "revoke")
+    )
+    return specialist_result(
+        "shield",
+        summary=(
+            "shield in-scope: no abuse events claimed without request evidence"
+            if in_scope
+            else "shield observation-only: no request-log evidence in this run"
+        ),
+        status="ok",
+        observations=observations,
+        unknowns=unknowns,
+        evidence=[],
+        extra={
+            "source_attribution": {"write_auth": "internal/write_auth.py"},
+            "monitors": ("rate_limits", "scraping", "endpoint_misuse", "auth_abuse"),
+        },
     )
 
 
@@ -229,6 +265,7 @@ _ADAPTERS: Dict[str, Specialist] = {
     "drift_qa": run_drift_qa,
     "proof_scout": run_proof_scout,
     "market_desk": run_market_desk,
+    "shield": run_shield,
 }
 
 

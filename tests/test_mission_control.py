@@ -40,6 +40,7 @@ def _bot(name, status="ok", summary=None, action=None, source=None):
             status=status,
             recommended_action=action,
             sources=[envelope],
+            evidence=[{"kind": "fixture", "source": envelope.get("source")}],
             extra={"query": query, "subject": (context or {}).get("subject")},
         )
 
@@ -69,11 +70,12 @@ def test_critical_risk_requires_human_approval(tmp_path, monkeypatch):
     assert response.approval_required is True
     approval = response.merged_results["approval"]
     assert approval["status"] == "pending"
-    assert approval["risk_level"] == "critical"
+    assert approval["required"] is True
+    assert approval["approval_id"]
     with pytest.raises(ApprovalDenied):
-        gate_execution(approval["id"])
-    approve(approval["id"], "platform_operator")
-    assert enforce_approval(approval["id"]).status == "approved"
+        gate_execution(approval["approval_id"])
+    approve(approval["approval_id"], "platform_operator")
+    assert enforce_approval(approval["approval_id"]).status == "approved"
 
 
 def test_read_only_monitor_does_not_request_approval(tmp_path, monkeypatch):
@@ -85,7 +87,9 @@ def test_read_only_monitor_does_not_request_approval(tmp_path, monkeypatch):
     assert response.intent == "monitor"
     assert response.risk_level == "low"
     assert response.approval_required is False
-    assert response.merged_results["approval"] is None
+    assert response.merged_results["approval"]["required"] is False
+    assert response.merged_results["shareable"] is True
+    assert response.merged_results["approval"]["status"] == "not_required"
 
 
 def test_parallel_routing_runs_specialists_together(tmp_path, monkeypatch):
@@ -127,7 +131,7 @@ def test_contradiction_detection_is_surfaced_not_averaged(tmp_path, monkeypatch)
         ]
     )
     assert conflicts
-    assert conflicts[0]["type"] == "status"
+    assert conflicts[0]["tag"] == "status_disagreement"
 
     mc = MissionControl(
         specialists={
@@ -137,8 +141,13 @@ def test_contradiction_detection_is_surfaced_not_averaged(tmp_path, monkeypatch)
     )
     response = mc.handle("Why is SN65 underperforming?")
     assert response.merged_results["contradictions"]
-    assert response.merged_results["status"] == "degraded"
-    assert "not averaged" in response.merged_results["summary"]
+    assert response.approval_required is True
+    assert response.merged_results["shareable"] is False
+    tags = {item["tag"] for item in response.merged_results["contradictions"]}
+    from internal.ops.bot_policy import CONTRADICTION_TAGS
+
+    assert tags <= set(CONTRADICTION_TAGS)
+    assert "held pending" in response.merged_results["summary"]
 
 
 def test_freshness_policy_degrades_stale_evidence(tmp_path, monkeypatch):
@@ -157,8 +166,9 @@ def test_freshness_policy_degrades_stale_evidence(tmp_path, monkeypatch):
     response = mc.handle("The dashboard feels stale")
     assert response.merged_results["freshness"]["status"] == "stale"
     assert response.merged_results["freshness"]["claim_fresh"] is False
-    assert response.merged_results["status"] == "degraded"
-    assert "freshness" in response.merged_results["summary"]
+    assert response.merged_results["freshness"]["suspect_over_4h"] is False
+    assert response.approval_required is True
+    assert response.merged_results["shareable"] is False
 
     def lie(query, context):
         payload = specialist_result(
@@ -192,6 +202,9 @@ def test_mission_control_response_shape(tmp_path, monkeypatch):
     assert isinstance(payload["approval_required"], bool)
     assert payload["merged_results"]["subject"] == "SN12"
     assert select_specialists("monitor") == ["sentinel", "drift_qa"]
+    assert "shield" in select_specialists("recommend", "restart the worker")
+    for key in ("freshness", "confidence", "approval", "approval_required"):
+        assert key in payload["merged_results"]
 
 
 def test_handle_module_function_uses_real_adapters(tmp_path, monkeypatch):
@@ -212,3 +225,82 @@ def test_handle_module_function_uses_real_adapters(tmp_path, monkeypatch):
     assert "market_desk" in response.merged_results["specialists"]
     assert "proof_scout" in response.merged_results["specialists"]
     assert response.approval_required is False
+    assert response.merged_results["shareable"] is True
+    assert response.merged_results["approval"]["approval_id"] is None
+
+
+def test_insight_older_than_4h_is_suspect_even_if_source_policy_is_fresh(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPROVAL_STORE_PATH", str(tmp_path / "approvals.json"))
+    now = datetime.now(timezone.utc)
+    # pick_audit fresh bound is 24h; 5h is still policy-fresh but >4h overlay.
+    source = classify_freshness("pick_audit", now - timedelta(hours=5), now=now)
+    assert source["status"] == "fresh"
+    envelope = enforce_freshness([source])
+    assert envelope["suspect_over_4h"] is True
+    assert envelope["claim_fresh"] is False
+    assert envelope["status"] == "aging"
+
+    missing_age = {
+        "source": "pick_audit",
+        "status": "fresh",
+        "captured_at": (now - timedelta(hours=5)).isoformat(),
+        "age_seconds": None,
+        "authoritative": True,
+    }
+    from_captured = enforce_freshness([missing_age])
+    assert from_captured["suspect_over_4h"] is True
+    assert from_captured["claim_fresh"] is False
+
+    mc = MissionControl(
+        specialists={"market_desk": _bot("market_desk", source=source), "proof_scout": _bot("proof_scout", source=source)}
+    )
+    response = mc.handle("Explain SN12 confidence")
+    assert response.approval_required is True
+    assert response.merged_results["freshness"]["suspect_over_4h"] is True
+
+
+def test_high_risk_and_incomplete_go_through_approval_gate(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPROVAL_STORE_PATH", str(tmp_path / "approvals.json"))
+    assert assess_risk("Draft a release note", "recommend") == "high"
+    mc = MissionControl(
+        specialists={
+            "market_desk": _bot("market_desk"),
+            "proof_scout": _bot("proof_scout"),
+            "sentinel": _bot("sentinel"),
+            "shield": _bot("shield"),
+        }
+    )
+    response = mc.handle("Draft a release note")
+    assert response.risk_level == "high"
+    assert response.approval_required is True
+    approval = response.merged_results["approval"]
+    assert approval["required"] is True
+    assert approval["status"] == "pending"
+    assert approval["approval_id"]
+    assert approval["approver_role"]
+    assert approval["surface"]
+
+    degraded = MissionControl(
+        specialists={
+            "sentinel": _bot("sentinel", status="degraded"),
+            "drift_qa": _bot("drift_qa"),
+        }
+    )
+    held = degraded.handle("The dashboard feels stale")
+    assert held.approval_required is True
+    assert held.merged_results["status"] == "incomplete"
+    assert held.merged_results["shareable"] is False
+    assert "sentinel" in held.merged_results["incomplete_specialists"]
+    assert held.merged_results["claims"] == []
+
+
+def test_notify_logs_routing_and_decision(tmp_path, monkeypatch, caplog):
+    monkeypatch.setenv("APPROVAL_STORE_PATH", str(tmp_path / "approvals.json"))
+    caplog.set_level("INFO", logger="internal.ops.notify")
+    mc = MissionControl(
+        specialists={"sentinel": _bot("sentinel"), "drift_qa": _bot("drift_qa")}
+    )
+    mc.handle("The dashboard feels stale")
+    events = [r.getMessage() for r in caplog.records if "mission_control" in r.getMessage()]
+    assert any("mission_control.route" in msg for msg in events)
+    assert any("mission_control.decision" in msg for msg in events)

@@ -14,6 +14,7 @@ import re
 import uuid
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from internal.approval.service import (
@@ -23,13 +24,21 @@ from internal.approval.service import (
     request_approval,
 )
 from internal.bots.specialists import resolve_specialist, specialist_result
-from internal.ops.bot_policy import aggregate_freshness, classify_freshness
+from internal.ops.bot_policy import (
+    aggregate_freshness,
+    approval_for,
+    bot_contract,
+    classify_freshness,
+)
+from internal.ops.notify import log_event
 
 logger = logging.getLogger(__name__)
 
 INTENTS = ("monitor", "analyze", "explain", "recommend")
 RISK_LEVELS = ("low", "medium", "high", "critical")
 SPECIALIST_TIMEOUT_SECONDS = 8
+# Overlay on FRESHNESS_THRESHOLDS: any insight older than 4h is suspect.
+INSIGHT_SUSPECT_SECONDS = 4 * 3600
 
 # Policy §3.1 — critical actions always require a human approval record.
 _CRITICAL_PATTERNS = (
@@ -108,7 +117,7 @@ _INTENT_SPECIALISTS: Dict[str, tuple[str, ...]] = {
     "monitor": ("sentinel", "drift_qa"),
     "analyze": ("market_desk", "proof_scout"),
     "explain": ("market_desk", "proof_scout"),
-    "recommend": ("market_desk", "proof_scout", "sentinel"),
+    "recommend": ("market_desk", "proof_scout", "sentinel", "drift_qa", "shield"),
 }
 
 _STATUS_STANCE = {
@@ -191,6 +200,9 @@ def select_specialists(intent: str, query: str = "") -> List[str]:
     ):
         if "sentinel" not in names:
             names.append("sentinel")
+    if any(token in text for token in ("scrap", "rate limit", "auth abuse", "block user")):
+        if "shield" not in names:
+            names.append("shield")
     return names
 
 
@@ -219,10 +231,17 @@ def _sources_of(result: Mapping[str, Any]) -> List[Dict[str, Any]]:
 
 
 def detect_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-    """Surface conflicting specialist conclusions instead of averaging them."""
+    """Surface conflicting specialist conclusions instead of averaging them.
+
+    Tags are the Policy §4 enum in ``internal.ops.bot_policy.CONTRADICTION_TAGS``.
+    """
     contradictions: List[Dict[str, Any]] = []
     stances: Dict[str, List[str]] = {}
     actions: Dict[str, List[str]] = {}
+    populations: Dict[str, List[str]] = {}
+    freshness_by_source: Dict[str, Dict[str, List[str]]] = {}
+    supporting_bots: List[str] = []
+    contradictory_bots: List[str] = []
     for result in results:
         bot = str(result.get("bot") or "unknown")
         stance = _STATUS_STANCE.get(str(result.get("status") or "").lower())
@@ -232,10 +251,30 @@ def detect_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str
         if action:
             mapped = _ACTION_STANCE.get(action, action)
             actions.setdefault(mapped, []).append(bot)
+        if result.get("supporting"):
+            supporting_bots.append(bot)
+        if result.get("contradictory"):
+            contradictory_bots.append(bot)
+        for item in result.get("evidence") or []:
+            if isinstance(item, dict) and item.get("population"):
+                populations.setdefault(str(item["population"]), []).append(bot)
+        for src in _sources_of(result):
+            source_name = str(src.get("source") or "unknown")
+            status = str(src.get("status") or "missing")
+            freshness_by_source.setdefault(source_name, {}).setdefault(status, []).append(bot)
+        flags = result.get("flags") or []
+        if "stale_data_labeled_live" in flags:
+            contradictions.append(
+                {
+                    "tag": "stale_labeled_live",
+                    "detail": f"{bot} flagged stale data labeled live",
+                    "bots": [bot],
+                }
+            )
     if len(stances) > 1:
         contradictions.append(
             {
-                "type": "status",
+                "tag": "status_disagreement",
                 "detail": "specialists disagree on health stance",
                 "by_stance": stances,
             }
@@ -243,27 +282,83 @@ def detect_contradictions(results: Sequence[Mapping[str, Any]]) -> List[Dict[str
     if len(actions) > 1:
         contradictions.append(
             {
-                "type": "recommended_action",
+                "tag": "recommended_action_conflict",
                 "detail": "specialists recommend incompatible actions",
                 "by_action": actions,
             }
         )
+    if supporting_bots and contradictory_bots:
+        contradictions.append(
+            {
+                "tag": "supporting_vs_contradictory",
+                "detail": "evidence bundles both support and contradict the claim",
+                "supporting_bots": supporting_bots,
+                "contradictory_bots": contradictory_bots,
+            }
+        )
+    live_pops = {k: v for k, v in populations.items() if k != "unknown"}
+    if len(live_pops) > 1:
+        contradictions.append(
+            {
+                "tag": "population_mix",
+                "detail": "evidence populations mixed without a shared lineage",
+                "by_population": live_pops,
+            }
+        )
+    for source_name, by_status in freshness_by_source.items():
+        if len(by_status) > 1:
+            contradictions.append(
+                {
+                    "tag": "freshness_disagreement",
+                    "detail": f"{source_name} freshness disagrees across specialists",
+                    "source": source_name,
+                    "by_status": by_status,
+                }
+            )
     return contradictions
 
 
+def _age_seconds(envelope: Mapping[str, Any]) -> Optional[float]:
+    raw = envelope.get("age_seconds")
+    try:
+        if raw is not None:
+            return float(raw)
+    except (TypeError, ValueError):
+        pass
+    captured = envelope.get("captured_at") or envelope.get("observed_at")
+    if not captured:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(captured).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return max(0.0, (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds())
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def _canonicalize_freshness(envelope: Mapping[str, Any]) -> Dict[str, Any]:
-    """A non-fresh status can never claim freshness (Policy §5)."""
+    """Per-source thresholds plus the 4h suspect overlay. Never claim fresh if suspect."""
     result = dict(envelope)
     status = str(result.get("status") or "missing").lower()
     result["status"] = status
-    result["claim_fresh"] = status == "fresh"
+    age_value = _age_seconds(result)
+    if age_value is not None:
+        result["age_seconds"] = round(age_value, 1)
+    suspect = age_value is not None and age_value > INSIGHT_SUSPECT_SECONDS
+    result["suspect_over_4h"] = bool(suspect)
+    if suspect and status == "fresh":
+        result["status"] = "aging"
+        status = "aging"
+    result["claim_fresh"] = status == "fresh" and not suspect
     result["enforced"] = True
     return result
 
 
 def enforce_freshness(sources: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
     """Policy §5: a stale/missing/degraded source cannot yield a fresh conclusion."""
-    envelope = aggregate_freshness(sources) if sources else classify_freshness("learning_health")
+    canonical = [_canonicalize_freshness(item) for item in sources] if sources else []
+    envelope = aggregate_freshness(canonical) if canonical else classify_freshness("learning_health")
     return _canonicalize_freshness(envelope)
 
 
@@ -281,13 +376,81 @@ def _normalize_specialist_freshness(result: Mapping[str, Any]) -> Dict[str, Any]
     return payload
 
 
+def _incomplete_specialists(results: Mapping[str, Mapping[str, Any]]) -> List[str]:
+    incomplete: List[str] = []
+    for name, result in results.items():
+        status = str(result.get("status") or "")
+        if status in {"degraded", "blocked"} or result.get("unknowns") and status != "ok":
+            incomplete.append(name)
+        if "unavailable" in str(result.get("summary") or "").lower() or "timed out" in str(result.get("summary") or "").lower():
+            if name not in incomplete:
+                incomplete.append(name)
+    return incomplete
+
+
+def _is_uncertain(
+    results: Mapping[str, Mapping[str, Any]],
+    freshness: Mapping[str, Any],
+    contradictions: Sequence[Mapping[str, Any]],
+    incomplete: Sequence[str],
+) -> bool:
+    if contradictions or incomplete:
+        return True
+    if freshness.get("suspect_over_4h"):
+        return True
+    if str(freshness.get("status") or "") in {"stale", "missing", "degraded"}:
+        return True
+    for result in results.values():
+        conf = result.get("confidence")
+        try:
+            if conf is not None and float(conf) < 0.4:
+                return True
+        except (TypeError, ValueError):
+            pass
+    return False
+
+
+def _traced_claims(results: Mapping[str, Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Only claims that trace to a source envelope. Never fabricate."""
+    claims: List[Dict[str, Any]] = []
+    for name, result in results.items():
+        if str(result.get("status") or "") in {"degraded", "blocked"}:
+            continue
+        text = str(result.get("summary") or "").strip()
+        sources = _sources_of(result)
+        evidence = result.get("evidence") or []
+        if not text or not sources or not evidence:
+            continue
+        claims.append(
+            {
+                "bot": name,
+                "text": text,
+                "source_attribution": result.get("source_attribution")
+                or [src.get("source") for src in sources],
+                "freshness": result.get("freshness"),
+                "evidence": result.get("evidence") or [],
+            }
+        )
+    return claims
+
+
 def _run_one(
     name: str,
     query: str,
     context: Mapping[str, Any],
     runners: Mapping[str, Callable[..., Dict[str, Any]]],
 ) -> Dict[str, Any]:
-    runner = runners[name]
+    runner = runners.get(name)
+    if runner is None:
+        return _normalize_specialist_freshness(
+            specialist_result(
+                name,
+                summary=f"{name} unavailable: specialist not registered",
+                status="degraded",
+                unknowns=["specialist_unavailable"],
+                sources=[classify_freshness("learning_health", degraded=True)],
+            )
+        )
     try:
         result = runner(query, context)
         if not isinstance(result, dict):
@@ -363,8 +526,14 @@ class MissionControl:
 
     def _runners(self, names: Sequence[str]) -> Dict[str, Callable[..., Dict[str, Any]]]:
         if self._specialists is not None:
-            return {name: self._specialists[name] for name in names}
-        return {name: resolve_specialist(name) for name in names}
+            return dict(self._specialists)
+        resolved: Dict[str, Callable[..., Dict[str, Any]]] = {}
+        for name in names:
+            try:
+                resolved[name] = resolve_specialist(name)
+            except KeyError:
+                continue
+        return resolved
 
     def handle(
         self,
@@ -379,6 +548,14 @@ class MissionControl:
         risk_level = assess_risk(query, resolved_intent)
         names = list(specialists) if specialists is not None else select_specialists(resolved_intent, query)
         subject = extract_subject(query)
+        log_event(
+            "mission_control.route",
+            run_id=run_id,
+            intent=resolved_intent,
+            risk_level=risk_level,
+            routed_to=list(names),
+            query=query,
+        )
         context = {"subject": subject, "intent": resolved_intent, "run_id": run_id}
         results = _run_parallel(names, query, context, self._runners(names))
 
@@ -387,48 +564,101 @@ class MissionControl:
             sources.extend(_sources_of(result))
         freshness = enforce_freshness(sources)
         contradictions = detect_contradictions(list(results.values()))
+        incomplete = _incomplete_specialists(results)
+        uncertain = _is_uncertain(results, freshness, contradictions, incomplete)
+
+        if uncertain and risk_level == "low":
+            risk_level = "medium"
 
         state_changing = _is_state_changing(query, resolved_intent)
         if risk_level == "critical":
             state_changing = True
-        approval_required = risk_level == "critical" or state_changing
+        # Policy §3.1: critical + high-risk + uncertain all go through the approval gate
+        # BEFORE sharing. Sharing a held finding is the gated action.
+        approval_required = risk_level in {"critical", "high"} or uncertain or state_changing
 
         status = "ok"
-        if freshness.get("status") in {"stale", "missing", "degraded"}:
+        if incomplete:
+            status = "incomplete"
+        elif freshness.get("status") in {"stale", "missing", "degraded"} or contradictions:
             status = "degraded"
-        if contradictions:
-            status = "degraded"
-        if any(item.get("status") in {"degraded", "blocked"} for item in results.values()):
+        elif any(item.get("status") in {"degraded", "blocked"} for item in results.values()):
             status = "degraded"
 
-        summaries = [str(item.get("summary") or "") for item in results.values() if item.get("summary")]
-        if contradictions:
+        claims = _traced_claims(results)
+        shareable = not approval_required and status == "ok"
+        if approval_required:
+            summary = "held pending human approval before sharing (Policy §3.1)"
+        elif status == "incomplete":
+            summary = "incomplete: specialists unavailable or degraded; synthesis withheld"
+        elif contradictions:
             summary = "specialist contradiction: results surfaced, not averaged"
         elif status == "degraded" and freshness.get("status") in {"stale", "missing", "degraded"}:
             summary = f"degraded: evidence freshness is {freshness.get('status')}"
-        elif summaries:
-            summary = summaries[0]
+        elif claims:
+            summary = str(claims[0]["text"])
         else:
-            summary = "no specialist summary"
+            summary = "no sourced specialist claim"
 
-        approval_payload: Optional[Dict[str, Any]] = None
+        category = _action_category(query, resolved_intent)
+        approval_payload = approval_for(category, state_changing=approval_required)
         if approval_required:
             record = request_approval(
                 action_type=resolved_intent,
                 risk_level=risk_level,
                 evidence_refs=[src.get("source") or "unknown" for src in sources],
                 requested_by=requested_by,
-                action_category=_action_category(query, resolved_intent),
-                proposal={"query": query, "subject": subject, "recommended_actions": [
-                    item.get("recommended_action")
-                    for item in results.values()
-                    if item.get("recommended_action")
-                ]},
+                action_category=category,
+                proposal={
+                    "query": query,
+                    "subject": subject,
+                    "shareable": False,
+                    "specialists": results,
+                    "claims": claims,
+                    "recommended_actions": [
+                        item.get("recommended_action")
+                        for item in results.values()
+                        if item.get("recommended_action")
+                    ],
+                },
                 freshness=freshness,
                 run_id=run_id,
                 state_changing=True,
             )
-            approval_payload = record.to_dict()
+            approval_payload = record.to_contract()
+
+        confidences = []
+        for item in results.values():
+            try:
+                if item.get("confidence") is not None:
+                    confidences.append(float(item["confidence"]))
+            except (TypeError, ValueError):
+                pass
+        merged_confidence = min(confidences) if confidences else None
+        contract = bot_contract(
+            freshness=freshness,
+            confidence=merged_confidence,
+            action_category=category,
+            state_changing=approval_required,
+        )
+        contract["freshness"] = freshness
+        contract["approval"] = approval_payload
+        contract["approval_required"] = bool(approval_required)
+        if isinstance(contract.get("approval"), dict):
+            contract["approval"]["required"] = bool(approval_required)
+
+        public_specialists = results
+        approval_packet = None
+        if not shareable:
+            public_specialists = {
+                name: {
+                    "bot": item.get("bot") or name,
+                    "status": item.get("status"),
+                    "freshness": item.get("freshness"),
+                }
+                for name, item in results.items()
+            }
+            approval_packet = {"specialists": results, "claims": claims, "contradictions": contradictions}
 
         merged = {
             "status": status,
@@ -436,12 +666,29 @@ class MissionControl:
             "subject": subject,
             "run_id": run_id,
             "routed_to": names,
-            "specialists": results,
+            "specialists": public_specialists,
             "contradictions": contradictions,
+            "incomplete_specialists": incomplete,
+            "uncertain": uncertain,
+            "shareable": shareable,
+            "claims": claims if shareable else [],
+            "approval_packet": approval_packet,
             "freshness": freshness,
-            "approval": approval_payload,
             "state_changing": state_changing,
         }
+        merged.update(contract)
+        log_event(
+            "mission_control.decision",
+            run_id=run_id,
+            intent=resolved_intent,
+            risk_level=risk_level,
+            approval_required=approval_required,
+            status=status,
+            shareable=shareable,
+            incomplete_specialists=incomplete,
+            contradiction_tags=[c.get("tag") for c in contradictions],
+            approval_id=approval_payload.get("approval_id") if isinstance(approval_payload, dict) else None,
+        )
         return MissionControlResponse(
             intent=resolved_intent,
             risk_level=risk_level,

@@ -33,9 +33,9 @@ def test_no_approval_means_no_mutation():
 
 def test_human_approve_then_enforce_succeeds():
     record = request_approval("recommend", "critical", requested_by="mission_control")
-    approved = approve(record.id, "platform_operator")
+    approved = approve(record.id, "designated_owner")
     assert approved.status == "approved"
-    assert approved.approved_by == "platform_operator"
+    assert approved.approved_by == "designated_owner"
     assert is_approved(record.id) is True
     assert enforce_approval(record.id).id == record.id
 
@@ -69,7 +69,7 @@ def test_stale_freshness_expires_an_approved_record():
         "high",
         freshness={"status": "fresh", "sources": []},
     )
-    approve(record.id, "platform_operator")
+    approve(record.id, "designated_owner")
     from internal.approval import service as svc
 
     loaded = svc.get_record(record.id)
@@ -84,3 +84,31 @@ def test_stale_freshness_expires_an_approved_record():
 def test_missing_record_fails_closed():
     with pytest.raises(ApprovalDenied, match="no approval"):
         enforce_approval("does-not-exist")
+
+
+def test_wrong_role_cannot_approve():
+    record = request_approval("recommend", "high", action_category="security")
+    with pytest.raises(ApprovalDenied, match="role"):
+        approve(record.id, "platform_operator")
+
+
+def test_contract_shape_matches_bot_policy():
+    record = request_approval(
+        "recommend",
+        "high",
+        action_category="security",
+        requested_by="mission_control",
+    )
+    contract = record.to_contract()
+    assert set(contract) >= {
+        "required",
+        "status",
+        "action_category",
+        "approver_role",
+        "surface",
+        "approval_id",
+    }
+    assert contract["required"] is True
+    assert contract["approval_id"] == record.id
+    assert contract["action_category"] == "security"
+    assert contract["approver_role"] == "security_operator"
