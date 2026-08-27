@@ -1,3 +1,0 @@
-{"t_s": 16.168, "type": "warning", "text": "[cockpit_hydrate] daily-pick patch skipped (stale/pending)", "location": "{'url': 'https://subnet-dashboard.fly.dev/static/js/cockpit_hydrate.js?v=76d9f4ef', 'line': 3449, 'column': 14, 'lineNumber': 3449, 'columnNumber': 14}"}
-{"t_s": 16.171, "type": "log", "text": "[cockpit_hydrate] tier-1/2 panels updated", "location": "{'url': 'https://subnet-dashboard.fly.dev/static/js/cockpit_hydrate.js?v=76d9f4ef', 'line': 4806, 'column': 14, 'lineNumber': 4806, 'columnNumber': 14}"}
-{"t_s": 47.358, "type": "log", "text": "[cockpit_hydrate] deferred panels updated", "location": "{'url': 'https://subnet-dashboard.fly.dev/static/js/cockpit_hydrate.js?v=76d9f4ef', 'line': 4983, 'column': 14, 'lineNumber': 4983, 'columnNumber': 14}"}

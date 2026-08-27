@@ -1,2 +1,0 @@
-{"t_s": 5.993, "type": "log", "text": "[cockpit_hydrate] tier-1/2 panels updated", "location": "{'url': 'https://subnet-dashboard.fly.dev/static/js/cockpit_hydrate.js?v=7b9cae5e', 'line': 4818, 'column': 14, 'lineNumber': 4818, 'columnNumber': 14}"}
-{"t_s": 32.471, "type": "log", "text": "[cockpit_hydrate] deferred panels updated", "location": "{'url': 'https://subnet-dashboard.fly.dev/static/js/cockpit_hydrate.js?v=7b9cae5e', 'line': 4995, 'column': 14, 'lineNumber': 4995, 'columnNumber': 14}"}
