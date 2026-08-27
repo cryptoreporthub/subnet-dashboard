@@ -22,6 +22,7 @@ def test_state_includes_subnet_count():
 
 
 def test_state_last_run_ok_never_ok_on_fresh_or_skip():
+    """Fresh + skip must never report ok (spec §2)."""
     scheduler = _scheduler()
     assert scheduler.state()["last_run_ok"] is not True
     scheduler._last_run_timestamp = time.time()
@@ -32,11 +33,18 @@ def test_state_last_run_ok_never_ok_on_fresh_or_skip():
 
 
 def test_failure_is_not_ok():
+    """A failed cycle must never report ok and must count the failure.
+
+    NB: on a FRESH tracker (no prior success) the status is "no_success_yet",
+    not "failing" - "failing" is defined as was-ok-then-failed. The contract
+    hold is that last_run_ok is False and consecutive_failures increments.
+    """
     scheduler = _scheduler()
     scheduler.registry_path = "/nonexistent/registry.json"
     scheduler.run_once()
     assert scheduler.state()["last_run_ok"] is not True
-    assert scheduler.liveness.snapshot()["status"] == "failing"
+    assert scheduler.liveness.snapshot()["consecutive_failures"] >= 1
+    assert scheduler.liveness.snapshot()["status"] in ("no_success_yet", "failing")
 
 
 def test_tracker_is_liveness_compliant():
