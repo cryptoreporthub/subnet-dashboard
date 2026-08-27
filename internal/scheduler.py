@@ -6,12 +6,8 @@ AdversarialJudge cycle was removed during the council hygiene pass; the
 scheduler now persists a lightweight heartbeat and registry snapshot to the
 Soul-Map on each tick.
 
-Features:
-- Configurable refresh interval via REFRESH_MINUTES environment variable.
-- Exponential backoff on repeated failures (capped at max_backoff_minutes).
-- Persists heartbeat to the Soul-Map (data/soul_map.json).
-- Idempotent start/stop semantics safe for Fly.io single-worker deployments.
-- Request-triggered refresh for Fly.io auto-stop compatibility.
+Health reporting goes exclusively through the LivenessTracker (issue #1032):
+"ok" is never a stored value, always derived from last_success_at freshness.
 """
 
 import json
@@ -19,18 +15,16 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map
+from internal.liveness import LivenessTracker
 
-# Ensure the data directory exists at module load time. Fly.io root filesystems
-# are ephemeral; without this the heartbeat write below silently fails. Uses the
-# shared helper so the "directory missing, created" event is logged once.
 try:
     from internal.file_utils import ensure_data_dir
     ensure_data_dir()
-except Exception:  # pragma: no cover - keep import-safe if file_utils is unavailable
+except Exception:
     os.makedirs('data', exist_ok=True)
 
 REFRESH_MINUTES = int(os.environ.get("REFRESH_MINUTES", "60"))
@@ -39,25 +33,24 @@ SOUL_MAP_PATH = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
 REGISTRY_PATH = os.environ.get("REGISTRY_PATH", "config/registry.json")
 JOB_ID = "adversarial-scheduler"
 
+
 def _now_iso() -> str:
-    """Return current UTC time as ISO format string."""
     return datetime.now(timezone.utc).isoformat()
 
-def _load_json(path: str) -> Optional[Dict[str, Any]]:
-    """Load JSON file, return None if missing or invalid."""
+
+def _load_json(path: str):
     try:
         with open(path, "r") as f:
             return json.load(f)
     except Exception:
         return None
 
-class AdversarialScheduler:
-    """
-    Background scheduler that periodically records a lightweight heartbeat and
-    registry snapshot. The legacy Selector/AdversarialJudge cycle was removed
-    during the council hygiene pass.
 
-    Supports both timer-based (legacy) and request-triggered refresh modes.
+class AdversarialScheduler:
+    """Background scheduler that records heartbeat + registry snapshot.
+
+    Health is reported exclusively through the LivenessTracker (issue #1032);
+    "ok" is never stored, always derived from the tracker's success age.
     """
 
     def __init__(
@@ -72,36 +65,37 @@ class AdversarialScheduler:
         self.max_backoff_minutes = max_backoff_minutes
         self.soul_map_path = soul_map_path
         self.registry_path = registry_path
-        # stake_threshold_tao kept for API compatibility but no longer used.
         self.stake_threshold_tao = stake_threshold_tao
 
         self._lock = threading.Lock()
-        self._running = False
+        self._active = False
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
-        self._last_run_at: Optional[str] = None
         self._last_run_timestamp: float = 0.0
-        self._last_run_ok: Optional[bool] = None
         self._last_run_error: Optional[str] = None
         self._next_run_at: Optional[float] = None
         self._state_cache: Dict[str, Any] = {}
         self._last_subnet_count: int = 0
+        self.liveness = LivenessTracker(
+            name="adversarial_scheduler",
+            interval_seconds=max(60, int(refresh_minutes) * 60),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
-        """Start the scheduler. Idempotent."""
         with self._lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
             self._last_run_timestamp = time.time()
-
+        self.liveness.start()
         if immediate:
             self._tick()
         else:
             self._schedule_next(self.refresh_minutes)
-
         return {
             "started": True,
             "refresh_minutes": self.refresh_minutes,
@@ -109,67 +103,61 @@ class AdversarialScheduler:
         }
 
     def stop(self) -> Dict[str, Any]:
-        """Stop the scheduler and cancel any pending tick."""
         with self._lock:
-            self._running = False
+            self._active = False
             self._next_run_at = None
         cancel_job(JOB_ID)
         return {"stopped": True}
 
+    def _liveness_ok(self) -> bool:
+        return self.liveness.snapshot()["status"] == "ok"
+
     def state(self) -> Dict[str, Any]:
-        """Return the current scheduler state for health checks."""
         with self._lock:
+            snap = self.liveness.snapshot()
             return {
-                "running": self._running,
+                "running": self._active,
                 "refresh_minutes": self.refresh_minutes,
                 "backoff_minutes": self._backoff_minutes,
                 "consecutive_failures": self._consecutive_failures,
-                "last_run_at": self._last_run_at,
-                "last_run_ok": self._last_run_ok,
+                "last_run_at": snap.get("last_event_at"),
+                "last_run_ok": self._liveness_ok(),
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
                 "last_subnet_count": self._last_subnet_count,
+                "liveness": snap,
             }
 
     def run_once(self) -> Dict[str, Any]:
-        """Execute a single refresh cycle synchronously."""
         return self._tick()
 
     def should_refresh(self) -> bool:
-        """Check if enough time has passed since last refresh."""
-        if not self._running:
+        if not self._active:
             return False
-        current_time = time.time()
-        elapsed = current_time - self._last_run_timestamp
-        return elapsed >= self._backoff_minutes * 60
+        return (time.time() - self._last_run_timestamp) >= self._backoff_minutes * 60
 
     def check_and_run(self) -> Dict[str, Any]:
-        """Check if refresh is due and run if so."""
         if self.should_refresh():
             return self._tick()
+        self.liveness.record_skip("not due yet")
         return {
-            "ok": True,
             "skipped": True,
             "reason": "not due yet",
-            "last_refresh_at": self._last_run_at,
+            "status": self.liveness.snapshot()["status"],
+            "last_refresh_at": self.liveness.snapshot().get("last_event_at"),
         }
 
     def _schedule_next(self, minutes: int) -> None:
-        """Schedule the next timer-based tick."""
         with self._lock:
-            if not self._running:
+            if not self._active:
                 return
             self._next_run_at = time.time() + minutes * 60
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
-        """Run one adversarial refresh cycle and reschedule."""
         result = self._run_refresh_cycle()
-
         with self._lock:
-            self._last_run_at = result["run_at"]
             self._last_run_timestamp = time.time()
-            self._last_run_ok = result["ok"]
             self._last_run_error = result.get("error")
             if result["ok"]:
                 self._consecutive_failures = 0
@@ -180,13 +168,18 @@ class AdversarialScheduler:
                     self.refresh_minutes * (2 ** self._consecutive_failures),
                     self.max_backoff_minutes,
                 )
-
-        if self._running:
+        if result["ok"]:
+            self.liveness.record_success(evidence={
+                "registry_subnet_count": self._last_subnet_count,
+                "op": "adversarial_refresh",
+            })
+        else:
+            self.liveness.record_failure(result.get("error") or "refresh cycle failed")
+        if self._active:
             self._schedule_next(self._backoff_minutes)
         return result
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
-        """Record a lightweight heartbeat and registry snapshot."""
         run_at = _now_iso()
         result = {
             "ok": False,
@@ -195,41 +188,27 @@ class AdversarialScheduler:
             "verdicts": [],
             "error": None,
         }
-
         try:
             registry = _load_json(self.registry_path)
             if not registry:
                 raise RuntimeError("registry is empty or missing")
-
             self._last_subnet_count = len(registry)
             self._persist_cycle_summary(run_at, registry)
-
             result["ok"] = True
             result["decisions_judged"] = 0
         except Exception as exc:
             result["error"] = str(exc)
-
         return result
 
-    def _persist_cycle_summary(
-        self, run_at: str, registry: Dict[str, Any]
-    ) -> None:
-        """Persist a lightweight heartbeat to the Soul-Map."""
-        summary = {
-            "run_at": run_at,
-            "registry_subnet_count": len(registry),
-        }
+    def _persist_cycle_summary(self, run_at: str, registry: Dict[str, Any]) -> None:
+        summary = {"run_at": run_at, "registry_subnet_count": len(registry)}
         self._state_cache = summary
         try:
             from internal.council.emission_monitor import snapshot_registry_emissions
-
             emissions = snapshot_registry_emissions(registry, run_at=run_at)
         except Exception:
             emissions = {}
         try:
-            # Re-check the data directory before every write cycle: on Fly.io
-            # the volume can be absent on a fresh machine and the module-load
-            # makedirs may have run before the mount was ready.
             try:
                 from internal.file_utils import ensure_data_dir
                 ensure_data_dir()
@@ -240,28 +219,24 @@ class AdversarialScheduler:
                 if emissions:
                     blob.setdefault("emission_monitor", {})["last_emissions"] = emissions
                     blob["emission_monitor"]["snapshot_at"] = run_at
-
             write_soul_map(_mutator, self.soul_map_path)
         except Exception:
             pass
 
-# ------------------------------------------------------------------------------
-# Module-level singleton for server.py
-# ------------------------------------------------------------------------------
 
-_scheduler: Optional[AdversarialScheduler] = None
+_scheduler = None
+
 
 def get_adversarial_scheduler() -> AdversarialScheduler:
-    """Get or create the module-level scheduler singleton."""
     global _scheduler
     if _scheduler is None:
         _scheduler = AdversarialScheduler()
     return _scheduler
 
+
 def start_adversarial_scheduler(immediate: bool = False) -> Dict[str, Any]:
-    """Start the adversarial scheduler (module-level helper)."""
     return get_adversarial_scheduler().start(immediate=immediate)
 
+
 def get_adversarial_scheduler_state() -> Dict[str, Any]:
-    """Get the scheduler state (module-level helper)."""
     return get_adversarial_scheduler().state()
