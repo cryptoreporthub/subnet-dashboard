@@ -6,6 +6,8 @@ Does not mutate application state, caches, workers, deployments, or artifacts.
 
 from __future__ import annotations
 
+import json
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -13,7 +15,12 @@ from datetime import datetime, timezone
 from types import MappingProxyType
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple
 
-from internal.ops.bot_policy import aggregate_freshness, bot_contract, classify_freshness
+from internal.ops.bot_policy import (
+    FRESHNESS_THRESHOLDS,
+    aggregate_freshness,
+    bot_contract,
+    classify_freshness,
+)
 from internal.ops.evidence import build_evidence_report
 from internal.ops.notify import log_event
 
@@ -31,9 +38,8 @@ PREDICATE_NAMES: Tuple[str, ...] = (
     "deployment",
 )
 
-# Health-path latency: original Sentinel check used 500ms; /health SLA is <1s.
-_LATENCY_OK_MS = 500.0
-_LATENCY_WARN_MS = 1000.0
+# Live-handler budget from internal/health/routes.py (same env default).
+_LIVE_TIMEOUT_MS = float(os.environ.get("OPS_LIVE_HANDLER_TIMEOUT_SECONDS", "8")) * 1000.0
 
 _STATUS_RANK = {"ok": 0, "warn": 1, "unknown": 2, "fail": 3}
 
@@ -95,6 +101,72 @@ class HealthReport:
     audit: Mapping[str, Any]
 
 
+def _read_predictions_readonly() -> Dict[str, Any]:
+    """json.load only — skips predictions_store migrations that call save_predictions."""
+    from internal.learning.predictions_store import PREDICTIONS_PATH, _default_data
+
+    try:
+        with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        return data if isinstance(data, dict) else _default_data()
+    except Exception:
+        return _default_data()
+
+
+def _live_cache_freshness() -> Dict[str, Any]:
+    """Read data/live_subnets.json only. Does not call probe_feed_layers/init_db."""
+    from internal.live_subnets import MAX_STALE_SECONDS, _cache_path
+
+    info: Dict[str, Any] = {
+        "last_sync": None,
+        "age_seconds": None,
+        "subnet_count": 0,
+        "stale": True,
+        "cache_path": _cache_path(),
+    }
+    path = _cache_path()
+    if not os.path.isfile(path):
+        return info
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, dict):
+        return info
+    info["last_sync"] = data.get("synced_at")
+    try:
+        info["subnet_count"] = int(data.get("count") or len(data.get("subnets") or []) or 0)
+    except (TypeError, ValueError):
+        info["subnet_count"] = 0
+    if data.get("synced_at"):
+        try:
+            parsed = datetime.fromisoformat(str(data["synced_at"]).replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            info["age_seconds"] = int(age)
+            info["stale"] = age > MAX_STALE_SECONDS
+        except (TypeError, ValueError, OverflowError):
+            pass
+    if info["subnet_count"] > 0:
+        info["effective_source"] = "blockmachine"
+        info["effective_total"] = info["subnet_count"]
+    else:
+        info["effective_source"] = None
+        info["effective_total"] = 0
+    return info
+
+
+def _evidence_readonly() -> Dict[str, Any]:
+    # ponytail: capture telemetry calls load_predictions, which can migrate and
+    # write predictions.json. Swap in a json.load-only loader for this call.
+    # Upgrade: add read_only=True on load_predictions / build_evidence_report.
+    import internal.learning.predictions_store as pred_store
+
+    saved = pred_store.load_predictions
+    pred_store.load_predictions = _read_predictions_readonly
+    try:
+        return build_evidence_report()
+    finally:
+        pred_store.load_predictions = saved
+
+
 def collect_snapshot() -> Dict[str, Any]:
     """Read current signals. File and in-process reads only; no writers."""
     started = time.perf_counter()
@@ -109,18 +181,14 @@ def collect_snapshot() -> Dict[str, Any]:
 
     def _loop_health() -> Dict[str, Any]:
         from internal.learning.loop_health import build_learning_loop_health
+        from internal.learning.predictions_store import PREDICTIONS_PATH
 
-        return build_learning_loop_health()
+        return build_learning_loop_health(predictions_path=PREDICTIONS_PATH)
 
     def _resolver() -> Dict[str, Any]:
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
         return get_prediction_resolver_scheduler_state()
-
-    def _live() -> Dict[str, Any]:
-        from internal.live_subnets import live_data_freshness
-
-        return live_data_freshness()
 
     def _sync() -> Dict[str, Any]:
         from internal.freshness import get_sync_state
@@ -139,7 +207,7 @@ def collect_snapshot() -> Dict[str, Any]:
 
     loop_health = _safe("loop_health", _loop_health)
     resolver = _safe("resolver", _resolver)
-    live = _safe("live", _live)
+    live = _safe("live", _live_cache_freshness)
     sync = _safe("sync", _sync)
     file_freshness = sync.get("freshness") if isinstance(sync, dict) else None
     if not isinstance(file_freshness, dict):
@@ -151,7 +219,7 @@ def collect_snapshot() -> Dict[str, Any]:
         file_freshness = _safe("file_freshness", _files)
     job_scheduler = _safe("job_scheduler", _jobs)
     pump_scheduler = _safe("pump_scheduler", _pump)
-    evidence = _safe("evidence", build_evidence_report)
+    evidence = _safe("evidence", _evidence_readonly)
     feed = {
         "effective_source": live.get("effective_source") if isinstance(live, dict) else None,
         "likely_total": (live.get("effective_total") if isinstance(live, dict) else None)
@@ -217,7 +285,6 @@ def _has_error(payload: Any) -> bool:
 
 def _api_health(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     live = snapshot.get("liveness") or {}
-    checked = live.get("checked_at") or snapshot.get("checked_at")
     if not live or _has_error(live):
         return PredicateResult(
             "api_health",
@@ -241,14 +308,13 @@ def _api_health(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         "api_health",
         status,
         detail,
-        _envelope("learning_health", checked, now=now, degraded=status == "fail"),
+        _envelope("learning_health", None, now=now),
         _freeze({"status": live.get("status"), "live": live.get("live"), "volume": volume}),
     )
 
 
 def _latency(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     ms = snapshot.get("latency_ms")
-    checked = snapshot.get("checked_at")
     if ms is None:
         return PredicateResult(
             "latency",
@@ -267,18 +333,19 @@ def _latency(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
             _envelope("learning_health", None, now=now, degraded=True),
             _freeze({"latency_ms": ms}),
         )
-    if value <= _LATENCY_OK_MS:
+    timeout_ms = _LIVE_TIMEOUT_MS
+    if value <= timeout_ms:
         status = "ok"
-    elif value <= _LATENCY_WARN_MS:
-        status = "warn"
+        detail = f"liveness path {value:.1f}ms (budget {timeout_ms:.0f}ms OPS_LIVE_HANDLER_TIMEOUT)"
     else:
         status = "fail"
+        detail = f"liveness path {value:.1f}ms exceeded {timeout_ms:.0f}ms live-handler budget"
     return PredicateResult(
         "latency",
         status,
-        f"liveness path {value:.1f}ms (ok<={_LATENCY_OK_MS:.0f} warn<={_LATENCY_WARN_MS:.0f})",
-        _envelope("learning_health", checked, now=now, degraded=status == "fail"),
-        _freeze({"latency_ms": value}),
+        detail,
+        _envelope("learning_health", None, now=now),
+        _freeze({"latency_ms": value, "budget_ms": timeout_ms}),
     )
 
 
@@ -339,7 +406,16 @@ def _resolver(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         or resolver.get("last_run_at")
         or loop_resolver.get("last_run_at")
     )
-    failures = int(resolver.get("consecutive_failures") or 0)
+    try:
+        failures = int(resolver.get("consecutive_failures") or 0)
+    except (TypeError, ValueError):
+        return PredicateResult(
+            "resolver",
+            "unknown",
+            f"unreadable consecutive_failures={resolver.get('consecutive_failures')!r}",
+            _envelope("resolver", last_at, now=now),
+            _freeze({"consecutive_failures": resolver.get("consecutive_failures")}),
+        )
     lifecycle = loop_resolver.get("lifecycle") or resolver.get("lifecycle")
     if failures > 0 or last_ok is False:
         status = "fail"
@@ -347,9 +423,12 @@ def _resolver(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     elif loop_resolver.get("warming") or lifecycle in {"starting", "scheduled"}:
         status = "warn"
         detail = f"lifecycle={lifecycle} warming={loop_resolver.get('warming')}"
-    elif running is True:
+    elif running is True and last_at:
         status = "ok"
         detail = f"running lifecycle={lifecycle}"
+    elif running is True:
+        status = "unknown"
+        detail = "resolver marked running but no last tick"
     elif running is False:
         status = "fail"
         detail = "resolver not running"
@@ -375,14 +454,14 @@ def _resolver(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
 def _watchdog(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     loop = snapshot.get("loop_health") or {}
     watchdog = snapshot.get("watchdog") or loop.get("watchdog") or {}
-    captured = loop.get("checked_at") or loop.get("last_resolver_tick")
-    if not watchdog:
+    captured = loop.get("last_resolver_tick")
+    if not watchdog or "warning" not in watchdog:
         return PredicateResult(
             "watchdog",
             "unknown",
             "resolver watchdog payload missing",
             _envelope("resolver", None, now=now),
-            _freeze({}),
+            _freeze(watchdog if isinstance(watchdog, dict) else {}),
         )
     warning = bool(watchdog.get("warning"))
     status = "fail" if warning else "ok"
@@ -452,7 +531,13 @@ def _cache_age(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     files = snapshot.get("file_freshness") or {}
     live = snapshot.get("live") or {}
     loop = snapshot.get("loop_health") or {}
-    if not files and live.get("age_seconds") is None and loop.get("snapshot_age_seconds") is None:
+    overall = files.get("overall") if isinstance(files.get("overall"), dict) else {}
+    price = files.get("price_cache") if isinstance(files.get("price_cache"), dict) else {}
+    captured = price.get("last_updated") or live.get("last_sync")
+    snap_age = loop.get("snapshot_age_seconds")
+    has_file_flag = "any_stale" in overall
+    has_live_flag = "stale" in live
+    if not has_file_flag and not has_live_flag and snap_age is None:
         return PredicateResult(
             "cache_age",
             "unknown",
@@ -460,15 +545,11 @@ def _cache_age(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
             _envelope("market_data", None, now=now),
             _freeze({}),
         )
-    overall = files.get("overall") if isinstance(files.get("overall"), dict) else {}
-    price = files.get("price_cache") if isinstance(files.get("price_cache"), dict) else {}
-    captured = price.get("last_updated") or live.get("last_sync")
     stale_flags = []
     if overall.get("any_stale"):
         stale_flags.append("file_sources")
     if live.get("stale"):
         stale_flags.append("live_cache")
-    snap_age = loop.get("snapshot_age_seconds")
     if isinstance(snap_age, (int, float)) and snap_age > 2700:
         stale_flags.append("score_snapshot")
     if stale_flags:
@@ -481,7 +562,7 @@ def _cache_age(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
         "cache_age",
         status,
         detail,
-        _envelope("market_data", captured, now=now, degraded=status == "fail" and not captured),
+        _envelope("market_data", captured, now=now, degraded=bool(stale_flags) and not captured),
         _freeze(
             {
                 "any_stale": overall.get("any_stale"),
@@ -500,7 +581,11 @@ def _scheduler(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     pick = loop.get("pick_scheduler") if isinstance(loop.get("pick_scheduler"), dict) else {}
     failures = dict(jobs.get("last_failures") or {})
     failed: list[str] = list(failures.keys())
-    if int(resolver.get("consecutive_failures") or 0) > 0:
+    try:
+        resolver_failures = int(resolver.get("consecutive_failures") or 0)
+    except (TypeError, ValueError):
+        resolver_failures = None
+    if resolver_failures:
         failed.append("resolver")
     if resolver.get("last_run_ok") is False:
         failed.append("resolver_last_run")
@@ -593,14 +678,14 @@ def _deployment(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
     guard = snapshot.get("snapshot_guard") or {}
     loop = snapshot.get("loop_health") or {}
     peer = snapshot.get("worker_peer") or {}
-    captured = loop.get("checked_at")
+    captured = None
     if guard.get("installed") and guard.get("cold"):
         return PredicateResult(
             "deployment",
             "fail",
             "learning snapshot guard serving cold fallback",
             _envelope("github", captured, now=now, degraded=True),
-            _freeze(guard),
+            _freeze({"signal": "snapshot_guard", **dict(guard)}),
         )
     snap_age = loop.get("snapshot_age_seconds")
     worker_alive = peer.get("alive") is True
@@ -610,22 +695,14 @@ def _deployment(snapshot: Mapping[str, Any], now: datetime) -> PredicateResult:
             "warn",
             f"score snapshot age {snap_age:.0f}s while worker alive",
             _envelope("github", captured, now=now),
-            _freeze({"snapshot_age_seconds": snap_age, "worker_alive": True}),
-        )
-    if guard.get("installed") and not guard.get("cold"):
-        return PredicateResult(
-            "deployment",
-            "ok",
-            "snapshot guard warm",
-            _envelope("github", captured, now=now),
-            _freeze(guard),
+            _freeze({"signal": "score_snapshot", "snapshot_age_seconds": snap_age, "worker_alive": True}),
         )
     return PredicateResult(
         "deployment",
         "unknown",
-        "no in-process deploy-regression signal (snapshot guard not installed)",
+        "no GitHub/CI revision timestamp in this process",
         _envelope("github", None, now=now),
-        _freeze({"installed": bool(guard.get("installed"))}),
+        _freeze({"installed": bool(guard.get("installed")), "cold": guard.get("cold")}),
     )
 
 
@@ -681,15 +758,29 @@ def observe(*, snapshot: Optional[Mapping[str, Any]] = None) -> HealthReport:
     now = datetime.now(timezone.utc)
     predicates = evaluate_predicates(collected, now=now)
     unknowns = tuple(item.name for item in predicates if item.status == "unknown")
-    freshness_sources = [dict(item.freshness) for item in predicates]
+    freshness_sources: list[Dict[str, Any]] = []
+    skip_aggregate = {"api_health", "latency", "deployment"}
+    for item in predicates:
+        if item.name in skip_aggregate:
+            continue
+        env = dict(item.freshness)
+        if env.get("source") not in FRESHNESS_THRESHOLDS:
+            continue
+        if env.get("captured_at") is None and env.get("status") != "degraded":
+            continue
+        freshness_sources.append(env)
     evidence = collected.get("evidence") if isinstance(collected.get("evidence"), dict) else {}
     for extra in evidence.get("evidence_sources") or []:
-        if isinstance(extra, Mapping):
-            freshness_sources.append(dict(extra))
+        if not isinstance(extra, Mapping):
+            continue
+        if extra.get("source") not in FRESHNESS_THRESHOLDS:
+            continue
+        if extra.get("captured_at") is None and extra.get("status") != "degraded":
+            continue
+        freshness_sources.append(dict(extra))
     freshness = aggregate_freshness(freshness_sources)
     contract = bot_contract(freshness=freshness, state_changing=False)
-    ok_n = sum(1 for item in predicates if item.status == "ok")
-    confidence = round(ok_n / len(predicates), 3) if predicates else None
+    confidence = None
     status = _report_status(predicates)
     failed = [item.name for item in predicates if item.status == "fail"]
     warned = [item.name for item in predicates if item.status == "warn"]
@@ -730,7 +821,7 @@ def observe(*, snapshot: Optional[Mapping[str, Any]] = None) -> HealthReport:
                 "sources_read": [
                     "internal.ops.readiness.build_liveness_report",
                     "internal.learning.loop_health.build_learning_loop_health",
-                    "internal.live_subnets.live_data_freshness",
+                    "internal.live_subnets live cache file",
                     "internal.ops.evidence.build_evidence_report",
                     "internal.freshness.get_sync_state",
                 ],

@@ -148,14 +148,18 @@ def test_ten_predicates_evaluate_healthy_snapshot():
     results = _by_name(evaluate_predicates(_healthy_snapshot(), now=NOW))
     assert tuple(results) == PREDICATE_NAMES
     for name in PREDICATE_NAMES:
-        assert results[name].status == "ok", name
+        if name == "deployment":
+            assert results[name].status == "unknown", name
+        else:
+            assert results[name].status == "ok", name
     report = observe(snapshot=_healthy_snapshot())
-    assert report.status == "ok"
+    assert report.status == "degraded"
+    assert report.unknowns == ("deployment",)
     assert report.bot == BOT_NAME
     assert report.approval_required is False
     assert report.approval["status"] == "not_required"
     assert report.recommended_action is None
-    assert report.confidence == 1.0
+    assert report.confidence is None
 
 
 def test_missing_signals_are_unknown_not_fabricated():
@@ -173,7 +177,7 @@ def test_failing_predicates_use_real_snapshot_fields():
     snap = _healthy_snapshot()
     snap["liveness"]["live"] = False
     snap["liveness"]["status"] = "down"
-    snap["latency_ms"] = 2500.0
+    snap["latency_ms"] = 9000.0
     snap["worker_peer"]["alive"] = False
     snap["resolver"]["consecutive_failures"] = 3
     snap["resolver"]["last_run_ok"] = False
@@ -237,14 +241,9 @@ def test_observe_does_not_write_or_mutate(monkeypatch):
         "internal.freshness.refresh_all",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("refresh_all")),
     )
-    monkeypatch.setattr("fetchers.taomarketcap.init_db", lambda: None)
     monkeypatch.setattr(
-        "internal.subnets.feed.probe_feed_layers",
-        lambda: {
-            "effective_source": "blockmachine",
-            "likely_total": 1,
-            "live_cache": {},
-        },
+        "internal.learning.predictions_store.save_predictions",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("save_predictions")),
     )
 
     snapshot = collect_snapshot()
@@ -262,6 +261,25 @@ def test_latency_unknown_when_timing_absent():
     snap = _healthy_snapshot()
     snap.pop("latency_ms")
     result = _by_name(evaluate_predicates(snap, now=NOW))["latency"]
+    assert result.status == "unknown"
+
+
+def test_malformed_scheduler_failures_do_not_crash():
+    snap = _healthy_snapshot()
+    snap["resolver"]["consecutive_failures"] = "n/a"
+    snap["resolver"]["running"] = True
+    snap.pop("loop_health")
+    results = _by_name(evaluate_predicates(snap, now=NOW))
+    assert results["scheduler"].status in {"ok", "unknown", "fail"}
+    assert results["resolver"].status == "unknown"
+
+
+def test_resolver_running_without_tick_is_unknown():
+    snap = _healthy_snapshot()
+    snap["resolver"] = {"running": True, "consecutive_failures": 0}
+    snap["loop_health"]["resolver"] = {"running": True, "lifecycle": "running"}
+    snap["loop_health"]["last_resolver_tick"] = None
+    result = _by_name(evaluate_predicates(snap, now=NOW))["resolver"]
     assert result.status == "unknown"
 
 
