@@ -1,12 +1,38 @@
 # Prod critical-path n=3 — graph-defer cut (Fly #1521, `653ef795`)
 
-**Close: no.** [#1058](https://github.com/cryptoreporthub/subnet-dashboard/issues/1058) **stays open.** Product round **2 of 3**. One in-budget run is not a close; this n=3 has a **majority (2/3)** in the ≤10 s budget and median hero **9.518 s** vs marks **13.881 s**, but the issue stays open. Do not merge. Do not drop pump-alerts preload.
+**Decision (tightened overlap scoring): gate 1.** Graph begins only after stats **and** daily-pick finish on all three runs (`graph_start < stats_end` or `graph_start < daily_pick_end` is **false**). Median hero **9.518 s** is not a regression vs marks **13.881 s**. Attach this evidence to [#1058](https://github.com/cryptoreporthub/subnet-dashboard/issues/1058) and **request review**. **Do not merge.** **Do not close #1058** until review. One in-budget run is not a close. `/health` 200 is spacing-only (process liveness), **not** a pass.
 
-**Graph gate: yes.** `/api/mindmap/graph` did **not** co-start with stats. Starts were **9.509 / 9.293 / 10.772 s**, after stats+daily-pick settled (or with the other gated secondaries), not 1.6–4.1 s with stats as on Fly #1519.
+Overlap definition: `overlap = (graph_start < stats_end) OR (graph_start < daily_pick_end)` on the hero-critical first `/api/learning/stats` and `/api/daily-pick`.
 
-**Deploy:** Fly Deploy [#1521](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/33033421906) SUCCESS. Branch `cursor/hydrate-hero-first-ec01`, SHA `653ef795`, `static_v=d7c4c971`. Draft PR [#1062](https://github.com/cryptoreporthub/subnet-dashboard/pull/1062). Identity (pre-harness): `GET /` 200, 133900 bytes, `Server-Timing: app;dur=0.3`, served `mindmap_graph.js` contains `afterHeroCritical` and `refreshGraphUngated`. No `flyctl deploy` from the agent.
+---
 
-**Harness:** `harness/g0_hydration_starvation/run_g0.py` against `https://subnet-dashboard.fly.dev`. Three spaced loads (`critpath-graph-defer-1521-{1,2,3}`). After each run, waited for three consecutive `GET /health` 200 &lt;1s plus extra 20 s (leftover 20 s homepage-curl sanity wedges `/health` for ~1–2 min of 8 s timeouts). Not Playwright against `73b681b4`.
+## Per-run timestamps (not the median alone)
+
+Times are probe seconds from navigation start. Graph completion is the request `end_s` (here always client abort after ~12 s).
+
+| Run | Hero complete (s) | Stats start | Stats end | Daily-pick start | Daily-pick end | Graph start | Graph end | overlap stats | overlap daily-pick | **overlap** | 12s safety | t=10s hydration |
+|-----|-------------------|-------------|-----------|------------------|----------------|-------------|-----------|---------------|-------------------|-------------|------------|-----------------|
+| 1 | **9.518** | 2.793 | 9.414 | 2.793 | 9.487 | 9.509 | 21.502 abort | no (9.509 ≮ 9.414) | no (9.509 ≮ 9.487) | **no** | no (letters 9.508; safety would be ~14.31) | Closest · SN65 · gated |
+| 2 | **6.707** | 4.087 | 6.300 | 4.087 | 6.315 | 9.293 | 21.289 abort | no (9.293 ≮ 6.300) | no (9.293 ≮ 6.315) | **no** | no (letters 9.293; safety would be ~15.75) | Closest · SN65 · gated |
+| 3 | 10.886 | 3.046 | 10.631 | 3.045 | 10.768 | 10.772 | 22.768 abort | no (10.772 ≮ 10.631) | no (10.772 ≮ 10.768) | **no** | no (letters 10.771; safety would be ~14.71) | Awaiting subnet / COLD |
+
+| Run | Gap graph_start − max(stats_end, daily_pick_end) | Stats HTTP | Daily-pick HTTP (hero-critical) | Graph result | Aborted hero-critical | Fallback / stale |
+|-----|--------------------------------------------------|------------|----------------------------------|--------------|----------------------|------------------|
+| 1 | **+0.022 s** | 200 | 200 | `net::ERR_ABORTED` ~12 s after start | none | none on hero pair; later daily-pick retries 200 |
+| 2 | **+2.978 s** | 200 | 200 | `net::ERR_ABORTED` ~12 s after start | none | none on hero pair; extra daily-pick 200s after 6.3 s |
+| 3 | **+0.004 s** | 200 | 200 | `net::ERR_ABORTED` ~12 s after start | none | t=10s COLD / Awaiting (hero finished 10.886 s); final t=50s SN65 gated |
+
+**Median hero complete = 9.518 s** (of 9.518 / 6.707 / 10.886) vs marks **13.881 s** — not near-or-above. Majority 2/3 in ≤10 s. Graph overlap **0/3**.
+
+`/health` during the burst is **not** scored as a pass. It was used only between runs (wait until 200 &lt;1 s) so a leftover 20 s homepage curl did not stack a 503.
+
+---
+
+**Close: no.** Product round **2 of 3**. Do not drop pump-alerts preload.
+
+**Deploy:** Fly Deploy [#1521](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/33033421906) SUCCESS. Branch `cursor/hydrate-hero-first-ec01`, SHA `653ef795`, `static_v=d7c4c971`. Draft PR [#1062](https://github.com/cryptoreporthub/subnet-dashboard/pull/1062). Identity: `GET /` 200, 133900 bytes, served `mindmap_graph.js` contains `afterHeroCritical` and `refreshGraphUngated`. No `flyctl deploy` from the agent.
+
+**Harness:** spaced `run_g0.py` loads `critpath-graph-defer-1521-{1,2,3}` against `https://subnet-dashboard.fly.dev`. Not Playwright against `73b681b4`.
 
 **Vs marks median (`77395892`):** hero complete 13.881 s → **9.518 s**. Hydrate measure 8613 ms → **6713 ms**. Graph start no longer matches stats.
 
@@ -36,17 +62,11 @@ Hero-complete median of `{9.518, 6.707, 10.886}` is **9.518**. Graph does not co
 
 ---
 
-## Graph gate proof
+## Graph overlap scoring (gate 1)
 
-| Run | stats start → end | daily-pick end | graph start | first gated (letters) | co-start with stats? |
-|-----|-------------------|----------------|-------------|----------------------|----------------------|
-| 1 | 2.793 → 9.414 | 9.487 | **9.509** | 9.508 | **no** |
-| 2 | 4.087 → 6.300 | 6.315 | **9.293** | 9.293 | **no** (starts after settle; ~3 s after hydrate-end 6.299) |
-| 3 | 3.046 → 10.631 | 10.768 | **10.772** | 10.771 | **no** |
+`overlap = graph_start < stats_end OR graph_start < daily_pick_end`. All three runs **false**. Fly #1519 graph starts were 1.628 / 4.143 / 2.688 s (same millisecond as stats). This cut moved graph into the gated-secondary wave.
 
-Fly #1519 graph starts were 1.628 / 4.143 / 2.688 s (same millisecond as stats). This cut moved graph into the gated-secondary wave.
-
-Graph still aborts ~12 s later (`net::ERR_ABORTED`) on every run — occupancy after hero, not during it.
+Graph still aborts ~12 s later (`net::ERR_ABORTED`, `GRAPH_FETCH_TIMEOUT_MS`) on every run — after hero, not during stats/daily-pick.
 
 Pump-alerts preload still fires at ~0.45–0.60 s (before DCL). Left as required.
 
@@ -91,10 +111,10 @@ Still self-starting with stats (out of scope): data-freshness, ops/readiness, su
 |-------|--------|
 | n=3 on SHA `653ef795` after Fly #1521 | **yes** |
 | Identity: `afterHeroCritical` + `refreshGraphUngated` in served `mindmap_graph.js` | **yes** |
-| Graph co-starts with stats | **no** (9.509 / 9.293 / 10.772 vs stats 2.8 / 4.1 / 3.0) |
-| Median hydrate measure vs marks 8613 ms | **6713 ms** (moved) |
-| Median hero complete vs marks 13.881 s | **9.518 s** (moved) |
+| Graph co-starts / overlaps stats or daily-pick | **no** (0/3; see timestamp table) |
+| Median hero complete vs marks 13.881 s | **9.518 s** (not a regression) |
 | Majority ≤10 s | **yes (2/3)** |
-| #1058 close | **no** — stays open; do not merge |
+| `/health` 200 as pass | **no** — spacing gate only |
+| #1058 | **open** — gate 1: evidence attached, review requested, do not merge |
 
 Harness dirs: `artifacts/g0-baseline/critpath-graph-defer-1521-{1,2,3}/`.
