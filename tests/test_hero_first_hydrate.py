@@ -18,6 +18,7 @@ LETTER_SCRIPTS = (
     Path("static/js/daily_recap.js"),
     Path("static/js/premium_judges.js"),
 )
+MINDMAP_GRAPH = Path("static/js/mindmap_graph.js")
 
 
 def test_after_hero_critical_gate_defined():
@@ -53,6 +54,18 @@ def test_letters_and_judges_wait_for_hero_gate():
     assert "afterHeroCritical(hydrate)" in brain
 
 
+def test_mindmap_graph_waits_for_hero_gate():
+    js = MINDMAP_GRAPH.read_text(encoding="utf-8")
+    assert "afterHeroCritical" in js
+    assert "function refreshGraphUngated" in js
+    assert "function refreshGraph()" in js
+    refresh = js.split("function refreshGraph()")[1].split("async function init()")[0]
+    assert "window.afterHeroCritical(refreshGraphUngated)" in refresh
+    assert "/api/mindmap/graph" in js
+    hydrate = HYDRATE.read_text(encoding="utf-8")
+    assert "/api/mindmap/graph" not in hydrate
+
+
 def test_run_starts_hero_before_trail_story_strip_evidence():
     js = HYDRATE.read_text(encoding="utf-8")
     run = js.split("async function run()")[1].split("async function runDeferredPanels")[0]
@@ -80,6 +93,7 @@ def test_served_homepage_loads_hydrate_before_letters():
     assert hydrate_at < html.index("/static/js/brain_letter.js")
     assert hydrate_at < html.index("/static/js/premium_judges.js")
     assert "href=\"/api/pump-alerts\"" in html
+    assert "/static/js/mindmap_graph.js" in html
 
 
 def test_hero_gate_queues_until_release():
@@ -103,6 +117,69 @@ if (!ran) throw new Error('waiter did not run after release');
 let late = false;
 ctx.afterHeroCritical(function () { late = true; });
 if (!late) throw new Error('post-release waiter must run immediately');
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_mindmap_graph_fetch_queued_until_hero_release():
+    """Prod order: mindmap_graph.js evaluates before api_fetch.js (body partial)."""
+    script = r"""
+const fs = require('fs');
+const vm = require('vm');
+const fetches = [];
+const dcl = [];
+const root = {
+  dataset: { api: '/api/mindmap/graph' },
+  querySelector: function () { return null; },
+};
+const ctx = {
+  fetch: function (url) {
+    fetches.push(String(url));
+    return Promise.resolve({
+      ok: true,
+      json: function () { return Promise.resolve({ status: 'success', nodes: [], edges: [] }); },
+    });
+  },
+  setTimeout: setTimeout,
+  clearTimeout: clearTimeout,
+  AbortSignal: { timeout: function () { return undefined; } },
+  console: { warn: function () {}, error: function () {} },
+  document: {
+    readyState: 'interactive',
+    getElementById: function (id) { return id === 'mindmap-graph-root' ? root : null; },
+    addEventListener: function (ev, fn) { if (ev === 'DOMContentLoaded') dcl.push(fn); },
+    removeEventListener: function (ev, fn) {
+      if (ev !== 'DOMContentLoaded') return;
+      const i = dcl.indexOf(fn);
+      if (i >= 0) dcl.splice(i, 1);
+    },
+  },
+};
+ctx.window = ctx;
+(async function () {
+  vm.runInNewContext(fs.readFileSync('static/js/mindmap_graph.js', 'utf8'), ctx);
+  if (fetches.length) throw new Error('graph fetched before api_fetch loaded: ' + fetches);
+  vm.runInNewContext(fs.readFileSync('static/js/api_fetch.js', 'utf8'), ctx);
+  dcl.slice().forEach(function (fn) { fn(); });
+  if (fetches.length) throw new Error('graph fetched before release: ' + fetches);
+  ctx.releaseHeroCritical();
+  for (let i = 0; i < 20; i++) {
+    await new Promise(function (resolve) { setImmediate(resolve); });
+    if (fetches.some(function (u) { return u.indexOf('/api/mindmap/graph') >= 0; })) break;
+  }
+  if (!fetches.some(function (u) { return u.indexOf('/api/mindmap/graph') >= 0; })) {
+    throw new Error('graph did not fetch after release: ' + JSON.stringify(fetches));
+  }
+})().catch(function (err) {
+  console.error(err && err.stack ? err.stack : err);
+  process.exit(1);
+});
 """
     result = subprocess.run(
         ["node", "-e", script],

@@ -604,7 +604,7 @@
     return '';
   }
 
-  async function refreshGraph() {
+  async function refreshGraphUngated() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
     const graph = await fetchGraph(root);
@@ -618,11 +618,31 @@
     renderTrail(root, graph);
   }
 
+  // #1058: this script tag sits in the body partial before api_fetch.js, so
+  // afterHeroCritical is often missing at first evaluate. Wait for DCL (remaining
+  // deferred scripts, including the gate) then queue behind the hero window so
+  // /api/mindmap/graph does not co-start with stats + daily-pick.
+  function refreshGraph() {
+    if (window.afterHeroCritical) {
+      window.afterHeroCritical(refreshGraphUngated);
+      return;
+    }
+    if (document.readyState === 'complete') {
+      refreshGraphUngated();
+      return;
+    }
+    document.addEventListener('DOMContentLoaded', function onDclForGraph() {
+      document.removeEventListener('DOMContentLoaded', onDclForGraph);
+      if (window.afterHeroCritical) window.afterHeroCritical(refreshGraphUngated);
+      else refreshGraphUngated();
+    });
+  }
+
   async function init() {
     const root = document.getElementById('mindmap-graph-root');
     if (!root) return;
     initSpineChrome();
-    await refreshGraph();
+    refreshGraph();
     document.addEventListener('living-focus:change', refreshGraph);
   }
 
