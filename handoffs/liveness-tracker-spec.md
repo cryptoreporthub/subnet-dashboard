@@ -1,3 +1,4 @@
+
 # LivenessTracker — Contract Spec v1
 **Repo:** cryptoreporthub/subnet-dashboard · **Authored:** 2026-08-23 (post power-hour sweep)
 **Design principle:** make the lie structurally impossible, not merely discouraged. The correct-but-optional pattern (`internal/scheduler.py`) already sat unused while a weakened fork of it shipped to prod. This contract's API shape must prevent dishonesty even by accident.
@@ -126,7 +127,7 @@ Note what's absent: there is no branch that consults `_running`, thread liveness
 ## 9. Post-green addendum (2026-08-23 ~05:00Z)
 
 - CI run 32616625040 (guard v2) went **red**: `test_no_new_handrolled_liveness` flagged `internal/scheduler.py` (AdversarialScheduler) — the 12th scheduler-named module, omitted from the initial allowlist snapshot. Diagnosis was by inference (raw log download is admin-gated); falsification test = controlled one-line allowlist commit `45a87ae8`. Re-run [32618505953](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/32618505953) went green with all steps succeeding; step 7 (pytest incl. both liveness test files at that SHA) passed and later steps executed, proving exit 0.
-- Standing gap: raw CI log access needs admin rights. Permanent fix option queued: diag workflow pulling job logs with the repo-scoped `GITHUB_TO
+- Standing gap: raw CI log access needs admin rights. Permanent fix option queued: diag workflow pulling job logs with the repo-scoped `GITHUB_TOKEN` and uploading them as an artifact, so future failures are read, not inferred.
 
 ## PR-2 STATUS (2026-08-23)
 
@@ -138,3 +139,13 @@ Note what's absent: there is no branch that consults `_running`, thread liveness
   remaining legacy entries tracked under the same issue.
 - Diag scaffolding (diag-file-export workflow + diag/ chunks) is
   temporary and must be removed before merge to main.
+
+## 10. ROLLOUT COMPLETE (2026-08-27)
+
+- **PR-3 (adversarial):** `internal/scheduler.py` (AdversarialScheduler) migrated onto LivenessTracker via **PR #1075** (squash `2f2d236`), closing **#1032**. Allowlist 11 → 10.
+- **PR-4 (pump):** `internal/pump/scheduler.py` (PumpLadderScheduler) migrated onto LivenessTracker via **PR #1076** (squash `947199ee`), closing **#1029**. Allowlist 10 → 9.
+- Resolver migration (PR-2, #1033) landed earlier; adversarial + pump migrations complete the same-bar family.
+- **Allowlist: 11 → 9**, monotonic shrink enforced by the guard; remaining 9 entries are mechanical ride-along adopters.
+- Every allowlist removal was backed by: a conformance fixture (`assert_liveness_compliant`) in the file's own test suite, the test wired into `.github/workflows/ci-smoke.yml` (proving it actually ran in CI), and CI green before merge.
+- **Issue #1029** — the tracked blocker for “PR-1 fully closed” — is **CLOSED**. PR-1 family complete: #1028 → #1033 → #1075 → #1076.
+- Next (unchanged from §6): registry endpoint consumption (`ops/readiness.py` → `/api/liveness`), hour-slot + loop_health persistence fixes, pump trust gate behavior change, selector/calibration ride-along. End-state: empty allowlist.
