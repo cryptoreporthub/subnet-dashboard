@@ -407,7 +407,6 @@ def specialist_result_from_observe(bot: str, report: Any) -> Dict[str, Any]:
         extra={
             "flags": _flags_from_report(report, tags),
             "snapshot_contradictions": snapshot_contradictions,
-            "checks": _as_items(_get(report, "checks")),
         },
     )
 
