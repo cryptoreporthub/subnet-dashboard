@@ -140,14 +140,19 @@
       });
   }
 
+  function startPollWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(poll);
+    else poll();
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', function () {
       ssrBootstrap();
-      poll();
+      startPollWhenHeroReady();
     });
   } else {
     ssrBootstrap();
-    poll();
+    startPollWhenHeroReady();
   }
 
   function tick() {

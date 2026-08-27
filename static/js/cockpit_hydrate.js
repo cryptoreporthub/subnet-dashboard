@@ -4616,8 +4616,7 @@
     }
     markHydrateStart('run');
     showHydrateSkeletons();
-    // H1: hour-watch rib via cockpit.picks — connect before deferred tier-3 panels
-    connectCockpitStream();
+    // H1: hour-watch rib via cockpit.picks — SSE connects after stats + daily-pick (#1058).
 
     var stats = null;
     var subnets = [];
@@ -4656,6 +4655,7 @@
       await Promise.allSettled([dailyPickRequest, statsRequest]);
       var dpResult = await dailyPickRequest;
 
+      connectCockpitStream();
       kickPriorityPanels();
       window.__homeTrailHydratePending = true;
       trailPromise = startTrailHydration();

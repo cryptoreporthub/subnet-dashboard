@@ -2761,30 +2761,34 @@ function renderTrendingSky(rows) {
       .catch(function () { hbCalEl.textContent = "cal …"; });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () {
-      bindPulseModes();
-      bindRankSubtabs();
-      bindFilterClicks();
-      syncFilterChipStates();
-       hydrateWatchlist();
+  function startFeedWhenHeroReady() {
+    function boot() {
+      hydrateWatchlist();
       hydrate();
       hydrateCalibration();
       pollNetFlow();
       refreshTimer = window.setInterval(hydrate, 60000);
       window.setInterval(pollNetFlow, 60000);
-    });
-  } else {
+    }
+    if (window.afterHeroCritical) window.afterHeroCritical(boot);
+    else boot();
+  }
+
+  function bindUi() {
     bindPulseModes();
     bindRankSubtabs();
     bindFilterClicks();
     syncFilterChipStates();
-    hydrateWatchlist();
-    hydrate();
-    hydrateCalibration();
-    pollNetFlow();
-    refreshTimer = window.setInterval(hydrate, 60000);
-    window.setInterval(pollNetFlow, 60000);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", function () {
+      bindUi();
+      startFeedWhenHeroReady();
+    });
+  } else {
+    bindUi();
+    startFeedWhenHeroReady();
   }
 
   window.addEventListener("pagehide", function () {

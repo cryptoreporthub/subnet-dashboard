@@ -140,10 +140,15 @@
     loadDriverCard(currentNetuid());
   }
 
+  function startRefreshWhenHeroReady() {
+    if (window.afterHeroCritical) window.afterHeroCritical(refresh);
+    else refresh();
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", refresh);
+    document.addEventListener("DOMContentLoaded", startRefreshWhenHeroReady);
   } else {
-    refresh();
+    startRefreshWhenHeroReady();
   }
 
   document.addEventListener("home-daily-call-updated", function () {

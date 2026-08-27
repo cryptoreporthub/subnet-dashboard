@@ -70,19 +70,23 @@
   }
 
   var api = slot.getAttribute("data-api") || "/api/whales/flow-signals?hours=24&limit=10";
-  try {
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", api, true);
-    xhr.withCredentials = true;
-    xhr.timeout = 6000;
-    xhr.onload = function () {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try { render(JSON.parse(xhr.responseText)); }
-        catch (e) { fail(); }
-      } else { fail(); }
-    };
-    xhr.onerror = fail;
-    xhr.ontimeout = fail;
-    xhr.send();
-  } catch (e) { fail(); }
+  function loadFlowSignals() {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open("GET", api, true);
+      xhr.withCredentials = true;
+      xhr.timeout = 6000;
+      xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try { render(JSON.parse(xhr.responseText)); }
+          catch (e) { fail(); }
+        } else { fail(); }
+      };
+      xhr.onerror = fail;
+      xhr.ontimeout = fail;
+      xhr.send();
+    } catch (e) { fail(); }
+  }
+  if (window.afterHeroCritical) window.afterHeroCritical(loadFlowSignals);
+  else loadFlowSignals();
 })();
