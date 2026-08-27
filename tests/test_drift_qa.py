@@ -405,10 +405,28 @@ def test_notify_log_event_and_emit_are_importable():
     assert recorded["run_id"] == "r1"
     assert recorded["intent"] == "monitor"
     assert recorded["routed_to"] == ["drift_qa"]
+    assert "payload" not in recorded
     assert emitted["event"] == "mission_control.decision"
     assert emitted["status"] == "ok"
     assert emitted["approval_required"] is False
     assert notify_mod.notify("bot_observe", bot="drift_qa") is None
+
+
+def test_notify_keeps_nested_payload_instead_of_flattening(caplog):
+    """Drift/QA ``notify(..., payload={})`` must not hit log_event's payload merge."""
+    caplog.set_level("INFO", logger="internal.ops.notify")
+    nested = {"status": "degraded", "flagged": ["stale_data"], "observation_only": True}
+    notify_fn("bot_observe", bot="drift_qa", run_id="r2", payload=nested)
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages, "notify() must write the process log"
+    last = messages[-1]
+    assert "bot_observe" in last
+    assert "payload" in last
+    # Flattening would merge nested keys onto the record and drop the payload key.
+    extras = caplog.records[-1].args[1]
+    assert extras["payload"] == nested
+    assert extras["bot"] == "drift_qa"
+    assert "flagged" not in extras
 
 
 def test_empty_snapshot_is_not_ok():
