@@ -22,35 +22,43 @@ if [ -z "$MID" ] || [ "$MID" = "null" ]; then
 fi
 echo "probe_machine=${MID}"
 
-AUDIT_PY='import json, hashlib, os, sys
-DEPLOY = os.environ.get("REV3_DEPLOY_SHA", "")
-ROW = os.environ.get("REV3_ROW_ID", "dd13cfb298")
-path = "data/predictions.json"
-raw = open(path, "rb").read()
+_remote_python() {
+  local py="$1"
+  local b64
+  b64=$(printf '%s' "$py" | base64 -w0 2>/dev/null || printf '%s' "$py" | base64 | tr -d '\n')
+  flyctl machine exec "$MID" -a "$APP" --timeout 120 \
+    "bash -lc 'cd /app && python3 -c \"import base64; exec(base64.b64decode(\\\"${b64}\\\").decode())\"'"
+}
+
+AUDIT_PY="import json, hashlib
+DEPLOY = \"${DEPLOY_SHA}\"
+ROW = \"${ROW_ID}\"
+path = \"data/predictions.json\"
+raw = open(path, \"rb\").read()
 ledger_hash = hashlib.sha256(raw).hexdigest()
 data = json.loads(raw.decode())
 found = {}
-for bucket in ("predictions", "resolved"):
+for bucket in (\"predictions\", \"resolved\"):
     for p in data.get(bucket, []) or []:
-        if isinstance(p, dict) and p.get("id") == ROW:
+        if isinstance(p, dict) and p.get(\"id\") == ROW:
             found[bucket] = {k: p.get(k) for k in (
-                "id", "status", "outcome", "shadow", "counterfactual",
-                "price_data_unavailable", "retirement_reason", "resolve_at",
-                "horizon_hours", "resolved_at", "historical_hydration_attempted",
-                "side_effect_warnings",
+                \"id\", \"status\", \"outcome\", \"shadow\", \"counterfactual\",
+                \"price_data_unavailable\", \"retirement_reason\", \"resolve_at\",
+                \"horizon_hours\", \"resolved_at\", \"historical_hydration_attempted\",
+                \"side_effect_warnings\",
             )}
-stats = data.get("stats") or {}
-missing = [r.get("id") for r in (data.get("resolved") or []) if r.get("retirement_reason") == "missing_price_at_horizon"]
+stats = data.get(\"stats\") or {}
+missing = [r.get(\"id\") for r in (data.get(\"resolved\") or []) if r.get(\"retirement_reason\") == \"missing_price_at_horizon\"]
 print(json.dumps({
-    "deploy_sha": DEPLOY,
-    "predictions_json_sha256": ledger_hash,
-    "row": found,
-    "stats_pending": stats.get("pending"),
-    "stats_price_data_unavailable": stats.get("price_data_unavailable"),
-    "missing_price_resolved_count": len(missing),
-    "missing_price_sample_ids": missing[:10],
+    \"deploy_sha\": DEPLOY,
+    \"predictions_json_sha256\": ledger_hash,
+    \"row\": found,
+    \"stats_pending\": stats.get(\"pending\"),
+    \"stats_price_data_unavailable\": stats.get(\"price_data_unavailable\"),
+    \"missing_price_resolved_count\": len(missing),
+    \"missing_price_sample_ids\": missing[:10],
 }, indent=2))
-'
+"
 
 RECOVER_PY='from internal.learning.expired_recovery import recover_expired_predictions
 import json
@@ -71,13 +79,13 @@ print(json.dumps({
 '
 
 echo "=== volume row + ledger hash (read-only) ==="
-flyctl ssh console -a "$APP" -C "cd /app && REV3_DEPLOY_SHA=${DEPLOY_SHA} REV3_ROW_ID=${ROW_ID} python3 -c \"${AUDIT_PY}\"" || true
+if [ -n "$MID" ]; then _remote_python "$AUDIT_PY" || true; else echo "WARN: no probe_machine; skip volume audit"; fi
 
 echo "=== recover_expired_predictions dry_run=True (no ledger mutation) ==="
-flyctl ssh console -a "$APP" -C "cd /app && python3 -c \"${RECOVER_PY}\"" || true
+if [ -n "$MID" ]; then _remote_python "$RECOVER_PY" || true; else echo "WARN: no probe_machine; skip dry_run recover"; fi
 
 echo "=== regrade observation-only (counts; no regrade_expired_predictions call) ==="
-flyctl ssh console -a "$APP" -C "cd /app && python3 -c \"${REGRADE_OBS}\"" || true
+if [ -n "$MID" ]; then _remote_python "$REGRADE_OBS" || true; else echo "WARN: no probe_machine; skip regrade observation"; fi
 
 echo "=== resolver / revive log lines (post-deploy window) ==="
 flyctl logs -a "$APP" --no-tail 2>&1 \
