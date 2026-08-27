@@ -1,8 +1,3 @@
-Title: 
-
-URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/chore/scheduler-liveness-1032/.github/workflows/ci-smoke.yml
-
-Markdown Content:
 # Required PR/main gate — single job named "smoke" (branch protection).
 # Homepage hydration smoke is also registered below; this comment commit re-queues PR validation.
 # Replaces the old health-only smoke + duplicate ci-check + Phase K gate stack.
