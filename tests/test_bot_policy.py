@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 
 from internal.ops.bot_policy import (
     APPROVAL_POLICY,
+    CONTRADICTION_TAGS,
     aggregate_freshness,
     approval_for,
     bot_contract,
@@ -77,3 +78,14 @@ def test_state_changing_actions_have_role_and_pending_approval():
     unknown = approval_for("unclassified_action", state_changing=True)
     assert unknown["required"] is True
     assert unknown["approver_role"] == "designated_owner"
+
+
+def test_contradiction_tags_are_an_explicit_enum():
+    assert CONTRADICTION_TAGS == (
+        "status_disagreement",
+        "recommended_action_conflict",
+        "supporting_vs_contradictory",
+        "population_mix",
+        "freshness_disagreement",
+        "stale_labeled_live",
+    )

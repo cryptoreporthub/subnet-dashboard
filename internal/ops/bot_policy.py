@@ -34,6 +34,20 @@ FRESHNESS_THRESHOLDS: Dict[str, Dict[str, int]] = {
 _FRESHNESS_ORDER = {"fresh": 0, "aging": 1, "stale": 2, "missing": 3, "degraded": 4}
 
 
+# Policy §4 contradiction tags.  No numbered Policy.md exists on main; the
+# blueprint requires contradictions to be surfaced rather than averaged, and
+# learning/evidence.py only labels populations (council/shadow/pump/archive).
+# This enum is the explicit tag set Mission Control uses when evidence bundles
+# disagree.  Do not invent silent extra tags at call sites.
+CONTRADICTION_TAGS = (
+    "status_disagreement",
+    "recommended_action_conflict",
+    "supporting_vs_contradictory",
+    "population_mix",
+    "freshness_disagreement",
+    "stale_labeled_live",
+)
+
 # The surface is intentionally explicit even though this repository does not
 # yet ship the review queue.  It gives future bots a stable hand-off contract.
 APPROVAL_POLICY: Dict[str, Dict[str, str]] = {
