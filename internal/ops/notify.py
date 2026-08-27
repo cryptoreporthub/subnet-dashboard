@@ -33,10 +33,12 @@ def emit(event: str, payload: Optional[Mapping[str, Any]] = None, **fields: Any)
 
 
 def notify(event: str, **fields: Any) -> Dict[str, Any]:
-    """Compatible alias for Drift/QA and other specialists that call ``notify``.
+    """Drift/QA alias on the same logging-only destination as ``log_event``.
 
-    Same destination as ``log_event`` / ``emit`` (process log, no network).
-    Both APIs must exist so merge order with a sibling ``notify.py`` cannot
-    ImportError the coordinator (``log_event``) or the observer (``notify``).
+    Nested ``payload=`` stays nested. Routing this through ``log_event`` would
+    flatten that blob into the record (coordinator shape). No extra file.
     """
-    return log_event(event, **fields)
+    record: Dict[str, Any] = {"event": str(event or "unknown").strip() or "unknown"}
+    record.update({key: value for key, value in fields.items() if value is not None})
+    logger.info("%s", json.dumps(record, default=str, sort_keys=True))
+    return record

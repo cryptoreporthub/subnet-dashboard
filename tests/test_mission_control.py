@@ -320,6 +320,18 @@ def test_notify_dual_api_exports(caplog):
     assert via_notify["event"] == "dual.alias"
     assert via_log["event"] == "dual.log_event"
     assert via_emit["event"] == "dual.emit"
+    nested = notify_mod.notify(
+        "bot_observe",
+        bot="drift_qa",
+        payload={"check": "stale_data", "flagged": True},
+    )
+    assert nested["payload"] == {"check": "stale_data", "flagged": True}
+    assert "check" not in nested
+    assert "flagged" not in nested
+    flattened = notify_mod.log_event("mission_control.route", {"intent": "monitor"}, run_id="abc")
+    assert flattened["intent"] == "monitor"
+    assert flattened["run_id"] == "abc"
+    assert "payload" not in flattened
     messages = [record.getMessage() for record in caplog.records]
     assert any("dual.alias" in msg for msg in messages)
     assert any("dual.log_event" in msg for msg in messages)
