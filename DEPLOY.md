@@ -6,7 +6,7 @@ App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `s
 
 ### Deploy
 
-Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (`workflow_dispatch`; not push-to-main). That workflow **must** scale `web=1 worker=0` after deploy and fail if a dedicated worker machine remains.
+Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (`workflow_dispatch`; not push-to-main). Same-repo PRs can also deploy when the repo owner (`cryptoreporthub`) applies the exact label `fly-deploy` (GitHub MCP can label; it cannot `workflow_dispatch`). Other labels no-op. That workflow **must** scale `web=1 worker=0` after deploy and fail if a dedicated worker machine remains.
 
 Manual v1 deploy — `worker=0` is **required**, not optional. Removing `worker` from `fly.toml` does not delete a leftover Fly worker process group:
 

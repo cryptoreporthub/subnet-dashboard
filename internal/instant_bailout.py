@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from typing import Callable, Optional
 
 # Inline critical CSS — no /static dependency on first paint.
@@ -151,7 +152,14 @@ class InstantBailoutASGI:
             return
 
         if method == "GET" and path == "/":
+            started = time.perf_counter()
             html = self._get_homepage_html()
+            timing_header = [
+                (
+                    b"server-timing",
+                    f"app;dur={(time.perf_counter() - started) * 1000:.1f}".encode("ascii"),
+                )
+            ]
             if html:
                 await _send_response(
                     send,
@@ -159,6 +167,7 @@ class InstantBailoutASGI:
                     body=html.encode("utf-8"),
                     content_type="text/html; charset=utf-8",
                     cache_control=self._homepage_cache_control,
+                    extra_headers=timing_header,
                 )
                 return
             self._schedule_warm()
@@ -168,6 +177,7 @@ class InstantBailoutASGI:
                 body=HARDCODED_EMERGENCY_HTML,
                 content_type="text/html; charset=utf-8",
                 cache_control=self._homepage_cache_control,
+                extra_headers=timing_header,
             )
             return
 

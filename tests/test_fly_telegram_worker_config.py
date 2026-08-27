@@ -122,6 +122,26 @@ def test_dockerfile_bakes_sentry_release_from_git_sha():
     assert "ENV SENTRY_RELEASE=${GIT_SHA}" in docker
 
 
+def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
+    """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off."""
+    yml = _fly_yml()
+    on_block = yml.split("jobs:", 1)[0]
+    assert "workflow_dispatch:" in on_block
+    assert "pull_request:" in on_block
+    assert "types: [labeled]" in on_block
+    assert "\n  push:" not in on_block
+    gate = (
+        "github.event_name == 'workflow_dispatch' || "
+        "(github.event_name == 'pull_request' && "
+        "github.event.label.name == 'fly-deploy' && "
+        "github.event.pull_request.head.repo.full_name == github.repository && "
+        "github.actor == 'cryptoreporthub')"
+    )
+    assert yml.count(gate) == 2
+    assert "github.event.pull_request.head.sha || github.sha" in yml
+    assert yml.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}") == 2
+
+
 def test_fly_yml_passes_sentry_release_build_arg():
     yml = _fly_yml()
     assert "git rev-parse HEAD" in yml

@@ -317,9 +317,17 @@
   window.BrainLetter = { hydrate: hydrate, render: render };
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", function () { hydrate(); });
+    document.addEventListener("DOMContentLoaded", function () {
+      if (window.afterHeroCritical) window.afterHeroCritical(hydrate);
+      else hydrate();
+    });
+  } else if (window.afterHeroCritical) {
+    window.afterHeroCritical(hydrate);
   } else {
     hydrate();
   }
-  document.addEventListener("home-daily-call-updated", hydrate);
+  document.addEventListener("home-daily-call-updated", function () {
+    if (window.afterHeroCritical) window.afterHeroCritical(hydrate);
+    else hydrate();
+  });
 })();

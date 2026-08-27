@@ -76,4 +76,36 @@
     delete responseCache[key];
     delete inFlight[key];
   };
+
+  // #1058 hydrate wall: secondary panels wait until stats + daily-pick settle.
+  // ponytail: 12s safety so letters/judges still load if cockpit_hydrate never runs.
+  var heroCriticalReleased = false;
+  var heroCriticalWaiters = [];
+  var heroCriticalSafety = null;
+  function releaseHeroCritical() {
+    if (heroCriticalReleased) return;
+    heroCriticalReleased = true;
+    if (heroCriticalSafety) {
+      clearTimeout(heroCriticalSafety);
+      heroCriticalSafety = null;
+    }
+    var queued = heroCriticalWaiters;
+    heroCriticalWaiters = [];
+    for (var i = 0; i < queued.length; i++) {
+      try { queued[i](); } catch (e) {}
+    }
+  }
+  function afterHeroCritical(fn) {
+    if (typeof fn !== 'function') return;
+    if (heroCriticalReleased) {
+      fn();
+      return;
+    }
+    heroCriticalWaiters.push(fn);
+    if (!heroCriticalSafety) {
+      heroCriticalSafety = setTimeout(releaseHeroCritical, 12000);
+    }
+  }
+  global.afterHeroCritical = afterHeroCritical;
+  global.releaseHeroCritical = releaseHeroCritical;
 })(typeof window !== 'undefined' ? window : this);

@@ -121,7 +121,8 @@
       });
   }
 
-  loadJudges();
+  if (window.afterHeroCritical) window.afterHeroCritical(loadJudges);
+  else loadJudges();
   if (drawer) {
     drawer.addEventListener('toggle', function () {
       if (drawer.open) loadJudges();
