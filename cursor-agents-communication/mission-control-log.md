@@ -67,6 +67,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-28 ~11:58pm PT / 06:58Z — Step 0 complete: #1091 on main
+
+- Un-drafted #1091, updated branch onto main after #1089+#1085 (head 1fc9386a), smoke green (run 33149466727).
+- Squash-merged #1091 at 2026-08-28T06:58:26Z as SHA 4d72a1c385d5c0a2d46057809e564daf85c5b76b. Files: mission-control-log.md, ditto-sync.mdc mirror duty, board.md pointer.
+- #1089 already merged (closes #1072). #1085 already merged.
+- Next: rebase draft #1086 onto this main; fan-out Sentinel soak, Drift/QA #1090, Market Desk HOLD #1088, Proof Scout #1087 (allowlist 7→0), Shield re-audit.
+- No Phase-5 bot PRs merged in this step. #1088 remains parked.
+
 ### 2026-08-28 ~05:40Z — Initial snapshot
 
 Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1086–#1090 remain draft / human-gated. Mirror rule added: `mission-control-log.md` + Ditto `save_memory`.
