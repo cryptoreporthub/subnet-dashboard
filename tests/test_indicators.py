@@ -324,13 +324,30 @@ def test_indicator_scheduler_run_once(tmp_path):
     assert state["running"] is False
     assert state["consecutive_failures"] == 0
 
-def test_scheduler_start_stop_are_idempotent():
-    scheduler = IndicatorScheduler(refresh_minutes=60)
-    res1 = scheduler.start(immediate=False)
+def test_scheduler_start_stop_are_idempotent(monkeypatch):
+    import internal.indicators.indicator_scheduler as isched
+
+    monkeypatch.setattr(isched, "schedule_in_seconds", lambda *a: None)
+    isched._scheduler = None
+    res1 = isched.start_indicator_scheduler(refresh_minutes=60, immediate=False)
     assert res1["started"] is True
-    res2 = scheduler.start(immediate=False)
+    res2 = isched.start_indicator_scheduler(refresh_minutes=60, immediate=False)
     assert res2["started"] is False
-    scheduler.stop()
+    isched.stop_indicator_scheduler()
+
+
+def test_indicator_scheduler_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return IndicatorScheduler(refresh_minutes=60, soul_map_path=str(soul)).liveness
+
+    assert_liveness_compliant(factory)
 
 
 

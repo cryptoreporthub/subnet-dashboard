@@ -86,3 +86,17 @@ def test_scheduler_run_once(monkeypatch):
     result = s.run_once()
     assert result["ok"] is True
     assert result["alert_level"] == "ok"
+
+
+def test_pump_desk_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return sched.PumpDeskSnapshotScheduler().liveness
+
+    assert_liveness_compliant(factory)

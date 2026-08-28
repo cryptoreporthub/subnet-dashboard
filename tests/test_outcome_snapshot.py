@@ -69,9 +69,14 @@ def test_evidence_report_empty():
     assert "pick_audit" in report
 
 
-def test_evidence_ignores_stale_pump_alert():
-    from internal.ops.evidence import build_evidence_report
+def test_outcome_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
 
-    report = build_evidence_report()
-    if report["pump_desk"]["alert_level"] == "alert" and report["status"] == "alert":
-        assert "pump_desk alert" in report["alerts"]
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return sched.OutcomeSnapshotScheduler().liveness
+
+    assert_liveness_compliant(factory)

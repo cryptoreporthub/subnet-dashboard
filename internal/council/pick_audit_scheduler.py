@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker
 
 logger = logging.getLogger(__name__)
 
@@ -58,19 +59,46 @@ def _load_subnets_and_context() -> tuple[list, dict]:
         return [], {}
 
 
+def _stopped_scheduler_state() -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("pick_selection_audit")
+        if t is not None:
+            snap = t.snapshot()
+    except Exception:
+        pass
+    return {
+        "running": False,
+        "last_result": {},
+        "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}",
+        "liveness": snap,
+    }
+
+
 class PickSelectionAuditScheduler:
     def __init__(self) -> None:
-        self._running = False
-        self._last_run_at: Optional[str] = None
-        self._last_ok: Optional[bool] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
+        self.liveness = LivenessTracker(
+            name="pick_selection_audit",
+            interval_seconds=max(3600, int(_seconds_until_slot())),
+            staleness_factor=2,
+            persist=True,
+        )
+
+    def _is_registered(self) -> bool:
+        with _lock:
+            return _scheduler is self
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
-        with _lock:
-            if self._running:
-                return {"started": False, "reason": "already running"}
-            self._running = True
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
+        self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="pick-audit-tick").start()
         else:
@@ -78,19 +106,17 @@ class PickSelectionAuditScheduler:
         return {"started": True, "job": JOB_ID, "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}"}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._running = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
-            "running": self._running,
-            "last_run_at": self._last_run_at,
-            "last_run_ok": self._last_ok,
+            "running": snap.get("lifecycle") == "started",
             "last_run_error": self._last_error,
             "last_result": self._last_result,
             "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}",
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -110,6 +136,13 @@ class PickSelectionAuditScheduler:
             primary = (payload.get("oracles") or {}).get("scheduler_cap_24", {})
             result["oracle_scheduler_netuid"] = (primary.get("pick") or {}).get("netuid")
             result["audit_path"] = payload.get("pick_date")
+            self.liveness.record_success(
+                evidence={
+                    "verdict": result.get("verdict"),
+                    "published_netuid": result.get("published_netuid"),
+                    "op": "pick_selection_audit",
+                }
+            )
             if payload.get("verdict") == "MISS":
                 logger.warning(
                     "pick selection audit MISS: category=%s published=%s oracle=%s",
@@ -119,11 +152,10 @@ class PickSelectionAuditScheduler:
                 )
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("pick selection audit tick failed: %s", exc)
 
         with _lock:
-            self._last_run_at = result["run_at"]
-            self._last_ok = result.get("ok")
             self._last_error = result.get("error")
             self._last_result = {
                 k: result.get(k)
@@ -136,7 +168,7 @@ class PickSelectionAuditScheduler:
                 if k in result
             }
 
-        if reschedule and self._running:
+        if reschedule and self._is_registered():
             schedule_in_seconds(JOB_ID, self._tick, _seconds_until_slot())
         return result
 
@@ -146,10 +178,13 @@ def start_pick_audit_scheduler(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = PickSelectionAuditScheduler()
-        sched = _scheduler
-    return sched.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 
 def stop_pick_audit_scheduler() -> Dict[str, Any]:
@@ -166,5 +201,5 @@ def get_pick_audit_scheduler_state() -> Dict[str, Any]:
     with _lock:
         return {
             "enabled": _enabled(),
-            "scheduler": _scheduler.state() if _scheduler else {"running": False},
+            "scheduler": _scheduler.state() if _scheduler else _stopped_scheduler_state(),
         }
