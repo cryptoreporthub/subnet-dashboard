@@ -1,8 +1,8 @@
 # Mission Control log (Ditto-readable)
 
-> **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless gated (#1088 behavior change).
+> **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~17:10Z (main `cfa7a5bc`; prod deploy **33192921483** #1102)
+**Snapshot:** 2026-08-28 ~18:30Z (main `daa4ce0d`; prod deploy **#1105** in flight)
 
 ---
 
@@ -16,7 +16,8 @@
 ## Standing policy
 
 - Fleet is exactly **six** bots: Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield. **No Remedy bot.**
-- Policy §3.1: critical findings need **human approval**.
+- Policy §3.1: critical findings and live / behavior-changing updates need **human approval only when necessary**.
+- Automation-first default: **docs, mirrors, and other non-live changes should proceed automatically when green**; reserve human review for live behavior, safety, or other explicit gates.
 - Insights **>4h** are suspect.
 - **One PR per bot**, branch `<issue>-<bot>`.
 - Canonical refs: `handoffs/bot-fleet-fanout-2026-08-27.md`, `_ci/mission_control_prompt.md`.
@@ -48,18 +49,23 @@ Branches off **main `cfa7a5bc`** — last verified 2026-08-28 ~17:10Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
-| #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Merged 2026-08-28T06:15:51Z. Sentinel soak: `/health` 200, `/api/ops/live` ok `live=true`; one recovered 20s timeout. Fly pid 650 — #1089 likely not deployed. |
-| #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. Leak patch: `public_liveness_registry` strips `last_error`/`last_evidence`; GET `/api/liveness` `probe_worker=False`. Coordinator leftovers (`last_run_ok`/`force_running`/`pump_desk_trust.ready`) landed as-is. |
-| #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. HourPickScheduler + `loop_health` on tracker. |
-| #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. Readiness `trust.ready=true`; desk path may hold on `signal_snapshots_stale` until trail rows refresh. |
-| #1081 | Proof Scout | **#1087** | **Merged** | Squash `bb142c86` 2026-08-28T13:04Z. Allowlist `[]`. All `*scheduler.py` on LivenessTracker. Preceded by **#1095** daily-pick wedge. |
+| #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Soak through 2026-08-29 ~15:54Z. |
+| #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. |
+| #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. |
+| #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. |
+| #1081 | Proof Scout | **#1087** | **Merged** | Allowlist `[]`. |
+| — | Sentinel bot | **#1066** | **Rebased** | Read-only health observer; merge queue #1. |
+| — | Proof Scout bot | **#1065** | **Rebased** | Evidence gather; merge queue #2. |
+| — | Shield | **#1067** | **Rebased** | Abuse detection; merge queue #3. |
+| — | Market Desk bot | **#1064** | **Rebased** | Phase-2 specialist; merge queue #4. |
+| — | Docs | **#1093** | **Rebased** | Automation-first wording; merge queue #5. |
 
 ### Remaining (not executed)
 
 - **Sentinel soak → #1072 close** — window ends **2026-08-29 ~15:54Z** (~8:54 AM PDT).
 - **G0 harness ×2 → #1058 formal close** — after soak.
 - **Resolver timeout watch** — bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if 120s cap keeps firing.
-- Leftover PRs **#1064–#1067** and hydrate drafts untouched.
+- Leftover fleet PRs **#1064–#1067** rebased 2026-08-28; merge queue active. Hydrate drafts **#1073 / #1060 / #1061** untouched.
 
 ---
 
@@ -70,7 +76,7 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 1. **Ditto MCP** — `save_memory` with `source: cursor-agents-communication` / `Mission Control`
 2. **This file** — append a dated entry so Ditto can read status from the repo shared folder
 
-**Token-budget rule:** `.cursor/rules/token-budget.mdc` was deleted **2026-08-16**. Leftover `ditto-sync` / `model-guide` / `subagent-models` lines are intentional — **do not edit in docs-only mirror PRs.**
+**Token-budget rule:** .cursor/rules/token-budget.mdc was deleted **2026-08-16**. Leftover `ditto-sync` / `model-guide` / `subagent-models` lines are intentional — **do not edit in docs-only mirror PRs** unless a change is specifically needed for automation alignment.
 
 **Grok Bot** product prompt (short chat) is **not** in this repo.
 
