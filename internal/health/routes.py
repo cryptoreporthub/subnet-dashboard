@@ -21,12 +21,37 @@ SUBNET_INTEGRATIONS_HANDLER_TIMEOUT = float(
 OPS_EVIDENCE_HANDLER_TIMEOUT = float(os.environ.get("OPS_EVIDENCE_HANDLER_TIMEOUT_SECONDS", "8"))
 
 
-async def _to_thread_timeout(fn, timeout_s: float, *, label: str):
+def ops_live_degraded_payload(*, error: str = "timeout") -> dict:
+    """Honest degraded ops/live body — never launder timeout as ok."""
+    data_dir = os.environ.get("DATA_DIR", "data")
+    return {
+        "status": "degraded",
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "live": False,
+        "volume": {"path": data_dir, "writable": False},
+        "worker_mode": "unknown",
+        "worker_peer": {},
+        "error": error,
+    }
+
+
+def build_ops_live_report_sync():
+    """File/heartbeat-only liveness — no worker HTTP peer on hot paths."""
+    from internal.ops.readiness import build_liveness_report
+
+    return build_liveness_report(probe_worker=False)
+
+
+async def fetch_ops_live_report() -> dict:
+    """REQUEST_EXECUTOR + hard timeout so hydrate cannot wedge accept()."""
     try:
-        return await asyncio.wait_for(asyncio.to_thread(fn), timeout=timeout_s)
+        return await to_thread_timeout(
+            build_ops_live_report_sync,
+            OPS_LIVE_HANDLER_TIMEOUT,
+            label="ops-live",
+        )
     except asyncio.TimeoutError:
-        logger.warning("%s timed out after %.1fs", label, timeout_s)
-        raise
+        return ops_live_degraded_payload(error="timeout")
 
 
 @health_router.get("/api/data-freshness")
@@ -46,23 +71,7 @@ async def api_health_check():
 @health_router.get("/api/ops/live")
 async def api_ops_live():
     """Ultra-fast liveness for Fly/monitors — no feed probes or network."""
-    from internal.ops.readiness import build_liveness_report
-
-    try:
-        return await _to_thread_timeout(
-            build_liveness_report, OPS_LIVE_HANDLER_TIMEOUT, label="ops-live"
-        )
-    except asyncio.TimeoutError:
-        data_dir = os.environ.get("DATA_DIR", "data")
-        return {
-            "status": "degraded",
-            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "live": False,
-            "volume": {"path": data_dir, "writable": False},
-            "worker_mode": "unknown",
-            "worker_peer": {},
-            "error": "timeout",
-        }
+    return await fetch_ops_live_report()
 
 
 @health_router.get("/api/ops/worker-peer")
