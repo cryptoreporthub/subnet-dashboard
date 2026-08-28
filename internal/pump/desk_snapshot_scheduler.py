@@ -8,6 +8,7 @@ import threading
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_interval_seconds
+from internal.liveness import LivenessTracker
 
 logger = logging.getLogger(__name__)
 
@@ -30,14 +31,21 @@ def _enabled() -> bool:
 class PumpDeskSnapshotScheduler:
     def __init__(self, interval_minutes: int = INTERVAL_MINUTES) -> None:
         self.interval_minutes = max(5, min(int(interval_minutes), 60))
-        self._running = False
+        self._active = False
         self._last_result: Dict[str, Any] = {}
+        self.liveness = LivenessTracker(
+            name="pump_desk_snapshot",
+            interval_seconds=max(60, self.interval_minutes * 60),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
+        self.liveness.start()
         delay = 30 if immediate else max(60, self.interval_minutes * 60)
         schedule_interval_seconds(
             JOB_ID,
@@ -49,15 +57,18 @@ class PumpDeskSnapshotScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._running = False
+            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
-            "running": self._running,
+            "running": self._active,
             "interval_minutes": self.interval_minutes,
             "last_result": self._last_result,
+            "last_run_ok": snap["status"] == "ok",
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -73,6 +84,12 @@ class PumpDeskSnapshotScheduler:
             result["alert_level"] = payload.get("alert_level")
             result["path"] = payload.get("path")
             result["actionable_count"] = len(payload.get("actionable_badges") or [])
+            self.liveness.record_success(
+                evidence={
+                    "actionable_count": result["actionable_count"],
+                    "op": "pump_desk_snapshot",
+                }
+            )
             if payload.get("alert_level") == "alert":
                 logger.warning(
                     "pump desk snapshot ALERT: %s",
@@ -80,6 +97,7 @@ class PumpDeskSnapshotScheduler:
                 )
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("pump desk snapshot tick failed: %s", exc)
 
         with _lock:

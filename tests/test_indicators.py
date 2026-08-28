@@ -333,6 +333,19 @@ def test_scheduler_start_stop_are_idempotent():
     scheduler.stop()
 
 
+def test_indicator_scheduler_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return IndicatorScheduler(refresh_minutes=60, soul_map_path=str(soul)).liveness
+
+    assert_liveness_compliant(factory)
+
+
 
 def test_price_sources_include_blockmachine_fallback():
     pairs = {"5": {"symbol": "KAON"}}

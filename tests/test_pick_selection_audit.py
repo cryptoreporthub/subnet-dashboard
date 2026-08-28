@@ -129,6 +129,19 @@ def test_pick_audit_run_once(monkeypatch):
     assert result["verdict"] == "PASS"
 
 
+def test_pick_audit_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return sched.PickSelectionAuditScheduler().liveness
+
+    assert_liveness_compliant(factory)
+
+
 def test_background_boot_wires_pick_audit():
     from pathlib import Path
 

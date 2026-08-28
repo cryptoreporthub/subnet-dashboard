@@ -133,7 +133,8 @@ def test_tick_skips_when_gate_busy_without_blocking(tmp_path, monkeypatch):
     with heavy_job_slot("other_heavy_job"):
         out = sched._tick(reschedule=False)
     assert out.get("skipped") == "heavy_job_busy"
-    assert out.get("ok") is True
+    assert out.get("ok") is not True
+    assert sched.liveness.snapshot()["consecutive_skips"] >= 1
     assert ran["n"] == 0
 
 
@@ -441,7 +442,7 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     _wire_scheduler_paths(tmp_path, monkeypatch)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched._active = True
     snaps._TICK_ACTIVE = True
     sched._tick_active = True
     with snaps._lock:
@@ -449,3 +450,16 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     sched._register_write_completion_callback(reschedule=False)
     assert snaps._TICK_ACTIVE is False
     assert sched._tick_active is False
+
+
+def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return snaps.ScoreSnapshotScheduler().liveness
+
+    assert_liveness_compliant(factory)

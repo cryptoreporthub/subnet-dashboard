@@ -222,7 +222,7 @@ class TestCalibrationSnapshotSchedulerSlot:
              patch.object(smod, "_seconds_until_slot", return_value=float(slot_delay)), \
              patch.object(smod, "_next_slot_dt", return_value=datetime(2026, 8, 8, 5, 15, 0, tzinfo=timezone.utc)):
             s = smod.CalibrationSnapshotScheduler()
-            s._running = True
+            s._active = True
             s._tick(reschedule=True)
 
         assert len(scheduled_delays) == 1
@@ -326,3 +326,17 @@ class TestCalibrationSnapshotSchedulerSlot:
         assert "calibration db unavailable" in result["error"]
         # reschedule=False: schedule_in_seconds must NOT have been called
         assert scheduled_calls == []
+
+
+def test_calibration_snapshot_scheduler_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    from tests.liveness_conformance import assert_liveness_compliant
+    import internal.message_intel.calibration_snapshot_scheduler as smod
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return smod.CalibrationSnapshotScheduler().liveness
+
+    assert_liveness_compliant(factory)

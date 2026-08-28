@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [
   "internal/council/pick_audit_scheduler.py",
   "internal/council/score_snapshots.py",
@@ -6,3 +7,6 @@
   "internal/message_intel/calibration_snapshot_scheduler.py",
   "internal/pump/desk_snapshot_scheduler.py"
 ]
+=======
+[]
+>>>>>>> 07a57086 (feat(liveness): empty allowlist — migrate remaining 7 schedulers (#1081))

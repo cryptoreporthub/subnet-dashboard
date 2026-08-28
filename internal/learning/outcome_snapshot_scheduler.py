@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker
 
 logger = logging.getLogger(__name__)
 
@@ -49,14 +50,21 @@ def _interval_seconds() -> int:
 
 class OutcomeSnapshotScheduler:
     def __init__(self) -> None:
-        self._running = False
+        self._active = False
         self._last_result: Dict[str, Any] = {}
+        self.liveness = LivenessTracker(
+            name="learning_outcome_snapshot",
+            interval_seconds=_interval_seconds(),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
+        self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="outcome-snapshot-tick").start()
         else:
@@ -70,15 +78,18 @@ class OutcomeSnapshotScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._running = False
+            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
-            "running": self._running,
+            "running": self._active,
             "last_result": self._last_result,
+            "last_run_ok": snap["status"] == "ok",
             "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -104,16 +115,24 @@ class OutcomeSnapshotScheduler:
             result["health_score"] = (payload.get("council_health") or {}).get("health_score")
             result["escalation"] = (payload.get("council_health") or {}).get("escalation")
             result["path"] = payload.get("path")
+            self.liveness.record_success(
+                evidence={
+                    "health_score": result.get("health_score"),
+                    "recovered": result.get("recovered", 0),
+                    "op": "outcome_snapshot",
+                }
+            )
             if payload.get("alert_level") == "alert":
                 logger.warning("outcome snapshot ALERT: %s", payload.get("alert_reasons"))
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("outcome snapshot tick failed: %s", exc)
 
         with _lock:
             self._last_result = dict(result)
 
-        if reschedule and self._running:
+        if reschedule and self._active:
             schedule_in_seconds(JOB_ID, self._tick, _interval_seconds())
         return result
 

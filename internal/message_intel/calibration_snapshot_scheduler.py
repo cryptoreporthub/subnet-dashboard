@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +72,22 @@ def _next_slot_dt(now: Optional[datetime] = None) -> datetime:
 
 class CalibrationSnapshotScheduler:
     def __init__(self) -> None:
-        self._running = False
+        self._active = False
         self._last_result: Dict[str, Any] = {}
         self._next_run_at: Optional[str] = None
+        self.liveness = LivenessTracker(
+            name="calibration_snapshot",
+            interval_seconds=max(3600, int(_seconds_until_slot())),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
+        self.liveness.start()
         if immediate:
             threading.Thread(
                 target=self._tick, daemon=True, name="calibration-snapshot-tick"
@@ -99,18 +107,21 @@ class CalibrationSnapshotScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._running = False
+            self._active = False
             self._next_run_at = None
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         with _lock:
             return {
-                "running": self._running,
+                "running": self._active,
                 "last_result": dict(self._last_result),
+                "last_run_ok": snap["status"] == "ok",
                 "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
                 "next_run_at": self._next_run_at,
+                "liveness": snap,
             }
 
     def run_once(self) -> Dict[str, Any]:
@@ -127,6 +138,13 @@ class CalibrationSnapshotScheduler:
             result["drifted"] = (payload.get("drift") or {}).get("drifted")
             result["factor"] = (payload.get("calibration_health") or {}).get("factor")
             result["path"] = payload.get("path")
+            self.liveness.record_success(
+                evidence={
+                    "factor": result.get("factor"),
+                    "drifted": bool(result.get("drifted")),
+                    "op": "calibration_snapshot",
+                }
+            )
             if payload.get("alert_level") in ("warn", "alert"):
                 logger.warning(
                     "calibration snapshot %s: %s",
@@ -135,10 +153,11 @@ class CalibrationSnapshotScheduler:
                 )
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("calibration snapshot tick failed: %s", exc)
 
         # Re-anchor to the UTC slot so the next run is always near 05:15 UTC.
-        if reschedule and self._running:
+        if reschedule and self._active:
             delay = _seconds_until_slot()
             next_dt = _next_slot_dt()
             next_iso = next_dt.isoformat().replace("+00:00", "Z")
