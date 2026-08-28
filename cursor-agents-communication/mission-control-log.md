@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~22:04Z (main `cfbe842a`; intended prod `e86070b` **PROVISIONAL** hold to 2026-08-29 18:52:52Z; #1060 FAIL CLOSED open)
+**Snapshot:** 2026-08-28 ~23:44Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **P0 #1112** stall-guard dead path; **P1** cadence mechanism unproven; #1060 open)
 
 ---
 
@@ -65,10 +65,11 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 ### Remaining (not executed)
 
-- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z** (~11:52 AM PDT).
-- **G0 harness ×2 → #1058 formal close** — after soak.
-- **Resolver watch** — if tick wedges again past 180s cap, capture phase/subsystem delta; do NOT just bump higher (#1107 is mitigation).
-- Hydrate drafts **#1073 / #1060 / #1061** untouched.
+- **P0 #1112** stall-guard imports deleted `_last_resolver_tick` — resolver revive inert. Independent of #1060; do not close together.
+- **P1 cadence** execution confirmed, mechanism unproven (no `tick_start` in Fly log window). last_success intervals 82.6 → 34.8 → **110 min** (21:42:08Z → 23:32:05Z) — **not** recovering toward 15 min.
+- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z**.
+- **#1060** FAIL CLOSED open (hydration not re-run; liveness 2–3 min pair did not advance).
+- Hydrate drafts **#1073 / #1061** untouched. Held **#1074 / #1069 / #1036** untouched.
 
 ---
 
@@ -88,6 +89,59 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~23:44 UTC — P0 stall-guard input vs P1 cadence (read-only)
+
+**Priority (explicit, not equal):**
+1. **P0 stall-guard thread** — correctness bug for **every** future resolver stall this guard is supposed to catch. Independent of this incident. Filed **[#1112](https://github.com/cryptoreporthub/subnet-dashboard/issues/1112)**.
+2. **P1 cadence thread** — explains **this** incident only. Execution confirmed, mechanism **unproven**.
+
+**Incident wording (unchanged):** Evidence proves a post-deployment 15-minute freshness-contract violation. It does **not** establish scheduler-fail-to-execute vs health/persist-fail-to-publish.
+
+**No merge / no deploy / no timeout bump / no #1060 close.** Hold `e86070b` **PROVISIONAL** (approver ___ none named) expiry 2026-08-29 18:52:52Z. Fly Deploy **33203293244** → `e86070b` Success.
+
+**Evidence class:** `/proc` and file:line reads are **single-agent**, not independently verified, **not** more final than each other.
+
+#### Probe 1a — SET-vs-READ (FIRST)
+
+**Verdict: PERMANENT dead path.** `_last_resolver_tick` is **never SET** and has **no `def`** on `origin/main` `cfbe842a` or prod `e86070b`. Repo-wide: no `_last_resolver_tick =`. Not intermittent.
+
+Removed (not aliased) in `98677e74` (#1090): `def _last_resolver_tick` → `def _resolver_liveness_view`. Callers not updated. Originally `40a6dc27`.
+
+`except → fallback` fires **100%** of calls (`ImportError`). Three reads were a sample; SET-grep is the existence proof.
+
+#### Probe 1b — what 5968s actually is
+
+Log `21:57:54Z snapshot STALE (age=5968s, threshold=5400s, strike=3/2)` is **score-snapshot age**, not `last_resolver_tick` and not liveness `last_success_at`.
+
+- soul `score_snapshot_scheduler.last_cycle.run_at` = **2026-08-28T20:18:26Z**
+- 21:57:54Z − 20:18:26Z = **5968s exact**
+- Code: `loop_stall_guard.py:160,189` `_snapshot_age_seconds()` vs default max 5400s
+
+Resolver input `_resolver_tick_age_seconds()` (`:82-102`) **always returns None** (1a). Fallback does **not** yield 5968s; it yields **None**, so resolver-stale warn and `_try_revive_resolver` **never run**.
+
+#### Probe 1c — strike 3/2 kill=False
+
+- `LOOP_STALL_GUARD_CONSECUTIVE_CHECKS` default **2** (env `<UNSET>` on pid 649/643 at **23:42:46Z**, single-source `/proc`)
+- Strike 3/2 (later **29/2** at 23:42:07Z) ≥ threshold → would `os._exit(1)` **if** `KILL_ENABLED`
+- Prod `/proc`: **`LOOP_STALL_GUARD_KILL=0`** (code default True; Fly override). Log: `kill disabled, would have exited`
+- Kill is **snapshot-consecutive**, not resolver-age. A working `_last_resolver_tick` would **not** by itself change kill while KILL=0. It **would** re-enable resolver revive after 1800s — currently **inert**
+
+#### Probe 2 (P1) — cadence mechanism still unproven
+
+Worker pid **649** alive (heartbeat 23:42:36Z). last_success **#4: 23:32:05.836Z** (persist + `/api/liveness` 23:43:00Z `ok`, failures=0). last_success **interval** 21:42:08Z → 23:32:05Z = **110.0 min** (not sub-15; **not** “recovering”). Prior intervals 82.6 then 34.8. Fork A vs B **undecided**: no `resolver lifecycle event=tick_start` in `flyctl logs --no-tail` window. Persist still proves cycles complete (success + earlier `cycle_timeout_180s` at 22:01:14Z). Do not call probe done.
+
+#### Probe 3 — not re-run
+
+Carry-forward: persist + `/api/liveness` move together; `learning_loop_health.last_resolver_tick` stale projection. `/api/learning/health` timed out 20.0s at 21:59:21Z — still flagged.
+
+#### #1060
+
+FAIL CLOSED, **stays OPEN**. Hydration G0 not re-run. Last 2–3 min liveness pair (21:59:58Z → 22:02:47Z) did not advance last_success.
+
+**Separate filing:** [#1112](https://github.com/cryptoreporthub/subnet-dashboard/issues/1112) — blast radius inline. Do not close with #1060.
+
+**Deviations:** none. Did not unmute `LOOP_STALL_GUARD_KILL`.
 
 ### 2026-08-28 ~22:04 UTC — cadence vs persistence (read-only probes)
 
