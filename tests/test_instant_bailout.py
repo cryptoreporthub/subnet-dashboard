@@ -1,7 +1,9 @@
 """ASGI bailout must answer / and /health even when the inner app is wedged."""
 
 import asyncio
+import threading
 import time
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -256,3 +258,67 @@ def test_bailout_missing_allowlist_file_falls_through_to_inner(tmp_path):
     assert resp.status_code == 418
     assert resp.text == "inner"
     assert hit == ["/static/js/api_fetch.js"]
+
+
+def test_bailout_ops_live_timeout_returns_degraded(monkeypatch):
+    import internal.health.routes as health_routes
+
+    monkeypatch.setattr(health_routes, "OPS_LIVE_HANDLER_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(0.2)
+        return {"status": "ok", "live": True}
+
+    app = wrap_instant_bailout(
+        _wedged_app,
+        get_homepage_html=lambda: None,
+        schedule_warm=lambda: None,
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        with patch.object(health_routes, "build_ops_live_report_sync", side_effect=_slow):
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                return await client.get("/api/ops/live")
+
+    resp = _run(_check())
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "degraded"
+    assert body.get("error") == "timeout"
+
+
+def test_bailout_health_instant_when_ops_live_report_slow(monkeypatch):
+    import internal.health.routes as health_routes
+
+    monkeypatch.setattr(health_routes, "OPS_LIVE_HANDLER_TIMEOUT", 2.0)
+    release = threading.Event()
+
+    def _slow():
+        release.wait(timeout=2.0)
+        return {"status": "ok", "live": True, "volume": {}, "worker_peer": {}}
+
+    app = wrap_instant_bailout(
+        _wedged_app,
+        get_homepage_html=lambda: None,
+        schedule_warm=lambda: None,
+    )
+    transport = httpx.ASGITransport(app=app)
+
+    async def _check():
+        with patch.object(health_routes, "build_ops_live_report_sync", side_effect=_slow):
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                live_task = asyncio.create_task(client.get("/api/ops/live"))
+                await asyncio.sleep(0.05)
+                t0 = time.time()
+                health = await client.get("/health")
+                elapsed = time.time() - t0
+                release.set()
+                live = await live_task
+                return health, live, elapsed
+
+    health, live, elapsed = _run(_check())
+    assert health.status_code == 200
+    assert health.text == "OK"
+    assert elapsed < 1.0
+    assert live.status_code == 200
