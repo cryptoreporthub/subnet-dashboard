@@ -46,6 +46,51 @@ def all_snapshots() -> Dict[str, Dict[str, Any]]:
     return {t.name: t.snapshot() for t in trackers}
 
 
+_PUBLIC_STRIP_FIELDS = frozenset({"last_error", "last_evidence"})
+
+
+def public_liveness_registry(registry: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip operator-only tracker fields before any public HTTP response."""
+    trackers = registry.get("trackers") or {}
+    sanitized: Dict[str, Dict[str, Any]] = {}
+    for name, snap in trackers.items():
+        if isinstance(snap, dict):
+            sanitized[name] = {
+                k: v for k, v in snap.items() if k not in _PUBLIC_STRIP_FIELDS
+            }
+        else:
+            sanitized[name] = snap
+    return {**registry, "trackers": sanitized}
+
+
+def build_liveness_registry(*, probe_worker: bool = True) -> Dict[str, Any]:
+    """Registry payload for ``GET /api/liveness`` and readiness aggregation."""
+    local = all_snapshots()
+    source = "inprocess"
+    if probe_worker:
+        try:
+            from internal.data_volume import needs_worker_volume_proxy
+
+            if needs_worker_volume_proxy():
+                from internal.worker_proxy import fetch_worker_json_sync
+
+                remote = fetch_worker_json_sync("/api/liveness")
+                if isinstance(remote, dict):
+                    remote_trackers = remote.get("trackers")
+                    if isinstance(remote_trackers, dict) and remote_trackers:
+                        merged = dict(local)
+                        merged.update(remote_trackers)
+                        local = merged
+                        source = "merged" if all_snapshots() else "worker"
+        except Exception:
+            pass
+    return {
+        "trackers": local,
+        "checked_at": _now_iso(),
+        "source": source,
+    }
+
+
 class LivenessTracker:
     """ok is computed from last_success_at freshness; it can never be set."""
 
