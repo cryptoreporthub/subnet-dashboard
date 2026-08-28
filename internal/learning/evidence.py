@@ -7,7 +7,17 @@ shadow, and archived measurements.
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
+
+# Coarse lineage buckets callers may mix in a report. Fine-grained labels
+# stay on ``evidence_population``; this set is what ``evidence_source`` returns.
+SOURCE_POPULATIONS: Tuple[str, ...] = (
+    "council",
+    "shadow",
+    "pump",
+    "archive",
+    "unknown",
+)
 
 
 def evidence_population(row: Dict[str, Any]) -> str:
@@ -38,14 +48,16 @@ def evidence_population(row: Dict[str, Any]) -> str:
 def evidence_source(row: Dict[str, Any]) -> str:
     population = evidence_population(row)
     if population.startswith("pump_"):
-        return "pump"
-    if population == "council_shadow":
-        return "shadow"
-    if population == "council_published":
-        return "council"
-    if population == "archived":
-        return "archive"
-    return "unknown"
+        source = "pump"
+    elif population == "council_shadow":
+        source = "shadow"
+    elif population == "council_published":
+        source = "council"
+    elif population == "archived":
+        source = "archive"
+    else:
+        source = "unknown"
+    return source if source in SOURCE_POPULATIONS else "unknown"
 
 
 def stamp_evidence(row: Dict[str, Any]) -> bool:

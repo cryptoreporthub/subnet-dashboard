@@ -90,7 +90,7 @@ def _migrate_evidence(data: Dict[str, Any]) -> bool:
     return changed
 
 
-def load_predictions() -> Dict[str, Any]:
+def load_predictions(*, persist: bool = True) -> Dict[str, Any]:
     try:
         with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
             data = json.load(handle)
@@ -104,7 +104,7 @@ def load_predictions() -> Dict[str, Any]:
     changed = _migrate_phases(data)
     changed = _migrate_expert_labels(data) or changed
     changed = _migrate_evidence(data) or changed
-    if changed:
+    if changed and persist:
         save_predictions(data)
     return data
 
