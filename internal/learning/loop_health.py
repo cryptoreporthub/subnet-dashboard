@@ -247,7 +247,7 @@ def _worker_peer() -> Dict[str, Any]:
 def _resolver_liveness_view() -> Dict[str, Any]:
     """Resolver health from the LivenessTracker registry (persisted worker truth)."""
     from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
-    from internal.liveness import LivenessTracker, get_tracker
+    from internal.liveness import LivenessTracker, build_liveness_registry, get_tracker
 
     refresh_m = RESOLVER_REFRESH_MINUTES
     lifecycle_fallback = "stopped"
@@ -269,8 +269,23 @@ def _resolver_liveness_view() -> Dict[str, Any]:
             staleness_factor=2,
             persist=True,
         )
-
     snap = tracker.snapshot()
+    try:
+        merged = (build_liveness_registry(probe_worker=False).get("trackers") or {}).get(
+            "prediction_resolver"
+        )
+        if isinstance(merged, dict) and merged:
+            cur_status = snap.get("status")
+            merged_status = merged.get("status")
+            if cur_status in ("no_success_yet", "failing") and merged_status == "ok":
+                snap = merged
+            elif (
+                merged.get("last_success_at")
+                and not snap.get("last_success_at")
+            ):
+                snap = merged
+    except Exception:
+        pass
     peer = _worker_peer()
     status = str(snap.get("status") or "no_success_yet")
     lifecycle = str(snap.get("lifecycle") or lifecycle_fallback)
