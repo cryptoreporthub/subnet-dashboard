@@ -98,6 +98,53 @@ def _learning_summary() -> Dict[str, Any]:
         return {"graded": 0, "pending": 0, "accuracy": None, "trust_ready": None}
 
 
+def _scheduler_view_from_tracker(
+    snap: Dict[str, Any],
+    *,
+    peer: str | None = None,
+    force_running: bool = False,
+) -> Dict[str, Any]:
+    """Map a liveness registry snapshot to the legacy resolver scheduler shape."""
+    if not snap:
+        return {
+            "running": bool(force_running),
+            "lifecycle": "stopped",
+            "status": None,
+            "peer": peer,
+        }
+    lifecycle = snap.get("lifecycle")
+    status = snap.get("status")
+    running = bool(force_running) or lifecycle == "started"
+    return {
+        "running": running,
+        "lifecycle": lifecycle,
+        "status": status,
+        "status_reason": snap.get("status_reason"),
+        "last_run_at": snap.get("last_event_at"),
+        "last_run_ok": status == "ok",
+        "last_success_at": snap.get("last_success_at"),
+        "success_age_seconds": snap.get("success_age_seconds"),
+        "consecutive_failures": snap.get("consecutive_failures"),
+        "consecutive_skips": snap.get("consecutive_skips"),
+        "source": snap.get("source"),
+        "peer": peer,
+    }
+
+
+def _pump_desk_trust_from_liveness(registry: Dict[str, Any]) -> Dict[str, Any]:
+    """Age-derived pump desk trust gate (spec §1 — status ok is never stored)."""
+    snap = (registry.get("trackers") or {}).get("pump_ladder") or {}
+    status = snap.get("status")
+    ready = status == "ok"
+    return {
+        "ready": ready,
+        "liveness_status": status,
+        "success_age_seconds": snap.get("success_age_seconds"),
+        "last_success_at": snap.get("last_success_at"),
+        "source": "liveness_registry",
+    }
+
+
 def build_liveness_report(*, probe_worker: bool = True) -> Dict[str, Any]:
     """Fast liveness probe — file/heartbeat only by default on hot paths.
 
@@ -137,14 +184,17 @@ def build_readiness_report() -> Dict[str, Any]:
 
     from internal.live_subnets import live_data_freshness
     from internal.freshness import get_sync_state
-    from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
+    from internal.liveness import build_liveness_registry
 
     live = live_data_freshness()
     feed = probe_feed_layers()
     sync = get_sync_state()
-    resolver = get_prediction_resolver_scheduler_state()
+    liveness = build_liveness_registry()
+    trackers = liveness.get("trackers") or {}
+    resolver_snap = trackers.get("prediction_resolver") or {}
     learning = _learning_summary()
     daily = _daily_pick_summary()
+    pump_desk_trust = _pump_desk_trust_from_liveness(liveness)
 
     loop_health = _learning_loop_health()
     if loop_health.get("status") == "stalled":
@@ -160,23 +210,19 @@ def build_readiness_report() -> Dict[str, Any]:
     worker_peer = get_worker_peer()
     worker_peer_alive = bool(worker_peer.get("alive"))
     if is_worker_mode() and worker_peer_alive:
-        resolver = {**resolver, "running": True, "peer": "dedicated_worker"}
+        resolver = _scheduler_view_from_tracker(
+            resolver_snap, peer="dedicated_worker", force_running=True
+        )
     elif inline_worker and worker_peer_alive:
-        resolver = {**resolver, "running": True, "peer": "inline_worker"}
+        resolver = _scheduler_view_from_tracker(
+            resolver_snap, peer="inline_worker", force_running=True
+        )
     elif split_v2 and not is_worker_mode() and worker_peer_alive:
-        worker_resolver = (
-            loop_health.get("resolver") if isinstance(loop_health, dict) else {}
-        ) or {}
-        resolver = {
-            **resolver,
-            "running": bool(worker_resolver.get("running", True)),
-            "peer": worker_resolver.get("peer") or "dedicated_worker",
-            "last_run_ok": worker_resolver.get("last_ok", resolver.get("last_run_ok")),
-            "last_run_at": loop_health.get("last_resolver_tick") or resolver.get("last_run_at"),
-            "age_seconds": worker_resolver.get("age_seconds"),
-            "lifecycle": worker_resolver.get("lifecycle") or resolver.get("lifecycle"),
-            "warming": worker_resolver.get("warming", resolver.get("warming", False)),
-        }
+        resolver = _scheduler_view_from_tracker(
+            resolver_snap, peer="dedicated_worker", force_running=True
+        )
+    else:
+        resolver = _scheduler_view_from_tracker(resolver_snap)
 
     try:
         from fetchers.taostats_client import is_available as taostats_available
@@ -231,7 +277,8 @@ def build_readiness_report() -> Dict[str, Any]:
         ),
         classify_freshness(
             "resolver",
-            resolver.get("last_run_at") or loop_health.get("last_resolver_tick"),
+            resolver.get("last_success_at")
+            or resolver.get("last_run_at"),
             degraded=bool(resolver.get("running") is False and (inline_worker or split_v2)),
         ),
         classify_freshness(
@@ -269,7 +316,9 @@ def build_readiness_report() -> Dict[str, Any]:
         "issues": issues,
         "learning": learning,
         "learning_loop_health": loop_health,
+        "liveness": liveness,
         "resolver": resolver,
+        "pump_desk_trust": pump_desk_trust,
         "registry_sync": {
             "background_running": sync.get("background_running"),
             "last_sync_at": sync.get("last_sync_at"),

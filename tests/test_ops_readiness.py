@@ -117,24 +117,81 @@ def test_readiness_split_v2_web_shows_worker_resolver_running(monkeypatch):
     remote_health = {
         "status": "ok",
         "last_resolver_tick": "2026-07-29T12:00:00+00:00",
-        "resolver": {"running": True, "last_ok": True, "peer": "dedicated_worker"},
         "ledger": {"gap": False},
     }
-    with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote_health):
+    remote_liveness = {
+        "trackers": {
+            "prediction_resolver": {
+                "name": "prediction_resolver",
+                "lifecycle": "started",
+                "status": "ok",
+                "last_event_at": "2026-07-29T12:00:00+00:00",
+                "last_success_at": "2026-07-29T12:00:00+00:00",
+                "success_age_seconds": 30.0,
+                "source": "inprocess",
+            }
+        },
+        "checked_at": "2026-07-29T12:00:30+00:00",
+        "source": "inprocess",
+    }
+
+    def _proxy(path, **_kwargs):
+        if path == "/api/liveness":
+            return remote_liveness
+        return remote_health
+
+    with patch("internal.worker_proxy.fetch_worker_json_sync", side_effect=_proxy):
         with patch(
             "internal.worker_peer.get_worker_peer",
             return_value={"expected": True, "alive": True, "peer": "dedicated_worker"},
         ):
-            with patch(
-                "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-                return_value={"running": False, "refresh_minutes": 15},
-            ):
-                from internal.ops.readiness import build_readiness_report
+            from internal.ops.readiness import build_readiness_report
 
-                report = build_readiness_report()
+            report = build_readiness_report()
     assert report["resolver"]["running"] is True
     assert report["resolver"]["peer"] == "dedicated_worker"
+    assert report["resolver"]["status"] == "ok"
     assert "prediction_resolver_not_running" not in report["issues"]
+    assert "liveness" in report
+    assert report["liveness"]["trackers"]["prediction_resolver"]["status"] == "ok"
+
+
+def test_readiness_pump_desk_trust_from_liveness_registry(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    from internal.liveness import LivenessTracker
+
+    tracker = LivenessTracker("pump_ladder", interval_seconds=60, persist=False)
+    tracker.record_success(evidence={"scanned": 3})
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+    trust = report["pump_desk_trust"]
+    assert trust["ready"] is True
+    assert trust["liveness_status"] == "ok"
+    assert trust["source"] == "liveness_registry"
+
+
+def test_readiness_pump_desk_trust_not_ready_when_stale(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    from internal.liveness import LivenessTracker
+
+    tracker = LivenessTracker("pump_ladder", interval_seconds=60, persist=False)
+    tracker.record_success(evidence={"scanned": 1})
+    tracker._last_success_epoch -= 600
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+    assert report["pump_desk_trust"]["ready"] is False
+    assert report["pump_desk_trust"]["liveness_status"] == "stale"
+
+
+def test_api_liveness_returns_registry():
+    resp = client.get("/api/liveness")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "trackers" in body
+    assert "checked_at" in body
+    assert isinstance(body["trackers"], dict)
 
 
 def test_ops_readiness_contract():
@@ -145,6 +202,8 @@ def test_ops_readiness_contract():
     assert "issues" in body
     assert "learning" in body
     assert "resolver" in body
+    assert "liveness" in body
+    assert "pump_desk_trust" in body
     assert "subnet_feed" in body
     assert "daily_pick" in body
     assert "next_levers" in body

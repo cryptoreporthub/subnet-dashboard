@@ -46,6 +46,34 @@ def all_snapshots() -> Dict[str, Dict[str, Any]]:
     return {t.name: t.snapshot() for t in trackers}
 
 
+def build_liveness_registry(*, probe_worker: bool = True) -> Dict[str, Any]:
+    """Registry payload for ``GET /api/liveness`` and readiness aggregation."""
+    local = all_snapshots()
+    source = "inprocess"
+    if probe_worker:
+        try:
+            from internal.data_volume import needs_worker_volume_proxy
+
+            if needs_worker_volume_proxy():
+                from internal.worker_proxy import fetch_worker_json_sync
+
+                remote = fetch_worker_json_sync("/api/liveness")
+                if isinstance(remote, dict):
+                    remote_trackers = remote.get("trackers")
+                    if isinstance(remote_trackers, dict) and remote_trackers:
+                        merged = dict(local)
+                        merged.update(remote_trackers)
+                        local = merged
+                        source = "merged" if all_snapshots() else "worker"
+        except Exception:
+            pass
+    return {
+        "trackers": local,
+        "checked_at": _now_iso(),
+        "source": source,
+    }
+
+
 class LivenessTracker:
     """ok is computed from last_success_at freshness; it can never be set."""
 

@@ -68,6 +68,14 @@ async def api_health_check():
     return {"status": "ok"}
 
 
+@health_router.get("/api/liveness")
+async def api_liveness():
+    """Enumerate every registered LivenessTracker snapshot (§5 registry endpoint)."""
+    from internal.liveness import build_liveness_registry
+
+    return build_liveness_registry()
+
+
 @health_router.get("/api/ops/live")
 async def api_ops_live():
     """Ultra-fast liveness for Fly/monitors — no feed probes or network."""
