@@ -31,8 +31,8 @@
 
 | Item | Resolution |
 |------|------------|
-| **#1080** Market Desk | **#1100** (was #1088) | **Shipped** | `trust.ready` gated on `pump_ladder` liveness + signal snapshots. Deployed via #1101+#1103. |
-| **#1072** Sentinel zoom | **#1089** | **Soak** | Merged+deployed. Formal close after 24h soak ends ~2026-08-29 15:54Z. |
+| **#1080** Market Desk | **#1100** shipped (was #1088). `trust.ready` gated on `pump_ladder` liveness + signal snapshots. |
+| **#1072** Sentinel | **#1089** merged+deployed; formal close after soak ends 2026-08-29 ~15:54Z. |
 | **#1078** Drift/QA liveness | Via **#1086** merged 2026-08-28T07:32:58Z (head `6ee50f4b`) |
 | **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
@@ -44,7 +44,7 @@
 
 ## Phase-5 board
 
-Branches off **main `c82c59fe`** — last verified 2026-08-28 ~15:35Z.
+Branches off **main `cfa7a5bc`** — last verified 2026-08-28 ~17:10Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
