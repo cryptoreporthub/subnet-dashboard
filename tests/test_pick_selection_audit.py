@@ -111,8 +111,12 @@ def test_pick_audit_scheduler_disabled(monkeypatch):
     assert out["started"] is False
 
 
-def test_pick_audit_run_once(monkeypatch):
+def test_pick_audit_run_once(monkeypatch, tmp_path):
     sched.stop_pick_audit_scheduler()
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(sched, "_load_subnets_and_context", lambda: ([{"netuid": 1}], {}))
     monkeypatch.setattr(
         "internal.council.pick_selection_audit.run_audit_today",
@@ -135,6 +139,7 @@ def test_pick_audit_tracker_is_liveness_compliant(monkeypatch, tmp_path):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     def factory():
         return sched.PickSelectionAuditScheduler().liveness

@@ -16,6 +16,7 @@ def test_tracker_is_liveness_compliant(monkeypatch, tmp_path):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     def factory():
         return _make_scheduler().liveness
@@ -39,6 +40,7 @@ def test_running_derived_from_tracker_lifecycle(monkeypatch, tmp_path):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     scheduler = _make_scheduler()
     assert scheduler.state()["running"] is False
     scheduler.liveness.start()
