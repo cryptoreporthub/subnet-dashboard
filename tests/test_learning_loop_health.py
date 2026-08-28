@@ -145,7 +145,7 @@ def test_published_long_with_day_row_ok(tmp_path, monkeypatch):
     assert report["pending"] == 1
 
 
-def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
+def test_inline_worker_alive_shows_resolver_status_ok(tmp_path, monkeypatch):
     """Web process must see fresh resolver tracker status when worker is alive."""
     monkeypatch.setenv("INLINE_WORKER", "1")
     monkeypatch.setenv("RUN_MODE", "web")
