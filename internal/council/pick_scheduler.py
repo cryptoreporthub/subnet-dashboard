@@ -21,6 +21,7 @@ from internal.liveness import LivenessTracker, get_tracker
 logger = logging.getLogger(__name__)
 
 HOUR_PICK_TRACKER_NAME = "hour_pick"
+DAILY_PICK_TRACKER_NAME = "daily_pick"
 
 DAILY_JOB_ID = "daily-pick-scheduler"
 HOUR_JOB_ID = "hour-pick-scheduler"
@@ -207,21 +208,24 @@ def _record_ab_benchmark(subnets: Any, market_context: Dict[str, Any], source: s
 
 class DailyPickScheduler:
     def __init__(self) -> None:
-        self._running = False
-        self._last_run_at: Optional[str] = None
-        self._last_ok: Optional[bool] = None
-        self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
         self._work_lock = threading.Lock()
         # ponytail: timeout abandons in-flight work via generation bump; orphan
         # threads may still finish in the background but cannot commit results.
         self._work_generation = 0
+        retry_seconds = max(1, min(DAILY_PICK_RETRY_MINUTES, 120)) * 60
+        self.liveness = LivenessTracker(
+            name=DAILY_PICK_TRACKER_NAME,
+            interval_seconds=max(retry_seconds, 3600),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if _daily is self and self.liveness.snapshot().get("lifecycle") == "started":
                 return {"started": False, "reason": "already running"}
-            self._running = True
+        self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="daily-pick-tick").start()
         else:
@@ -230,19 +234,29 @@ class DailyPickScheduler:
         return {"started": True, "job": DAILY_JOB_ID}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._running = False
         cancel_job(DAILY_JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
+        last_result = self._last_result
+        if not last_result and isinstance(snap.get("last_evidence"), dict):
+            ev = snap["last_evidence"]
+            last_result = {
+                k: ev.get(k)
+                for k in ("action", "date", "netuid", "scheduler_hold")
+                if k in ev
+            }
         return {
-            "running": self._running,
-            "last_run_at": self._last_run_at,
-            "last_run_ok": self._last_ok,
-            "last_run_error": self._last_error,
-            "last_result": self._last_result,
+            "last_run_at": snap.get("last_event_at"),
+            "last_run_error": snap.get("last_error"),
+            "last_result": last_result,
             "slot_utc": f"{DAILY_PICK_SLOT_UTC_HOUR:02d}:{DAILY_PICK_SLOT_UTC_MINUTE:02d}",
+            "lifecycle": snap.get("lifecycle"),
+            "status": snap.get("status"),
+            "last_success_at": snap.get("last_success_at"),
+            "success_age_seconds": snap.get("success_age_seconds"),
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -324,17 +338,30 @@ class DailyPickScheduler:
                 except Exception as hold_exc:
                     logger.warning("scheduler hold write failed: %s", hold_exc)
 
+        tick_ok = bool(result.get("ok")) and today_ready
+        evidence: Dict[str, Any] = {
+            "op": "daily_pick",
+            "action": result.get("action"),
+            "date": result.get("date"),
+            "netuid": result.get("netuid"),
+            "today_ready": today_ready,
+        }
+        if result.get("scheduler_hold"):
+            evidence["scheduler_hold"] = True
+        if tick_ok:
+            self.liveness.record_success(evidence=evidence)
+        else:
+            self.liveness.record_failure(error=str(result.get("error") or "today pick not ready"))
+
         with _lock:
-            self._last_run_at = result["run_at"]
-            self._last_ok = result.get("ok") and today_ready
-            self._last_error = result.get("error")
             self._last_result = {
                 k: result.get(k)
                 for k in ("action", "date", "netuid", "scheduler_hold")
                 if k in result
             }
+            still_scheduled = _daily is self
 
-        if reschedule and self._running:
+        if reschedule and still_scheduled:
             delay = _seconds_until_next_daily_tick(today_ready=today_ready)
             schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
             result["next_delay_seconds"] = delay
@@ -484,10 +511,43 @@ def _hour_state_from_tracker() -> Dict[str, Any]:
     }
 
 
+def _daily_state_from_tracker() -> Dict[str, Any]:
+    """Persisted worker truth when web has no in-process daily scheduler."""
+    retry_seconds = max(1, min(DAILY_PICK_RETRY_MINUTES, 120)) * 60
+    tracker = get_tracker(DAILY_PICK_TRACKER_NAME)
+    if tracker is None:
+        tracker = LivenessTracker(
+            name=DAILY_PICK_TRACKER_NAME,
+            interval_seconds=max(retry_seconds, 3600),
+            staleness_factor=2,
+            persist=True,
+        )
+    snap = tracker.snapshot()
+    last_evidence = snap.get("last_evidence") if isinstance(snap.get("last_evidence"), dict) else {}
+    last_result = {
+        k: last_evidence.get(k)
+        for k in ("action", "date", "netuid", "scheduler_hold")
+        if k in last_evidence
+    }
+    return {
+        "last_run_at": snap.get("last_event_at"),
+        "last_run_error": snap.get("last_error"),
+        "last_result": last_result,
+        "slot_utc": f"{DAILY_PICK_SLOT_UTC_HOUR:02d}:{DAILY_PICK_SLOT_UTC_MINUTE:02d}",
+        "lifecycle": snap.get("lifecycle"),
+        "status": snap.get("status"),
+        "last_success_at": snap.get("last_success_at"),
+        "success_age_seconds": snap.get("success_age_seconds"),
+        "liveness": snap,
+        "source": snap.get("source"),
+    }
+
+
 def get_pick_scheduler_state() -> Dict[str, Any]:
     with _lock:
-        daily_state = _daily.state() if _daily else {"running": False}
+        daily_local = _daily.state() if _daily is not None else None
         hour_local = _hour.state() if _hour is not None else None
+    daily_state = daily_local if daily_local is not None else _daily_state_from_tracker()
     hour_state = hour_local if hour_local is not None else _hour_state_from_tracker()
     return {
         "enabled": _enabled(),

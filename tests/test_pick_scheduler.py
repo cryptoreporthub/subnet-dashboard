@@ -59,12 +59,26 @@ def test_daily_run_once_calls_get_or_create(monkeypatch):
     )
     monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
 
     sched = pick_scheduler.DailyPickScheduler()
     result = sched.run_once()
     assert result["ok"] is True
     assert called["force"] is False
     assert result["action"] == "HOLD"
+    assert sched.liveness.snapshot()["status"] == "ok"
+
+
+def test_daily_pick_scheduler_liveness_conformance():
+    def factory():
+        return pick_scheduler.DailyPickScheduler().liveness
+
+    assert_liveness_compliant(factory)
+
+
+def _arm_daily_sched(sched):
+    with pick_scheduler._lock:
+        pick_scheduler._daily = sched
 
 
 def test_hour_run_once_records_prediction(monkeypatch):
@@ -129,6 +143,36 @@ def test_hour_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
     assert hour["liveness"]["source"] == "persisted"
 
 
+def test_daily_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: {
+            "action": "LONG",
+            "date": "2026-08-28",
+            "pick": {"netuid": 9},
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 9, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
+
+    sched = pick_scheduler.DailyPickScheduler()
+    sched.run_once()
+    pick_scheduler.stop_pick_schedulers()
+
+    monkeypatch.setattr(pick_scheduler, "get_tracker", lambda _name: None)
+
+    state = pick_scheduler.get_pick_scheduler_state()
+    daily = state["daily"]
+    assert daily["status"] == "ok"
+    assert daily["lifecycle"] is not None
+    assert daily["source"] == "persisted"
+    assert daily["last_success_at"] is not None
+    assert daily["liveness"]["status"] == "ok"
+
+
 def test_start_stop_idempotent(monkeypatch):
     monkeypatch.setenv("PICK_SCHEDULER_ENABLED", "on")
     monkeypatch.setattr(pick_scheduler, "schedule_in_seconds", MagicMock())
@@ -174,7 +218,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
     pick_scheduler.DAILY_PICK_RETRY_MINUTES = 15
 
     sched = pick_scheduler.DailyPickScheduler()
-    sched._running = True
+    _arm_daily_sched(sched)
     result = sched._tick(reschedule=True)
     assert result["ok"] is False
     assert holds
@@ -210,7 +254,7 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
     )
 
     sched = pick_scheduler.DailyPickScheduler()
-    sched._running = True
+    _arm_daily_sched(sched)
     result = sched._tick(reschedule=True)
     assert result["ok"] is True
     assert scheduled[0][1] == 12_345.0
@@ -245,7 +289,7 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
     pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
-    sched._running = True
+    _arm_daily_sched(sched)
     result = sched._tick(reschedule=False)
     assert holds, result
     assert result.get("scheduler_hold") is True
@@ -288,7 +332,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
     pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
-    sched._running = True
+    _arm_daily_sched(sched)
     first = sched._tick(reschedule=False)
     assert "timed out" in str(first.get("error") or "")
 
@@ -334,7 +378,7 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
     pick_scheduler.DAILY_PICK_TICK_TIMEOUT_SECONDS = 5
 
     sched = pick_scheduler.DailyPickScheduler()
-    sched._running = True
+    _arm_daily_sched(sched)
     result = sched._tick(reschedule=True)
 
     assert "timed out" in str(result.get("error") or "")
