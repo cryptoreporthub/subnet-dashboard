@@ -23,6 +23,11 @@ def test_source_thresholds_cover_all_required_states():
     )["status"] == "stale"
     assert classify_freshness("pump_desk")["status"] == "missing"
     assert classify_freshness("pump_desk", now, degraded=True)["status"] == "degraded"
+    # Shield request-log batches use the same envelope, not a parallel policy.
+    assert classify_freshness(
+        "request_logs", now - timedelta(seconds=300), now=now
+    )["status"] == "fresh"
+    assert classify_freshness("request_logs")["status"] == "missing"
 
 
 def test_archive_message_evidence_is_not_authoritative_for_live_claims():
