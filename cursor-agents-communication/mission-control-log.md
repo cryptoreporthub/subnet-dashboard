@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~18:30Z (main `daa4ce0d`; prod deploy **#1105** in flight)
+**Snapshot:** 2026-08-28 ~18:35Z (main `eb36b0fa`; prod **#1102** live via #1103; fleet bots merged, not yet deployed)
 
 ---
 
@@ -11,7 +11,8 @@
 - **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 draft closed superseded.
 - **#1088 gate live:** `pump_desk_trust.ready=true`, `pump_ladder=ok` on `/api/ops/readiness`. Full desk path (`/api/pump-alerts`) also requires non-placeholder signal snapshots — currently `signal_snapshots_stale=true` (expected until ladder scan refreshes trail rows).
 - **Sentinel soak:** armed 2026-08-28 ~15:54Z → **close #1072** after clean window **2026-08-29 ~15:54Z** (~8:54 AM PDT). Then G0×2 → close **#1058**.
-- **Resolver watch:** post-#1100 abandon wedge; prod resolver `ok`, last tick 16:56Z. Bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if `cycle_timeout_120s` recurs.
+- **Resolver watch:** prod resolver `failing` (persisted, last tick 16:56Z). `/api/liveness` may timeout under load — use `/api/ops/readiness` persisted trackers for soak truth. Bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if `cycle_timeout_120s` recurs.
+- **Fleet queue (2026-08-28):** **#1066** Sentinel → **#1065** Proof Scout → **#1067** Shield → **#1064** Market Desk → **#1093** docs — **all merged** to main `eb36b0fa`. Read-only bots; no new routes. Deploy when convenient.
 
 ## Standing policy
 
@@ -22,7 +23,7 @@
 - **One PR per bot**, branch `<issue>-<bot>`.
 - Canonical refs: `handoffs/bot-fleet-fanout-2026-08-27.md`, `_ci/mission_control_prompt.md`.
 - PR **#1082** merged. Do **not** add files to #1082.
-- Do **not** route leftover PRs **#1064–#1067** or hydrate drafts **#1073 / #1060 / #1061 / #1018**.
+- Do **not** route hydrate drafts **#1073 / #1060 / #1061 / #1018**.
 - Extra docs PR **#1085** is **not** this fan-out.
 - **Pump-alerts preload stays.** No `fly.toml` topology changes.
 
@@ -38,34 +39,34 @@
 | **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
 | **#1081** liveness allowlist | **#1095** daily pick + **#1087** remaining schedulers merged → allowlist `[]` on main `bb142c86` |
-| **#1032** | Via **#1075 + #1077** |
+| **#1064–#1067** fleet bots | **#1066** Sentinel, **#1065** Proof Scout, **#1067** Shield, **#1064** Market Desk merged 2026-08-28. **#1093** docs merged. |
 | **#1029** | Via **#1076 + #1077** |
 
 ---
 
 ## Phase-5 board
 
-Branches off **main `cfa7a5bc`** — last verified 2026-08-28 ~17:10Z.
+Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
-| #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Soak through 2026-08-29 ~15:54Z. |
+| #1072 | Sentinel | **#1089** | **Soak** | Formal close after 2026-08-29 ~15:54Z. |
 | #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. |
 | #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. |
 | #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. |
 | #1081 | Proof Scout | **#1087** | **Merged** | Allowlist `[]`. |
-| — | Sentinel bot | **#1066** | **Rebased** | Read-only health observer; merge queue #1. |
-| — | Proof Scout bot | **#1065** | **Rebased** | Evidence gather; merge queue #2. |
-| — | Shield | **#1067** | **Rebased** | Abuse detection; merge queue #3. |
-| — | Market Desk bot | **#1064** | **Rebased** | Phase-2 specialist; merge queue #4. |
-| — | Docs | **#1093** | **Rebased** | Automation-first wording; merge queue #5. |
+| — | Sentinel bot | **#1066** | **Merged** | Read-only health observer. |
+| — | Proof Scout bot | **#1065** | **Merged** | Evidence gather; classify only. |
+| — | Shield | **#1067** | **Merged** | Abuse detection; approval-gated remediations. |
+| — | Market Desk bot | **#1064** | **Merged** | Phase-2 specialist; explain-only. |
+| — | Docs | **#1093** | **Merged** | Automation-first governance wording. |
 
 ### Remaining (not executed)
 
 - **Sentinel soak → #1072 close** — window ends **2026-08-29 ~15:54Z** (~8:54 AM PDT).
 - **G0 harness ×2 → #1058 formal close** — after soak.
 - **Resolver timeout watch** — bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if 120s cap keeps firing.
-- Leftover fleet PRs **#1064–#1067** rebased 2026-08-28; merge queue active. Hydrate drafts **#1073 / #1060 / #1061** untouched.
+- Hydrate drafts **#1073 / #1060 / #1061** untouched.
 
 ---
 
