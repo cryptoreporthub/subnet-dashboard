@@ -2,7 +2,7 @@
 
 > **Mission Control** is the CEO/orchestrator agent. **Ditto** (GitHub app / heyditto.ai) is the **outside reviewer** — not a fleet bot. **Joshua Riley** (`cryptoreporthub`) is merge/Fly approver. Do not self-merge.
 
-**Snapshot:** 2026-08-28 ~13:05Z (main `bb142c86`)
+**Snapshot:** 2026-08-28 ~15:35Z (main `c82c59fe`; prod worker pid **650** — pre-deploy)
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Item | Resolution |
 |------|------------|
-| **#1072** Sentinel zoom | Closed via **#1089** merged 2026-08-28T06:15:51Z |
+| **#1072** Sentinel zoom | **#1089** merged; **await prod deploy + 24h soak** before formal close |
 | **#1078** Drift/QA liveness | Via **#1086** merged 2026-08-28T07:32:58Z (head `6ee50f4b`) |
 | **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
@@ -36,7 +36,7 @@
 
 ## Phase-5 board
 
-Branches off **main `bb142c86`** — last verified 2026-08-28 ~13:05Z.
+Branches off **main `c82c59fe`** — last verified 2026-08-28 ~15:35Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
@@ -48,7 +48,10 @@ Branches off **main `bb142c86`** — last verified 2026-08-28 ~13:05Z.
 
 ### Remaining (not executed)
 
-- **#1088** Market Desk — DRAFT HOLD; human merge only.
+- **GATE — Fly deploy (Joshua only):** main ahead of prod. Next prod cut bundles **#1089** (Sentinel wedge) + **#1086/#1090** (liveness registry/hour) + **#1095/#1087** (scheduler LivenessTracker, allowlist `[]`) + docs. Trigger via GitHub Actions **Fly Deploy** `workflow_dispatch` on `main` (or `fly-deploy` label on a PR as `cryptoreporthub`). MC does **not** auto-deploy prod.
+- **After deploy:** Sentinel 24h soak on prod (`/health`, `/api/ops/live`, wedge-recurrence window) → then formally close **#1072**. Do not skip even though merge CI was green.
+- **Optional after deploy:** G0 harness ×2 on prod → formal **#1058** close.
+- **#1088** Market Desk — DRAFT HOLD; human merge only; outside MC autonomous-merge policy.
 - Leftover PRs **#1064–#1067** and hydrate drafts untouched.
 
 ---
@@ -69,6 +72,12 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~15:35 UTC — Deploy is the board choke point (Joshua)
+
+- **Gate:** Fly deploy of `main` `c82c59fe` (human `workflow_dispatch` only). Prod still worker pid 650 — bundle is not just #1089.
+- **Then:** Sentinel 24h prod soak → close #1072. Optional G0 ×2 → #1058 formal close.
+- **Parked:** #1088 human-merge-only. MC continues routine merges to main; main/prod drift expected until deploy cut.
 
 ### 2026-08-28 ~13:05 UTC — #1081 liveness complete (#1095 + #1087)
 
