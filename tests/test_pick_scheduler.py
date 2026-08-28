@@ -120,7 +120,8 @@ def test_hour_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
     monkeypatch.setattr(pick_scheduler, "get_tracker", lambda _name: None)
 
     state = pick_scheduler.get_pick_scheduler_state()
-    assert state["hour"]["last_run_ok"] is True
+    assert state["hour"]["status"] == "ok"
+    assert state["hour"]["last_success_at"] is not None
     assert state["hour"]["liveness"]["status"] == "ok"
     assert state["hour"]["liveness"]["source"] == "persisted"
 

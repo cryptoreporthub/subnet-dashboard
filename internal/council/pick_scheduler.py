@@ -346,7 +346,6 @@ class DailyPickScheduler:
 class HourPickScheduler:
     def __init__(self, refresh_minutes: int = HOUR_PICK_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(15, min(int(refresh_minutes), 24 * 60))
-        self._running = False
         self._last_result: Dict[str, Any] = {}
         self.liveness = LivenessTracker(
             name=HOUR_PICK_TRACKER_NAME,
@@ -357,9 +356,8 @@ class HourPickScheduler:
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if _hour is self and self.liveness.snapshot().get("lifecycle") == "started":
                 return {"started": False, "reason": "already running"}
-            self._running = True
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="hour-pick-tick").start()
@@ -368,20 +366,20 @@ class HourPickScheduler:
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._running = False
         cancel_job(HOUR_JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": self._running,
             "refresh_minutes": self.refresh_minutes,
             "last_run_at": snap.get("last_event_at"),
-            "last_run_ok": snap["status"] == "ok",
             "last_run_error": snap.get("last_error"),
             "last_result": self._last_result,
+            "lifecycle": snap.get("lifecycle"),
+            "status": snap.get("status"),
+            "last_success_at": snap.get("last_success_at"),
+            "success_age_seconds": snap.get("success_age_seconds"),
             "liveness": snap,
         }
 
@@ -421,8 +419,9 @@ class HourPickScheduler:
             self._last_result = {
                 k: result.get(k) for k in ("netuid", "final_confidence") if k in result
             }
+            still_scheduled = _hour is self
 
-        if reschedule and self._running:
+        if reschedule and still_scheduled:
             schedule_in_seconds(HOUR_JOB_ID, self._tick, self.refresh_minutes * 60)
         return result
 
@@ -472,12 +471,14 @@ def _hour_state_from_tracker() -> Dict[str, Any]:
     snap = tracker.snapshot()
     last_result = snap.get("last_evidence") if isinstance(snap.get("last_evidence"), dict) else {}
     return {
-        "running": snap["status"] == "ok",
         "refresh_minutes": refresh_m,
         "last_run_at": snap.get("last_event_at"),
-        "last_run_ok": snap["status"] == "ok",
         "last_run_error": snap.get("last_error"),
         "last_result": last_result,
+        "lifecycle": snap.get("lifecycle"),
+        "status": snap.get("status"),
+        "last_success_at": snap.get("last_success_at"),
+        "success_age_seconds": snap.get("success_age_seconds"),
         "liveness": snap,
         "source": snap.get("source"),
     }
@@ -486,7 +487,7 @@ def _hour_state_from_tracker() -> Dict[str, Any]:
 def get_pick_scheduler_state() -> Dict[str, Any]:
     with _lock:
         daily_state = _daily.state() if _daily else {"running": False}
-        hour_local = _hour.state() if _hour and _hour._running else None
+        hour_local = _hour.state() if _hour is not None else None
     hour_state = hour_local if hour_local is not None else _hour_state_from_tracker()
     return {
         "enabled": _enabled(),

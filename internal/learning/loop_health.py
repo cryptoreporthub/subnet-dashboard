@@ -250,13 +250,13 @@ def _resolver_liveness_view() -> Dict[str, Any]:
     from internal.liveness import LivenessTracker, get_tracker
 
     refresh_m = RESOLVER_REFRESH_MINUTES
-    mem_running = False
+    lifecycle_fallback = "stopped"
     try:
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
         state = get_prediction_resolver_scheduler_state()
         refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)
-        mem_running = bool(state.get("running"))
+        lifecycle_fallback = str(state.get("lifecycle") or "stopped")
     except Exception:
         state = {}
 
@@ -273,34 +273,27 @@ def _resolver_liveness_view() -> Dict[str, Any]:
     snap = tracker.snapshot()
     peer = _worker_peer()
     status = str(snap.get("status") or "no_success_yet")
-    lifecycle = str(snap.get("lifecycle") or state.get("lifecycle") or "stopped")
+    lifecycle = str(snap.get("lifecycle") or lifecycle_fallback)
     success_at = snap.get("last_success_at")
     event_at = snap.get("last_event_at")
     success_age = snap.get("success_age_seconds")
-
-    stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
-    tick_fresh = status == "ok" or (
-        success_age is not None and success_age <= stall_after_s
-    )
     warming = status == "no_success_yet" and lifecycle in {
         "starting",
         "started",
         "scheduled",
         "ticking",
     }
-    running = status == "ok" or mem_running
-    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
-        running = (bool(peer.get("alive")) and tick_fresh) or mem_running
 
     return {
         "at": success_at or event_at,
-        "ok": status == "ok",
-        "running": running,
         "lifecycle": lifecycle,
         "warming": warming,
         "refresh_minutes": refresh_m,
         "worker_peer": peer,
         "liveness": snap,
+        "status": status,
+        "last_success_at": success_at,
+        "success_age_seconds": success_age,
     }
 
 
@@ -353,7 +346,11 @@ def build_learning_loop_health(
             if isinstance(file_state, dict):
                 pick_scheduler = {**pick_scheduler, **file_state, "source": "volume"}
     except Exception:
-        pick_scheduler = {"enabled": None, "daily": {"running": False}, "hour": {"running": False}}
+        pick_scheduler = {
+            "enabled": None,
+            "daily": {"running": False},
+            "hour": {"status": "no_success_yet"},
+        }
 
     pred_path = predictions_path or PREDICTIONS_PATH
     if predictions_path:
@@ -433,7 +430,7 @@ def build_learning_loop_health(
             status = "stalled"
     elif resolver.get("warming") and boot_grace:
         status = "warming"
-    elif not resolver.get("running") or tick_at is None:
+    elif resolver.get("status") != "ok" or tick_at is None:
         status = "degraded"
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
@@ -444,13 +441,15 @@ def build_learning_loop_health(
         "pending": pending,
         "last_resolver_tick": resolver.get("at"),
         "resolver": {
-            "running": resolver.get("running"),
             "lifecycle": resolver.get("lifecycle"),
             "warming": resolver.get("warming", False),
-            "last_ok": resolver.get("ok"),
+            "status": resolver.get("status"),
+            "last_success_at": resolver.get("last_success_at"),
+            "success_age_seconds": resolver.get("success_age_seconds"),
             "age_seconds": tick_age_s,
             "refresh_minutes": refresh_m,
             "peer": worker_peer.get("peer"),
+            "liveness": resolver.get("liveness"),
         },
         "worker_peer": worker_peer,
         "watchdog": watchdog,

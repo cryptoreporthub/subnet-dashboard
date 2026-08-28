@@ -146,7 +146,7 @@ def test_published_long_with_day_row_ok(tmp_path, monkeypatch):
 
 
 def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
-    """Web process must not report running=false when sibling worker is alive."""
+    """Web process must see fresh resolver tracker status when worker is alive."""
     monkeypatch.setenv("INLINE_WORKER", "1")
     monkeypatch.setenv("RUN_MODE", "web")
     daily = tmp_path / "daily_picks.json"
@@ -166,13 +166,14 @@ def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
         predictions_path=str(preds),
         soul_path=str(soul),
     )
-    assert report["resolver"]["running"] is True
+    assert report["resolver"]["status"] == "ok"
+    assert report["resolver"]["last_success_at"] is not None
     assert report["worker_peer"]["alive"] is True
     assert report["status"] == "ok"
 
 
-def test_inline_worker_alive_stale_tick_shows_resolver_not_running(tmp_path, monkeypatch):
-    """Stale soul_map tick must not report running=true just because worker heartbeat is alive."""
+def test_inline_worker_alive_stale_tick_shows_resolver_not_ok(tmp_path, monkeypatch):
+    """Stale tracker success must not read ok just because worker heartbeat is alive."""
     from datetime import timedelta
 
     monkeypatch.setenv("INLINE_WORKER", "1")
@@ -186,10 +187,6 @@ def test_inline_worker_alive_stale_tick_shows_resolver_not_running(tmp_path, mon
     _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
     _seed_resolver_liveness(monkeypatch, stale_seconds=3 * 3600)
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {"running": False, "refresh_minutes": 15, "lifecycle": "stopped"},
-    )
     monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
     monkeypatch.setattr(
         "internal.worker_heartbeat.read_heartbeat",
@@ -200,7 +197,7 @@ def test_inline_worker_alive_stale_tick_shows_resolver_not_running(tmp_path, mon
         predictions_path=str(preds),
         soul_path=str(soul),
     )
-    assert report["resolver"]["running"] is False
+    assert report["resolver"]["status"] == "stale"
     assert report["worker_peer"]["alive"] is True
 
 
