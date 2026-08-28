@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~19:14Z (main `24488f4e` #1107 merged; prod recovering; soak **restarted** 18:52:52Z)
+**Snapshot:** 2026-08-28 ~20:10Z (main `cfbe842a`; prod `e86070b` with `RESOLVER_CYCLE_TIMEOUT_SECONDS=180`; #1060 audit **FAIL CLOSED**)
 
 ---
 
@@ -87,6 +87,39 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~20:10 UTC — v5 resume: #1060 G0 audit + #1107 prod verify
+
+**Re-verified GitHub (live):**
+- **main head:** `cfbe842a` (#1109 docs v5 delegation). **#1107** merged `24488f4e` on main.
+- **#1108:** CLOSED, NOT merged. Deploy app **FAILED** run **33201296527** (Deploy Guard ✅, smoke ✅, Deploy app ❌).
+- **#1110:** CLOSED (retry deploy PR). CI: smoke only run **33203323484** ✅ — no Deploy app job on PR checks.
+- **#1060:** STILL OPEN (draft). **#1058 / #1072:** CLOSED on GitHub.
+
+**Secondary — #1107 on prod (live runtime, not file):**
+| Item | Evidence |
+|------|----------|
+| Deployed SHA | `SENTRY_RELEASE=e86070b` via `flyctl ssh console` (2026-08-28 ~19:52Z). Ancestor of main `24488f4e` + `cfbe842a`; **not** identical to main HEAD. |
+| Runtime timeout | `RESOLVER_CYCLE_TIMEOUT_SECONDS=180` via `flyctl ssh console` (confirmed twice). |
+| Fly release | **v2095** complete ~19:21Z; machine `7841024b3712e8` last updated 2026-08-28T19:21:31Z. |
+| #1108 deploy | Did **not** land #1107; prod reached via separate fly-deploy branch commit `e86070b` ("docs: retry fly-deploy #1107 after #1108 Deploy app failure"). |
+
+**Primary — #1060 post-offload G0 audit (prod `https://subnet-dashboard.fly.dev`, Playwright harness):**
+
+| # | Criterion | Verdict | Evidence |
+|---|-----------|---------|----------|
+| 1 | Hero-critical hydration ≤10s (both runs) | **PASS** | `resume-prod-1`: hero **2.422s**, shape HYDRATES_IN_BUDGET, no hero-critical aborts. `resume-prod-2`: hero **7.593s**, same. Artifacts: `artifacts/g0-baseline/resume-prod-{1,2}/`. |
+| 2 | `/health` not 8s TimeoutError cliff | **PARTIAL** | Run-1: p95 **411ms** (136/136 OK). Run-2: p95 **1723ms**, p100 **8078ms** (82/84 OK) — one late-window 8s timeout remains under fan-out. |
+| 3 | daily-pick does not hold handler | **PARTIAL** | G0 probe: run-1 **373ms** status 200; run-2 **1859ms** status 200. Sequential `curl /api/daily-pick` at ~20:00Z **15s timeout** (machine contended post-G0). |
+| 4 | Degraded paths shape-stability | **PASS** | Both runs: final hero `SN107 · Minos`, verdict `sealed`, graded **57**, statsGraded=57 — no placeholder/cold starvation shape. |
+| 5 | Resolver tick advancing (2 spaced prod reads) | **FAIL** | Persisted `/api/liveness` `prediction_resolver.last_success_at` frozen **19:44:45Z** from READ1 (19:50Z) through poll-4 (20:06Z) — **no advance** across 16+ min (15m scheduler should have ticked ~19:59Z). Skip event at **20:01:08Z** (`consecutive_skips=1`) without new `last_success_at`. |
+| 6 | `last_resolver_tick` in `/api/ops/readiness` | **FAIL (stale field)** | `learning_loop_health.last_resolver_tick` stuck **19:16:36Z** while persisted liveness shows **19:44:45Z** — hydration inconsistency; do not use readiness tick alone. |
+
+**Gate verdict: FAIL CLOSED — do not close #1060.** G0 hydration bar improved vs prior #1060 FAIL (hero 12–15s → 2.4s/7.6s), but resolver advancement criterion not met and readiness tick field is stale. **Flag Joshua.**
+
+**Deviations:** None new this session (prior #1110 auto-retry already flagged).
+
+**Soak:** unchanged — restart **18:52:52Z** → #1072 close **2026-08-29 18:52:52Z**. Fleet deploy still held.
 
 ### 2026-08-28 ~19:14 UTC — v5 delegation: #1107 merge + resolver recovery + soak restart
 

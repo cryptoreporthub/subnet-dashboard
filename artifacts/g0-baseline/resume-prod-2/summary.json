@@ -1,0 +1,350 @@
+{
+  "run_id": "resume-prod-2",
+  "base_url": "https://subnet-dashboard.fly.dev",
+  "captured_at": "2026-08-28T19:56:36.261553Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": 7.593,
+  "stats_parsed_at_s": 7.593,
+  "hero_dom_ready_at_s": 7.593,
+  "hydrates_in_budget": true,
+  "starvation_shape": false,
+  "nav_domcontentloaded_s": 6.997,
+  "machine_state": "warm",
+  "machine_probe": {
+    "machine_state": "warm",
+    "probes": [
+      {
+        "latency_ms": 156.69,
+        "status": 200,
+        "ok": true,
+        "error": null
+      },
+      {
+        "latency_ms": 250.34,
+        "status": 200,
+        "ok": true,
+        "error": null
+      },
+      {
+        "latency_ms": 133.04,
+        "status": 200,
+        "ok": true,
+        "error": null
+      }
+    ],
+    "p50_ms": 156.69,
+    "max_ms": 250.34
+  },
+  "document_server_timing": "app;dur=72.5",
+  "critical_path": {
+    "marks": {
+      "html-parse": 261.3,
+      "hydrate-start": 5166.8,
+      "hydrate-end": 7038.6
+    },
+    "measures": {
+      "hydrate": {
+        "startTime": 5166.8,
+        "duration": 1871.8
+      }
+    },
+    "first_script": {
+      "name": "https://subnet-dashboard.fly.dev/static/js/dev_pulse.js?v=3dd1605a",
+      "startTime": 303.30000000074506,
+      "responseEnd": 3690.39999999851,
+      "duration": 3387.099999997765
+    },
+    "script_wall_before_dcl": {
+      "name": "https://subnet-dashboard.fly.dev/static/js/weekly_letter.js?v=3dd1605a",
+      "startTime": 321.69999999925494,
+      "responseEnd": 6987.5,
+      "duration": 6665.800000000745
+    },
+    "dom_interactive": 5165.1,
+    "dom_content_loaded": 6993.1,
+    "load_event_end": 6993.5,
+    "html_ttfb": 255.6
+  },
+  "hero_api_timing": {
+    "learning_stats": {
+      "path": "/api/learning/stats",
+      "start_s": 5.511,
+      "end_s": 7.356,
+      "duration_ms": 1845.0,
+      "status": 200
+    },
+    "daily_pick": {
+      "path": "/api/daily-pick",
+      "start_s": 5.511,
+      "end_s": 7.37,
+      "duration_ms": 1859.0,
+      "status": 200
+    }
+  },
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 5165.099999997765,
+    "domContentLoadedEventEnd": 6993.099999997765,
+    "loadEventEnd": 6993.5,
+    "responseStart": 255.59999999776483,
+    "responseEnd": 321.30000000074506,
+    "duration": 6993.5,
+    "transferSize": 28958,
+    "encodedBodySize": 28658
+  },
+  "final_hero": {
+    "title": "SN107 \u00b7 Minos",
+    "verdict": "sealed",
+    "warming": false,
+    "hydrate": "0",
+    "graded": "57",
+    "accSub": "Last 57 graded: 51% directionally right",
+    "badgeText": "SEALED",
+    "placeholderTitle": false,
+    "cold": false,
+    "statsParsed": true,
+    "statsGraded": 57,
+    "needsHydrate": false,
+    "heroPresent": true,
+    "t_s": 50.241
+  },
+  "aborted_endpoints": [
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 7.39,
+      "end_s": 19.368,
+      "duration_ms": 11978.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/market-drivers",
+      "class": "secondary",
+      "start_s": 7.39,
+      "end_s": 19.381,
+      "duration_ms": 11991.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/whales/flow-signals",
+      "class": "secondary",
+      "start_s": 7.391,
+      "end_s": 13.384,
+      "duration_ms": 5993.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/dev-radar",
+      "class": "secondary",
+      "start_s": 7.392,
+      "end_s": 19.384,
+      "duration_ms": 11992.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/graph",
+      "class": "secondary",
+      "start_s": 7.392,
+      "end_s": 19.384,
+      "duration_ms": 11992.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/ops/evidence",
+      "class": "secondary",
+      "start_s": 7.392,
+      "end_s": 19.388,
+      "duration_ms": 11996.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 7.392,
+      "end_s": 22.389,
+      "duration_ms": 14997.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 7.4,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel",
+      "class": "secondary",
+      "start_s": 19.69,
+      "end_s": 37.69,
+      "duration_ms": 18000.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/ops/evidence",
+      "class": "secondary",
+      "start_s": 19.714,
+      "end_s": 35.715,
+      "duration_ms": 16001.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 27.541,
+      "end_s": 39.534,
+      "duration_ms": 11993.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel",
+      "class": "secondary",
+      "start_s": 27.541,
+      "end_s": 39.54,
+      "duration_ms": 11999.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 49.057,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/callers",
+      "class": "secondary",
+      "start_s": 49.489,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/divergence",
+      "class": "secondary",
+      "start_s": 49.489,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/message-intel/authors",
+      "class": "secondary",
+      "start_s": 49.489,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    }
+  ],
+  "aborted_hero_critical": [],
+  "health": {
+    "n": 84,
+    "ok": 82,
+    "errors": 2,
+    "p50_ms": 147.43,
+    "p95_ms": 1722.82,
+    "p100_ms": 8077.75,
+    "min_ms": 113.3,
+    "mean_ms": 527.22
+  },
+  "health_p95_over_budget": true,
+  "max_concurrent_inflight": 45,
+  "max_concurrent_inflight_api": 25,
+  "pending_api_at_45s": [
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 7.4,
+      "end_s": null
+    },
+    {
+      "path": "/api/message-intel",
+      "class": "secondary",
+      "start_s": 38.291,
+      "end_s": 47.966
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 39.709,
+      "end_s": 47.857
+    },
+    {
+      "path": "/api/message-intel",
+      "class": "secondary",
+      "start_s": 39.922,
+      "end_s": 49.746
+    }
+  ],
+  "still_open_at_close": [
+    {
+      "path": "/api/cockpit/stream",
+      "start_s": 7.4
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "start_s": 49.057
+    },
+    {
+      "path": "/api/message-intel/callers",
+      "start_s": 49.489
+    },
+    {
+      "path": "/api/message-intel/divergence",
+      "start_s": 49.489
+    },
+    {
+      "path": "/api/message-intel/authors",
+      "start_s": 49.489
+    }
+  ],
+  "api_request_count": 53,
+  "homepage_curl_sanity": {
+    "status": 200,
+    "ttfb_ms": 118.2,
+    "error": null,
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "artifacts/g0-baseline/resume-prod-2/session.har",
+    "screenshot_t10s": "artifacts/g0-baseline/resume-prod-2/hero_t10s.png",
+    "screenshot_t45s": "artifacts/g0-baseline/resume-prod-2/hero_t45s.png"
+  }
+}
