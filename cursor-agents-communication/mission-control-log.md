@@ -70,7 +70,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
-### 2026-08-28 ~2:22am PT / 09:22Z — Mirror gap catch-up
+### 2026-08-28 ~12:50 UTC — Composer takeover (#1081)
+
+- **Policy:** Joshua not required for routine merges; Composer verifies no conflict + CI green.
+- **Done:** `DailyPickScheduler` migrated to `LivenessTracker`; `pick_scheduler.py` removed from liveness allowlist (8→7 modules).
+- **Tests:** `test_no_handrolled_liveness`, `test_pick_scheduler`, contract guard — green locally.
+- **Branch:** `cursor/1081-daily-pick-liveness-f603` — PR pending merge (main is branch-protected).
+- **Next:** merge #1081 PR → Luna spot-check → post-deploy G0 ×2 if Joshua wants #1058 formally closed on issue.
 
 - Ditto MCP has all beats; this file was stale after Step 0 (#1092). Catch-up append per Joshua: are all MC messages in the shared repo?
 - Board tables refreshed to main `98677e74`.

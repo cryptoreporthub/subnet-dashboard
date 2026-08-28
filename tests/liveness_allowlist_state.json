@@ -1,7 +1,6 @@
 [
   "internal/calibration/scheduler.py",
   "internal/council/pick_audit_scheduler.py",
-  "internal/council/pick_scheduler.py",
   "internal/council/score_snapshots.py",
   "internal/council/selector_scheduler.py",
   "internal/indicators/indicator_scheduler.py",
