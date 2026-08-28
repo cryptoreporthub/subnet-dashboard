@@ -244,87 +244,63 @@ def _worker_peer() -> Dict[str, Any]:
     return get_worker_peer()
 
 
-def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
-    """Prefer soul_map cycle summary — survives split web/worker processes."""
-    candidates: List[tuple] = []
-    state: Dict[str, Any] = {}
+def _resolver_liveness_view() -> Dict[str, Any]:
+    """Resolver health from the LivenessTracker registry (persisted worker truth)."""
+    from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
+    from internal.liveness import LivenessTracker, get_tracker
+
+    refresh_m = RESOLVER_REFRESH_MINUTES
+    mem_running = False
     try:
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
         state = get_prediction_resolver_scheduler_state()
-        mem_at = state.get("last_run_at")
-        if mem_at:
-            candidates.append(
-                (
-                    _parse_iso(mem_at) or datetime.min.replace(tzinfo=timezone.utc),
-                    mem_at,
-                    state.get("last_run_ok"),
-                    bool(state.get("running")),
-                )
-            )
+        refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)
+        mem_running = bool(state.get("running"))
     except Exception:
         state = {}
-    try:
-        soul = _load_raw(soul_path or SOUL_MAP_PATH)
-        sched = soul.get("prediction_resolver_scheduler") or {}
-        if isinstance(sched, dict):
-            last = sched.get("last_cycle") or {}
-            if isinstance(last, dict) and last.get("run_at"):
-                run_at = last.get("run_at")
-                candidates.append(
-                    (
-                        _parse_iso(run_at) or datetime.min.replace(tzinfo=timezone.utc),
-                        run_at,
-                        last.get("ok"),
-                        False,
-                    )
-                )
-    except Exception:
-        pass
-    tick, ok, mem_running = None, None, False
-    lifecycle = state.get("lifecycle") or "stopped"
-    if candidates:
-        candidates.sort(key=lambda row: row[0], reverse=True)
-        _, tick, ok, mem_running = candidates[0]
-    try:
-        soul = _load_raw(soul_path or SOUL_MAP_PATH)
-        sched = soul.get("prediction_resolver_scheduler") or {}
-        if isinstance(sched, dict):
-            if sched.get("lifecycle"):
-                lifecycle = sched.get("lifecycle")
-            last = sched.get("last_cycle") or {}
-            if isinstance(last, dict) and last.get("lifecycle"):
-                lifecycle = last.get("lifecycle")
-    except Exception:
-        pass
-    refresh_m = RESOLVER_REFRESH_MINUTES
-    try:
-        refresh_m = int(state.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES)
-    except Exception:
-        pass
-    tick_age_s: Optional[float] = None
-    if tick:
-        tick_dt = _parse_iso(tick)
-        if tick_dt is not None:
-            tick_age_s = max(0.0, (_utcnow() - tick_dt).total_seconds())
-    stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
-    tick_fresh = tick_age_s is not None and tick_age_s <= stall_after_s
+
+    interval_s = max(60, refresh_m * 60)
+    tracker = get_tracker("prediction_resolver")
+    if tracker is None:
+        tracker = LivenessTracker(
+            name="prediction_resolver",
+            interval_seconds=interval_s,
+            staleness_factor=2,
+            persist=True,
+        )
+
+    snap = tracker.snapshot()
     peer = _worker_peer()
-    warming = lifecycle in {"starting", "scheduled", "ticking"} and tick is None
-    running = bool(mem_running) or (
-        lifecycle in {"starting", "scheduled", "ticking", "running"} and (tick_fresh or warming)
+    status = str(snap.get("status") or "no_success_yet")
+    lifecycle = str(snap.get("lifecycle") or state.get("lifecycle") or "stopped")
+    success_at = snap.get("last_success_at")
+    event_at = snap.get("last_event_at")
+    success_age = snap.get("success_age_seconds")
+
+    stall_after_s = refresh_m * _STALL_MULTIPLIER * 60
+    tick_fresh = status == "ok" or (
+        success_age is not None and success_age <= stall_after_s
     )
+    warming = status == "no_success_yet" and lifecycle in {
+        "starting",
+        "started",
+        "scheduled",
+        "ticking",
+    }
+    running = status == "ok" or mem_running
     if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
-        # Worker heartbeat alone must not mask a stale resolver tick on web.
-        running = (bool(peer.get("alive")) and tick_fresh) or bool(mem_running)
+        running = (bool(peer.get("alive")) and tick_fresh) or mem_running
+
     return {
-        "at": tick,
-        "ok": ok,
+        "at": success_at or event_at,
+        "ok": status == "ok",
         "running": running,
         "lifecycle": lifecycle,
         "warming": warming,
         "refresh_minutes": refresh_m,
         "worker_peer": peer,
+        "liveness": snap,
     }
 
 
@@ -416,7 +392,7 @@ def build_learning_loop_health(
         "netuid": daily.get("pick_netuid") if is_published_long else None,
     }
 
-    resolver = _timed_health_stage("resolver_tick", _last_resolver_tick, soul_path)
+    resolver = _timed_health_stage("resolver_tick", _resolver_liveness_view)
     tick_at = _parse_iso(resolver.get("at"))
     refresh_m = max(1, int(resolver.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES))
     stall_after_s = refresh_m * _STALL_MULTIPLIER * 60

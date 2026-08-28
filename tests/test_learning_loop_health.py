@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,6 +20,22 @@ def _today() -> str:
 def _write_json(path: Path, payload) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _seed_resolver_liveness(monkeypatch, *, fresh: bool = True, stale_seconds: float = 0.0):
+    """Install a prediction_resolver tracker for loop_health registry lookup."""
+    from internal.liveness import LivenessTracker
+
+    tracker = LivenessTracker(name="prediction_resolver", interval_seconds=900, persist=False)
+    if fresh:
+        tracker.record_success(evidence={"resolved_now": 0})
+        if stale_seconds > 0:
+            tracker._last_success_epoch = time.time() - stale_seconds
+    monkeypatch.setattr(
+        "internal.liveness.get_tracker",
+        lambda name: tracker if name == "prediction_resolver" else None,
+    )
+    return tracker
 
 
 def test_api_learning_health_shape():
@@ -54,15 +71,7 @@ def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):
         ],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
         predictions_path=str(preds),
@@ -89,15 +98,7 @@ def test_hold_day_does_not_require_ledger(tmp_path, monkeypatch):
         ],
     )
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
         predictions_path=str(preds),
@@ -131,15 +132,7 @@ def test_published_long_with_day_row_ok(tmp_path, monkeypatch):
             "stats": {"pending": 1},
         },
     )
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
         predictions_path=str(preds),
@@ -162,23 +155,7 @@ def test_inline_worker_alive_shows_resolver_running(tmp_path, monkeypatch):
     tick = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
-    _write_json(
-        soul,
-        {
-            "prediction_resolver_scheduler": {
-                "last_cycle": {"run_at": tick, "ok": True, "pending": 0},
-            }
-        },
-    )
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": False,
-            "last_run_at": None,
-            "last_run_ok": None,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
     monkeypatch.setattr(
         "internal.worker_heartbeat.read_heartbeat",
@@ -208,18 +185,10 @@ def test_inline_worker_alive_stale_tick_shows_resolver_not_running(tmp_path, mon
     fresh_hb = now.isoformat().replace("+00:00", "Z")
     _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
-    _write_json(
-        soul,
-        {
-            "prediction_resolver_scheduler": {
-                "last_cycle": {"run_at": old_tick, "ok": True, "lifecycle": "running"},
-                "lifecycle": "running",
-            }
-        },
-    )
+    _seed_resolver_liveness(monkeypatch, stale_seconds=3 * 3600)
     monkeypatch.setattr(
         "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {"running": False, "last_run_at": None, "refresh_minutes": 15, "lifecycle": "stopped"},
+        lambda: {"running": False, "refresh_minutes": 15, "lifecycle": "stopped"},
     )
     monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
     monkeypatch.setattr(
@@ -262,15 +231,7 @@ def test_young_pending_not_stalled_without_watchdog(tmp_path, monkeypatch):
             "stats": {"pending": 1},
         },
     )
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": created,
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
         predictions_path=str(preds),
@@ -312,14 +273,7 @@ def test_restart_with_stale_tick_degraded_not_stalled(tmp_path, monkeypatch):
             "stats": {"pending": 1},
         },
     )
-    _write_json(
-        soul,
-        {"prediction_resolver_scheduler": {"last_cycle": {"run_at": old_tick, "ok": True}}},
-    )
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {"running": False, "last_run_at": None, "refresh_minutes": 15},
-    )
+    _seed_resolver_liveness(monkeypatch, stale_seconds=3 * 3600)
     monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
     monkeypatch.setattr(
         "internal.worker_heartbeat.read_heartbeat",
@@ -351,15 +305,7 @@ def test_snapshot_age_from_soul_map_when_file_missing(tmp_path, monkeypatch):
     preds = tmp_path / "predictions.json"
     _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": tick,
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     report = build_learning_loop_health(
         daily_picks_path=str(daily),
         predictions_path=str(preds),
@@ -391,15 +337,7 @@ def test_snapshot_stale_degraded_not_stalled(tmp_path, monkeypatch):
     _write_json(daily, [{"date": _today(), "action": "HOLD", "pick": None}])
     _write_json(preds, {"predictions": [], "resolved": [], "stats": {"pending": 0}})
     _write_json(soul, {"score_snapshot_scheduler": {"last_cycle": {}}})
-    monkeypatch.setattr(
-        "internal.council.resolver_scheduler.get_prediction_resolver_scheduler_state",
-        lambda: {
-            "running": True,
-            "last_run_at": tick,
-            "last_run_ok": True,
-            "refresh_minutes": 15,
-        },
-    )
+    _seed_resolver_liveness(monkeypatch)
     monkeypatch.setattr("internal.worker_heartbeat.is_alive", lambda max_age_seconds=180: True)
     monkeypatch.setattr(
         "internal.worker_heartbeat.read_heartbeat",

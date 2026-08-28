@@ -16,8 +16,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker, get_tracker
 
 logger = logging.getLogger(__name__)
+
+HOUR_PICK_TRACKER_NAME = "hour_pick"
 
 DAILY_JOB_ID = "daily-pick-scheduler"
 HOUR_JOB_ID = "hour-pick-scheduler"
@@ -344,16 +347,20 @@ class HourPickScheduler:
     def __init__(self, refresh_minutes: int = HOUR_PICK_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(15, min(int(refresh_minutes), 24 * 60))
         self._running = False
-        self._last_run_at: Optional[str] = None
-        self._last_ok: Optional[bool] = None
-        self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
+        self.liveness = LivenessTracker(
+            name=HOUR_PICK_TRACKER_NAME,
+            interval_seconds=self.refresh_minutes * 60,
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
             if self._running:
                 return {"started": False, "reason": "already running"}
             self._running = True
+        self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="hour-pick-tick").start()
         else:
@@ -367,13 +374,15 @@ class HourPickScheduler:
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
             "running": self._running,
             "refresh_minutes": self.refresh_minutes,
-            "last_run_at": self._last_run_at,
-            "last_run_ok": self._last_ok,
-            "last_run_error": self._last_error,
+            "last_run_at": snap.get("last_event_at"),
+            "last_run_ok": snap["status"] == "ok",
+            "last_run_error": snap.get("last_error"),
             "last_result": self._last_result,
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -397,14 +406,18 @@ class HourPickScheduler:
                 result["netuid"] = sn.get("netuid")
             if isinstance(pick, dict):
                 result["final_confidence"] = pick.get("final_confidence")
+            evidence: Dict[str, Any] = {"op": "hour_pick"}
+            if result.get("netuid") is not None:
+                evidence["netuid"] = result["netuid"]
+            else:
+                evidence["noop"] = True
+            self.liveness.record_success(evidence=evidence)
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("hour pick scheduler tick failed: %s", exc)
 
         with _lock:
-            self._last_run_at = result["run_at"]
-            self._last_ok = result.get("ok")
-            self._last_error = result.get("error")
             self._last_result = {
                 k: result.get(k) for k in ("netuid", "final_confidence") if k in result
             }
@@ -445,10 +458,38 @@ def stop_pick_schedulers() -> Dict[str, Any]:
     return out or {"stopped": False, "reason": "not running"}
 
 
+def _hour_state_from_tracker() -> Dict[str, Any]:
+    """Persisted worker truth when web has no in-process hour scheduler."""
+    refresh_m = max(15, min(HOUR_PICK_REFRESH_MINUTES, 24 * 60))
+    tracker = get_tracker(HOUR_PICK_TRACKER_NAME)
+    if tracker is None:
+        tracker = LivenessTracker(
+            name=HOUR_PICK_TRACKER_NAME,
+            interval_seconds=refresh_m * 60,
+            staleness_factor=2,
+            persist=True,
+        )
+    snap = tracker.snapshot()
+    last_result = snap.get("last_evidence") if isinstance(snap.get("last_evidence"), dict) else {}
+    return {
+        "running": snap["status"] == "ok",
+        "refresh_minutes": refresh_m,
+        "last_run_at": snap.get("last_event_at"),
+        "last_run_ok": snap["status"] == "ok",
+        "last_run_error": snap.get("last_error"),
+        "last_result": last_result,
+        "liveness": snap,
+        "source": snap.get("source"),
+    }
+
+
 def get_pick_scheduler_state() -> Dict[str, Any]:
     with _lock:
-        return {
-            "enabled": _enabled(),
-            "daily": _daily.state() if _daily else {"running": False},
-            "hour": _hour.state() if _hour else {"running": False},
-        }
+        daily_state = _daily.state() if _daily else {"running": False}
+        hour_local = _hour.state() if _hour and _hour._running else None
+    hour_state = hour_local if hour_local is not None else _hour_state_from_tracker()
+    return {
+        "enabled": _enabled(),
+        "daily": daily_state,
+        "hour": hour_state,
+    }
