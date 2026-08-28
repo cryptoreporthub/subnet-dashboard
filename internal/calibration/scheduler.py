@@ -14,7 +14,7 @@ from internal.calibration.pipeline import (
 from internal.liveness import LivenessTracker
 
 _AUTO_ON = frozenset({"1", "true", "on", "yes"})
-_last_hook: Dict[str, Any] = {"last_run_at": None, "triggered": False, "reason": "never_run"}
+_last_hook: Dict[str, Any] = {"evaluated_at": None, "triggered": False, "reason": "never_run"}
 _HOOK_INTERVAL_SECONDS = max(60, int(os.environ.get("RESOLVER_REFRESH_MINUTES", "15")) * 60)
 _liveness: Optional[LivenessTracker] = None
 
@@ -59,7 +59,7 @@ def maybe_trigger_auto_retrain(*, resolved_now: int = 0) -> Dict[str, Any]:
     soul_path = os.environ.get("SOUL_MAP_PATH", "data/soul_map.json")
     tracker = get_liveness()
     result: Dict[str, Any] = {
-        "last_run_at": run_at,
+        "evaluated_at": run_at,
         "triggered": False,
         "enabled": auto_retrain_enabled(),
         "resolved_this_cycle": resolved_now,

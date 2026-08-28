@@ -12,21 +12,45 @@ def _make_scheduler(**kwargs):
     return sched.SelectorScheduler(refresh_minutes=kwargs.get("refresh_minutes", 60))
 
 
-def test_tracker_is_liveness_compliant():
-    assert_liveness_compliant(lambda: _make_scheduler().liveness)
+def test_tracker_is_liveness_compliant(monkeypatch, tmp_path):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+
+    def factory():
+        return _make_scheduler().liveness
+
+    assert_liveness_compliant(factory)
 
 
-def test_state_last_run_ok_derived_from_tracker():
+def test_state_exposes_liveness_without_last_run_ok():
     scheduler = _make_scheduler()
-    assert scheduler.state()["last_run_ok"] is not True
+    state = scheduler.state()
+    assert "last_run_ok" not in state
+    assert state["liveness"]["status"] != "ok"
 
     scheduler.liveness.record_success(evidence={"decisions": 1, "op": "daily_rotation"})
-    assert scheduler.state()["last_run_ok"] is True
+    state = scheduler.state()
+    assert "last_run_ok" not in state
+    assert state["liveness"]["status"] == "ok"
+
+
+def test_running_derived_from_tracker_lifecycle(monkeypatch, tmp_path):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    scheduler = _make_scheduler()
+    assert scheduler.state()["running"] is False
+    scheduler.liveness.start()
+    assert scheduler.state()["running"] is True
 
 
 def test_success_tick_records_tracker_success():
+    sched.stop_selector_scheduler()
     scheduler = _make_scheduler()
-    scheduler._active = True
+    with sched._lock:
+        sched._scheduler = scheduler
+    scheduler.liveness.start()
 
     rotation = {
         "daily_output": {"decisions": [{"subnet_id": 1}]},
@@ -44,13 +68,17 @@ def test_success_tick_records_tracker_success():
     assert result["ok"] is True
     assert result["decisions"] == 1
     assert scheduler.liveness.snapshot()["status"] == "ok"
-    assert scheduler.state()["last_run_ok"] is True
+    assert "last_run_ok" not in scheduler.state()
     schedule.assert_called_once()
+    sched.stop_selector_scheduler()
 
 
 def test_failure_tick_records_tracker_failure():
+    sched.stop_selector_scheduler()
     scheduler = _make_scheduler()
-    scheduler._active = True
+    with sched._lock:
+        sched._scheduler = scheduler
+    scheduler.liveness.start()
 
     with patch("internal.council.orchestrator.Orchestrator") as orch_cls:
         orch_cls.return_value.run_daily_rotation.side_effect = RuntimeError("boom")
@@ -60,11 +88,14 @@ def test_failure_tick_records_tracker_failure():
     assert result["ok"] is False
     assert "boom" in result["error"]
     assert scheduler.liveness.snapshot()["consecutive_failures"] >= 1
-    assert scheduler.state()["last_run_ok"] is not True
+    assert "last_run_ok" not in scheduler.state()
     schedule.assert_called_once()
+    sched.stop_selector_scheduler()
 
 
 def test_stopped_state_uses_registry_liveness():
+    sched.stop_selector_scheduler()
     state = sched.get_selector_scheduler_state()
     assert state["running"] is False
-    assert state.get("last_run_ok") is not True
+    assert "last_run_ok" not in state
+    assert "liveness" in state

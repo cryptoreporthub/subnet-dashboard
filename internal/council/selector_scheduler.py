@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import os
 import threading
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -29,8 +28,6 @@ def _now_iso() -> str:
 class SelectorScheduler:
     def __init__(self, refresh_minutes: int = SELECTOR_REFRESH_MINUTES):
         self.refresh_minutes = refresh_minutes
-        self._active = False
-        self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self.liveness = LivenessTracker(
             name="selector_rotation",
@@ -39,11 +36,16 @@ class SelectorScheduler:
             persist=True,
         )
 
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
+    def _is_registered(self) -> bool:
         with _lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
+            return _scheduler is self
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True).start()
@@ -52,18 +54,14 @@ class SelectorScheduler:
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": self._active,
+            "running": snap.get("lifecycle") == "started",
             "refresh_minutes": self.refresh_minutes,
-            "last_run_at": self._last_tick_at,
-            "last_run_ok": snap["status"] == "ok",
             "last_run_error": self._last_error,
             "liveness": snap,
         }
@@ -72,9 +70,8 @@ class SelectorScheduler:
         return self._tick()
 
     def _schedule(self, minutes: int) -> None:
-        with _lock:
-            if not self._active:
-                return
+        if not self._is_registered():
+            return
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
@@ -117,10 +114,9 @@ class SelectorScheduler:
             logger.warning("Selector rotation tick failed: %s", exc)
 
         with _lock:
-            self._last_tick_at = result["run_at"]
             self._last_error = result.get("error")
 
-        if self._active:
+        if self._is_registered():
             self._schedule(self.refresh_minutes)
         return result
 
@@ -128,7 +124,11 @@ class SelectorScheduler:
 def start_selector_scheduler(immediate: bool = False) -> Dict[str, Any]:
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = SelectorScheduler()
     return _scheduler.start(immediate=immediate)
 
@@ -144,26 +144,21 @@ def stop_selector_scheduler() -> Dict[str, Any]:
     return sched.stop()
 
 
-def _stopped_liveness_ok() -> Optional[bool]:
-    try:
-        from internal.liveness import get_tracker
-
-        t = get_tracker("selector_rotation")
-        if t is not None:
-            return t.snapshot()["status"] == "ok"
-    except Exception:
-        pass
-    return None
-
-
 def get_selector_scheduler_state() -> Dict[str, Any]:
     with _lock:
         if _scheduler is None:
+            snap: Dict[str, Any] = {}
+            try:
+                from internal.liveness import get_tracker
+
+                t = get_tracker("selector_rotation")
+                if t is not None:
+                    snap = t.snapshot()
+            except Exception:
+                pass
             return {
                 "running": False,
                 "refresh_minutes": SELECTOR_REFRESH_MINUTES,
-                "last_run_at": None,
-                "last_run_ok": _stopped_liveness_ok(),
-                "last_run_error": None,
+                "liveness": snap,
             }
         return _scheduler.state()
