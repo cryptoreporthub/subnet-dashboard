@@ -43,6 +43,8 @@ primary_region = "sjc"
   # SS-TG W6: Bot API /summary in group — separate from Telethon user-session listener.
   TELEGRAM_SUMMARY_BOT = "on"
   RESOLVER_REFRESH_MINUTES = "15"
+  # 2026-08-28: prod stall ~16:56Z — cycle_timeout_120s wedge recurring; bump cap.
+  RESOLVER_CYCLE_TIMEOUT_SECONDS = "180"
   # Defer heavy resolver tick on boot — immediate=True wedges single-worker Fly.
   RESOLVER_BOOT_IMMEDIATE = "off"
   BOOT_BACKGROUND_SYNC_IMMEDIATE = "off"
