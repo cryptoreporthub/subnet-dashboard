@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~21:39Z (main `cfbe842a`; **intended prod** `e86070b` time-boxed; worker `/proc` timeout **180**; #1060 still **FAIL CLOSED**)
+**Snapshot:** 2026-08-28 ~22:04Z (main `cfbe842a`; intended prod `e86070b` **PROVISIONAL** hold to 2026-08-29 18:52:52Z; #1060 FAIL CLOSED open)
 
 ---
 
@@ -10,7 +10,7 @@
 
 - **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 closed superseded.
 - **#1107:** `RESOLVER_CYCLE_TIMEOUT_SECONDS` 120→180 merged `24488f4e`. Deploy **#1108** fly-deploy labeled.
-- **Prod×main (2026-08-28 21:39Z, option b):** intended prod SHA **`e86070b`** (tree-identical to `#1110` `57a7b18f`; parent `cfbe842a`). Divergence is **intentional and time-boxed** until soak end **2026-08-29 18:52:52Z** (next authorized main deploy). Do **not** promote `cfbe842a` now.
+- **Prod×main (2026-08-28 21:39Z, option b, PROVISIONAL):** intended prod SHA **`e86070b`**. No named human approver on the hold — **not** “approved.” Expiry **2026-08-29 18:52:52Z**. Emergency human-approved rollback/safety still allowed. Do not reconcile-flip for the docs-only SHA delta.
 - **Resolver recovery (18:50Z):** persisted stall from 16:56Z cleared. `prediction_resolver=ok`, `consecutive_failures=0`. Ops truth = persisted `/api/liveness` + `/api/ops/readiness` (ignore web `/api/learning/health`).
 - **Soak RESTARTED:** 2026-08-28 **18:52:52Z** (first verified clean read post-recovery). **#1072** closes **2026-08-29 18:52:52Z** (~11:52 AM PDT). Prior soak from 15:54Z contaminated (resolver froze 16:56Z).
 - **Fleet deploy HOLD:** #1064–#1067 + #1093 on main, **not deployed**. Cut after #1072 closes.
@@ -88,6 +88,81 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~22:04 UTC — cadence vs persistence (read-only probes)
+
+**Incident wording (corrected):** Evidence proves a **post-deployment 15-minute freshness-contract violation**. It does **not** yet fully establish whether the worker scheduler fails to execute vs the health/persistence path fails to publish. See probes.
+
+**No merge / no deploy / no timeout bump / no issue close.**
+
+**Non-main prod hold (fill):**
+| Field | Value |
+|-------|--------|
+| approver | **___ none named** |
+| timestamp | n/a |
+| approved SHA | `e86070b` |
+| reason | option-b docs-only delta after #1108 fail; soak time-box |
+| expiry | **2026-08-29 18:52:52Z** |
+| label | **PROVISIONAL** (not approved) |
+| emergency | hold does **not** block human-approved rollback/safety |
+
+**Deploy truth:** Fly Deploy run **[33203293244](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/33203293244)** (`fly.yml` pull_request, **Success**, Deploy app 3m 34s, checkout **`e86070b`**, triggered 2026-08-28 19:18Z). Prior “gh 401” was **local gh auth**, not a GitHub evidence gap.
+
+**`/proc` timeout (single-agent; MC independent verify: NO):**
+- Machine `7841024b3712e8`; worker pid **649** `python -m internal.worker`; web pid **643** `python scripts/run_web_with_guard.py`; start **19:21:31Z**
+- `RESOLVER_CYCLE_TIMEOUT_SECONDS=180` from `/proc/{649,643}/environ` at **2026-08-28T21:33:30Z** (prior session). Confidence: **high, SINGLE-SOURCE**.
+
+#### Probe zero — is `last_resolver_tick` a dead metric?
+
+**Not dead.** JSON field **is written** on every `build_learning_loop_health()`:
+
+| Site | Role |
+|------|------|
+| `internal/learning/loop_health.py:457` | **WRITE** of response key `last_resolver_tick` ← `resolver.get("at")` |
+| `internal/learning/loop_health.py:303` | **WRITE** of `at` ← `success_at or event_at` from LivenessTracker snapshot |
+| `internal/liveness.py:293` `record_success` / `:366` `_save` | **WRITE** of persisted `soul_map.json` `liveness.prediction_resolver` |
+
+**Not** schema-only. Conditions: `_resolver_liveness_view()` (`loop_health.py:247`) snapshots `get_tracker("prediction_resolver")` then **weak-merges** persisted registry only if in-process status is `no_success_yet`/`failing` or `last_success_at` is missing — **not** if in-process is merely stale. `build_liveness_registry` (`liveness.py:141`) **does** prefer fresher persisted timestamps.
+
+Related (not “no write”): `def _last_resolver_tick` **does not exist**. Callers `internal/learning/routes.py:1285`, `internal/council/resolver_scheduler.py:737`, `internal/loop_stall_guard.py:87` import it and **except → fallback**. That path is dead; the **JSON field** still writes via `_resolver_liveness_view`.
+
+**Do not merge this field into #1060.** #1060 stays hydration + **liveness last_success advancing**. Frozen `last_resolver_tick` is a **projection split**, not a close/fail of G0 hydration.
+
+#### Probe one — worker cadence (third `last_success`)
+
+Worker identity (volume heartbeat **21:57:57Z**): pid **649**, `run_mode=worker`. Process start **19:21:31Z**. Scheduler code: `_tick` logs `tick_start`; skip `heavy_job_busy`; success → `record_success`; else `record_failure` / `record_skip` (`resolver_scheduler.py:294-343`). Refresh 15 min; timeout 180s loaded.
+
+**`last_success_at` values (do not call these a “tick delta”):**
+
+| # | last_success_at | last_success interval vs prior | notes |
+|---|-----------------|--------------------------------|-------|
+| 1 | 19:44:45.843Z | — | first post-deploy success observed |
+| 2 | 21:07:21.800Z | **82.6 min** | one interval; not a trend |
+| 3 | **21:42:08.944Z** | **34.8 min** | third success; persist `updated_at` 21:42:12Z; HTTP `/api/liveness` 21:58:25Z matches, `source=persisted` |
+
+Both observed last_success **intervals** (82.6 min, 34.8 min) **exceed 15 min**. n=2 intervals from n=3 successes — repeating vs one-off is **better supported than n=1**, not a full n≥3 interval series.
+
+**Cycle execution between 21:59:58Z and 22:02:47Z (HTTP `/api/liveness`):** last_success **unchanged** 21:42:08Z; status `ok` → **`failing`** (`status_reason`: last tick raised); `consecutive_failures=1`, skips=0. Persist at 22:03:51Z: `last_error=cycle_timeout_180s`, `last_event_epoch` → **22:01:14.934Z**, `updated_at` **22:01:17Z**. Fly log 21:57:54Z: loop stall guard snapshot STALE age=5968s, strike=3/2, kill=False. **Worker did run a cycle that hit `cycle_timeout_180s`.** That is execution, not “never ticks.” Mechanism of the 82.6 min gap still **not fully established** (timeouts, heavy_job skips, and projection lag can all stretch last_success).
+
+Recent `flyctl logs --no-tail` did **not** include `resolver lifecycle event=tick_start` lines (log window may omit worker stdout). Cycle start/end wall times for 21:42 success **not** captured in that tail.
+
+#### Probe two — persist vs health projection
+
+| Source | Read timestamp | last_success / last_error | last_resolver_tick |
+|--------|----------------|---------------------------|--------------------|
+| soul_map `liveness.prediction_resolver` | 21:57:56Z then 22:03:51Z | 21:42:08Z; later fail `cycle_timeout_180s` @ 22:01:14Z | n/a (field not stored) |
+| GET `/api/liveness` | 21:58:25Z / 21:59:58Z / 22:02:47Z / 22:03:31Z | matches persist (21:42:08Z; then failing) | n/a |
+| GET `/api/ops/readiness` `resolver` + nested `liveness` | 21:58:25Z | matches persist 21:42:08Z | — |
+| GET `/api/ops/readiness` `learning_loop_health` | 21:58:25Z | `resolver.last_success_at` **19:16:36Z** | **19:16:36Z** (unchanged all session) |
+| GET `/api/learning/health` | 21:59:21Z (app log: timed out after 20s) | null / degraded | null |
+
+**Conclusion (bounded):** **Worker persist + `/api/liveness` are moving together.** **`learning_loop_health.last_resolver_tick` (and that object's `resolver.last_success_at`) are a stale HEALTH PROJECTION**, consistent with weak merge in `_resolver_liveness_view` vs full merge in `build_liveness_registry`. Does **not** prove the worker never ran.
+
+#### #1060
+
+Two liveness reads **2.5 min apart** (21:59:58Z → 22:02:47Z): last_success **did not advance** (21:42:08Z both). **FAIL.** Hydration G0 2.422s/7.593s on this SHA still stands; not re-run. **Leave #1060 OPEN.** GitHub closed #1058/#1072 is not this gate.
+
+**Deviations:** none (read-only). Hold labeled **PROVISIONAL**.
 
 ### 2026-08-28 ~21:39 UTC — prod×main reconciliation + resolver evidence gates
 
