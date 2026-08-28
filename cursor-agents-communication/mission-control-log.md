@@ -2,7 +2,7 @@
 
 > **Mission Control** is the CEO/orchestrator agent. **Ditto** (GitHub app / heyditto.ai) is the **outside reviewer** — not a fleet bot. **Joshua Riley** (`cryptoreporthub`) is merge/Fly approver. Do not self-merge.
 
-**Snapshot:** 2026-08-28 ~09:22Z (2:22am PT Aug 28)
+**Snapshot:** 2026-08-28 ~13:05Z (main `bb142c86`)
 
 ---
 
@@ -28,6 +28,7 @@
 | **#1078** Drift/QA liveness | Via **#1086** merged 2026-08-28T07:32:58Z (head `6ee50f4b`) |
 | **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
+| **#1081** liveness allowlist | **#1095** daily pick + **#1087** remaining schedulers merged → allowlist `[]` on main `bb142c86` |
 | **#1032** | Via **#1075 + #1077** |
 | **#1029** | Via **#1076 + #1077** |
 
@@ -35,19 +36,18 @@
 
 ## Phase-5 board
 
-Branches off **main `98677e74`** — last verified 2026-08-28 ~09:22Z.
+Branches off **main `bb142c86`** — last verified 2026-08-28 ~13:05Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
 | #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Merged 2026-08-28T06:15:51Z. Sentinel soak: `/health` 200, `/api/ops/live` ok `live=true`; one recovered 20s timeout. Fly pid 650 — #1089 likely not deployed. |
 | #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. Leak patch: `public_liveness_registry` strips `last_error`/`last_evidence`; GET `/api/liveness` `probe_worker=False`. Coordinator leftovers (`last_run_ok`/`force_running`/`pump_desk_trust.ready`) landed as-is. |
-| #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. HourPickScheduler + `loop_health` on tracker. DailyPickScheduler on main **still** has `_running`/`_last_run_at`/`_last_ok` — fails #1087 empty-allowlist smoke. |
+| #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. HourPickScheduler + `loop_health` on tracker. |
 | #1080 | Market Desk | **#1088** | **Draft HOLD** | Shield FINAL: human merge only. Extra placeholder trail-phase gate. Smoke does not run `test_pump_desk_trust_gate.py`. Head `185f536`. Base may still be behind. |
-| #1081 | Proof Scout | **#1087** | **Draft** | Head `ef3ae950`. Allowlist `[]`. 17 files. `pick_scheduler.py` zero vs main (collision cleared). Selector/calibration leftovers cleaned; six other schedulers leftover-cleaned per Shield. Smoke **FAIL**: DailyPickScheduler `_running` still on main. Security empty. Nested snapshots note only, not §3.1. |
+| #1081 | Proof Scout | **#1087** | **Merged** | Squash `bb142c86` 2026-08-28T13:04Z. Allowlist `[]`. All `*scheduler.py` on LivenessTracker. Preceded by **#1095** daily-pick wedge. |
 
 ### Remaining (not executed)
 
-- **#1087** Proof Scout — draft; smoke FAIL until DailyPickScheduler leftover on main addressed. Joshua skipped daily-pick follow-on widget — **do not** claim a follow-on PR is open.
 - **#1088** Market Desk — DRAFT HOLD; human merge only.
 - Leftover PRs **#1064–#1067** and hydrate drafts untouched.
 
@@ -70,16 +70,20 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-28 ~13:05 UTC — #1081 liveness complete (#1095 + #1087)
+
+- **Policy:** Joshua not required for routine merges; Composer verifies no conflict + CI green.
+- **Merged:** **#1095** (`ebafd329`) DailyPickScheduler → LivenessTracker; **#1087** (`bb142c86`) remaining 7 schedulers + allowlist `[]`.
+- **CI:** smoke green on both PRs (runs 33172947439, 33173497469).
+- **Tests:** `test_no_handrolled_liveness`, `test_pick_scheduler`, `test_selector_scheduler`, contract guard — green locally.
+- **Parked:** **#1088** Market Desk — human merge only. Deploy not triggered (Fly gated).
+
 ### 2026-08-28 ~12:50 UTC — Composer takeover (#1081)
 
 - **Policy:** Joshua not required for routine merges; Composer verifies no conflict + CI green.
 - **Done:** `DailyPickScheduler` migrated to `LivenessTracker`; `pick_scheduler.py` removed from liveness allowlist (8→7 modules).
 - **Tests:** `test_no_handrolled_liveness`, `test_pick_scheduler`, contract guard — green locally.
-- **Branch:** `cursor/1081-daily-pick-liveness-f603` — PR pending merge (main is branch-protected).
-- **Next:** merge #1081 PR → Luna spot-check → post-deploy G0 ×2 if Joshua wants #1058 formally closed on issue.
-
-- Ditto MCP has all beats; this file was stale after Step 0 (#1092). Catch-up append per Joshua: are all MC messages in the shared repo?
-- Board tables refreshed to main `98677e74`.
+- **Branch:** `cursor/1081-daily-pick-liveness-f603` — merged as **#1095**.
 
 ### 2026-08-28 ~2:22am PT — Sentinel soak (post-#1089 merge)
 
