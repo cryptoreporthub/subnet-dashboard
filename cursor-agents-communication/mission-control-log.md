@@ -2,7 +2,7 @@
 
 > **Mission Control** is the CEO/orchestrator agent. **Ditto** (GitHub app / heyditto.ai) is the **outside reviewer** — not a fleet bot. **Joshua Riley** (`cryptoreporthub`) is merge/Fly approver. Do not self-merge.
 
-**Snapshot:** 2026-08-28 ~05:40Z (10:40pm PT Aug 27)
+**Snapshot:** 2026-08-28 ~09:22Z (2:22am PT Aug 28)
 
 ---
 
@@ -24,6 +24,9 @@
 
 | Item | Resolution |
 |------|------------|
+| **#1072** Sentinel zoom | Closed via **#1089** merged 2026-08-28T06:15:51Z |
+| **#1078** Drift/QA liveness | Via **#1086** merged 2026-08-28T07:32:58Z (head `6ee50f4b`) |
+| **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
 | **#1032** | Via **#1075 + #1077** |
 | **#1029** | Via **#1076 + #1077** |
@@ -32,21 +35,21 @@
 
 ## Phase-5 board
 
-Branches off **main `228b9d44`** — re-verify heads if they moved.
+Branches off **main `98677e74`** — last verified 2026-08-28 ~09:22Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
-| #1072 | Sentinel | **#1089** | **Ready** (not draft) | Merge **#1089 BEFORE #1086** (shared `internal/health/routes.py`). No fly-deploy. Do **not** rebase 1072 onto 1078. |
-| #1078 | Drift/QA | **#1086** | Draft | Unauthenticated GET `/api/liveness` **not** rate-limit exempt. Collides with #1089. |
-| #1079 | Drift/QA | **#1090** | Draft | Shield leftover re-audit **CLEARED**, `overall_risk` low. Do **not** merge until Joshua says. |
-| #1080 | Market Desk | **#1088** | Draft | Behavior change — **human merge only**. Parked. |
-| #1081 | Proof Scout | **#1087** | Draft | Allowlist 9→7. Medium leftovers. Do **not** merge. |
+| #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Merged 2026-08-28T06:15:51Z. Sentinel soak: `/health` 200, `/api/ops/live` ok `live=true`; one recovered 20s timeout. Fly pid 650 — #1089 likely not deployed. |
+| #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. Leak patch: `public_liveness_registry` strips `last_error`/`last_evidence`; GET `/api/liveness` `probe_worker=False`. Coordinator leftovers (`last_run_ok`/`force_running`/`pump_desk_trust.ready`) landed as-is. |
+| #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. HourPickScheduler + `loop_health` on tracker. DailyPickScheduler on main **still** has `_running`/`_last_run_at`/`_last_ok` — fails #1087 empty-allowlist smoke. |
+| #1080 | Market Desk | **#1088** | **Draft HOLD** | Shield FINAL: human merge only. Extra placeholder trail-phase gate. Smoke does not run `test_pump_desk_trust_gate.py`. Head `185f536`. Base may still be behind. |
+| #1081 | Proof Scout | **#1087** | **Draft** | Head `ef3ae950`. Allowlist `[]`. 17 files. `pick_scheduler.py` zero vs main (collision cleared). Selector/calibration leftovers cleaned; six other schedulers leftover-cleaned per Shield. Smoke **FAIL**: DailyPickScheduler `_running` still on main. Security empty. Nested snapshots note only, not §3.1. |
 
-### Proposed merge order (NOT executed)
+### Remaining (not executed)
 
-1. **#1089** first
-2. Then rebase **#1086**
-3. **#1088** stays parked
+- **#1087** Proof Scout — draft; smoke FAIL until DailyPickScheduler leftover on main addressed. Joshua skipped daily-pick follow-on widget — **do not** claim a follow-on PR is open.
+- **#1088** Market Desk — DRAFT HOLD; human merge only.
+- Leftover PRs **#1064–#1067** and hydrate drafts untouched.
 
 ---
 
@@ -66,6 +69,42 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~2:22am PT / 09:22Z — Mirror gap catch-up
+
+- Ditto MCP has all beats; this file was stale after Step 0 (#1092). Catch-up append per Joshua: are all MC messages in the shared repo?
+- Board tables refreshed to main `98677e74`.
+
+### 2026-08-28 ~2:22am PT — Sentinel soak (post-#1089 merge)
+
+- `/health` 200, `/api/ops/live` ok `live=true`, homepage desktop+390px 200.
+- One recovered 20s ops/live timeout.
+- Fly pid 650 unchanged — #1089 on main likely not on the machine. **No deploy.**
+- 24h wedge watch armed through 2026-08-28 23:59 PT.
+
+### 2026-08-28 ~1:06–1:08am PT — #1086+#1090 on main
+
+- #1086 merged 2026-08-28T07:32:58Z (head `6ee50f4b`). #1090 merged 2026-08-28T07:33:16Z (head `26067c48`).
+- Main SHA verified `98677e74` includes both.
+- #1087 `ef3ae950`: leftover cleanup confirmed; `pick_scheduler.py` zero vs main.
+- DailyPickScheduler `_running`/`_last_run_at`/`_last_ok` still on main — fails #1087 empty-allowlist smoke.
+- Joshua skipped daily-pick follow-on widget; **do not** claim a follow-on is open.
+
+### 2026-08-28 ~12:22am PT — #1087 collision cleared
+
+- Collision cleared at `5c74d609`, then leftover cleanup per Shield.
+- Shield re-audits #1087.
+
+### 2026-08-28 ~12:10–12:17am PT — #1086 leak patch
+
+- Leak patch head `6ee50f4b`; smoke green.
+- Leak HOLD closed.
+
+### 2026-08-28 ~12:04–12:08am PT — Shield FINAL on #1088; #1090 smoke green; #1086 rebase
+
+- #1088 Shield FINAL HOLD (human merge only).
+- #1090 smoke green.
+- #1086 rebase done `e6d928df` then leak patch applied.
 
 ### 2026-08-28 ~11:58pm PT / 06:58Z — Step 0 complete: #1091 on main
 
