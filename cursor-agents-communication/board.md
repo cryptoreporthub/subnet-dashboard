@@ -1,5 +1,7 @@
 # Subnet Dashboard Coordination Board
 
+> **Live Mission Control board:** [`mission-control-log.md`](mission-control-log.md) — Ditto-readable snapshot + dated MC status (mirrored from Mission Control per Joshua 2026-08-27). This file below is the historical Aug 5 coordination snapshot; do not delete.
+
 **Last updated:** 2026-08-05T19:05:00Z  
 **main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
 **Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  

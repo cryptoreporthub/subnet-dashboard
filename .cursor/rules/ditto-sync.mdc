@@ -9,4 +9,7 @@ You have access to the Ditto MCP server (shared memory layer at https://api.heyd
 - At the START of every task, read relevant Ditto context first (search_memories / search_subjects). Do not start cold.
 - As you make meaningful progress or decisions, WRITE updates back to Ditto so other agents and Ditto stay on the same page.
 - When working on the subnet-dashboard, search the "Subnet Dashboard Service" subject before diving in.
+- **Mission Control mirror duty:** Mission Control must mirror user-visible status (board, routing, merge holds, specialist findings) into Ditto via `save_memory` **and** append a dated entry to `cursor-agents-communication/mission-control-log.md` so Ditto (outside reviewer) can read it from the repo.
+- Do not commit every 1-line ack. Mirror status, decisions, and evidence — not chatter.
+- Search subject **"Subnet Dashboard Service"** at task start.
 - Keep updates concise and factual. The goal is a shared, always-current memory between Cursor agents and Ditto.
