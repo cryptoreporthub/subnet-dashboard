@@ -156,7 +156,7 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
     assert out.get("ok") is True
     assert out.get("count") == 3
     state = sched.state()
-    assert state["last_run_ok"] is True
+    assert state["liveness"]["status"] == "ok"
     assert state["last_result"]["count"] == 3
 
 
@@ -442,7 +442,7 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     _wire_scheduler_paths(tmp_path, monkeypatch)
     _reset_write_occupancy()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._active = True
+    snaps._scheduler = sched
     snaps._TICK_ACTIVE = True
     sched._tick_active = True
     with snaps._lock:

@@ -332,7 +332,6 @@ def write_full_universe_snapshot(
 class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
-        self._active = False
         self._tick_active = False
         self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
@@ -344,11 +343,16 @@ class ScoreSnapshotScheduler:
             persist=True,
         )
 
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
+    def _is_registered(self) -> bool:
         with _lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
+            return _scheduler is self
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
@@ -358,18 +362,15 @@ class ScoreSnapshotScheduler:
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": self._active,
+            "running": snap.get("lifecycle") == "started",
             "refresh_minutes": self.refresh_minutes,
             "last_run_at": self._last_tick_at,
-            "last_run_ok": snap["status"] == "ok",
             "last_run_error": self._last_error,
             "last_result": self._last_result,
             "age_seconds": snapshot_age_seconds(),
@@ -445,7 +446,7 @@ class ScoreSnapshotScheduler:
             if not self._tick_active:
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-            if reschedule and self._active:
+            if reschedule and self._is_registered():
                 schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
             return skipped
 
@@ -454,7 +455,7 @@ class ScoreSnapshotScheduler:
                 skipped = {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
                 self._persist_cycle_summary(skipped)
                 self._record_liveness(skipped)
-                if reschedule and self._active:
+                if reschedule and self._is_registered():
                     schedule_in_seconds(JOB_ID, self._tick, min(120, self.refresh_minutes * 60))
                 return skipped
         # ponytail: release gate before ~127×2 scoring — holding it wedged resolver for hours
@@ -492,7 +493,7 @@ class ScoreSnapshotScheduler:
                     _write_future = None
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if reschedule and self._active:
+            if reschedule and self._is_registered():
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
 
     def _register_write_completion_callback(self, reschedule: bool) -> None:
@@ -504,7 +505,7 @@ class ScoreSnapshotScheduler:
             with _lock:
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if reschedule and self._active:
+            if reschedule and self._is_registered():
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
             return
         if fut.done():
@@ -526,7 +527,7 @@ class ScoreSnapshotScheduler:
                     "skipped": "scoring_in_progress",
                 }
                 self._record_liveness(skipped)
-                if reschedule and self._active:
+                if reschedule and self._is_registered():
                     schedule_in_seconds(
                         JOB_ID, self._tick, min(120, self.refresh_minutes * 60)
                     )
@@ -579,7 +580,7 @@ class ScoreSnapshotScheduler:
                 with _lock:
                     _TICK_ACTIVE = False
                     self._tick_active = False
-                if reschedule and self._active:
+                if reschedule and self._is_registered():
                     schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
@@ -621,10 +622,13 @@ def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = ScoreSnapshotScheduler()
-        sched = _scheduler
-    return sched.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 
 def stop_score_snapshot_scheduler() -> Dict[str, Any]:
@@ -637,15 +641,32 @@ def stop_score_snapshot_scheduler() -> Dict[str, Any]:
     return sched.stop()
 
 
+def _stopped_scheduler_state() -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("score_snapshot")
+        if t is not None:
+            snap = t.snapshot()
+    except Exception:
+        pass
+    return {
+        "running": False,
+        "refresh_minutes": SCORE_SNAPSHOT_REFRESH_MINUTES,
+        "last_run_at": None,
+        "last_run_error": None,
+        "last_result": {},
+        "age_seconds": snapshot_age_seconds(),
+        "liveness": snap,
+    }
+
+
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
     """In-process state; web workers see soul_map via loop_health cross-process merge."""
     with _lock:
         if _scheduler is None:
-            return {
-                "running": False,
-                "age_seconds": snapshot_age_seconds(),
-                "enabled": _enabled(),
-            }
+            return {**_stopped_scheduler_state(), "enabled": _enabled()}
         return {**_scheduler.state(), "enabled": _enabled()}
 
 
@@ -673,7 +694,9 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     recycled = False
     with _lock:
         sched = _scheduler
-        running = bool(sched and sched._active)
+        running = bool(
+            sched and sched.liveness.snapshot().get("lifecycle") == "started"
+        )
         tick_in_progress = (
             _write_future_active()
             or _TICK_ACTIVE

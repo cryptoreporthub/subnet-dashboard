@@ -83,7 +83,6 @@ class IndicatorScheduler:
         )
 
         self._lock = threading.Lock()
-        self._active = False
         self._backoff_minutes = refresh_minutes
         self._consecutive_failures = 0
         self._last_run_error: Optional[str] = None
@@ -95,12 +94,18 @@ class IndicatorScheduler:
             persist=True,
         )
 
+    def _is_registered(self) -> bool:
+        with _scheduler_lock:
+            return _scheduler is self
+
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         """Start the scheduler. Idempotent."""
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         with self._lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
             self._backoff_minutes = self.refresh_minutes
             self._consecutive_failures = 0
         self.liveness.start()
@@ -123,7 +128,6 @@ class IndicatorScheduler:
     def stop(self) -> Dict[str, Any]:
         """Stop the scheduler and cancel any pending tick."""
         with self._lock:
-            self._active = False
             self._next_run_at = None
         cancel_job(JOB_ID)
         return {"stopped": True}
@@ -133,12 +137,10 @@ class IndicatorScheduler:
         with self._lock:
             snap = self.liveness.snapshot()
             return {
-                "running": self._active,
+                "running": snap.get("lifecycle") == "started",
                 "refresh_minutes": self.refresh_minutes,
                 "backoff_minutes": self._backoff_minutes,
                 "consecutive_failures": self._consecutive_failures,
-                "last_run_at": snap.get("last_event_at"),
-                "last_run_ok": snap["status"] == "ok",
                 "last_run_error": self._last_run_error,
                 "next_run_at": self._next_run_at,
                 "liveness": snap,
@@ -150,11 +152,7 @@ class IndicatorScheduler:
 
     def should_refresh(self) -> bool:
         """Check if enough time has passed since last refresh."""
-        if not self._active:
-            return False
-        current_backoff = self._backoff_minutes * 60
-        # For simplicity, always allow refresh if running
-        return True
+        return self.liveness.snapshot().get("lifecycle") == "started"
 
     def check_and_run(self) -> Dict[str, Any]:
         """
@@ -171,9 +169,9 @@ class IndicatorScheduler:
         }
 
     def _schedule_next(self, minutes: int) -> None:
+        if not self._is_registered():
+            return
         with self._lock:
-            if not self._active:
-                return
             self._next_run_at = (
                 datetime.now(timezone.utc).timestamp() + minutes * 60
             )
@@ -207,7 +205,7 @@ class IndicatorScheduler:
                 )
             next_interval = self._backoff_minutes
 
-        if self._active:
+        if self._is_registered():
             self._schedule_next(next_interval)
         return result
 
@@ -266,11 +264,15 @@ def start_indicator_scheduler(
     """Start the module-level indicator scheduler singleton."""
     global _scheduler
     with _scheduler_lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = IndicatorScheduler(
                 refresh_minutes=refresh_minutes, **kwargs
             )
-        return _scheduler.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 def stop_indicator_scheduler() -> Dict[str, Any]:
     """Stop the module-level indicator scheduler singleton."""
@@ -286,22 +288,23 @@ def get_indicator_scheduler_state() -> Dict[str, Any]:
     """Return the state of the module-level indicator scheduler singleton."""
     with _scheduler_lock:
         if _scheduler is None:
+            snap: Dict[str, Any] = {}
             try:
                 from internal.liveness import get_tracker
 
                 t = get_tracker("indicator_scheduler")
-                last_run_ok = t.snapshot()["status"] == "ok" if t is not None else None
+                if t is not None:
+                    snap = t.snapshot()
             except Exception:
-                last_run_ok = None
+                pass
             return {
                 "running": False,
                 "refresh_minutes": INDICATOR_REFRESH_MINUTES,
                 "backoff_minutes": INDICATOR_REFRESH_MINUTES,
                 "consecutive_failures": 0,
-                "last_run_at": None,
-                "last_run_ok": last_run_ok,
                 "last_run_error": None,
                 "next_run_at": None,
+                "liveness": snap,
             }
         return _scheduler.state()
 

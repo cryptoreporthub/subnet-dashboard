@@ -46,11 +46,7 @@ def _enabled() -> bool:
 
 
 def _seconds_until_slot(now: Optional[datetime] = None) -> float:
-    """Return seconds until the next occurrence of the configured UTC slot.
-
-    Always returns at least 30 seconds so a just-missed slot schedules for
-    tomorrow rather than firing immediately.
-    """
+    """Return seconds until the next occurrence of the configured UTC slot."""
     now = now or datetime.now(timezone.utc)
     target = now.replace(
         hour=max(0, min(23, SLOT_HOUR)),
@@ -64,15 +60,31 @@ def _seconds_until_slot(now: Optional[datetime] = None) -> float:
 
 
 def _next_slot_dt(now: Optional[datetime] = None) -> datetime:
-    """Return the UTC datetime of the next configured slot."""
     now = now or datetime.now(timezone.utc)
-    secs = _seconds_until_slot(now)
-    return now + timedelta(seconds=secs)
+    return now + timedelta(seconds=_seconds_until_slot(now))
+
+
+def _stopped_scheduler_state() -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("calibration_snapshot")
+        if t is not None:
+            snap = t.snapshot()
+    except Exception:
+        pass
+    return {
+        "running": False,
+        "last_result": {},
+        "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
+        "next_run_at": None,
+        "liveness": snap,
+    }
 
 
 class CalibrationSnapshotScheduler:
     def __init__(self) -> None:
-        self._active = False
         self._last_result: Dict[str, Any] = {}
         self._next_run_at: Optional[str] = None
         self.liveness = LivenessTracker(
@@ -82,18 +94,22 @@ class CalibrationSnapshotScheduler:
             persist=True,
         )
 
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
+    def _is_registered(self) -> bool:
         with _lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
+            return _scheduler is self
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         self.liveness.start()
         if immediate:
             threading.Thread(
                 target=self._tick, daemon=True, name="calibration-snapshot-tick"
             ).start()
         else:
-            # Always anchor to the UTC slot, never a boot-relative cap.
             delay = _seconds_until_slot()
             next_dt = _next_slot_dt()
             with _lock:
@@ -107,7 +123,6 @@ class CalibrationSnapshotScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._active = False
             self._next_run_at = None
         cancel_job(JOB_ID)
         return {"stopped": True}
@@ -116,9 +131,8 @@ class CalibrationSnapshotScheduler:
         snap = self.liveness.snapshot()
         with _lock:
             return {
-                "running": self._active,
+                "running": snap.get("lifecycle") == "started",
                 "last_result": dict(self._last_result),
-                "last_run_ok": snap["status"] == "ok",
                 "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
                 "next_run_at": self._next_run_at,
                 "liveness": snap,
@@ -156,8 +170,7 @@ class CalibrationSnapshotScheduler:
             self.liveness.record_failure(error=str(exc))
             logger.warning("calibration snapshot tick failed: %s", exc)
 
-        # Re-anchor to the UTC slot so the next run is always near 05:15 UTC.
-        if reschedule and self._active:
+        if reschedule and self._is_registered():
             delay = _seconds_until_slot()
             next_dt = _next_slot_dt()
             next_iso = next_dt.isoformat().replace("+00:00", "Z")
@@ -178,10 +191,13 @@ def start_calibration_snapshot_scheduler(immediate: bool = False) -> Dict[str, A
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = CalibrationSnapshotScheduler()
-        sched = _scheduler
-    return sched.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 
 def stop_calibration_snapshot_scheduler() -> Dict[str, Any]:
@@ -198,5 +214,5 @@ def get_calibration_snapshot_scheduler_state() -> Dict[str, Any]:
     with _lock:
         return {
             "enabled": _enabled(),
-            "scheduler": _scheduler.state() if _scheduler else {"running": False},
+            "scheduler": _scheduler.state() if _scheduler else _stopped_scheduler_state(),
         }

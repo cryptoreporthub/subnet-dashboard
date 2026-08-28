@@ -59,10 +59,26 @@ def _load_subnets_and_context() -> tuple[list, dict]:
         return [], {}
 
 
+def _stopped_scheduler_state() -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("pick_selection_audit")
+        if t is not None:
+            snap = t.snapshot()
+    except Exception:
+        pass
+    return {
+        "running": False,
+        "last_result": {},
+        "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}",
+        "liveness": snap,
+    }
+
+
 class PickSelectionAuditScheduler:
     def __init__(self) -> None:
-        self._active = False
-        self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
         self.liveness = LivenessTracker(
@@ -72,11 +88,16 @@ class PickSelectionAuditScheduler:
             persist=True,
         )
 
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
+    def _is_registered(self) -> bool:
         with _lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
+            return _scheduler is self
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="pick-audit-tick").start()
@@ -85,17 +106,13 @@ class PickSelectionAuditScheduler:
         return {"started": True, "job": JOB_ID, "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}"}
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": self._active,
-            "last_run_at": self._last_tick_at,
-            "last_run_ok": snap["status"] == "ok",
+            "running": snap.get("lifecycle") == "started",
             "last_run_error": self._last_error,
             "last_result": self._last_result,
             "slot_utc": f"{AUDIT_UTC_HOUR:02d}:{AUDIT_UTC_MINUTE:02d}",
@@ -139,7 +156,6 @@ class PickSelectionAuditScheduler:
             logger.warning("pick selection audit tick failed: %s", exc)
 
         with _lock:
-            self._last_tick_at = result["run_at"]
             self._last_error = result.get("error")
             self._last_result = {
                 k: result.get(k)
@@ -152,7 +168,7 @@ class PickSelectionAuditScheduler:
                 if k in result
             }
 
-        if reschedule and self._active:
+        if reschedule and self._is_registered():
             schedule_in_seconds(JOB_ID, self._tick, _seconds_until_slot())
         return result
 
@@ -162,10 +178,13 @@ def start_pick_audit_scheduler(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = PickSelectionAuditScheduler()
-        sched = _scheduler
-    return sched.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 
 def stop_pick_audit_scheduler() -> Dict[str, Any]:
@@ -182,5 +201,5 @@ def get_pick_audit_scheduler_state() -> Dict[str, Any]:
     with _lock:
         return {
             "enabled": _enabled(),
-            "scheduler": _scheduler.state() if _scheduler else {"running": False},
+            "scheduler": _scheduler.state() if _scheduler else _stopped_scheduler_state(),
         }

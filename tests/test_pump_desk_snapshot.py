@@ -94,6 +94,7 @@ def test_pump_desk_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path)
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}")
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
 
     def factory():
         return sched.PumpDeskSnapshotScheduler().liveness

@@ -161,8 +161,13 @@ class TestCalibrationSnapshotSchedulerSlot:
     """Verify the scheduler anchors first and subsequent ticks to the UTC slot."""
 
     @pytest.fixture(autouse=True)
-    def reset_singleton(self):
+    def reset_singleton(self, tmp_path, monkeypatch):
         import internal.message_intel.calibration_snapshot_scheduler as smod
+
+        soul = tmp_path / "soul_map.json"
+        soul.write_text("{}")
+        monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+        monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
         smod._scheduler = None
         yield
         smod._scheduler = None
@@ -199,6 +204,7 @@ class TestCalibrationSnapshotSchedulerSlot:
         with patch.object(smod, "_seconds_until_slot", return_value=float(slot_delay)), \
              patch.object(smod, "_next_slot_dt", return_value=datetime(2026, 8, 7, 5, 15, 0, tzinfo=timezone.utc)):
             sched = smod.CalibrationSnapshotScheduler()
+            smod._scheduler = sched
             sched.start(immediate=False)
 
         assert len(scheduled_delays) == 1
@@ -222,7 +228,7 @@ class TestCalibrationSnapshotSchedulerSlot:
              patch.object(smod, "_seconds_until_slot", return_value=float(slot_delay)), \
              patch.object(smod, "_next_slot_dt", return_value=datetime(2026, 8, 8, 5, 15, 0, tzinfo=timezone.utc)):
             s = smod.CalibrationSnapshotScheduler()
-            s._active = True
+            smod._scheduler = s
             s._tick(reschedule=True)
 
         assert len(scheduled_delays) == 1
@@ -241,6 +247,7 @@ class TestCalibrationSnapshotSchedulerSlot:
         with patch.object(smod, "_seconds_until_slot", return_value=11700.0), \
              patch.object(smod, "_next_slot_dt", return_value=next_dt):
             s = smod.CalibrationSnapshotScheduler()
+            smod._scheduler = s
             s.start(immediate=False)
 
         state = s.state()

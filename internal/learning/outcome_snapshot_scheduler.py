@@ -48,9 +48,26 @@ def _interval_seconds() -> int:
     return max(3600, min(INTERVAL_HOURS * 3600, 86400))
 
 
+def _stopped_scheduler_state() -> Dict[str, Any]:
+    snap: Dict[str, Any] = {}
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("learning_outcome_snapshot")
+        if t is not None:
+            snap = t.snapshot()
+    except Exception:
+        pass
+    return {
+        "running": False,
+        "last_result": {},
+        "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
+        "liveness": snap,
+    }
+
+
 class OutcomeSnapshotScheduler:
     def __init__(self) -> None:
-        self._active = False
         self._last_result: Dict[str, Any] = {}
         self.liveness = LivenessTracker(
             name="learning_outcome_snapshot",
@@ -59,16 +76,20 @@ class OutcomeSnapshotScheduler:
             persist=True,
         )
 
-    def start(self, immediate: bool = False) -> Dict[str, Any]:
+    def _is_registered(self) -> bool:
         with _lock:
-            if self._active:
-                return {"started": False, "reason": "already running"}
-            self._active = True
+            return _scheduler is self
+
+    def start(self, immediate: bool = False) -> Dict[str, Any]:
+        if not self._is_registered():
+            return {"started": False, "reason": "not registered"}
+        snap = self.liveness.snapshot()
+        if snap.get("lifecycle") == "started":
+            return {"started": False, "reason": "already running"}
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="outcome-snapshot-tick").start()
         else:
-            # First tick soon after worker boot; then interval cadence.
             schedule_in_seconds(JOB_ID, self._tick, min(120.0, _seconds_until_slot()))
         return {
             "started": True,
@@ -77,17 +98,14 @@ class OutcomeSnapshotScheduler:
         }
 
     def stop(self) -> Dict[str, Any]:
-        with _lock:
-            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": self._active,
+            "running": snap.get("lifecycle") == "started",
             "last_result": self._last_result,
-            "last_run_ok": snap["status"] == "ok",
             "slot_utc": f"{SLOT_HOUR:02d}:{SLOT_MINUTE:02d}",
             "liveness": snap,
         }
@@ -98,9 +116,6 @@ class OutcomeSnapshotScheduler:
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False}
         try:
-            # Expired-recovery sweep first so the snapshot reflects recovered
-            # grades (2026-08-11: 90.5% expired from rows retired on missing
-            # price data; hydrate-on-miss now lets them re-grade).
             from internal.learning.expired_recovery import recover_expired_predictions
 
             recovery = recover_expired_predictions()
@@ -132,7 +147,7 @@ class OutcomeSnapshotScheduler:
         with _lock:
             self._last_result = dict(result)
 
-        if reschedule and self._active:
+        if reschedule and self._is_registered():
             schedule_in_seconds(JOB_ID, self._tick, _interval_seconds())
         return result
 
@@ -142,10 +157,13 @@ def start_outcome_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is None:
+        if _scheduler is not None:
+            snap = _scheduler.liveness.snapshot()
+            if snap.get("lifecycle") == "started":
+                return {"started": False, "reason": "already running"}
+        else:
             _scheduler = OutcomeSnapshotScheduler()
-        sched = _scheduler
-    return sched.start(immediate=immediate)
+    return _scheduler.start(immediate=immediate)
 
 
 def stop_outcome_snapshot_scheduler() -> Dict[str, Any]:
@@ -162,5 +180,5 @@ def get_outcome_snapshot_scheduler_state() -> Dict[str, Any]:
     with _lock:
         return {
             "enabled": _enabled(),
-            "scheduler": _scheduler.state() if _scheduler else {"running": False},
+            "scheduler": _scheduler.state() if _scheduler else _stopped_scheduler_state(),
         }
