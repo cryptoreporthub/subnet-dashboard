@@ -25,6 +25,12 @@ corrected below against the current repo state.
 ## GitHub connect
 - GitHub connect (MCP) is back up from the overseer side; no need to tap the connect card.
 
+## STATUS UPDATE (2026-08-28) — merges done, rebase requested
+- #1089 MERGED — Sentinel #1072 /health + /api/ops/live event-loop wedge fix. merged_at 2026-08-28T06:15:51Z, merged_by cryptoreporthub. Closes #1072.
+- #1085 MERGED — docs directive (this file). merged_at 2026-08-28T06:15:54Z.
+- ACTION FOR MC — rebase #1086 NOW. PR #1086 (drift/qa, 1078-drift-qa) collided with #1089; #1089 is now on main, so rebase #1086 onto the new main to clear the collision. Keep it a draft.
+- #1090, #1087, #1088 unchanged (drafts / parked).
+- #1088 remains HUMAN-MERGE ONLY (Tier-C live behavior change — do not auto-merge); not touched.
+
 ## Next action
-- Spawn the four real-work branches on <issue>-<bot>: #1072/#1078/#1079/#1080/#1081.
-- Shield audits the four. #1080 stays manual (no auto-merge).
+- MC: rebase #1086 → then keep fan-out moving under deterministic governance (auto-merge docs/non-live only). Shield audits the four. #1080/#1088 stays manual (no auto-merge).
