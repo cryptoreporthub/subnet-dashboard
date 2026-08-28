@@ -42,3 +42,8 @@ def notify(event: str, **fields: Any) -> Dict[str, Any]:
     record.update({key: value for key, value in fields.items() if value is not None})
     logger.info("%s", json.dumps(record, default=str, sort_keys=True))
     return record
+
+
+def log_status(message: str = "", *, level: str = "info", **fields: Any) -> Dict[str, Any]:
+    """Emit a health/status log (``event=status``)."""
+    return log_event("status", message=message, level=level, **fields)
