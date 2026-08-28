@@ -71,9 +71,9 @@ async def api_health_check():
 @health_router.get("/api/liveness")
 async def api_liveness():
     """Enumerate every registered LivenessTracker snapshot (§5 registry endpoint)."""
-    from internal.liveness import build_liveness_registry
+    from internal.liveness import build_liveness_registry, public_liveness_registry
 
-    return build_liveness_registry()
+    return public_liveness_registry(build_liveness_registry(probe_worker=False))
 
 
 @health_router.get("/api/ops/live")

@@ -9,6 +9,20 @@ from server import app
 client = TestClient(app)
 
 
+def _assert_no_sensitive_tracker_fields(trackers: dict) -> None:
+    for snap in (trackers or {}).values():
+        assert "last_error" not in snap
+        assert "last_evidence" not in snap
+
+
+def _seed_tracker_with_sensitive_fields(name: str = "shield_audit_tracker") -> None:
+    from internal.liveness import LivenessTracker
+
+    tracker = LivenessTracker(name, interval_seconds=60, persist=False)
+    tracker.record_success(evidence={"scanned": 1, "path": "/secret/artifact"})
+    tracker.record_failure(error="internal stack trace must not leak")
+
+
 def test_worker_data_freshness_proxies(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
@@ -192,6 +206,27 @@ def test_api_liveness_returns_registry():
     assert "trackers" in body
     assert "checked_at" in body
     assert isinstance(body["trackers"], dict)
+
+
+def test_api_liveness_strips_sensitive_tracker_fields(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    _seed_tracker_with_sensitive_fields()
+    resp = client.get("/api/liveness")
+    assert resp.status_code == 200
+    _assert_no_sensitive_tracker_fields(resp.json().get("trackers"))
+
+
+def test_api_readiness_strips_sensitive_liveness_fields(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    _seed_tracker_with_sensitive_fields("shield_readiness_tracker")
+    resp = client.get("/api/ops/readiness")
+    assert resp.status_code == 200
+    body = resp.json()
+    _assert_no_sensitive_tracker_fields((body.get("liveness") or {}).get("trackers"))
+    assert "last_error" not in body.get("resolver", {})
+    assert "last_evidence" not in body.get("resolver", {})
+    assert "last_error" not in body.get("pump_desk_trust", {})
+    assert "last_evidence" not in body.get("pump_desk_trust", {})
 
 
 def test_ops_readiness_contract():

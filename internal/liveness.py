@@ -46,6 +46,23 @@ def all_snapshots() -> Dict[str, Dict[str, Any]]:
     return {t.name: t.snapshot() for t in trackers}
 
 
+_PUBLIC_STRIP_FIELDS = frozenset({"last_error", "last_evidence"})
+
+
+def public_liveness_registry(registry: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip operator-only tracker fields before any public HTTP response."""
+    trackers = registry.get("trackers") or {}
+    sanitized: Dict[str, Dict[str, Any]] = {}
+    for name, snap in trackers.items():
+        if isinstance(snap, dict):
+            sanitized[name] = {
+                k: v for k, v in snap.items() if k not in _PUBLIC_STRIP_FIELDS
+            }
+        else:
+            sanitized[name] = snap
+    return {**registry, "trackers": sanitized}
+
+
 def build_liveness_registry(*, probe_worker: bool = True) -> Dict[str, Any]:
     """Registry payload for ``GET /api/liveness`` and readiness aggregation."""
     local = all_snapshots()

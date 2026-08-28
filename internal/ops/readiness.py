@@ -184,7 +184,7 @@ def build_readiness_report() -> Dict[str, Any]:
 
     from internal.live_subnets import live_data_freshness
     from internal.freshness import get_sync_state
-    from internal.liveness import build_liveness_registry
+    from internal.liveness import build_liveness_registry, public_liveness_registry
 
     live = live_data_freshness()
     feed = probe_feed_layers()
@@ -316,7 +316,7 @@ def build_readiness_report() -> Dict[str, Any]:
         "issues": issues,
         "learning": learning,
         "learning_loop_health": loop_health,
-        "liveness": liveness,
+        "liveness": public_liveness_registry(liveness),
         "resolver": resolver,
         "pump_desk_trust": pump_desk_trust,
         "registry_sync": {
