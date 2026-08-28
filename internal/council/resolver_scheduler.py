@@ -145,6 +145,7 @@ class PredictionResolverScheduler:
 
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
+        self._cycle_generation = 0
         # Control-flow flag only (start/stop); health reporting goes through
         # the tracker below, never through stored booleans (spec §2).
         self._active = False
@@ -358,6 +359,9 @@ class PredictionResolverScheduler:
                     self.max_backoff_minutes,
                 )
             next_interval = self._backoff_minutes
+            if "cycle_timeout" in str(result.get("error") or ""):
+                # ponytail: hung cycle abandoned — retry soon while last success still fresh
+                next_interval = min(2, max(1, self.refresh_minutes))
             self._mark_first_tick(result)
 
         duration_ms = (time.perf_counter() - tick_started) * 1000
@@ -418,6 +422,14 @@ class PredictionResolverScheduler:
         except Exception:
             pass
 
+    def _abandon_inflight_cycle(self) -> None:
+        """Release wedge after cycle timeout; orphan thread must not double-release."""
+        self._cycle_generation += 1
+        try:
+            self._cycle_lock.release()
+        except RuntimeError:
+            pass
+
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
         if not self._cycle_lock.acquire(blocking=False):
             result = {
@@ -440,21 +452,35 @@ class PredictionResolverScheduler:
                 return self._run_refresh_cycle()
             finally:
                 self._cycle_lock.release()
+
+        self._cycle_generation += 1
+        gen = self._cycle_generation
         pool = ThreadPoolExecutor(max_workers=1)
-        submitted = False
 
         def _run_cycle() -> Dict[str, Any]:
             try:
+                if gen != self._cycle_generation:
+                    return {
+                        "ok": False,
+                        "run_at": _now_iso(),
+                        "resolved_now": 0,
+                        "expired_now": 0,
+                        "pending": 0,
+                        "skipped": "cycle_abandoned",
+                    }
                 return self._run_refresh_cycle()
             finally:
-                self._cycle_lock.release()
+                if gen == self._cycle_generation:
+                    self._cycle_lock.release()
 
+        submitted = False
         try:
             fut = pool.submit(_run_cycle)
             submitted = True
             try:
                 return fut.result(timeout=timeout)
             except FuturesTimeoutError:
+                self._abandon_inflight_cycle()
                 result = {
                     "ok": False,
                     "run_at": _now_iso(),

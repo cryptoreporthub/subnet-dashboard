@@ -25,6 +25,93 @@ _SNAPSHOT_FRESH_SECONDS = int(os.environ.get("PUMP_DESK_PAYLOAD_FRESH_SECONDS", 
 _ROW_STALE_SECONDS = int(os.environ.get("PUMP_ROW_STALE_SECONDS", str(6 * 3600)))
 
 
+def _signal_snapshot_stale(snapshot: Dict[str, Any]) -> bool:
+    """Detect placeholder ladder snapshots (0.5 buys / 100% vol) from missing flow fields.
+
+    Mirrors internal.learning.pump_alert._signal_snapshot_stale semantics.
+    """
+    if not snapshot:
+        return True
+    try:
+        buy_ratio = float(snapshot.get("buy_ratio", 0.5))
+        volume_intensity = float(snapshot.get("volume_intensity", 0.0))
+    except (TypeError, ValueError):
+        return True
+    if abs(buy_ratio - 0.5) > 1e-6:
+        return False
+    # ponytail: Fly volume rows froze 0.5/1.0 when buy/sell flow was absent
+    return volume_intensity >= 0.99 or volume_intensity <= 0.0
+
+
+def _pump_ladder_liveness_snapshot() -> Dict[str, Any]:
+    """Age-derived pump_ladder health from the LivenessTracker registry."""
+    from internal.liveness import get_tracker
+
+    tracker = get_tracker("pump_ladder")
+    if tracker is not None:
+        return tracker.snapshot()
+    return {
+        "name": "pump_ladder",
+        "status": "no_success_yet",
+        "status_reason": "tracker not registered",
+    }
+
+
+def _ladder_signal_snapshots_untrustworthy() -> bool:
+    """True when trail-phase ladder rows carry placeholder signal snapshots."""
+    from internal.pump.constants import TRAIL_PHASES
+
+    try:
+        from internal.pump.state import load_state
+
+        state = load_state()
+    except Exception:
+        return True
+    subnets = state.get("subnets")
+    if not isinstance(subnets, dict):
+        return False
+    for entry in subnets.values():
+        if not isinstance(entry, dict):
+            continue
+        phase = str(entry.get("phase") or "").upper()
+        if phase not in TRAIL_PHASES:
+            continue
+        snap = entry.get("signal_snapshot")
+        if not isinstance(snap, dict) or _signal_snapshot_stale(snap):
+            return True
+    return False
+
+
+def gate_pump_desk_trust(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Gate trust.ready on pump_ladder liveness ok + non-placeholder signal snapshots."""
+    out = dict(payload)
+    trust = out.get("trust")
+    if not isinstance(trust, dict):
+        trust = {"ready": False, "line": ""}
+    else:
+        trust = dict(trust)
+
+    liveness = _pump_ladder_liveness_snapshot()
+    liveness_ok = liveness.get("status") == "ok"
+    signals_ok = not _ladder_signal_snapshots_untrustworthy()
+    stats_ready = bool(trust.get("ready"))
+
+    if stats_ready and liveness_ok and signals_ok:
+        trust["ready"] = True
+    else:
+        trust["ready"] = False
+        trust["liveness"] = {
+            "name": liveness.get("name", "pump_ladder"),
+            "status": liveness.get("status"),
+            "status_reason": liveness.get("status_reason"),
+        }
+        if not signals_ok:
+            trust["signal_snapshots_stale"] = True
+
+    out["trust"] = trust
+    return out
+
+
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -111,7 +198,7 @@ def attach_pump_freshness(
     out["data_available"] = data_available
     out["freshness"] = freshness
     out["freshness_scope"] = scope
-    return out
+    return gate_pump_desk_trust(out)
 
 
 def _mark_stale(payload: Dict[str, Any], captured_at: str) -> Dict[str, Any]:

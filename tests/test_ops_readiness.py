@@ -199,6 +199,43 @@ def test_readiness_pump_desk_trust_not_ready_when_stale(monkeypatch):
     assert report["pump_desk_trust"]["liveness_status"] == "stale"
 
 
+def test_api_liveness_merges_persisted_worker_truth(monkeypatch, tmp_path):
+    """Web orphan must not mask worker-persisted daily_pick success."""
+    import time
+
+    from internal.liveness import LivenessTracker, build_liveness_registry
+    from internal.store.soul_map_io import write_soul_map
+
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    LivenessTracker("daily_pick", interval_seconds=900, persist=False)
+    now = time.time()
+    write_soul_map(
+        lambda blob: blob.setdefault("liveness", {}).update(
+            {
+                "daily_pick": {
+                    "last_success_epoch": now,
+                    "last_event_epoch": now,
+                    "lifecycle": "started",
+                    "consecutive_failures": 0,
+                    "consecutive_skips": 0,
+                    "last_error": None,
+                    "last_evidence": {"op": "daily_pick", "action": "long"},
+                }
+            }
+        ),
+        str(soul),
+    )
+
+    merged = build_liveness_registry(probe_worker=False)
+    daily = merged["trackers"]["daily_pick"]
+    assert daily["status"] == "ok"
+    assert daily["source"] == "persisted"
+
+
 def test_api_liveness_returns_registry():
     resp = client.get("/api/liveness")
     assert resp.status_code == 200

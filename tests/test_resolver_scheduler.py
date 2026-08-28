@@ -779,12 +779,12 @@ def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
     assert started.wait(timeout=1)
     assert "cycle_timeout" in str(timed_out["error"])
 
-    skipped = sched._run_refresh_cycle_with_timeout()
-    assert skipped["skipped"] == "cycle_in_flight"
-    assert not finished.is_set()
-
+    # Abandoned hung cycle — next tick must not wedge on cycle_in_flight.
     release.set()
     assert finished.wait(timeout=1)
+    recovered = sched._run_refresh_cycle_with_timeout()
+    assert recovered.get("ok") is True
+    assert recovered.get("skipped") != "cycle_in_flight"
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):

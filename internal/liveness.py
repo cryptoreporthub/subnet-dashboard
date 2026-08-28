@@ -63,9 +63,112 @@ def public_liveness_registry(registry: Dict[str, Any]) -> Dict[str, Any]:
     return {**registry, "trackers": sanitized}
 
 
+def hydrate_registry_trackers() -> None:
+    """Ensure known trackers are registered (loads persisted soul_map on web workers)."""
+    for name, interval in _known_tracker_intervals().items():
+        if get_tracker(name) is None:
+            LivenessTracker(name=name, interval_seconds=interval, persist=True)
+
+
+def _known_tracker_intervals() -> Dict[str, int]:
+    specs: Dict[str, int] = {}
+    try:
+        from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
+
+        specs["prediction_resolver"] = max(60, int(RESOLVER_REFRESH_MINUTES) * 60)
+    except Exception:
+        specs["prediction_resolver"] = 900
+    try:
+        from internal.council.pick_scheduler import (
+            DAILY_PICK_RETRY_MINUTES,
+            HOUR_PICK_REFRESH_MINUTES,
+        )
+
+        specs["daily_pick"] = max(60, int(DAILY_PICK_RETRY_MINUTES) * 60)
+        specs["hour_pick"] = max(60, min(int(HOUR_PICK_REFRESH_MINUTES), 24 * 60) * 60)
+    except Exception:
+        pass
+    try:
+        from internal.pump.scheduler import PUMP_LADDER_REFRESH_MINUTES
+
+        specs["pump_ladder"] = max(60, int(PUMP_LADDER_REFRESH_MINUTES) * 60)
+    except Exception:
+        specs["pump_ladder"] = 1200
+    return specs
+
+
+def _snapshot_from_persisted(name: str, interval_seconds: int) -> Optional[Dict[str, Any]]:
+    """Compute a tracker snapshot from soul_map without registering in-process."""
+    if read_soul_map is None:
+        return None
+    try:
+        bucket = (read_soul_map() or {}).get(_PERSIST_PREFIX) or {}
+        prior = bucket.get(name)
+        if not isinstance(prior, dict):
+            return None
+        tracker = LivenessTracker.__new__(LivenessTracker)
+        tracker.name = name
+        tracker.interval_seconds = int(interval_seconds)
+        tracker.staleness_factor = 2
+        tracker.persist = False
+        tracker.skip_limit = DEFAULT_SKIP_LIMIT
+        tracker._lock = threading.Lock()
+        tracker._lifecycle = str(prior.get("lifecycle", "new"))
+        tracker._last_success_epoch = (
+            float(prior["last_success_epoch"])
+            if prior.get("last_success_epoch") is not None
+            else None
+        )
+        tracker._last_event_epoch = (
+            float(prior["last_event_epoch"])
+            if prior.get("last_event_epoch") is not None
+            else None
+        )
+        tracker._consecutive_failures = int(prior.get("consecutive_failures", 0))
+        tracker._consecutive_skips = int(prior.get("consecutive_skips", 0))
+        tracker._backoff_seconds = 0
+        tracker._last_error = prior.get("last_error")
+        tracker._last_skip_reason = prior.get("last_skip_reason")
+        tracker._last_evidence = prior.get("last_evidence")
+        tracker._source = "persisted"
+        snap = tracker.snapshot()
+        snap["source"] = "persisted"
+        return snap
+    except Exception:
+        return None
+
+
+def _merge_persisted_snapshots(local: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Prefer worker-persisted truth when web has empty in-process trackers."""
+
+    def _freshness(snap: Dict[str, Any]) -> str:
+        return str(snap.get("last_success_at") or snap.get("last_event_at") or "")
+
+    merged = dict(local)
+    for name, interval in _known_tracker_intervals().items():
+        persisted = _snapshot_from_persisted(name, interval)
+        if persisted is None:
+            continue
+        current = merged.get(name)
+        if current is None:
+            merged[name] = persisted
+            continue
+        if current.get("status") == "no_success_yet":
+            merged[name] = persisted
+            continue
+        if persisted.get("status") == "ok" and current.get("status") != "ok":
+            merged[name] = persisted
+            continue
+        if _freshness(persisted) > _freshness(current):
+            merged[name] = persisted
+    return merged
+
+
 def build_liveness_registry(*, probe_worker: bool = True) -> Dict[str, Any]:
     """Registry payload for ``GET /api/liveness`` and readiness aggregation."""
+    hydrate_registry_trackers()
     local = all_snapshots()
+    local = _merge_persisted_snapshots(local)
     source = "inprocess"
     if probe_worker:
         try:
