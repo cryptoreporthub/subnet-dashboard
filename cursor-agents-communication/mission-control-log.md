@@ -2,9 +2,16 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless gated (#1088 behavior change).
 
-**Snapshot:** 2026-08-28 ~15:54Z (main `fcbce1ec`; **prod deploy success** run 33186935806 via #1098)
+**Snapshot:** 2026-08-28 ~17:10Z (main `cfa7a5bc`; prod deploy **33192921483** #1102)
 
 ---
+
+## Governance
+
+- **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 draft closed superseded.
+- **#1088 gate live:** `pump_desk_trust.ready=true`, `pump_ladder=ok` on `/api/ops/readiness`. Full desk path (`/api/pump-alerts`) also requires non-placeholder signal snapshots — currently `signal_snapshots_stale=true` (expected until ladder scan refreshes trail rows).
+- **Sentinel soak:** armed 2026-08-28 ~15:54Z → **close #1072** after clean window **2026-08-29 ~15:54Z** (~8:54 AM PDT). Then G0×2 → close **#1058**.
+- **Resolver watch:** post-#1100 abandon wedge; prod resolver `ok`, last tick 16:56Z. Bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if `cycle_timeout_120s` recurs.
 
 ## Standing policy
 
@@ -24,7 +31,8 @@
 
 | Item | Resolution |
 |------|------------|
-| **#1072** Sentinel zoom | **#1089** merged; **await prod deploy + 24h soak** before formal close |
+| **#1080** Market Desk | **#1100** (was #1088) | **Shipped** | `trust.ready` gated on `pump_ladder` liveness + signal snapshots. Deployed via #1101+#1103. |
+| **#1072** Sentinel zoom | **#1089** | **Soak** | Merged+deployed. Formal close after 24h soak ends ~2026-08-29 15:54Z. |
 | **#1078** Drift/QA liveness | Via **#1086** merged 2026-08-28T07:32:58Z (head `6ee50f4b`) |
 | **#1079** Drift/QA hour-slot | Via **#1090** merged 2026-08-28T07:33:16Z (head `26067c48`) |
 | **#1058** hydration | Live n=3 SHA `ca118843` / Fly `33040064615` |
@@ -43,14 +51,14 @@ Branches off **main `c82c59fe`** — last verified 2026-08-28 ~15:35Z.
 | #1072 | Sentinel | **#1089** | **Merged** | Closes #1072. Merged 2026-08-28T06:15:51Z. Sentinel soak: `/health` 200, `/api/ops/live` ok `live=true`; one recovered 20s timeout. Fly pid 650 — #1089 likely not deployed. |
 | #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. Leak patch: `public_liveness_registry` strips `last_error`/`last_evidence`; GET `/api/liveness` `probe_worker=False`. Coordinator leftovers (`last_run_ok`/`force_running`/`pump_desk_trust.ready`) landed as-is. |
 | #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. HourPickScheduler + `loop_health` on tracker. |
-| #1080 | Market Desk | **#1088** | **Draft HOLD** | Shield FINAL: human merge only. Extra placeholder trail-phase gate. Smoke does not run `test_pump_desk_trust_gate.py`. Head `185f536`. Base may still be behind. |
+| #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. Readiness `trust.ready=true`; desk path may hold on `signal_snapshots_stale` until trail rows refresh. |
 | #1081 | Proof Scout | **#1087** | **Merged** | Squash `bb142c86` 2026-08-28T13:04Z. Allowlist `[]`. All `*scheduler.py` on LivenessTracker. Preceded by **#1095** daily-pick wedge. |
 
 ### Remaining (not executed)
 
-- **Deploy done:** #1098 `fly-deploy` → run **33186935806** success 2026-08-28T15:52:44Z. Prod `/api/liveness` live (daily_pick/hour_pick trackers). Sentinel **24h soak** started ~15:54Z → close #1072 after clean window.
-- **Optional after deploy:** G0 harness ×2 on prod → formal **#1058** close.
-- **#1088** Market Desk — DRAFT HOLD; human merge only; outside MC autonomous-merge policy.
+- **Sentinel soak → #1072 close** — window ends **2026-08-29 ~15:54Z** (~8:54 AM PDT).
+- **G0 harness ×2 → #1058 formal close** — after soak.
+- **Resolver timeout watch** — bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if 120s cap keeps firing.
 - Leftover PRs **#1064–#1067** and hydrate drafts untouched.
 
 ---
@@ -71,6 +79,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~17:10 UTC — #1102 deploy + #1088 governance ship-it
+
+- **Deploy:** #1103 `fly-deploy` → run **33192921483** success. main `cfa7a5bc`.
+- **#1088 gate verified:** `/api/ops/readiness` `pump_desk_trust.ready=true`, `pump_ladder=ok`. `/api/pump-alerts` `trust.liveness.status=ok` but `signal_snapshots_stale=true` (trail placeholder rows — gate working as designed).
+- **Learning health:** `status=ok`, resolver `ok`, last tick 16:56Z.
+- **Governance:** Joshua sign-off #1088→#1100 ship it.
+- **Next:** soak through 2026-08-29 15:54Z → close #1072 → G0×2 → #1058.
 
 ### 2026-08-28 ~15:48 UTC — Fleet takeover + Fly deploy (#1098)
 
