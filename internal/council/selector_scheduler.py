@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
+from internal.liveness import LivenessTracker
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +29,22 @@ def _now_iso() -> str:
 class SelectorScheduler:
     def __init__(self, refresh_minutes: int = SELECTOR_REFRESH_MINUTES):
         self.refresh_minutes = refresh_minutes
-        self._running = False
-        self._last_run_at: Optional[str] = None
-        self._last_ok: Optional[bool] = None
+        self._active = False
+        self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
+        self.liveness = LivenessTracker(
+            name="selector_rotation",
+            interval_seconds=max(60, int(refresh_minutes) * 60),
+            staleness_factor=2,
+            persist=True,
+        )
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if self._running:
+            if self._active:
                 return {"started": False, "reason": "already running"}
-            self._running = True
+            self._active = True
+        self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True).start()
         else:
@@ -46,17 +53,19 @@ class SelectorScheduler:
 
     def stop(self) -> Dict[str, Any]:
         with _lock:
-            self._running = False
+            self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
+        snap = self.liveness.snapshot()
         return {
-            "running": self._running,
+            "running": self._active,
             "refresh_minutes": self.refresh_minutes,
-            "last_run_at": self._last_run_at,
-            "last_run_ok": self._last_ok,
+            "last_run_at": self._last_tick_at,
+            "last_run_ok": snap["status"] == "ok",
             "last_run_error": self._last_error,
+            "liveness": snap,
         }
 
     def run_once(self) -> Dict[str, Any]:
@@ -64,12 +73,12 @@ class SelectorScheduler:
 
     def _schedule(self, minutes: int) -> None:
         with _lock:
-            if not self._running:
+            if not self._active:
                 return
         schedule_in_seconds(JOB_ID, self._tick, minutes * 60)
 
     def _tick(self) -> Dict[str, Any]:
-        result = {"ok": False, "run_at": _now_iso(), "error": None}
+        result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         try:
             from internal.council.orchestrator import Orchestrator
             from internal.learning.alignment_nudge import apply_alignment_nudge
@@ -96,18 +105,22 @@ class SelectorScheduler:
                 evidence={"rotation_decisions": len((rotation.get("daily_output") or {}).get("decisions", []))},
                 to_action="daily_rotation_complete",
             )
+            decisions = len((rotation.get("daily_output") or {}).get("decisions", []))
             result["ok"] = True
-            result["decisions"] = len((rotation.get("daily_output") or {}).get("decisions", []))
+            result["decisions"] = decisions
+            self.liveness.record_success(
+                evidence={"decisions": decisions, "op": "daily_rotation"},
+            )
         except Exception as exc:
             result["error"] = str(exc)
+            self.liveness.record_failure(error=str(exc))
             logger.warning("Selector rotation tick failed: %s", exc)
 
         with _lock:
-            self._last_run_at = result["run_at"]
-            self._last_ok = result["ok"]
+            self._last_tick_at = result["run_at"]
             self._last_error = result.get("error")
 
-        if self._running:
+        if self._active:
             self._schedule(self.refresh_minutes)
         return result
 
@@ -131,8 +144,26 @@ def stop_selector_scheduler() -> Dict[str, Any]:
     return sched.stop()
 
 
+def _stopped_liveness_ok() -> Optional[bool]:
+    try:
+        from internal.liveness import get_tracker
+
+        t = get_tracker("selector_rotation")
+        if t is not None:
+            return t.snapshot()["status"] == "ok"
+    except Exception:
+        pass
+    return None
+
+
 def get_selector_scheduler_state() -> Dict[str, Any]:
     with _lock:
         if _scheduler is None:
-            return {"running": False, "refresh_minutes": SELECTOR_REFRESH_MINUTES}
+            return {
+                "running": False,
+                "refresh_minutes": SELECTOR_REFRESH_MINUTES,
+                "last_run_at": None,
+                "last_run_ok": _stopped_liveness_ok(),
+                "last_run_error": None,
+            }
         return _scheduler.state()

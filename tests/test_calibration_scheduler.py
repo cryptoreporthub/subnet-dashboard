@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
 from internal.calibration import pipeline as cal
 from internal.calibration import scheduler as sched
+from internal.liveness import LivenessTracker
+from tests.liveness_conformance import assert_liveness_compliant
 
 
 def _resolved_row(expert: str, correct: bool, *, idx: int = 0) -> dict:
@@ -44,13 +47,26 @@ def isolate(monkeypatch, tmp_path):
     monkeypatch.setattr("internal.council.resolver.PREDICTIONS_PATH", str(pred))
     monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
     monkeypatch.delenv("CALIBRATION_AUTO_RETRAIN", raising=False)
+    sched._liveness = None
     yield {"soul": str(soul), "pred": str(pred)}
+
+
+def test_calibration_scheduler_liveness_conformance():
+    def factory():
+        return LivenessTracker(
+            name=f"calibration-conformance-{time.time()}",
+            interval_seconds=sched._HOOK_INTERVAL_SECONDS,
+            persist=False,
+        )
+
+    assert_liveness_compliant(factory)
 
 
 def test_auto_retrain_disabled_by_default(isolate):
     result = sched.maybe_trigger_auto_retrain(resolved_now=5)
     assert result["triggered"] is False
     assert result["reason"] == "disabled"
+    assert sched.get_liveness().snapshot()["consecutive_skips"] >= 1
 
 
 def test_auto_retrain_insufficient_sample(isolate, monkeypatch):
@@ -58,6 +74,7 @@ def test_auto_retrain_insufficient_sample(isolate, monkeypatch):
     result = sched.maybe_trigger_auto_retrain()
     assert result["triggered"] is False
     assert result["reason"] == "insufficient_total_sample"
+    assert sched.get_liveness().snapshot()["consecutive_skips"] >= 1
 
 
 def test_auto_retrain_triggers_when_threshold_met(isolate, monkeypatch):
@@ -77,3 +94,4 @@ def test_auto_retrain_triggers_when_threshold_met(isolate, monkeypatch):
     assert result["triggered"] is True
     assert result["reason"] == "started"
     assert len(started) == 1
+    assert sched.get_liveness().snapshot()["status"] == "ok"
