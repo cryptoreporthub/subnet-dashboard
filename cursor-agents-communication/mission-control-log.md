@@ -88,6 +88,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-28 ~19:15 UTC — #1108 deploy FAILED; #1110 retry opened
+
+- **#1108** Deploy app failed (run **33201296527**). Deploy Guard + smoke passed. #1108 closed.
+- **Prod unchanged:** still healthy; resolver ok @ 19:15Z. Likely post-deploy gate (health/SENTRY_RELEASE/learning-loop) during machine churn — not a prod outage.
+- **#1110** retry fly-deploy labeled from `cfbe842a` main (includes #1107 `RESOLVER_CYCLE_TIMEOUT_SECONDS=180`).
+- **Note:** #1107 mitigation may not be on prod until #1110 succeeds. Resolver self-recovered at 18:50Z on existing #1102 bundle.
+
 ### 2026-08-28 ~19:14 UTC — v5 delegation: #1107 merge + resolver recovery + soak restart
 
 - **#1107 merged** `24488f4e` (RESOLVER_CYCLE_TIMEOUT_SECONDS 120→180). **#1108** fly-deploy labeled.
