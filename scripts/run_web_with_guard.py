@@ -4,6 +4,10 @@ Replaces "uvicorn server:app" in scripts/fly_web_entrypoint.sh (2026-08-10 fix).
 python scripts/run_web_with_guard.py puts scripts/ on sys.path, NOT the repo root.
 Without the sys.path bootstrap below, importing internal.snapshot_guard fails and
 the web process dies at boot (Fly health check 5xx). Fixed 2026-08-10.
+
+2026-08-27: serve via asgi_entry:app (transport gzip + immutable static cache,
+supersedes PR #894) instead of server:app. The snapshot guard is still installed
+before the app module is imported, preserving the original ordering guarantee.
 """
 
 import os
@@ -22,7 +26,7 @@ import uvicorn
 
 if __name__ == "__main__":
     uvicorn.run(
-        "server:app",
+        "asgi_entry:app",
         host=os.environ.get("HOST", "0.0.0.0"),
         port=int(os.environ.get("PORT", "8080")),
     )
