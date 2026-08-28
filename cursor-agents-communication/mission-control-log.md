@@ -2,17 +2,18 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~18:35Z (main `eb36b0fa`; prod **#1102** live via #1103; fleet bots merged, not yet deployed)
+**Snapshot:** 2026-08-28 ~19:14Z (main `24488f4e` #1107 merged; prod recovering; soak **restarted** 18:52:52Z)
 
 ---
 
 ## Governance
 
-- **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 draft closed superseded.
-- **#1088 gate live:** `pump_desk_trust.ready=true`, `pump_ladder=ok` on `/api/ops/readiness`. Full desk path (`/api/pump-alerts`) also requires non-placeholder signal snapshots — currently `signal_snapshots_stale=true` (expected until ladder scan refreshes trail rows).
-- **Sentinel soak:** armed 2026-08-28 ~15:54Z → **close #1072** after clean window **2026-08-29 ~15:54Z** (~8:54 AM PDT). Then G0×2 → close **#1058**.
-- **Resolver watch:** prod resolver `failing` (persisted, last tick 16:56Z). `/api/liveness` may timeout under load — use `/api/ops/readiness` persisted trackers for soak truth. Bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if `cycle_timeout_120s` recurs.
-- **Fleet queue (2026-08-28):** **#1066** Sentinel → **#1065** Proof Scout → **#1067** Shield → **#1064** Market Desk → **#1093** docs — **all merged** to main `eb36b0fa`. Read-only bots; no new routes. Deploy when convenient.
+- **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 closed superseded.
+- **#1107:** `RESOLVER_CYCLE_TIMEOUT_SECONDS` 120→180 merged `24488f4e`. Deploy **#1108** fly-deploy labeled.
+- **Resolver recovery (18:50Z):** persisted stall from 16:56Z cleared. `prediction_resolver=ok`, `consecutive_failures=0`. Ops truth = persisted `/api/liveness` + `/api/ops/readiness` (ignore web `/api/learning/health`).
+- **Soak RESTARTED:** 2026-08-28 **18:52:52Z** (first verified clean read post-recovery). **#1072** closes **2026-08-29 18:52:52Z** (~11:52 AM PDT). Prior soak from 15:54Z contaminated (resolver froze 16:56Z).
+- **Fleet deploy HOLD:** #1064–#1067 + #1093 on main, **not deployed**. Cut after #1072 closes.
+- **#1065 Proof Scout:** already merged `cc734681` (v5 rebase task N/A — on main).
 
 ## Standing policy
 
@@ -50,7 +51,7 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
-| #1072 | Sentinel | **#1089** | **Soak** | Formal close after 2026-08-29 ~15:54Z. |
+| #1072 | Sentinel | **#1089** | **Soak (restarted)** | Clean window from **2026-08-28 18:52:52Z** → close **2026-08-29 18:52:52Z**. |
 | #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. |
 | #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. |
 | #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. |
@@ -63,9 +64,9 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 ### Remaining (not executed)
 
-- **Sentinel soak → #1072 close** — window ends **2026-08-29 ~15:54Z** (~8:54 AM PDT).
+- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z** (~11:52 AM PDT).
 - **G0 harness ×2 → #1058 formal close** — after soak.
-- **Resolver timeout watch** — bump `RESOLVER_CYCLE_TIMEOUT_SECONDS` if 120s cap keeps firing.
+- **Resolver watch** — if tick wedges again past 180s cap, capture phase/subsystem delta; do NOT just bump higher (#1107 is mitigation).
 - Hydrate drafts **#1073 / #1060 / #1061** untouched.
 
 ---
@@ -86,6 +87,15 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~19:14 UTC — v5 delegation: #1107 merge + resolver recovery + soak restart
+
+- **#1107 merged** `24488f4e` (RESOLVER_CYCLE_TIMEOUT_SECONDS 120→180). **#1108** fly-deploy labeled.
+- **Incident cleared:** stall from 16:56Z; recovery tick **18:50:55Z**, liveness last **18:59:04Z**.
+- **Verify (5 criteria):** (1) resolver=ok ✓ (2) readiness ready, loop ok ✓ (3) tick past 16:56Z ✓ (4) tick advanced stall→18:50→18:59; NOT in final 3-min pair (15m scheduler) — watch next cycle (5) consecutive_failures=0 ✓
+- **Soak RESTART:** **2026-08-28 18:52:52Z** → #1072 close **2026-08-29 18:52:52Z**.
+- **#1065:** already merged `cc734681`; v5 rebase N/A. Fleet deploy held post-soak.
+- **Per-bot:** #1066 merged | #1065 merged | #1067 merged | #1064 merged | #1093 merged — all code-only, not on prod.
 
 ### 2026-08-28 ~17:10 UTC — #1102 deploy + #1088 governance ship-it
 
