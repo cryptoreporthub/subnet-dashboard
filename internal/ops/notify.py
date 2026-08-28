@@ -69,8 +69,8 @@ _REDACTED = "[redacted]"
 _MAX_RECENT = 500
 _RECENT: Deque[Dict[str, Any]] = deque(maxlen=_MAX_RECENT)
 
-# Shield audit path only when kwargs are exclusively these keys (Drift/QA adds more).
-_AUDIT_ONLY_KWARGS = frozenset({"bot", "payload", "run_id", "level"})
+# Shield uses the audit-id path; sibling bots keep the legacy record dict.
+_SHIELD_BOT = "shield"
 
 
 def _key_is_sensitive(key: str) -> bool:
@@ -187,14 +187,12 @@ def _audit_notify(
 def notify(event: str, **fields: Any) -> Union[str, Dict[str, Any]]:
     """Shared logging-only notify.
 
-    Shield (audit_id str): ``notify(event, bot=..., run_id=..., payload=...)`` with
-    only ``bot`` / ``payload`` / ``run_id`` / ``level`` kwargs.
+    Shield (audit_id str): ``notify(event, bot="shield", run_id=..., payload=...)``.
 
-    Drift/QA / Mission Control (record dict): any extra kwargs (e.g.
-    ``observation_only``) keep the legacy nested-payload record shape.
+    Drift/QA / Mission Control (record dict): any other ``bot=`` keeps the legacy
+    nested-payload record shape.
     """
-    keys = frozenset(fields)
-    if keys <= _AUDIT_ONLY_KWARGS and "bot" in fields:
+    if str(fields.get("bot") or "").strip().lower() == _SHIELD_BOT:
         return _audit_notify(
             event,
             bot=str(fields["bot"]),
