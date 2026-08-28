@@ -2,11 +2,38 @@
 
 from __future__ import annotations
 
+import json
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+
 import internal.council.pick_scheduler as pick_scheduler
+from tests.liveness_conformance import assert_liveness_compliant
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file."""
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        sm_path.parent.mkdir(parents=True, exist_ok=True)
+        sm_path.write_text(json.dumps(blob), encoding="utf-8")
+
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
 
 
 def test_pick_scheduler_disabled(monkeypatch):
@@ -64,6 +91,42 @@ def test_hour_run_once_records_prediction(monkeypatch):
     assert result["ok"] is True
     assert recorded["netuid"] == 7
     assert result["netuid"] == 7
+    assert sched.liveness.snapshot()["status"] == "ok"
+
+
+def test_hour_pick_scheduler_liveness_conformance():
+    def factory():
+        return pick_scheduler.HourPickScheduler(refresh_minutes=60).liveness
+
+    assert_liveness_compliant(factory)
+
+
+def test_hour_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
+    """Web-orphan fix: hour slot truth survives worker process boundary."""
+    pick_scheduler.stop_pick_schedulers()
+    monkeypatch.setattr(
+        "internal.council.hourly_pick.select_hourly_pick",
+        lambda subnets, ctx: {"subnet": {"netuid": 3}, "final_confidence": 0.4},
+    )
+    monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_k: None)
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 3, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+
+    sched = pick_scheduler.HourPickScheduler(refresh_minutes=180)
+    sched.run_once()
+    pick_scheduler.stop_pick_schedulers()
+
+    # Simulate a fresh web process with no in-memory tracker registration.
+    monkeypatch.setattr(pick_scheduler, "get_tracker", lambda _name: None)
+
+    state = pick_scheduler.get_pick_scheduler_state()
+    hour = state["hour"]
+    assert hour["status"] == "ok"
+    assert hour["lifecycle"] is not None
+    assert hour["source"] == "persisted"
+    assert hour["last_success_at"] is not None
+    assert hour["liveness"]["status"] == "ok"
+    assert hour["liveness"]["source"] == "persisted"
 
 
 def test_start_stop_idempotent(monkeypatch):
