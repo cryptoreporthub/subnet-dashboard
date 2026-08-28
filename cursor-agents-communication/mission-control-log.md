@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless gated (#1088 behavior change).
 
-**Snapshot:** 2026-08-28 ~15:48Z (main `fcbce1ec`; **Fly deploy in flight** via #1098 `fly-deploy` label)
+**Snapshot:** 2026-08-28 ~15:54Z (main `fcbce1ec`; **prod deploy success** run 33186935806 via #1098)
 
 ---
 
@@ -48,8 +48,7 @@ Branches off **main `c82c59fe`** — last verified 2026-08-28 ~15:35Z.
 
 ### Remaining (not executed)
 
-- **GATE — Fly deploy:** Trigger via **`fly-deploy` label** on a deploy PR (Composer) or `workflow_dispatch`. **#1098** labeled 2026-08-28 ~15:48Z — bundle: #1089 + #1086/#1090 + #1095/#1087 on `fcbce1ec`.
-- **After deploy:** Sentinel 24h soak on prod (`/health`, `/api/ops/live`, wedge-recurrence window) → then formally close **#1072**. Do not skip even though merge CI was green.
+- **Deploy done:** #1098 `fly-deploy` → run **33186935806** success 2026-08-28T15:52:44Z. Prod `/api/liveness` live (daily_pick/hour_pick trackers). Sentinel **24h soak** started ~15:54Z → close #1072 after clean window.
 - **Optional after deploy:** G0 harness ×2 on prod → formal **#1058** close.
 - **#1088** Market Desk — DRAFT HOLD; human merge only; outside MC autonomous-merge policy.
 - Leftover PRs **#1064–#1067** and hydrate drafts untouched.
@@ -76,8 +75,8 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ### 2026-08-28 ~15:48 UTC — Fleet takeover + Fly deploy (#1098)
 
 - **Policy:** Composer owns all six bot roles; bot-directed work routes to Composer. Deploy via `fly-deploy` label (not Joshua-only).
-- **Deploy:** #1098 labeled `fly-deploy`; workflow run 33186935806. Bundle at `fcbce1ec` (+ empty trigger commit).
-- **After deploy:** Sentinel 24h prod soak → close #1072. Optional G0 ×2 → #1058.
+- **Deploy:** #1098 labeled `fly-deploy`; workflow **33186935806 success** (15:52:44Z). `/api/liveness` confirmed on prod.
+- **Soak:** Sentinel 24h watch armed through **2026-08-29 ~15:54Z** (`/health`, `/api/ops/live`, wedge window).
 - **Parked:** #1088 human-merge-only (behavior change).
 
 ### 2026-08-28 ~15:35 UTC — Deploy is the board choke point (Joshua)
