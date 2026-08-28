@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~20:10Z (main `cfbe842a`; prod `e86070b` with `RESOLVER_CYCLE_TIMEOUT_SECONDS=180`; #1060 audit **FAIL CLOSED**)
+**Snapshot:** 2026-08-28 ~21:39Z (main `cfbe842a`; **intended prod** `e86070b` time-boxed; worker `/proc` timeout **180**; #1060 still **FAIL CLOSED**)
 
 ---
 
@@ -10,6 +10,7 @@
 
 - **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 closed superseded.
 - **#1107:** `RESOLVER_CYCLE_TIMEOUT_SECONDS` 120→180 merged `24488f4e`. Deploy **#1108** fly-deploy labeled.
+- **Prod×main (2026-08-28 21:39Z, option b):** intended prod SHA **`e86070b`** (tree-identical to `#1110` `57a7b18f`; parent `cfbe842a`). Divergence is **intentional and time-boxed** until soak end **2026-08-29 18:52:52Z** (next authorized main deploy). Do **not** promote `cfbe842a` now.
 - **Resolver recovery (18:50Z):** persisted stall from 16:56Z cleared. `prediction_resolver=ok`, `consecutive_failures=0`. Ops truth = persisted `/api/liveness` + `/api/ops/readiness` (ignore web `/api/learning/health`).
 - **Soak RESTARTED:** 2026-08-28 **18:52:52Z** (first verified clean read post-recovery). **#1072** closes **2026-08-29 18:52:52Z** (~11:52 AM PDT). Prior soak from 15:54Z contaminated (resolver froze 16:56Z).
 - **Fleet deploy HOLD:** #1064–#1067 + #1093 on main, **not deployed**. Cut after #1072 closes.
@@ -87,6 +88,82 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-28 ~21:39 UTC — prod×main reconciliation + resolver evidence gates
+
+**No merge, no prod deploy, no timeout bump this session.**
+
+#### Gate 0 — prod×main reconciliation (blocking)
+
+| Item | Live |
+|------|------|
+| `origin/main` | `cfbe842a` (2026-08-28 19:15:08Z local / 12:15:08 -0700) #1109 |
+| Prod SHA | `SENTRY_RELEASE=e86070b034011ca97af95ebe5e64ed593bd69124` (`/proc/649` + `/proc/643` at **2026-08-28T21:33:30Z**) |
+| Relationship | `cfbe842a` **is ancestor of** `e86070b`. `e86070b` **not on main**. `git log main..e86070b` = 1 docs-only commit (`mission-control-log.md` +1). `git log e86070b..main` = empty. Tree of `e86070b` **==** `#1110` commit `57a7b18f`. `#1110` HEAD `47db090` is `e86070b` + 7 more MC-log lines — **not** what is running. |
+| Product delta vs main | **none** for `fly.toml` / resolver: both have `RESOLVER_CYCLE_TIMEOUT_SECONDS=180`. |
+
+**Decision (b), not (a):** do **not** promote `cfbe842a` to prod now.
+
+- **Why `e86070b` is the intended prod release:** legitimate PR-triggered path after #1108 Deploy-app **FAIL** (run **33201296527**). #1110 (`cursor/fly-deploy-1107-retry-f603`) carried the #1107 timeout onto a deployable SHA. Fly **v2095** complete **2026-08-28T19:21:10Z**; machine `7841024b3712e8` updated **19:21:31Z**; kernel `btime` **19:21:30Z**; web pid **643** + worker pid **649** started **19:21:31Z**. Git commit timestamp **19:18:06Z** is **not** the deploy instant.
+- **Why not (a) now:** promoting `cfbe842a` is a machine restart for **zero** resolver/product delta vs `e86070b`, forbidden while evidence gates were open, and would contaminate the soak.
+- **Time-box:** intended SHA stays **`e86070b` until 2026-08-29 18:52:52Z** (soak / #1072 close target). Next **authorized** Fly deploy must be `origin/main` (or main fast-forwarded to include this docs commit) so prod == main. Until then the divergence is **recorded, not silent**.
+- **Workflow-run evidence:** #1108 Deploy app **33201296527** ❌. #1110 PR checks show smoke **33203323484** ✅ only (HEAD `47db090` — later than deployed SHA). **GAP:** GitHub `gh` 401 — cannot list `fly.yml` run that produced v2095. Deployment truth used instead: Fly release timestamp + process start + `/proc` `SENTRY_RELEASE`.
+
+#### Gate 1 — is 120→180 loaded in the running process?
+
+| Item | Value |
+|------|-------|
+| Verdict | **YES — 180 is loaded** |
+| Method | `flyctl machine exec 7841024b3712e8` read `/proc/649/environ` (cmd `python -m internal.worker`) and `/proc/643/environ` (`python scripts/run_web_with_guard.py`) |
+| Timestamp | **2026-08-28T21:33:30Z** (reconfirmed with start times **21:34:56Z**) |
+| Worker | pid **649**, `RESOLVER_CYCLE_TIMEOUT_SECONDS=180`, `RESOLVER_REFRESH_MINUTES=15`, `SENTRY_RELEASE=e86070b…` |
+| Web | pid **643**, same timeout/SENTRY |
+| Process start | **2026-08-28T19:21:31Z** (both pids; uptime ~8005s at 21:34:56Z) |
+
+No further timeout bump. Value is 180 in the live worker, not only `fly.toml`.
+
+#### Gate 2 — freeze timeline vs 19:18:06Z
+
+**19:18:06Z is the git author time of `e86070b` / first #1110 commit. Process-start / Fly cut is 19:21:31Z / v2095 19:21:10Z.**
+
+| Clock | Event |
+|-------|--------|
+| **19:16:36Z** | `learning_loop_health.last_resolver_tick` last value (still frozen at 21:38Z) — **BEFORE** 19:18:06Z |
+| 19:18:06Z | git commit `e86070b` / `57a7b18f` (same tree) |
+| 19:18:13Z | PR #1110 opened |
+| 18:53–18:56Z | #1108 Deploy app FAIL **33201296527**; Fly releases 2090–2092 in this window |
+| 19:19:09–19:20:57Z | #1110 smoke **33203323484** |
+| 19:19:27 / 19:19:55 / **19:21:10Z** | Fly releases 2093, 2094, **2095** (current image `deployment-01M14X1RNN9Q9WBG967YHVFNZ2`) |
+| **19:21:31Z** | worker+web process start (pid 649/643) |
+| **19:44:45Z** | persisted `prediction_resolver.last_success_at` — **AFTER** deploy |
+| **20:01:08Z** | skip event (`consecutive_skips=1`); last_success **did not** move — ~16.4 min after 19:44:45 (≈15m refresh) |
+| **21:07:21Z** | last_success advanced again (post-skip recovery) |
+| 21:35:36Z READ1 | last_success still **21:07:21Z**, status `ok`, age 1700s |
+| 21:38:37Z READ2 | last_success **unchanged**, status **`stale`**, age 1877s; `last_resolver_tick` still **19:16:36Z** |
+
+**Causality:**
+
+1. `last_success_at` freeze observed 19:50–20:06Z: **freeze_start = 19:44:45Z > 19:18:06Z** and **> 19:21:31Z**. Deploy did **not** start that freeze; a **post-deploy success** then a skip at 20:01:08Z did.
+2. `last_resolver_tick` (loop_health): **freeze_start ≤ 19:16:36Z < 19:18:06Z**. Field never caught 19:44:45 or 21:07:21. **Pre-deploy stale web snapshot**, not caused by e86070b.
+3. Tick deltas: 19:44:45 → 21:07:21 = **+82.6 min** (not 15 min). READ2 real-time gap vs last_success = **1877s (~31.3 min)** — cadence broken even with 180s timeout loaded.
+4. Hypothesis upgrade: **fix present (180 in `/proc/649` from process start) but 15m cadence still not held.** Not “timeout never loaded.”
+
+#### Gate 3 — #1060 (re-pulled)
+
+| Issue | GitHub | Quality |
+|-------|--------|---------|
+| #1058 | CLOSED 2026-08-27T06:04:59Z (`completed`) on n=3 SHA `ca118843` / Fly **33040064615** | Close was for **#1071** critpath, **not** G0 post-offload bar in #1060. Stale vs this gate. |
+| #1072 | CLOSED 2026-08-28T06:15:52Z (`completed`) | Soak restart 18:52:52Z still running — GitHub close ≠ soak complete. |
+| #1060 | **OPEN** draft, head `cursor/post-offload-audit-ec01` `7b937797` | Keep open. |
+
+**Current prod evidence (this session):**
+
+- Hydration (same SHA `e86070b`, 19:51/19:56Z G0): hero **2.422s / 7.593s** — still the latest G0 pair; SHA unchanged so not re-run (avoid load during freeze forensics).
+- Resolver two reads **2.5 min apart (21:35:36Z → 21:38:37Z):** last_success **did not advance** (21:07:21Z both). **FAIL.**
+
+**#1060 verdict: FAIL CLOSED — leave open. Flag Joshua.** Cadence + stale `last_resolver_tick` remain.
+
+**Deviations:** none new (no deploy, no merge to main, no timeout change). Prior #1110 auto-retry still on record.
 
 ### 2026-08-28 ~20:10 UTC — v5 resume: #1060 G0 audit + #1107 prod verify
 
