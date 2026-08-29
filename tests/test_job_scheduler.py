@@ -26,3 +26,15 @@ def test_schedule_in_seconds_runs_callback():
     assert seen == ["ok"]
     job_scheduler.cancel_job("test-once-job")
     _reset_scheduler_state()
+
+
+def test_schedule_in_seconds_sets_misfire_grace():
+    """Hour pick was MISSED (grace=1s) while daily occupied the executor for 90s."""
+    _reset_scheduler_state()
+    job_scheduler.schedule_in_seconds("test-grace-job", lambda: None, 60)
+    sched = job_scheduler.get_background_scheduler()
+    job = sched.get_job("test-grace-job")
+    assert job is not None
+    assert job.misfire_grace_time == 180
+    job_scheduler.cancel_job("test-grace-job")
+    _reset_scheduler_state()
