@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-29 ~00:30Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **P0** snapshot stall live + #1112 open; **A3 no new filing**; **P1** cadence still unproven; #1060 liveness leg pass / G0 pending)
+**Snapshot:** 2026-08-29 ~01:22Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **P0** snapshot freeze still 20:18:26Z same pids; FP1 case (1) revive start path; FP2 SUPPORTED shared-loop wedge on 649; **no filing**; #1060/#1112 open)
 
 ---
 
@@ -65,13 +65,14 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 ### Remaining (not executed)
 
-- **P0 snapshot stall** live (`run_at` still 20:18:26Z, strike 40/2). **A3: no new GitHub issue** (reviver not orphaned; shared-process starvation not supported; do not file a gate-logic bug). Residual freeze mechanism after 20:18Z reportable.
-- **P0 #1112** stall-guard imports deleted `_last_resolver_tick` — resolver revive inert. Independent of #1060; do not close together. **Not** an umbrella for the snapshot stall (A2a call site exists).
-- **P1 cadence** mechanism still unproven for the 110-min gap (no `tick_start`). Current window: cycles **do** fire (`cycle_timeout_180s` then success). last_success intervals 82.6 → 34.8 → 110 → ~33 → **~21.5 min** — **not** recovering to 15 min.
-- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z**.
-- **#1060** FAIL CLOSED open. Liveness leg **PASS** (pair 00:24:19Z → 00:29:41Z advanced). Hydration G0 **not** re-run.
+- **P0 snapshot stall** live (`run_at` still 20:18:26Z, same pids 643/649 since 19:21:31Z). FP1 case **(1)** — start path exists (strike-1 revive on worker). Freeze = loop-stopped after a completed cycle. **No new GitHub issue** (stop condition did not fire).
+- **FP2** SUPPORTED: shared-loop / subsystem wedge on pid 649 at ~20:18:26Z (not whole-process). Persist-vs-tick caveat.
+- **P0 #1112** stall-guard dead `_last_resolver_tick`. Independent of this stall; not a vehicle for it.
+- **P1 cadence** 110-min gap still unproven (no `tick_start`). `duration_ms=220709` is **worker `_tick` wall time**, not the stall guard.
+- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z** (hold expiry same instant).
+- **#1060** FAIL CLOSED open. Liveness leg **PASS**. Hydration G0 **not** re-run (latest pair on this SHA: 19:51:50Z / 19:56:36Z).
 - Hydrate drafts **#1073 / #1061** untouched. Held **#1074 / #1069 / #1036** untouched.
-- **KILL=0 stays off.** Hold expiry **2026-08-29 18:52:52Z** — surface to Joshua, do not auto-extend.
+- **KILL=0 stays off.** Hold expiry **2026-08-29 18:52:52Z** — surface to Joshua with restart-as-diagnostic; do not auto-extend.
 
 ---
 
@@ -91,6 +92,52 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-29 ~01:22 UTC — snapshot freeze writer vs process wedge (read-only)
+
+**No merge / no deploy / no timeout bump / no KILL unmute / no #1060 or #1112 close / no filing** (stop condition did not fire). Hold `e86070b` **PROVISIONAL** expiry **2026-08-29 18:52:52Z**. Evidence class: `/proc` + file:line + git grep on `cfbe842a`/`e86070b` = **single-agent**.
+
+**Re-verify at run start:** `run_at` **still** `2026-08-28T20:18:26.392957Z` at 01:22:09Z. Same `SENTRY_RELEASE=e86070b034011c…`, same pids **643/649**, start **19:21:31Z**. No in-generation revive recovery; no early deploy/rollback.
+
+**G0 timestamp check (do not reuse B's "predates freeze" as settled starvation):** `artifacts/g0-baseline/resume-prod-{1,2}/summary.json` `captured_at` = **2026-08-28T19:51:50Z** and **19:56:36Z** (hero 2.422s / 7.593s). That is **after** boot 19:21:31Z and **before** freeze 20:18:26Z — not ~23:17Z. Hits **web**. Worker `heavy_job_gate` remains in-process; G0 still cannot hold pid 649's lock. Pattern sighting 07:10Z prior generation: **not found in-repo**; cite as unconfirmed sighting only.
+
+#### FP1 — who wrote 20:18:26Z
+
+**a. Boot ordering.** Pid 643 start **19:21:31.040Z**, pid 649 **19:21:31.070Z**, `/proc/1` **19:21:31.453Z**. Fly machine last updated 19:21:31Z (deploy **33203293244** → `e86070b`). **boot < 20:18:26Z** → producer **RAN this generation**. Snapshot age at 01:22:09Z = **18223s**. Frozen row still `ok: true`, count 40, `written_at` 20:18:26.271Z vs file mtime 20:18:26.344Z vs `run_at` 20:18:26.392Z (~48–121ms) — **completed cycle**, then stopped cycling.
+
+**b. Writer grep** (`cfbe842a` ≡ `e86070b` for these lines):
+
+| Site | Guard |
+|------|--------|
+| `background_boot.py:491` → `_start_score_snapshot_scheduler` | `if heavy:` only (`:487-491`). Essential skips it. |
+| `background_boot.py:294` | inside that helper; `SCORE_SNAPSHOT_BOOT_IMMEDIATE` default `on` if worker |
+| `score_snapshots.py:719` | `revive_score_snapshot_scheduler` → `start_score_snapshot_scheduler(immediate=False)` then `run_once` |
+| `loop_stall_guard.py:114-119` | strike-1 `_try_revive` → revive (worker mode only) |
+| tests | `test_background_boot.py`, `test_score_snapshots.py`, `test_loop_stall_guard.py` |
+
+No other prod callers of `start_score_snapshot_scheduler` / `_start_score_snapshot_scheduler`. No HTTP/`write_full_universe_snapshot` caller outside `_tick_body` + tests.
+
+**run_at WRITE SITE:** `_tick_body` persists `run_at=started_at` with `phase=scoring` at **cycle start** (`score_snapshots.py:539-540`), then overwrites with success/fail `run_at=_now_iso()` **after** `write_full_universe_snapshot` (`:558-566`). Frozen row has `ok: true`, `phase: null` → **success persist**, not the start-of-cycle scoring row. Residual "pre-first-write wedge indistinguishable from never-started" does **not** apply to this freeze row.
+
+**c. Host process:** stall guard + revive run only in worker mode (`loop_stall_guard.py:138-140`). Essential boot does not start the producer on 649 or 643 (`BACKGROUND_ON_WEB=off`). The only remaining prod start path that can write **this generation** is **strike-1 revive on pid 649**. Fly log buffer still has no `in-place revive attempt ->` (first strike hours outside buffer) — path is **code-complete**, revive **event** unverified. After that start, producer is **in-process with the resolver on 649**.
+
+**FP1 verdict: case (1).** Start path found (revive, not essential boot). Freeze narrows to **loop-stopped / hung-tick / subsystem wedge after a completed cycle**. Not case (2) contradiction. Not case (3) (this generation booted **before** 20:18:26Z). Stop condition **does not fire**.
+
+#### FP2 — wedge correlation
+
+20:18:26Z sits ~34 min inside the 19:44:44Z→21:07:20Z (82.6 min) last_success gap; cadence then 34.8 → 110. Producer on **pid 649 with the resolver**. Resolver persists after freeze (21:42 / 23:32 / 00:05 / 00:26 / persist 01:15:06Z) falsify a whole-process death.
+
+**FP2 verdict (one sentence):** **SUPPORTED** that a shared-loop / subsystem wedge on pid 649 at ~20:18:26Z stopped snapshot cycling after a completed cycle while the resolver loop stayed alive but degraded — last_success times are persists, not tick times, so simultaneity is inferred.
+
+#### FP3 — what `duration_ms=220709` measures
+
+**(a) worker cycle duration, not the stall guard.** `resolver_scheduler.py:298` `tick_started=time.perf_counter()` at `_tick` entry; `:367` logs `duration_ms` after `_run_refresh_cycle_with_timeout()` returns. Timeout path: `fut.result(timeout=RESOLVER_CYCLE_TIMEOUT_SECONDS)` around `_run_refresh_cycle` (grade due predictions) on a 1-thread pool (`:433-499`); on timeout the scheduler **does not join** the orphan thread (`pool.shutdown(wait=False)`). `cycle_timeout_180s` + `duration_ms=220709` means the **`_tick` frame** ran ~40s past the 180s budget (timeout wait + abandon/persist/log). Named phase: **`_run_refresh_cycle`** (un-joined after timeout). Matches the slow-handler family (`/api/learning/health` 20s, liveness curls 16–28s); **not** a stall-guard checker duration.
+
+#### Decision items (surface, do not decide)
+
+1. Hold expiry **18:52:52Z**: no auto-rollback, no auto-extend. (a) freeze **unrecoverable until next deploy/restart** (one-shot revive spent `:197-199`); (b) restart = cheapest diagnostic — producer healthy post-restart → transient hang; producer absent → boot-config gap (essential omits `_start_score_snapshot_scheduler`), then file; (c) KILL=0 — strikes climbing against a frozen field; unmute = `os._exit(1)` restart loop.
+2. #1060: liveness leg PASSES (00:05:15Z → 00:26:47Z, ~5.4 min spacing disclosed); hydration G0 un-run; FAIL CLOSED, stays open. #1112: open; **not** a vehicle for this stall.
+3. KILL stays 0.
 
 ### 2026-08-29 ~00:30 UTC — snapshot-stall vs cadence (A2a first, B before A3)
 
