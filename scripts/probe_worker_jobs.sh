@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # FP7: read worker-side APScheduler job inventory (GET /jobs on WORKER_HTTP_PORT).
 # Requires #1116 deployed (worker listens on 8081). Read-only.
-# v2: robust against flyctl non-JSON status output; tolerates machine state noise.
+# v3: use python3 urllib inside the machine (curl is NOT in the prod image).
 set -uo pipefail
 APP="${FLY_APP:-subnet-dashboard}"
 PORT="${WORKER_HTTP_PORT:-8081}"
@@ -24,11 +24,11 @@ if [ -z "${TARGET_ID:-}" ] || [ "$TARGET_ID" = "null" ]; then
 fi
 echo "probe machine=$TARGET_ID port=$PORT"
 
-# Machine state check is best-effort only (flyctl status output may be non-JSON).
-STATE="$(flyctl machine status "$TARGET_ID" -a "$APP" --json 2>/dev/null | jq -r '.state // empty' 2>/dev/null || true)"
-echo "machine state=${STATE:-unknown}"
-
 echo "== /jobs inventory =="
-OUT="$(flyctl machine exec "$TARGET_ID" "curl -sS --max-time 20 -w '\nHTTP_CODE=%{http_code}' http://127.0.0.1:${PORT}/jobs" --app "$APP" --timeout 60 2>&1 || true)"
-echo "$OUT" | head -c 12000
+OUT="$(flyctl machine exec "$TARGET_ID" "python3 -c \"import urllib.request as u; print(u.urlopen('http://127.0.0.1:${PORT}/jobs').read().decode())\"" --app "$APP" --timeout 60 2>&1 || true)"
+if [ -z "$OUT" ]; then
+  echo "EMPTY response from /jobs (probe exec produced nothing)"
+else
+  echo "$OUT" | head -c 12000
+fi
 echo ""
