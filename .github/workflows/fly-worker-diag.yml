@@ -1,3 +1,4 @@
+
 name: Fly worker diag
 
 on:
@@ -29,5 +30,9 @@ jobs:
         run: bash scripts/worker-diag.sh
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Worker /jobs inventory (FP7)
+        run: bash scripts/probe_worker_jobs.sh
+        env:
+          FLY_API_TOKEN: ${secrets.FLY_API_TOKEN}
       - name: Public data-freshness
         run: curl -fsS https://subnet-dashboard.fly.dev/api/data-freshness | python3 -m json.tool
