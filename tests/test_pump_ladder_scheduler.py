@@ -116,3 +116,21 @@ def test_record_ladder_scan_run_persists_meta(tmp_path, monkeypatch):
 def test_tracker_is_liveness_compliant():
     sched = _make_scheduler()
     assert_liveness_compliant(lambda: sched.liveness)
+
+
+def test_ensure_returns_already_running_when_active():
+    """#1087 leftover: ensure_* must read _active, not deleted _running."""
+    from internal.pump import scheduler as pump_sched
+
+    pump_sched.stop_pump_ladder_scheduler()
+    sched = pump_sched.PumpLadderScheduler()
+    sched._active = True
+    with pump_sched._lock:
+        pump_sched._scheduler = sched
+    try:
+        out = pump_sched.ensure_pump_ladder_scheduler()
+        assert out == {"started": False, "reason": "already running"}
+        assert not hasattr(sched, "_running")
+    finally:
+        with pump_sched._lock:
+            pump_sched._scheduler = None

@@ -266,6 +266,6 @@ def get_pump_ladder_scheduler_state() -> Dict[str, Any]:
 def ensure_pump_ladder_scheduler(immediate: bool = False) -> Dict[str, Any]:
     """Idempotent start used by analytics/resolver boot hooks."""
     with _lock:
-        if _scheduler is not None and _scheduler._running:
+        if _scheduler is not None and _scheduler._active:
             return {"started": False, "reason": "already running"}
     return start_pump_ladder_scheduler(immediate=immediate)
