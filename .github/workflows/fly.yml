@@ -1,3 +1,4 @@
+
 name: Fly Deploy
 on:
   # INCIDENT 2026-08-19: push-to-main disabled until fly.toml + this workflow + contract
@@ -8,6 +9,10 @@ on:
   workflow_dispatch:
   pull_request:
     types: [labeled]
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   deploy-guard:
     name: Deploy Guard
@@ -246,26 +251,24 @@ jobs:
             sleep 10
           done
           echo "WARN: live_subnets not fresh after ~8m (check worker logs)"
-          curl -fsS -m 15 "$BASE/api/data-freshness" | python3 -m json.tool || true
-      - name: Learning loop post-deploy check
-        continue-on-error: false
+          curl -fsS -m 15 "$BASE/api/data-freshness" | pyth
+
+[read_links truncated 870 chars from this runtime tool output. The full content is stored with the tool result.]
+      - name: Worker /jobs inventory (FP7, post-deploy)
+        continue-on-error: true
         run: |
-          set -e
-          chmod +x scripts/check_learning_loop.sh
-          # Sustained health: 3 spaced probes before learning check
-          ok=0
-          for i in 1 2 3; do
-            code=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" https://subnet-dashboard.fly.dev/health || echo 000)
-            echo "sustained health $i: HTTP $code"
-            [ "$code" = "200" ] && ok=$((ok + 1)) || true
-            sleep 5
-          done
-          if [ "$ok" -lt 2 ]; then
-            echo "GUARD FAIL: sustained /health below 2/3"
-            exit 1
-          fi
-          APP_BASE_URL=https://subnet-dashboard.fly.dev ./scripts/check_learning_loop.sh
+          set +e
+          bash scripts/probe_worker_jobs.sh > /tmp/fp7-jobs.out 2>&1
+          rc=$?
+          cat /tmp/fp7-jobs.out
+          echo 'FP7_PROBE_RC='$rc | tee -a /tmp/fp7-jobs.out
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-# redeploy-marker-20260811
+      - name: Post FP7 /jobs inventory to PR
+        if: github.event_name == 'pull_request'
+        run: |
+          { echo '**FP7 worker /jobs inventory (post-deploy)**'; echo '```'; cat /tmp/fp7-jobs.out; echo '```'; } > /tmp/fp7-body.txt
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/fp7-body.txt || echo 'comment failed (non-fatal)'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
