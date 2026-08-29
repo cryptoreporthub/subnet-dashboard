@@ -422,14 +422,17 @@ def test_fly_worker_split_v2_guard_reads_fly_toml():
 
 def test_diag_scripts_use_grep_not_rg():
     """Portable diagnostics — GitHub runners may not have ripgrep."""
-    workflow_paths = [
-        Path(".github/workflows/fly-worker-diag.yml"),
-        Path(".github/workflows/worker-diag-v1.yml"),
-    ]
-    for path in workflow_paths:
-        text = path.read_text(encoding="utf-8")
-        assert "grep" in text
-        assert not re.search(r"\brg\b", text), f"{path} must not use rg"
+    v1 = Path(".github/workflows/worker-diag-v1.yml").read_text(encoding="utf-8")
+    assert "grep" in v1
+    assert not re.search(r"\brg\b", v1), "worker-diag-v1.yml must not use rg"
+
+    # fly-worker-diag.yml now shells out to probe_worker_jobs.sh (no inline grep).
+    diag_wf = Path(".github/workflows/fly-worker-diag.yml").read_text(encoding="utf-8")
+    assert "probe_worker_jobs.sh" in diag_wf
+    assert not re.search(r"\brg\b", diag_wf), "fly-worker-diag.yml must not use rg"
+    probe = Path("scripts/probe_worker_jobs.sh").read_text(encoding="utf-8")
+    assert not re.search(r"\brg\b", probe), "probe_worker_jobs.sh must not use rg"
+
     diag = Path("scripts/worker-diag.sh").read_text(encoding="utf-8")
     assert not re.search(r"\brg\b", diag), "worker-diag.sh must not use rg"
     for line in diag.splitlines():

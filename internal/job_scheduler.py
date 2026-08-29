@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 # the logging wrapper.
 _JOB_RETRY_SECONDS = int(os.environ.get("JOB_RETRY_SECONDS", "60"))
 _JOB_RETRY_CAP = int(os.environ.get("JOB_RETRY_CAP", "5"))
+# DateTrigger default grace is 1s; a 90s daily-pick tick then MISSES the hour job.
+_JOB_MISFIRE_GRACE_SECONDS = int(os.environ.get("JOB_MISFIRE_GRACE_SECONDS", "180"))
 _retry_counts: Dict[str, int] = {}
 
 
@@ -93,6 +95,7 @@ def schedule_interval_seconds(
         IntervalTrigger(seconds=seconds, start_date=start),
         id=job_id,
         replace_existing=replace_existing,
+        misfire_grace_time=_JOB_MISFIRE_GRACE_SECONDS,
     )
 
 
@@ -113,6 +116,7 @@ def schedule_in_seconds(
         DateTrigger(run_date=run_at),
         id=job_id,
         replace_existing=replace_existing,
+        misfire_grace_time=_JOB_MISFIRE_GRACE_SECONDS,
     )
 
 
