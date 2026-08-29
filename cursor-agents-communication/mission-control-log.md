@@ -2,7 +2,9 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-29 ~01:46Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **F1 filed #1113**; F2 not filed; freeze still 20:18:26Z; KILL=0; #1060/#1112 open)
+**Snapshot:** Fri 2026-08-28 **6:46 PM MST** (01:46Z Sat) — main `cfbe842a`; prod `e86070b` PROVISIONAL; **F1 #1113**; F2 not filed; freeze still 1:18:26 PM MST (20:18:26Z); KILL=0; #1060/#1112 open
+
+**Clock:** operator-facing times = **Arizona MST** (`America/Phoenix`, UTC−7, no DST). UTC kept on Fly/Sentry/git evidence.
 
 ---
 
@@ -10,9 +12,9 @@
 
 - **#1080 / #1088 → #1100:** Joshua sign-off **ship it** (2026-08-28). Merged #1100 + deployed; #1088 closed superseded.
 - **#1107:** `RESOLVER_CYCLE_TIMEOUT_SECONDS` 120→180 merged `24488f4e`. Deploy **#1108** fly-deploy labeled.
-- **Prod×main (2026-08-28 21:39Z, option b, PROVISIONAL):** intended prod SHA **`e86070b`**. No named human approver on the hold — **not** “approved.” Expiry **2026-08-29 18:52:52Z**. Emergency human-approved rollback/safety still allowed. Do not reconcile-flip for the docs-only SHA delta.
+- **Prod×main (2026-08-28 2:39 PM MST / 21:39Z, option b, PROVISIONAL):** intended prod SHA **`e86070b`**. No named human approver on the hold — **not** “approved.” Expiry **Sat 2026-08-29 11:52:52 AM MST** (18:52:52Z). Emergency human-approved rollback/safety still allowed. Do not reconcile-flip for the docs-only SHA delta.
 - **Resolver recovery (18:50Z):** persisted stall from 16:56Z cleared. `prediction_resolver=ok`, `consecutive_failures=0`. Ops truth = persisted `/api/liveness` + `/api/ops/readiness` (ignore web `/api/learning/health`).
-- **Soak RESTARTED:** 2026-08-28 **18:52:52Z** (first verified clean read post-recovery). **#1072** closes **2026-08-29 18:52:52Z** (~11:52 AM PDT). Prior soak from 15:54Z contaminated (resolver froze 16:56Z).
+- **Soak RESTARTED:** Fri 2026-08-28 **11:52:52 AM MST** (18:52:52Z). **#1072** closes **Sat 2026-08-29 11:52:52 AM MST** (18:52:52Z). Prior soak from 8:54 AM MST (15:54Z) contaminated (resolver froze 9:56 AM MST / 16:56Z).
 - **Fleet deploy HOLD:** #1064–#1067 + #1093 on main, **not deployed**. Cut after #1072 closes.
 - **#1065 Proof Scout:** already merged `cc734681` (v5 rebase task N/A — on main).
 
@@ -22,6 +24,7 @@
 - Policy §3.1: critical findings and live / behavior-changing updates need **human approval only when necessary**.
 - Automation-first default: **docs, mirrors, and other non-live changes should proceed automatically when green**; reserve human review for live behavior, safety, or other explicit gates.
 - Insights **>4h** are suspect.
+- **Timezone:** Joshua-facing MC times in **Arizona MST** (`America/Phoenix`). UTC on raw log/Sentry/Fly evidence.
 - **One PR per bot**, branch `<issue>-<bot>`.
 - Canonical refs: `handoffs/bot-fleet-fanout-2026-08-27.md`, `_ci/mission_control_prompt.md`.
 - PR **#1082** merged. Do **not** add files to #1082.
@@ -52,7 +55,7 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 | Issue | Bot | PR | Status | Notes |
 |-------|-----|-----|--------|-------|
-| #1072 | Sentinel | **#1089** | **Soak (restarted)** | Clean window from **2026-08-28 18:52:52Z** → close **2026-08-29 18:52:52Z**. |
+| #1072 | Sentinel | **#1089** | **Soak (restarted)** | Clean window **Fri 11:52:52 AM MST** → close **Sat 11:52:52 AM MST** (18:52:52Z both). |
 | #1078 | Drift/QA | **#1086** | **Merged** | Head `6ee50f4b`. |
 | #1079 | Drift/QA | **#1090** | **Merged** | Head `26067c48`. |
 | #1080 | Market Desk | **#1100** | **Shipped** | Joshua sign-off. `gate_pump_desk_trust` live. |
@@ -66,10 +69,10 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 ### Remaining (not executed)
 
 - **F1 [#1113](https://github.com/cryptoreporthub/subnet-dashboard/issues/1113)** filed (orphan write/resolve pools). **F2 not filed** (e86070b did not change boot; this gen did produce at 20:18:26Z via late write complete).
-- **P0 snapshot stall** live (`run_at` still 20:18:26Z, strike **60/2** at 01:46:24Z, 4.0 min observed). Unrecoverable until deploy/restart (one-shot revive spent).
+- **P0 snapshot stall** live (`run_at` still **1:18:26 PM MST** / 20:18:26Z, strike **60/2** at **6:46:24 PM MST** / 01:46:24Z, 4.0 min observed). Unrecoverable until deploy/restart (one-shot revive spent).
 - **P0 #1112** dead `_last_resolver_tick`. Not a vehicle for this stall.
 - **P1 cadence** still unproven for the 110-min gap. Resolver timeouts from **19:26Z** this gen (before freeze).
-- **Sentinel soak → #1072 close** — ends **2026-08-29 18:52:52Z** (same instant as hold expiry).
+- **Sentinel soak → #1072 close** — ends **Sat 11:52:52 AM MST** (18:52:52Z; same instant as hold expiry).
 - **#1060** FAIL CLOSED open. Liveness leg PASS. Hydration G0 un-run.
 - Hydrate drafts **#1073 / #1061** untouched. Held **#1074 / #1069 / #1036** untouched.
 - **KILL=0 stays.** Expiry: restart = diagnostic; rollback **unverified** whether it restores a boot-started producer; drain non-daemon pool threads first.
@@ -93,9 +96,15 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### Fri 2026-08-28 6:53 PM MST — clock = Arizona MST
+
+Operator-facing MC times: **Arizona mountain time** (`America/Phoenix`, UTC−7, no DST). UTC remains on Fly/Sentry/git evidence.
+
+Hold / #1072 soak close: **Sat 2026-08-29 11:52:52 AM MST** (18:52:52Z). Freeze `run_at`: **Fri 1:18:26 PM MST** (20:18:26Z). Cutover: **Fri 12:21:31 PM MST** (19:21:31Z).
+
 ### 2026-08-29 ~01:46 UTC — revive vs deploy boundary (FP4–FP6); F1 filed #1113
 
-**No merge / no deploy / no timeout bump / no KILL unmute / no #1060 or #1112 close.** F2 **not** filed. Hold `e86070b` **PROVISIONAL** expiry **2026-08-29 18:52:52Z**. Single-agent class.
+**No merge / no deploy / no timeout bump / no KILL unmute / no #1060 or #1112 close.** F2 **not** filed. Hold `e86070b` **PROVISIONAL** expiry **Sat 11:52:52 AM MST** (18:52:52Z). Single-agent class.
 
 **Re-verify:** `run_at` still `2026-08-28T20:18:26.392957Z`. Same pids/release. Strikes **observed** 59/2@01:42:24Z → **60/2@01:46:24Z** (exactly 240s = `LOOP_STALL_GUARD_INTERVAL_SECONDS`). Do **not** treat “~54/2 by 01:22” as observed; 4.0/strike **is** observed in this window. `KILL=0`. `SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS=480` on pid 649.
 
