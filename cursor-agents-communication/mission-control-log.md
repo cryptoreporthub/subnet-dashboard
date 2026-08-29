@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-29 ~01:22Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **P0** snapshot freeze still 20:18:26Z same pids; FP1 case (1) revive start path; FP2 SUPPORTED shared-loop wedge on 649; **no filing**; #1060/#1112 open)
+**Snapshot:** 2026-08-29 ~01:46Z (main `cfbe842a`; prod `e86070b` PROVISIONAL; **F1 filed #1113**; F2 not filed; freeze still 20:18:26Z; KILL=0; #1060/#1112 open)
 
 ---
 
@@ -65,14 +65,14 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 ### Remaining (not executed)
 
-- **P0 snapshot stall** live (`run_at` still 20:18:26Z, same pids 643/649 since 19:21:31Z). FP1 case **(1)** — start path exists (strike-1 revive on worker). Freeze = loop-stopped after a completed cycle. **No new GitHub issue** (stop condition did not fire).
-- **FP2** SUPPORTED: shared-loop / subsystem wedge on pid 649 at ~20:18:26Z (not whole-process). Persist-vs-tick caveat.
-- **P0 #1112** stall-guard dead `_last_resolver_tick`. Independent of this stall; not a vehicle for it.
-- **P1 cadence** 110-min gap still unproven (no `tick_start`). `duration_ms=220709` is **worker `_tick` wall time**, not the stall guard.
-- **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z** (hold expiry same instant).
-- **#1060** FAIL CLOSED open. Liveness leg **PASS**. Hydration G0 **not** re-run (latest pair on this SHA: 19:51:50Z / 19:56:36Z).
+- **F1 [#1113](https://github.com/cryptoreporthub/subnet-dashboard/issues/1113)** filed (orphan write/resolve pools). **F2 not filed** (e86070b did not change boot; this gen did produce at 20:18:26Z via late write complete).
+- **P0 snapshot stall** live (`run_at` still 20:18:26Z, strike **60/2** at 01:46:24Z, 4.0 min observed). Unrecoverable until deploy/restart (one-shot revive spent).
+- **P0 #1112** dead `_last_resolver_tick`. Not a vehicle for this stall.
+- **P1 cadence** still unproven for the 110-min gap. Resolver timeouts from **19:26Z** this gen (before freeze).
+- **Sentinel soak → #1072 close** — ends **2026-08-29 18:52:52Z** (same instant as hold expiry).
+- **#1060** FAIL CLOSED open. Liveness leg PASS. Hydration G0 un-run.
 - Hydrate drafts **#1073 / #1061** untouched. Held **#1074 / #1069 / #1036** untouched.
-- **KILL=0 stays off.** Hold expiry **2026-08-29 18:52:52Z** — surface to Joshua with restart-as-diagnostic; do not auto-extend.
+- **KILL=0 stays.** Expiry: restart = diagnostic; rollback **unverified** whether it restores a boot-started producer; drain non-daemon pool threads first.
 
 ---
 
@@ -93,7 +93,54 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
-### 2026-08-29 ~01:22 UTC — snapshot freeze writer vs process wedge (read-only)
+### 2026-08-29 ~01:46 UTC — revive vs deploy boundary (FP4–FP6); F1 filed #1113
+
+**No merge / no deploy / no timeout bump / no KILL unmute / no #1060 or #1112 close.** F2 **not** filed. Hold `e86070b` **PROVISIONAL** expiry **2026-08-29 18:52:52Z**. Single-agent class.
+
+**Re-verify:** `run_at` still `2026-08-28T20:18:26.392957Z`. Same pids/release. Strikes **observed** 59/2@01:42:24Z → **60/2@01:46:24Z** (exactly 240s = `LOOP_STALL_GUARD_INTERVAL_SECONDS`). Do **not** treat “~54/2 by 01:22” as observed; 4.0/strike **is** observed in this window. `KILL=0`. `SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS=480` on pid 649.
+
+Strike-rate backward date ~21:49:51Z remains an **extrapolation** from earlier 2-interval fit; FP4 did not treat it as a measured first-strike.
+
+#### FP4 — thread forensics
+
+`/proc/649/task`: **15** threads, all `comm=python`, all state **S**, none **D**. Birth windows ±2min **20:18:26Z: n=0**; ±2min **21:49:51Z (extrap): n=0**.
+
+Nearby births: tid **1284** **19:52:34Z**; tid **1489** **20:00:35.530Z**; tid **1501** **20:01:40Z**.
+
+**Limitation:** Python 3.12 thread names did not appear in `comm`; revive `run_once` would not birth a thread at success time. Absent-both windows ≠ inherited.
+
+**Crash/timeout pass (Sentry, not inherited):** `score snapshot write timed out after 480s` **20:00:35Z** (PYTHON-FASTAPI-X); `cycle failed: write_timeout_480s` **20:05:53Z** (PYTHON-FASTAPI-Y). 19:52:34+480s = 20:00:35 **exact**. Late soul success **20:18:26Z** matches an **unjoined write completing after timeout** (`write_full_universe_snapshot` `:318-322` does not cancel `fut`; `_register_write_completion_callback` can persist late success). Rules out “never spawned this generation.” Durable row: **timestamps only**, no writer/instance/machine (`:586-606`).
+
+**Revive preconditions:** ENABLED, worker mode, boot grace, snapshot **age**. **No** essential/heavy skip. Age **None** → reset, **no** revive (`:178-181`). Stale file **does** revive strike-1 once.
+
+**FP4 verdict:** not “live named producer loop since 20:18.” Producer **did run** this gen (timeout then late ok). Freeze after late complete. Revive-vs-inherited **split:** inherited **ruled out**; which entry started the write (revive vs other) still **unverified** (no revive log line).
+
+#### FP5 — deploy boundary
+
+**a.** Fly release **v2095** `CreatedAt` **19:21:10Z**; pids **19:21:31Z**. **Before** 20:18:26Z → row written on the **live** generation. GitHub Actions run **33203293244** exact completion: **GAP** (`gh` 401); Fly timestamp used. `e86070b` git author 19:18:06Z is **not** the cut.
+
+**b.** Prior Fly **v2094** 19:19:55Z (image `01M14VHVDA…`). Runtime `WORKER_HEAVY` of that dead process: **unrecoverable**. `fly.toml` `WORKER_HEAVY=essential` at `e86070b`, parent, and `fe002bb0`. **Regression-vs-structural for this cutover: e86070b is docs-only** (1-line MC log). Rollback **unverified whether it would restore a boot-started producer.**
+
+**c.** Heavy-gate `if heavy: _start_score_snapshot_scheduler()` = `fe002bb0` **#906** 2026-08-13. Before that, `abcf7608` started snapshots **unconditionally**. Prod toml has been essential since **2026-07-24** (`ebd68552`). After #906, **boot** start on prod requires `WORKER_HEAVY=full` (not current `/proc`).
+
+#### FP6 — log window 20:18–21:00Z
+
+Fly `logs --no-tail` buffer: **no** `in-place revive attempt ->`, no `score snapshot cycle ok` in current tail. **Sentry errors** cover 20:00:35 / 20:05:53 write timeout and resolver `cycle_timeout_180s` at **20:13:16Z** (before freeze). First-tick timeout this gen: **19:26:42Z** `cycle_timeout_90s`. Sentry **logs** dataset: no hits for those message strings. Limitation: Fly history for 20:18–21:00Z not in buffer; Sentry errors used as substitute.
+
+#### Filings
+
+| ID | Fire? | Issue |
+|----|-------|--------|
+| **F1** | **YES** | **[#1113](https://github.com/cryptoreporthub/subnet-dashboard/issues/1113)** — unjoined pools: snapshot `write_timeout_480s` + resolver `cycle_timeout_*`; 3.12 executor threads non-daemon |
+| **F2** | **NO** | This gen **did** produce 20:18:26Z; e86070b did not change the heavy-gate; revive not essential-gated. Boot gap is #906-era **structural**, not this cutover. Do not file a false “no snapshot since cutover.” |
+
+#### Decision items (surface, do not decide)
+
+1. Expiry **18:52:52Z**: no auto-rollback, no auto-extend. (a) freeze ≠ cutover boundary (cut 19:21, write 20:18 this gen). Rollback **unverified** as restoring boot-start. (b) restart = cheapest diagnostic; **drain first** — 3.12 `ThreadPoolExecutor` threads are **non-daemon**; snapshot write + resolver cycle orphans can hang exit. Post-restart: if producer absent → confirms boot gap (would then be F2-shaped); if it writes then stalls → F1 hang. (c) KILL=0; strike **60/2** observed, 4 min cadence, frozen field.
+2. #1060 liveness leg PASS; G0 un-run; FAIL CLOSED open. #1112 open, not this stall. **#1113** is the F1 record for expiry.
+3. KILL stays 0.
+
+### 2026-08-29 ~01:22 UTC — snapshot freeze writer vs process wedge (FP1–FP3, no filing)
 
 **No merge / no deploy / no timeout bump / no KILL unmute / no #1060 or #1112 close / no filing** (stop condition did not fire). Hold `e86070b` **PROVISIONAL** expiry **2026-08-29 18:52:52Z**. Evidence class: `/proc` + file:line + git grep on `cfbe842a`/`e86070b` = **single-agent**.
 
