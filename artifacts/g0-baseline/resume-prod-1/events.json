@@ -1,0 +1,1556 @@
+[
+  {
+    "t_s": 0.355,
+    "kind": "request",
+    "id": 1,
+    "path": "/"
+  },
+  {
+    "t_s": 0.602,
+    "kind": "request",
+    "id": 2,
+    "path": "/api/pump-alerts"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 3,
+    "path": "/css2"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 4,
+    "path": "/static/css/smoke-tokens.css"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 5,
+    "path": "/static/css/base.css"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 6,
+    "path": "/static/css/ui.css"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 7,
+    "path": "/static/css/tribunal-hero-layout.css"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 8,
+    "path": "/static/css/council-polish.css"
+  },
+  {
+    "t_s": 0.603,
+    "kind": "request",
+    "id": 9,
+    "path": "/npm/driver.js@1.3.1/dist/driver.css"
+  },
+  {
+    "t_s": 0.604,
+    "kind": "request",
+    "id": 10,
+    "path": "/static/css/chat.css"
+  },
+  {
+    "t_s": 0.604,
+    "kind": "request",
+    "id": 11,
+    "path": "/static/vendor/uplot/uPlot.min.css"
+  },
+  {
+    "t_s": 0.63,
+    "kind": "request",
+    "id": 12,
+    "path": "/static/css/dev_pulse.css"
+  },
+  {
+    "t_s": 0.63,
+    "kind": "request",
+    "id": 13,
+    "path": "/static/js/dev_pulse.js"
+  },
+  {
+    "t_s": 0.63,
+    "kind": "request",
+    "id": 14,
+    "path": "/static/js/mindmap_graph.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 15,
+    "path": "/static/js/conviction_tiers.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 16,
+    "path": "/static/js/empty_state.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 17,
+    "path": "/static/js/weighing_room.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 18,
+    "path": "/static/js/data_freshness.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 19,
+    "path": "/static/js/api_fetch.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 20,
+    "path": "/static/js/cockpit_hydrate.js"
+  },
+  {
+    "t_s": 0.637,
+    "kind": "request",
+    "id": 21,
+    "path": "/static/js/ops_readiness_badge.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 22,
+    "path": "/static/js/subnet_integrations.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 23,
+    "path": "/static/js/trust_banner_ui.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 24,
+    "path": "/static/js/market_drivers_ui.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 25,
+    "path": "/static/js/brain_letter.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 26,
+    "path": "/static/js/story_path_ui.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 27,
+    "path": "/static/js/paper_portfolio.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 28,
+    "path": "/static/js/weekly_letter.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 29,
+    "path": "/static/js/daily_recap.js"
+  },
+  {
+    "t_s": 0.638,
+    "kind": "request",
+    "id": 30,
+    "path": "/static/js/watchlist_alerts.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 31,
+    "path": "/static/js/letter_export.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 32,
+    "path": "/static/js/time_capsule.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 33,
+    "path": "/static/js/hour_watch_ui.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 34,
+    "path": "/static/js/premium_judges.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 35,
+    "path": "/static/js/pump_map.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 36,
+    "path": "/static/js/message_intel_feed.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 37,
+    "path": "/static/js/home_live_refresh.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 38,
+    "path": "/static/js/living_focus.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 39,
+    "path": "/static/js/home_deferred.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 40,
+    "path": "/static/js/thumb_dock.js"
+  },
+  {
+    "t_s": 0.639,
+    "kind": "request",
+    "id": 41,
+    "path": "/static/js/app.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 42,
+    "path": "/static/js/chat_stream.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 43,
+    "path": "/static/judge_panel.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 44,
+    "path": "/static/js/command_palette.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 45,
+    "path": "/npm/driver.js@1.3.1/dist/driver.js.iife.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 46,
+    "path": "/static/js/onboarding_tour.js"
+  },
+  {
+    "t_s": 0.64,
+    "kind": "request",
+    "id": 47,
+    "path": "/static/js/council_polish.js"
+  },
+  {
+    "t_s": 0.641,
+    "kind": "finish",
+    "id": 1,
+    "path": "/",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.652,
+    "kind": "finish",
+    "id": 9,
+    "path": "/npm/driver.js@1.3.1/dist/driver.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.654,
+    "kind": "finish",
+    "id": 45,
+    "path": "/npm/driver.js@1.3.1/dist/driver.js.iife.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.664,
+    "kind": "finish",
+    "id": 3,
+    "path": "/css2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.743,
+    "kind": "finish",
+    "id": 6,
+    "path": "/static/css/ui.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 0.789,
+    "kind": "finish",
+    "id": 14,
+    "path": "/static/js/mindmap_graph.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.015,
+    "kind": "finish",
+    "id": 19,
+    "path": "/static/js/api_fetch.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.053,
+    "kind": "finish",
+    "id": 2,
+    "path": "/api/pump-alerts",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.11,
+    "kind": "finish",
+    "id": 20,
+    "path": "/static/js/cockpit_hydrate.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.149,
+    "kind": "finish",
+    "id": 5,
+    "path": "/static/css/base.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.165,
+    "kind": "finish",
+    "id": 7,
+    "path": "/static/css/tribunal-hero-layout.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.168,
+    "kind": "finish",
+    "id": 10,
+    "path": "/static/css/chat.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.181,
+    "kind": "finish",
+    "id": 11,
+    "path": "/static/vendor/uplot/uPlot.min.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.182,
+    "kind": "finish",
+    "id": 13,
+    "path": "/static/js/dev_pulse.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.182,
+    "kind": "finish",
+    "id": 12,
+    "path": "/static/css/dev_pulse.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.182,
+    "kind": "finish",
+    "id": 4,
+    "path": "/static/css/smoke-tokens.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.182,
+    "kind": "finish",
+    "id": 8,
+    "path": "/static/css/council-polish.css",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.204,
+    "kind": "request",
+    "id": 48,
+    "path": "/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2"
+  },
+  {
+    "t_s": 1.205,
+    "kind": "finish",
+    "id": 21,
+    "path": "/static/js/ops_readiness_badge.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.548,
+    "kind": "finish",
+    "id": 48,
+    "path": "/s/spacegrotesk/v22/V8mDoQDjQSkFtoMM3T6r8E7mPbF4Cw.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.598,
+    "kind": "request",
+    "id": 49,
+    "path": "/s/syne/v24/8vIH7w4qzmVxm2BL9A.woff2"
+  },
+  {
+    "t_s": 1.598,
+    "kind": "request",
+    "id": 50,
+    "path": "/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2"
+  },
+  {
+    "t_s": 1.599,
+    "kind": "finish",
+    "id": 30,
+    "path": "/static/js/watchlist_alerts.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.602,
+    "kind": "finish",
+    "id": 15,
+    "path": "/static/js/conviction_tiers.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.612,
+    "kind": "finish",
+    "id": 46,
+    "path": "/static/js/onboarding_tour.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.632,
+    "kind": "finish",
+    "id": 27,
+    "path": "/static/js/paper_portfolio.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.633,
+    "kind": "finish",
+    "id": 16,
+    "path": "/static/js/empty_state.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.633,
+    "kind": "finish",
+    "id": 25,
+    "path": "/static/js/brain_letter.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.633,
+    "kind": "finish",
+    "id": 23,
+    "path": "/static/js/trust_banner_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.633,
+    "kind": "finish",
+    "id": 26,
+    "path": "/static/js/story_path_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.634,
+    "kind": "finish",
+    "id": 31,
+    "path": "/static/js/letter_export.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.634,
+    "kind": "finish",
+    "id": 39,
+    "path": "/static/js/home_deferred.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.634,
+    "kind": "finish",
+    "id": 40,
+    "path": "/static/js/thumb_dock.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.634,
+    "kind": "finish",
+    "id": 33,
+    "path": "/static/js/hour_watch_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.641,
+    "kind": "request",
+    "id": 51,
+    "path": "/api/daily-pick"
+  },
+  {
+    "t_s": 1.641,
+    "kind": "request",
+    "id": 52,
+    "path": "/api/learning/stats"
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 32,
+    "path": "/static/js/time_capsule.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 34,
+    "path": "/static/js/premium_judges.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 18,
+    "path": "/static/js/data_freshness.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 37,
+    "path": "/static/js/home_live_refresh.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 47,
+    "path": "/static/js/council_polish.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 43,
+    "path": "/static/judge_panel.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 41,
+    "path": "/static/js/app.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.643,
+    "kind": "finish",
+    "id": 42,
+    "path": "/static/js/chat_stream.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 17,
+    "path": "/static/js/weighing_room.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 29,
+    "path": "/static/js/daily_recap.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 35,
+    "path": "/static/js/pump_map.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 22,
+    "path": "/static/js/subnet_integrations.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 44,
+    "path": "/static/js/command_palette.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 28,
+    "path": "/static/js/weekly_letter.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 38,
+    "path": "/static/js/living_focus.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 24,
+    "path": "/static/js/market_drivers_ui.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 36,
+    "path": "/static/js/message_intel_feed.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.644,
+    "kind": "finish",
+    "id": 50,
+    "path": "/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwg.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 1.645,
+    "kind": "finish",
+    "id": 49,
+    "path": "/s/syne/v24/8vIH7w4qzmVxm2BL9A.woff2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.005,
+    "kind": "finish",
+    "id": 52,
+    "path": "/api/learning/stats",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.014,
+    "kind": "finish",
+    "id": 51,
+    "path": "/api/daily-pick",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 53,
+    "path": "/api/market-drivers/107"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 54,
+    "path": "/api/mindmap/story-path"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 55,
+    "path": "/api/ops/readiness"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 56,
+    "path": "/api/subnet-integrations"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 57,
+    "path": "/api/market-drivers"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 58,
+    "path": "/api/letter/brain"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 59,
+    "path": "/api/portfolio/status"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 60,
+    "path": "/api/letter/weekly"
+  },
+  {
+    "t_s": 2.056,
+    "kind": "request",
+    "id": 61,
+    "path": "/api/letter/daily"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 62,
+    "path": "/api/judges"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 63,
+    "path": "/api/watchlist"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 64,
+    "path": "/api/message-intel/status"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 65,
+    "path": "/api/message-intel/calibration"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 66,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 2.057,
+    "kind": "request",
+    "id": 67,
+    "path": "/api/whales/flow-signals"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 68,
+    "path": "/api/dev-radar"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 69,
+    "path": "/api/mindmap/graph"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 70,
+    "path": "/api/data-freshness"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 71,
+    "path": "/api/ops/evidence"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 72,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 73,
+    "path": "/api/judges/107"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 74,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 2.058,
+    "kind": "request",
+    "id": 75,
+    "path": "/api/story-strip"
+  },
+  {
+    "t_s": 2.42,
+    "kind": "request",
+    "id": 76,
+    "path": "/api/cockpit/stream"
+  },
+  {
+    "t_s": 2.422,
+    "kind": "STATS_PARSED"
+  },
+  {
+    "t_s": 2.422,
+    "kind": "HERO_DOM_READY",
+    "title": "SN107 \u00b7 Minos"
+  },
+  {
+    "t_s": 2.422,
+    "kind": "HERO_COMPLETE_AT",
+    "stats_parsed_at": 2.422,
+    "hero_dom_ready_at": 2.422,
+    "title": "SN107 \u00b7 Minos",
+    "verdict": "sealed",
+    "statsGraded": 57
+  },
+  {
+    "t_s": 2.48,
+    "kind": "request",
+    "id": 77,
+    "path": "/static/vendor/uplot/uPlot.iife.min.js"
+  },
+  {
+    "t_s": 3.643,
+    "kind": "request",
+    "id": 78,
+    "path": "/api/simivision"
+  },
+  {
+    "t_s": 8.044,
+    "kind": "abort",
+    "id": 67,
+    "path": "/api/whales/flow-signals",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 9.81,
+    "kind": "finish",
+    "id": 53,
+    "path": "/api/market-drivers/107",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.916,
+    "kind": "finish",
+    "id": 57,
+    "path": "/api/market-drivers",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.933,
+    "kind": "finish",
+    "id": 55,
+    "path": "/api/ops/readiness",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.963,
+    "kind": "finish",
+    "id": 61,
+    "path": "/api/letter/daily",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.965,
+    "kind": "finish",
+    "id": 59,
+    "path": "/api/portfolio/status",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.974,
+    "kind": "request",
+    "id": 79,
+    "path": "/api/watchlist/thresholds"
+  },
+  {
+    "t_s": 9.975,
+    "kind": "finish",
+    "id": 63,
+    "path": "/api/watchlist",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 9.987,
+    "kind": "finish",
+    "id": 60,
+    "path": "/api/letter/weekly",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.008,
+    "kind": "request",
+    "id": 80,
+    "path": "/api/message-intel"
+  },
+  {
+    "t_s": 10.008,
+    "kind": "finish",
+    "id": 64,
+    "path": "/api/message-intel/status",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.044,
+    "kind": "finish",
+    "id": 58,
+    "path": "/api/letter/brain",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.057,
+    "kind": "finish",
+    "id": 62,
+    "path": "/api/judges",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.06,
+    "kind": "finish",
+    "id": 70,
+    "path": "/api/data-freshness",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.079,
+    "kind": "finish",
+    "id": 66,
+    "path": "/api/subnets",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.079,
+    "kind": "finish",
+    "id": 68,
+    "path": "/api/dev-radar",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.098,
+    "kind": "finish",
+    "id": 56,
+    "path": "/api/subnet-integrations",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.183,
+    "kind": "finish",
+    "id": 74,
+    "path": "/api/subnets",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.481,
+    "kind": "finish",
+    "id": 78,
+    "path": "/api/simivision",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 10.482,
+    "kind": "finish",
+    "id": 79,
+    "path": "/api/watchlist/thresholds",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 11.658,
+    "kind": "finish",
+    "id": 65,
+    "path": "/api/message-intel/calibration",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 12.795,
+    "kind": "finish",
+    "id": 73,
+    "path": "/api/judges/107",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 14.008,
+    "kind": "abort",
+    "id": 54,
+    "path": "/api/mindmap/story-path",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.044,
+    "kind": "abort",
+    "id": 69,
+    "path": "/api/mindmap/graph",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.053,
+    "kind": "abort",
+    "id": 71,
+    "path": "/api/ops/evidence",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 14.449,
+    "kind": "request",
+    "id": 81,
+    "path": "/api/ops/evidence"
+  },
+  {
+    "t_s": 14.667,
+    "kind": "finish",
+    "id": 80,
+    "path": "/api/message-intel",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 14.668,
+    "kind": "request",
+    "id": 82,
+    "path": "/api/message-intel/trending-v2"
+  },
+  {
+    "t_s": 15.209,
+    "kind": "request",
+    "id": 83,
+    "path": "/api/message-intel/trending-v2"
+  },
+  {
+    "t_s": 15.21,
+    "kind": "finish",
+    "id": 82,
+    "path": "/api/message-intel/trending-v2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 15.569,
+    "kind": "request",
+    "id": 84,
+    "path": "/api/message-intel/callers"
+  },
+  {
+    "t_s": 15.57,
+    "kind": "request",
+    "id": 85,
+    "path": "/api/message-intel/divergence"
+  },
+  {
+    "t_s": 15.57,
+    "kind": "finish",
+    "id": 83,
+    "path": "/api/message-intel/trending-v2",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 15.57,
+    "kind": "request",
+    "id": 86,
+    "path": "/api/message-intel/authors"
+  },
+  {
+    "t_s": 17.053,
+    "kind": "abort",
+    "id": 72,
+    "path": "/api/mindmap/trail",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 17.402,
+    "kind": "request",
+    "id": 87,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 17.639,
+    "kind": "finish",
+    "id": 77,
+    "path": "/static/vendor/uplot/uPlot.iife.min.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 17.641,
+    "kind": "request",
+    "id": 88,
+    "path": "/static/js/uplot_charts.js"
+  },
+  {
+    "t_s": 18.24,
+    "kind": "finish",
+    "id": 75,
+    "path": "/api/story-strip",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 18.246,
+    "kind": "request",
+    "id": 89,
+    "path": "/api/mindmap/story-path"
+  },
+  {
+    "t_s": 18.246,
+    "kind": "request",
+    "id": 90,
+    "path": "/api/message-intel"
+  },
+  {
+    "t_s": 18.597,
+    "kind": "request",
+    "id": 91,
+    "path": "/api/simivision"
+  },
+  {
+    "t_s": 18.728,
+    "kind": "finish",
+    "id": 91,
+    "path": "/api/simivision",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 20.198,
+    "kind": "finish",
+    "id": 84,
+    "path": "/api/message-intel/callers",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 20.641,
+    "kind": "finish",
+    "id": 86,
+    "path": "/api/message-intel/authors",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 22.119,
+    "kind": "finish",
+    "id": 85,
+    "path": "/api/message-intel/divergence",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 22.571,
+    "kind": "finish",
+    "id": 81,
+    "path": "/api/ops/evidence",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 24.82,
+    "kind": "finish",
+    "id": 90,
+    "path": "/api/message-intel",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 25.508,
+    "kind": "finish",
+    "id": 87,
+    "path": "/api/mindmap/trail",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 25.589,
+    "kind": "finish",
+    "id": 88,
+    "path": "/static/js/uplot_charts.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 25.589,
+    "kind": "request",
+    "id": 92,
+    "path": "/static/js/premium_signals.js"
+  },
+  {
+    "t_s": 25.694,
+    "kind": "finish",
+    "id": 92,
+    "path": "/static/js/premium_signals.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 25.695,
+    "kind": "request",
+    "id": 93,
+    "path": "/api/signals/summary"
+  },
+  {
+    "t_s": 25.696,
+    "kind": "request",
+    "id": 94,
+    "path": "/api/alerts"
+  },
+  {
+    "t_s": 25.696,
+    "kind": "request",
+    "id": 95,
+    "path": "/api/signals"
+  },
+  {
+    "t_s": 25.696,
+    "kind": "request",
+    "id": 96,
+    "path": "/static/js/subnet_grouping.js"
+  },
+  {
+    "t_s": 26.601,
+    "kind": "finish",
+    "id": 94,
+    "path": "/api/alerts",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 26.604,
+    "kind": "finish",
+    "id": 93,
+    "path": "/api/signals/summary",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 26.708,
+    "kind": "request",
+    "id": 97,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 30.239,
+    "kind": "abort",
+    "id": 89,
+    "path": "/api/mindmap/story-path",
+    "status": null,
+    "failure": "net::ERR_ABORTED"
+  },
+  {
+    "t_s": 34.407,
+    "kind": "finish",
+    "id": 95,
+    "path": "/api/signals",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.491,
+    "kind": "request",
+    "id": 98,
+    "path": "/static/js/premium_scanner.js"
+  },
+  {
+    "t_s": 34.491,
+    "kind": "finish",
+    "id": 96,
+    "path": "/static/js/subnet_grouping.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.57,
+    "kind": "finish",
+    "id": 98,
+    "path": "/static/js/premium_scanner.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.57,
+    "kind": "request",
+    "id": 99,
+    "path": "/api/subnets"
+  },
+  {
+    "t_s": 34.571,
+    "kind": "request",
+    "id": 100,
+    "path": "/static/js/investigation_panel.js"
+  },
+  {
+    "t_s": 34.709,
+    "kind": "finish",
+    "id": 99,
+    "path": "/api/subnets",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.79,
+    "kind": "request",
+    "id": 101,
+    "path": "/api/whales/leaderboards"
+  },
+  {
+    "t_s": 34.79,
+    "kind": "request",
+    "id": 102,
+    "path": "/static/js/subnet_report.js"
+  },
+  {
+    "t_s": 34.79,
+    "kind": "finish",
+    "id": 100,
+    "path": "/static/js/investigation_panel.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.924,
+    "kind": "finish",
+    "id": 97,
+    "path": "/api/mindmap/trail",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 34.942,
+    "kind": "finish",
+    "id": 101,
+    "path": "/api/whales/leaderboards",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 35.092,
+    "kind": "finish",
+    "id": 102,
+    "path": "/static/js/subnet_report.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 35.092,
+    "kind": "request",
+    "id": 103,
+    "path": "/static/js/social_sentiment.js"
+  },
+  {
+    "t_s": 35.504,
+    "kind": "request",
+    "id": 104,
+    "path": "/api/message-intel/status"
+  },
+  {
+    "t_s": 35.504,
+    "kind": "finish",
+    "id": 103,
+    "path": "/static/js/social_sentiment.js",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 35.661,
+    "kind": "request",
+    "id": 105,
+    "path": "/api/message-intel/social"
+  },
+  {
+    "t_s": 35.661,
+    "kind": "finish",
+    "id": 104,
+    "path": "/api/message-intel/status",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 35.871,
+    "kind": "finish",
+    "id": 105,
+    "path": "/api/message-intel/social",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 36.124,
+    "kind": "request",
+    "id": 106,
+    "path": "/api/mindmap/trail"
+  },
+  {
+    "t_s": 44.222,
+    "kind": "finish",
+    "id": 106,
+    "path": "/api/mindmap/trail",
+    "status": 200,
+    "failure": null
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 107,
+    "path": "/api/top-picks"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 108,
+    "path": "/api/indicators-convergence"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 109,
+    "path": "/api/signals"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 110,
+    "path": "/api/alerts"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 111,
+    "path": "/api/signals/summary"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 112,
+    "path": "/api/cockpit/sections"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 113,
+    "path": "/api/backtest"
+  },
+  {
+    "t_s": 44.267,
+    "kind": "request",
+    "id": 114,
+    "path": "/api/formula-lineage"
+  },
+  {
+    "t_s": 44.268,
+    "kind": "request",
+    "id": 115,
+    "path": "/api/formula-lineage/dark_horse/evolution"
+  },
+  {
+    "t_s": 44.268,
+    "kind": "request",
+    "id": 116,
+    "path": "/api/mindmap/story-path"
+  }
+]

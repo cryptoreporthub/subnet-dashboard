@@ -1,0 +1,426 @@
+{
+  "run_id": "resume-prod-1",
+  "base_url": "https://subnet-dashboard.fly.dev",
+  "captured_at": "2026-08-28T19:51:50.003449Z",
+  "wait_s": 50.0,
+  "hero_budget_s": 10.0,
+  "hero_complete_at_s": 2.422,
+  "stats_parsed_at_s": 2.422,
+  "hero_dom_ready_at_s": 2.422,
+  "hydrates_in_budget": true,
+  "starvation_shape": false,
+  "nav_domcontentloaded_s": 1.298,
+  "machine_state": "warm",
+  "machine_probe": {
+    "machine_state": "warm",
+    "probes": [
+      {
+        "latency_ms": 145.38,
+        "status": 200,
+        "ok": true,
+        "error": null
+      },
+      {
+        "latency_ms": 127.24,
+        "status": 200,
+        "ok": true,
+        "error": null
+      },
+      {
+        "latency_ms": 226.09,
+        "status": 200,
+        "ok": true,
+        "error": null
+      }
+    ],
+    "p50_ms": 145.38,
+    "max_ms": 226.09
+  },
+  "document_server_timing": "app;dur=0.0",
+  "critical_path": {
+    "marks": {
+      "html-parse": 252.8,
+      "hydrate-start": 1262.5,
+      "hydrate-end": 1663.2
+    },
+    "measures": {
+      "hydrate": {
+        "startTime": 1262.5,
+        "duration": 400.7
+      }
+    },
+    "first_script": {
+      "name": "https://subnet-dashboard.fly.dev/static/js/mindmap_graph.js?v=3dd1605a",
+      "startTime": 280.19999999925494,
+      "responseEnd": 437.5,
+      "duration": 157.30000000074506
+    },
+    "script_wall_before_dcl": {
+      "name": "https://subnet-dashboard.fly.dev/static/js/message_intel_feed.js?v=3dd1605a",
+      "startTime": 286.1000000014901,
+      "responseEnd": 1023.1000000014901,
+      "duration": 737
+    },
+    "dom_interactive": 1261.4,
+    "dom_content_loaded": 1294.8,
+    "load_event_end": 1302.4,
+    "html_ttfb": 246
+  },
+  "hero_api_timing": {
+    "learning_stats": {
+      "path": "/api/learning/stats",
+      "start_s": 1.641,
+      "end_s": 2.005,
+      "duration_ms": 364.0,
+      "status": 200
+    },
+    "daily_pick": {
+      "path": "/api/daily-pick",
+      "start_s": 1.641,
+      "end_s": 2.014,
+      "duration_ms": 373.0,
+      "status": 200
+    }
+  },
+  "navigation_timing": {
+    "type": "navigate",
+    "startTime": 0,
+    "unloadEventEnd": 0,
+    "domInteractive": 1261.3999999985099,
+    "domContentLoadedEventEnd": 1294.800000000745,
+    "loadEventEnd": 1302.3999999985099,
+    "responseStart": 246,
+    "responseEnd": 285.5,
+    "duration": 1302.3999999985099,
+    "transferSize": 28958,
+    "encodedBodySize": 28658
+  },
+  "final_hero": {
+    "title": "SN107 \u00b7 Minos",
+    "verdict": "sealed",
+    "warming": false,
+    "hydrate": "0",
+    "graded": "57",
+    "accSub": "Last 57 graded: 51% directionally right",
+    "badgeText": "SEALED",
+    "placeholderTitle": false,
+    "cold": false,
+    "statsParsed": true,
+    "statsGraded": 57,
+    "needsHydrate": false,
+    "heroPresent": true,
+    "t_s": 50.124
+  },
+  "aborted_endpoints": [
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 2.056,
+      "end_s": 14.008,
+      "duration_ms": 11952.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/whales/flow-signals",
+      "class": "secondary",
+      "start_s": 2.057,
+      "end_s": 8.044,
+      "duration_ms": 5987.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/graph",
+      "class": "secondary",
+      "start_s": 2.058,
+      "end_s": 14.044,
+      "duration_ms": 11986.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/ops/evidence",
+      "class": "secondary",
+      "start_s": 2.058,
+      "end_s": 14.053,
+      "duration_ms": 11995.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/trail",
+      "class": "secondary",
+      "start_s": 2.058,
+      "end_s": 17.053,
+      "duration_ms": 14995.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 2.42,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 18.246,
+      "end_s": 30.239,
+      "duration_ms": 11993.0,
+      "status": null,
+      "failure": "net::ERR_ABORTED",
+      "hero_critical": false
+    },
+    {
+      "path": "/api/top-picks",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/signals",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/alerts",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/signals/summary",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/backtest",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/formula-lineage",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "class": "secondary",
+      "start_s": 44.268,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 44.268,
+      "end_s": null,
+      "duration_ms": null,
+      "status": null,
+      "failure": null,
+      "hero_critical": false
+    }
+  ],
+  "aborted_hero_critical": [],
+  "health": {
+    "n": 136,
+    "ok": 136,
+    "errors": 0,
+    "p50_ms": 127.27,
+    "p95_ms": 411.19,
+    "p100_ms": 5738.28,
+    "min_ms": 110.54,
+    "mean_ms": 228.98
+  },
+  "health_p95_over_budget": false,
+  "max_concurrent_inflight": 47,
+  "max_concurrent_inflight_api": 25,
+  "pending_api_at_45s": [
+    {
+      "path": "/api/cockpit/stream",
+      "class": "secondary",
+      "start_s": 2.42,
+      "end_s": null
+    },
+    {
+      "path": "/api/top-picks",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/signals",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/alerts",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/signals/summary",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/backtest",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/formula-lineage",
+      "class": "secondary",
+      "start_s": 44.267,
+      "end_s": null
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "class": "secondary",
+      "start_s": 44.268,
+      "end_s": null
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "class": "secondary",
+      "start_s": 44.268,
+      "end_s": null
+    }
+  ],
+  "still_open_at_close": [
+    {
+      "path": "/api/cockpit/stream",
+      "start_s": 2.42
+    },
+    {
+      "path": "/api/top-picks",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/indicators-convergence",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/signals",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/alerts",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/signals/summary",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/cockpit/sections",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/backtest",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/formula-lineage",
+      "start_s": 44.267
+    },
+    {
+      "path": "/api/formula-lineage/dark_horse/evolution",
+      "start_s": 44.268
+    },
+    {
+      "path": "/api/mindmap/story-path",
+      "start_s": 44.268
+    }
+  ],
+  "api_request_count": 59,
+  "homepage_curl_sanity": {
+    "status": null,
+    "ttfb_ms": 20089.3,
+    "error": "TimeoutError: The read operation timed out",
+    "note": "sanity-only, not a G0 pass/fail gate"
+  },
+  "artifacts": {
+    "har": "artifacts/g0-baseline/resume-prod-1/session.har",
+    "screenshot_t10s": "artifacts/g0-baseline/resume-prod-1/hero_t10s.png",
+    "screenshot_t45s": "artifacts/g0-baseline/resume-prod-1/hero_t45s.png"
+  }
+}
