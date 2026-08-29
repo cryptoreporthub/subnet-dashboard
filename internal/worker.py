@@ -1,3 +1,4 @@
+
 """Fly background worker — resolver, freshness, live feed (no HTTP).
 
 Usage: python -m internal.worker
@@ -5,6 +6,7 @@ Usage: python -m internal.worker
 
 from __future__ import annotations
 
+import json
 import logging
 import signal
 import sys
@@ -22,6 +24,60 @@ _shutdown = threading.Event()
 def _handle_signal(signum, _frame) -> None:
     logger.info("worker shutdown signal %s", signum)
     _shutdown.set()
+
+
+def _start_job_inventory_http() -> None:
+    """Serve GET /jobs JSON inventory on WORKER_HTTP_PORT (FP7 probe, read-only).
+
+    Env-gated: starts only when WORKER_HTTP_PORT is set (fly.toml: 8081). Never
+    mutates scheduler state; failures are logged and never fatal to the worker.
+    """
+    import os
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    raw = os.environ.get("WORKER_HTTP_PORT", "").strip()
+    if not raw:
+        return
+    try:
+        port = int(raw)
+    except ValueError:
+        logger.warning("job inventory http: invalid WORKER_HTTP_PORT=%r", raw)
+        return
+    if port <= 0:
+        return
+    from internal.job_scheduler import job_inventory
+
+    class _Handler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 (stdlib naming)
+            if self.path.split("?")[0] not in ("/jobs", "/jobs/"):
+                self.send_response(404)
+                self.end_headers()
+                return
+            try:
+                body = json.dumps(job_inventory(), default=str).encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+            except Exception as exc:
+                logger.warning("job inventory http: handler error: %s", exc)
+                try:
+                    self.send_response(500)
+                    self.end_headers()
+                except Exception:
+                    pass
+
+        def log_message(self, *args) -> None:
+            pass
+
+    try:
+        httpd = ThreadingHTTPServer(("0.0.0.0", port), _Handler)
+    except Exception as exc:
+        logger.warning("job inventory http: bind failed on %d: %s", port, exc)
+        return
+    threading.Thread(target=httpd.serve_forever, daemon=True, name="job-inventory-http").start()
+    logger.info("job inventory http: serving /jobs on port %d", port)
 
 
 def main() -> None:
@@ -47,6 +103,7 @@ def main() -> None:
         logger.warning("resolver semantics patch failed to apply: %s", exc)
 
     start_background_workers(heavy=heavy)
+    _start_job_inventory_http()
 
     # Loop stall guard (loop-stall-guard commit d03a3789): watch the pump desk
     # snapshot age; if it stays stale across consecutive checks, revive in place
