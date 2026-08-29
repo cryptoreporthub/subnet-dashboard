@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** Fri 2026-08-28 **6:46 PM MST** (01:46Z Sat) — main `cfbe842a`; prod `e86070b` PROVISIONAL; **F1 #1113**; F2 not filed; freeze still 1:18:26 PM MST (20:18:26Z); KILL=0; #1060/#1112 open
+**Snapshot:** Fri 2026-08-28 **7:04 PM MST** (02:04Z Sat) — last read-only round done; **#1113** stands (FP7 undetermined; FP8 revive **OBSERVED** 1:05:53 PM MST / 20:05:53Z); no #1114; freeze 1:18:26 PM MST; strike **64/2**; KILL=0; hold **Sat 11:52:52 AM MST**
 
 **Clock:** operator-facing times = **Arizona MST** (`America/Phoenix`, UTC−7, no DST). UTC kept on Fly/Sentry/git evidence.
 
@@ -68,8 +68,8 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 
 ### Remaining (not executed)
 
-- **F1 [#1113](https://github.com/cryptoreporthub/subnet-dashboard/issues/1113)** filed (orphan write/resolve pools). **F2 not filed** (e86070b did not change boot; this gen did produce at 20:18:26Z via late write complete).
-- **P0 snapshot stall** live (`run_at` still **1:18:26 PM MST** / 20:18:26Z, strike **60/2** at **6:46:24 PM MST** / 01:46:24Z, 4.0 min observed). Unrecoverable until deploy/restart (one-shot revive spent).
+- **F1 [#1113](https://github.com/cryptoreporthub/subnet-dashboard/issues/1113)** stands. FP7: wedge confirmed, join-vs-dead-timer **undetermined** (no #1114). FP8: revive **OBSERVED** (Sentry PYTHON-FASTAPI-A last **1:05:53 PM MST** / 20:05:53Z this gen). **F2 not filed.**
+- **P0 snapshot stall** live (`run_at` still **1:18:26 PM MST** / 20:18:26Z, strike **64/2** at **7:02:24 PM MST** / 02:02:24Z). Unrecoverable until deploy/restart. **No further read-only rounds.**
 - **P0 #1112** dead `_last_resolver_tick`. Not a vehicle for this stall.
 - **P1 cadence** still unproven for the 110-min gap. Resolver timeouts from **19:26Z** this gen (before freeze).
 - **Sentinel soak → #1072 close** — ends **Sat 11:52:52 AM MST** (18:52:52Z; same instant as hold expiry).
@@ -95,6 +95,48 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### Fri 2026-08-28 7:04 PM MST — last read-only round (FP7/FP8)
+
+**No merge / no deploy / no timeout bump / no KILL unmute / no #1060/#1112 close / no #1114.** #1113 stands. Hold expiry **Sat 11:52:52 AM MST** (18:52:52Z). Clock: Arizona MST; UTC on evidence.
+
+**Re-verify:** `run_at` still 20:18:26.392957Z. Same pids 643/649, `SENTRY_RELEASE=e86070b…`. Strike **64/2** at 02:02:24Z (7:02:24 PM MST); 60/2@01:46:24Z → 64/2 is +4 × 240s. No deploy/restart.
+
+#### FP7 — scheduler vs orphan wait
+
+15 threads; stacks readable (kernel only). `comm=python`. Separate pools **confirmed**: snapshot module `_write_executor` (`score-snap-write`) vs resolver **per-tick** `ThreadPoolExecutor()` + `shutdown(wait=False)` (`resolver_scheduler.py:458-499`).
+
+| tid | born UTC | wchan | note |
+|-----|----------|-------|------|
+| 649 | 19:21:31 | futex_wait | main |
+| 664, 703, 1292 | 19:21:39 / 19:21:55 / 19:54:02 | hrtimer_nanosleep | sleepers (guard candidate 664: 240s strikes still fire) |
+| 1284 | 19:52:34 | futex_wait | write-start lineage; **still alive** 02:04Z — idle pool vs join **not discriminable** |
+| 1489 | 20:00:35.530 | futex_wait | +30ms after timeout |
+| 1501 | 20:01:40 | futex_wait | |
+
+APScheduler shared loop is **alive** (resolver still cycling). Guard is **alive** (240s strikes). Snapshot job re-arm not visible in `/proc`.
+
+**FP7 verdict:** WEDGE CONFIRMED, EXACT BLOCKING MECHANISM UNDETERMINED. Not join-proven. Not dead-timer-proven. **No #1114.** Residual stands. #1113 addendum: mechanism undetermined + separate pools.
+
+#### FP8 — revive
+
+Code: **reachable** (`LOOP_STALL_GUARD_ENABLED` unset → default True; worker; not essential-gated; stale file → strike-1).
+
+Logs: Fly buffer empty. Sentry **errors** (not logs dataset): [PYTHON-FASTAPI-A](https://simivision.sentry.io/issues/PYTHON-FASTAPI-A) template `in-place revive attempt -> %s` (payload not interpolated). Last **2026-08-28T20:05:53.399Z** this gen (`worker.py`, release e86070b) — same second as write_timeout cycle-failed. First seen 2026-08-24T15:59:47Z; 18 occurrences. Prior-gen also 18:05:05Z (before 19:21 cutover).
+
+**FP8 verdict: OBSERVED** — last this generation 1:05:53 PM MST (20:05:53Z). Not UNREACHABLE.
+
+#### Residual (expiry carries this; no further read-only rounds)
+
+Freeze = orphaned write completed 20:18:26Z; loop never cycled again; **wedge-confirmed-mechanism-undetermined**; revive **observed** 20:05:53Z (result payload missing in Sentry); #1113 filed; F2 not filed.
+
+#### Joshua (surface, do not decide)
+
+1. Expiry Sat **11:52:52 AM MST**: no auto-rollback, no auto-extend. Rollback weakened. Restart = diagnostic, **drain first** (#1113). Post-restart: writes → transient; absent → file F2; writes-then-stalls → #1113 reproducible.
+2. #1060 FAIL CLOSED open. #1112 open. #1113 mechanism issue.
+3. KILL=0. Strike 64/2 at 240s.
+
+### Fri 2026-08-28 6:53 PM MST — clock = Arizona MST
 
 ### Fri 2026-08-28 6:53 PM MST — clock = Arizona MST
 
@@ -145,7 +187,7 @@ Fly `logs --no-tail` buffer: **no** `in-place revive attempt ->`, no `score snap
 
 #### Decision items (surface, do not decide)
 
-1. Expiry **18:52:52Z**: no auto-rollback, no auto-extend. (a) freeze ≠ cutover boundary (cut 19:21, write 20:18 this gen). Rollback **unverified** as restoring boot-start. (b) restart = cheapest diagnostic; **drain first** — 3.12 `ThreadPoolExecutor` threads are **non-daemon**; snapshot write + resolver cycle orphans can hang exit. Post-restart: if producer absent → confirms boot gap (would then be F2-shaped); if it writes then stalls → F1 hang. (c) KILL=0; strike **60/2** observed, 4 min cadence, frozen field.
+1. Expiry **Sat 11:52:52 AM MST** (18:52:52Z): no auto-rollback, no auto-extend. (a) freeze ≠ cutover boundary (cut 12:21 PM MST / 19:21Z, write 1:18 PM MST / 20:18Z this gen). Rollback **unverified** as restoring boot-start. (b) restart = cheapest diagnostic; **drain first** — 3.12 `ThreadPoolExecutor` threads are **non-daemon**; snapshot write + resolver cycle orphans can hang exit. Post-restart: if producer absent → confirms boot gap (would then be F2-shaped); if it writes then stalls → F1 hang. (c) KILL=0; strike **60/2** observed, 4 min cadence, frozen field.
 2. #1060 liveness leg PASS; G0 un-run; FAIL CLOSED open. #1112 open, not this stall. **#1113** is the F1 record for expiry.
 3. KILL stays 0.
 
