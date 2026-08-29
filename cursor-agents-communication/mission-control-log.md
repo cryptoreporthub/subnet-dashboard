@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** Fri 2026-08-28 **7:04 PM MST** (02:04Z Sat) — last read-only round done; **#1113** stands (FP7 undetermined; FP8 revive **OBSERVED** 1:05:53 PM MST / 20:05:53Z); no #1114; freeze 1:18:26 PM MST; strike **64/2**; KILL=0; hold **Sat 11:52:52 AM MST**
+**Snapshot:** Sat 2026-08-29 **1:44 AM MST** (08:44Z) — **HOLD**; FP7/FP8 complete; **no further probes**; **#1113** stands; F2/#1114 not filed; freeze 1:18:26 PM MST; strike **64/2** (last observed 7:02 PM MST); KILL=0; hold expiry **Sat 11:52:52 AM MST**
 
 **Clock:** operator-facing times = **Arizona MST** (`America/Phoenix`, UTC−7, no DST). UTC kept on Fly/Sentry/git evidence.
 
@@ -96,6 +96,95 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### Sat 2026-08-29 1:44 AM MST — hold + expiry decision + restart plan (prepared only)
+
+**Joshua directive:** FP7 and FP8 complete. **No further read-only rounds.** **No merge / no deploy / no timeout bump / no KILL unmute / no rollback / no auto-extend.** Cursor must **not** run more probes or change production state until Joshua decides on restart.
+
+**Held state (unchanged):**
+
+| Item | Status |
+|------|--------|
+| **#1113** | **FILED** — stands with addendum (unjoined pools; mechanism undetermined) |
+| **FP7** | Wedge **confirmed**; exact blocking mechanism **undetermined**; **no #1114** |
+| **FP8** | Revive **OBSERVED + REACHABLE** (Sentry PYTHON-FASTAPI-A **1:05:53 PM MST** / 20:05:53Z this gen) |
+| **F2** | **Not filed** (deferred to restart experiment if producer absent) |
+| **#1114** | **Not filed** |
+| **KILL** | **0** — must stay 0 |
+| **Prod SHA** | `e86070b` **PROVISIONAL** (no named approver) |
+| **main** | `cfbe842a` |
+| **Machine** | `7841024b3712e8`; web pid **643**, worker pid **649**; start **Fri 12:21:31 PM MST** |
+| **Freeze** | `run_at` **Fri 1:18:26 PM MST** (20:18:26Z); strike **64/2** at **Fri 7:02:24 PM MST** (02:02:24Z); unrecoverable until deploy/restart |
+| **#1060** | OPEN / FAIL CLOSED (liveness leg PASS; G0 not re-run) |
+| **#1112** | OPEN (dead `_last_resolver_tick`; not vehicle for snapshot stall) |
+| **#1072 soak** | Ends **Sat 11:52:52 AM MST** (18:52:52Z) — same instant as hold expiry |
+
+#### Expiry decision (Sat 11:52:52 AM MST / 18:52:52Z) — Joshua must choose; no auto-action
+
+At expiry the **PROVISIONAL** hold on prod `e86070b` ends. **Nothing happens automatically:**
+
+- **No auto-rollback** (rollback weakened: prior v2094 `WORKER_HEAVY` unrecoverable; whether rollback restores a boot-started snapshot producer is **unverified**).
+- **No auto-extend** of the hold or soak.
+- **No deploy** to main `cfbe842a` (docs-only delta; zero product change vs prod).
+
+**Options for Joshua (mutually exclusive at decision time):**
+
+1. **Let hold lapse** — prod stays on `e86070b` with frozen snapshot until a future authorized deploy/restart. Sentinel #1072 soak clock completes; formal close is a separate governance step.
+2. **Approve controlled restart diagnostic** — execute the plan below (not prepared = not run until explicit approval).
+3. **Approve emergency rollback** — human-approved only; mechanism unverified for snapshot producer restoration.
+4. **Authorize main deploy** — only if reconciling prod×main is desired; would restart processes and is itself a diagnostic (contaminates soak).
+
+**Residual record (carries past expiry):** Freeze = live-generation orphaned write completed 20:18:26Z (~17.8 min after 480s timeout); scheduler loop never cycled again; FP7 wedge-confirmed-mechanism-undetermined; FP8 revive observed 20:05:53Z (Sentry template not interpolated); essential boot omits `_start_score_snapshot_scheduler`; sole entry path = strike-1 one-shot revive on worker (gate spent this generation).
+
+#### Controlled restart diagnostic — PREPARED ONLY (do not execute)
+
+**Preconditions:** Joshua explicit approval. `LOOP_STALL_GUARD_KILL` stays **0** on Fly secrets/env. No timeout bumps. No merge.
+
+**Phase 0 — capture (before any signal to process)**
+
+```bash
+MACHINE=7841024b3712e8
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+OUT=/tmp/mc-restart-capture-$TS
+mkdir -p "$OUT"
+flyctl machine exec "$MACHINE" -- bash -lc '
+  echo "=== /proc ===" > /tmp/cap.txt
+  for p in 643 649; do echo "--- pid $p ---"; cat /proc/$p/cmdline | tr "\0" " "; echo;
+    tr "\0" "\n" < /proc/$p/environ | grep -E "LOOP_STALL|SCORE_SNAPSHOT|WORKER_HEAVY|SENTRY" || true;
+    ls /proc/$p/task/*/wchan 2>/dev/null | wc -l; done
+  curl -sS http://127.0.0.1:8080/api/liveness | tee /tmp/liveness.json
+  curl -sS http://127.0.0.1:8080/api/ops/readiness | tee /tmp/readiness.json
+  python3 -c "import json; d=json.load(open(\"data/soul_map.json\")); print(json.dumps(d.get(\"score_snapshot_scheduler\",{}),indent=2))"
+' 
+flyctl logs --no-tail -a subnet-dashboard > "$OUT/fly-logs-pre.txt" 2>&1
+# Save OUT + artifact paths to MC log / Ditto with capture timestamp
+```
+
+**Phase 1 — drain (required: Python 3.12 non-daemon pool threads per #1113)**
+
+Ordinary `SIGTERM` may hang on unjoined `ThreadPoolExecutor` workers (`score-snap-write`, resolver per-tick pools). **Preferred:** `flyctl machine restart "$MACHINE"` with documented expectation that drain may block until Fly kill timeout — capture whether restart stalls (evidence for #1113). **Do not** enable KILL to force exit (strike loop risk). If a code-level graceful shutdown is added later, it must `shutdown(wait=True)` on snapshot write executor before exit.
+
+**Phase 2 — restart**
+
+- `flyctl machine restart "$MACHINE"` **or** `flyctl apps restart subnet-dashboard` (machine-scoped preferred for forensics).
+- Confirm post-start: `SENTRY_RELEASE=e86070b…`, `LOOP_STALL_GUARD_KILL=0`, pids new, `GET /health` OK.
+
+**Phase 3 — classify (first ~15 min + two reads 3–5 min apart)**
+
+| Observation | Classification | Action |
+|-------------|----------------|--------|
+| `score_snapshot_scheduler.last_cycle.run_at` advances within a few ticks (~15 min cadence) | **Transient one-off hang** | Document; #1113 remains fix track; no F2 |
+| No snapshot producer after boot (no scheduler lifecycle, no revive path, `run_at` stale from prior gen or absent) | **Structural boot-gating issue** | **File F2** |
+| Writes resume then stall again (same wedge signature) | **#1113 reproduced** | Escalate #1113 priority; do not close |
+
+**Phase 4 — post-capture**
+
+```bash
+flyctl logs --no-tail -a subnet-dashboard > "$OUT/fly-logs-post.txt"
+# Repeat liveness + soul_map snapshot fields; note strike count reset on new pids
+```
+
+**Explicitly forbidden without separate approval:** merge, deploy to new SHA, `LOOP_STALL_GUARD_KILL=1`, timeout bumps, rollback, hold auto-extension.
+
 ### Fri 2026-08-28 7:04 PM MST — last read-only round (FP7/FP8)
 
 **No merge / no deploy / no timeout bump / no KILL unmute / no #1060/#1112 close / no #1114.** #1113 stands. Hold expiry **Sat 11:52:52 AM MST** (18:52:52Z). Clock: Arizona MST; UTC on evidence.
@@ -135,8 +224,6 @@ Freeze = orphaned write completed 20:18:26Z; loop never cycled again; **wedge-co
 1. Expiry Sat **11:52:52 AM MST**: no auto-rollback, no auto-extend. Rollback weakened. Restart = diagnostic, **drain first** (#1113). Post-restart: writes → transient; absent → file F2; writes-then-stalls → #1113 reproducible.
 2. #1060 FAIL CLOSED open. #1112 open. #1113 mechanism issue.
 3. KILL=0. Strike 64/2 at 240s.
-
-### Fri 2026-08-28 6:53 PM MST — clock = Arizona MST
 
 ### Fri 2026-08-28 6:53 PM MST — clock = Arizona MST
 
