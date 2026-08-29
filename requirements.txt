@@ -1,1 +1,15 @@
-ZmFzdGFwaT09MC4xMTIuNAp1dmljb3JuW3N0YW5kYXJkXT09MC4zMS4xCmppbmphMj09My4xLjUKcmVxdWVzdHM9PTIuMzIuMwpodHRweD09MC4yNy4yCnRlbmFjaXR5PT05LjAuMAphaW9jYWNoZT09MC4xMi4zCmFwc2NoZWR1bGVyPT0zLjEwLjQKc2VudHJ5LXNkaz09Mi4xOS4wCnByb21ldGhldXNyb2NrPT0wLjEuMwpzbG93YXBpPT0wLjEuOQpQaWxsb3c9PTExLjEuMAp0ZWxldGhvbj49MS4zMy4wLDwyCnB5dGVzdApweS1zcHk9PTAuNC4yCg==
+fastapi==0.112.4
+uvicorn[standard]==0.31.1
+jinja2==3.1.5
+requests==2.32.3
+httpx==0.27.2
+tenacity==9.0.0
+aiocache==0.12.3
+apscheduler==3.10.4
+sentry-sdk==2.19.0
+prometheusrock==0.1.3
+slowapi==0.1.9
+Pillow==11.1.0
+telethon>=1.33.0,<2
+pytest
+py-spy==0.4.2
