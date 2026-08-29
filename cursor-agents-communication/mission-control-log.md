@@ -88,6 +88,17 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-29 ~11:25 UTC — snapshot scheduler diagnosis v3 probes (observation only)
+
+- **No restart / no second revive / KILL=0 / no deploy.** Machine `7841024b3712e8` pid **649** still current (gen since 19:21:31Z).
+- **snapshot** last_cycle still **2026-08-28T20:18:26.392957Z** ok:true. **hour** 16:08:59Z / **daily** 16:12:13Z frozen. **pump** last 00:54:30Z.
+- **prediction_resolver is cycling** — `/api/liveness` last_success **2026-08-29T11:13:32Z**. Shared “APScheduler dead” is false.
+- **C2b contradicted:** py-spy APScheduler tid 677 `_main_loop` wait timeout≈210s. **write-stuck contradicted:** tid 1284 idle pool worker.
+- **C2a vs C1 unsplit:** job_count=3 (IDs unknown). Worker 8081 not listening. No `EVENT_JOB_MISSED` listener. Do not classify misfire vs failed re-arm.
+- **Revive result dict unknown** (Sentry extra=sys.argv). Strike-1 19:49:55Z → revive log 20:05:53Z ~16 min, timing-only for blocking `run_once`.
+- **Restart not justified as next discriminator.** If later restart: drain first (#1113 idle non-daemon write thread). Do not batch #1112/#1113/E1/misfire.
+- Ditto STATUS saved (`vendorId` snapshot-scheduler-diagnosis-v3-2026-08-29). Artifacts: `/opt/cursor/artifacts/diagnosis-v3/FINDINGS.md`
+
 ### 2026-08-28 ~19:14 UTC — v5 delegation: #1107 merge + resolver recovery + soak restart
 
 - **#1107 merged** `24488f4e` (RESOLVER_CYCLE_TIMEOUT_SECONDS 120→180). **#1108** fly-deploy labeled.
