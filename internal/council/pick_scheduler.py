@@ -223,14 +223,19 @@ class DailyPickScheduler:
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if _daily is self and self.liveness.snapshot().get("lifecycle") == "started":
-                return {"started": False, "reason": "already running"}
+            already = (
+                _daily is self and self.liveness.snapshot().get("lifecycle") == "started"
+            )
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="daily-pick-tick").start()
         else:
             # Cold start: create today soon, then align to UTC slot.
+            # Persisted lifecycle=started is not proof a DateTrigger is armed
+            # (new process generation after prior boot).
             schedule_in_seconds(DAILY_JOB_ID, self._tick, 45)
+        if already:
+            return {"started": False, "reason": "already running"}
         return {"started": True, "job": DAILY_JOB_ID}
 
     def stop(self) -> Dict[str, Any]:
@@ -361,7 +366,7 @@ class DailyPickScheduler:
             }
             still_scheduled = _daily is self
 
-        if reschedule and still_scheduled:
+        if still_scheduled:
             delay = _seconds_until_next_daily_tick(today_ready=today_ready)
             schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
             result["next_delay_seconds"] = delay
@@ -383,13 +388,17 @@ class HourPickScheduler:
 
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         with _lock:
-            if _hour is self and self.liveness.snapshot().get("lifecycle") == "started":
-                return {"started": False, "reason": "already running"}
+            already = (
+                _hour is self and self.liveness.snapshot().get("lifecycle") == "started"
+            )
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="hour-pick-tick").start()
         else:
+            # Persisted lifecycle=started is not proof a DateTrigger is armed.
             schedule_in_seconds(HOUR_JOB_ID, self._tick, 90)
+        if already:
+            return {"started": False, "reason": "already running"}
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
@@ -448,7 +457,7 @@ class HourPickScheduler:
             }
             still_scheduled = _hour is self
 
-        if reschedule and still_scheduled:
+        if still_scheduled:
             schedule_in_seconds(HOUR_JOB_ID, self._tick, self.refresh_minutes * 60)
         return result
 
