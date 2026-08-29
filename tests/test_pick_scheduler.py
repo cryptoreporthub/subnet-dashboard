@@ -81,6 +81,11 @@ def _arm_daily_sched(sched):
         pick_scheduler._daily = sched
 
 
+def _arm_hour_sched(sched):
+    with pick_scheduler._lock:
+        pick_scheduler._hour = sched
+
+
 def test_hour_run_once_records_prediction(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
     recorded = {}
@@ -411,3 +416,122 @@ def test_attach_council_prediction_uses_timezone_utc():
     src = Path(sv.__file__).read_text(encoding="utf-8")
     assert "_dt.timezone" not in src
     assert "timezone as _tz" in src
+
+
+def test_daily_start_schedules_when_persisted_lifecycle_started(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = pick_scheduler.DailyPickScheduler()
+    _arm_daily_sched(sched)
+    sched.liveness.start()
+    assert sched.liveness.snapshot().get("lifecycle") == "started"
+    out = sched.start(immediate=False)
+    assert scheduled
+    assert scheduled[0][0] == pick_scheduler.DAILY_JOB_ID
+    assert out["started"] is False
+    assert out["reason"] == "already running"
+
+
+def test_hour_start_schedules_when_persisted_lifecycle_started(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = pick_scheduler.HourPickScheduler(refresh_minutes=180)
+    _arm_hour_sched(sched)
+    sched.liveness.start()
+    assert sched.liveness.snapshot().get("lifecycle") == "started"
+    out = sched.start(immediate=False)
+    assert scheduled
+    assert scheduled[0][0] == pick_scheduler.HOUR_JOB_ID
+    assert out["started"] is False
+    assert out["reason"] == "already running"
+
+
+def test_daily_run_once_rearms_when_singleton(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: {
+            "action": "HOLD",
+            "date": "2026-08-29",
+            "pick": None,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = pick_scheduler.DailyPickScheduler()
+    _arm_daily_sched(sched)
+    result = sched.run_once()
+    assert result["ok"] is True
+    assert scheduled
+    assert scheduled[0][0] == pick_scheduler.DAILY_JOB_ID
+
+
+def test_hour_run_once_rearms_when_singleton(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+    monkeypatch.setattr(
+        "internal.council.hourly_pick.select_hourly_pick",
+        lambda subnets, ctx: {"subnet": {"netuid": 3}, "final_confidence": 0.4},
+    )
+    monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_k: None)
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 3}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = pick_scheduler.HourPickScheduler(refresh_minutes=180)
+    _arm_hour_sched(sched)
+    result = sched.run_once()
+    assert result["ok"] is True
+    assert scheduled
+    assert scheduled[0][0] == pick_scheduler.HOUR_JOB_ID
+    assert scheduled[0][1] == 180 * 60
+
+
+def test_daily_run_once_does_not_schedule_when_not_singleton(monkeypatch):
+    pick_scheduler.stop_pick_schedulers()
+    scheduled = []
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick",
+        lambda subnets, market_context=None, force=False: {
+            "action": "HOLD",
+            "date": "2026-08-29",
+            "pick": None,
+        },
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        pick_scheduler,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    sched = pick_scheduler.DailyPickScheduler()
+    result = sched.run_once()
+    assert result["ok"] is True
+    assert scheduled == []
