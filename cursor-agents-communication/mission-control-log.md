@@ -88,6 +88,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-29 ~19:00 UTC — FREEZE-LIFT START (hold expired 18:52:52Z / 11:52:52 AM AZ)
+
+- **#1060 reopened** (Ditto): GitHub auto-closed it via keyword match on the substring `close #1060` inside commit `a099999` ("Does not close #1060") at squash-merge 16:54:59Z. Not a G0/liveness pass. Fail-closed marker restored.
+- **#1072 soak window COMPLETE** (18:52:52Z → 08-29). GitHub issue already closed 08-28T06:15:52Z via #1089; this is the formal soak close.
+- **Post-hold baseline (verified 19:00Z):** resolver fresh 18:53:05Z (age ~7.7min, consec_failures 0); score-snapshot scheduler running, last cycle 18:32:03Z ok count 40 (recovered, advancing); worker peer pid 651 alive (heartbeat 17s); readiness ready, issues []; pump_desk_trust ready; live_cache 149 subnets rpc_healthy. /jobs probe 18:09Z: 7 jobs armed, last_failures {}.
+- **QUEUED next:** G0 harness ×2 → #1058 formal close (run both cold-load audits; hero ≤10s + /health p95 <500ms bar). Resolver watch continues via FP7 poll (do NOT bump 180s cap).
+- **Standing:** KILL stays 0 (no unmute without explicit ask). Daily pick next slot 00:15Z 08-30.
+
 ### 2026-08-28 ~19:14 UTC — v5 delegation: #1107 merge + resolver recovery + soak restart
 
 - **#1107 merged** `24488f4e` (RESOLVER_CYCLE_TIMEOUT_SECONDS 120→180). **#1108** fly-deploy labeled.
