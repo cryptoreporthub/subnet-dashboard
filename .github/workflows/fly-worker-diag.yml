@@ -49,9 +49,8 @@ jobs:
       - name: Post /jobs inventory to PR (label-triggered run)
         if: github.event_name == 'pull_request'
         run: |
-          body=$(cat /tmp/jobs.out)
-          printf '%s' "$body" > /tmp/jobs_body.txt
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/jobs_body.txt -F header="FP7 /jobs inventory" || echo 'comment failed (non-fatal)'
+          { echo '**FP7 /jobs inventory**'; echo '```'; cat /tmp/jobs.out; echo '```'; } > /tmp/jobs_body.txt
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body-file /tmp/jobs_body.txt || echo 'comment failed (non-fatal)'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
