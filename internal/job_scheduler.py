@@ -1,3 +1,4 @@
+
 """Shared APScheduler BackgroundScheduler for Fly single-worker background jobs."""
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import Any, Callable, Dict, Optional
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.date import DateTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.events import EVENT_JOB_MISSED
 
 _scheduler: Optional[BackgroundScheduler] = None
 _shutting_down = False
@@ -68,7 +70,9 @@ def get_background_scheduler() -> BackgroundScheduler:
             sched = BackgroundScheduler(daemon=True)
             sched.start()
             _scheduler = sched
-        return _scheduler
+        sched = _scheduler
+    install_missed_event_logger()
+    return sched
 
 
 def schedule_interval_seconds(
@@ -152,3 +156,78 @@ def shutdown_background_scheduler() -> None:
         _scheduler = None
     if sched is not None:
         sched.shutdown(wait=True)
+
+
+
+def job_inventory() -> Dict[str, Any]:
+    """Read-only worker-side job inventory for diagnostics (FP7).
+
+    Returns APScheduler job id/name/next_run_time/misfire_grace_time/pending for
+    every registered job plus retry counts. Classification aid for scheduler
+    stalls: shows whether each scheduler still holds a live trigger.
+    """
+    with _lock:
+        sched = _scheduler
+    if sched is None:
+        return {"running": False, "job_count": 0, "jobs": [], "last_failures": {}}
+    try:
+        jobs = sched.get_jobs()
+    except Exception as exc:
+        return {"running": False, "job_count": 0, "jobs": [], "error": str(exc)}
+    out = []
+    for job in jobs:
+        try:
+            nrt = job.next_run_time.isoformat() if job.next_run_time else None
+        except Exception:
+            nrt = None
+        try:
+            trigger = repr(job.trigger)
+        except Exception:
+            trigger = None
+        out.append(
+            {
+                "id": job.id,
+                "name": getattr(job, "name", None),
+                "next_run_time": nrt,
+                "misfire_grace_time": getattr(job, "misfire_grace_time", None),
+                "pending": getattr(job, "pending", None),
+                "trigger": trigger,
+            }
+        )
+    return {
+        "running": sched.running,
+        "job_count": len(out),
+        "jobs": out,
+        "last_failures": dict(_retry_counts),
+    }
+
+
+_missed_listener_installed = False
+
+
+def install_missed_event_logger() -> bool:
+    """Attach a logging-only EVENT_JOB_MISSED listener (FP7).
+
+    Logs when a scheduled one-shot job is missed/misfired, so re-arm failures
+    are visible in worker logs instead of failing silently. Idempotent.
+    """
+    global _missed_listener_installed
+    if _missed_listener_installed:
+        return True
+    with _lock:
+        sched = _scheduler
+        if sched is None:
+            return False
+        sched.add_listener(_on_job_missed, EVENT_JOB_MISSED)
+        _missed_listener_installed = True
+        return True
+
+
+def _on_job_missed(event: Any) -> None:
+    logger.warning(
+        "background job MISSED: %s (job_id=%s, scheduled=%s, misfire_grace_time=%s)",
+        getattr(event, "job", None),
+        getattr(event, "job_id", "?"),
+        getattr(event, "scheduled_run_time", "?"),
+        getattr(event, "misfire_grace_time", "?"),
+    )
