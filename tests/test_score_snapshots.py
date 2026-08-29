@@ -441,15 +441,135 @@ def test_register_completion_clears_occupancy_if_future_already_gone(tmp_path, m
     """Race: write released between occupancy check and callback register."""
     _wire_scheduler_paths(tmp_path, monkeypatch)
     _reset_write_occupancy()
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
     sched = snaps.ScoreSnapshotScheduler()
     snaps._scheduler = sched
     snaps._TICK_ACTIVE = True
     sched._tick_active = True
     with snaps._lock:
         snaps._write_future = None
-    sched._register_write_completion_callback(reschedule=False)
-    assert snaps._TICK_ACTIVE is False
-    assert sched._tick_active is False
+    try:
+        sched._register_write_completion_callback(reschedule=False)
+        assert snaps._TICK_ACTIVE is False
+        assert sched._tick_active is False
+        assert scheduled
+        assert scheduled[0][0] == snaps.JOB_ID
+    finally:
+        snaps._scheduler = None
+
+
+def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_path):
+    """Timed-out run_once must still DateTrigger-rearm when the late write finishes."""
+    path = _wire_scheduler_paths(tmp_path, monkeypatch)
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    write_calls = {"n": 0}
+
+    def _slow_build(*_args, **_kwargs):
+        write_calls["n"] += 1
+        time.sleep(2)
+        payload = {
+            "written_at": "2026-08-21T00:00:00Z",
+            "count": 1,
+            "hour": [],
+            "day": [{"netuid": 1, "total_score": 1.0}],
+        }
+        snaps.save_score_snapshot(payload, str(path))
+        return payload
+
+    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
+    _reset_write_occupancy()
+    sched = snaps.ScoreSnapshotScheduler()
+    snaps._scheduler = sched
+    sched._scoring_in_progress = lambda: False
+    try:
+        timed_out = sched.run_once()
+        assert "write_timeout" in timed_out.get("error", "")
+        assert write_calls["n"] == 1
+        assert scheduled == []
+        deadline = time.time() + 5
+        while not scheduled and time.time() < deadline:
+            time.sleep(0.05)
+        assert scheduled, "deferred completion must re-arm DateTrigger"
+        assert scheduled[0][0] == snaps.JOB_ID
+        assert path.is_file()
+    finally:
+        snaps._scheduler = None
+        _reset_write_occupancy()
+
+
+def test_start_does_not_schedule_when_not_registered(monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda *a, **k: scheduled.append(a),
+    )
+    snaps._scheduler = None
+    sched = snaps.ScoreSnapshotScheduler()
+    out = sched.start(immediate=False)
+    assert out["started"] is False
+    assert out["reason"] == "not registered"
+    assert scheduled == []
+
+
+def test_start_schedules_when_persisted_lifecycle_started(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    snaps.stop_score_snapshot_scheduler()
+    sched = snaps.ScoreSnapshotScheduler()
+    snaps._scheduler = sched
+    sched.liveness.start()
+    assert sched.liveness.snapshot().get("lifecycle") == "started"
+    try:
+        out = sched.start(immediate=False)
+        assert scheduled
+        assert scheduled[0][0] == snaps.JOB_ID
+        assert out["started"] is False
+        assert out["reason"] == "already running"
+    finally:
+        snaps._scheduler = None
+
+
+def test_module_start_schedules_when_lifecycle_started(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    scheduled = []
+    monkeypatch.setattr(
+        snaps,
+        "schedule_in_seconds",
+        lambda job_id, func, seconds: scheduled.append((job_id, seconds)),
+    )
+    snaps.stop_score_snapshot_scheduler()
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    sched.liveness.start()
+    try:
+        out = snaps.start_score_snapshot_scheduler(immediate=False)
+        assert scheduled
+        assert scheduled[0][0] == snaps.JOB_ID
+        assert out["started"] is False
+        assert out["reason"] == "already running"
+    finally:
+        snaps.stop_score_snapshot_scheduler()
 
 
 def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):

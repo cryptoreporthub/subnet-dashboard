@@ -350,15 +350,17 @@ class ScoreSnapshotScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        snap = self.liveness.snapshot()
-        if snap.get("lifecycle") == "started":
-            return {"started": False, "reason": "already running"}
+        already = self.liveness.snapshot().get("lifecycle") == "started"
         self.liveness.start()
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
         else:
             # After pick schedulers; full score is the heavy job.
+            # Persisted lifecycle=started is not proof a DateTrigger is armed
+            # (new process generation after prior boot).
             schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+        if already:
+            return {"started": False, "reason": "already running"}
         return {"started": True, "refresh_minutes": self.refresh_minutes}
 
     def stop(self) -> Dict[str, Any]:
@@ -493,7 +495,9 @@ class ScoreSnapshotScheduler:
                     _write_future = None
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if reschedule and self._is_registered():
+            # Deferred path: re-arm even when this tick was run_once/revive
+            # (reschedule=False). Sync-complete and occupancy-skip keep the gate.
+            if self._is_registered():
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
 
     def _register_write_completion_callback(self, reschedule: bool) -> None:
@@ -505,7 +509,7 @@ class ScoreSnapshotScheduler:
             with _lock:
                 _TICK_ACTIVE = False
                 self._tick_active = False
-            if reschedule and self._is_registered():
+            if self._is_registered():
                 schedule_in_seconds(JOB_ID, self._tick, self.refresh_minutes * 60)
             return
         if fut.done():
@@ -622,11 +626,7 @@ def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
         return {"started": False, "reason": "disabled"}
     global _scheduler
     with _lock:
-        if _scheduler is not None:
-            snap = _scheduler.liveness.snapshot()
-            if snap.get("lifecycle") == "started":
-                return {"started": False, "reason": "already running"}
-        else:
+        if _scheduler is None:
             _scheduler = ScoreSnapshotScheduler()
     return _scheduler.start(immediate=immediate)
 
