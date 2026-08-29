@@ -1,13 +1,15 @@
-
 name: Fly worker diag
 
 on:
   workflow_dispatch:  # manual trigger
+  pull_request:
+    types: [labeled]
 
 jobs:
   diag:
     name: Worker logs + live_subnets probe (split v2 worker, v1 web fallback)
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'fly-deploy' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'cryptoreporthub')
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
@@ -33,6 +35,6 @@ jobs:
       - name: Worker /jobs inventory (FP7)
         run: bash scripts/probe_worker_jobs.sh
         env:
-          FLY_API_TOKEN: ${secrets.FLY_API_TOKEN}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Public data-freshness
         run: curl -fsS https://subnet-dashboard.fly.dev/api/data-freshness | python3 -m json.tool
