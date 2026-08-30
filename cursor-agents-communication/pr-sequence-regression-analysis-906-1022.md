@@ -75,7 +75,7 @@ The §4 gate ("ranks 2/3/(e) wait on §6 item 4") must be **widened to also requ
 | #1128 `if reschedule and still_scheduled:` → `if still_scheduled:` | **diff-verified** 2026-08-30 |
 | #1009 forced-retry semantics | audit; verify PR body at impl time |
 | #1021 1712s/128 CPU-s vs 90s | audit quote from PR description; re-verify at impl time |
-| #1008 exact diff (which of 7 commits) | OPEN — git history at impl time |
+| #1008 exact diff (which of 7 commits) | **verified** — causal SHA `1eb0a6bfa3` + test rename; VM `0769f631c8`; merge `d3e331aad` MERGE ≠ DEPLOY |
 
 ---
 

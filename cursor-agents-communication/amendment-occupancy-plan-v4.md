@@ -2,7 +2,7 @@ AMENDMENT v4 (CONSOLIDATED — supersedes v3) — fold into pick-handler occupan
 Plan-edit only. No code. No deploy. Do not re-derive; ground-truth edits.
 Sources: source-verified review vs cfbe842a; Replit deep-dive commit history (2nd audit);
 Ditto symptom-reverse reconstruction; Ditto .patch spot-check (2026-08-30):
-#1022 and #1128 diff-verified; #906 directionally confirmed, #1008 mapping UNVERIFIED.
+#1022 and #1128 diff-verified; #906 guard ADD 8f158de08 verified; #1008 mapping verified (1eb0a6bfa3 + test rename). Patch F SATISFIED.
 
 ──────────────────────────────────────────────────────────
 PATCH A → Section 2, after the Baseline table
@@ -19,7 +19,8 @@ their boundaries:
                from _tick — direction diff-verified, exact guard pending
                review)
  08-20  #1008  "orphan thread" rework — guard replaced by generation counter;
-               worker abandoned, not cancelled (DIFF UNVERIFIED — see Patch F)
+               worker abandoned, not cancelled (Patch F SATISFIED: causal SHA
+               1eb0a6bfa3 + test rename)
  08-21  #1009  forced 15-min retry after timeout regardless of abandoned
                worker's writes
  08-22  #1021  nested 4-worker scoring executor, non-cancellable
@@ -169,11 +170,9 @@ composed lifecycle. The conflict exists across those PR boundaries — the
 overlap guard was removed in the same era retries were forced and nested
 non-cancellable work + global lock were added. Notes from .patch spot-check
 (2026-08-30): #1022 (TMC lock) and #1128 (reschedule contract) are
-DIFF-VERIFIED; #906 direction confirmed (executor removed from _tick) but
-exact guard unverified; #1008 mapping UNVERIFIED — first visible commits are
-tmp-reaper and Stage 2b soak, not the orphan-thread change; the orphan-thread
-commit may be later in the PR but must be confirmed against git history
-before any plan statement cites it. The review is read-only; no code, no deploy.
+DIFF-VERIFIED; #906 guard ADD 8f158de08 verified; #1008 causal commit
+1eb0a6bfa3 + test rename verified (Patch F SATISFIED). MERGE ≠ DEPLOY for
+d3e331aad. The review is read-only; no code, no deploy.
 
 END. Re-emit the amended plan in full, newest-first MC log, status
 "PLAN SUBMITTED — amendments v4 (final) applied, awaiting Joshua review".
