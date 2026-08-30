@@ -65,7 +65,7 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 ### Remaining (not executed)
 
 - **Sentinel soak → #1072 close** — restarted **2026-08-28 18:52:52Z** → ends **2026-08-29 18:52:52Z** (~11:52 AM PDT).
-- **G0 harness ×2 → #1058 formal close** — after soak.
+- **G0 harness ×2 on v2107** — **FAIL** 2026-08-30 ~00:49–00:54Z (both STARVATION). PR 1060 stays open. Issue 1058 already closed 08-27 — not the close target.
 - **Resolver watch** — if tick wedges again past 180s cap, capture phase/subsystem delta; do NOT just bump higher (#1107 is mitigation).
 - Hydrate drafts **#1073 / #1060 / #1061** untouched.
 
@@ -87,6 +87,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 ## Log entries
 
 <!-- Append dated entries below. Newest first. -->
+
+### 2026-08-30 ~00:57 UTC — G0 ×2 on v2107 FAIL (PR 1060 stays open)
+
+- Joshua Go 17:46 AZ. Harness vs live `subnet-dashboard.fly.dev`. **Both** runs STARVATION: hero NEVER, `Awaiting subnet` / COLD, aborted `/api/daily-pick`, UI “pick handler busy — retry shortly”.
+- g0-1 00:49Z `/health` p95 **1245ms**. g0-2 00:54Z p95 465ms but homepage curl 20s and post-burst `/health` timeout + liveness **503**. Recovered 00:57:21Z without restart.
+- Do not close PR 1060. Issue 1058 already closed 08-27; this is not a re-close. No fly-deploy, KILL=0, no 90s bump.
+- Daily pick slot: HOLD after 90s tick timeout (00:17Z) then HOLD directional-conflict (00:39Z). Report: `artifacts/g0-baseline/FREEZE_LIFT_G0.md`.
 
 ### 2026-08-29 ~19:00 UTC — FREEZE-LIFT START (hold expired 18:52:52Z / 11:52:52 AM AZ)
 
