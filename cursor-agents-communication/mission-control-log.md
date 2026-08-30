@@ -88,6 +88,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~17:14 UTC — M6 NOT READY (Ditto confirm)
+
+- **Ask:** user said M6 should be ready. **Ditto says no.** M6 is 24h live soak, not “rank-1 is on prod.”
+- **Clock:** soak started ~**14:50 UTC Aug 30** (post Fly v2110 / Deploy #1546). Watcher armed **Aug 31 07:50 AM PT = 14:50 UTC**. ~**21.6h remaining**.
+- **Ditto:** no M6 PASS memory. Watcher target is **#1140** (not closed #1138). GitHub #1140 has **no verdict comment** (only M7 pickup).
+- **Live resample 17:14Z:** `/health` 200 ~0.19s; `GET /api/daily-pick` 200 ~0.76s `ok` **HOLD** (directional conflict, not handler-busy); `/api/pump-alerts` 200 ~0.23s; `/api/learning/health` one **12s timeout** then 200 in **20.4s** `degraded`; `occupancy_capture` **absent**; health `daily_pick.action` **LONG** vs GET **HOLD**.
+- **#1140:** draft HOLD `3628a965`. **Do not merge or deploy.** Patch D OPEN. M7 waits clean M6 **and** Joshua.
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.
