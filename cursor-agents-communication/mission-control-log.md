@@ -88,6 +88,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~09:05 UTC — PLAN SUBMITTED — amendments v3 (FINAL) applied, awaiting Joshua review
+
+- Folded Ditto amendment v3 (FINAL) into `cursor-agents-communication/pick-handler-occupancy-scope.md`. **Still plan-only. No code. No deploy.**
+- Added: recurrence (08-19/21/25 + #1087 wedge); (b1) abandoned-worker write window (independent corroboration); (b2) rank-2 **reverses** current outside-future load; (b3) root 90s latency is a **named non-goal**; rank **(e)** generation-counter hardening; validation items 4–6 (runtime capture, misfire-grace isolation, rank-1-only merge gate).
+- Line refs re-pinned vs `origin/main` `5a33fe6c` (§8). Old `cfbe842a` 265-297 vs HEAD 270-302 is the same `_tick`, new numbers.
+- Rank-1 (GET single-flight) remains the only mergeable cut after a separate impl Go. Ranks 2/3/(e) wait on resource-capture. 90s/KILL/#1112/#1113/PR 1060 unchanged.
+
 ### 2026-08-30 ~01:40 UTC — occupancy SCOPE PLAN ready (no implementation)
 
 - Joshua “Ok you can start” → execute Ditto GO checklist (#1136): **plan only**.
