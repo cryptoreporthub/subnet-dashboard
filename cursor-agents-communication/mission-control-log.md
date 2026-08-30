@@ -88,6 +88,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
+
+- **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.
+- **Watcher status — resolved the confusion:** Joshua DID apply the "Daily Pick Publication Watch" (Ditto workflow id 60f3c72b, one-shot 00:25Z). It fired and reports daily-pick tick !ok at 00:17Z -> HOLD (90s timeout), matching Cursor. Nothing further to apply or run; skip is fine.
+- **G0 x2 on live v2107 -> post result on #1060.** Visibility correction: #1058 is ALREADY CLOSED (2026-08-27T06:04:59Z) — my earlier queue line "G0 x2 -> #1058 formal close" was wrong framing; SUPERSEDED. G0 verdict targets #1060 only.
+- **#1060 closes ONLY when both bars pass (hero <=10s cold-load, /health p95 <500ms) AND Joshua explicitly ok's.** Fail-closed marker stays until then.
+- **Locked (unchanged): KILL=0, #1112/#1113 untouched, no timeout bump.** Resolver baseline fresh (00:16Z persisted, 0 consecutive failures).
+
 ### 2026-08-29 ~19:00 UTC — FREEZE-LIFT START (hold expired 18:52:52Z / 11:52:52 AM AZ)
 
 - **#1060 reopened** (Ditto): GitHub auto-closed it via keyword match on the substring `close #1060` inside commit `a099999` ("Does not close #1060") at squash-merge 16:54:59Z. Not a G0/liveness pass. Fail-closed marker restored.
@@ -182,4 +190,6 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 ### 2026-08-28 ~05:40Z — Initial snapshot
 
-Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1086–#1090 remain draft / human-gated. Mirror rule added: `mission-control-log.md` + Ditto `save_memory`.
+Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1086–#1090
+
+[read_links truncated 96 chars from this runtime tool output. The full content is stored with the tool result.]
