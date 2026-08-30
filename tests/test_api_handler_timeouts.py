@@ -8,12 +8,25 @@ import threading
 import time
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport
 
 from internal.judges import council_routes
 from internal.letter import routes as letter_routes
 from server import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_daily_pick_flight():
+    """Rank-1 coalesce reuses a process-global Future; don't leak hangs across tests."""
+    import server as srv
+
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
+    yield
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
 
 
 def test_api_judges_timeout_returns_degraded(monkeypatch):
