@@ -88,6 +88,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~01:40 UTC — occupancy SCOPE PLAN ready (no implementation)
+
+- Joshua “Ok you can start” → execute Ditto GO checklist (#1136): **plan only**.
+- Plan: `cursor-agents-communication/pick-handler-occupancy-scope.md`
+- Split: GET `/api/daily-pick` already off scoring (0.5s pick-read); G0 “pick handler busy” is that timeout under burst + retry storm. 90s HOLD is the **tick** (`get_or_create_today_pick`), not GET.
+- Rank-1 impl (later Go): GET single-flight/shed. Rank-2: move tick subnet load inside the 90s pool. Rank-3: inner scoring deadlines. Skip SQLite. 90s/KILL/#1112/#1113/PR 1060 unchanged. No deploy.
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.
