@@ -632,6 +632,10 @@ _PICK_READ_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
     thread_name_prefix="pick-read",
 )
 atexit.register(_PICK_READ_EXECUTOR.shutdown, wait=False, cancel_futures=True)
+# ponytail: coalesce concurrent hydrates onto one pick-read job (G0 retry storm).
+_DAILY_PICK_FLIGHT_LOCK = threading.Lock()
+_DAILY_PICK_FLIGHT: Optional[concurrent.futures.Future] = None
+_DAILY_PICK_STASH: Dict[str, Any] = {}
 SUBNETS_HANDLER_TIMEOUT = float(os.environ.get("SUBNETS_HANDLER_TIMEOUT_SECONDS", "3"))
 _SUBNETS_TTL = float(os.environ.get("SUBNETS_CACHE_SECONDS", "30"))
 _SUBNETS_LOCK = threading.Lock()
@@ -3118,81 +3122,89 @@ def _daily_pick_pending_hold() -> Dict[str, Any]:
     )
 
 
+def _hydrate_daily_pick_lite(stash: Dict[str, Any]) -> Dict[str, Any]:
+    """One JSON load + lite enrich — never scores. Shared by single-flight GET."""
+    from internal.council.daily_pick_engine import _find_today, _load
+    from internal.whales.enrichment_badge import empty_whale_flow_badge
+
+    existing = _find_today(_load())
+    if existing is None:
+        pending = _daily_pick_pending_hold()
+        stash["payload"] = pending
+        return pending
+    # Stash stored JSON before enrich so waiters of THIS flight can shed to it
+    # instead of rewriting a scheduler HOLD into the busy timeout payload.
+    raw = dict(existing)
+    raw["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+    stash["payload"] = _attach_daily_pick_meta(raw)
+    result = _enrich_daily_pick_payload_lite(dict(existing))
+    result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
+    return _attach_daily_pick_meta(result)
+
+
+def _coalesce_daily_pick_flight():
+    """One in-flight hydrate; extra GETs join that Future (hour-lock idea, shared result)."""
+    global _DAILY_PICK_FLIGHT, _DAILY_PICK_STASH
+    with _DAILY_PICK_FLIGHT_LOCK:
+        fut = _DAILY_PICK_FLIGHT
+        stash = _DAILY_PICK_STASH
+        if fut is None or fut.done():
+            stash = {}
+            fut = _PICK_READ_EXECUTOR.submit(_hydrate_daily_pick_lite, stash)
+            _DAILY_PICK_FLIGHT = fut
+            _DAILY_PICK_STASH = stash
+        return fut, stash
+
+
 @app.get("/api/daily-pick")
 async def api_daily_pick(full: bool = False):
     """Today's pick from stored JSON. Hydrate GET never waits on scoring.
 
     ``full`` is accepted so old clients do not 422, then ignored. Shortlist
     scoring lives on ``/api/daily-pick/weighed`` — this path stays lite.
+    Concurrent hydrates share one pick-read job; extras get that result or
+    last stored JSON (shed), not N parallel loads.
     """
     _ = full
     started = time.monotonic()
-    from internal.whales.enrichment_badge import empty_whale_flow_badge
-
-    def _read_stored() -> Optional[Dict[str, Any]]:
-        from internal.council.daily_pick_engine import _find_today, _load
-
-        return _find_today(_load())
-
     timeout_s = PICK_READ_TIMEOUT
-    pool = _PICK_READ_EXECUTOR
+    fut, stash = _coalesce_daily_pick_flight()
     try:
-        existing = await _to_thread_timeout(
-            _read_stored, timeout_s, label="daily-pick-read", executor=pool
+        loop = asyncio.get_running_loop()
+        # One wrap per concurrent.Future+loop — N wrap_future() on the same
+        # Future deadlocks waiters under asyncio.gather (G0-style burst).
+        aio = getattr(fut, "_daily_pick_aio", None)
+        if aio is None or aio.get_loop() is not loop:
+            aio = asyncio.wrap_future(fut, loop=loop)
+            try:
+                fut._daily_pick_aio = aio
+            except Exception:
+                pass
+        payload = await asyncio.wait_for(asyncio.shield(aio), timeout=timeout_s)
+        stage = (
+            "hydrate_get_miss"
+            if isinstance(payload, dict) and payload.get("status") == "pending"
+            else "hydrate_get_hit"
         )
+        _daily_pick_stage_timing(stage, (time.monotonic() - started) * 1000)
+        return payload
     except asyncio.TimeoutError:
         _daily_pick_stage_timing(
             "hydrate_get_timeout", (time.monotonic() - started) * 1000
         )
+        last = stash.get("payload")
+        if isinstance(last, dict) and str(last.get("status") or "").lower() != "timeout":
+            return last
         return _daily_pick_timeout_hold()
     except Exception as e:
         logger.error("Error fetching daily pick: %s", e)
         return _attach_daily_pick_meta(
             {
-            "status": "error",
-            "date": datetime.now(timezone.utc).date().isoformat(),
-            "action": "HOLD",
-            "reason": str(e),
-            "pick": None,
-            }
-        )
-
-    if existing is None:
-        _daily_pick_stage_timing(
-            "hydrate_get_miss", (time.monotonic() - started) * 1000
-        )
-        return _daily_pick_pending_hold()
-
-    def _enrich() -> Dict[str, Any]:
-        result = _enrich_daily_pick_payload_lite(dict(existing))
-        result["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-        return _attach_daily_pick_meta(result)
-
-    try:
-        payload = await _to_thread_timeout(
-            _enrich, timeout_s, label="daily-pick-enrich", executor=pool
-        )
-        _daily_pick_stage_timing(
-            "hydrate_get_hit", (time.monotonic() - started) * 1000
-        )
-        return payload
-    except asyncio.TimeoutError:
-        # Stored scheduler HOLD/LONG is not a timeout HOLD.
-        _daily_pick_stage_timing(
-            "hydrate_get_enrich_timeout", (time.monotonic() - started) * 1000
-        )
-        raw = dict(existing)
-        raw["enrichment_badge"] = empty_whale_flow_badge("lite_read")
-        return _attach_daily_pick_meta(raw)
-    except Exception as e:
-        logger.error("Error fetching daily pick: %s", e)
-        return _attach_daily_pick_meta(
-            {
-            "status": "error",
-            "date": datetime.now(timezone.utc).date().isoformat(),
-            "action": "HOLD",
-            "reason": str(e),
-            "pick": None,
+                "status": "error",
+                "date": datetime.now(timezone.utc).date().isoformat(),
+                "action": "HOLD",
+                "reason": str(e),
+                "pick": None,
             }
         )
 
