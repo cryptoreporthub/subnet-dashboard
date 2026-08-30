@@ -3178,12 +3178,8 @@ async def api_daily_pick(full: bool = False):
             aio = asyncio.wrap_future(fut, loop=loop)
             try:
                 fut._daily_pick_aio = aio
-            except Exception:
-                logger.warning(
-                    "daily-pick wrap_future cache failed; "
-                    "N concurrent wraps may deadlock under gather",
-                    exc_info=True,
-                )
+            except Exception as _aio_set_exc:
+                logger.warning("daily-pick wrap_future cache set failed: %s", _aio_set_exc)
         payload = await asyncio.wait_for(asyncio.shield(aio), timeout=timeout_s)
         stage = (
             "hydrate_get_miss"
