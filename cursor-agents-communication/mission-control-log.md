@@ -88,6 +88,22 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~01:20 UTC — GO: scope pick-handler occupancy cut (Joshua, via Ditto)
+
+Next product move = **scoped pick-handler occupancy cut**. Confirmed: NOT another freeze PR, NOT #1112/#1113, NOT a G0 re-run, NOT a deploy. Ditto mapped this to option C (fix the live pick-path symptom first) — sharpened.
+
+**Deliverable of THIS instruction: a scoped PLAN only. Do not implement on this instruction. Implementation happens on a separate Go after human review.**
+
+## Checklist for Cursor
+
+1. **Define occupancy.** Wall-clock time the daily-pick handler holds the process/web tier, request entry -> response return, including sub-calls (resolver batch, council grading, proxy/chain calls, DB writes). Name the metric + how it'll be measured.
+2. **Baseline from tonight's evidence:** 90s tick timeout -> HOLD (00:17Z), HOLD directional-conflict (00:39Z), "pick handler busy - retry shortly" screenshots (00:49/00:54Z), g0-1 /health p95 1245ms, p100 8076ms. Daily pick last published 08-29 17:31Z.
+3. **Root-cause map.** Every synchronous sub-call on the daily-pick hot path (routes -> scheduler -> learning/grading/council/proxy). Mark which block the handler.
+4. **Proposed cut (options, not a single pick):** (a) move pick computation off the request path — async precompute + cache, serve cached pick; (b) time-box/dedupe sub-calls (deadlines on council/proxy/resolver); (c) single-flight + shed/queue concurrent pick requests (fast-fail or stale-cache response); (d) reduce SQLite write cost on the hot handler. Rank by risk/effort.
+5. **Constraints (non-negotiable):** response shape preserved (published flag, netuid, confidence); hourly pick untouched unless scoped; **no timeout bump (90s stays)**; **no deploy without Joshua approval**; KILL=0; #1112/#1113 untouched; **#1060 stays OPEN fail-closed**; #1058 stays closed (was closed 08-27 via #1071, not the G0 gate).
+6. **Validation plan before any implementation PR:** how you prove occupancy dropped (metric delta vs baseline), targeted probe replacing full G0 re-run (a single controlled run only with explicit Go), /health p95 impact check.
+7. **Deliverable:** scope plan doc on branch + MC log post for human review. Do NOT implement yet.
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.
@@ -171,25 +187,6 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 ### 2026-08-28 ~12:10–12:17am PT — #1086 leak patch
 
-- Leak patch head `6ee50f4b`; smoke green.
-- Leak HOLD closed.
+- Leak patch head `6ee50f4b`; smoke gr
 
-### 2026-08-28 ~12:04–12:08am PT — Shield FINAL on #1088; #1090 smoke green; #1086 rebase
-
-- #1088 Shield FINAL HOLD (human merge only).
-- #1090 smoke green.
-- #1086 rebase done `e6d928df` then leak patch applied.
-
-### 2026-08-28 ~11:58pm PT / 06:58Z — Step 0 complete: #1091 on main
-
-- Un-drafted #1091, updated branch onto main after #1089+#1085 (head 1fc9386a), smoke green (run 33149466727).
-- Squash-merged #1091 at 2026-08-28T06:58:26Z as SHA 4d72a1c385d5c0a2d46057809e564daf85c5b76b. Files: mission-control-log.md, ditto-sync.mdc mirror duty, board.md pointer.
-- #1089 already merged (closes #1072). #1085 already merged.
-- Next: rebase draft #1086 onto this main; fan-out Sentinel soak, Drift/QA #1090, Market Desk HOLD #1088, Proof Scout #1087 (allowlist 7→0), Shield re-audit.
-- No Phase-5 bot PRs merged in this step. #1088 remains parked.
-
-### 2026-08-28 ~05:40Z — Initial snapshot
-
-Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1086–#1090
-
-[read_links truncated 96 chars from this runtime tool output. The full content is stored with the tool result.]
+[read_links truncated 1124 chars from this runtime tool output. The full content is stored with the tool result.]
