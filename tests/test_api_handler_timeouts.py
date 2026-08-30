@@ -2,14 +2,31 @@
 
 from __future__ import annotations
 
+import asyncio
+import concurrent.futures
 import threading
 import time
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport
 
 from internal.judges import council_routes
 from internal.letter import routes as letter_routes
 from server import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_daily_pick_flight():
+    """Rank-1 coalesce reuses a process-global Future; don't leak hangs across tests."""
+    import server as srv
+
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
+    yield
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
 
 
 def test_api_judges_timeout_returns_degraded(monkeypatch):
@@ -883,6 +900,8 @@ def test_daily_pick_full_query_stays_on_pick_read_pool(monkeypatch):
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
     release = threading.Event()
 
     def _block():
@@ -928,3 +947,65 @@ def test_daily_pick_stage_timing_on_fast_degraded(monkeypatch, caplog):
     assert resp.json()["status"] == "pending"
     assert "daily_pick_stage" in caplog.text
     assert "hydrate_get_miss" in caplog.text
+
+
+def test_daily_pick_concurrent_gets_single_flight(monkeypatch):
+    """n=8 overlapping hydrates share one load; HTTP GET 200; elapsed ≪ 0.5s × 8.
+
+    Starlette TestClient / httpx ASGITransport run requests serially, so
+    overlap is the handler's coalesce (same path GET uses) plus one HTTP GET.
+    """
+    import server as srv
+
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
+    calls = {"n": 0}
+    stored = {
+        "date": "2099-01-01",
+        "status": "ok",
+        "action": "HOLD",
+        "reason": "Directional conflict: council signal is bearish; no LONG published.",
+        "candidate": {"subnet": {"netuid": 78, "name": "SN78"}},
+        "pick": None,
+    }
+    ready = threading.Barrier(8)
+
+    def _slow_hydrate(stash):
+        calls["n"] += 1
+        time.sleep(0.15)
+        payload = dict(stored)
+        stash["payload"] = payload
+        return payload
+
+    monkeypatch.setattr(srv, "_hydrate_daily_pick_lite", _slow_hydrate)
+    monkeypatch.setattr(srv, "PICK_READ_TIMEOUT", 0.5)
+
+    def _join(_i):
+        ready.wait(timeout=2)
+        fut, _stash = srv._coalesce_daily_pick_flight()
+        return fut.result(timeout=3)
+
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        payloads = list(pool.map(_join, range(8)))
+    elapsed = time.time() - t0
+    assert elapsed < 1.0
+    assert calls["n"] == 1
+    assert all(isinstance(p, dict) and p.get("candidate") for p in payloads)
+    assert all(p.get("status") != "timeout" for p in payloads)
+
+    async def _eight_handlers():
+        return await asyncio.gather(*[srv.api_daily_pick(full=False) for _ in range(8)])
+
+    srv._DAILY_PICK_FLIGHT = None
+    srv._DAILY_PICK_STASH = {}
+    calls["n"] = 0
+    handler_payloads = asyncio.run(_eight_handlers())
+    assert calls["n"] == 1
+    assert all(isinstance(p, dict) and p.get("candidate") for p in handler_payloads)
+    assert all(p.get("status") != "timeout" for p in handler_payloads)
+
+    with TestClient(app) as client:
+        resp = client.get("/api/daily-pick")
+    assert resp.status_code == 200
+    assert resp.json().get("status") != "timeout"
