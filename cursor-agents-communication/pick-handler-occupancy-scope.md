@@ -2,12 +2,20 @@
 
 Answers Ditto GO checklist ([#1136](https://github.com/cryptoreporthub/subnet-dashboard/pull/1136)) plus amendment **v4 (FINAL, supersedes v3)**. **Plan only. No implementation in this PR.**
 
-**Status: PLAN SUBMITTED — amendments v4 (final) applied, awaiting Joshua review.**
+**Status: PLAN SUBMITTED — amendments v4 (final) + E1/E2 receipts fold (2026-08-30), awaiting Joshua review.**
+
+**Gates (verbatim, receipts `f661435d` / `ditto-occupancy-e1e2-receipts-2026-08-30.md`):**
+
+- Patch F (static composed-lifecycle): SATISFIED with receipts (the #1008 exact-diff item is now closed).
+- Patch D (runtime resource capture): OPEN — gates ranks 2/3/(e), NOT rank 1.
+- Rank 1 (single-flight GET) remains the ONLY mergeable cut; #1138 must NOT merge as-is; 90s stays; KILL=0; #1112/#1113 untouched; #1060 stays open; #1058 stays closed; no deploy without Joshua.
+- B6 wording: keep "No deploy without Joshua" (broader than "no fly-deploy") — retain, don't downgrade.
 
 Companions (not subsections — distinct deliverables; this file stays the **gate surface**):
 
 - [`amendment-occupancy-plan-v4.md`](amendment-occupancy-plan-v4.md) — consolidated patches (PR #1136 head `f8fa3905`)
 - [`pr-sequence-regression-analysis-906-1022.md`](pr-sequence-regression-analysis-906-1022.md) — #906→#1022 finding; fold deltas are that doc’s **§6**
+- [`ditto-occupancy-e1e2-receipts-2026-08-30.md`](ditto-occupancy-e1e2-receipts-2026-08-30.md) — #1008 exact-diff + E1/E2 source of truth (on `origin/main` `f661435d`)
 
 Line numbers below are re-pinned against `origin/main` **`5a33fe6c`** (code files identical on this branch; see §8). Do not reuse `cfbe842a` ranges without a fresh `git show`. An implementation Go must `git show` **then-current** HEAD again.
 
@@ -48,8 +56,9 @@ So: GET is already off the scoring engine. The screenshot string is the **0.5s r
 
 | Date | PR | What |
 |------|-----|------|
-| 08-13 | **#906** | Overlap protection (`_work_thread.is_alive()`). PR body (verified 2026-08-30): abandoned executor/thread work starved the worker HTTP process → Fly 8081 health timeout → “Worker volume temporarily unavailable.” Exact guard diff: direction confirmed (executor removed from `_tick`); see Patch F. |
-| 08-20 | **#1008** | **Intentional** replacement of that guard with fresh-executor-per-tick + generation tokens. PR body (verified): named `_work_thread.is_alive()` as the skip-forever bug. Tokens discard zombie **results**; they do **not** bound worker lifetime or side effects. Exact 7-commit diff still to read at impl time. |
+| 08-13 | **#906** | Overlap protection (`_work_thread.is_alive()`). Guard ADD: `8f158de08` (2026-08-13T12:01:26Z) — skip log `"daily pick tick skipped; previous worker still running"`. PR body (verified 2026-08-30): abandoned executor/thread work starved the worker HTTP process → Fly 8081 health timeout → “Worker volume temporarily unavailable.” Exact guard diff: **verified**. |
+| 08-20 | **#1008** | **Intentional** replacement. Causal commit `1eb0a6bfa3` (2026-08-20T22:51:57Z): **removes** the `is_alive()` guard; **adds** `ThreadPoolExecutor(max_workers=1)`, `_work_generation` bump on timeout, `fut.result(timeout=…)`, `pool.shutdown(wait=False, cancel_futures=True)`. Test rename (behavioral receipt): `test_daily_tick_skips_when_previous_work_is_still_running` → `test_daily_tick_timeout_then_immediate_retry_starts_new_worker` (timeout → next tick STARTS a new worker; it does NOT wait for the prior one). Tokens discard zombie **results**; they do **not** bound worker lifetime or side effects. Merge `d3e331aad` (2026-08-20T22:59:07Z) is an ancestor of `5a33fe6c`; incident ~2026-08-30T00:15Z (~9d1h16m gap). **MERGE ≠ DEPLOY** — do not claim deployment. |
+| 08-20 | **#1008** VM | Commit `0769f631c8` (2026-08-20T22:21:23Z): fly.toml `shared-cpu-1x` → `shared-cpu-2x` (“Prod emergency: scale v1 web VM to shared-cpu-2x (CPU starvation)”). Current `origin/main` shows `performance-1x` / `4gb`. Resource-topology history is part of the evidence chain. |
 | 08-21 | **#1009** | Forced 15-min retry after timeout regardless of abandoned-worker writes (audit; re-verify PR body at impl time). |
 | 08-22 | **#1021** | Nested 4-worker scoring executor, non-cancellable. Audit quote from PR: ~20 subnets, **1712s wall / 128 CPU-s** vs 90s budget — re-verify at impl time. |
 | 08-22 | **#1022** | Global `_tmc_refresh_lock` — **diff-verified**: “peers block on the lock”; serializes both TMC endpoints; assumes “refresh window is short.” |
@@ -58,7 +67,9 @@ So: GET is already off the scoring engine. The screenshot string is the **0.5s r
 
 **THE CONFLICT, STATED:** “We intentionally removed the only code that knew whether the previous daily worker was still alive, while preserving automatic retries and adding nested, non-cancellable parallel work behind a shared global lock.” (Replit audit #2 — primary investigation target.)
 
-Tonight’s signature (“pick handler busy” + `/health` 8s + 503) is the **same failure #906 was built to fix** — back because #1008 re-opened the daily-pick half of the protection. Recurrence is structural, not coincidence.
+Tonight’s signature (“pick handler busy” + `/health` 8s + 503) is the **same failure mode #906 was built to fix** — back because #1008 re-opened the daily-pick half of the protection (failure-mode framing, not a resource-level root-cause claim). Recurrence is structural, not coincidence.
+
+The #906 failure mode (#1008 re-opened, #1009/#1021/#1022 amplified) is a code-level causal chain; the exact exhausted resource is UNPROVEN and requires runtime capture (Patch D).
 
 Same-signature recurrences: 08-19, 08-21, 08-25; pump-alerts line degrading since 07-27. 08-29 ~03:00Z: #1087 LivenessTracker wedge (write timeouts leave tick-active flags). Tonight (00:15/00:17Z) is the latest instance.
 
@@ -99,9 +110,9 @@ On `FuturesTimeoutError`: bump `_work_generation` (`215`, `297-298`), log `worke
 
 EPISTEMIC STATUS: **triple independent corroboration** — code-forward (source-verified vs `cfbe842a` / re-pin `5a33fe6c`), symptom-reverse (Ditto from 00:49 shared starvation), PR-composition (Replit audit #2 + #906/#1008 PR bodies). Stronger than any single path. Required in any impl PR as a post-timeout side-effect audit.
 
-**(b2) RANK 2 REVERSES CURRENT DESIGN — CONTAINMENT, NOT ROOT FIX.** Today subnet+market load runs **outside** the 90s future on the APScheduler thread (`276-277` **before** `fut.result`). Rank 2 **deliberately** moves them inside so abandonment reclaims them and APScheduler can re-arm (wedge **#1087**). The impl Go must **not** “preserve” the current outside placement; the reversal is the fix. Moving the load inside does **not** reduce the work — it contains it. Occupancy **reduction** for the web tier is rank **1** (and later inner bounding). Rank 2/3/(e) wait on Patch D + Patch F.
+**(b2) RANK 2 REVERSES CURRENT DESIGN — CONTAINMENT, NOT ROOT FIX.** Today subnet+market load runs **outside** the 90s future on the APScheduler thread (`276-277` **before** `fut.result`). Rank 2 **deliberately** moves them inside so abandonment reclaims them and APScheduler can re-arm (wedge **#1087**). The impl Go must **not** “preserve” the current outside placement; the reversal is the fix. Moving the load inside does **not** reduce the work — it contains it. Occupancy **reduction** for the web tier is rank **1** (and later inner bounding). Rank 2/3/(e) wait on Patch D (Patch F SATISFIED).
 
-**(b3) ROOT LATENCY — NAMED NON-GOAL (v4 rewrite).** Not an unnamed long tail. **Intentional replacement** (#1008 fixing #906’s skip-forever wedge) with an **incomplete model**: generation tokens bound **results**, not worker **lifetime or side effects**. Tonight’s signature is the **#906 failure mode re-opened by #1008**, convoy-multiplied by **#1021/#1022**. Cuts 1–4 / (e) contain the aftermath; they do not resolve the composed conflict. This plan measures and bounds. **Follow-up Go (separate)** completes “#1008’s goal, correctly” at the PR-composition level (fresh start **and** bounded previous worker). If the tail degrades (TMC latency, subnet-count creep toward cap 24, ambient web-tier contention), the episode recurs even with containment cuts shipped — accepting this Go knowingly.
+**(b3) COMPOSED FAILURE MODE — NAMED NON-GOAL (v4 rewrite; E2).** Not an unnamed long tail. **Intentional replacement** (#1008 fixing #906’s skip-forever wedge) with an **incomplete model**: generation tokens bound **results**, not worker **lifetime or side effects**. Failure-mode framing only: **#906 re-opened, convoy-multiplied** by **#1009/#1021/#1022** — never “root cause.” The #906 failure mode (#1008 re-opened, #1009/#1021/#1022 amplified) is a code-level causal chain; the exact exhausted resource is UNPROVEN and requires runtime capture (Patch D). Cuts 1–4 / (e) contain the aftermath; they do not resolve the composed conflict. This plan measures and bounds. **Follow-up Go (separate)** completes “#1008’s goal, correctly” at the PR-composition level (fresh start **and** bounded previous worker). If the tail degrades (TMC latency, subnet-count creep toward cap 24, ambient web-tier contention), the episode recurs even with containment cuts shipped — accepting this Go knowingly.
 
 Hour pick: separate job, untouched unless a later Go says so.
 
@@ -122,7 +133,7 @@ Hour pick: separate job, untouched unless a later Go says so.
 
 **Recommended first impl PR (after review Go):** rank 1 only — GET single-flight + shed. That is **#1008’s GET-side analogue** (one in-flight hydrate; extras join or shed), not tick bounding. Later ranks (tick) implement “**#1008’s goal, completed correctly**”: fresh start **and** bounded previous worker — **not** restore #906.
 
-Until **both** runtime capture (§6 item 4, four falsifiable checks) **and** Patch F composed-lifecycle review complete, **rank 1 is the only mergeable cut** (items 1–2 passing). Ranks 2 / 3 / (e) wait. No impl PR ships those ranks until that gate. Premature code on `cursor/occupancy-cuts-d36d` / PR **#1138** (ranks 1–3+(e) together) **must not merge** as-is — v4 gate was not in force when it landed; treat it as HOLD.
+Until runtime capture (§6 item 4, four falsifiable checks / Patch D) is complete, **rank 1 is the only mergeable cut** (items 1–2 passing). Patch F is SATISFIED with receipts. Ranks 2 / 3 / (e) wait on Patch D, not rank 1. No impl PR ships those ranks until that gate. Premature code on `cursor/occupancy-cuts-d36d` / PR **#1138** (ranks 1–3+(e) together) **must not merge** as-is — v4 gate was not in force when it landed; treat it as HOLD.
 
 Not #1112/#1113.
 
@@ -133,20 +144,23 @@ Not #1112/#1113.
 - **90s stays. No deploy without Joshua. KILL=0.**
 - #1112 / #1113 untouched. PR 1060 stays open fail-closed. #1058 stays closed (08-27 / #1071).
 - **LINE-REF DRIFT:** this doc re-pins vs `5a33fe6c` (§8). Two older cites still exist in the thread (`pick_scheduler` 270-302 vs 265-297). An **implementation** Go must `git show` **then-current** HEAD and re-pin **all** line refs before citing either set. No plan section is authoritative on line numbers until that `git show`.
-- **PATCH F — COMPOSED-LIFECYCLE REVIEW (precondition gate).** Do **not** approve later ranks until PRs **#906, #1008, #1009, #1021, #1022** are reviewed as **one** composed lifecycle (read-only; no code, no deploy). The conflict exists across those boundaries.
+- **PATCH F — COMPOSED-LIFECYCLE REVIEW (precondition gate).** SATISFIED with receipts (the #1008 exact-diff item is now closed). PRs **#906, #1008, #1009, #1021, #1022** reviewed as **one** composed lifecycle at the static/diff layer (read-only; no code, no deploy). The conflict exists across those boundaries. Remaining later-rank gate is Patch D only.
 
-  Spot-check receipts (2026-08-30) + regression-doc upgrade:
+  Spot-check receipts (2026-08-30) + git `show` of each SHA + regression-doc upgrade:
 
   | Claim | Status |
   |-------|--------|
   | #1022 TMC lock, peers block, serializes both endpoints | **Diff-verified** |
   | #1128 `if still_scheduled:` (run_once re-arms) | **Diff-verified** — not Aug-30 root without runtime evidence |
-  | #906 overlap guard / executor removed from `_tick` | Direction confirmed; PR body verified (root-cause: health 8081). Exact `_work_thread.is_alive()` lines: review at impl time |
-  | #1008 removed the guard, generation tokens | **PR-body-confirmed** (own description + named tests). Exact diff among 7 commits: **OPEN** — git history at impl time |
+  | #906 overlap guard ADD `8f158de08` (`_work_thread` / `is_alive()` + skip log) | **verified** (2026-08-13T12:01:26Z) |
+  | #1008 exact diff — verified (full SHA 1eb0a6bfa3 + test rename) | **verified** (2026-08-20T22:51:57Z): removes guard; adds `ThreadPoolExecutor(max_workers=1)`, generation bump, `fut.result(timeout=…)`, `shutdown(wait=False, cancel_futures=True)` |
+  | #1008 VM-sizing `0769f631c8` (`shared-cpu-1x` → `shared-cpu-2x`) | **verified** (E1; current main `performance-1x` / `4gb`) |
+  | #1008 merge `d3e331aad` ancestor of `5a33fe6c` | **verified** (2026-08-20T22:59:07Z). **MERGE ≠ DEPLOY** |
+  | Side-effect gating (generation check AFTER `get_or_create_today_pick`) | **verified** in `1eb0a6bfa3`: gates returned payload only, not in-flight writes; `shutdown(wait=False)` cannot kill a running future |
   | #1009 forced retry | audit; verify PR body at impl time |
   | #1021 1712s wall / 128 CPU-s vs 90s | audit quote; re-verify PR body at impl time |
 
-  Capture proves *what* is exhausted. This review establishes *whether the fix restores known-good behavior or completes #1008’s incomplete replacement.*
+  Capture (Patch D) still proves *what* is exhausted. Patch F established the static chain: the fix must complete #1008’s incomplete replacement, not restore #906.
 
 ## 6. Validation (before any impl PR ships to prod)
 
@@ -160,14 +174,14 @@ No full G0 unless Joshua says so.
    2. Does the 15-min retry create **ANOTHER** generation? (second executor, second nested scoring pool — `/jobs` + thread inventory at 00:15–00:17Z)
    3. Where are surviving `dpick-score` threads blocked? `_tmc_refresh_lock` / network reads / scoring GIL / score-cache `fcntl`
    4. Does thread count return to **baseline BEFORE** the retry?
-   Deliverable: capture artifact naming the exhausted resource (TMC lock convoy / threads / GIL / network / volume). Also verify the #1008 orphan-thread diff and #906 guard while inside the code (Patch F intersection). Fallback grid if ambiguous: jobs / stacks / tick-active / fcntl holder / process metrics vs G0-1 `/health` p95 1245ms.
+   Deliverable: capture artifact naming the exhausted resource (TMC lock convoy / threads / GIL / network / volume). Patch F intersection (#1008 exact diff `1eb0a6bfa3` + #906 guard `8f158de08`) is **closed** at git-diff layer; runtime still needed to name the resource. Fallback grid if ambiguous: jobs / stacks / tick-active / fcntl holder / process metrics vs G0-1 `/health` p95 1245ms.
 5. **ISOLATE MISFIRE GRACE:** `misfire_grace_time=180` (`internal/job_scheduler.py`; test asserts 180) can **absorb** catch-up backlog rather than fix occupancy. A validation run with backlog absorption **MUST NOT** be credited as occupancy improvement. State per run whether catch-up occurred; treat absorbed runs as **inconclusive**.
 6. **#1128 CONTRACT SCRUTINY (diff-verified 2026-08-30):** `if reschedule and still_scheduled:` → `if still_scheduled:` in both Daily and Hour schedulers; `run_once(reschedule=False)` now re-arms when singleton (`test_daily_run_once_rearms_when_singleton`). Deliberate per commit message. Not Aug-30 root cause without runtime evidence. Track as a separate correctness item — an accidental `run_once` caller can now become a repeating scheduler.
-7. **GATE:** no impl PR ships ranks 2/3/(e) until item 4 answers the exhausted-resource question **AND** Patch F’s lifecycle review is complete. Until then **rank 1 is the only mergeable cut**, with items 1–2 passing.
+7. **GATE:** no impl PR ships ranks 2/3/(e) until item 4 answers the exhausted-resource question (Patch D). Patch F (static composed-lifecycle) is SATISFIED with receipts. Until then **rank 1 is the only mergeable cut**, with items 1–2 passing.
 
 ## 7. Deliverable
 
-This file + companions + MC log. Implementation = separate Joshua Go after review. Rank 1 only until Patch D + Patch F.
+This file + companions + MC log. Implementation = separate Joshua Go after review. Rank 1 only mergeable; Patch F SATISFIED; Patch D OPEN. No deploy without Joshua.
 
 ## 8. Source verification (re-pin vs `origin/main` `5a33fe6c`)
 
