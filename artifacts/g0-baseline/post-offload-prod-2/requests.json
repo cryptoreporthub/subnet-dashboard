@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "url": "https://subnet-dashboard.fly.dev/",
+    "path": "/",
+    "method": "GET",
+    "resource_type": "document",
+    "is_api": false,
+    "class": "document",
+    "start_s": 0.34,
+    "end_s": 36.573,
+    "duration_ms": 36233.0,
+    "status": 503,
+    "failure": null,
+    "aborted": false
+  }
+]
