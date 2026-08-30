@@ -15,7 +15,7 @@ distribution (top-5 = 53%), i.e. I/O-bound fetch waiting, so fetches are
 parallelized rather than cached.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from typing import Any, Dict, List, Optional
 
 import json
@@ -109,9 +109,40 @@ def _weights_for_context(market_context: Dict[str, Any]) -> Dict[str, float]:
     })
 
 
+def _remaining_s(deadline_monotonic: Optional[float]) -> Optional[float]:
+    if deadline_monotonic is None:
+        return None
+    return deadline_monotonic - time.monotonic()
+
+
+def _deadline_exhausted_pick() -> Dict[str, Any]:
+    """Low-confidence payload so the engine persists HOLD instead of abandoning."""
+    return {
+        "subnet": None,
+        "score": 0.0,
+        "confidence": 0.0,
+        "expert_contributions": {},
+        "scenario_tags": {},
+        "audit": {
+            "approved": False,
+            "concerns": ["Scoring deadline exceeded"],
+            "adjusted_confidence": 0.0,
+        },
+        "final_confidence": 0.0,
+        "action": "long",
+        "prediction": None,
+        "reasons": [],
+        "signal_impact": None,
+        "signal_contributions": None,
+        "active_signals": [],
+    }
+
+
 def select_daily_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
+    *,
+    deadline_monotonic: Optional[float] = None,
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
     market_context.setdefault("weights", _weights_for_context(market_context))
@@ -148,12 +179,18 @@ def select_daily_pick(
     # herd-fix: install single-flight TMC refresh and pre-warm caches sequentially
     # BEFORE workers start, so neither the initial cold miss nor any mid-run TTL
     # expiry can stampede TaoMarketCap from multiple scoring threads.
+    remaining = _remaining_s(deadline_monotonic)
+    if remaining is not None and remaining <= 0:
+        return _deadline_exhausted_pick()
     try:
         from internal.indicators.tmc_singleflight import install_once, prewarm
 
         install_once()
-        if not prewarm():
-            logger.warning("dpick: TMC pre-warm failed; continuing (workers fetch lazily)")
+        if remaining is None or remaining > 2:
+            if not prewarm():
+                logger.warning("dpick: TMC pre-warm failed; continuing (workers fetch lazily)")
+        else:
+            logger.warning("dpick: skip TMC pre-warm; %.1fs left on scoring deadline", remaining)
     except Exception as exc:
         logger.warning("dpick: tmc_singleflight unavailable (%s); continuing", exc)
 
@@ -215,7 +252,23 @@ def select_daily_pick(
     score_wall_t0 = time.perf_counter()
     executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dpick-score")
     try:
-        results = list(executor.map(_score_one, subnets))
+        remaining = _remaining_s(deadline_monotonic)
+        if remaining is None:
+            results = list(executor.map(_score_one, subnets))
+        else:
+            futs = [executor.submit(_score_one, sn) for sn in subnets]
+            done, not_done = wait(futs, timeout=max(0.0, remaining))
+            for fut in not_done:
+                fut.cancel()
+            if not_done:
+                logger.warning(
+                    "dpick: scoring deadline cut %d/%d subnet jobs",
+                    len(not_done),
+                    len(subnets),
+                )
+                results = []
+            else:
+                results = [fut.result() for fut in futs]
     finally:
         # ponytail: wait=False — scorer failure must not block on peer I/O (scheduler timeout).
         executor.shutdown(wait=False, cancel_futures=True)
@@ -228,6 +281,9 @@ def select_daily_pick(
             pick_score_cache.end_session(cache_session)
         except Exception as exc:
             logger.warning("dpick: pick_score_cache persist failed (%s)", exc)
+
+    if not results:
+        return _deadline_exhausted_pick()
 
     scored = [{"subnet": r["subnet"], "score": r["score"]} for r in results]
     latency_rows = [r["latency_row"] for r in results if r["latency_row"] is not None]
