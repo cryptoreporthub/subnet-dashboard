@@ -58,7 +58,7 @@ def test_daily_engine_hold_calls_record(monkeypatch, tmp_path):
     monkeypatch.setattr(
         daily_pick_engine,
         "select_daily_pick",
-        lambda subnets, ctx, **_k: {
+        lambda subnets, ctx: {
             "subnet": {"netuid": 9, "name": "Low"},
             "final_confidence": 0.2,
             "action": "long",

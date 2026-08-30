@@ -38,7 +38,7 @@ def test_regen_calls_select_on_capped_universe(monkeypatch, tmp_path):
 
     select_args = {}
 
-    def _fake_select(subnets, ctx, **_k):
+    def _fake_select(subnets, ctx):
         select_args["n"] = len(subnets)
         select_args["netuids"] = [s.get("netuid") for s in subnets]
         return {

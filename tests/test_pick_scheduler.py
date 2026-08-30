@@ -48,7 +48,7 @@ def test_daily_run_once_calls_get_or_create(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
     called = {}
 
-    def _fake_get(subnets, market_context=None, force=False, **_k):
+    def _fake_get(subnets, market_context=None, force=False):
         called["force"] = force
         called["n"] = len(subnets or [])
         return {"action": "HOLD", "date": "2026-07-26", "pick": None}
@@ -152,7 +152,7 @@ def test_daily_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
     pick_scheduler.stop_pick_schedulers()
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, **_k: {
+        lambda subnets, market_context=None, force=False: {
             "action": "LONG",
             "date": "2026-08-28",
             "pick": {"netuid": 9},
@@ -198,7 +198,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, **_k: (_ for _ in ()).throw(
+        lambda subnets, market_context=None, force=False: (_ for _ in ()).throw(
             RuntimeError("boom")
         ),
     )
@@ -239,7 +239,7 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, **_k: {
+        lambda subnets, market_context=None, force=False: {
             "action": "HOLD",
             "date": "2026-08-03",
             "pick": None,
@@ -307,7 +307,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
     calls = {"n": 0}
     second_started = threading.Event()
 
-    def _slow_then_fast(subnets, market_context=None, force=False, **_k):
+    def _slow_then_fast(subnets, market_context=None, force=False):
         calls["n"] += 1
         if calls["n"] == 1:
             import time
@@ -461,7 +461,7 @@ def test_daily_run_once_rearms_when_singleton(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, **_k: {
+        lambda subnets, market_context=None, force=False: {
             "action": "HOLD",
             "date": "2026-08-29",
             "pick": None,
@@ -515,7 +515,7 @@ def test_daily_run_once_does_not_schedule_when_not_singleton(monkeypatch):
     scheduled = []
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
-        lambda subnets, market_context=None, force=False, **_k: {
+        lambda subnets, market_context=None, force=False: {
             "action": "HOLD",
             "date": "2026-08-29",
             "pick": None,

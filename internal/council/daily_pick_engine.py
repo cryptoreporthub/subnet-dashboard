@@ -11,7 +11,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from internal.council.daily_pick import select_daily_pick
 from internal.council.scenario_memory import classify_regime
@@ -181,22 +181,10 @@ def write_scheduler_hold(reason: str) -> Dict[str, Any]:
     return payload
 
 
-def _may_commit(commit_ok: Optional[Callable[[], bool]]) -> bool:
-    if commit_ok is None:
-        return True
-    try:
-        return bool(commit_ok())
-    except Exception:
-        return False
-
-
 def get_or_create_today_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
     force: bool = False,
-    *,
-    commit_ok: Optional[Callable[[], bool]] = None,
-    deadline_monotonic: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Return today's daily pick, creating it if necessary.
@@ -205,10 +193,6 @@ def get_or_create_today_pick(
     record is returned. Otherwise a new pick is generated via
     ``select_daily_pick``, optionally downgraded to HOLD when confidence is
     low, and persisted.
-
-    ``commit_ok``: if provided and false, skip JSON/HOLD persistence (abandoned
-    worker after scheduler timeout). ``deadline_monotonic`` is forwarded to
-    scoring so the tick can return a real HOLD/LONG inside the 90s budget.
     """
     market_context = market_context or {}
     subnets = tradable_subnets(subnets)
@@ -253,21 +237,18 @@ def get_or_create_today_pick(
             "rotation_summary": get_rotation_summary(subnets),
             "market_context": market_context,
         }
-        if _may_commit(commit_ok):
-            records = _upsert_today(records, payload)
-            _save(records)
-            try:
-                from internal.learning.prediction_loop import record_hold_decision
+        records = _upsert_today(records, payload)
+        _save(records)
+        try:
+            from internal.learning.prediction_loop import record_hold_decision
 
-                record_hold_decision(reason="No subnets available", horizon_type="day")
-            except Exception as exc:
-                logger.warning("record_hold_decision failed (no subnets): %s", exc)
+            record_hold_decision(reason="No subnets available", horizon_type="day")
+        except Exception as exc:
+            logger.warning("record_hold_decision failed (no subnets): %s", exc)
         return payload
 
     pick_subnets = _subnets_for_pick_creation(subnets)
-    pick = select_daily_pick(
-        pick_subnets, market_context, deadline_monotonic=deadline_monotonic
-    )
+    pick = select_daily_pick(pick_subnets, market_context)
     final_confidence = float(pick.get("final_confidence", 0.0))
     gate = publish_gate_fraction()
     directional_gate = directional_publish_guard(pick)
@@ -300,49 +281,48 @@ def get_or_create_today_pick(
     }
 
     records = _upsert_today(records, payload)
-    if _may_commit(commit_ok):
-        _save(records)
+    _save(records)
 
-        if stored_pick is not None:
-            try:
-                from internal.learning.prediction_loop import record_pick_prediction
+    if stored_pick is not None:
+        try:
+            from internal.learning.prediction_loop import record_pick_prediction
 
-                sn = stored_pick.get("subnet") if isinstance(stored_pick.get("subnet"), dict) else {}
-                netuid = sn.get("netuid")
-                subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
-                if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
-                    record_pick_prediction(
-                        stored_pick,
-                        subnet_row,
-                        horizon_type="day",
-                        market_context=market_context,
-                    )
-            except Exception as exc:
-                logger.warning(
-                    "record_pick_prediction failed for daily pick netuid=%s: %s",
-                    (stored_pick.get("subnet") or {}).get("netuid") if isinstance(stored_pick, dict) else None,
-                    exc,
-                )
-        elif action == "HOLD":
-            try:
-                from internal.learning.prediction_loop import record_hold_decision
-
-                # Prefer live subnet row for shadow price when candidate has netuid.
-                subnet_row = None
-                if isinstance(candidate, dict):
-                    sn = candidate.get("subnet") if isinstance(candidate.get("subnet"), dict) else {}
-                    netuid = sn.get("netuid") or candidate.get("netuid")
-                    if netuid is not None:
-                        subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
-                record_hold_decision(
-                    candidate=candidate,
-                    reason=reason,
+            sn = stored_pick.get("subnet") if isinstance(stored_pick.get("subnet"), dict) else {}
+            netuid = sn.get("netuid")
+            subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
+            if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
+                record_pick_prediction(
+                    stored_pick,
+                    subnet_row,
                     horizon_type="day",
-                    subnet=subnet_row,
                     market_context=market_context,
                 )
-            except Exception as exc:
-                logger.warning("record_hold_decision failed: %s", exc)
+        except Exception as exc:
+            logger.warning(
+                "record_pick_prediction failed for daily pick netuid=%s: %s",
+                (stored_pick.get("subnet") or {}).get("netuid") if isinstance(stored_pick, dict) else None,
+                exc,
+            )
+    elif action == "HOLD":
+        try:
+            from internal.learning.prediction_loop import record_hold_decision
+
+            # Prefer live subnet row for shadow price when candidate has netuid.
+            subnet_row = None
+            if isinstance(candidate, dict):
+                sn = candidate.get("subnet") if isinstance(candidate.get("subnet"), dict) else {}
+                netuid = sn.get("netuid") or candidate.get("netuid")
+                if netuid is not None:
+                    subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
+            record_hold_decision(
+                candidate=candidate,
+                reason=reason,
+                horizon_type="day",
+                subnet=subnet_row,
+                market_context=market_context,
+            )
+        except Exception as exc:
+            logger.warning("record_hold_decision failed: %s", exc)
 
     return payload
 
