@@ -2,7 +2,7 @@
 
 Answers Ditto GO checklist ([#1136](https://github.com/cryptoreporthub/subnet-dashboard/pull/1136)) plus amendment **v4 (FINAL, supersedes v3)**. **Plan only. No implementation in this PR.**
 
-**Status: PLAN SUBMITTED — amendments v4 (final) + E1/E2 receipts fold (2026-08-30), awaiting Joshua review.**
+**Status: M4 PASS on trimmed #1138 — awaiting Joshua M5 (merge AND deploy are one act).**
 
 **Gates (verbatim, receipts `f661435d` / `ditto-occupancy-e1e2-receipts-2026-08-30.md`):**
 
@@ -122,7 +122,7 @@ Hour pick: separate job, untouched unless a later Go says so.
 
 | Rank | Option | What | Effort / risk | Hits tonight’s symptom? |
 |------|--------|------|---------------|-------------------------|
-| **1** | **(c)** GET single-flight + shed | One in-flight `_load`+lite enrich; extra hydrates get that result or last stored JSON. Borrow hour’s `_HOUR_PICK_LOCK` pattern **deliberately** (daily does not have it today). Stop retry storms (G0 ×9). | Low. Shape unchanged. | **GET busy string + /health during burst** |
+| **1** | **(c)** GET single-flight + shed | One in-flight `_load`+lite enrich; extra hydrates get that result or last stored JSON. Borrow hour’s `_HOUR_PICK_LOCK` pattern **deliberately** (daily does not have it today). **Accepted interpretation (M4):** coalesce-single-flight — one shared `Future` on `_PICK_READ_EXECUTOR` (`_coalesce_daily_pick_flight`); extras join or shed to this flight’s stored JSON. Not a literal `_HOUR_PICK_LOCK` cached-or-busy. Do not re-litigate. Stop retry storms (G0 ×9). | Low. Shape unchanged. | **GET busy string + /health during burst** |
 | **2** | Tick: move subnet+market load **inside** the 90s pool | **Reverses** current outside-future placement (`276-277`). Containment vs APScheduler / #1087 re-arm — **not** less work. | Low. 90s cap unchanged. | Tick occupancy vs APScheduler; not GET |
 | **3** | **(b)** inner deadlines in `select_daily_pick` | Time-box TMC/council/proxy so the tick returns a real HOLD/LONG inside 90s instead of abandon. | Medium. Scoring behavior. | 00:17Z 90s HOLD (**containment**, not root latency — see b3) |
 | **4** | **(e)** generation-counter hardening | Pre-persistence check in `get_or_create_today_pick`: bail before `_save` / HOLD records if `_work_generation` is no longer current. | Low-Med. Engine write path. | Post-timeout stale writes **(b1)** |
@@ -133,7 +133,7 @@ Hour pick: separate job, untouched unless a later Go says so.
 
 **Recommended first impl PR (after review Go):** rank 1 only — GET single-flight + shed. That is **#1008’s GET-side analogue** (one in-flight hydrate; extras join or shed), not tick bounding. Later ranks (tick) implement “**#1008’s goal, completed correctly**”: fresh start **and** bounded previous worker — **not** restore #906.
 
-Until runtime capture (§6 item 4, four falsifiable checks / Patch D) is complete, **rank 1 is the only mergeable cut** (items 1–2 passing). Patch F is SATISFIED with receipts. Ranks 2 / 3 / (e) wait on Patch D, not rank 1. No impl PR ships those ranks until that gate. Premature code on `cursor/occupancy-cuts-d36d` / PR **#1138** (ranks 1–3+(e) together) **must not merge** as-is — v4 gate was not in force when it landed; treat it as HOLD.
+Until runtime capture (§6 item 4, four falsifiable checks / Patch D) is complete, **rank 1 is the only mergeable cut** (items 1–2 passing). Patch F is SATISFIED with receipts. Ranks 2 / 3 / (e) wait on Patch D, not rank 1. No impl PR ships those ranks until that gate. Trimmed rank-1 code is PR **#1138** (M3/M4). Tick ranks are draft **#1140**, gated on Patch D — do not merge. **M5 (Joshua):** merge of #1138 to main *is* deploy.
 
 Not #1112/#1113.
 
