@@ -1,10 +1,17 @@
 # Pick-handler occupancy — scope plan (2026-08-30)
 
-Answers Ditto GO checklist ([#1136](https://github.com/cryptoreporthub/subnet-dashboard/pull/1136)) plus amendment **v3 (FINAL)**. **Plan only. No implementation in this PR.**
+Answers Ditto GO checklist ([#1136](https://github.com/cryptoreporthub/subnet-dashboard/pull/1136)) plus amendment **v4 (FINAL, supersedes v3)**. **Plan only. No implementation in this PR.**
 
-**Status: PLAN SUBMITTED — amendments v3 (FINAL) applied, awaiting Joshua review.**
+**Status: PLAN SUBMITTED — amendments v4 (final) applied, awaiting Joshua review.**
 
-Line numbers below are re-pinned against `origin/main` **`5a33fe6c`** (code files identical on this branch; see §8). Do not reuse `cfbe842a` ranges without a fresh `git show`.
+Companions (not subsections — distinct deliverables; this file stays the **gate surface**):
+
+- [`amendment-occupancy-plan-v4.md`](amendment-occupancy-plan-v4.md) — consolidated patches (PR #1136 head `f8fa3905`)
+- [`pr-sequence-regression-analysis-906-1022.md`](pr-sequence-regression-analysis-906-1022.md) — #906→#1022 finding; fold deltas are that doc’s **§6**
+
+Line numbers below are re-pinned against `origin/main` **`5a33fe6c`** (code files identical on this branch; see §8). Do not reuse `cfbe842a` ranges without a fresh `git show`. An implementation Go must `git show` **then-current** HEAD again.
+
+**Fix framing (ranks 2/3/(e), after gates):** “**#1008’s goal, completed correctly**” — next tick always starts fresh **and** the previous worker is bounded (join-with-deadline / cooperative cancel / true single-flight). **Not** “restore #906” (reintroduces skip-forever). **Not** design-blind.
 
 ## 1. Occupancy (definition + metric)
 
@@ -37,7 +44,25 @@ Three timing envelopes on the tick (do not collapse):
 
 So: GET is already off the scoring engine. The screenshot string is the **0.5s read-path timeout**, not `select_daily_pick` on GET. The 90s failure is the **background tick**. The timeout is **long-tail, not baseline**.
 
-**RECURRENCE, NOT A ONE-OFF.** Same signature at 08-19 (tick timeout → HOLD, busy handler, alerts 422), 08-21 (HOLD busy-handler, tick timeout, endpoints OK — degradation inside handler), 08-25 (HOLD busy/retry, watchdog pending >48h); pump-alerts line degrading intermittently since 07-27. 08-29 ~03:00Z: scheduler wedge reverse-engineered — write timeouts leave tick-active flags set, preventing re-arm; regression traced to LivenessTracker migration **#1087** (merged 08-28 13:04Z). Tonight (00:15/00:17Z) is the latest instance.
+**RECURRENCE, NOT A ONE-OFF — AND A SELF-CREATED COMPOSED CONFLICT.** Daily scoring became a traffic-independent essential workload on 2026-07-26 (PR **#500**). By 08-03, PR **#781/#782** already documented the tick “wedges the shared Fly VM”. Subsequent PRs form one lifecycle; the conflict spans their boundaries:
+
+| Date | PR | What |
+|------|-----|------|
+| 08-13 | **#906** | Overlap protection (`_work_thread.is_alive()`). PR body (verified 2026-08-30): abandoned executor/thread work starved the worker HTTP process → Fly 8081 health timeout → “Worker volume temporarily unavailable.” Exact guard diff: direction confirmed (executor removed from `_tick`); see Patch F. |
+| 08-20 | **#1008** | **Intentional** replacement of that guard with fresh-executor-per-tick + generation tokens. PR body (verified): named `_work_thread.is_alive()` as the skip-forever bug. Tokens discard zombie **results**; they do **not** bound worker lifetime or side effects. Exact 7-commit diff still to read at impl time. |
+| 08-21 | **#1009** | Forced 15-min retry after timeout regardless of abandoned-worker writes (audit; re-verify PR body at impl time). |
+| 08-22 | **#1021** | Nested 4-worker scoring executor, non-cancellable. Audit quote from PR: ~20 subnets, **1712s wall / 128 CPU-s** vs 90s budget — re-verify at impl time. |
+| 08-22 | **#1022** | Global `_tmc_refresh_lock` — **diff-verified**: “peers block on the lock”; serializes both TMC endpoints; assumes “refresh window is short.” |
+| 08-23 | **#1025** | File-locked score cache (`fcntl`) — probably secondary, not primary. |
+| 08-28/29 | **#1095/#1128** | Liveness + DateTrigger re-arm: makes the heavy tick run **reliably**; does not fix the workload lifecycle. **#1128** `if still_scheduled:` (diff-verified) — separate contract item, not Aug-30 root without runtime evidence. |
+
+**THE CONFLICT, STATED:** “We intentionally removed the only code that knew whether the previous daily worker was still alive, while preserving automatic retries and adding nested, non-cancellable parallel work behind a shared global lock.” (Replit audit #2 — primary investigation target.)
+
+Tonight’s signature (“pick handler busy” + `/health` 8s + 503) is the **same failure #906 was built to fix** — back because #1008 re-opened the daily-pick half of the protection. Recurrence is structural, not coincidence.
+
+Same-signature recurrences: 08-19, 08-21, 08-25; pump-alerts line degrading since 07-27. 08-29 ~03:00Z: #1087 LivenessTracker wedge (write timeouts leave tick-active flags). Tonight (00:15/00:17Z) is the latest instance.
+
+**00:39Z** directional HOLD: engine **can** finish inside 90s. Consistent with convoy: fast path = early council exit; slow path = full scoring under TMC/cache contention.
 
 Cuts in this plan explain: **08-19 / 08-21 / 08-25 handler-busy HOLDs + tonight’s GET busy + tick abandon**. They do **not** explain: alerts-line degradation, resolver freshness.
 
@@ -70,13 +95,13 @@ Enforced: `tests/test_homepage_pick_read_only.py:36-92` (`_boom` if engine calle
 
 On `FuturesTimeoutError`: bump `_work_generation` (`215`, `297-298`), log `worker abandoned`, `pool.shutdown(wait=False, cancel_futures=True)` (`302`) — same unjoined-pool motif as #1113; **do not bundle**. Then `write_scheduler_hold`. Retry `DAILY_PICK_RETRY_MINUTES` (15) (`369-372`). Test: `tests/test_pick_scheduler.py:350-393` (timeout retries even if a zombie wrote HOLD to disk).
 
-**(b1) SIDE-EFFECT WINDOW (critical; was missing).** Abandoned worker is **not** cancelled. `get_or_create_today_pick` can still write `data/daily_picks.json` (`_save` at `241`, `284`) and prediction/HOLD records (`286-325` via `record_pick_prediction` / `record_hold_decision`) **before** the generation check at `_run_pick` (`288-290`) rejects the returned payload. Generation guard stops stale **result** propagation to the scheduler, not writes.
+**(b1) SIDE-EFFECT WINDOW (critical).** Abandoned worker is **not** cancelled (`shutdown(wait=False, cancel_futures=True)` does not stop a running callable — stdlib). `get_or_create_today_pick` can still write `data/daily_picks.json` (`_save` at `241`, `284`) and prediction/HOLD records (`286-325`) **before** the generation check at `_run_pick` (`288-290`) rejects the returned payload. Generation guard stops stale **result** propagation, not writes.
 
-EPISTEMIC STATUS: **independent corroboration** — code-forward (source review) **and** symptom-reverse (reconstruction from 00:49 shared-runtime starvation). Not two readings of the same file.
+EPISTEMIC STATUS: **triple independent corroboration** — code-forward (source-verified vs `cfbe842a` / re-pin `5a33fe6c`), symptom-reverse (Ditto from 00:49 shared starvation), PR-composition (Replit audit #2 + #906/#1008 PR bodies). Stronger than any single path. Required in any impl PR as a post-timeout side-effect audit.
 
-**(b2) RANK 2 REVERSES CURRENT DESIGN (say so).** Today subnet+market load runs **outside** the 90s future on the APScheduler thread (`276-277` **before** `fut.result`). Rank 2 **deliberately** moves them inside so abandonment reclaims them and APScheduler can re-arm (wedge **#1087** — grounded: LivenessTracker migration merged 08-28 13:04Z). The impl Go must **not** “preserve” the current outside placement; the reversal is the fix. Moving the load inside does **not** reduce the work — it contains it. Occupancy **reduction** for the web tier is ranks **1** and (later) **3**; say so in the impl PR.
+**(b2) RANK 2 REVERSES CURRENT DESIGN — CONTAINMENT, NOT ROOT FIX.** Today subnet+market load runs **outside** the 90s future on the APScheduler thread (`276-277` **before** `fut.result`). Rank 2 **deliberately** moves them inside so abandonment reclaims them and APScheduler can re-arm (wedge **#1087**). The impl Go must **not** “preserve” the current outside placement; the reversal is the fix. Moving the load inside does **not** reduce the work — it contains it. Occupancy **reduction** for the web tier is rank **1** (and later inner bounding). Rank 2/3/(e) wait on Patch D + Patch F.
 
-**(b3) ROOT LATENCY — NAMED NON-GOAL OF THIS PLAN.** No cut here asks **why** the 24-subnet scoring pass blows 90s. Cuts 1–4 / (e) contain the aftermath (abandonment, retry overlap, starvation, stale writes). They do not reduce or explain the tail. 00:39Z proves the engine **can** finish inside budget. If the tail degrades (TMC latency, subnet-count creep toward cap 24, ambient web-tier contention), the episode recurs on a longer cycle even with all cuts shipped. This plan measures and bounds. **Follow-up Go (separate) isolates the tail.**
+**(b3) ROOT LATENCY — NAMED NON-GOAL (v4 rewrite).** Not an unnamed long tail. **Intentional replacement** (#1008 fixing #906’s skip-forever wedge) with an **incomplete model**: generation tokens bound **results**, not worker **lifetime or side effects**. Tonight’s signature is the **#906 failure mode re-opened by #1008**, convoy-multiplied by **#1021/#1022**. Cuts 1–4 / (e) contain the aftermath; they do not resolve the composed conflict. This plan measures and bounds. **Follow-up Go (separate)** completes “#1008’s goal, correctly” at the PR-composition level (fresh start **and** bounded previous worker). If the tail degrades (TMC latency, subnet-count creep toward cap 24, ambient web-tier contention), the episode recurs even with containment cuts shipped — accepting this Go knowingly.
 
 Hour pick: separate job, untouched unless a later Go says so.
 
@@ -95,9 +120,11 @@ Hour pick: separate job, untouched unless a later Go says so.
 
 **(e)** closes the **(b1)** window. If scope is tight, defer **(e)** to its own Go with a one-line why — **do not silently drop it**; it is the only cut that targets the post-timeout write race.
 
-**Recommended first impl PR (after review Go):** rank 1 only. Rank 2 is a legal same-PR rider only if still tiny; otherwise its own PR. Rank 3 and (e) are later Gos. Not #1112/#1113.
+**Recommended first impl PR (after review Go):** rank 1 only — GET single-flight + shed. That is **#1008’s GET-side analogue** (one in-flight hydrate; extras join or shed), not tick bounding. Later ranks (tick) implement “**#1008’s goal, completed correctly**”: fresh start **and** bounded previous worker — **not** restore #906.
 
-Until runtime capture (§6 item 4) names the exhausted shared resource, **rank 1 is the only mergeable cut** (items 1–2 passing). Ranks 2 / 3 / (e) wait on that capture.
+Until **both** runtime capture (§6 item 4, four falsifiable checks) **and** Patch F composed-lifecycle review complete, **rank 1 is the only mergeable cut** (items 1–2 passing). Ranks 2 / 3 / (e) wait. No impl PR ships those ranks until that gate. Premature code on `cursor/occupancy-cuts-d36d` / PR **#1138** (ranks 1–3+(e) together) **must not merge** as-is — v4 gate was not in force when it landed; treat it as HOLD.
+
+Not #1112/#1113.
 
 ## 5. Constraints
 
@@ -105,7 +132,21 @@ Until runtime capture (§6 item 4) names the exhausted shared resource, **rank 1
 - Hour pick untouched in the first impl PR (ok to **copy** its lock pattern onto daily GET).
 - **90s stays. No deploy without Joshua. KILL=0.**
 - #1112 / #1113 untouched. PR 1060 stays open fail-closed. #1058 stays closed (08-27 / #1071).
-- **LINE-REF DRIFT WAS OPEN; THIS DOC RE-PINS IT** against `5a33fe6c` (§8). An **implementation** Go must `git show` against **then-current** HEAD again before citing these numbers. No older range (`cfbe842a` 265-297 / 312-369) is authoritative.
+- **LINE-REF DRIFT:** this doc re-pins vs `5a33fe6c` (§8). Two older cites still exist in the thread (`pick_scheduler` 270-302 vs 265-297). An **implementation** Go must `git show` **then-current** HEAD and re-pin **all** line refs before citing either set. No plan section is authoritative on line numbers until that `git show`.
+- **PATCH F — COMPOSED-LIFECYCLE REVIEW (precondition gate).** Do **not** approve later ranks until PRs **#906, #1008, #1009, #1021, #1022** are reviewed as **one** composed lifecycle (read-only; no code, no deploy). The conflict exists across those boundaries.
+
+  Spot-check receipts (2026-08-30) + regression-doc upgrade:
+
+  | Claim | Status |
+  |-------|--------|
+  | #1022 TMC lock, peers block, serializes both endpoints | **Diff-verified** |
+  | #1128 `if still_scheduled:` (run_once re-arms) | **Diff-verified** — not Aug-30 root without runtime evidence |
+  | #906 overlap guard / executor removed from `_tick` | Direction confirmed; PR body verified (root-cause: health 8081). Exact `_work_thread.is_alive()` lines: review at impl time |
+  | #1008 removed the guard, generation tokens | **PR-body-confirmed** (own description + named tests). Exact diff among 7 commits: **OPEN** — git history at impl time |
+  | #1009 forced retry | audit; verify PR body at impl time |
+  | #1021 1712s wall / 128 CPU-s vs 90s | audit quote; re-verify PR body at impl time |
+
+  Capture proves *what* is exhausted. This review establishes *whether the fix restores known-good behavior or completes #1008’s incomplete replacement.*
 
 ## 6. Validation (before any impl PR ships to prod)
 
@@ -114,19 +155,19 @@ No full G0 unless Joshua says so.
 1. **GET occupancy:** `TestClient` + jammed `_DASHBOARD_EXECUTOR` (already `test_daily_pick_ignores_saturated_dashboard_executor`); add concurrent n=8 GET `/api/daily-pick` — one load, all 200, elapsed ≪ 0.5s × 8.
 2. **Probe (local or one prod curl pair after deploy Go):** sequential GET `/api/daily-pick` duration_ms; `/health` p95 while n=10 parallel daily-pick. Compare to G0-1 p95 1245ms only as a *burst* check, not a close of PR 1060.
 3. **Tick:** do not claim the 90s HOLD is fixed by rank 1. Rank 2/3/(e) get their own `duration_ms` on `last_tick` plus a **post-timeout side-effect audit** (no `_save` / HOLD records from an abandoned generation).
-4. **RUNTIME CAPTURE** (open question: which shared resource is exhausted — capture from the affected generation or the next recurrence **before ranks 2/3/(e) ship**):
-   - worker `/jobs` inventory: which jobs registered/fired at 00:15–00:17Z
-   - Python thread stacks (`py-spy` / `faulthandler`) at timeout+5s and +60s: is the abandoned worker still alive? what is it holding?
-   - scheduler logs: tick-active flags, re-arm, misfire events
-   - file-lock state on `data/daily_picks.json` + `pick_score_cache.json` (`fcntl` holder) and soul_map liveness timestamps
-   - process metrics (CPU/threads/FD) vs G0-1 `/health` p95 1245ms / p100 8076ms
-   - Deliverable: capture artifact naming the exhausted resource (threads / GIL / network / lock / volume).
+4. **RUNTIME CAPTURE — CONVOY HYPOTHESIS (falsifiable; primary).** Primary suspect: global TMC lock convoy (#1022) + generation overlap. Capture from the affected generation or the next recurrence **before any impl PR ships ranks 2/3/(e)**. Four checks (regression doc §4; A–E inventory demoted to fallback if these are ambiguous):
+   1. Does a `daily-pick-work` generation **SURVIVE** the 90s timeout? (py-spy / faulthandler at timeout+5s and +60s)
+   2. Does the 15-min retry create **ANOTHER** generation? (second executor, second nested scoring pool — `/jobs` + thread inventory at 00:15–00:17Z)
+   3. Where are surviving `dpick-score` threads blocked? `_tmc_refresh_lock` / network reads / scoring GIL / score-cache `fcntl`
+   4. Does thread count return to **baseline BEFORE** the retry?
+   Deliverable: capture artifact naming the exhausted resource (TMC lock convoy / threads / GIL / network / volume). Also verify the #1008 orphan-thread diff and #906 guard while inside the code (Patch F intersection). Fallback grid if ambiguous: jobs / stacks / tick-active / fcntl holder / process metrics vs G0-1 `/health` p95 1245ms.
 5. **ISOLATE MISFIRE GRACE:** `misfire_grace_time=180` (`internal/job_scheduler.py`; test asserts 180) can **absorb** catch-up backlog rather than fix occupancy. A validation run with backlog absorption **MUST NOT** be credited as occupancy improvement. State per run whether catch-up occurred; treat absorbed runs as **inconclusive**.
-6. **GATE:** rank 1 may merge when items 1–2 pass. Ranks 2 / 3 / (e) do not ship until item 4 answers “which shared resource”.
+6. **#1128 CONTRACT SCRUTINY (diff-verified 2026-08-30):** `if reschedule and still_scheduled:` → `if still_scheduled:` in both Daily and Hour schedulers; `run_once(reschedule=False)` now re-arms when singleton (`test_daily_run_once_rearms_when_singleton`). Deliberate per commit message. Not Aug-30 root cause without runtime evidence. Track as a separate correctness item — an accidental `run_once` caller can now become a repeating scheduler.
+7. **GATE:** no impl PR ships ranks 2/3/(e) until item 4 answers the exhausted-resource question **AND** Patch F’s lifecycle review is complete. Until then **rank 1 is the only mergeable cut**, with items 1–2 passing.
 
 ## 7. Deliverable
 
-This file + MC log. Implementation = separate Joshua Go after review.
+This file + companions + MC log. Implementation = separate Joshua Go after review. Rank 1 only until Patch D + Patch F.
 
 ## 8. Source verification (re-pin vs `origin/main` `5a33fe6c`)
 
