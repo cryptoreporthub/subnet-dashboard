@@ -101,11 +101,20 @@ def _save_store_unlocked(store: Dict[str, Any]) -> None:
 def _with_file_lock(fn):
     os.makedirs(os.path.dirname(LOCK_PATH) or ".", exist_ok=True)
     with open(LOCK_PATH, "a", encoding="utf-8") as lf:
+        t0 = time.monotonic()
         fcntl.flock(lf.fileno(), fcntl.LOCK_EX)
+        wait_ms = (time.monotonic() - t0) * 1000.0
+        held0 = time.monotonic()
         try:
             return fn()
         finally:
             fcntl.flock(lf.fileno(), fcntl.LOCK_UN)
+            try:
+                from internal.council.occupancy_capture import note_block
+
+                note_block("fcntl", wait_ms, (time.monotonic() - held0) * 1000.0)
+            except Exception:
+                pass
 
 
 def _evict(store: Dict[str, Any]) -> None:

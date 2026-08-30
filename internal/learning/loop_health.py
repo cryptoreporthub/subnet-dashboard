@@ -450,6 +450,14 @@ def build_learning_loop_health(
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
 
+    occupancy_capture: Dict[str, Any] = {"patch_d": "OPEN", "error": "unavailable"}
+    try:
+        from internal.council.occupancy_capture import snapshot as _occ_snap
+
+        occupancy_capture = _occ_snap()
+    except Exception:
+        pass
+
     return {
         "status": status,
         "checked_at": _utcnow().isoformat().replace("+00:00", "Z"),
@@ -473,4 +481,5 @@ def build_learning_loop_health(
         "ledger": ledger,
         "snapshot_age_seconds": snapshot_age,
         "score_snapshot": score_snapshot,
+        "occupancy_capture": occupancy_capture,
     }

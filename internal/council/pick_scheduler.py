@@ -280,6 +280,13 @@ class DailyPickScheduler:
             with self._work_lock:
                 self._work_generation += 1
                 tick_generation = self._work_generation
+            from internal.council import occupancy_capture as _oc
+
+            prev = getattr(self, "_capture_fut", None)
+            _oc.note_tick_start(
+                tick_generation,
+                overlapping=bool(prev is not None and prev.running()),
+            )
             deadline = time.monotonic() + timeout
 
             pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
@@ -311,12 +318,16 @@ class DailyPickScheduler:
 
             try:
                 fut = pool.submit(_run_pick)
+                self._capture_fut = fut
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
                 with self._work_lock:
                     self._work_generation += 1
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 logger.warning("%s (worker abandoned)", result["error"])
+                from internal.council.occupancy_capture import note_timeout
+
+                note_timeout(tick_generation, timeout, fut)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             tick_succeeded = isinstance(payload, dict)
