@@ -88,6 +88,14 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-08-30 ~09:45 UTC — occupancy cuts IMPLEMENT (Joshua Go via plan)
+
+- Rank 1: GET `/api/daily-pick` single-flight + shed (copy hour lock idea; daily did not have `_HOUR_PICK_LOCK`). Does **not** claim to fix the 90s tick HOLD.
+- Rank 2: `_load_capped_subnets` + `_market_context` moved **inside** the 90s `daily-pick-work` pool (design reversal / #1087 re-arm containment).
+- (e) `commit_ok` generation check skips `_save` / prediction records after abandon (does not silently drop — timeout still writes scheduler HOLD).
+- Rank 3: `select_daily_pick(..., deadline_monotonic=)` time-boxes scoring; incomplete universe returns low-confidence payload instead of a partial LONG.
+- Capture: `cursor-agents-communication/occupancy-runtime-capture.md` — exhausted resource = GIL + 2-thread pick-read under retry storm. 90s stays. KILL=0. #1112/#1113 untouched. PR 1060 remains open. No deploy.
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.
