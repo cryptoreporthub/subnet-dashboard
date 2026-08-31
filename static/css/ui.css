@@ -19089,4 +19089,129 @@ section.desk-zone,
     letter-spacing: 0.16em;
     font-weight: 600;
 }
+.pump-field .pd-lead {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+}
+.pump-field .pd-lead__visual {
+    position: relative;
+    inset: auto;
+    width: min(100%, 340px);
+    margin: 0 auto 4px;
+    aspect-ratio: 1;
+    height: auto;
+    overflow: visible;
+    background: none;
+    z-index: 1;
+    pointer-events: none;
+}
+.pump-field .pump-hero__card,
+.pump-field #pump-desk-hero {
+    background: transparent !important;
+    background-image: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding-left: 0;
+    padding-right: 0;
+}
+.pump-field .pd-lead__identity {
+    position: relative;
+    z-index: 2;
+    justify-content: center;
+    text-align: center;
+}
+.pf-print__iso {
+    stroke: rgba(56, 189, 248, 0.18);
+    stroke-width: 0.7;
+    stroke-dasharray: 2 6;
+    animation: pf-iso-spin 28s linear infinite;
+    transform-origin: 100px 100px;
+}
+.pf-print__iso--slow {
+    stroke: rgba(167, 139, 250, 0.22);
+    animation-duration: 48s;
+    animation-direction: reverse;
+}
+@keyframes pf-iso-spin {
+    to { transform: rotate(360deg); }
+}
+.pf-instrument__core {
+    animation: pf-beat calc(2.6s - (var(--pf-trig, 40) * 0.016s)) ease-in-out infinite;
+}
+@keyframes pf-beat {
+    0%, 100% { opacity: 0.82; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.045); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .pf-print__iso,
+    .pf-instrument__core { animation: none; }
+}
+.pf-horizon {
+    position: relative;
+    margin: 4px 0 14px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-top: 1px solid rgba(56, 189, 248, 0.55);
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.18), transparent 70%);
+    box-shadow: 0 -8px 28px rgba(56, 189, 248, 0.22);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 9px;
+    color: #7dd3fc;
+}
+.pf-horizon span {
+    padding: 0 10px;
+    background: #060918;
+}
+.pump-field .pd-metrics-bar__line,
+.pump-field .pds-metrics-bar__line {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    text-align: center;
+}
+.pump-field .pd-metrics-bar__line span,
+.pump-field .pds-metrics-bar__line span {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    padding-bottom: 6px;
+    border-bottom: 2px solid rgba(56, 189, 248, 0.35);
+}
+.pump-field .pd-metrics-bar__line span:nth-child(2),
+.pump-field .pds-metrics-bar__line span:nth-child(2) {
+    border-bottom-color: rgba(167, 139, 250, 0.55);
+}
+.pump-field .pd-metrics-bar__line span:nth-child(3),
+.pump-field .pds-metrics-bar__line span:nth-child(3) {
+    border-bottom-color: rgba(251, 191, 36, 0.55);
+}
+.pump-field .pd-metrics-bar__line span:nth-child(4),
+.pump-field .pds-metrics-bar__line span:nth-child(4) {
+    border-bottom-color: rgba(148, 163, 184, 0.35);
+}
+.pump-field .pd-metrics-bar__line b,
+.pump-field .pds-metrics-bar__line b {
+    display: block;
+    margin-top: 2px;
+    font-size: 16px;
+    letter-spacing: 0;
+    color: #f8fbff;
+}
+.pump-field .pd-board__rows,
+.pump-field .pds-board__rows {
+    min-height: 120px;
+    background-image:
+      linear-gradient(180deg, rgba(56,189,248,0.12) 0 1px, transparent 1px 100%),
+      linear-gradient(90deg, rgba(56,189,248,0.05) 1px, transparent 1px);
+    background-size: 100% 28px, 10% 100%;
+    background-position: 0 0, 0 0;
+}
 

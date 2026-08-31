@@ -78,6 +78,7 @@
       <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
         <div class="pds-hero__stage pds-hero__stage--field">
           {% include "partials/premium/pump_field_instrument.html" %}
+          <div class="pf-horizon" aria-hidden="true"><span>Trigger horizon · 80%</span></div>
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>

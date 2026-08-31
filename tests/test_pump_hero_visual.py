@@ -25,4 +25,5 @@ def test_hydrate_has_build_pump_hero_visual():
     js = Path("static/js/cockpit_hydrate.js").read_text(encoding="utf-8")
     assert "function buildPumpHeroVisual" in js
     assert "pf-print" in js
+    assert "pf-print__iso" in js
     assert "Formation <b>" in js

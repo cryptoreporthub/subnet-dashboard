@@ -2260,7 +2260,9 @@
       '<div class="pds-hero__visual pds-hero__visual--' +
       esc(String(phase || 'STIRRING').toLowerCase()) +
       '" data-slot="hero-visual">' +
-      '<div class="pf-instrument" data-trig="' +
+      '<div class="pf-instrument" style="--pf-trig:' +
+      trig +
+      '" data-trig="' +
       trig +
       '"><svg class="pf-print" viewBox="0 0 200 200" aria-hidden="true">' +
       '<defs><radialGradient id="pf-halo-' +
@@ -2268,7 +2270,7 @@
       '" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(56,189,248,0.5)"/><stop offset="65%" stop-color="rgba(167,139,250,0.12)"/><stop offset="100%" stop-color="rgba(2,6,23,0)"/></radialGradient></defs>' +
       '<circle cx="100" cy="100" r="94" fill="url(#pf-halo-' +
       esc(nid) +
-      ')"/><circle class="pf-print__gate" cx="100" cy="100" r="80" fill="none"/>' +
+      ')"/><circle class="pf-print__iso" cx="100" cy="100" r="44" fill="none"/><circle class="pf-print__iso pf-print__iso--slow" cx="100" cy="100" r="68" fill="none"/><circle class="pf-print__gate" cx="100" cy="100" r="80" fill="none"/>' +
       '<circle class="pf-print__ring" cx="100" cy="100" r="58" fill="none" pathLength="100" stroke-dasharray="' +
       trig +
       ' 100"/>' +
@@ -2278,7 +2280,7 @@
       '<i>%</i></span><span class="pf-instrument__lbl">to trigger</span></div>' +
       '<ol class="pf-orbit" aria-hidden="true">' +
       orbit +
-      '</ol></div></div>'
+      '</ol></div><div class="pf-horizon" aria-hidden="true"><span>Trigger horizon · 80%</span></div></div>'
     );
   }
 
