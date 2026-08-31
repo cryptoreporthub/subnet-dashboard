@@ -47,6 +47,13 @@ def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> None:
     with open(tmp, "w") as f:
         json.dump(records, f, indent=2)
     os.replace(tmp, path)
+    try:
+        from internal.council.occupancy_capture import note_persist
+
+        # File replace has no writer generation/timestamp field on the site itself.
+        note_persist("daily_picks.json", has_write_timestamp=False)
+    except Exception:
+        pass
 
 
 def _today_str() -> str:

@@ -96,6 +96,12 @@ def _save_store_unlocked(store: Dict[str, Any]) -> None:
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(store, f, sort_keys=True, separators=(",", ":"))
     os.replace(tmp, CACHE_PATH)
+    try:
+        from internal.council.occupancy_capture import note_persist
+
+        note_persist("pick_score_cache.json", has_write_timestamp=False)
+    except Exception:
+        pass
 
 
 def _with_file_lock(fn):
