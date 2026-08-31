@@ -18927,3 +18927,166 @@ section.desk-zone,
     background: rgba(255, 255, 255, 0.07) !important;
     border-color: rgba(255, 255, 255, 0.18) !important;
 }
+
+/* PUMP//FIELD — live geometry, not KPI tiles. Layout-only. */
+.pump-field {
+    --pf-cyan: #38bdf8;
+    --pf-violet: #a78bfa;
+    --pf-amber: #fbbf24;
+    --pf-ink: #e8f0ff;
+}
+.pump-field .pds-atmosphere,
+.pump-field .pd-atmosphere {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% -10%, rgba(56, 189, 248, 0.16), transparent 55%),
+      radial-gradient(ellipse 40% 35% at 92% 8%, rgba(167, 139, 250, 0.14), transparent 50%),
+      repeating-linear-gradient(
+        180deg,
+        transparent 0,
+        transparent 18px,
+        rgba(56, 189, 248, 0.03) 19px
+      );
+    height: 85%;
+    mask-image: linear-gradient(180deg, #000 40%, transparent);
+}
+.pf-instrument {
+    position: relative;
+    width: min(100%, 320px);
+    margin: 0 auto 8px;
+    aspect-ratio: 1;
+}
+.pf-print {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+.pf-print__gate {
+    stroke: rgba(251, 191, 36, 0.35);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 5;
+}
+.pf-print__ring {
+    stroke: #38bdf8;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.65));
+    transform: rotate(-90deg);
+    transform-origin: 100px 100px;
+}
+.pf-print__ray {
+    stroke-width: 1.15;
+    opacity: 0.85;
+}
+.pf-print__ray--0 { stroke: #38bdf8; }
+.pf-print__ray--1 { stroke: #a78bfa; }
+.pf-print__ray--2 { stroke: #fbbf24; }
+.pf-instrument__core {
+    position: absolute;
+    inset: 32% 28%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    text-align: center;
+}
+.pf-instrument__pct {
+    font-size: clamp(40px, 12vw, 56px);
+    font-weight: 800;
+    letter-spacing: -0.06em;
+    line-height: 0.9;
+    color: #f8fbff;
+    text-shadow: 0 0 28px rgba(56, 189, 248, 0.45);
+}
+.pf-instrument__pct i {
+    font-size: 0.38em;
+    font-style: normal;
+    opacity: 0.55;
+}
+.pf-instrument__lbl {
+    margin-top: 6px;
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(148, 163, 184, 0.9);
+}
+.pf-orbit {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.pf-orbit__step {
+    position: absolute;
+    font-family: ui-monospace, "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #64748b;
+}
+.pf-orbit__step--now {
+    color: #fbbf24;
+    text-shadow: 0 0 12px rgba(251, 191, 36, 0.45);
+}
+.pf-orbit__step--1 { top: 4%; left: 50%; transform: translateX(-50%); }
+.pf-orbit__step--2 { top: 50%; right: 2%; transform: translateY(-50%); }
+.pf-orbit__step--3 { bottom: 4%; left: 50%; transform: translateX(-50%); }
+.pf-orbit__step--4 { top: 50%; left: 2%; transform: translateY(-50%); }
+.pds-hero__stage--field {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+.pump-field .pds-hero,
+.pump-field .pd-lead {
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+}
+.pump-field .pds-board__rows,
+.pump-field .pd-board__rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 0 4px;
+    background-image: linear-gradient(90deg, rgba(56,189,248,0.06) 1px, transparent 1px);
+    background-size: 12% 100%;
+    border-top: 1px dashed rgba(251, 191, 36, 0.28);
+}
+.pump-field .pds-ladder,
+.pump-field .pd-r {
+    margin-left: calc(var(--pf-prox, 40) * 0.35%);
+    max-width: calc(100% - 8px);
+    border-left: 2px solid rgba(56, 189, 248, 0.35);
+    background: linear-gradient(90deg, rgba(56,189,248,0.07), transparent 42%);
+}
+.pump-field .pds-ladder--active,
+.pump-field .pd-r--active {
+    border-left-color: #fb7185;
+    background: linear-gradient(90deg, rgba(251,113,133,0.12), transparent 50%);
+}
+.pump-field .pds-ladder--exit,
+.pump-field .pd-r--exit {
+    border-left-color: #34d399;
+    opacity: 0.78;
+    filter: saturate(0.7);
+}
+.pump-field .pds-title,
+.pump-field .pd-title {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 700;
+    color: #94a3b8;
+}
+.pump-field .pds-title::after {
+    content: " // field";
+    color: #38bdf8;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+}
+

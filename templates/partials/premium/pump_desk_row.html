@@ -6,7 +6,7 @@
 {% set labels = row.triad_labels if row.triad_labels is mapping else {} %}
 {% set why = row.trigger|default(row.subtitle|default(row.badge)) %}
 {% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
-<a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}">
+<a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}" style="--pf-prox: {{ [((((row.score|default(0)|float) / (row.trigger_score|default(0.72)|float)) * 100)|round(0)|int), 100]|min }}">
   <div class="pd-r__top">
     <div class="pd-r__id">
       <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>

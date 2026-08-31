@@ -28,7 +28,7 @@
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 {% set full_desk_href = pump_full_desk_href|default('/pump') %}
 
-<section class="pds pds--polish desk-zone wrap-pad" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
+<section class="pds pds--polish desk-zone wrap-pad pump-field" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
   <div class="pds-atmosphere" aria-hidden="true"></div>
 
   <header class="pds-head">
@@ -76,20 +76,8 @@
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
       <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
-        <div class="pds-hero__stage">
-          <div class="pds-hero__visual pds-hero__visual--{{ phase|lower }}" aria-hidden="true" data-slot="hero-visual">
-            {% if progress_pts|length >= 2 %}
-            {% set arc_first = progress_pts[0]|float %}
-            {% set arc_last = progress_pts[-1]|float %}
-            {% set arc_span = (arc_last - arc_first)|abs %}
-            {% set arc_hi = [arc_last, 1.0]|max %}
-            {% set arc_pct = [[((arc_span / arc_hi * 100 + 20)|round(0)|int), 28]|max, 92]|min %}
-            <svg class="pds-hero__arc" viewBox="0 0 120 72" aria-hidden="true">
-              <path class="pds-hero__arc-track" d="M8 64 A52 52 0 0 1 112 64" fill="none"/>
-              <path class="pds-hero__arc-fill" d="M8 64 A52 52 0 0 1 112 64" fill="none" pathLength="100" stroke-dasharray="{{ arc_pct }} 100"/>
-            </svg>
-            {% endif %}
-          </div>
+        <div class="pds-hero__stage pds-hero__stage--field">
+          {% include "partials/premium/pump_field_instrument.html" %}
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
@@ -99,20 +87,17 @@
             {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
             {% include "partials/premium/pump_pattern_line.html" %}
             {% endwith %}
-            <div class="pds-hero__headline" aria-label="{{ trig_pct }} percent to trigger">
+            <div class="pds-hero__headline sr-only" aria-label="{{ trig_pct }} percent to trigger">
               <span class="pds-hero__pct">{{ trig_pct }}<i>%</i></span>
               <span class="pds-hero__pct-lbl">to trigger</span>
             </div>
-            <div class="pds-hero__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100">
-              <span class="pds-hero__bar-fill" style="width: {{ trig_pct }}%"></span>
-              {% if progress_pts|length >= 2 %}
-              <span class="pds-hero__spark"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend"></span></span>
-              {% endif %}
-            </div>
+            {% if progress_pts|length >= 2 %}
+            <span class="pds-hero__spark"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend"></span></span>
+            {% endif %}
           </div>
         </div>
 
-        <ol class="pds-phase" aria-label="Formation phase">
+        <ol class="pds-phase sr-only" aria-label="Formation phase">
           {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
           <li class="pds-phase__step{% if phase == p %} pds-phase__step--now{% endif %}">{{ label }}</li>
           {% endfor %}
@@ -124,9 +109,10 @@
         <div class="pds-strip" aria-label="Metrics and triad">
           <div class="pds-metrics-bar" aria-label="Formation metrics">
             <p class="pds-metrics-bar__line">
-              <span>Form <b>{{ form_pct }}</b></span>
-              <span>Conf <b>{{ confirm_pct }}</b></span>
-              <span>Gap <b>{{ hero_row.distance|default('—') }}</b></span>
+              <span title="How developed the pre-pump formation is (0–100).">Formation <b>{{ form_pct }}</b></span>
+              <span title="How strongly flow/momentum confirms the setup. Not hit-rate.">Confirm <b>{{ confirm_pct }}</b></span>
+              <span title="How closely the path matches a known pattern. Not council conviction.">Pattern <b>{% if hero_row.get('pattern_confidence') is not none %}{{ (hero_row.pattern_confidence * 100)|round(0)|int if hero_row.pattern_confidence <= 1 else hero_row.pattern_confidence|int }}{% else %}—{% endif %}</b></span>
+              <span title="Distance to the desk trigger line — lower usually means closer to firing.">Gap <b>{{ hero_row.distance|default('—') }}</b></span>
             </p>
             {% if hero_row.vol_pct is not none or hero_row.buy_pct is not none %}
             <p class="pds-metrics-bar__line">

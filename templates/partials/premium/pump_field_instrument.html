@@ -1,0 +1,36 @@
+{# Trigger fingerprint — ray length from formation / confirmation / pattern. #}
+{% set pf_trig = trig_pct|default(0)|int %}
+{% set pf_form = form_pct|default(0)|int %}
+{% set pf_conf = confirm_pct|default(0)|int %}
+{% set pf_pat_raw = hero_row.get('pattern_confidence') if hero_row is defined and hero_row is mapping else none %}
+{% set pf_pat = ((pf_pat_raw * 100)|round(0)|int) if pf_pat_raw is not none and pf_pat_raw <= 1 else (pf_pat_raw|default(0)|int) %}
+{% set pf_id = hero_row.netuid|default('x') if hero_row is defined else 'x' %}
+<div class="pf-instrument" data-trig="{{ pf_trig }}" data-form="{{ pf_form }}" data-confirm="{{ pf_conf }}" data-pattern="{{ pf_pat }}">
+  <svg class="pf-print" viewBox="0 0 200 200" aria-hidden="true">
+    <defs>
+      <radialGradient id="pf-halo-{{ pf_id }}" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="rgba(56,189,248,0.5)"/>
+        <stop offset="65%" stop-color="rgba(167,139,250,0.12)"/>
+        <stop offset="100%" stop-color="rgba(2,6,23,0)"/>
+      </radialGradient>
+    </defs>
+    <circle cx="100" cy="100" r="94" fill="url(#pf-halo-{{ pf_id }})"/>
+    <circle class="pf-print__gate" cx="100" cy="100" r="80" fill="none"/>
+    <circle class="pf-print__ring" cx="100" cy="100" r="58" fill="none" pathLength="100" stroke-dasharray="{{ [pf_trig, 100]|min }} 100"/>
+    {% for i in range(18) %}
+      {% set mix = [pf_form, pf_conf, pf_pat][i % 3] %}
+      {% set reach = 36 + (mix / 100 * (0.45 + pf_trig / 180) * 50) %}
+      {% set ang = (i * 20) - 90 %}
+      <line class="pf-print__ray pf-print__ray--{{ i % 3 }}" x1="100" y1="100" x2="{{ 100 + reach }}" y2="100" transform="rotate({{ ang }} 100 100)"/>
+    {% endfor %}
+  </svg>
+  <div class="pf-instrument__core">
+    <span class="pf-instrument__pct">{{ pf_trig }}<i>%</i></span>
+    <span class="pf-instrument__lbl">to trigger</span>
+  </div>
+  <ol class="pf-orbit" aria-hidden="true">
+    {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
+    <li class="pf-orbit__step pf-orbit__step--{{ loop.index }}{% if phase == p %} pf-orbit__step--now{% endif %}">{{ label }}</li>
+    {% endfor %}
+  </ol>
+</div>

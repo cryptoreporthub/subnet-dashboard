@@ -25,7 +25,7 @@
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 
-<section class="pump-alert wrap-pad{% if compact %} pump-alert--board{% endif %}" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1"{% if compact %} data-pump-compact="1"{% endif %}>
+<section class="pump-alert wrap-pad pump-field{% if compact %} pump-alert--board{% endif %}" id="section-pump-alert" aria-labelledby="pump-alert-title" data-home-live="1"{% if compact %} data-pump-compact="1"{% endif %}>
   <div class="pd-atmosphere" aria-hidden="true"></div>
 
   <header class="pd-head">
@@ -81,42 +81,24 @@
       {% set trigger = hero_row.trigger|default(hero_row.subtitle|default('')) %}
 
       <article class="pd-lead pd-lead--{{ timing }}{% if hero_row.pattern_highlight %} pd-lead--pattern-highlight{% endif %} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
-        <div class="pd-lead__visual pd-lead__visual--{{ phase|lower }}" aria-hidden="true" data-slot="hero-visual">
-          {% if progress_pts|length >= 2 %}
-          {% set arc_first = progress_pts[0]|float %}
-          {% set arc_last = progress_pts[-1]|float %}
-          {% set arc_span = (arc_last - arc_first)|abs %}
-          {% set arc_hi = [arc_last, 1.0]|max %}
-          {% set arc_pct = [[((arc_span / arc_hi * 100 + 20)|round(0)|int), 28]|max, 92]|min %}
-          <svg class="pd-lead__arc" viewBox="0 0 120 72" aria-hidden="true">
-            <path class="pd-lead__arc-track" d="M8 64 A52 52 0 0 1 112 64" fill="none"/>
-            <path class="pd-lead__arc-fill" d="M8 64 A52 52 0 0 1 112 64" fill="none" pathLength="100" stroke-dasharray="{{ arc_pct }} 100"/>
-          </svg>
-          {% endif %}
+        <div class="pd-lead__visual pd-lead__visual--{{ phase|lower }}" data-slot="hero-visual">
+          {% include "partials/premium/pump_field_instrument.html" %}
         </div>
         <div class="pd-lead__identity">
           <span class="pd-lead__badge pd-lead__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
-          <div class="pd-lead__who">
-            <a class="pd-lead__name" href="/subnet/{{ hero_row.netuid }}">{{ hero_row.name|default('SN' ~ hero_row.netuid) }} <b class="pd-lead__sn">SN{{ hero_row.netuid }}</b></a>
-            {% if hero_row.updated_ago %}<span class="pd-lead__ago">{{ hero_row.updated_ago }}</span>{% endif %}
-          </div>
-          <div class="pd-lead__meter" aria-label="{{ trig_pct }} percent of the way to trigger">
+          <div class="pd-lead__meter sr-only" aria-label="{{ trig_pct }} percent of the way to trigger">
             <span class="pd-lead__meter-val">{{ trig_pct }}<i>%</i></span>
             <span class="pd-lead__meter-lbl">to trigger</span>
           </div>
-        </div>
         {% with row=hero_row, class_extra='pump-pattern-line--hero' %}
         {% include "partials/premium/pump_pattern_line.html" %}
         {% endwith %}
 
-        <div class="pd-lead__bar" role="progressbar" aria-valuenow="{{ trig_pct }}" aria-valuemin="0" aria-valuemax="100" aria-label="Formation progress to trigger">
-          <span class="pd-lead__bar-fill" style="width: {{ trig_pct }}%"></span>
-          {% if progress_pts|length >= 2 %}
-          <span class="pd-lead__trend"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend toward trigger"></span></span>
-          {% endif %}
-        </div>
+        {% if progress_pts|length >= 2 %}
+        <span class="pd-lead__trend"><span class="pump-progress" data-progress="{{ progress_pts|join(',') }}" role="img" aria-label="Score trend toward trigger"></span></span>
+        {% endif %}
 
-        <ol class="pd-phase" aria-label="Formation phase">
+        <ol class="pd-phase sr-only" aria-label="Formation phase">
           {% for p, label in [('STIRRING','Stir'),('ACCUMULATING','Build'),('PUMPING','Pump'),('COOLING','Cool')] %}
           <li class="pd-phase__step{% if phase == p %} pd-phase__step--now{% endif %}">{{ label }}</li>
           {% endfor %}
@@ -131,9 +113,10 @@
         <div class="pd-evidence" aria-label="Formation metrics">
           <div class="pd-metrics-bar">
             <p class="pd-metrics-bar__line">
-              <span>Form <b>{{ form_pct }}</b></span>
-              <span>Conf <b>{{ confirm_pct }}</b></span>
-              <span>Gap <b>{{ hero_row.distance|default('—') }}</b></span>
+              <span title="How developed the pre-pump formation is (0–100).">Formation <b>{{ form_pct }}</b></span>
+              <span title="How strongly flow/momentum confirms the setup. Not hit-rate.">Confirm <b>{{ confirm_pct }}</b></span>
+              <span title="How closely the path matches a known pattern. Not council conviction.">Pattern <b>{% if hero_row.get('pattern_confidence') is not none %}{{ (hero_row.pattern_confidence * 100)|round(0)|int if hero_row.pattern_confidence <= 1 else hero_row.pattern_confidence|int }}{% else %}—{% endif %}</b></span>
+              <span title="Distance to the desk trigger line — lower usually means closer to firing.">Gap <b>{{ hero_row.distance|default('—') }}</b></span>
             </p>
             {% if hero_row.vol_pct is not none or hero_row.buy_pct is not none %}
             <p class="pd-metrics-bar__line">
