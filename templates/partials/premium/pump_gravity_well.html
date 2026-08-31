@@ -1,0 +1,48 @@
+{# Gravity well — bodies closer to the core are closer to trigger. Layout-only. #}
+{% set gw_rows = field_rows if field_rows is defined else [] %}
+{% set slots = [(180, 108), (252, 152), (108, 168), (222, 208), (88, 118), (278, 122)] %}
+{% set hues = ['amber', 'teal', 'cyan', 'amber', 'teal', 'cyan'] %}
+<figure class="gw-stage">
+  <svg class="gw-well" viewBox="0 0 360 280" role="img" aria-label="Gravity well of live formations">
+    <defs>
+      <radialGradient id="gw-core" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#fff8e8"/>
+        <stop offset="18%" stop-color="#fde68a"/>
+        <stop offset="42%" stop-color="#38bdf8"/>
+        <stop offset="100%" stop-color="rgba(8,12,28,0)"/>
+      </radialGradient>
+      <filter id="gw-bloom" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="2.4" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <ellipse class="gw-orbit gw-orbit--4" cx="180" cy="148" rx="168" ry="92"/>
+    <ellipse class="gw-orbit gw-orbit--3" cx="180" cy="148" rx="128" ry="70"/>
+    <ellipse class="gw-orbit gw-orbit--2" cx="180" cy="148" rx="88" ry="48"/>
+    <ellipse class="gw-orbit gw-orbit--1" cx="180" cy="148" rx="48" ry="26"/>
+    <circle class="gw-core" cx="180" cy="148" r="14" fill="url(#gw-core)" filter="url(#gw-bloom)"/>
+    <circle class="gw-core__hot" cx="180" cy="148" r="4.5" fill="#fff"/>
+    <text class="gw-eh" x="180" y="178" text-anchor="middle">EVENT HORIZON</text>
+    {% for row in gw_rows[:6] %}
+      {% set xy = slots[loop.index0] %}
+      {% set hue = hues[loop.index0] %}
+      {% set nm = (row.name|default('SN' ~ row.netuid)|string)|upper|truncate(10, True, '') %}
+      {% set tp = ((row.score|default(0)|float / row.trigger_score|default(0.72)|float * 100)|round(0))|int %}
+      {% set tp = [tp, 100]|min %}
+      <g class="gw-body gw-body--{{ hue }}" transform="translate({{ xy[0] }}, {{ xy[1] }})">
+        <circle class="gw-body__halo" r="11" fill="none"/>
+        <circle class="gw-body__dot" r="4.2"/>
+        <text class="gw-body__lbl" x="0" y="-16" text-anchor="middle">{{ nm }} {{ tp }}%</text>
+      </g>
+    {% endfor %}
+  </svg>
+  {% if hero_row %}
+  {% set hname = (hero_row.name|default('SN' ~ hero_row.netuid)|string)|upper %}
+  {% set htrig = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int %}
+  {% set htrig = [htrig, 100]|min %}
+  <figcaption class="gw-caption">
+    <p class="gw-caption__lead">{{ hname }} SN{{ hero_row.netuid }} · {{ htrig }}% TO IMPACT</p>
+    <p class="gw-caption__sub">CLOSEST APPROACH IN FIELD</p>
+  </figcaption>
+  {% endif %}
+</figure>

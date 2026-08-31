@@ -2216,6 +2216,111 @@
     }
   }
 
+  function pumpOrbitKind(row) {
+    var t = pumpTrigPct(row);
+    if (row && row.timing === 'exit') return 'widening';
+    if ((row && row.timing === 'confirmed') || t >= 70) return 'crossing';
+    if (t >= 50) return 'tightening';
+    return 'unstable';
+  }
+
+  function pumpDecayLabel(row) {
+    var s = row && row.progress_series;
+    if (Array.isArray(s) && s.length >= 2) return s[s.length - 1] - s[0] + '%/tick';
+    return row && row.distance != null ? String(row.distance) : '—';
+  }
+
+  function gwRowChrome(row) {
+    var orbit = pumpOrbitKind(row);
+    return (
+      '<span class="gw-row__dot" aria-hidden="true"></span><span class="gw-row__name">' +
+      esc(pumpRowDisplayName(row)) +
+      ' <b>SN' +
+      esc(row.netuid) +
+      '</b></span><span class="gw-row__orbit">' +
+      orbit.toUpperCase() +
+      '</span><span class="gw-row__decay">' +
+      esc(pumpDecayLabel(row)) +
+      '</span><span class="gw-row__impact">' +
+      pumpTrigPct(row) +
+      '%</span>'
+    );
+  }
+
+  function pumpTrigPct(row) {
+    if (!row) return 0;
+    var score = row.score != null ? Number(row.score) : 0;
+    var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
+    if (!trigger) return 0;
+    return Math.min(100, Math.round((score / trigger) * 100));
+  }
+
+  function renderGravityWell(rows, hero) {
+    var list = (rows || [])
+      .slice()
+      .sort(function (a, b) {
+        return (Number(b.score) || 0) - (Number(a.score) || 0);
+      })
+      .slice(0, 6);
+    var slots = [
+      [180, 108],
+      [252, 152],
+      [108, 168],
+      [222, 208],
+      [88, 118],
+      [278, 122],
+    ];
+    var hues = ['amber', 'teal', 'cyan', 'amber', 'teal', 'cyan'];
+    var bodies = '';
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var row = list[i];
+      var xy = slots[i];
+      var nm = String(row.name || 'SN' + row.netuid)
+        .toUpperCase()
+        .slice(0, 10);
+      bodies +=
+        '<g class="gw-body gw-body--' +
+        hues[i] +
+        '" transform="translate(' +
+        xy[0] +
+        ', ' +
+        xy[1] +
+        ')"><circle class="gw-body__halo" r="11" fill="none"/><circle class="gw-body__dot" r="4.2"/><text class="gw-body__lbl" x="0" y="-16" text-anchor="middle">' +
+        esc(nm) +
+        ' ' +
+        pumpTrigPct(row) +
+        '%</text></g>';
+    }
+    var cap = '';
+    if (hero && hero.netuid != null) {
+      cap =
+        '<figcaption class="gw-caption"><p class="gw-caption__lead">' +
+        esc(String(hero.name || 'SN' + hero.netuid).toUpperCase()) +
+        ' SN' +
+        esc(hero.netuid) +
+        ' · ' +
+        pumpTrigPct(hero) +
+        '% TO IMPACT</p><p class="gw-caption__sub">CLOSEST APPROACH IN FIELD</p></figcaption>';
+    }
+    return (
+      '<figure class="gw-stage"><svg class="gw-well" viewBox="0 0 360 280" role="img" aria-label="Gravity well of live formations">' +
+      '<defs><radialGradient id="gw-core" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff8e8"/><stop offset="18%" stop-color="#fde68a"/><stop offset="42%" stop-color="#38bdf8"/><stop offset="100%" stop-color="rgba(8,12,28,0)"/></radialGradient>' +
+      '<filter id="gw-bloom" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>' +
+      '<ellipse class="gw-orbit gw-orbit--4" cx="180" cy="148" rx="168" ry="92"/>' +
+      '<ellipse class="gw-orbit gw-orbit--3" cx="180" cy="148" rx="128" ry="70"/>' +
+      '<ellipse class="gw-orbit gw-orbit--2" cx="180" cy="148" rx="88" ry="48"/>' +
+      '<ellipse class="gw-orbit gw-orbit--1" cx="180" cy="148" rx="48" ry="26"/>' +
+      '<circle class="gw-core" cx="180" cy="148" r="14" fill="url(#gw-core)" filter="url(#gw-bloom)"/>' +
+      '<circle class="gw-core__hot" cx="180" cy="148" r="4.5" fill="#fff"/>' +
+      '<text class="gw-eh" x="180" y="178" text-anchor="middle">EVENT HORIZON</text>' +
+      bodies +
+      '</svg>' +
+      cap +
+      '</figure>'
+    );
+  }
+
   function buildPumpHeroVisual(phase, progress, metrics) {
     var m = metrics || {};
     var trig = Math.min(100, Math.max(0, Number(m.trigPct) || 0));
@@ -2772,13 +2877,17 @@
     return (
       '<a class="pds-ladder pds-ladder--' +
       esc(tone) +
+      ' gw-row gw-row--' +
+      pumpOrbitKind(row) +
       '" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
       '" style="--pf-prox:' +
       prox +
-      '"><div class="pds-ladder__head">' +
+      '">' +
+      gwRowChrome(row) +
+      '<div class="pds-ladder__head">' +
       '<span class="pds-ladder__badge pds-ladder__badge--' +
       esc(badgeSlug) +
       '">' +
@@ -3063,7 +3172,9 @@
     return (
       '<a class="pd-r pd-r--' +
       esc(tone) +
-      ' pump-desk__row" href="/subnet/' +
+      ' pump-desk__row gw-row gw-row--' +
+      pumpOrbitKind(row) +
+      '" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
@@ -3072,6 +3183,7 @@
       '" style="--pf-prox:' +
       prox +
       '">' +
+      gwRowChrome(row) +
       '<div class="pd-r__top"><div class="pd-r__id">' +
       '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
@@ -3150,7 +3262,9 @@
       hero = payloadHero;
     }
     var html = '';
+    var fieldRows = warm.concat(active).concat(exits);
     if (compact && hero) {
+      html += renderGravityWell(fieldRows, hero);
       if (isPumpScanMode()) {
         html += renderPumpScanHeroCard(hero);
         var moreScan = '';
@@ -3181,7 +3295,11 @@
             moreScan += renderPumpScanRow(row, 'exit');
           });
         }
-        if (moreScan) html += '<div class="pds-board" id="pump-desk-more">' + moreScan + '</div>';
+        if (moreScan)
+          html +=
+            '<div class="pds-board gw-board" id="pump-desk-more"><div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>' +
+            moreScan +
+            '</div>';
         renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
         liveHost.innerHTML = html;
         if (typeof window.__paintSparks === 'function') window.__paintSparks();
@@ -3219,7 +3337,11 @@
         });
         more += '</div></section>';
       }
-      if (more) html += '<div class="pd-board" id="pump-desk-more">' + more + '</div>';
+      if (more)
+        html +=
+          '<div class="pd-board gw-board" id="pump-desk-more"><div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>' +
+          more +
+          '</div>';
       renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
       liveHost.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();

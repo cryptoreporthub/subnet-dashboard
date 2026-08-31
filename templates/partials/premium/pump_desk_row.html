@@ -1,12 +1,21 @@
 {# Ladder row — flagship secondary: badge + name + why + flow/gap + triad legs #}
 {% set form_pct = row.formation_pct if row.formation_pct is not none else (((row.score|default(0)|float * 100)|round(0))|int if row.score is not none else none) %}
+{% set trig_pct = [((((row.score|default(0)|float) / (row.trigger_score|default(0.72)|float)) * 100)|round(0)|int), 100]|min %}
+{% set orbit = 'WIDENING' if row.timing == 'exit' else ('CROSSING' if row.timing == 'confirmed' or trig_pct >= 70 else ('TIGHTENING' if trig_pct >= 50 else 'UNSTABLE')) %}
+{% set ps = row.progress_series if row.progress_series is iterable and row.progress_series is not string and row.progress_series|length >= 2 else [] %}
+{% set decay = ((ps[-1] - ps[0])|string ~ '%/tick') if ps else (row.distance|string if row.distance is not none else '—') %}
 {% set tone = 'warm' if row.timing == 'lead' else ('exit' if row.timing == 'exit' else 'active') %}
 {% set badge_slug = (row.badge|default('')|lower|replace(' ', '-')) %}
 {% set triad = row.triad if row.triad is mapping else {} %}
 {% set labels = row.triad_labels if row.triad_labels is mapping else {} %}
 {% set why = row.trigger|default(row.subtitle|default(row.badge)) %}
 {% set BADGE_ABBR = {'WARMING UP': 'WARM', 'BUILDING': 'BUILD', 'STRONG': 'STRONG', 'JUST STARTED': 'JUST', 'CHASE RISK': 'CHASE', 'FADING': 'FADE'} %}
-<a class="pd-r pd-r--{{ tone }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}" style="--pf-prox: {{ [((((row.score|default(0)|float) / (row.trigger_score|default(0.72)|float)) * 100)|round(0)|int), 100]|min }}">
+<a class="pd-r pd-r--{{ tone }} gw-row gw-row--{{ orbit|lower }}" href="/subnet/{{ row.netuid }}" data-netuid="{{ row.netuid }}" title="{{ row.badge }}" style="--pf-prox: {{ trig_pct }}">
+  <span class="gw-row__dot" aria-hidden="true"></span>
+  <span class="gw-row__name">{{ row.name|default('SN' ~ row.netuid) }} <b class="pd-r__sn">SN{{ row.netuid }}</b></span>
+  <span class="gw-row__orbit">{{ orbit }}</span>
+  <span class="gw-row__decay">{{ decay }}</span>
+  <span class="gw-row__impact">{{ trig_pct }}%</span>
   <div class="pd-r__top">
     <div class="pd-r__id">
       <span class="pd-r__badge pd-r__badge--{{ badge_slug }}">{{ BADGE_ABBR.get(row.badge, row.badge) }}</span>

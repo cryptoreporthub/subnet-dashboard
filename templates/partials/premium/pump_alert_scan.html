@@ -27,9 +27,25 @@
 {% endif %}
 {% if pa_exit == 0 %}{% set pa_exit = exit_ns.rows|length %}{% endif %}
 {% set full_desk_href = pump_full_desk_href|default('/pump') %}
+{% set field_rows = map_ns.rows|sort(attribute='score', reverse=True) %}
+{% set gw_pressure = 0 %}
+{% if hero_row %}
+  {% set gw_pressure = (hero_row.get('buy_pct') if hero_row.get('buy_pct') is not none else hero_row.get('formation_pct') or 0)|int %}
+{% endif %}
 
-<section class="pds pds--polish desk-zone wrap-pad pump-field" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
+<section class="pds pds--polish desk-zone wrap-pad pump-field gw" id="section-pump-alert" aria-labelledby="pds-title" data-home-live="1" data-pump-compact="1" data-pump-scan="1" data-pump-polish="1">
   <div class="pds-atmosphere" aria-hidden="true"></div>
+  <div class="gw-shell">
+  <div class="gw-top">
+    <p class="gw-live">LIVE FIELD · {{ pa_count or field_rows|length }} FORMATIONS</p>
+    <p class="gw-sync"><i></i> SYNC</p>
+  </div>
+  <div class="gw-vitals" aria-hidden="true">
+    <span class="gw-vital gw-vital--p"><i></i><b>{{ gw_pressure }}</b> PRESSURE</span>
+    <span class="gw-vital gw-vital--b"><i></i><b>{{ pa_early }}</b> BUILDING</span>
+    <span class="gw-vital gw-vital--t"><i></i><b>{{ pa_confirmed }}</b> TIGHTENING</span>
+    <span class="gw-vital gw-vital--e"><i></i><b>{{ pa_exit }}</b> ESCAPED</span>
+  </div>
 
   <header class="pds-head">
     <div class="pds-head__row">
@@ -61,6 +77,9 @@
         <div class="pds-skel-row skel skel-md"></div>
       </div>
       <div class="pds-desk__live live-only">
+      {% if compact and field_rows %}
+      {% include "partials/premium/pump_gravity_well.html" %}
+      {% endif %}
       {% if compact and hero_row and hero_row.timing == 'lead' %}
       {% set triad = hero_row.triad if hero_row.triad is mapping else {} %}
       {% set labels = hero_row.triad_labels if hero_row.triad_labels is mapping else {} %}
@@ -77,8 +96,6 @@
 
       <article class="pds-hero pds-hero--{{ timing }} pump-hero__card" id="pump-desk-hero" data-netuid="{{ hero_row.netuid }}" data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">
         <div class="pds-hero__stage pds-hero__stage--field">
-          {% include "partials/premium/pump_field_instrument.html" %}
-          <div class="pf-horizon" aria-hidden="true"><span>Trigger horizon · 80%</span></div>
           <div class="pds-hero__copy">
             <div class="pds-hero__top">
               <span class="pds-hero__badge pds-hero__badge--{{ badge_slug }}">{{ hero_row.badge }}</span>
@@ -198,7 +215,8 @@
       </article>
 
       {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
-      <div class="pds-board" id="pump-desk-more">
+      <div class="pds-board gw-board" id="pump-desk-more">
+        <div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>
         {% if warm_ns.rows|length > 1 %}
         <h3 class="pds-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h3>
         {% for row in warm_ns.rows[1:] %}
@@ -235,5 +253,17 @@
       </div>
     </div>
     <script type="application/json" id="pump-map-data">{{ map_ns.rows|tojson|safe }}</script>
+  </div>
+  {% if compact and exit_ns.rows %}
+  <p class="gw-escaped" id="gw-escaped"><b>ESCAPED</b> ·
+    {% for row in exit_ns.rows[:2] %}{{ row.name|default('SN' ~ row.netuid) }} SN{{ row.netuid }}{% if not loop.last %} · {% endif %}{% endfor %}
+    — wait for recapture
+  </p>
+  {% endif %}
+  <nav class="gw-dock" aria-label="Field views">
+    <a class="gw-dock__btn gw-dock__btn--on" href="#section-pump-alert">Field</a>
+    <a class="gw-dock__btn" href="#pump-desk-more">Stream</a>
+    <a class="gw-dock__btn" href="{{ full_desk_href }}">Exits</a>
+  </nav>
   </div>
 </section>
