@@ -2292,15 +2292,16 @@
         pumpTrigPct(row) +
         '%</text></g>';
     }
+    var capRow = list[0] || hero;
     var cap = '';
-    if (hero && hero.netuid != null) {
+    if (capRow && capRow.netuid != null) {
       cap =
         '<figcaption class="gw-caption"><p class="gw-caption__lead">' +
-        esc(String(hero.name || 'SN' + hero.netuid).toUpperCase()) +
+        esc(String(capRow.name || 'SN' + capRow.netuid).toUpperCase()) +
         ' SN' +
-        esc(hero.netuid) +
+        esc(capRow.netuid) +
         ' · ' +
-        pumpTrigPct(hero) +
+        pumpTrigPct(capRow) +
         '% TO IMPACT</p><p class="gw-caption__sub">CLOSEST APPROACH IN FIELD</p></figcaption>';
     }
     return (

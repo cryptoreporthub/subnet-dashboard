@@ -214,7 +214,20 @@
            data-name="{{ hero_row.name|default('SN' ~ hero_row.netuid) }}">Open {{ hero_row.name|default('SN' ~ hero_row.netuid) }} SN{{ hero_row.netuid }} dossier</a>
       </article>
 
-      {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
+      {% if compact and field_rows %}
+      <div class="pds-board gw-board" id="pump-desk-more">
+        <div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>
+        {% if warm_ns.rows|length > 1 %}
+        <h3 class="pds-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h3>
+        {% endif %}
+        {% if active_ns.rows %}
+        <h3 class="pds-board__lbl pds-board__lbl--chase">Active · chase risk <span>{{ active_ns.rows|length }}</span></h3>
+        {% endif %}
+        {% for row in field_rows %}
+        {% include "partials/premium/pump_desk_row_scan.html" %}
+        {% endfor %}
+      </div>
+      {% elif warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
       <div class="pds-board gw-board" id="pump-desk-more">
         <div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>
         {% if warm_ns.rows|length > 1 %}

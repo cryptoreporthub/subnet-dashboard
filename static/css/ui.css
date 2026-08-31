@@ -19326,14 +19326,17 @@ section.desk-zone,
     text-transform: uppercase;
     color: #64748b;
 }
-.pump-field.gw .pd-proof,
-.pump-field.gw .pds-proof {
-    text-align: center;
-    margin: 0 0 8px;
-}
-.pump-field.gw .pd-proof__copy,
-.pump-field.gw .pds-proof__copy {
-    display: none;
+.pump-field.gw .pd-proof__ready,
+.pump-field.gw .pds-proof__ready,
+.pump-field.gw .pd-proof__pct,
+.pump-field.gw .pds-proof__pct,
+.pump-field.gw .pd-proof__building,
+.pump-field.gw .pds-proof__line {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
 }
 .gw-stage {
     margin: 0 auto 8px;

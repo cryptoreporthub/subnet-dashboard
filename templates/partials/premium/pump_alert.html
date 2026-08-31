@@ -233,7 +233,22 @@
         </div>
       </article>
 
-      {% if warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
+      {% if compact and field_rows %}
+      <div class="pd-board gw-board" id="pump-desk-more">
+        <div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>
+        {% if warm_ns.rows|length > 1 %}
+        <h4 class="pd-board__lbl">Also warming <span>{{ warm_ns.rows|length - 1 }}</span></h4>
+        {% endif %}
+        {% if active_ns.rows %}
+        <h4 class="pd-board__lbl">Active · chase risk <span>{{ active_ns.rows|length }}</span></h4>
+        {% endif %}
+        <div class="pd-board__rows">
+          {% for row in field_rows %}
+          {% include "partials/premium/pump_desk_row.html" %}
+          {% endfor %}
+        </div>
+      </div>
+      {% elif warm_ns.rows|length > 1 or active_ns.rows or exit_ns.rows %}
       <div class="pd-board gw-board" id="pump-desk-more">
         <div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>
         {% if warm_ns.rows|length > 1 %}

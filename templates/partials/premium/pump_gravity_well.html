@@ -36,12 +36,13 @@
       </g>
     {% endfor %}
   </svg>
-  {% if hero_row %}
-  {% set hname = (hero_row.name|default('SN' ~ hero_row.netuid)|string)|upper %}
-  {% set htrig = ((hero_row.score|default(0)|float / hero_row.trigger_score|default(0.72)|float * 100)|round(0))|int %}
+  {% set gw_cap = field_rows[0] if field_rows else hero_row %}
+  {% if gw_cap %}
+  {% set hname = (gw_cap.name|default('SN' ~ gw_cap.netuid)|string)|upper %}
+  {% set htrig = ((gw_cap.score|default(0)|float / gw_cap.trigger_score|default(0.72)|float * 100)|round(0))|int %}
   {% set htrig = [htrig, 100]|min %}
   <figcaption class="gw-caption">
-    <p class="gw-caption__lead">{{ hname }} SN{{ hero_row.netuid }} · {{ htrig }}% TO IMPACT</p>
+    <p class="gw-caption__lead">{{ hname }} SN{{ gw_cap.netuid }} · {{ htrig }}% TO IMPACT</p>
     <p class="gw-caption__sub">CLOSEST APPROACH IN FIELD</p>
   </figcaption>
   {% endif %}
