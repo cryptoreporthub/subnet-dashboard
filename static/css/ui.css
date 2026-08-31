@@ -19331,12 +19331,11 @@ section.desk-zone,
 .pump-field.gw .pd-proof__pct,
 .pump-field.gw .pds-proof__pct,
 .pump-field.gw .pd-proof__building,
-.pump-field.gw .pds-proof__line {
-    position: absolute !important;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+.pump-field.gw .pds-proof__line,
+.pump-field.gw .pds-full-desk,
+.pump-field.gw .pds-hero__cta,
+.pump-field.gw #pump-desk-cta {
+    display: none !important;
 }
 .gw-stage {
     margin: 0 auto 8px;
