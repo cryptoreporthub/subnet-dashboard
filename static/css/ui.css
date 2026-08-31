@@ -18954,6 +18954,9 @@ section.desk-zone,
     width: min(100%, 320px);
     margin: 0 auto 8px;
     aspect-ratio: 1;
+    overflow: visible;
+    padding: 22px 12px 28px;
+    box-sizing: content-box;
 }
 .pf-print {
     width: 100%;
