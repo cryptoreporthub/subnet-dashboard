@@ -3,16 +3,37 @@
 from __future__ import annotations
 
 import json
+import asyncio
 import time
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from internal.learning import loop_health
 from internal.learning import routes
 from internal.learning.loop_health import build_learning_loop_health
 from server import app
+
+
+@pytest.fixture(autouse=True)
+def _reset_resolver_snapshot_caches():
+    """Keep shared resolver snapshots isolated across health-contract tests."""
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
+    routes._RESOLVER_STATE_CACHE["at"] = 0.0
+    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_BUILDING = False
+    yield
+    loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
+    loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+    loop_health._RESOLVER_LIVENESS_BUILDING = False
+    routes._RESOLVER_STATE_CACHE["at"] = 0.0
+    routes._RESOLVER_STATE_CACHE["payload"] = None
+    routes._RESOLVER_STATE_BUILDING = False
 
 
 def _today() -> str:
@@ -113,6 +134,179 @@ def test_resolver_state_cross_process_keeps_active_running_state(monkeypatch):
     assert result["last_run_ok"] is True
     assert result["refresh_minutes"] == 15
     assert result["worker_peer"] == view["worker_peer"]
+
+
+def _seed_resolver_state_cache(payload):
+    routes._RESOLVER_STATE_CACHE["at"] = time.monotonic() - 30
+    routes._RESOLVER_STATE_CACHE["payload"] = dict(payload)
+
+
+def test_resolver_endpoint_timeout_uses_recent_persisted_snapshot(monkeypatch):
+    recent_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    _seed_resolver_state_cache(
+        {
+            "running": True,
+            "lifecycle": "ticking",
+            "last_run_at": recent_at,
+            "last_run_ok": True,
+            "refresh_minutes": 15,
+            "worker_peer": {"alive": True},
+            "source": "volume",
+        }
+    )
+    monkeypatch.setattr(routes, "RESOLVER_STATE_TIMEOUT", 0.01)
+
+    def _slow_snapshot():
+        time.sleep(0.2)
+        return {"source": "memory", "running": False}
+
+    monkeypatch.setattr(routes, "_resolver_state_snapshot", _slow_snapshot)
+    body = asyncio.run(routes.api_predictions_resolver_state())
+
+    data = body["data"]
+    assert body["status"] == "success"
+    assert data["running"] is True
+    assert data["source"] == "volume"
+    assert data["fallback"] == "recent_persisted"
+    assert data["availability"] == "degraded"
+    assert data["fallback_age_seconds"] < 120
+    assert data["error"] == "timeout"
+    assert data["stage_timing_ms"]["executor_wait"] >= 0
+    time.sleep(0.25)
+
+
+def test_resolver_endpoint_timeout_marks_stale_persistence_unavailable(monkeypatch):
+    stale_at = (datetime.now(timezone.utc).timestamp() - 3600)
+    stale_iso = datetime.fromtimestamp(stale_at, timezone.utc).isoformat().replace("+00:00", "Z")
+    _seed_resolver_state_cache(
+        {
+            "running": True,
+            "lifecycle": "ticking",
+            "last_run_at": stale_iso,
+            "last_run_ok": True,
+            "refresh_minutes": 15,
+            "worker_peer": {"alive": True},
+            "source": "volume",
+        }
+    )
+    monkeypatch.setattr(routes, "RESOLVER_STATE_TIMEOUT", 0.01)
+    monkeypatch.setattr(
+        routes,
+        "_resolver_state_snapshot",
+        lambda: (time.sleep(0.2), {"source": "memory"})[1],
+    )
+
+    body = asyncio.run(routes.api_predictions_resolver_state())
+
+    data = body["data"]
+    assert data["availability"] == "unavailable"
+    assert data["unavailable_reason"] == "persisted_state_stale"
+    assert data["fallback"] == "process_memory"
+    assert data["error"] == "timeout"
+    time.sleep(0.25)
+
+
+def test_resolver_endpoint_timeout_without_persisted_state_is_unavailable(monkeypatch):
+    monkeypatch.setattr(routes, "RESOLVER_STATE_TIMEOUT", 0.01)
+    monkeypatch.setattr(
+        routes,
+        "_resolver_state_snapshot",
+        lambda: (time.sleep(0.2), {"source": "memory"})[1],
+    )
+
+    body = asyncio.run(routes.api_predictions_resolver_state())
+
+    data = body["data"]
+    assert data["availability"] == "unavailable"
+    assert data["unavailable_reason"] == "persisted_state_absent"
+    assert data["fallback"] == "process_memory"
+    assert data["error"] == "timeout"
+    time.sleep(0.25)
+
+
+def test_resolver_endpoint_bare_get_preserves_shape(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "_resolver_state_snapshot",
+        lambda: {
+            "running": True,
+            "lifecycle": "ticking",
+            "last_run_at": "2026-09-01T12:00:00Z",
+            "last_run_ok": True,
+            "refresh_minutes": 15,
+            "worker_peer": {"alive": True},
+            "source": "volume",
+        },
+    )
+    response = TestClient(app).get("/api/predictions/resolver")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "success"
+    assert set(body["data"]) >= {
+        "running",
+        "lifecycle",
+        "last_run_at",
+        "last_run_ok",
+        "refresh_minutes",
+        "worker_peer",
+        "source",
+    }
+
+
+def test_resolver_endpoint_normal_snapshot_marks_missing_persistence(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "_resolver_state_snapshot",
+        lambda: {
+            "running": False,
+            "lifecycle": "stopped",
+            "last_run_at": None,
+            "refresh_minutes": 15,
+            "worker_peer": {},
+            "source": "memory",
+        },
+    )
+
+    body = TestClient(app).get("/api/predictions/resolver").json()
+
+    assert body["data"]["availability"] == "unavailable"
+    assert body["data"]["unavailable_reason"] == "persisted_state_absent"
+
+
+def test_resolver_liveness_view_single_flight(monkeypatch):
+    started = threading.Event()
+    release = threading.Event()
+    calls = {"n": 0}
+    view = {
+        "at": "2026-09-01T12:00:00Z",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {"alive": True},
+        "liveness": {"status": "ok"},
+        "status": "ok",
+        "last_success_at": "2026-09-01T12:00:00Z",
+        "success_age_seconds": 0,
+        "stage_timing_ms": {"persistence": 1.0, "peer_access": 1.0},
+    }
+
+    def _slow_build():
+        calls["n"] += 1
+        started.set()
+        release.wait(timeout=2)
+        return view
+
+    monkeypatch.setattr(loop_health, "_build_resolver_liveness_view", _slow_build)
+    thread = threading.Thread(target=loop_health._resolver_liveness_view)
+    thread.start()
+    assert started.wait(timeout=1)
+    second = loop_health._resolver_liveness_view()
+    release.set()
+    thread.join(timeout=2)
+
+    assert calls["n"] == 1
+    assert second["status"] == "unavailable"
 
 
 def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):

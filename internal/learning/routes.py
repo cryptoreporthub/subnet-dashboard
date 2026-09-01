@@ -48,6 +48,9 @@ _LEARNING_HEALTH_STALE_TTL = float(os.environ.get("LEARNING_HEALTH_STALE_SECONDS
 _LEARNING_HEALTH_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _LEARNING_HEALTH_CACHE_LOCK = threading.Lock()
 _LEARNING_HEALTH_BUILDING = False
+_RESOLVER_STATE_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_RESOLVER_STATE_CACHE_LOCK = threading.Lock()
+_RESOLVER_STATE_BUILDING = False
 MINDMAP_STATE_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_STATE_HANDLER_TIMEOUT_SECONDS", "12"))
 MINDMAP_SUMMARY_TIMEOUT = float(os.environ.get("MINDMAP_SUMMARY_TIMEOUT_SECONDS", "8"))
 MINDMAP_TRAIL_HANDLER_TIMEOUT = float(os.environ.get("MINDMAP_TRAIL_HANDLER_TIMEOUT_SECONDS", "8"))
@@ -1287,12 +1290,19 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
         state["source"] = "memory"
         return state
 
+    persistence_started = time.perf_counter()
     try:
         tick = _last_resolver_tick()
     except Exception as exc:
         logger.warning("resolver cross-process state failed: %s", exc)
         state["source"] = "memory"
         return state
+    finally:
+        persistence_ms = (time.perf_counter() - persistence_started) * 1000
+        logger.info(
+            "resolver state stage=persistence duration_ms=%.1f",
+            persistence_ms,
+        )
 
     peer = tick.get("worker_peer") if isinstance(tick.get("worker_peer"), dict) else {}
     state["running"] = bool(tick.get("running"))
@@ -1303,26 +1313,191 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
     state["worker_peer"] = peer
     state["run_mode"] = worker_mode_label()
     state["source"] = "volume" if tick.get("at") else "memory"
+    state["stage_timing_ms"] = dict(tick.get("stage_timing_ms") or {})
+    state["stage_timing_ms"]["persistence"] = persistence_ms
     return state
+
+
+def _get_cached_resolver_state(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
+    now = time.monotonic()
+    ttl = float("inf") if allow_stale else 5.0
+    with _RESOLVER_STATE_CACHE_LOCK:
+        payload = _RESOLVER_STATE_CACHE.get("payload")
+        captured = float(_RESOLVER_STATE_CACHE.get("at") or 0.0)
+        if isinstance(payload, dict) and now - captured <= ttl:
+            return dict(payload)
+    return None
+
+
+def _set_cached_resolver_state(payload: Dict[str, Any]) -> None:
+    if not isinstance(payload, dict):
+        return
+    with _RESOLVER_STATE_CACHE_LOCK:
+        _RESOLVER_STATE_CACHE["at"] = time.monotonic()
+        _RESOLVER_STATE_CACHE["payload"] = dict(payload)
+
+
+def _resolver_state_snapshot() -> Dict[str, Any]:
+    """Build one resolver response snapshot and coalesce concurrent builders."""
+    global _RESOLVER_STATE_BUILDING
+    cached = _get_cached_resolver_state()
+    if cached is not None:
+        return cached
+    with _RESOLVER_STATE_CACHE_LOCK:
+        if _RESOLVER_STATE_BUILDING:
+            stale = _RESOLVER_STATE_CACHE.get("payload")
+            if isinstance(stale, dict):
+                return dict(stale)
+            logger.warning(
+                "resolver state unavailable=true error=refresh_in_flight "
+                "stage_persistence_ms=unknown stage_peer_access_ms=unknown "
+                "stage_executor_wait_ms=0.0"
+            )
+            return {
+                **get_prediction_resolver_scheduler_state(),
+                "source": "memory",
+                "availability": "unavailable",
+                "unavailable_reason": "refresh_in_flight",
+            }
+        _RESOLVER_STATE_BUILDING = True
+    try:
+        data = _resolver_state_cross_process()
+        _set_cached_resolver_state(data)
+        return data
+    finally:
+        with _RESOLVER_STATE_CACHE_LOCK:
+            _RESOLVER_STATE_BUILDING = False
+
+
+def _resolver_timestamp_age_seconds(value: Any) -> Optional[float]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        timestamp = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - timestamp).total_seconds())
+
+
+def _annotate_resolver_availability(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Expose persistence freshness explicitly without changing legacy fields."""
+    if data.get("availability") in {"degraded", "unavailable"}:
+        return data
+    try:
+        refresh_minutes = max(1, int(data.get("refresh_minutes") or 15))
+    except (TypeError, ValueError):
+        refresh_minutes = 15
+    tick_at = data.get("last_run_at") or data.get("at")
+    age_seconds = _resolver_timestamp_age_seconds(tick_at)
+    if (
+        data.get("source") == "volume"
+        and age_seconds is not None
+        and age_seconds <= (2 * refresh_minutes * 60)
+    ):
+        data["availability"] = "available"
+        return data
+    data["availability"] = "unavailable"
+    data["unavailable_reason"] = (
+        "persisted_state_stale"
+        if data.get("source") == "volume" and age_seconds is not None
+        else "persisted_state_absent"
+    )
+    return data
+
+
+def _resolver_timeout_fallback(*, error: str, executor_wait_ms: float) -> Dict[str, Any]:
+    """Prefer recent shared persisted truth; otherwise expose unavailable honestly."""
+    data = _get_cached_resolver_state(allow_stale=True)
+    if data is None:
+        try:
+            from internal.learning.loop_health import cached_resolver_liveness_view
+
+            tick = cached_resolver_liveness_view(allow_stale=True)
+        except Exception:
+            tick = None
+        if isinstance(tick, dict):
+            data = {
+                **get_prediction_resolver_scheduler_state(),
+                "running": bool(tick.get("running")),
+                "last_run_at": tick.get("at"),
+                "last_run_ok": tick.get("ok"),
+                "refresh_minutes": tick.get("refresh_minutes"),
+                "worker_peer": tick.get("worker_peer") or {},
+                "source": "volume" if tick.get("at") else "memory",
+                "stage_timing_ms": dict(tick.get("stage_timing_ms") or {}),
+            }
+    if data is None:
+        data = {**get_prediction_resolver_scheduler_state(), "source": "memory"}
+
+    try:
+        refresh_minutes = max(1, int(data.get("refresh_minutes") or 15))
+    except (TypeError, ValueError):
+        refresh_minutes = 15
+    tick_at = data.get("last_run_at") or data.get("at")
+    age_seconds = _resolver_timestamp_age_seconds(tick_at)
+    persisted_recent = (
+        data.get("source") == "volume"
+        and age_seconds is not None
+        and age_seconds <= (2 * refresh_minutes * 60)
+    )
+    stage_timing_ms = dict(data.get("stage_timing_ms") or {})
+    stage_timing_ms["executor_wait"] = round(executor_wait_ms, 1)
+    data["stage_timing_ms"] = stage_timing_ms
+    data["error"] = error
+    data["fallback"] = "recent_persisted" if persisted_recent else "process_memory"
+    data["availability"] = "degraded" if persisted_recent else "unavailable"
+    if persisted_recent:
+        data["fallback_age_seconds"] = round(age_seconds or 0.0, 1)
+    else:
+        data["unavailable_reason"] = (
+            "persisted_state_stale"
+            if data.get("source") == "volume" and age_seconds is not None
+            else "persisted_state_absent"
+        )
+    logger.warning(
+        "resolver state unavailable=%s error=%s fallback=%s "
+        "stage_persistence_ms=%s stage_peer_access_ms=%s stage_executor_wait_ms=%.1f",
+        not persisted_recent,
+        error,
+        data["fallback"],
+        stage_timing_ms.get("persistence"),
+        stage_timing_ms.get("peer_access"),
+        executor_wait_ms,
+    )
+    return data
 
 
 @learning_router.get("/api/predictions/resolver")
 async def api_predictions_resolver_state():
+    executor_started = time.perf_counter()
     try:
         data = await _to_thread_timeout(
-            _resolver_state_cross_process,
+            _resolver_state_snapshot,
             RESOLVER_STATE_TIMEOUT,
             label="resolver-state",
         )
+        executor_wait_ms = (time.perf_counter() - executor_started) * 1000
+        stage_timing_ms = dict(data.get("stage_timing_ms") or {})
+        stage_timing_ms["executor_wait"] = round(executor_wait_ms, 1)
+        data["stage_timing_ms"] = stage_timing_ms
+        logger.info(
+            "resolver state stage=executor_wait duration_ms=%.1f",
+            executor_wait_ms,
+        )
+        data = _annotate_resolver_availability(data)
     except asyncio.TimeoutError:
-        data = {**get_prediction_resolver_scheduler_state(), "source": "memory", "error": "timeout"}
+        executor_wait_ms = (time.perf_counter() - executor_started) * 1000
+        data = _resolver_timeout_fallback(
+            error="timeout",
+            executor_wait_ms=executor_wait_ms,
+        )
     except Exception as exc:
         logger.warning("resolver state failed: %s", exc)
-        data = {
-            **get_prediction_resolver_scheduler_state(),
-            "source": "memory",
-            "error": "state_unavailable",
-        }
+        executor_wait_ms = (time.perf_counter() - executor_started) * 1000
+        data = _resolver_timeout_fallback(
+            error="state_unavailable",
+            executor_wait_ms=executor_wait_ms,
+        )
     return {"status": "success", "data": data}
 
 
