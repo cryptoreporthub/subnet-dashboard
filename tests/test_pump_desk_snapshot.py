@@ -61,6 +61,21 @@ def test_build_snapshot_uses_collectors(monkeypatch):
     assert payload["daily_pick"]["netuid"] == 40
 
 
+def test_slow_collector_returns_explicit_timeout_fallback(monkeypatch):
+    import time
+
+    monkeypatch.setattr(snap, "SNAPSHOT_STAGE_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(
+        "internal.pump.desk_payload.load_pump_alerts_desk_payload",
+        lambda: (time.sleep(1.1) or {"status": "ok"}),
+    )
+
+    result = snap._collect_pump_desk()
+
+    assert result["status"] == "timeout"
+    assert result["error"] == "pump desk collector timed out"
+
+
 def test_save_snapshot_writes_latest(tmp_path, monkeypatch):
     monkeypatch.setenv("PUMP_DESK_SNAPSHOT_DIR", str(tmp_path))
     payload = {"status": "ok", "alert_level": "ok"}

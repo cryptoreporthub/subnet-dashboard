@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 PUMP_DESK_DIR = os.environ.get("PUMP_DESK_SNAPSHOT_DIR", os.path.join("data", "pump_desk"))
 ALERT_BADGES = frozenset({"BUILDING", "JUST STARTED"})
+SNAPSHOT_STAGE_TIMEOUT_SECONDS = max(
+    1.0, float(os.environ.get("PUMP_DESK_SNAPSHOT_STAGE_TIMEOUT_SECONDS", "30"))
+)
 
 
 def _desk_dir() -> str:
@@ -24,6 +28,41 @@ def _desk_dir() -> str:
 
 def _utcnow_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _run_stage_with_timeout(
+    label: str,
+    fn,
+    fallback: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Keep one slow collector from preventing the snapshot artifact."""
+    result: Dict[str, Any] = {}
+    error: Dict[str, BaseException] = {}
+    done = threading.Event()
+
+    def _run() -> None:
+        try:
+            value = fn()
+            if isinstance(value, dict):
+                result["value"] = value
+            else:
+                error["value"] = TypeError(f"{label} returned a non-object")
+        except BaseException as exc:
+            error["value"] = exc
+        finally:
+            done.set()
+
+    threading.Thread(target=_run, daemon=True, name=f"pump-snapshot-{label}").start()
+    if not done.wait(timeout=SNAPSHOT_STAGE_TIMEOUT_SECONDS):
+        logger.warning(
+            "pump desk snapshot stage timed out: %s after %.1fs",
+            label,
+            SNAPSHOT_STAGE_TIMEOUT_SECONDS,
+        )
+        return dict(fallback)
+    if "value" in error:
+        raise error["value"]
+    return result.get("value") or dict(fallback)
 
 
 def _snapshot_path(ts: Optional[str] = None) -> str:
@@ -39,7 +78,16 @@ def _collect_pump_desk() -> Dict[str, Any]:
     try:
         from internal.pump.desk_payload import load_pump_alerts_desk_payload
 
-        return load_pump_alerts_desk_payload()
+        return _run_stage_with_timeout(
+            "pump-desk",
+            load_pump_alerts_desk_payload,
+            {
+                "status": "timeout",
+                "count": 0,
+                "alerts": [],
+                "error": "pump desk collector timed out",
+            },
+        )
     except Exception as exc:
         logger.warning("pump desk snapshot: pump_alerts failed: %s", exc)
         return {
@@ -54,7 +102,14 @@ def _collect_learning_health() -> Dict[str, Any]:
     try:
         from internal.learning.loop_health import build_learning_loop_health
 
-        return build_learning_loop_health()
+        return _run_stage_with_timeout(
+            "learning-health",
+            build_learning_loop_health,
+            {
+                "status": "degraded",
+                "error": "learning health collector timed out",
+            },
+        )
     except Exception as exc:
         logger.warning("pump desk snapshot: learning health failed: %s", exc)
         return {"status": "error", "error": str(exc)}
