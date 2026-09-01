@@ -39,9 +39,12 @@ def test_daily_pick_timeout_shed_date_guard(monkeypatch, payload_kind, expect_sh
 
     from internal.council.daily_pick_engine import _today_str
 
-    date = _today_str() if payload_kind == "same-day" else "2000-01-01"
+    monkeypatch.setattr(srv, "_DAILY_PICK_FLIGHT", None)
+    monkeypatch.setattr(srv, "_DAILY_PICK_STASH", {})
+
+    today = _today_str()
+    date = today if payload_kind == "same-day" else "2000-01-01"
     seeded = _seed_hold(date)
-    srv._DAILY_PICK_STASH["payload"] = seeded
 
     def _slow_hydrate(stash):
         time.sleep(0.2)
@@ -49,6 +52,8 @@ def test_daily_pick_timeout_shed_date_guard(monkeypatch, payload_kind, expect_sh
 
     monkeypatch.setattr(srv, "_hydrate_daily_pick_lite", _slow_hydrate)
     monkeypatch.setattr(srv, "PICK_READ_TIMEOUT", 0.05)
+    _future, stash = srv._coalesce_daily_pick_flight()
+    stash["payload"] = seeded
 
     body = asyncio.run(srv.api_daily_pick())
 
@@ -57,6 +62,6 @@ def test_daily_pick_timeout_shed_date_guard(monkeypatch, payload_kind, expect_sh
         assert body.get("action") == "HOLD"
     else:
         assert body is not seeded
-        assert body.get("date") != "2000-01-01"
+        assert body.get("date") != date
         assert str(body.get("status") or "").lower() == "timeout"
         assert (body.get("_meta") or {}).get("stale") is True

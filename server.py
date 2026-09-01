@@ -3193,7 +3193,17 @@ async def api_daily_pick(full: bool = False):
             "hydrate_get_timeout", (time.monotonic() - started) * 1000
         )
         last = stash.get("payload")
-        if isinstance(last, dict) and str(last.get("status") or "").lower() != "timeout":
+        # Shed-to-stash is only valid for TODAY's stored pick (UTC). A
+        # pre-midnight scheduler HOLD stashed here was served as today's
+        # pick after UTC rollover (2026-08-30 HOLD served on 2026-08-31).
+        # Date-less synthesized holds (pending) keep their existing shed.
+        from internal.council.daily_pick_engine import _today_str
+        _stash_date = str(last.get("date") or "") if isinstance(last, dict) else ""
+        if (
+            isinstance(last, dict)
+            and str(last.get("status") or "").lower() != "timeout"
+            and (not _stash_date or _stash_date == _today_str())
+        ):
             return last
         return _daily_pick_timeout_hold()
     except Exception as e:

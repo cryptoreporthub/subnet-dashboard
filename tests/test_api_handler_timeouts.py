@@ -781,6 +781,7 @@ def test_daily_pick_timeout_is_stale_not_fresh_hold(monkeypatch):
 
 def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
     import server as srv
+    from internal.council.daily_pick_engine import _today_str
 
     def _boom(*_a, **_k):
         raise AssertionError("cached daily-pick GET must not call the scoring engine")
@@ -791,7 +792,7 @@ def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
-            "date": "2099-01-01",
+            "date": _today_str(),
             "status": "ok",
             "action": "HOLD",
             "reason": "Directional conflict: council signal is bearish; no LONG published.",
@@ -815,10 +816,11 @@ def test_daily_pick_cached_hit_skips_scoring_engine(monkeypatch):
 def test_daily_pick_enrich_timeout_returns_stored_hold_not_timeout(monkeypatch):
     """Slow lite enrich must not rewrite a scheduler HOLD into timeout HOLD."""
     import server as srv
+    from internal.council.daily_pick_engine import _today_str
 
     monkeypatch.setattr(srv, "PICK_READ_TIMEOUT", 0.05)
     stored = {
-        "date": "2099-01-01",
+        "date": _today_str(),
         "status": "ok",
         "action": "HOLD",
         "reason": "Directional conflict: council signal is bearish; no LONG published.",
@@ -853,6 +855,7 @@ def test_daily_pick_enrich_timeout_returns_stored_hold_not_timeout(monkeypatch):
 def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
     """Hydrate GET uses the pick-read pool — a jammed scoring pool must not 8s-wait."""
     import server as srv
+    from internal.council.daily_pick_engine import _today_str
 
     release = threading.Event()
 
@@ -863,7 +866,7 @@ def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
-            "date": "2099-01-01",
+            "date": _today_str(),
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 3}},
         },
@@ -890,6 +893,7 @@ def test_daily_pick_ignores_saturated_dashboard_executor(monkeypatch):
 def test_daily_pick_full_query_stays_on_pick_read_pool(monkeypatch):
     """?full=true must not opt back into the 8s scoring executor or subnet hydrate."""
     import server as srv
+    from internal.council.daily_pick_engine import _today_str
 
     def _boom(*_a, **_k):
         raise AssertionError("full=true must not hydrate subnets or full-enrich")
@@ -911,7 +915,7 @@ def test_daily_pick_full_query_stays_on_pick_read_pool(monkeypatch):
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
-            "date": "2099-01-01",
+            "date": _today_str(),
             "action": "HOLD",
             "candidate": {"subnet": {"netuid": 3}},
         },
