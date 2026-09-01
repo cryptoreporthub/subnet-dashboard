@@ -29,7 +29,7 @@
 
 ## On safety-critical constraints
 
-14. **Non-negotiable constraints (timeouts, kill switches, fail-closed states) get restate in every doc that touches them** — don't rely on them being "remembered" from an earlier round.
+14. **Non-negotiable constraints (timeouts, kill switches, fail-closed states) get restated in every doc that touches them** — don't rely on them being "remembered" from an earlier round.
 15. Any live/production probe needs a **named approver, a stated blast radius, and an explicit statement of what it cannot affect** — "read-only" is not automatically "harmless."
 
 ---
