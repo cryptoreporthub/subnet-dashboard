@@ -94,6 +94,11 @@ def _known_tracker_intervals() -> Dict[str, int]:
         specs["pump_ladder"] = max(60, int(PUMP_LADDER_REFRESH_MINUTES) * 60)
     except Exception:
         specs["pump_ladder"] = 1200
+    try:
+        snapshot_minutes = int(os.environ.get("PUMP_DESK_SNAPSHOT_MINUTES", "15"))
+        specs["pump_desk_snapshot"] = max(60, min(snapshot_minutes, 60) * 60)
+    except (TypeError, ValueError):
+        specs["pump_desk_snapshot"] = 900
     return specs
 
 

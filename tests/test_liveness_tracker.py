@@ -49,6 +49,14 @@ def test_no_success_is_never_ok():
     assert snap["status"] == "no_success_yet"
 
 
+def test_known_intervals_include_pump_desk_snapshot(monkeypatch):
+    monkeypatch.setenv("PUMP_DESK_SNAPSHOT_MINUTES", "20")
+
+    from internal.liveness import _known_tracker_intervals
+
+    assert _known_tracker_intervals()["pump_desk_snapshot"] == 20 * 60
+
+
 def test_empty_evidence_raises():
     t = LivenessTracker("evict", interval_seconds=60, persist=False)
     with pytest.raises(ValueError):
