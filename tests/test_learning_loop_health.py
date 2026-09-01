@@ -9,6 +9,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from internal.learning import loop_health
+from internal.learning import routes
 from internal.learning.loop_health import build_learning_loop_health
 from server import app
 
@@ -55,6 +57,62 @@ def test_api_learning_health_shape():
     ):
         assert key in data
     assert set(data["ledger"]) >= {"required", "present", "gap"}
+
+
+def test_last_resolver_tick_compat_shim_preserves_legacy_contract(monkeypatch):
+    view = {
+        "at": "2099-01-01T00:00:00+00:00",
+        "status": "ok",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {"alive": True},
+        "last_success_at": "2099-01-01T00:00:00+00:00",
+        "liveness": {"status": "ok"},
+    }
+    monkeypatch.setattr(loop_health, "_resolver_liveness_view", lambda: view)
+    monkeypatch.setattr(loop_health, "inline_worker_expected", lambda: False)
+    monkeypatch.setattr(loop_health, "split_worker_v2_enabled", lambda: False)
+    monkeypatch.setattr(loop_health, "is_worker_mode", lambda: True)
+
+    result = loop_health._last_resolver_tick(soul_path="/ignored/legacy/path")
+
+    assert result["at"] == view["at"]
+    assert result["ok"] is True
+    assert result["running"] is True
+    assert result["lifecycle"] == "ticking"
+    assert result["warming"] is False
+    assert result["refresh_minutes"] == 15
+    assert result["worker_peer"] == {"alive": True}
+
+
+def test_resolver_state_cross_process_keeps_active_running_state(monkeypatch):
+    view = {
+        "at": "2099-01-01T00:00:00+00:00",
+        "status": "ok",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {"alive": True},
+    }
+    monkeypatch.setattr(loop_health, "_resolver_liveness_view", lambda: view)
+    monkeypatch.setattr(loop_health, "inline_worker_expected", lambda: False)
+    monkeypatch.setattr(loop_health, "split_worker_v2_enabled", lambda: False)
+    monkeypatch.setattr(loop_health, "is_worker_mode", lambda: True)
+    monkeypatch.setattr(
+        routes,
+        "get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "last_run_at": None},
+    )
+
+    result = routes._resolver_state_cross_process()
+
+    assert result["source"] == "volume"
+    assert result["running"] is True
+    assert result["last_run_at"] == view["at"]
+    assert result["last_run_ok"] is True
+    assert result["refresh_minutes"] == 15
+    assert result["worker_peer"] == view["worker_peer"]
 
 
 def test_published_long_without_ledger_is_stalled(tmp_path, monkeypatch):

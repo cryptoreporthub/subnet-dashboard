@@ -312,6 +312,49 @@ def _resolver_liveness_view() -> Dict[str, Any]:
     }
 
 
+def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:
+    """Compatibility view for callers that still use the legacy tick contract.
+
+    The resolver liveness registry is the sole source of truth. ``soul_path`` is
+    accepted for signature compatibility with the removed implementation.
+    """
+    view = _resolver_liveness_view()
+    at = view.get("at")
+    lifecycle = str(view.get("lifecycle") or "stopped")
+    warming = bool(view.get("warming"))
+    try:
+        refresh_m = max(1, int(view.get("refresh_minutes") or RESOLVER_REFRESH_MINUTES))
+    except (TypeError, ValueError):
+        refresh_m = RESOLVER_REFRESH_MINUTES
+
+    tick_at = _parse_iso(at)
+    tick_fresh = False
+    if tick_at is not None:
+        tick_fresh = max(0.0, (_utcnow() - tick_at).total_seconds()) <= (
+            refresh_m * _STALL_MULTIPLIER * 60
+        )
+
+    peer = view.get("worker_peer") if isinstance(view.get("worker_peer"), dict) else {}
+    running = lifecycle in {"starting", "started", "scheduled", "ticking", "running"} and (
+        tick_fresh or warming
+    )
+    if (inline_worker_expected() or split_worker_v2_enabled()) and not is_worker_mode():
+        # On the web process, a fresh persisted tick and a fresh worker
+        # heartbeat are both required; the in-process scheduler is not truth.
+        running = bool(peer.get("alive")) and tick_fresh
+
+    return {
+        **view,
+        "at": at,
+        "ok": view.get("status") == "ok",
+        "running": running,
+        "lifecycle": lifecycle,
+        "warming": warming,
+        "refresh_minutes": refresh_m,
+        "worker_peer": peer,
+    }
+
+
 def _heartbeat_age_seconds(peer: Dict[str, Any]) -> Optional[float]:
     hb = peer.get("heartbeat") if isinstance(peer.get("heartbeat"), dict) else {}
     ts = _parse_iso(hb.get("ts"))
