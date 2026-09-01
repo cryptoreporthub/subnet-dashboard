@@ -88,6 +88,23 @@ def test_scheduler_run_once(monkeypatch):
     assert result["alert_level"] == "ok"
 
 
+def test_scheduler_timeout_is_recorded(monkeypatch):
+    import time
+
+    monkeypatch.setattr(sched, "SNAPSHOT_TIMEOUT_SECONDS", 1)
+    monkeypatch.setattr(
+        "internal.pump.desk_snapshot.run_snapshot",
+        lambda save=True: (time.sleep(1.1) or {"alert_level": "ok"}),
+    )
+    s = sched.PumpDeskSnapshotScheduler(interval_minutes=15)
+
+    result = s.run_once()
+
+    assert result["ok"] is False
+    assert result["error"] == "cycle_timeout_1s"
+    assert s.liveness.snapshot()["status"] == "failing"
+
+
 def test_pump_desk_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
     from tests.liveness_conformance import assert_liveness_compliant
 
