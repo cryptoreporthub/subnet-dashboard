@@ -149,11 +149,11 @@ def _legacy_notify(event: str, **fields: Any) -> Dict[str, Any]:
     return record
 
 
-<<<<<<< HEAD
 def log_status(message: str = "", *, level: str = "info", **fields: Any) -> Dict[str, Any]:
     """Emit a health/status log (``event=status``)."""
     return log_event("status", message=message, level=level, **fields)
-=======
+
+
 def _audit_notify(
     event: str,
     *,
@@ -201,4 +201,3 @@ def notify(event: str, **fields: Any) -> Union[str, Dict[str, Any]]:
             level=str(fields.get("level") or "info"),
         )
     return _legacy_notify(event, **fields)
->>>>>>> ac728f79 (Add Shield abuse-detection bot with logging-only audit trail)
