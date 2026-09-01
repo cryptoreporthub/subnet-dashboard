@@ -1398,7 +1398,9 @@ def _annotate_resolver_availability(data: Dict[str, Any]) -> Dict[str, Any]:
         return data
     data["availability"] = "unavailable"
     data["unavailable_reason"] = (
-        "persisted_state_stale" if age_seconds is not None else "persisted_state_absent"
+        "persisted_state_stale"
+        if data.get("source") == "volume" and age_seconds is not None
+        else "persisted_state_absent"
     )
     return data
 
@@ -1448,7 +1450,9 @@ def _resolver_timeout_fallback(*, error: str, executor_wait_ms: float) -> Dict[s
         data["fallback_age_seconds"] = round(age_seconds or 0.0, 1)
     else:
         data["unavailable_reason"] = (
-            "persisted_state_stale" if age_seconds is not None else "persisted_state_absent"
+            "persisted_state_stale"
+            if data.get("source") == "volume" and age_seconds is not None
+            else "persisted_state_absent"
         )
     logger.warning(
         "resolver state unavailable=%s error=%s fallback=%s "
