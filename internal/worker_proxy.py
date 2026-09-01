@@ -813,6 +813,25 @@ def _maybe_web_spotlight_daily_pick(raw: bytes) -> bytes:
 async def proxy_get_to_worker(request: Request) -> Response:
     path = request.url.path
     query = request.url.query
+    is_prediction_path = path == "/api/predictions" or path.startswith("/api/predictions/")
+
+    def _log_prediction_proxy(status: Any) -> None:
+        if not is_prediction_path:
+            return
+        try:
+            from internal.run_mode import worker_mode_label
+
+            handling_process = worker_mode_label()
+        except Exception:
+            handling_process = os.environ.get("RUN_MODE", "unknown")
+        logger.info(
+            "worker proxy access method=GET path=%s upstream_status=%s "
+            "handling_process=%s",
+            path,
+            status,
+            handling_process,
+        )
+
     fast = _mindmap_path(path)
     if _circuit_open():
         degraded = _proxy_degraded_response(path)
@@ -820,6 +839,7 @@ async def proxy_get_to_worker(request: Request) -> Response:
             if _daily_pick_path(path) and "/api/daily-pick" not in _LAST_GOOD_PAYLOADS:
                 pass
             else:
+                _log_prediction_proxy(degraded.status_code)
                 return degraded
     if fast:
         timeout = _mindmap_proxy_timeout()
@@ -835,12 +855,15 @@ async def proxy_get_to_worker(request: Request) -> Response:
         if _daily_pick_path(path):
             body = _maybe_web_spotlight_daily_pick(body)
         media_type = resp.headers.get("content-type") or "application/json"
+        _log_prediction_proxy(resp.status_code)
         return Response(content=body, status_code=resp.status_code, media_type=media_type)
     except Exception as exc:
         logger.warning("worker volume proxy failed %s: %s", path, exc)
         degraded = _proxy_degraded_response(path)
         if degraded is not None:
+            _log_prediction_proxy(degraded.status_code)
             return degraded
+        _log_prediction_proxy(503)
         return JSONResponse(
             status_code=503,
             content={

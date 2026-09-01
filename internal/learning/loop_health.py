@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -27,6 +28,12 @@ _STALL_MULTIPLIER = 2
 _SNAPSHOT_BOOT_GRACE_S = int(os.environ.get("LEARNING_SNAPSHOT_BOOT_GRACE_SECONDS", "900"))
 _LOOP_BOOT_GRACE_S = int(os.environ.get("LEARNING_LOOP_BOOT_GRACE_SECONDS", "300"))
 _SNAPSHOT_STALE_S = int(os.environ.get("LEARNING_SNAPSHOT_STALE_SECONDS", "2700"))
+_RESOLVER_LIVENESS_CACHE_TTL_S = float(
+    os.environ.get("RESOLVER_LIVENESS_CACHE_SECONDS", "5")
+)
+_RESOLVER_LIVENESS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
+_RESOLVER_LIVENESS_CACHE_LOCK = threading.Lock()
+_RESOLVER_LIVENESS_BUILDING = False
 
 
 def _utcnow() -> datetime:
@@ -244,13 +251,15 @@ def _worker_peer() -> Dict[str, Any]:
     return get_worker_peer()
 
 
-def _resolver_liveness_view() -> Dict[str, Any]:
+def _build_resolver_liveness_view() -> Dict[str, Any]:
     """Resolver health from the LivenessTracker registry (persisted worker truth)."""
     from internal.council.resolver_scheduler import RESOLVER_REFRESH_MINUTES
     from internal.liveness import LivenessTracker, build_liveness_registry, get_tracker
 
+    stage_ms: Dict[str, float] = {}
     refresh_m = RESOLVER_REFRESH_MINUTES
     lifecycle_fallback = "stopped"
+    persistence_started = time.perf_counter()
     try:
         from internal.council.resolver_scheduler import get_prediction_resolver_scheduler_state
 
@@ -286,7 +295,21 @@ def _resolver_liveness_view() -> Dict[str, Any]:
                 snap = merged
     except Exception:
         pass
-    peer = _worker_peer()
+    finally:
+        stage_ms["persistence"] = (time.perf_counter() - persistence_started) * 1000
+        logger.info(
+            "resolver liveness stage=persistence duration_ms=%.1f",
+            stage_ms["persistence"],
+        )
+    peer_started = time.perf_counter()
+    try:
+        peer = _worker_peer()
+    finally:
+        stage_ms["peer_access"] = (time.perf_counter() - peer_started) * 1000
+        logger.info(
+            "resolver liveness stage=peer_access duration_ms=%.1f",
+            stage_ms["peer_access"],
+        )
     status = str(snap.get("status") or "no_success_yet")
     lifecycle = str(snap.get("lifecycle") or lifecycle_fallback)
     success_at = snap.get("last_success_at")
@@ -309,7 +332,64 @@ def _resolver_liveness_view() -> Dict[str, Any]:
         "status": status,
         "last_success_at": success_at,
         "success_age_seconds": success_age,
+        "stage_timing_ms": stage_ms,
     }
+
+
+def _cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
+    """Return the last shared resolver view without performing I/O."""
+    now = time.monotonic()
+    ttl = _RESOLVER_LIVENESS_CACHE_TTL_S if not allow_stale else float("inf")
+    with _RESOLVER_LIVENESS_CACHE_LOCK:
+        payload = _RESOLVER_LIVENESS_CACHE.get("payload")
+        captured = float(_RESOLVER_LIVENESS_CACHE.get("at") or 0.0)
+        if isinstance(payload, dict) and now - captured <= ttl:
+            return dict(payload)
+    return None
+
+
+def cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict[str, Any]]:
+    """Public read-only accessor for the shared resolver snapshot."""
+    return _cached_resolver_liveness_view(allow_stale=allow_stale)
+
+
+def _resolver_liveness_view() -> Dict[str, Any]:
+    """Return a cached resolver view, with one in-flight builder per process."""
+    global _RESOLVER_LIVENESS_BUILDING
+
+    cached = _cached_resolver_liveness_view()
+    if cached is not None:
+        return cached
+
+    with _RESOLVER_LIVENESS_CACHE_LOCK:
+        if _RESOLVER_LIVENESS_BUILDING:
+            stale = _RESOLVER_LIVENESS_CACHE.get("payload")
+            if isinstance(stale, dict):
+                return dict(stale)
+            return {
+                "at": None,
+                "lifecycle": "stopped",
+                "warming": False,
+                "refresh_minutes": RESOLVER_REFRESH_MINUTES,
+                "worker_peer": {},
+                "liveness": {},
+                "status": "unavailable",
+                "last_success_at": None,
+                "success_age_seconds": None,
+                "stage_timing_ms": {},
+            }
+        _RESOLVER_LIVENESS_BUILDING = True
+
+    try:
+        view = _build_resolver_liveness_view()
+        if isinstance(view, dict):
+            with _RESOLVER_LIVENESS_CACHE_LOCK:
+                _RESOLVER_LIVENESS_CACHE["at"] = time.monotonic()
+                _RESOLVER_LIVENESS_CACHE["payload"] = dict(view)
+        return view
+    finally:
+        with _RESOLVER_LIVENESS_CACHE_LOCK:
+            _RESOLVER_LIVENESS_BUILDING = False
 
 
 def _last_resolver_tick(soul_path: Optional[str] = None) -> Dict[str, Any]:

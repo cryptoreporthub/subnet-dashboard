@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import patch
 from fastapi.testclient import TestClient
 
@@ -510,6 +511,42 @@ def test_learning_proxy_route_uses_learning_timeout(monkeypatch):
     assert response.status_code == 200
     assert len(seen) == 1
     assert float(seen[0].read) == 25.0
+
+
+def test_prediction_proxy_logs_upstream_422(monkeypatch, caplog):
+    import asyncio
+    import httpx
+    from starlette.requests import Request
+    import internal.worker_proxy as wp
+
+    async def _fetch(*_args, **_kwargs):
+        return httpx.Response(
+            422,
+            content=b"",
+            request=httpx.Request("GET", "http://worker/api/predictions/resolver"),
+        )
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": "/api/predictions/resolver",
+        "query_string": b"",
+        "headers": [],
+        "scheme": "http",
+        "server": ("test", 80),
+        "client": ("test", 123),
+        "root_path": "",
+    }
+    monkeypatch.setattr(wp, "_fetch_worker_http", _fetch)
+    monkeypatch.setattr(wp, "_LAST_FAIL_MONO", 0.0)
+    with caplog.at_level(logging.INFO, logger="internal.worker_proxy"):
+        response = asyncio.run(wp.proxy_get_to_worker(Request(scope)))
+
+    assert response.status_code == 422
+    assert (
+        "worker proxy access method=GET path=/api/predictions/resolver "
+        "upstream_status=422 handling_process="
+    ) in caplog.text
 
 
 def test_proxy_learning_health_degraded_on_failure(monkeypatch):
