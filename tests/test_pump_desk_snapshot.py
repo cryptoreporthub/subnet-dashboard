@@ -105,6 +105,25 @@ def test_scheduler_timeout_is_recorded(monkeypatch):
     assert s.liveness.snapshot()["status"] == "failing"
 
 
+def test_scheduler_restart_reschedules_persisted_started_tracker(monkeypatch):
+    scheduled = []
+    monkeypatch.setattr(
+        sched,
+        "schedule_interval_seconds",
+        lambda *args, **kwargs: scheduled.append((args, kwargs)),
+    )
+    s = sched.PumpDeskSnapshotScheduler(interval_minutes=15)
+    monkeypatch.setattr(sched, "_scheduler", s)
+    s.liveness.persist = False
+    s.liveness._lifecycle = "started"
+
+    result = s.start()
+
+    assert result["started"] is True
+    assert len(scheduled) == 1
+    assert s.state()["running"] is True
+
+
 def test_pump_desk_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
     from tests.liveness_conformance import assert_liveness_compliant
 
