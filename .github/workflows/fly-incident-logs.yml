@@ -1,5 +1,7 @@
 # Read-only incident capture — run BEFORE any machine restart.
 # workflow_dispatch only; does not deploy or restart.
+# Label-trigger: apply label 'fly-incident-capture' to a same-repo PR
+# (actor cryptoreporthub only) to fire a capture without workflow_dispatch.
 name: Fly incident logs (read-only)
 
 on:
@@ -13,12 +15,15 @@ on:
         description: "UTC end of the bounded log window"
         required: true
         default: "2026-09-01T16:10:00Z"
+  pull_request:
+    types: [labeled]
 
 jobs:
   capture:
     name: Pre-restart logs + secrets + readiness
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'fly-incident-capture' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'cryptoreporthub') }}
     steps:
       - uses: superfly/flyctl-actions/setup-flyctl@master
         with:
@@ -38,8 +43,8 @@ jobs:
           {
             echo "capture_mode=read-only"
             echo "app=$APP"
-            echo "window_start=$WINDOW_START"
-            echo "window_end=$WINDOW_END"
+            echo "window_start=${WINDOW_START:-not-set}"
+            echo "window_end=${WINDOW_END:-not-set}"
             echo "captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "=== flyctl secrets list (names only) ==="
             flyctl secrets list -a "$APP" || true
@@ -81,7 +86,7 @@ jobs:
 
           timeout 90s flyctl logs -a "$APP" --no-tail > "$OUT_DIR/fly-logs-raw.txt" 2>&1 || true
 
-          python3 - "$OUT_DIR/fly-logs-raw.txt" "$OUT_DIR/fly-logs-window.txt" "$WINDOW_START" "$WINDOW_END" <<'PY'
+          python3 - "$OUT_DIR/fly-logs-raw.txt" "$OUT_DIR/fly-logs-window.txt" "${WINDOW_START:-1970-01-01T00:00:00Z}" "${WINDOW_END:-1970-01-01T00:01:00Z}" <<'PY'
           from datetime import datetime
           import re
           import sys
