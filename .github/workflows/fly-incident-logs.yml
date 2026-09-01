@@ -4,6 +4,15 @@ name: Fly incident logs (read-only)
 
 on:
   workflow_dispatch:
+    inputs:
+      window_start:
+        description: "UTC start of the bounded log window"
+        required: true
+        default: "2026-09-01T15:50:00Z"
+      window_end:
+        description: "UTC end of the bounded log window"
+        required: true
+        default: "2026-09-01T16:10:00Z"
 
 jobs:
   capture:
@@ -14,25 +23,118 @@ jobs:
       - uses: superfly/flyctl-actions/setup-flyctl@master
         with:
           version: latest
+
       - name: Pre-restart capture (do not restart in this job)
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          WINDOW_START: ${{ inputs.window_start }}
+          WINDOW_END: ${{ inputs.window_end }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           APP=subnet-dashboard
-          echo "=== flyctl secrets list ==="
-          flyctl secrets list -a "$APP" || true
-          echo "=== flyctl machines list ==="
-          flyctl machines list -a "$APP" || true
-          echo "=== flyctl volumes list ==="
-          flyctl volumes list -a "$APP" || true
-          echo "=== worker / sync / boot log lines (last 200 matches) ==="
-          flyctl logs -a "$APP" --no-tail 2>&1 \
-            | grep -iE "inline worker|WORKER_SPLIT|skipping inline|starting inline|worker pid|sync_start|sync_done|heartbeat stale|OOM|killed|loop stall|boot_status" \
-            | tail -200 || true
-          echo "=== public readiness ==="
-          curl -sS --max-time 25 "https://${APP}.fly.dev/api/ops/readiness" | python3 -m json.tool || true
-          echo "=== public data-freshness ==="
-          curl -sS --max-time 25 "https://${APP}.fly.dev/api/data-freshness" | python3 -m json.tool || true
-          echo "=== public health ==="
-          curl -sS --max-time 10 -w "\nHTTP %{http_code} in %{time_total}s\n" "https://${APP}.fly.dev/health" || true
+          OUT_DIR="$RUNNER_TEMP/fly-incident-${GITHUB_RUN_ID}"
+          mkdir -p "$OUT_DIR"
+
+          {
+            echo "capture_mode=read-only"
+            echo "app=$APP"
+            echo "window_start=$WINDOW_START"
+            echo "window_end=$WINDOW_END"
+            echo "captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "=== flyctl secrets list (names only) ==="
+            flyctl secrets list -a "$APP" || true
+            echo "=== flyctl status ==="
+            flyctl status -a "$APP" || true
+            echo "=== flyctl machines list ==="
+            flyctl machines list -a "$APP" || true
+            echo "=== flyctl volumes list ==="
+            flyctl volumes list -a "$APP" || true
+          } > "$OUT_DIR/machine-and-volume-receipt.txt" 2>&1
+
+          flyctl machines list -a "$APP" --json > "$OUT_DIR/machines.json" 2> "$OUT_DIR/machines.stderr" || true
+
+          python3 - "$OUT_DIR/machines.json" > "$OUT_DIR/machine-ids.txt" <<'PY'
+          import json
+          import sys
+
+          try:
+              payload = json.load(open(sys.argv[1]))
+          except Exception:
+              payload = []
+
+          if isinstance(payload, dict):
+              payload = payload.get("machines", [])
+
+          for machine in payload if isinstance(payload, list) else []:
+              machine_id = machine.get("id") if isinstance(machine, dict) else None
+              if machine_id:
+                  print(machine_id)
+          PY
+
+          : > "$OUT_DIR/machine-status-receipt.txt"
+
+          while IFS= read -r machine_id; do
+            [ -n "$machine_id" ] || continue
+            echo "=== flyctl machine status $machine_id ===" >> "$OUT_DIR/machine-status-receipt.txt"
+            flyctl machine status "$machine_id" -a "$APP" >> "$OUT_DIR/machine-status-receipt.txt" 2>&1 || true
+          done < "$OUT_DIR/machine-ids.txt"
+
+          timeout 90s flyctl logs -a "$APP" --no-tail > "$OUT_DIR/fly-logs-raw.txt" 2>&1 || true
+
+          python3 - "$OUT_DIR/fly-logs-raw.txt" "$OUT_DIR/fly-logs-window.txt" "$WINDOW_START" "$WINDOW_END" <<'PY'
+          from datetime import datetime
+          import re
+          import sys
+
+          raw_path, window_path, start_text, end_text = sys.argv[1:]
+          start = datetime.fromisoformat(start_text.replace("Z", "+00:00"))
+          end = datetime.fromisoformat(end_text.replace("Z", "+00:00"))
+          timestamp = re.compile(r"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z")
+          matched = 0
+
+          with open(raw_path, errors="replace") as source, open(window_path, "w") as target:
+              target.write(f"window_start={start_text}\nwindow_end={end_text}\n")
+
+              for line in source:
+                  keep = False
+
+                  for value in timestamp.findall(line):
+                      try:
+                          observed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                      except ValueError:
+                          continue
+
+                      if start <= observed <= end:
+                          keep = True
+                          break
+
+                  if keep:
+                      target.write(line)
+                      matched += 1
+
+              target.write(f"matched_timestamped_lines={matched}\n")
+          PY
+
+          grep -iE "resolver|stall|timeout|cycle|error|exception|traceback|heartbeat|worker|persistence|sync|OOM|killed" \
+            "$OUT_DIR/fly-logs-window.txt" > "$OUT_DIR/resolver-failure-receipt.txt" || true
+
+          {
+            echo "=== public readiness ==="
+            curl -sS --max-time 25 "https://${APP}.fly.dev/api/ops/readiness" | python3 -m json.tool || true
+            echo "=== public data-freshness ==="
+            curl -sS --max-time 25 "https://${APP}.fly.dev/api/data-freshness" | python3 -m json.tool || true
+            echo "=== public resolver ==="
+            curl -sS --max-time 25 "https://${APP}.fly.dev/api/predictions/resolver" | python3 -m json.tool || true
+            echo "=== public learning health ==="
+            curl -sS --max-time 25 "https://${APP}.fly.dev/api/learning/health" | python3 -m json.tool || true
+            echo "=== public health ==="
+            curl -sS --max-time 10 -w "\nHTTP %{http_code} in %{time_total}s\n" "https://${APP}.fly.dev/health" || true
+          } > "$OUT_DIR/public-receipts.txt" 2>&1
+
+      - name: Upload read-only diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fly-incident-read-only-${{ github.run_id }}
+          path: ${{ runner.temp }}/fly-incident-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 7
