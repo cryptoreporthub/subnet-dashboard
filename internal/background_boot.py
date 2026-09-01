@@ -484,13 +484,18 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _maybe_start_message_intel()
     _maybe_start_summary_bot()
 
+    # Pump-desk snapshots are an essential worker-owned artifact, not a
+    # live-subnet/heavy feed. Keep combined web mode behavior unchanged while
+    # ensuring the essential worker registers the producer too.
+    if is_worker_mode() or heavy:
+        _start_pump_desk_snapshot_scheduler()
+
     # Optional full-universe jobs stay off the essential worker. They can hold
     # the GIL for long periods and compete with the worker's HTTP health port.
     if heavy:
         _warm_judges_cache()
         _start_score_snapshot_scheduler()
         _start_pick_audit_scheduler()
-        _start_pump_desk_snapshot_scheduler()
         _start_outcome_snapshot_scheduler()
         _start_calibration_snapshot_scheduler()
         _start_dev_radar_github_scheduler()
