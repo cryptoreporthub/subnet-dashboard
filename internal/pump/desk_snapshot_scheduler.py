@@ -55,6 +55,7 @@ class PumpDeskSnapshotScheduler:
     def __init__(self, interval_minutes: int = INTERVAL_MINUTES) -> None:
         self.interval_minutes = max(5, min(int(interval_minutes), 60))
         self._last_result: Dict[str, Any] = {}
+        self._active = False
         self.liveness = LivenessTracker(
             name="pump_desk_snapshot",
             interval_seconds=max(60, self.interval_minutes * 60),
@@ -70,9 +71,10 @@ class PumpDeskSnapshotScheduler:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
         snap = self.liveness.snapshot()
-        if snap.get("lifecycle") == "started":
+        if self._active:
             return {"started": False, "reason": "already running"}
         delay = 30 if immediate else max(60, self.interval_minutes * 60)
+        self._active = True
         try:
             schedule_interval_seconds(
                 JOB_ID,
@@ -81,19 +83,21 @@ class PumpDeskSnapshotScheduler:
                 start_delay_seconds=delay,
             )
         except Exception as exc:
+            self._active = False
             self.liveness.record_failure(error=f"schedule_failed: {exc}")
             return {"started": False, "reason": "schedule_failed", "error": str(exc)}
         self.liveness.start()
         return {"started": True, "interval_minutes": self.interval_minutes}
 
     def stop(self) -> Dict[str, Any]:
+        self._active = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
     def state(self) -> Dict[str, Any]:
         snap = self.liveness.snapshot()
         return {
-            "running": snap.get("lifecycle") == "started",
+            "running": self._active,
             "interval_minutes": self.interval_minutes,
             "last_result": self._last_result,
             "liveness": snap,
@@ -174,8 +178,7 @@ def start_pump_desk_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any
     global _scheduler
     with _lock:
         if _scheduler is not None:
-            snap = _scheduler.liveness.snapshot()
-            if snap.get("lifecycle") == "started":
+            if _scheduler._active:
                 return {"started": False, "reason": "already running"}
         else:
             _scheduler = PumpDeskSnapshotScheduler()
