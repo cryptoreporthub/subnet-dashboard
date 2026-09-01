@@ -75,7 +75,7 @@ def _snapshot_age_seconds() -> Optional[float]:
 
         return _age()
     except Exception as exc:
-        logger.debug("loop stall guard: snapshot age probe failed: %s", exc)
+        logger.warning("loop stall guard: snapshot age probe failed: %s", exc)
         return None
 
 
@@ -98,7 +98,7 @@ def _resolver_tick_age_seconds() -> Optional[float]:
             dt = dt.replace(tzinfo=timezone.utc)
         return (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds()
     except Exception as exc:
-        logger.debug("loop stall guard: resolver tick probe failed: %s", exc)
+        logger.warning("loop stall guard: resolver tick probe failed: %s", exc)
         return None
 
 

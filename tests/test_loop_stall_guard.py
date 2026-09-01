@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
 from pathlib import Path
 
+from internal import loop_stall_guard
 from internal.council import score_snapshots as snaps
 from internal.learning import loop_health
 from internal.loop_stall_guard import MAX_SNAPSHOT_AGE_SECONDS, _try_revive
@@ -27,6 +29,21 @@ def _wire_snapshot_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(loop_health, "SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     return snap_path
+
+
+def test_probe_failures_are_warning_level_and_fail_closed(monkeypatch, caplog):
+    caplog.set_level(logging.WARNING, logger="internal.loop_stall_guard")
+
+    monkeypatch.delattr(loop_health, "_snapshot_age_seconds", raising=False)
+    assert loop_stall_guard._snapshot_age_seconds() is None
+
+    monkeypatch.delattr(loop_health, "_last_resolver_tick", raising=False)
+    assert loop_stall_guard._resolver_tick_age_seconds() is None
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("snapshot age probe failed" in message for message in messages)
+    assert any("resolver tick probe failed" in message for message in messages)
+    assert all(record.levelno == logging.WARNING for record in caplog.records)
 
 
 def _fake_write_that_saves(snap_path):
