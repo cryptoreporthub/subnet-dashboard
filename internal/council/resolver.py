@@ -151,11 +151,43 @@ def _is_shadow(prediction: Dict[str, Any]) -> bool:
 
 
 def _load_json(path: str, default: Any) -> Any:
+    now = datetime.now(timezone.utc)
+    file_bytes = 0
+    mtime_iso: Optional[str] = None
+    mtime_age_seconds = 0.0
+    parse_scope = path
+    partial_parse = True
+    result: Any = default
     try:
+        stat = os.stat(path)
+        mtime_iso = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat().replace(
+            "+00:00", "Z"
+        )
+        mtime_age_seconds = max(0.0, now.timestamp() - stat.st_mtime)
+        file_bytes = stat.st_size
         with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            result = json.load(f)
+        partial_parse = False
+        if isinstance(result, dict):
+            parse_scope = path + ":" + "|".join(sorted(str(k) for k in result.keys()))
+        else:
+            parse_scope = f"{path}:non_dict"
     except Exception:
-        return default
+        pass
+    logger.info(
+        "resolver_read_path %s",
+        json.dumps(
+            {
+                "file_bytes": file_bytes,
+                "mtime": mtime_iso,
+                "mtime_age_seconds": round(mtime_age_seconds, 3),
+                "parse_scope": parse_scope,
+                "partial_parse": partial_parse,
+            },
+            sort_keys=True,
+        ),
+    )
+    return result
 
 
 def _save_json(path: str, data: Any) -> None:
