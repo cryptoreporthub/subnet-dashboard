@@ -90,7 +90,7 @@ def _migrate_evidence(data: Dict[str, Any]) -> bool:
     return changed
 
 
-def load_predictions(*, persist: bool = True) -> Dict[str, Any]:
+def load_predictions(*, persist: bool = False) -> Dict[str, Any]:
     try:
         with open(PREDICTIONS_PATH, "r", encoding="utf-8") as handle:
             data = json.load(handle)
