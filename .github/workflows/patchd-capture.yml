@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     if: >-
-      ${{ github.event_name == 'workflow_dispatch' ||
+      ${ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'pull_request' &&
            github.event.label.name == 'patchd-capture' &&
            github.event.pull_request.head.repo.full_name == github.repository &&
@@ -33,10 +33,26 @@ jobs:
         with:
           version: latest
 
+      - name: Volume stat snapshot (pre-capture)
+        env:
+          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          APP=subnet-dashboard
+          OUT_DIR="logs"
+          OUT_FILE="$OUT_DIR/volume-stat-before.txt"
+          mkdir -p "$OUT_DIR"
+          if out=$(flyctl ssh console -a "$APP" -C 'for d in data /app/data; do for f in predictions.json pick_score_cache.json pick_scheduler_state.json; do if [ -f "$d/$f" ]; then stat -c "%y|%Y|%s|$d/$f" "$d/$f"; fi; done; done' 2>/dev/null); then
+            printf '%s\n' "$out" > "$OUT_FILE"
+          else
+            echo "STAT_FAIL: flyctl ssh console exited non-zero" > "$OUT_FILE"
+          fi
+          cat "$OUT_FILE"
+
       - name: Read-only flyctl log capture
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          MINUTES: ${{ inputs.minutes || '90' }}
+          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
+          MINUTES: ${ inputs.minutes || '90' }}
         run: |
           set -euo pipefail
           APP=subnet-dashboard
@@ -77,6 +93,22 @@ jobs:
           fi
 
           python3 scripts/patchd_correlate.py "$RAW" -o "$OUT_DIR/correlated.md" --capture-mode "$MODE"
+      - name: Volume stat snapshot (post-capture)
+        env:
+          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
+        run: |
+          set -e
+          APP=subnet-dashboard
+          OUT_DIR="logs"
+          OUT_FILE="$OUT_DIR/volume-stat-after.txt"
+          mkdir -p "$OUT_DIR"
+          if out=$(flyctl ssh console -a "$APP" -C 'for d in data /app/data; do for f in predictions.json pick_score_cache.json pick_scheduler_state.json; do if [ -f "$d/$f" ]; then stat -c "%y|%Y|%s|$d/$f" "$d/$f"; fi; done; done' 2>/dev/null); then
+            printf '%s\n' "$out" > "$OUT_FILE"
+          else
+            echo "STAT_FAIL: flyctl ssh console exited non-zero" > "$OUT_FILE"
+          fi
+          cat "$OUT_FILE"
+
 
       - name: Loud zero-hit summary (valid outcome)
         if: success()
@@ -94,7 +126,7 @@ jobs:
       - name: Upload Patch D artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: patchd-capture-${{ github.run_id }}
+          name: patchd-capture-${ github.run_id }}
           path: logs/
           if-no-files-found: error
           retention-days: 7
