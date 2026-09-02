@@ -5,7 +5,7 @@
 **Repo:** `cryptoreporthub/subnet-dashboard`  
 **Scope:** read-only git + GitHub + Ditto. No production mutation, no code fix, no deploy.
 
-Lens applied after the fact: upstream-first, topology (web vs worker), timeout floors, semantic HOLD vs transport error. See `AGENTS.md` operational discipline.
+**Honesty on method:** the git/PR sweep ran *before* the operational-discipline rules arrived. The first published writeup *framed* results with those rules; it was not a second independent pass. This section is the actual re-score (2026-09-02). See `AGENTS.md` operational discipline.
 
 ## Method limits (exhausted, not shortcut)
 
@@ -14,6 +14,24 @@ Lens applied after the fact: upstream-first, topology (web vs worker), timeout f
 - Runtime resource (which lock/CPU/GIL is exhausted) remains **unproven** without Patch D capture — same caveat as occupancy receipts `cursor-agents-communication/ditto-occupancy-e1e2-receipts-2026-08-30.md`.
 
 ---
+
+## Heuristic re-review (rules applied to the ranked list)
+
+| Rule | What the first writeup did | Re-score |
+|---|---|---|
+| **UPSTREAM-FIRST** | Correctly treated busy-handler / `running=false` / ImportError→`None` as *consumer* symptoms and traced producers (#1008 abandon, #1090 deleted symbol, degraded health fallback). | **Holds** for ranks 1–3. |
+| **TIMEOUT-FLOORS** | Used 90s / 180s / 480s / 8s / 5s as ceilings, not averages. #1021’s **1712s** is a max/wall, not a median. | **Holds** as diagnosis *shape*. Rank 4 still does **not** name the wait *inside* the orphaned thread (TMC lock vs GIL vs JSON vs RPC). Rule 1.2 is unsatisfied until Patch D. |
+| **TOPOLOGY-CHECK** | Web vs worker called out for health fallback vs scheduler `_active`. | **Holds** for #1090/#1128. Rank 1 mixes worker occupancy with web GET busy — same failure *family*, two processes; web busy does not prove the worker lock. |
+| **SEMANTIC vs STRUCTURAL** | Rank 1 “symptoms: HOLD” lumped council abstention with `scheduler_hold` / abandoned JSON writes. | **Fail, then corrected:** structural HOLD (timeout/abandoned persist) ≠ domain HOLD. Only the structural one matches #906/#1008. |
+| **BLAST-RADIUS** | Rank 2 *is* a caller-graph finding (3 importers). Rank 5 (AIO 24) did not list every pool consumer. | Rank 2 **holds**. Rank 5 **overranked**. |
+| **CACHE / SINGLEFLIGHT** | #1022 described as convoy; no proof of in-flight stale overwrite vs lock wait. | **Hypothesis**, not fact. |
+| **NO-SHARED-MEMORY** | Generation tokens and `_DAILY_PICK_FLIGHT` are in-process. Worker occupancy ≠ web GET single-flight. | First writeup under-separated these. |
+| **LOCK ORDER** | Not swept (TMC vs fcntl vs soul_map vs SQLite). | **Not done.** Do not claim a deadlock cycle. |
+| **3-CYCLE-SOAK** | Cited #1008’s 30–45 min watch as if occupancy were settled. | That watch can pass while orphans accumulate. Soak ≠ occupancy proof. |
+| **MUTATION-TEST** | Noted #1008 *renamed* the overlap test to assert a new worker starts. | That test encodes the regression, not occupancy. Inverted-test rule would fail it as a tautology for “no overlap.” |
+| **KILL in fly.toml** | Code default `True`, toml unset. | **Unverified in prod.** Secrets/`/proc/environ` were not read. Cannot assert live KILL=1. |
+
+**Ranking changes from this pass:** keep 1–3. Downgrade **AIO 4→24** from strong → **plausible** (no p99/max at 24 vs 4). Keep timeout-abandon as a *mechanism*, not the named slow-path lock. Split HOLD language as above.
 
 ## Ranked removals / weakenings (step 3)
 
