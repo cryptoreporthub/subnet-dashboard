@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     if: >-
-      ${ github.event_name == 'workflow_dispatch' ||
+      ${{ github.event_name == 'workflow_dispatch' ||
           (github.event_name == 'pull_request' &&
            github.event.label.name == 'patchd-capture' &&
            github.event.pull_request.head.repo.full_name == github.repository &&
@@ -35,7 +35,7 @@ jobs:
 
       - name: Volume stat snapshot (pre-capture)
         env:
-          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -e
           APP=subnet-dashboard
@@ -51,8 +51,8 @@ jobs:
 
       - name: Read-only flyctl log capture
         env:
-          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
-          MINUTES: ${ inputs.minutes || '90' }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          MINUTES: ${{ inputs.minutes || '90' }}
         run: |
           set -euo pipefail
           APP=subnet-dashboard
@@ -93,9 +93,10 @@ jobs:
           fi
 
           python3 scripts/patchd_correlate.py "$RAW" -o "$OUT_DIR/correlated.md" --capture-mode "$MODE"
+
       - name: Volume stat snapshot (post-capture)
         env:
-          FLY_API_TOKEN: ${ secrets.FLY_API_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -e
           APP=subnet-dashboard
@@ -126,7 +127,7 @@ jobs:
       - name: Upload Patch D artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: patchd-capture-${ github.run_id }}
+          name: patchd-capture-${{ github.run_id }}
           path: logs/
           if-no-files-found: error
           retention-days: 7
