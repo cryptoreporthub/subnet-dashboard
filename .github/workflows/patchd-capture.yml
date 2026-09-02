@@ -1,0 +1,100 @@
+# Patch D Phase 1 — read-only Fly log capture + correlation (no deploy/restart).
+# workflow_dispatch or PR label `patchd-capture` (same-repo, cryptoreporthub).
+name: Patch D capture (read-only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Stream live logs for N minutes (0 = retro buffer only via --no-tail)"
+        required: false
+        default: "90"
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Patch D log capture + correlate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    if: >-
+      ${{ github.event_name == 'workflow_dispatch' ||
+          (github.event_name == 'pull_request' &&
+           github.event.label.name == 'patchd-capture' &&
+           github.event.pull_request.head.repo.full_name == github.repository &&
+           github.actor == 'cryptoreporthub') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Read-only flyctl log capture
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          MINUTES: ${{ inputs.minutes || '90' }}
+        run: |
+          set -euo pipefail
+          APP=subnet-dashboard
+          OUT_DIR="logs"
+          mkdir -p "$OUT_DIR"
+          RAW="$OUT_DIR/raw.log"
+          MODE="retro-buffer"
+
+          if [ -z "${FLY_API_TOKEN:-}" ]; then
+            echo "PATCHD_CAPTURE_FAIL: FLY_API_TOKEN secret missing" >&2
+            exit 2
+          fi
+
+          flyctl status -a "$APP" > "$OUT_DIR/fly-status.txt" 2>&1
+
+          if [ "${MINUTES}" != "0" ] && [ "${MINUTES}" -gt 0 ]; then
+            MODE="live-stream-${MINUTES}m"
+            echo "capture_mode=${MODE}" > "$OUT_DIR/capture-meta.txt"
+            echo "Streaming flyctl logs for ${MINUTES} minutes (read-only)..." | tee -a "$OUT_DIR/capture-meta.txt"
+            timeout "$((MINUTES * 60))s" flyctl logs -a "$APP" > "$RAW" 2>&1 || true
+          else
+            MODE="retro-buffer"
+            echo "capture_mode=${MODE}" > "$OUT_DIR/capture-meta.txt"
+            echo "Fetching retroactive flyctl logs (--no-tail)..." | tee -a "$OUT_DIR/capture-meta.txt"
+            flyctl logs -a "$APP" --no-tail > "$RAW" 2>&1 || true
+          fi
+
+          echo "captured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$OUT_DIR/capture-meta.txt"
+          echo "line_count=$(wc -l < "$RAW" | tr -d ' ')" >> "$OUT_DIR/capture-meta.txt"
+
+          if [ ! -s "$RAW" ]; then
+            echo "PATCHD_CAPTURE_FAIL: empty or missing log stream" >&2
+            exit 2
+          fi
+          if grep -qiE 'failed to authenticate|401 Unauthorized|not authorized' "$RAW"; then
+            echo "PATCHD_CAPTURE_FAIL: flyctl auth error in log output" >&2
+            exit 2
+          fi
+
+          python3 scripts/patchd_correlate.py "$RAW" -o "$OUT_DIR/correlated.md" --capture-mode "$MODE"
+
+      - name: Loud zero-hit summary (valid outcome)
+        if: success()
+        run: |
+          if grep -q "## ZERO HITS" logs/correlated.md; then
+            {
+              echo "## PATCH D: ZERO HITS"
+              echo ""
+              echo "No anchor patterns matched. Extend capture window or arm Phase 2 instrumentation."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "pattern_hits present — see logs/correlated.md artifact" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload Patch D artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: patchd-capture-${{ github.run_id }}
+          path: logs/
+          if-no-files-found: error
+          retention-days: 7

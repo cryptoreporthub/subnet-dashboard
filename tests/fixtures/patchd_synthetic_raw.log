@@ -1,0 +1,9 @@
+2026-09-01T15:55:00Z app[7841024b3712e8] sjc [info] daily pick tick started thread=daily-pick-work
+2026-09-01T15:56:30Z app[7841024b3712e8] sjc [info] daily pick tick timed out after 90s (worker abandoned)
+2026-09-01T15:56:30Z app[7841024b3712e8] sjc [info] RUN_MODE=worker inline worker generation bump work_generation=3
+2026-09-01T15:58:45Z app[7841024b3712e8] sjc [info] pick_score_cache: persist complete path=data/pick_score_cache.json thread=dpick-score
+2026-09-01T16:00:10Z app[7841024b3712e8] sjc [info] daily pick tick timed out after 90s (worker abandoned) thread=daily-pick-work
+2026-09-01T16:02:30Z app[7841024b3712e8] sjc [info] write_scheduler_hold predictions.json updated thread=daily-pick-work
+2026-09-01T16:05:00Z app[7841024b3712e8] sjc [info] tmc_singleflight fetch took 3.2s subnets
+2026-09-01T16:06:00Z app[7841024b3712e8] sjc [info] resolver lifecycle event=timeout duration_ms=220709 error=cycle_timeout_180s
+2026-09-01T16:07:00Z app[7841024b3712e8] sjc [info] score snapshot write timed out after 480s
