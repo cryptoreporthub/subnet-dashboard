@@ -49,6 +49,20 @@ access are required to run it locally.
 
 Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](https://github.com/DietrichGebert/ponytail)): YAGNI, minimal diff, reuse existing patterns before adding files or dependencies. Do not cut validation, security, error handling, or contract-test coverage.
 
+### Operational discipline (investigation and patches)
+
+Full form: [`.cursor/rules/operational-discipline.mdc`](.cursor/rules/operational-discipline.mdc). Binding quick-reference:
+
+1. **[UPSTREAM-FIRST]** Never silence exceptions at the consumer (`.get()`, `try/except`, `if x is None: return`) without tracing the producer that broke the contract.
+2. **[TOPOLOGY-CHECK]** Verify node role (API vs background worker) before diagnosing stopped schedulers or background jobs. In-process globals do not cross Fly process boundaries.
+3. **[TIMEOUT-FLOORS]** Any metric landing on an exact integer (10.0s, 30.0s, 90s, 180s) is an infrastructure timeout ceiling — find the stalled lock, socket, or pool, not the average.
+4. **[NO-SHARED-MEMORY]** Never use in-process memory/globals to signal state between API and background containers. Durable primitives only (files, SQLite, liveness registry).
+5. **[MUTATION-TESTING]** Prove the regression test fails on the pre-fix commit before asserting it passes on the new one.
+6. **[3-CYCLE-SOAK]** Never declare a periodic scheduler/loop fixed without verifying 3+ consecutive successful loop ticks with monotonic timestamps.
+7. **[SURGICAL-DIFFS]** No unsolicited reformatting, renaming, or refactoring across concurrent agent boundaries (`server.py` + `tests/test_endpoint_contract.py` remain the only shared conflict surface).
+
+Also: HOLD / NO_PICK / LOW_CONFIDENCE are domain outcomes (HTTP 200 + telemetry), not transport bugs. Blast-radius: grep all callers before changing a shared helper used by both request path and worker. Cache invalidation without single-flight is a herd, not a fix.
+
 ### Subagent models
 
 Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slow**. **Grok 4.6 medium** and **Luna high** each review what they are best at; **the other is the final pass** (not a hard Luna-only or Grok-only review lane). Binding: [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md).
