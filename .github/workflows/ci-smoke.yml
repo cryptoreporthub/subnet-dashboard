@@ -13,7 +13,7 @@ name: CI Smoke Test
 
 on:
   push:
-    branches: [main]
+    branches: [main, patchd/snapshot-build-telemetry]
   pull_request:
     branches: [main]
 
@@ -134,14 +134,14 @@ jobs:
 
 
   apply_snapshot_telemetry:
-    if: github.event_name == 'push' && github.ref_name == 'patchd/snapshot-build-telemetry' && github.actor != 'github-actions[bot]'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
     name: apply snapshot telemetry
     runs-on: ubuntu-latest
     steps:
       - name: Check out PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Apply surgical telemetry patch
@@ -242,4 +242,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add internal/council/score_snapshots.py .github/workflows/ci-smoke.yml
           git commit -m "Patch D A4.6 Phase 2b: score snapshot build telemetry + log-label fix"
-          git push origin "HEAD:${{ github.ref_name }}"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
