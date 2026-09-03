@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import logging
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 PREDICTIONS_PATH = os.path.join("data", "predictions.json")
+PREDICTIONS_LOCK_PATH = os.path.join("data", "predictions.json.lock")
 
 _V1_TO_V2_PHASE = {
     "ACCUMULATION": "EARLY",
@@ -20,6 +24,39 @@ _V1_TO_V2_PHASE = {
     "DECLINE": "INACTIVE",
     "RE_ACCUMULATION": "CONSOLIDATING",
 }
+
+
+class FileLockTimeout(Exception):
+    """Raised when file lock acquisition times out."""
+    pass
+
+
+@contextlib.contextmanager
+def locked_predictions_file(timeout_seconds: float = 5.0):
+    """Cross-process advisory lock with bounded wait.
+
+    Uses fcntl.flock for cross-process safety between web and worker processes.
+    Waits up to timeout_seconds (default 5s) before raising FileLockTimeout.
+    """
+    os.makedirs(os.path.dirname(PREDICTIONS_LOCK_PATH) or ".", exist_ok=True)
+    with open(PREDICTIONS_LOCK_PATH, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.05)
+        if not acquired:
+            raise FileLockTimeout(
+                f"Timed out after {timeout_seconds}s waiting for {PREDICTIONS_LOCK_PATH}"
+            )
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def _default_data() -> Dict[str, Any]:
@@ -110,14 +147,26 @@ def load_predictions(*, persist: bool = False) -> Dict[str, Any]:
 
 
 def save_predictions(data: Dict[str, Any]) -> None:
+    """Write predictions.json atomically with cross-process file locking.
+
+    Uses fcntl.flock to prevent race conditions between web and worker processes.
+    Lock acquisition times out after 5 seconds to avoid hanging request handlers.
+    """
     try:
-        os.makedirs(os.path.dirname(PREDICTIONS_PATH) or ".", exist_ok=True)
-        tmp = PREDICTIONS_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(data, handle, indent=2)
-        os.replace(tmp, PREDICTIONS_PATH)
+        with locked_predictions_file(timeout_seconds=5.0):
+            os.makedirs(os.path.dirname(PREDICTIONS_PATH) or ".", exist_ok=True)
+            tmp = PREDICTIONS_PATH + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as handle:
+                json.dump(data, handle, indent=2)
+            os.replace(tmp, PREDICTIONS_PATH)
+    except FileLockTimeout:
+        logger.error(
+            "Failed to acquire predictions.json lock within 5s - possible deadlock or long-running write"
+        )
+        raise
     except Exception as exc:
         logger.warning("Failed to persist predictions.json: %s", exc)
+        raise
 
 
 def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bool = False) -> bool:
@@ -141,6 +190,7 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
 
     Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
     Returns True when the prediction was stored.
+    Uses cross-process file locking to prevent concurrent write races.
     """
     if not isinstance(prediction, dict):
         return False
