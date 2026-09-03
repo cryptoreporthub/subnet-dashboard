@@ -1,0 +1,115 @@
+/app/.venv/lib/python3.12/site-packages/pytest_asyncio/plugin.py:217: PytestDeprecationWarning: The configuration option "asyncio_default_fixture_loop_scope" is unset.
+The event loop scope for asynchronous fixtures will default to the fixture caching scope. Future versions of pytest-asyncio will default the loop scope for asynchronous fixtures to function scope. Set the default fixture loop scope explicitly in order to avoid unexpected behavior in the future. Valid fixture loop scopes are: "function", "class", "module", "package", "session"
+
+  warnings.warn(PytestDeprecationWarning(_DEFAULT_FIXTURE_LOOP_SCOPE_UNSET))
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-8.3.5, pluggy-1.5.0 -- /app/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /opt/workspace_base/subnet-dashboard
+plugins: anyio-4.9.0, libtmux-0.39.0, asyncio-0.26.0, cov-6.1.1, forked-1.6.0, xdist-3.6.1
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items
+
+tests/test_loop_stall_guard.py::test_probe_failures_are_warning_level_and_fail_closed PASSED [ 10%]
+tests/test_loop_stall_guard.py::test_revive_resets_stale_snapshot_age PASSED [ 20%]
+tests/test_loop_stall_guard.py::test_try_revive_targets_score_snapshot_scheduler PASSED [ 30%]
+tests/test_loop_stall_guard.py::test_revive_recycles_running_scheduler_in_guard_age_window FAILED [ 40%]
+tests/test_loop_stall_guard.py::test_revive_recycles_very_stale_running_scheduler FAILED [ 50%]
+tests/test_loop_stall_guard.py::test_revive_honest_when_tick_in_progress PASSED [ 60%]
+tests/test_loop_stall_guard.py::test_revive_false_when_file_already_young_and_no_write PASSED [ 70%]
+tests/test_loop_stall_guard.py::test_revive_false_on_skip_or_ok_without_file_write PASSED [ 80%]
+tests/test_loop_stall_guard.py::test_revive_false_on_ok_without_moving_mtime FAILED [ 90%]
+tests/test_loop_stall_guard.py::test_try_revive_contract_uses_score_snapshot_revive PASSED [100%]
+
+=================================== FAILURES ===================================
+__________ test_revive_recycles_running_scheduler_in_guard_age_window __________
+
+tmp_path = PosixPath('/tmp/pytest-of-openhands/pytest-3/test_revive_recycles_running_s0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f8c1881ddf0>
+
+    def test_revive_recycles_running_scheduler_in_guard_age_window(tmp_path, monkeypatch):
+        """5400–7200s window: guard already stale; recycle whenever _running."""
+        snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+        guard_stale_age = MAX_SNAPSHOT_AGE_SECONDS + 100
+        assert guard_stale_age < snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS
+        _make_stale_snapshot(snap_path, age_seconds=guard_stale_age)
+        monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
+    
+        snaps.stop_score_snapshot_scheduler()
+        sched = snaps.ScoreSnapshotScheduler()
+        sched._running = True
+        snaps._scheduler = sched
+    
+        age_before = loop_health._snapshot_age_seconds(str(snap_path))
+        assert age_before > MAX_SNAPSHOT_AGE_SECONDS
+    
+        try:
+            out = snaps.revive_score_snapshot_scheduler()
+>           assert out["recycled"] is True
+E           assert False is True
+
+tests/test_loop_stall_guard.py:133: AssertionError
+______________ test_revive_recycles_very_stale_running_scheduler _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-openhands/pytest-3/test_revive_recycles_very_stal0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f8c18986180>
+
+    def test_revive_recycles_very_stale_running_scheduler(tmp_path, monkeypatch):
+        snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+        _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
+        monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
+    
+        snaps.stop_score_snapshot_scheduler()
+        sched = snaps.ScoreSnapshotScheduler()
+        sched._running = True
+        snaps._scheduler = sched
+    
+        try:
+            out = snaps.revive_score_snapshot_scheduler()
+>           assert out["recycled"] is True
+E           assert False is True
+
+tests/test_loop_stall_guard.py:155: AssertionError
+_________________ test_revive_false_on_ok_without_moving_mtime _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-openhands/pytest-3/test_revive_false_on_ok_withou0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f8c1881db50>
+
+    def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
+        """ok:True without save_score_snapshot must not count as revived."""
+        snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+        _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
+    
+        monkeypatch.setattr(
+            snaps,
+            "write_full_universe_snapshot",
+            lambda progress_cb=None: {
+                "ok": True,
+                "count": 0,
+                "written_at": "2026-08-21T00:00:00Z",
+                "path": str(snap_path),
+            },
+        )
+    
+        snaps.stop_score_snapshot_scheduler()
+        sched = snaps.ScoreSnapshotScheduler()
+        sched._running = True
+        snaps._scheduler = sched
+    
+        try:
+            out = snaps.revive_score_snapshot_scheduler()
+>           assert out["recycled"] is True
+E           assert False is True
+
+tests/test_loop_stall_guard.py:280: AssertionError
+=============================== warnings summary ===============================
+../../../app/.venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1277
+  /app/.venv/lib/python3.12/site-packages/_pytest/config/__init__.py:1277: PytestAssertRewriteWarning: Module already imported so cannot be rewritten: anyio
+    self._mark_plugins_for_rewrite(hook)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_loop_stall_guard.py::test_revive_recycles_running_scheduler_in_guard_age_window - assert False is True
+FAILED tests/test_loop_stall_guard.py::test_revive_recycles_very_stale_running_scheduler - assert False is True
+FAILED tests/test_loop_stall_guard.py::test_revive_false_on_ok_without_moving_mtime - assert False is True
+==================== 3 failed, 7 passed, 1 warning in 0.65s ====================

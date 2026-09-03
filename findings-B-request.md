@@ -1,0 +1,10 @@
+# Workstream B — Request Path & Latency (commit 44fd2fb7)
+
+## B1 — /api/daily-pick: CONFIRMED
+Route server.py:3159 (/weighed :3078). Coalesced single-flight (_coalesce_daily_pick_flight :3145): leader awaits asyncio.shield(aio) w/ PICK_READ_TIMEOUT; waiters shed to date-guarded stash on TimeoutError else _daily_pick_timeout_hold (:3100). _daily_pick_timeout_hold returns status="timeout"/action=HOLD/pick=None — synthesized in-memory payload, NOT persisted as scheduler HOLD; no lock/flag file. _daily_pick_pending_hold -> status="pending". _hydrate_daily_pick_lite: single JSON load + lite enrich (empty_whale_flow_badge("lite_read")), stashes raw pre-enrich copy so waiters shed to stash not busy-timeout payload.
+
+## B2 — /api/pump-alerts 422: PARTIAL (string CONFIRMED; 422 NOT FOUND)
+"Worker volume temporarily unavailable" originates internal/worker_proxy.py (:427,:452,:470,:498,:514,:531,:555,:570,:580,:595) but worker_proxy returns status_code=200 degraded JSONResponse — NOT 422; no status_code=4xx in worker_proxy. /api/pump-alerts server.py:2462 -> _fetch_pump_alerts_payload (file-backed ladder, sub-second). pump_tracker/routes.py:80-81 degraded text; tribunal_hero.py:500 reads detail. "422" in server.py only docstring :3163. Rate limit: internal/rate_limit.py slowapi, _STRICT_LIMIT="30/minute", default 120/minute, ENABLE_RATE_LIMIT=1; strict_limit only /api/mindmap/feedback (server.py:2240) + learning/routes.py:1170 — pump-alerts not strictly limited; no middleware converts repeated 422s to 403. _fly_client_ip trusts first XFF hop.
+
+## B3 — AIO_WORKER_POOL_SIZE: CONFIRMED
+fly.toml:112 "24"; server.py:364 default "4"; ThreadPoolExecutor(max_workers=pool_cap, prefix="aio-web") as default loop executor in lifespan (ponytail comment: timed-out pick/weighed work can't exhaust slots). internal/request_executor.py: REQUEST_WORKER_POOL_SIZE default 4 (min 2), dedicated REQUEST_EXECUTOR prefix="request-work" for council hero aggregation; to_thread_timeout = asyncio.wait_for(loop.run_in_executor(REQUEST_EXECUTOR, fn), ...). mount_load_shed + WorkerVolumeProxyMiddleware mounted.
