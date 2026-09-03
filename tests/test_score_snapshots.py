@@ -308,7 +308,7 @@ def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):
     assert path.is_file()
 
 
-def test_write_snapshot_times_out(monkeypatch, tmp_path):
+def test_write_snapshot_times_out(monkeypatch, tmp_path, caplog):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
@@ -326,6 +326,9 @@ def test_write_snapshot_times_out(monkeypatch, tmp_path):
     assert "write_timeout" in out.get("error", "")
     assert not path.is_file()
     time.sleep(3.5)  # drain singleton executor slot after timeout
+    messages = [record.getMessage() for record in caplog.records]
+    assert any("completed-after-abandon" in message for message in messages)
+    assert any("duration=" in message and "started_at=" in message for message in messages)
 
 
 def _reset_write_occupancy() -> None:
