@@ -112,22 +112,46 @@ jobs:
           fi
           cat "$OUT_FILE"
 
-      - name: Gate verdict marker (A4.6)
+      - name: Gate verdict marker (A4.6 completeness)
         if: always()
         run: |
           set -euo pipefail
-          if ! test -s logs/volume-stat-before.txt \
-            || ! test -s logs/volume-stat-after.txt \
-            || grep -q "STAT_FAIL" logs/volume-stat-before.txt logs/volume-stat-after.txt; then
+          echo "## logs/ on runner" | tee -a "$GITHUB_STEP_SUMMARY"
+          ls -la logs/ | tee -a "$GITHUB_STEP_SUMMARY" || true
+
+          missing=0
+          reason=""
+          if [ ! -s logs/raw.log ]; then
+            missing=1
+            reason="${reason} missing-or-empty: raw.log;"
+          fi
+          if [ ! -s logs/correlated.md ]; then
+            missing=1
+            reason="${reason} missing-or-empty: correlated.md;"
+          fi
+          if [ ! -s logs/volume-stat-before.txt ]; then
+            missing=1
+            reason="${reason} missing-or-empty: volume-stat-before.txt;"
+          fi
+          if [ ! -s logs/volume-stat-after.txt ]; then
+            missing=1
+            reason="${reason} missing-or-empty: volume-stat-after.txt;"
+          fi
+          if grep -q "STAT_FAIL" logs/volume-stat-before.txt logs/volume-stat-after.txt 2>/dev/null; then
+            missing=1
+            reason="${reason} STAT_FAIL in volume-stat;"
+          fi
+
+          if [ "$missing" -ne 0 ]; then
             {
               echo "## PATCH D: UNVERIFIABLE"
               echo ""
-              echo "Volume-stat evidence is missing or failed; do not render an A4.6 verdict."
+              echo "Artifact-completeness gate failed: ${reason}"
+              echo "Do not render PASS / SCHEDULED-WRITER / LEAK. Missing expected artifacts stay UNVERIFIABLE."
             } | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "Volume-stat evidence captured for A4.6." | tee -a "$GITHUB_STEP_SUMMARY"
-
+          echo "Artifact completeness captured for A4.6 (raw.log, correlated.md, both volume-stat files)." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Loud zero-hit summary (valid outcome)
         if: success()
@@ -147,6 +171,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: patchd-capture-${{ github.run_id }}
-          path: logs/
+          include-hidden-files: true
+          path: |
+            logs/raw.log
+            logs/correlated.md
+            logs/volume-stat-before.txt
+            logs/volume-stat-after.txt
+            logs/volume-stat-before.err
+            logs/volume-stat-after.err
+            logs/fly-status.txt
+            logs/capture-meta.txt
           if-no-files-found: error
           retention-days: 7
