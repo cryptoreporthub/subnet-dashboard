@@ -154,11 +154,7 @@ def save_predictions(data: Dict[str, Any]) -> None:
     """
     try:
         with locked_predictions_file(timeout_seconds=5.0):
-            os.makedirs(os.path.dirname(PREDICTIONS_PATH) or ".", exist_ok=True)
-            tmp = PREDICTIONS_PATH + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as handle:
-                json.dump(data, handle, indent=2)
-            os.replace(tmp, PREDICTIONS_PATH)
+            _write_predictions_unlocked(data)
     except FileLockTimeout:
         logger.error(
             "Failed to acquire predictions.json lock within 5s - possible deadlock or long-running write"
@@ -169,8 +165,17 @@ def save_predictions(data: Dict[str, Any]) -> None:
         raise
 
 
+def _write_predictions_unlocked(data: Dict[str, Any]) -> None:
+    """Atomically write predictions.json while the caller owns the file lock."""
+    os.makedirs(os.path.dirname(PREDICTIONS_PATH) or ".", exist_ok=True)
+    tmp = PREDICTIONS_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as handle:
+        json.dump(data, handle, indent=2)
+    os.replace(tmp, PREDICTIONS_PATH)
+
+
 def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bool = False) -> bool:
-    """True when a pending row already exists for netuid + horizon (+ shadow flag).""
+    """True when a pending row already exists for netuid + horizon (+ shadow flag)."""
     if netuid is None:
         return False
     want_shadow = bool(shadow)
@@ -204,21 +209,22 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
         return False
     shadow = bool(prediction.get("shadow") or prediction.get("counterfactual"))
 
-    data = load_predictions()
-    pending = data.get("predictions", [])
-    for existing in pending:
-        if (
-            existing.get("netuid") == netuid
-            and existing.get("horizon_type", "hour") == horizon_type
-            and existing.get("status") == "pending"
-            and bool(existing.get("shadow") or existing.get("counterfactual")) == shadow
-        ):
-            return False
+    with locked_predictions_file(timeout_seconds=5.0):
+        data = load_predictions()
+        pending = data.get("predictions", [])
+        for existing in pending:
+            if (
+                existing.get("netuid") == netuid
+                and existing.get("horizon_type", "hour") == horizon_type
+                and existing.get("status") == "pending"
+                and bool(existing.get("shadow") or existing.get("counterfactual")) == shadow
+            ):
+                return False
 
-    pending.append(prediction)
-    data["predictions"] = pending
-    update_stats(data)
-    save_predictions(data)
+        pending.append(prediction)
+        data["predictions"] = pending
+        update_stats(data)
+        _write_predictions_unlocked(data)
     return True
 
 
@@ -247,7 +253,7 @@ def update_stats(data: Dict[str, Any]) -> None:
 
 
 def count_unclassified(data: Optional[Dict[str, Any]] = None) -> int:
-    """Count ledger rows tagged expert=unclassified (pending + resolved).""
+    """Count ledger rows tagged expert=unclassified (pending + resolved)."""
     if data is None:
         data = load_predictions()
     if not isinstance(data, dict):
