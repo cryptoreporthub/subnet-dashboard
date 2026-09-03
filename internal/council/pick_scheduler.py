@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
@@ -211,7 +212,7 @@ class DailyPickScheduler:
         self._last_result: Dict[str, Any] = {}
         self._work_lock = threading.Lock()
         # ponytail: timeout abandons in-flight work via generation bump; orphan
-        # threads may still finish in the background but cannot commit results.
+        # threads may still finish scoring but commit_ok blocks JSON/HOLD writes.
         self._work_generation = 0
         retry_seconds = max(1, min(DAILY_PICK_RETRY_MINUTES, 120)) * 60
         self.liveness = LivenessTracker(
@@ -270,21 +271,46 @@ class DailyPickScheduler:
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
+        tick_started = time.monotonic()
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            subnets = _load_capped_subnets()
-            ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
             with self._work_lock:
                 self._work_generation += 1
                 tick_generation = self._work_generation
+            from internal.council import occupancy_capture as _oc
+
+            prev = getattr(self, "_capture_fut", None)
+            _oc.note_tick_start(
+                tick_generation,
+                overlapping=bool(prev is not None and prev.running()),
+            )
+            deadline = time.monotonic() + timeout
 
             pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
+            captured: Dict[str, Any] = {}
 
             def _run_pick() -> Optional[Dict[str, Any]]:
-                out = get_or_create_today_pick(subnets, ctx, False)
+                # Rank 2: subnet+market load inside the 90s pool so abandonment
+                # reclaims it (reverses prior APScheduler-thread placement).
+                subnets = _load_capped_subnets()
+                ctx = _market_context(subnets)
+                captured["subnets"] = subnets
+                captured["ctx"] = ctx
+
+                def _commit_ok() -> bool:
+                    with self._work_lock:
+                        return tick_generation == self._work_generation
+
+                out = get_or_create_today_pick(
+                    subnets,
+                    ctx,
+                    False,
+                    commit_ok=_commit_ok,
+                    deadline_monotonic=deadline,
+                )
                 with self._work_lock:
                     if tick_generation != self._work_generation:
                         return None
@@ -292,12 +318,16 @@ class DailyPickScheduler:
 
             try:
                 fut = pool.submit(_run_pick)
+                self._capture_fut = fut
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
                 with self._work_lock:
                     self._work_generation += 1
                 result["error"] = f"daily pick tick timed out after {timeout}s"
                 logger.warning("%s (worker abandoned)", result["error"])
+                from internal.council.occupancy_capture import note_timeout
+
+                note_timeout(tick_generation, timeout, fut)
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
             tick_succeeded = isinstance(payload, dict)
@@ -310,7 +340,9 @@ class DailyPickScheduler:
                     sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
                     result["netuid"] = pick.get("netuid") or sn.get("netuid")
                 result["ab_benchmark"] = _record_ab_benchmark(
-                    subnets, ctx, "daily-pick-scheduler"
+                    captured.get("subnets") or [],
+                    captured.get("ctx") or {},
+                    "daily-pick-scheduler",
                 )
                 today_ready = _today_pick_ready()
             else:
@@ -371,6 +403,7 @@ class DailyPickScheduler:
             schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
             result["next_delay_seconds"] = delay
             result["today_ready"] = today_ready
+        result["duration_ms"] = round((time.monotonic() - tick_started) * 1000)
         _write_scheduler_state({"last_tick": result})
         return result
 

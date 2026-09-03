@@ -41,12 +41,25 @@ def _wrap(
 
         # Expired/cold: exactly one thread refetches while peers wait here;
         # after the lock releases they re-check and reuse the fresh cache.
-        with _tmc_refresh_lock:
+        t0 = time.monotonic()
+        _tmc_refresh_lock.acquire()
+        wait_ms = (time.monotonic() - t0) * 1000.0
+        held0 = time.monotonic()
+        try:
             data = cache_dict.get("data")
             now = time.time()
             if data is not None and (now - float(cache_dict.get("cached_at", 0.0))) < ttl:
                 return data
             return fetch(timeout)
+        finally:
+            held_ms = (time.monotonic() - held0) * 1000.0
+            _tmc_refresh_lock.release()
+            try:
+                from internal.council.occupancy_capture import note_block
+
+                note_block("tmc_lock", wait_ms, held_ms)
+            except Exception:
+                pass
 
     return wrapped
 

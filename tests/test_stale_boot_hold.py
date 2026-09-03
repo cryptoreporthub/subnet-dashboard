@@ -29,7 +29,7 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
 
     regen_calls = {"n": 0}
 
-    def _fake_select(subnets, ctx):
+    def _fake_select(subnets, ctx, **_k):
         regen_calls["n"] += 1
         return {
             "subnet": {"netuid": 42, "name": "Mid"},
@@ -83,7 +83,7 @@ def test_stale_published_long_regenerates_when_gate_fails(monkeypatch, tmp_path)
 
     regen_calls = {"n": 0}
 
-    def _fake_select(subnets, ctx):
+    def _fake_select(subnets, ctx, **_k):
         regen_calls["n"] += 1
         return {
             "subnet": {"netuid": 30, "name": "Endure Network"},
@@ -137,7 +137,7 @@ def test_fresh_hold_not_regenerated(monkeypatch, tmp_path):
     monkeypatch.setattr(
         daily_pick_engine,
         "select_daily_pick",
-        lambda subnets, ctx: (_ for _ in ()).throw(AssertionError("should not run")),
+        lambda subnets, ctx, **_k: (_ for _ in ()).throw(AssertionError("should not run")),
     )
 
     subnets = [{"netuid": 42, "name": "Mid", "price": 2.0, "volume": 8000, "marketcap_rank": 25}]
