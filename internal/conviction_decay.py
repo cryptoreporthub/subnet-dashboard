@@ -52,7 +52,14 @@ def get_decay_state() -> Dict[str, Any]:
         last_updated = node.get("last_updated")
         if last_updated:
             try:
-                age = (now - datetime.fromisoformat(last_updated)).total_seconds()
+                dt = datetime.fromisoformat(last_updated)
+                if dt.tzinfo is None:
+                    # Naive timestamps (older rows without an offset) are UTC by
+                    # convention; normalize so the subtraction can't raise
+                    # "can't subtract offset-naive and offset-aware" and silently
+                    # skip decay via the except below.
+                    dt = dt.replace(tzinfo=timezone.utc)
+                age = (now - dt).total_seconds()
                 days = age / 86400.0
                 decay_factor = max(0.0, 1.0 - days * 0.05)
                 conviction = round(conviction * decay_factor, 2)
