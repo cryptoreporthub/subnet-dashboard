@@ -88,6 +88,13 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-09-02 — Full-history root-cause sweep (findings only)
+
+- **Doc:** `cursor-agents-communication/full-history-root-cause-sweep-2026-09-02.md` at HEAD `4fe565e1`.
+- **Not one unifying root.** Three rhyming incomplete replacements: #906→#1008 occupancy (confirmed chain, resource unproven); #1090 dead `_last_resolver_tick` until #1151 (confirmed recovery, initiating timeout unknown); LivenessTracker leftovers #1126/#1128.
+- **No production code, no deploy, no timeout bump, KILL policy unchanged.** Discipline matrix landed in `AGENTS.md` + `.cursor/rules/operational-discipline.mdc`.
+- Ditto memory `747244fb` (vendorId `full-history-root-cause-sweep-2026-09-02`).
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.

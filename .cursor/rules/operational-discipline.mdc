@@ -1,0 +1,54 @@
+---
+description: Investigation and patch discipline — upstream-first, topology, timeout floors, soak
+alwaysApply: true
+---
+
+# Operational discipline
+
+These rules bind diagnosis and patches. They do not authorize new features.
+
+## Pre-code investigation
+
+### Upstream invariant (anti-downstream patching)
+
+When a bug manifests at a consumption boundary (`NoneType`, missing key, schema mismatch), do not patch the consumer first. Trace the producer: contract change, dropped transport payload, or unexpected serialize. A diff that only wraps the error site in `try/except`, `if x is None: return`, or `.get(key, default)` without a producer investigation fails review.
+
+### Bimodal distribution (anti-average traps)
+
+Do not use average or median latency to declare health when diagnosing intermittent failures or scheduler stalls. Look at p99 and max. Stalls are bimodal (fast path vs stuck path at an exact timeout floor). Identify the slow-path lock, socket timeout, or thread-pool exhaustion causing the upper mode.
+
+### Blast-radius graph
+
+Before touching a shared helper, middleware, base model, or storage adapter, list import and call sites. If both a FastAPI route and a background worker call it, preserve both execution contexts.
+
+## Concurrency and topology
+
+### Cache invalidation vs in-flight race
+
+`cache.clear()` / `invalidate()` does not fix a stale-data race. Specify: what prevents duplicate workers while regenerating (single-flight / mutex)? Is durable write committed before the cache key is evicted or updated?
+
+### Split-process safety
+
+API and workers are separate OS processes on Fly. An in-memory global, `threading.Event`, or in-process singleton set in a web handler has zero effect on the worker. Shared state must use durable primitives (SQLite/file locks, atomic flags, liveness registry).
+
+### Lock order
+
+Acquire locks in one global order. Do not hold a DB/file lock across network I/O. Transactions are short-lived with explicit timeouts.
+
+## Verification
+
+### Mutation / inverted test
+
+A test does not verify a fix unless it failed on the pre-fix SHA with the expected error and passed on the post-fix SHA.
+
+### N-cycle soak
+
+Point-in-time (`t=0`) is invalid proof for loop health. Require at least three sequential scheduled intervals with success and monotonic timestamps.
+
+### Semantic vs structural errors
+
+HOLD / NO_PICK / LOW_CONFIDENCE are domain abstentions: HTTP 200 with complete telemetry. 5xx, timeouts, and deadlocks are transport/system errors. Do not treat abstention as a bug.
+
+## Coordination
+
+Lock-first, edit-second on leased domains. Shared boundary (`server.py` include_router + `tests/test_endpoint_contract.py`) only in atomic sync passes. No unsolicited refactors.
