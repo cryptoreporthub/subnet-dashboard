@@ -1,3 +1,4 @@
+
 """Per-subnet exportable analysis report (markdown + structured sections)."""
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from internal.judges.subnet_judges import score_subnet
 
 def markdown_subset_html(md: str) -> str:
     """XSS-safe markdown subset (headings, lists, emphasis) for share pages."""
-    lines = str(md or "").split("\n")
+    lines = str(md or "").split("
+")
     out: List[str] = []
     in_list = False
 
@@ -62,6 +64,11 @@ def _find_subnet(subnets: List[Dict[str, Any]], netuid: int) -> Optional[Dict[st
     return None
 
 
+def _fmt_pct(value: Any) -> str:
+    """Percent-suffixed value; honest em-dash when missing (never renders '—%')."""
+    return "—" if value is None else f"{value}%"
+
+
 def _subnet_history(netuid: int, limit: int = 12) -> List[Dict[str, Any]]:
     bt = run_backtest(limit=500)
     rows = [h for h in bt.get("history") or [] if h.get("netuid") == netuid]
@@ -79,7 +86,9 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
             "status": "error",
             "netuid": netuid,
             "error": str(exc),
-            "markdown": f"# Subnet SN{netuid}\n\nRegistry unavailable — report cannot be generated.",
+            "markdown": f"# Subnet SN{netuid}
+
+Registry unavailable — report cannot be generated.",
             "sections": {},
         }
 
@@ -90,7 +99,9 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
             "netuid": netuid,
             "source": source,
             "message": f"SN{netuid} not found in current registry.",
-            "markdown": f"# Subnet SN{netuid}\n\nNot in registry — no live economics to report.",
+            "markdown": f"# Subnet SN{netuid}
+
+Not in registry — no live economics to report.",
             "sections": {},
         }
 
@@ -139,16 +150,16 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
         [
             "",
             "## Return decomposition (price ≠ staking yield)",
-            f"- Token price 7d: {decomp.get('price_change_7d', '—')}%",
-            f"- Staking yield APY: {round(float(apy), 2) if apy is not None else '—'}%",
-            f"- Wallet impact est. (7d): {decomp.get('wallet_impact_7d_estimate_pct', '—')}%",
+            f"- Token price 7d: {_fmt_pct(decomp.get('price_change_7d'))}",
+            f"- Staking yield APY: {_fmt_pct(round(float(apy), 2)) if apy is not None else '—'}",
+            f"- Wallet impact est. (7d): {_fmt_pct(decomp.get('wallet_impact_7d_estimate_pct'))}",
             f"- Dominant driver: {decomp.get('dominant_driver', '—')}",
             "",
             "## Registry snapshot",
             f"- Data source: {source}",
             f"- Price: {price if price is not None else '—'}",
-            f"- 24h change: {chg if chg is not None else '—'}%",
-            f"- APY (staking): {round(float(apy), 2) if apy is not None else '—'}%",
+            f"- 24h change: {_fmt_pct(chg)}",
+            f"- APY (staking): {_fmt_pct(round(float(apy), 2)) if apy is not None else '—'}",
             "",
             "## Judge scores",
         ]
@@ -176,7 +187,8 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
     if indicators:
         lines.extend(["", "## Technical indicators", f"- State: {indicators.get('signal', '—')}"])
 
-    markdown = "\n".join(lines)
+    markdown = "
+".join(lines)
     return {
         "status": "success",
         "netuid": netuid,
