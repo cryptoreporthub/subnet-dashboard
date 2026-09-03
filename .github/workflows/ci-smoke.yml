@@ -243,3 +243,5 @@ jobs:
           git add internal/council/score_snapshots.py .github/workflows/ci-smoke.yml
           git commit -m "Patch D A4.6 Phase 2b: score snapshot build telemetry + log-label fix"
           git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+
+# Temporary synchronization marker for Patch D applicator.
