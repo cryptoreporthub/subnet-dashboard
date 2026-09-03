@@ -15479,6 +15479,18 @@ body.wrap {
 }
 .pd-chip--tg { color: #7dd3fc; }
 .pd-chip::before { content: '· '; color: var(--pd-dim); }
+.pd-chip--stale {
+    display: inline-block;
+    margin: 6px 0 0;
+    padding: 2px 8px;
+    border: 1px solid #4a3f1e;
+    border-radius: 8px;
+    background: #1c1a0e;
+    color: #e8d48b;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.pd-chip--stale::before { content: none; }
 
 .pd-cta {
     display: flex;
