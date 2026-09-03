@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 
@@ -309,6 +310,7 @@ def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):
 
 
 def test_write_snapshot_times_out(monkeypatch, tmp_path, caplog):
+    caplog.set_level(logging.INFO, logger="internal.council.score_snapshots")
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
