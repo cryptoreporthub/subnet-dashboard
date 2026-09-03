@@ -16,7 +16,7 @@ def temp_predictions_file(tmp_path, monkeypatch):
     import os
     test_dir = tmp_path / "data"
     test_dir.mkdir()
-    
+
     test_json = test_dir / "predictions.json"
     test_lock = test_dir / "predictions.json.lock"
     test_json.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {"correct": 0, "wrong": 0, "pending": 0, "total": 0, "accuracy": 0.0}}))
@@ -50,24 +50,23 @@ def test_concurrent_appends_no_collision(temp_predictions_file):
     assert "pred_b" in ids
 
 
-def test_file_lock_timeout():
+def test_file_lock_timeout(monkeypatch, tmp_path):
     """Test that FileLockTimeout is raised when lock can't be acquired."""
     from internal.learning.predictions_store import locked_predictions_file, FileLockTimeout
     
-    import tempfile
     import os
     
     # Create a temp lock file
-    with tempfile.TemporaryDirectory() as tmpdir:
-        lock_path = os.path.join(tmpdir, "test.lock")
-        with open(lock_path, "w") as f:
-            # Hold the lock in a separate process simulation
-            import fcntl
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
-            
-            # Try to acquire with short timeout
-            try:
-                with locked_predictions_file(timeout_seconds=0.5):
-                    assert False, "Should have timed out"
-            except FileLockTimeout:
-                pass  # Expected
+    lock_path = os.path.join(tmp_path, "test.lock")
+    monkeypatch.setattr("internal.learning.predictions_store.PREDICTIONS_LOCK_PATH", lock_path)
+    with open(lock_path, "w") as f:
+        # Hold the lock in a separate process simulation
+        import fcntl
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+
+        # Try to acquire with short timeout
+        try:
+            with locked_predictions_file(timeout_seconds=0.5):
+                assert False, "Should have timed out"
+        except FileLockTimeout:
+            pass  # Expected
