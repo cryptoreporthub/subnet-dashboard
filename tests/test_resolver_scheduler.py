@@ -519,6 +519,56 @@ def test_scheduler_persists_cycle_summary(fresh_scheduler):
     assert summary["pending"] == 0
 
 
+def test_scheduler_persists_stage_timing_evidence(monkeypatch, fresh_scheduler):
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda resolved_now: {"triggered": False},
+    )
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    result = sched.run_once()
+
+    assert result["ok"] is True
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    timing = summary["stage_timing_ms"]
+    assert {
+        "ledger_heal_ms",
+        "soul_map_load_ms",
+        "resolve_due_ms",
+        "tmc_lock_wait_ms",
+        "hydrate_ms_total",
+        "hydrate_ms_max",
+        "hydration_count",
+        "total_cycle_ms",
+    } <= timing.keys()
+    assert all(isinstance(timing[key], (int, float)) for key in timing)
+    assert summary["active_stage"] is None
+    assert summary["abandoned_live"] == 0
+
+
 def test_scheduler_recovers_after_failure(nudge_spy, fresh_scheduler):
     """Backoff resets to the normal cadence once a cycle succeeds again."""
     state = {"fail": True}
@@ -741,6 +791,53 @@ def test_resolver_cycle_times_out(monkeypatch, fresh_scheduler, caplog):
     assert sched.state()["lifecycle"] == "degraded"
     assert sched.state()["first_tick_ok"] is False
     assert "resolver lifecycle event=timeout" in caplog.text
+
+
+def test_resolver_timeout_persists_partial_timing_and_abandoned_live(
+    monkeypatch, fresh_scheduler
+):
+    started = threading.Event()
+    release = threading.Event()
+
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+
+    def _blocked_provider():
+        started.set()
+        release.wait(timeout=2)
+        return []
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_blocked_provider
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+
+    first = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(first["error"])
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    first_summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    first_timing = first_summary["stage_timing_ms"]
+    assert first_summary["active_stage"] == "subnet_provider"
+    assert first_summary["abandoned_live"] == 1
+    assert first_timing["ledger_heal_ms"] >= 0
+    assert first_timing["total_cycle_ms"] >= first_timing["ledger_heal_ms"]
+
+    second = sched._run_refresh_cycle_with_timeout()
+    assert second["abandoned_live"] == 2
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    second_summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    assert second_summary["abandoned_live"] == 2
+
+    release.set()
 
 
 def test_resolver_cycle_timeout_does_not_overlap_inflight_work(

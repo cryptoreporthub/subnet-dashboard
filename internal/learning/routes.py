@@ -1313,7 +1313,21 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
     state["worker_peer"] = peer
     state["run_mode"] = worker_mode_label()
     state["source"] = "volume" if tick.get("at") else "memory"
-    state["stage_timing_ms"] = dict(tick.get("stage_timing_ms") or {})
+    cycle = {}
+    try:
+        from internal.store.soul_map_io import read_soul_map
+
+        persisted = read_soul_map()
+        scheduler = persisted.get("prediction_resolver_scheduler", {})
+        if isinstance(scheduler, dict):
+            cycle = scheduler.get("last_cycle", {})
+            if not isinstance(cycle, dict):
+                cycle = {}
+    except Exception:
+        cycle = {}
+    state["stage_timing_ms"] = dict(
+        cycle.get("stage_timing_ms") or tick.get("stage_timing_ms") or {}
+    )
     state["stage_timing_ms"]["persistence"] = persistence_ms
     return state
 
