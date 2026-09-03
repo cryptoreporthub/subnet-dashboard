@@ -2,6 +2,14 @@
 
 Anchor patterns per research/lock-convoy-ghost-write-audit.md §1–§2.
 Read-only: stdin or file → markdown report. No production mutation.
+
+Patch D follow-up (2026-09-03): extended anchors for the background
+timeout/failure family observed in capture run 33711955980 —
+learning-health 20s timeouts, homepage cache-warm join_timeout
+failures, pump desk snapshot stage timeouts, and fast shell
+learning-metrics failures. Previously these lines matched no anchor
+and were silently dropped, yielding misleading ZERO HITS reports.
+Scheduler+fail/timeout combos classify as scheduler_timeout_ceiling.
 """
 
 from __future__ import annotations
@@ -31,11 +39,11 @@ CACHE_PERSIST_RE = re.compile(
     re.I,
 )
 TIMEOUT_CEILING_RE = re.compile(
-    r"(90s|180s|480s|8s|5s|timeout after 90|cycle_timeout_180|write_timeout_480)",
+    r"(90s|180s|480s|8s|5s|timeout after 90|cycle_timeout_180|write_timeout_480|join_timeout|timed out|failed|error|\d+(?:\.\d+)?s)",
     re.I,
 )
 SCHEDULER_NAME_RE = re.compile(
-    r"score snapshot|score-snapshot|resolver lifecycle|daily pick|hour pick|pump ladder|prediction_resolver",
+    r"score snapshot|score-snapshot|resolver lifecycle|daily pick|hour pick|pump ladder|prediction_resolver|learning-health|homepage cache warm|pump desk snapshot|fast shell",
     re.I,
 )
 THREAD_NAME_RE = re.compile(
