@@ -34,18 +34,19 @@ jobs:
           version: latest
 
       - name: Volume stat snapshot (pre-capture)
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          set -e
-          APP=subnet-dashboard
+          set -euo pipefail
           OUT_DIR="logs"
           OUT_FILE="$OUT_DIR/volume-stat-before.txt"
+          ERR_FILE="$OUT_DIR/volume-stat-before.err"
           mkdir -p "$OUT_DIR"
-          if out=$(flyctl ssh console -a "$APP" -C 'for d in data /app/data; do for f in predictions.json pick_score_cache.json pick_scheduler_state.json; do if [ -f "$d/$f" ]; then stat -c "%y|%Y|%s|$d/$f" "$d/$f"; fi; done; done' 2>/dev/null); then
-            printf '%s\n' "$out" > "$OUT_FILE"
-          else
-            echo "STAT_FAIL: flyctl ssh console exited non-zero" > "$OUT_FILE"
+          if ! curl --fail --silent --show-error --max-time 15 \
+            "https://subnet-dashboard.fly.dev/api/ops/volume-stat" \
+            > "$OUT_FILE" 2> "$ERR_FILE"; then
+            {
+              echo "STAT_FAIL: curl /api/ops/volume-stat failed"
+              cat "$ERR_FILE"
+            } > "$OUT_FILE"
           fi
           cat "$OUT_FILE"
 
@@ -95,20 +96,37 @@ jobs:
           python3 scripts/patchd_correlate.py "$RAW" -o "$OUT_DIR/correlated.md" --capture-mode "$MODE"
 
       - name: Volume stat snapshot (post-capture)
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
-          set -e
-          APP=subnet-dashboard
+          set -euo pipefail
           OUT_DIR="logs"
           OUT_FILE="$OUT_DIR/volume-stat-after.txt"
+          ERR_FILE="$OUT_DIR/volume-stat-after.err"
           mkdir -p "$OUT_DIR"
-          if out=$(flyctl ssh console -a "$APP" -C 'for d in data /app/data; do for f in predictions.json pick_score_cache.json pick_scheduler_state.json; do if [ -f "$d/$f" ]; then stat -c "%y|%Y|%s|$d/$f" "$d/$f"; fi; done; done' 2>/dev/null); then
-            printf '%s\n' "$out" > "$OUT_FILE"
-          else
-            echo "STAT_FAIL: flyctl ssh console exited non-zero" > "$OUT_FILE"
+          if ! curl --fail --silent --show-error --max-time 15 \
+            "https://subnet-dashboard.fly.dev/api/ops/volume-stat" \
+            > "$OUT_FILE" 2> "$ERR_FILE"; then
+            {
+              echo "STAT_FAIL: curl /api/ops/volume-stat failed"
+              cat "$ERR_FILE"
+            } > "$OUT_FILE"
           fi
           cat "$OUT_FILE"
+
+      - name: Gate verdict marker (A4.6)
+        if: always()
+        run: |
+          set -euo pipefail
+          if ! test -s logs/volume-stat-before.txt \
+            || ! test -s logs/volume-stat-after.txt \
+            || grep -q "STAT_FAIL" logs/volume-stat-before.txt logs/volume-stat-after.txt; then
+            {
+              echo "## PATCH D: UNVERIFIABLE"
+              echo ""
+              echo "Volume-stat evidence is missing or failed; do not render an A4.6 verdict."
+            } | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "Volume-stat evidence captured for A4.6." | tee -a "$GITHUB_STEP_SUMMARY"
 
 
       - name: Loud zero-hit summary (valid outcome)
@@ -125,6 +143,7 @@ jobs:
           fi
 
       - name: Upload Patch D artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: patchd-capture-${{ github.run_id }}

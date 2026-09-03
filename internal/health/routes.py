@@ -132,6 +132,14 @@ async def api_ops_evidence():
         }
 
 
+@health_router.get("/api/ops/volume-stat")
+async def api_ops_volume_stat():
+    """Read-only stats for Patch D persistent-volume watch files."""
+    from internal.ops.volume_stat import build_volume_stat
+
+    return build_volume_stat()
+
+
 @health_router.get("/api/ops/desearch-spend")
 async def api_desearch_spend(recent: int = 25):
     """Rolling DeSearch API spend from X-Desearch-* response headers."""
