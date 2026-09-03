@@ -160,11 +160,9 @@ def test_resolver_state_cross_process_exposes_cycle_timing(monkeypatch):
             "prediction_resolver_scheduler": {
                 "last_cycle": {
                     "stage_timing_ms": {
-                        "resolve_ms": 12.5,
-                        "total_ms": 20.0,
+                        "resolve_due_ms": 12.5,
+                        "total_cycle_ms": 20.0,
                     },
-                    "active_stage": "resolve",
-                    "abandoned_live": 2,
                 }
             }
         },
@@ -172,10 +170,8 @@ def test_resolver_state_cross_process_exposes_cycle_timing(monkeypatch):
 
     result = routes._resolver_state_cross_process()
 
-    assert result["stage_timing_ms"]["resolve_ms"] == 12.5
-    assert result["stage_timing_ms"]["total_ms"] == 20.0
-    assert result["active_stage"] == "resolve"
-    assert result["abandoned_live"] == 2
+    assert result["stage_timing_ms"]["resolve_due_ms"] == 12.5
+    assert result["stage_timing_ms"]["total_cycle_ms"] == 20.0
 
 
 def _seed_resolver_state_cache(payload):

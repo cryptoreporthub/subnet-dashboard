@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
@@ -170,6 +170,10 @@ class _CycleTiming:
         with self._lock:
             self._abandoned = True
 
+    def set_abandoned_live(self, count: int) -> None:
+        with self._lock:
+            self._abandoned_live = count
+
     def is_abandoned(self) -> bool:
         with self._lock:
             return self._abandoned
@@ -187,7 +191,7 @@ class _CycleTiming:
             )
             active_stage = self._active_stage
             abandoned_live = self._abandoned_live
-        stage_timing_ms["total_ms"] = round(
+        stage_timing_ms["total_cycle_ms"] = round(
             (time.perf_counter() - self._started) * 1000, 1
         )
         return {
@@ -225,7 +229,7 @@ class PredictionResolverScheduler:
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
         self._cycle_generation = 0
-        self._abandoned_futures: List[Dict[str, Any]] = []
+        self._abandoned_live = 0
         # Control-flow flag only (start/stop); health reporting goes through
         # the tracker below, never through stored booleans (spec §2).
         self._active = False
@@ -510,24 +514,13 @@ class PredictionResolverScheduler:
         except RuntimeError:
             pass
 
-    def _abandoned_live_count(self) -> int:
-        """Count still-running threads from previously timed-out cycles."""
-        live_count = 0
-        survivors: List[Dict[str, Any]] = []
+    def _get_abandoned_live(self) -> int:
+        """Return the count of cycles abandoned by the timeout boundary."""
         with self._lock:
-            for record in self._abandoned_futures:
-                thread_ref = record.get("thread_ref") or {}
-                thread = thread_ref.get("thread")
-                if isinstance(thread, threading.Thread) and thread.is_alive():
-                    live_count += 1
-                    survivors.append(record)
-                elif not record["future"].done():
-                    survivors.append(record)
-            self._abandoned_futures = survivors
-        return live_count
+            return self._abandoned_live
 
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
-        abandoned_live = self._abandoned_live_count()
+        abandoned_live = self._get_abandoned_live()
         logger.info("resolver abandoned_live=%d", abandoned_live)
         if not self._cycle_lock.acquire(blocking=False):
             result = {
@@ -559,10 +552,8 @@ class PredictionResolverScheduler:
         gen = self._cycle_generation
         pool = ThreadPoolExecutor(max_workers=1)
         timing = _CycleTiming(abandoned_live)
-        thread_ref: Dict[str, Optional[threading.Thread]] = {"thread": None}
 
         def _run_cycle() -> Dict[str, Any]:
-            thread_ref["thread"] = threading.current_thread()
             token = _cycle_timing.set(timing)
             try:
                 if gen != self._cycle_generation:
@@ -589,9 +580,9 @@ class PredictionResolverScheduler:
             except FuturesTimeoutError:
                 self._abandon_inflight_cycle()
                 with self._lock:
-                    self._abandoned_futures.append(
-                        {"future": fut, "thread_ref": thread_ref}
-                    )
+                    self._abandoned_live += 1
+                    abandoned_live = self._abandoned_live
+                timing.set_abandoned_live(abandoned_live)
                 timing.mark_abandoned()
                 result = {
                     "ok": False,
@@ -691,7 +682,7 @@ class PredictionResolverScheduler:
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            with timing.stage("resolve", persist_partial):
+            with timing.stage("resolve_due", persist_partial):
                 resolved = self._resolve_with_timing(subnets, timing)
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
@@ -701,7 +692,7 @@ class PredictionResolverScheduler:
             #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
             #    Most are already retired in step 1; this catches stragglers
             #    (e.g. corrupt records that step 1 skipped).
-            with timing.stage("expire", persist_partial):
+            with timing.stage("expire_stale", persist_partial):
                 expired = resolver.expire_stale_predictions()
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count

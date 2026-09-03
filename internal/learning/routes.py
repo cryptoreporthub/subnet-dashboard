@@ -1,3 +1,9 @@
+async def api_story_strip(
+    limit: int = Query(default=8, ge=1, le=20),
+    focus: int | None = Query(default=None, ge=1),
+):
+    """Compact recent call outcomes for proof-band hydrate."""
+    from internal.analytics.story_strip import build_story_strip
 
     try:
         return await _to_thread_timeout(
@@ -423,10 +429,6 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
         cycle.get("stage_timing_ms") or tick.get("stage_timing_ms") or {}
     )
     state["stage_timing_ms"]["persistence"] = persistence_ms
-    state["active_stage"] = cycle.get("active_stage", tick.get("active_stage"))
-    state["abandoned_live"] = cycle.get(
-        "abandoned_live", tick.get("abandoned_live", 0)
-    )
     return state
 
 
@@ -537,8 +539,6 @@ def _resolver_timeout_fallback(*, error: str, executor_wait_ms: float) -> Dict[s
                 "worker_peer": tick.get("worker_peer") or {},
                 "source": "volume" if tick.get("at") else "memory",
                 "stage_timing_ms": dict(tick.get("stage_timing_ms") or {}),
-                "active_stage": tick.get("active_stage"),
-                "abandoned_live": tick.get("abandoned_live", 0),
             }
     if data is None:
         data = {**get_prediction_resolver_scheduler_state(), "source": "memory"}
