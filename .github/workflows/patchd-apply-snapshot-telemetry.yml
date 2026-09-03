@@ -1,21 +1,21 @@
 name: Patch D apply snapshot telemetry
 
 on:
-  push:
-    branches:
-      - patchd/snapshot-build-telemetry
+  pull_request:
+    types: [opened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Apply surgical telemetry patch
@@ -116,4 +116,4 @@ jobs:
           git add internal/council/score_snapshots.py
           git rm .github/workflows/patchd-apply-snapshot-telemetry.yml
           git commit -m "Patch D A4.6 Phase 2b: score snapshot build telemetry + log-label fix"
-          git push origin HEAD:patchd/snapshot-build-telemetry
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
