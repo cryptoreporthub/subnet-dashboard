@@ -141,6 +141,7 @@
               {% if hero_row.buy_pct is not none %}<span>Buys <b>{{ hero_row.buy_pct }}%</b></span>{% endif %}
             </p>
             {% endif %}
+            {% if hero_row.signal_snapshot_stale|default(false) %}<span class="pd-chip pd-chip--stale">stale flow</span>{% endif %}
           </div>
         </div>
 
@@ -329,6 +330,7 @@
         <p class="pump-alert__wallet-chip pump-alert__wallet-chip--day">{{ chip }}</p>
         {% endfor %}
         <p class="pump-alert__trigger">{{ row.trigger }}</p>
+        {% if row.signal_snapshot_stale|default(false) %}<span class="pd-chip pd-chip--stale">stale flow</span>{% endif %}
       </article>
       {% endif %}
       {% endfor %}

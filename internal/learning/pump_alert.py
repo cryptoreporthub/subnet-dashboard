@@ -582,6 +582,10 @@ def build_alert_row(
     ladder_entry: Dict[str, Any],
     subnet_row: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
+    raw_snap = ladder_entry.get("signal_snapshot")
+    signal_snapshot_stale = _signal_snapshot_stale(
+        raw_snap if isinstance(raw_snap, dict) else {}
+    )
     phase = str(ladder_entry.get("phase") or "DORMANT").upper()
     netuid = ladder_entry.get("netuid")
     try:
@@ -713,6 +717,7 @@ def build_alert_row(
             or (isinstance(src.get("sources"), list) and "taostats" in src.get("sources"))
         ),
         "updated_at": ladder_entry.get("updated_at"),
+        "signal_snapshot_stale": signal_snapshot_stale,
     }
     return row
 
@@ -830,6 +835,10 @@ def build_desk_row(
     subnet_row: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Minimal pump desk row — names, timing, formation %, cached sparklines only."""
+    raw_snap = ladder_entry.get("signal_snapshot")
+    signal_snapshot_stale = _signal_snapshot_stale(
+        raw_snap if isinstance(raw_snap, dict) else {}
+    )
     phase = str(ladder_entry.get("phase") or "DORMANT").upper()
     netuid = ladder_entry.get("netuid")
     try:
@@ -942,6 +951,7 @@ def build_desk_row(
         "pattern_confidence": pattern_confidence,
         "re_pump_prob": re_pump_prob,
         "pattern_highlight": pattern_highlight,
+        "signal_snapshot_stale": signal_snapshot_stale,
     }
 
 

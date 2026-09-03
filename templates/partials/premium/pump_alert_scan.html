@@ -134,6 +134,7 @@
               {% if hero_row.buy_pct is not none %}<span>Buys <b>{{ hero_row.buy_pct }}%</b></span>{% endif %}
             </p>
             {% endif %}
+            {% if hero_row.signal_snapshot_stale|default(false) %}<span class="pd-chip pd-chip--stale">stale flow</span>{% endif %}
           </div>
           <p class="pds-strip__triad">
             <span class="pds-strip__pill{% if triad.inflow_quiet_load %} pds-strip__pill--on{% endif %}">In {{ labels.inflow|default('WATCH') }}</span>
