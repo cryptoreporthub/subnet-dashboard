@@ -62,6 +62,13 @@ def _find_subnet(subnets: List[Dict[str, Any]], netuid: int) -> Optional[Dict[st
     return None
 
 
+def _fmt_pct(value: Any) -> str:
+    """Percent-suffixed value; honest em-dash when missing (never renders '\u2014%')."""
+    if value is None or value == "\u2014":
+        return "\u2014"
+    return f"{value}%"
+
+
 def _subnet_history(netuid: int, limit: int = 12) -> List[Dict[str, Any]]:
     bt = run_backtest(limit=500)
     rows = [h for h in bt.get("history") or [] if h.get("netuid") == netuid]
@@ -79,7 +86,7 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
             "status": "error",
             "netuid": netuid,
             "error": str(exc),
-            "markdown": f"# Subnet SN{netuid}\n\nRegistry unavailable — report cannot be generated.",
+            "markdown": f"# Subnet SN{netuid}\n\nRegistry unavailable \u2014 report cannot be generated.",
             "sections": {},
         }
 
@@ -90,7 +97,7 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
             "netuid": netuid,
             "source": source,
             "message": f"SN{netuid} not found in current registry.",
-            "markdown": f"# Subnet SN{netuid}\n\nNot in registry — no live economics to report.",
+            "markdown": f"# Subnet SN{netuid}\n\nNot in registry \u2014 no live economics to report.",
             "sections": {},
         }
 
@@ -129,26 +136,26 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
         f"# {name} (SN{netuid})",
         "",
         "## Market drivers",
-        f"- {drivers.get('headline', '—')}",
+        f"- {drivers.get('headline', '\u2014')}",
     ]
     for w in drivers.get("why") or []:
         lines.append(f"- {w}")
     for warn in decomp.get("warnings") or []:
-        lines.append(f"- ⚠ {warn}")
+        lines.append(f"- \u26a0 {warn}")
     lines.extend(
         [
             "",
-            "## Return decomposition (price ≠ staking yield)",
-            f"- Token price 7d: {decomp.get('price_change_7d', '—')}%",
-            f"- Staking yield APY: {round(float(apy), 2) if apy is not None else '—'}%",
-            f"- Wallet impact est. (7d): {decomp.get('wallet_impact_7d_estimate_pct', '—')}%",
-            f"- Dominant driver: {decomp.get('dominant_driver', '—')}",
+            "## Return decomposition (price \u2260 staking yield)",
+            f"- Token price 7d: {_fmt_pct(decomp.get('price_change_7d'))}",
+            f"- Staking yield APY: {_fmt_pct(round(float(apy), 2)) if apy is not None else '\u2014'}",
+            f"- Wallet impact est. (7d): {_fmt_pct(decomp.get('wallet_impact_7d_estimate_pct'))}",
+            f"- Dominant driver: {decomp.get('dominant_driver', '\u2014')}",
             "",
             "## Registry snapshot",
             f"- Data source: {source}",
-            f"- Price: {price if price is not None else '—'}",
-            f"- 24h change: {chg if chg is not None else '—'}%",
-            f"- APY (staking): {round(float(apy), 2) if apy is not None else '—'}%",
+            f"- Price: {price if price is not None else '\u2014'}",
+            f"- 24h change: {_fmt_pct(chg)}",
+            f"- APY (staking): {_fmt_pct(round(float(apy), 2)) if apy is not None else '\u2014'}",
             "",
             "## Judge scores",
         ]
@@ -157,24 +164,24 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
         block = judges.get(lane) if isinstance(judges, dict) else None
         if isinstance(block, dict):
             lines.append(
-                f"- **{lane.title()}**: score {block.get('score', '—')} "
-                f"(confidence {block.get('confidence', '—')})"
+                f"- **{lane.title()}**: score {block.get('score', '\u2014')} "
+                f"(confidence {block.get('confidence', '\u2014')})"
             )
         else:
-            lines.append(f"- **{lane.title()}**: —")
+            lines.append(f"- **{lane.title()}**: \u2014")
     lines.extend(["", "## Resolved prediction history", ""])
     if history:
         for row in history:
             lines.append(
                 f"- {row.get('id', '?')}: predicted {row.get('predicted_pct')}% "
-                f"→ actual {row.get('actual_pct')}% "
+                f"\u2192 actual {row.get('actual_pct')}% "
                 f"({'hit' if row.get('council_correct') else 'miss'})"
             )
     else:
         lines.append("_No resolved backtest rows for this subnet yet._")
 
     if indicators:
-        lines.extend(["", "## Technical indicators", f"- State: {indicators.get('signal', '—')}"])
+        lines.extend(["", "## Technical indicators", f"- State: {indicators.get('signal', '\u2014')}"])
 
     markdown = "\n".join(lines)
     return {

@@ -4,6 +4,13 @@
   <p class="pump-page__back">
     <a href="/">← Home</a> · Flow before price · early vs chase
   </p>
+  {% set pa_trust = pump_alerts.get('trust') if pump_alerts is defined and pump_alerts is mapping else {} %}
+  {% if pa_trust is mapping and pa_trust.get('signal_snapshots_stale') %}
+  <p class="pump-trust-badge" id="pump-trust-badge" role="status"
+     style="margin:0 auto 12px;max-width:960px;padding:8px 16px;border:1px solid #4a3f1e;border-radius:8px;background:#1c1a0e;color:#e8d48b;font-size:12px;line-height:1.4;">
+    ⚠ Placeholder signal data — Form / Conf / Vol / Buys on these cards may not be live flow.
+  </p>
+  {% endif %}
   {% if pump_alerts is defined and pump_alerts.get('status') in ('timeout', 'unavailable') %}
   <p class="empty">Pump desk is warming up — retry in a moment or return home.</p>
   {% endif %}
