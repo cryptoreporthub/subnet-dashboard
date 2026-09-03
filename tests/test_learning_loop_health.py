@@ -136,6 +136,48 @@ def test_resolver_state_cross_process_keeps_active_running_state(monkeypatch):
     assert result["worker_peer"] == view["worker_peer"]
 
 
+def test_resolver_state_cross_process_exposes_cycle_timing(monkeypatch):
+    view = {
+        "at": "2099-01-01T00:00:00+00:00",
+        "status": "ok",
+        "lifecycle": "ticking",
+        "warming": False,
+        "refresh_minutes": 15,
+        "worker_peer": {"alive": True},
+    }
+    monkeypatch.setattr(loop_health, "_resolver_liveness_view", lambda: view)
+    monkeypatch.setattr(loop_health, "inline_worker_expected", lambda: False)
+    monkeypatch.setattr(loop_health, "split_worker_v2_enabled", lambda: False)
+    monkeypatch.setattr(loop_health, "is_worker_mode", lambda: True)
+    monkeypatch.setattr(
+        routes,
+        "get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "last_run_at": None},
+    )
+    monkeypatch.setattr(
+        "internal.store.soul_map_io.read_soul_map",
+        lambda: {
+            "prediction_resolver_scheduler": {
+                "last_cycle": {
+                    "stage_timing_ms": {
+                        "resolve_ms": 12.5,
+                        "total_ms": 20.0,
+                    },
+                    "active_stage": "resolve",
+                    "abandoned_live": 2,
+                }
+            }
+        },
+    )
+
+    result = routes._resolver_state_cross_process()
+
+    assert result["stage_timing_ms"]["resolve_ms"] == 12.5
+    assert result["stage_timing_ms"]["total_ms"] == 20.0
+    assert result["active_stage"] == "resolve"
+    assert result["abandoned_live"] == 2
+
+
 def _seed_resolver_state_cache(payload):
     routes._RESOLVER_STATE_CACHE["at"] = time.monotonic() - 30
     routes._RESOLVER_STATE_CACHE["payload"] = dict(payload)

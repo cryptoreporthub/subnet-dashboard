@@ -25,8 +25,10 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from contextlib import contextmanager, nullcontext
+from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from internal.council import resolver
 from internal.job_scheduler import cancel_job, schedule_in_seconds
@@ -123,6 +125,83 @@ def _save_json(path: str, data: Dict[str, Any]) -> None:
             os.unlink(temp_path)
 
 
+class _CycleTiming:
+    """Thread-safe bounded timing evidence for one resolver cycle."""
+
+    def __init__(self, abandoned_live: int = 0):
+        self._started = time.perf_counter()
+        self._lock = threading.Lock()
+        self._stage_timing_ms: Dict[str, float] = {}
+        self._active_stage: Optional[str] = None
+        self._hydrate_ms_total = 0.0
+        self._hydrate_ms_max = 0.0
+        self._hydration_count = 0
+        self._tmc_lock_wait_ms = 0.0
+        self._abandoned_live = abandoned_live
+        self._abandoned = False
+
+    @contextmanager
+    def stage(
+        self, name: str, on_finally: Callable[[], None]
+    ) -> Iterator[None]:
+        started = time.perf_counter()
+        with self._lock:
+            self._active_stage = name
+        try:
+            yield
+        finally:
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            with self._lock:
+                self._stage_timing_ms[f"{name}_ms"] = round(elapsed_ms, 1)
+                self._active_stage = None
+            on_finally()
+
+    def record_hydration(self, duration_ms: float) -> None:
+        with self._lock:
+            self._hydrate_ms_total += duration_ms
+            self._hydrate_ms_max = max(self._hydrate_ms_max, duration_ms)
+            self._hydration_count += 1
+
+    def record_tmc_lock_wait(self, duration_ms: float) -> None:
+        with self._lock:
+            self._tmc_lock_wait_ms += duration_ms
+
+    def mark_abandoned(self) -> None:
+        with self._lock:
+            self._abandoned = True
+
+    def is_abandoned(self) -> bool:
+        with self._lock:
+            return self._abandoned
+
+    def snapshot(self) -> Dict[str, Any]:
+        with self._lock:
+            stage_timing_ms = dict(self._stage_timing_ms)
+            stage_timing_ms.update(
+                {
+                    "hydrate_ms_total": round(self._hydrate_ms_total, 1),
+                    "hydrate_ms_max": round(self._hydrate_ms_max, 1),
+                    "hydration_count": self._hydration_count,
+                    "tmc_lock_wait_ms": round(self._tmc_lock_wait_ms, 1),
+                }
+            )
+            active_stage = self._active_stage
+            abandoned_live = self._abandoned_live
+        stage_timing_ms["total_ms"] = round(
+            (time.perf_counter() - self._started) * 1000, 1
+        )
+        return {
+            "stage_timing_ms": stage_timing_ms,
+            "active_stage": active_stage,
+            "abandoned_live": abandoned_live,
+        }
+
+
+_cycle_timing: ContextVar[Optional[_CycleTiming]] = ContextVar(
+    "resolver_cycle_timing", default=None
+)
+
+
 class PredictionResolverScheduler:
     """Background scheduler that periodically grades pending predictions."""
 
@@ -146,6 +225,7 @@ class PredictionResolverScheduler:
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
         self._cycle_generation = 0
+        self._abandoned_futures: List[Dict[str, Any]] = []
         # Control-flow flag only (start/stop); health reporting goes through
         # the tracker below, never through stored booleans (spec §2).
         self._active = False
@@ -430,7 +510,25 @@ class PredictionResolverScheduler:
         except RuntimeError:
             pass
 
+    def _abandoned_live_count(self) -> int:
+        """Count still-running threads from previously timed-out cycles."""
+        live_count = 0
+        survivors: List[Dict[str, Any]] = []
+        with self._lock:
+            for record in self._abandoned_futures:
+                thread_ref = record.get("thread_ref") or {}
+                thread = thread_ref.get("thread")
+                if isinstance(thread, threading.Thread) and thread.is_alive():
+                    live_count += 1
+                    survivors.append(record)
+                elif not record["future"].done():
+                    survivors.append(record)
+            self._abandoned_futures = survivors
+        return live_count
+
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
+        abandoned_live = self._abandoned_live_count()
+        logger.info("resolver abandoned_live=%d", abandoned_live)
         if not self._cycle_lock.acquire(blocking=False):
             result = {
                 "run_at": _now_iso(),
@@ -438,6 +536,7 @@ class PredictionResolverScheduler:
                 "expired_now": 0,
                 "pending": 0,
                 "skipped": "cycle_in_flight",
+                "abandoned_live": abandoned_live,
             }
             self._persist_cycle_summary(result)
             return result
@@ -448,16 +547,23 @@ class PredictionResolverScheduler:
             else RESOLVER_CYCLE_TIMEOUT_SECONDS
         )
         if timeout <= 0:
+            timing = _CycleTiming(abandoned_live)
+            token = _cycle_timing.set(timing)
             try:
                 return self._run_refresh_cycle()
             finally:
+                _cycle_timing.reset(token)
                 self._cycle_lock.release()
 
         self._cycle_generation += 1
         gen = self._cycle_generation
         pool = ThreadPoolExecutor(max_workers=1)
+        timing = _CycleTiming(abandoned_live)
+        thread_ref: Dict[str, Optional[threading.Thread]] = {"thread": None}
 
         def _run_cycle() -> Dict[str, Any]:
+            thread_ref["thread"] = threading.current_thread()
+            token = _cycle_timing.set(timing)
             try:
                 if gen != self._cycle_generation:
                     return {
@@ -470,6 +576,7 @@ class PredictionResolverScheduler:
                     }
                 return self._run_refresh_cycle()
             finally:
+                _cycle_timing.reset(token)
                 if gen == self._cycle_generation:
                     self._cycle_lock.release()
 
@@ -481,6 +588,11 @@ class PredictionResolverScheduler:
                 return fut.result(timeout=timeout)
             except FuturesTimeoutError:
                 self._abandon_inflight_cycle()
+                with self._lock:
+                    self._abandoned_futures.append(
+                        {"future": fut, "thread_ref": thread_ref}
+                    )
+                timing.mark_abandoned()
                 result = {
                     "ok": False,
                     "run_at": _now_iso(),
@@ -488,7 +600,9 @@ class PredictionResolverScheduler:
                     "expired_now": 0,
                     "pending": 0,
                     "error": f"cycle_timeout_{timeout}s",
+                    "abandoned_live": abandoned_live,
                 }
+                self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(result)
                 return result
         except BaseException:
@@ -497,6 +611,32 @@ class PredictionResolverScheduler:
             raise
         finally:
             pool.shutdown(wait=False, cancel_futures=True)
+
+    def _apply_cycle_timing(
+        self, result: Dict[str, Any], timing: _CycleTiming
+    ) -> None:
+        evidence = timing.snapshot()
+        result["stage_timing_ms"] = evidence["stage_timing_ms"]
+        result["active_stage"] = evidence["active_stage"]
+        result["abandoned_live"] = evidence["abandoned_live"]
+
+    def _resolve_with_timing(
+        self, subnets: Any, timing: _CycleTiming
+    ) -> Dict[str, Any]:
+        from internal.council import price_reference
+
+        tmc_context = nullcontext()
+        try:
+            from internal.indicators import tmc_singleflight
+
+            tmc_context = tmc_singleflight.lock_wait_timing(
+                timing.record_tmc_lock_wait
+            )
+        except Exception:
+            pass
+        with price_reference.hydration_timing(timing.record_hydration):
+            with tmc_context:
+                return resolver.resolve_due_predictions(subnets)
 
     def _run_refresh_cycle(self) -> Dict[str, Any]:
         """Grade due predictions, expire stale ones, persist a cycle summary."""
@@ -509,21 +649,31 @@ class PredictionResolverScheduler:
             "pending": 0,
             "error": None,
         }
+        timing = _cycle_timing.get() or _CycleTiming()
+
+        def persist_partial() -> None:
+            if timing.is_abandoned():
+                return
+            self._apply_cycle_timing(result, timing)
+            self._persist_cycle_summary(result)
 
         try:
-            try:
-                from internal.learning.ledger_heal import heal_daily_pick_ledger
+            with timing.stage("ledger_heal", persist_partial):
+                try:
+                    from internal.learning.ledger_heal import heal_daily_pick_ledger
 
-                heal_daily_pick_ledger(dry_run=False)
-            except Exception as heal_exc:
-                import logging
-                logging.getLogger(__name__).warning(
-                    "ledger heal in resolver tick failed: %s", heal_exc
-                )
+                    heal_daily_pick_ledger(dry_run=False)
+                except Exception as heal_exc:
+                    import logging
+                    logging.getLogger(__name__).warning(
+                        "ledger heal in resolver tick failed: %s", heal_exc
+                    )
 
-            subnets = self._subnet_provider() or []
+            with timing.stage("subnet_provider", persist_partial):
+                subnets = self._subnet_provider() or []
 
-            soul_data = _load_json(self.soul_map_path)
+            with timing.stage("soul_map_load", persist_partial):
+                soul_data = _load_json(self.soul_map_path)
             sched_state = soul_data.get("prediction_resolver_scheduler", {})
             if not isinstance(sched_state, dict):
                 sched_state = {}
@@ -541,7 +691,8 @@ class PredictionResolverScheduler:
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            resolved = resolver.resolve_due_predictions(subnets)
+            with timing.stage("resolve", persist_partial):
+                resolved = self._resolve_with_timing(subnets, timing)
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
 
@@ -550,7 +701,8 @@ class PredictionResolverScheduler:
             #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
             #    Most are already retired in step 1; this catches stragglers
             #    (e.g. corrupt records that step 1 skipped).
-            expired = resolver.expire_stale_predictions()
+            with timing.stage("expire", persist_partial):
+                expired = resolver.expire_stale_predictions()
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count
             result["pending"] = expired.get("stats", {}).get("pending", 0)
@@ -560,18 +712,21 @@ class PredictionResolverScheduler:
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
             # N3: optional env-gated auto-retrain after resolver (non-blocking).
-            try:
-                from internal.calibration.scheduler import maybe_trigger_auto_retrain
+            with timing.stage("auto_retrain", persist_partial):
+                try:
+                    from internal.calibration.scheduler import maybe_trigger_auto_retrain
 
-                result["auto_retrain"] = maybe_trigger_auto_retrain(
-                    resolved_now=result.get("resolved_now", 0)
-                )
-            except Exception as exc:
-                result["auto_retrain"] = {"triggered": False, "error": str(exc)}
+                    result["auto_retrain"] = maybe_trigger_auto_retrain(
+                        resolved_now=result.get("resolved_now", 0)
+                    )
+                except Exception as exc:
+                    result["auto_retrain"] = {"triggered": False, "error": str(exc)}
         except Exception as exc:
             result["error"] = str(exc)
-
-        self._persist_cycle_summary(result)
+        finally:
+            if not timing.is_abandoned():
+                self._apply_cycle_timing(result, timing)
+                self._persist_cycle_summary(result)
         return result
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
@@ -586,6 +741,9 @@ class PredictionResolverScheduler:
             "watchdog": result.get("watchdog"),
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
+            "stage_timing_ms": dict(result.get("stage_timing_ms") or {}),
+            "active_stage": result.get("active_stage"),
+            "abandoned_live": result.get("abandoned_live", 0),
             "lifecycle": self._lifecycle,
         }
         def _mutator(data: Dict[str, Any]) -> None:

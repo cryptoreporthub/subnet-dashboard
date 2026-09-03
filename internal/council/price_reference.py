@@ -10,7 +10,8 @@ import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from functools import wraps
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -415,6 +416,37 @@ _hydrate_min_interval = int(os.environ.get("CALIBRATION_HYDRATE_MIN_INTERVAL", "
 _resolver_hydration_budget: ContextVar[Optional[int]] = ContextVar(
     "resolver_hydration_budget", default=None
 )
+_hydration_recorder: ContextVar[Optional[Callable[[float], None]]] = ContextVar(
+    "resolver_hydration_recorder", default=None
+)
+
+
+@contextmanager
+def hydration_timing(recorder: Optional[Callable[[float], None]]):
+    """Record bounded hydration durations for the active resolver cycle."""
+    token = _hydration_recorder.set(recorder)
+    try:
+        yield
+    finally:
+        _hydration_recorder.reset(token)
+
+
+def _record_hydration_duration(duration_ms: float) -> None:
+    recorder = _hydration_recorder.get()
+    if recorder is not None:
+        recorder(duration_ms)
+
+
+def _timed_hydration(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        started = time.perf_counter()
+        try:
+            return func(*args, **kwargs)
+        finally:
+            _record_hydration_duration((time.perf_counter() - started) * 1000)
+
+    return wrapper
 
 
 @contextmanager
@@ -499,6 +531,7 @@ def hydrate_candles_for_netuid(netuid: Any, cache_path: str = PRICE_CACHE_PATH) 
     return _hydrate_once(netuid, cache_path)
 
 
+@_timed_hydration
 def hydrate_candles_for_netuid_historical(
     netuid: Any,
     resolve_at: datetime,
@@ -569,6 +602,7 @@ def hydrate_candles_for_netuid_historical(
         return False
 
 
+@_timed_hydration
 def _hydrate_once(netuid: Any, cache_path: str) -> bool:
     """Force a fresh OHLCV fetch for a netuid at most once per interval."""
     key = str(netuid)

@@ -17,7 +17,9 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Any, Callable, Dict
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Any, Callable, Dict, Iterator, Optional
 
 from internal.indicators import price_fetcher as _pf
 
@@ -25,6 +27,19 @@ _tmc_refresh_lock = threading.Lock()
 _installed = False
 _orig_fetch_subnets = None
 _orig_fetch_candles = None
+_lock_wait_recorder: ContextVar[Optional[Callable[[float], None]]] = ContextVar(
+    "tmc_lock_wait_recorder", default=None
+)
+
+
+@contextmanager
+def lock_wait_timing(recorder: Optional[Callable[[float], None]]) -> Iterator[None]:
+    """Record TMC refresh-lock wait time for the active resolver cycle."""
+    token = _lock_wait_recorder.set(recorder)
+    try:
+        yield
+    finally:
+        _lock_wait_recorder.reset(token)
 
 
 def _wrap(
@@ -41,7 +56,11 @@ def _wrap(
 
         # Expired/cold: exactly one thread refetches while peers wait here;
         # after the lock releases they re-check and reuse the fresh cache.
+        wait_started = time.perf_counter()
         with _tmc_refresh_lock:
+            recorder = _lock_wait_recorder.get()
+            if recorder is not None:
+                recorder((time.perf_counter() - wait_started) * 1000)
             data = cache_dict.get("data")
             now = time.time()
             if data is not None and (now - float(cache_dict.get("cached_at", 0.0))) < ttl:
