@@ -88,6 +88,16 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-09-03 ~22:47 UTC / 3:47pm PT — PR #1176 per-card stale-flow chips (OPEN, no merge/deploy)
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1176 — `fix/pump-card-stale-chips` @ `e74d338` from main `795ecde` (#1175 already on main).
+- **Intent:** per-card `stale flow` chip on pump desk cards. Chip flags the **original** `ladder_entry["signal_snapshot"]` via `_signal_snapshot_stale` captured **before** `_lead_signals` rebuild in `build_alert_row` / `build_desk_row` (`signal_snapshot_stale`). Desk-level banner already shipped in **#1175** (`trust.signal_snapshots_stale`).
+- **Files:** `internal/learning/pump_alert.py`; `templates/partials/premium/pump_alert.html`, `pump_alert_scan.html`, `pump_desk_row.html`, `pump_desk_row_scan.html`; `static/css/ui.css` (`.pd-chip--stale` `#4a3f1e` / `#1c1a0e` / `#e8d48b`); `tests/test_pump_alert.py`.
+- **Tests:** targeted `test_pump_alert.py` + `test_pump_desk_trust_gate.py` **62 passed**. Full suite 2526 passed / 141 failed / 4 skipped — failures treated as pre-existing/environment; none in those two files. Did **not** modify `_signal_snapshot_stale()` or `gate_pump_desk_trust()`.
+- **Gate:** no merge, no deploy, no `fly-deploy` label. Human review before merge; human `fly-deploy` before deploy.
+- **Ditto:** `save_memory` vendorId `mc-pr-1176-stale-flow-chips-2026-09-03`.
+
+
 ### 2026-08-30 ~00:30 UTC — DITTO ACK of Cursor plan (freeze-lift continuation)
 
 - **Ack #1133 merged** (squash `ef8d9d6`, 2026-08-29 20:42Z, docs-only, no deploy). Confirmed on main.

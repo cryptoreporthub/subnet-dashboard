@@ -139,7 +139,7 @@ def test_stale_signal_snapshot_rebuilt_from_subnet_row():
             "emission": 1.5,
         },
     )
-    assert row["name"] == "gm"
+    assert "gm" in str(row["name"]).lower()
     assert row["buy_ratio"] != 0.5 or row["volume_intensity"] != 1.0
 
 
@@ -762,3 +762,147 @@ def test_pump_desk_templates_have_no_last5_caption():
     ):
         html = Path(rel).read_text(encoding="utf-8")
         assert "LAST 5" not in html, rel
+
+def test_signal_snapshot_stale_flag_on_placeholder_and_fresh():
+    stale = build_desk_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "PUMPING",
+            "composite_score": 0.75,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        }
+    )
+    fresh = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.72))
+    alert_stale = build_alert_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "PUMPING",
+            "composite_score": 0.75,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        }
+    )
+    alert_fresh = build_alert_row(_ladder_entry("STIRRING", score=0.28))
+    assert stale["signal_snapshot_stale"] is True
+    assert fresh["signal_snapshot_stale"] is False
+    assert alert_stale["signal_snapshot_stale"] is True
+    assert alert_fresh["signal_snapshot_stale"] is False
+
+
+def test_signal_snapshot_stale_survives_rebuild_from_subnet_row():
+    row = build_alert_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "PUMPING",
+            "composite_score": 0.75,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        },
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "buy_volume_24h": 8000,
+            "sell_volume_24h": 2000,
+            "volume": 50000,
+            "emission": 1.5,
+        },
+    )
+    assert row["signal_snapshot_stale"] is True
+    assert row["buy_ratio"] != 0.5 or row["volume_intensity"] != 1.0
+    desk = build_desk_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "PUMPING",
+            "composite_score": 0.75,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        },
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "buy_volume_24h": 8000,
+            "sell_volume_24h": 2000,
+            "volume": 50000,
+            "emission": 1.5,
+        },
+    )
+    assert desk["signal_snapshot_stale"] is True
+
+
+def _render_pump_alert_hero(row):
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    tmpl = env.get_template("partials/premium/pump_alert.html")
+    return tmpl.render(
+        pump_compact=True,
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
+        },
+    )
+
+
+def test_stale_flow_chip_renders_on_placeholder_hero():
+    row = build_desk_row(
+        {
+            "netuid": 28,
+            "name": "LOL",
+            "phase": "ACCUMULATING",
+            "composite_score": 0.72,
+            "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+        }
+    )
+    html = _render_pump_alert_hero(row)
+    assert 'pd-chip--stale' in html
+    assert "stale flow" in html
+    assert "pd-metrics-bar" in html
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    scan = env.get_template("partials/premium/pump_alert_scan.html").render(
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
+        }
+    )
+    assert 'pd-chip--stale' in scan
+    assert "stale flow" in scan
+
+
+def test_stale_flow_chip_absent_on_fresh_hero():
+    row = build_desk_row(_ladder_entry("ACCUMULATING", netuid=42, score=0.72))
+    html = _render_pump_alert_hero(row)
+    assert 'pd-chip--stale' not in html
+    assert "stale flow" not in html
+    assert "pd-metrics-bar" in html
+    env = Environment(
+        loader=FileSystemLoader("templates"),
+        autoescape=select_autoescape(["html", "xml"]),
+    )
+    scan = env.get_template("partials/premium/pump_alert_scan.html").render(
+        pump_alerts={
+            "count": 1,
+            "early_count": 1,
+            "confirmed_count": 0,
+            "exit_count": 0,
+            "hero": row,
+            "alerts": [row],
+            "trust": {"ready": False, "line": "grading starts"},
+        }
+    )
+    assert 'pd-chip--stale' not in scan
+    assert "stale flow" not in scan

@@ -15,6 +15,7 @@
     <div class="pd-r__nums" aria-label="Flow and gap">
       <span class="pd-r__num" title="Early-move score (0–100). Higher means more flow building before price runs."><i>Flow</i> {% if form_pct is not none %}{{ form_pct }}{% else %}—{% endif %}</span>
       <span class="pd-r__num pd-r__num--gap" title="Distance to the desk trigger line — lower usually means closer to firing."><i>Gap</i> {% if row.distance is not none %}{{ row.distance }}{% else %}—{% endif %}</span>
+      {% if row.signal_snapshot_stale|default(false) %}<span class="pd-chip pd-chip--stale">stale flow</span>{% endif %}
     </div>
   </div>
   {% include "partials/premium/pump_pattern_line.html" %}
