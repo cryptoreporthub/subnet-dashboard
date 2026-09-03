@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
@@ -278,6 +279,12 @@ def write_full_universe_snapshot(
 
             subnets = _cap_subnets_for_scoring(subnets, limit=cap)
         ctx = _market_context_with_weights(subnets or [])
+        logger.info(
+            "score snapshot build started: source=%s registry_only=%s subnets=%d",
+            source,
+            _registry_only_snapshot(),
+            len(subnets or []),
+        )
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
 
@@ -305,6 +312,9 @@ def write_full_universe_snapshot(
             return {"ok": False, "error": str(exc)}
 
     global _write_executor, _write_future
+    build_started_mono = time.monotonic()
+    build_started_wall = _now_iso()
+    caller_abandoned = threading.Event()
     with _lock:
         if _write_future is not None and not _write_future.done():
             return {"ok": False, "error": "scoring_in_progress"}
@@ -315,10 +325,68 @@ def write_full_universe_snapshot(
         fut = _write_executor.submit(_build_and_save)
         _write_future = fut
     fut.add_done_callback(_release_write_future)
+
+    def _log_build_completion(done_fut: Any) -> None:
+        """Log builds that outlive their caller-side timeout.
+
+        The caller may abandon the wait while the single-flight build continues.
+        The snapshot write is atomic and idempotent, so late completion is benign
+        with respect to corruption, but it can create staleness drift. The
+        duration and start timestamp make a slow crawl visible.
+        """
+        duration_s = time.monotonic() - build_started_mono
+
+        if done_fut.cancelled():
+            logger.warning(
+                "score snapshot build failed: state=cancelled duration=%.1fs started_at=%s",
+                duration_s,
+                build_started_wall,
+            )
+            return
+
+        try:
+            err = done_fut.exception(timeout=0)
+        except Exception as exc:
+            logger.warning(
+                "score snapshot build failed: state=callback-error duration=%.1fs "
+                "started_at=%s error=%s",
+                duration_s,
+                build_started_wall,
+                exc,
+            )
+            return
+
+        if err is not None:
+            logger.warning(
+                "score snapshot build failed: duration=%.1fs started_at=%s error=%s",
+                duration_s,
+                build_started_wall,
+                err,
+            )
+            return
+
+        state = (
+            "completed-after-abandon"
+            if caller_abandoned.is_set()
+            else "completed"
+        )
+        logger.info(
+            "score snapshot build %s: duration=%.1fs started_at=%s",
+            state,
+            duration_s,
+            build_started_wall,
+        )
+
+    fut.add_done_callback(_log_build_completion)
     try:
         return fut.result(timeout=timeout)
     except FuturesTimeoutError:
-        logger.warning("score snapshot write timed out after %ds", timeout)
+        caller_abandoned.set()
+        logger.warning(
+            "score snapshot build timed out after %ds "
+            "(build continues in background)",
+            timeout,
+        )
         return {"ok": False, "error": f"write_timeout_{timeout}s"}
     except Exception as exc:
         logger.warning("score snapshot write failed: %s", exc)
