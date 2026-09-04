@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import tempfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -935,7 +936,14 @@ def isolate_liveness_persistence(tmp_path, monkeypatch):
         blob = _read() or {}
         mutator(blob)
         sm_path.parent.mkdir(parents=True, exist_ok=True)
-        sm_path.write_text(json.dumps(blob), encoding="utf-8")
+        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(blob, f)
+            os.replace(tmp, sm_path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
 
     monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
     monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
