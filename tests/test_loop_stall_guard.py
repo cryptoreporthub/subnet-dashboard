@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
+
 import os
 import threading
 import time
@@ -29,6 +31,29 @@ def _wire_snapshot_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(loop_health, "SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     return snap_path
+
+
+
+def _seed_degraded_status(tracker, status: str) -> None:
+    """Force liveness status to failing/stale/starved without changing lifecycle."""
+    if status == "failing":
+        tracker.record_success(evidence={"scanned": 1})
+        tracker.record_failure("boom")
+    elif status == "stale":
+        tracker.record_success(evidence={"scanned": 1})
+        tracker._last_success_epoch -= (
+            tracker.interval_seconds * tracker.staleness_factor + 10
+        )
+    elif status == "starved":
+        tracker.record_success(evidence={"scanned": 1})
+        tracker._last_success_epoch -= (
+            tracker.interval_seconds * tracker.staleness_factor + 10
+        )
+        for _ in range(tracker.skip_limit):
+            tracker.record_skip("heavy_job_busy")
+    else:
+        raise AssertionError(f"unexpected degraded status {status!r}")
+    assert tracker.snapshot()["status"] == status, tracker.snapshot()
 
 
 def test_probe_failures_are_warning_level_and_fail_closed(monkeypatch, caplog):
@@ -289,3 +314,124 @@ def test_try_revive_contract_uses_score_snapshot_revive():
     assert "from internal.council.resolver_scheduler import revive_prediction_resolver_scheduler" in src
     assert "desk_snapshot_scheduler" not in src
     assert "start_pump_desk" not in src
+
+
+def test_revive_recycled_on_started_with_degraded_status(tmp_path, monkeypatch):
+    """Compatibility lock: started + degraded status still recycles (lifecycle branch).
+
+    Parametrize statuses failing/stale/starved in-loop so the file stays at 13 pytest items.
+    """
+    for degraded in ("failing", "stale", "starved"):
+        snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+        _make_stale_snapshot(snap_path)
+        monkeypatch.setattr(
+            snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path)
+        )
+
+        snaps.stop_score_snapshot_scheduler()
+        sched = snaps.ScoreSnapshotScheduler()
+        sched.liveness.start()
+        _seed_degraded_status(sched.liveness, degraded)
+        assert sched.liveness.snapshot()["lifecycle"] == "started"
+        snaps._scheduler = sched
+
+        try:
+            out = snaps.revive_score_snapshot_scheduler()
+            assert out["recycled"] is True, degraded
+        finally:
+            snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_false_on_new_lifecycle_with_degraded_status(tmp_path, monkeypatch):
+    """lifecycle new must stay running=False even with a degraded status present."""
+    snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+    _make_stale_snapshot(snap_path)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
+
+    snaps.stop_score_snapshot_scheduler()
+    # Persist degraded status with lifecycle still "new", then hydrate a fresh tracker.
+    soul = tmp_path / "soul_map.json"
+    now = time.time()
+    soul.write_text(
+        json.dumps(
+            {
+                "liveness": {
+                    "score_snapshot": {
+                        "lifecycle": "new",
+                        "last_success_epoch": now - 10_000,
+                        "last_event_epoch": now,
+                        "consecutive_failures": 1,
+                        "consecutive_skips": 0,
+                        "last_error": "boom",
+                        "last_evidence": {"scanned": 1},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    sched = snaps.ScoreSnapshotScheduler()
+    live = sched.liveness.snapshot()
+    assert live["lifecycle"] == "new"
+    assert live["status"] == "failing"
+    # no start()
+    snaps._scheduler = sched
+
+    try:
+        out = snaps.revive_score_snapshot_scheduler()
+        assert out["recycled"] is False
+    finally:
+        snaps.stop_score_snapshot_scheduler()
+
+
+def test_revive_recycled_on_stopped_lifecycle_with_degraded_status(tmp_path, monkeypatch):
+    """ONLY proof status branch broadens running beyond lifecycle==started.
+
+    Covers failing/stale/starved (parametrize-over-statuses). Prefer soul_map
+    hydrate; fall back to tracker._lifecycle='stopped' when registry/cache is warm.
+    """
+    import internal.store.soul_map_io as smio
+
+    for degraded in ("failing", "stale", "starved"):
+        snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
+        _make_stale_snapshot(snap_path)
+        monkeypatch.setattr(
+            snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path)
+        )
+
+        snaps.stop_score_snapshot_scheduler()
+        soul = tmp_path / "soul_map.json"
+        now = time.time()
+        base = {
+            "lifecycle": "stopped",
+            "last_success_epoch": now - 10_000,
+            "last_event_epoch": now,
+            "consecutive_failures": 0,
+            "consecutive_skips": 0,
+            "last_error": None,
+            "last_evidence": {"scanned": 1},
+        }
+        soul.write_text(
+            json.dumps({"liveness": {"score_snapshot": base}}), encoding="utf-8"
+        )
+        # Bypass TTL cache so hydrate sees the stopped bucket we just wrote.
+        with smio._meta_lock:
+            smio._cache.clear()
+
+        sched = snaps.ScoreSnapshotScheduler()
+        if sched.liveness.snapshot().get("lifecycle") != "stopped":
+            # Fallback: direct lifecycle seed + degraded status.
+            sched.liveness._lifecycle = "stopped"
+        _seed_degraded_status(sched.liveness, degraded)
+        sched.liveness._lifecycle = "stopped"
+        live = sched.liveness.snapshot()
+        assert live["lifecycle"] == "stopped", live
+        assert live["status"] == degraded, live
+        snaps._scheduler = sched
+
+        try:
+            out = snaps.revive_score_snapshot_scheduler()
+            assert out["recycled"] is True, degraded
+        finally:
+            snaps.stop_score_snapshot_scheduler()
