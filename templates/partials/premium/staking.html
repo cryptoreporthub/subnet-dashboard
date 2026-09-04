@@ -9,15 +9,12 @@
   {% elif staking_rows %}
   <div class="mi-grid">
     {% for sn in staking_rows[:8] %}
-    {% set apy_raw = sn.apy|default(none) %}
-    {% if apy_raw is none and sn.staking_data is mapping %}
-      {% set apy_raw = sn.staking_data.apy %}
-    {% endif %}
-    {% set apy_pct = ((apy_raw|default(0))|float * 100) %}
+    {# staking_data.apy is a 0–1 fraction; subnet_apy_percent() converts once (same path as report/market_drivers). #}
+    {% set apy_pct = subnet_apy_percent(sn) %}
     {% set stake = sn.staking_data.total_stake|default(0) if sn.staking_data is mapping else 0 %}
     <div class="metric card">
       <div class="lbl">{{ sn.name|default('SN' ~ (sn.netuid|default(sn.id))) }}</div>
-      <div class="val accent-bright">{{ "%.2f"|format(apy_pct) }}%</div>
+      <div class="val accent-bright">{% if apy_pct is none %}—{% else %}{{ "%.2f"|format(apy_pct) }}%{% endif %}</div>
       <div class="sub">SN{{ sn.netuid|default(sn.id) }} · stake {{ stake|shorten if stake else '—' }}</div>
     </div>
     {% endfor %}
