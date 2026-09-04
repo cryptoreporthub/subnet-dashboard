@@ -126,11 +126,10 @@ def build_subnet_report(netuid: int) -> Dict[str, Any]:
     chg = subnet.get("price_change_24h")
     apy = decomp.get("staking_yield_apy")
     if apy is None:
-        raw_apy = subnet.get("apy")
-        if raw_apy is not None and float(raw_apy) <= 1:
-            apy = float(raw_apy) * 100
-        elif raw_apy is not None:
-            apy = float(raw_apy)
+        # Same conversion path as staking UI (fraction → percent once).
+        from internal.subnets.apy import subnet_apy_percent
+
+        apy = subnet_apy_percent(subnet)
 
     lines = [
         f"# {name} (SN{netuid})",

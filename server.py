@@ -501,8 +501,11 @@ templates.env.filters["shorten"] = _jinja_shorten
 from internal.council.publish_gate import publish_gate_label
 from internal.static_version import STATIC_V
 
+from internal.subnets.apy import subnet_apy_percent
+
 templates.env.globals["publish_gate_label"] = publish_gate_label
 templates.env.globals["static_v"] = STATIC_V
+templates.env.globals["subnet_apy_percent"] = subnet_apy_percent
 
 _static_dir = os.path.join(BASE_DIR, "static")
 if os.path.isdir(_static_dir):

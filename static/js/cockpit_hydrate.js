@@ -3651,7 +3651,7 @@
       return (
         '<div class="metric card">' +
         '<div class="lbl">' + esc(subnetName(sn)) + '</div>' +
-        '<div class="val accent-bright">' + (apy != null ? fmt(apy, 2) : '—') + '%</div>' +
+        '<div class="val accent-bright">' + (apy != null ? fmt(apy, 2) + '%' : '—') + '</div>' +
         '<div class="sub">SN' + esc(subnetNetuid(sn)) + ' · stake ' + esc(stake ? String(stake) : '—') + '</div></div>'
       );
     }).join('');
