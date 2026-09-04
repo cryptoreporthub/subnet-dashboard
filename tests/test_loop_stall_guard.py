@@ -93,10 +93,10 @@ def test_try_revive_targets_score_snapshot_scheduler(tmp_path, monkeypatch):
     _make_stale_snapshot(snap_path)
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write_that_saves(snap_path))
 
-    # Simulate alive-but-hung: scheduler claims running but file never updates.
+    # Simulate alive-but-hung: lifecycle claims started but file never updates.
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched.liveness.start()
     snaps._scheduler = sched
 
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
@@ -113,7 +113,7 @@ def test_try_revive_targets_score_snapshot_scheduler(tmp_path, monkeypatch):
 
 
 def test_revive_recycles_running_scheduler_in_guard_age_window(tmp_path, monkeypatch):
-    """5400–7200s window: guard already stale; recycle whenever _running."""
+    """5400–7200s window: guard already stale; recycle when lifecycle claims started."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     guard_stale_age = MAX_SNAPSHOT_AGE_SECONDS + 100
     assert guard_stale_age < snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS
@@ -122,7 +122,7 @@ def test_revive_recycles_running_scheduler_in_guard_age_window(tmp_path, monkeyp
 
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched.liveness.start()
     snaps._scheduler = sched
 
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
@@ -147,7 +147,7 @@ def test_revive_recycles_very_stale_running_scheduler(tmp_path, monkeypatch):
 
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched.liveness.start()
     snaps._scheduler = sched
 
     try:
@@ -178,7 +178,7 @@ def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
 
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched.liveness.start()
     sched._scoring_in_progress = lambda: False
     snaps._scheduler = sched
 
@@ -272,7 +272,7 @@ def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
 
     snaps.stop_score_snapshot_scheduler()
     sched = snaps.ScoreSnapshotScheduler()
-    sched._running = True
+    sched.liveness.start()
     snaps._scheduler = sched
 
     try:
