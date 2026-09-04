@@ -408,7 +408,7 @@ if _ENABLE_METRICS:
             PrometheusMiddleware,
             app_name="subnet_dashboard",
             remove_labels=["headers"],
-            skip_paths=["/metrics", "/health", "/api/health"],
+            skip_paths=["/metrics", "/health", "/api/health", "/version"],
         )
         app.add_route("/metrics", metrics_endpoint)
     except Exception as exc:
@@ -2304,6 +2304,14 @@ async def post_feedback(request: Request):
 async def health():
     # Must stay async — sync /health queues behind wedged thread-pool workers on Fly.
     return PlainTextResponse("OK")
+
+
+@app.get("/version")
+async def version():
+    """Deploy receipt: short sha from SENTRY_RELEASE (GIT_SHA build-arg). Always 200."""
+    from internal.deploy_version import build_version_payload
+
+    return JSONResponse(build_version_payload())
 
 
 @app.get("/robots.txt", response_class=PlainTextResponse)

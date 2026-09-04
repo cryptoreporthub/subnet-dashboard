@@ -1,4 +1,4 @@
-"""Outermost ASGI bailout — answer GET / and /health before FastAPI can wedge.
+"""Outermost ASGI bailout — answer GET /, /health, /version before FastAPI can wedge.
 
 Fly returns 0-byte 503 when the worker never responds (~36s). Sync routes,
 lifespan Jinja priming, and a saturated Starlette thread pool can block the
@@ -96,7 +96,7 @@ async def _send_response(
 
 
 class InstantBailoutASGI:
-    """Serve / and /health without calling the inner app when possible."""
+    """Serve /, /health, /version without calling the inner app when possible."""
 
     def __init__(
         self,
@@ -138,6 +138,13 @@ class InstantBailoutASGI:
 
         if method == "GET" and path == "/api/health":
             body = json.dumps({"status": "ok"}).encode("utf-8")
+            await _send_response(send, status=200, body=body, content_type="application/json; charset=utf-8")
+            return
+
+        if method == "GET" and path == "/version":
+            from internal.deploy_version import build_version_payload
+
+            body = json.dumps(build_version_payload()).encode("utf-8")
             await _send_response(send, status=200, body=body, content_type="application/json; charset=utf-8")
             return
 

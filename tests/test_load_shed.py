@@ -6,6 +6,7 @@ from internal.load_shed import LoadShedMiddleware, bypass_path
 def test_bypass_paths():
     assert bypass_path("/health")
     assert bypass_path("/api/health")
+    assert bypass_path("/version")
     assert bypass_path("/api/ops/live")
     assert bypass_path("/static/js/app.js")
     assert bypass_path("/api/letter/brain")

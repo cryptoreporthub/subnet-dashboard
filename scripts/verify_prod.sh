@@ -42,6 +42,21 @@ for i in 1 2 3; do
 done
 echo "health summary: $health_ok/3 OK"
 
+echo "== version deploy-receipt =="
+if curl_json_safe "$BASE/version" /tmp/version.json 8; then
+  python3 -c "
+import json
+d=json.load(open('/tmp/version.json'))
+print('version:', d.get('version'))
+print('sentry_release:', d.get('sentry_release'))
+print('python:', d.get('python'))
+assert 'version' in d, 'version key required'
+assert d.get('version'), 'version must be non-empty (unknown ok)'
+"
+else
+  echo "WARN: /version skipped — endpoint slow or wedged"
+fi
+
 echo "== learning loop health (Phase 0–6) =="
 if curl_json_safe "$BASE/api/learning/health" /tmp/learning_health.json 10; then
   python3 -c "

@@ -66,6 +66,7 @@ Then push to `main` (or merge the PR) to trigger a deploy.
 ### Verification (after a successful deploy)
 ```bash
 curl https://subnet-dashboard.fly.dev/health            # -> OK
+curl https://subnet-dashboard.fly.dev/version           # -> JSON version/sentry_release/python; compare version to main sha
 curl https://subnet-dashboard.fly.dev/api/freshness     # -> JSON with timestamps
 curl https://subnet-dashboard.fly.dev/api/pick-history  # -> JSON
 curl https://subnet-dashboard.fly.dev/                  # -> 200 homepage

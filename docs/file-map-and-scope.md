@@ -19,7 +19,7 @@ date: 2026-06-17
 ```
 subnet-dashboard/
 ├── server.py                              # Main Flask entry point (915 LoC)
-│   ├── HTTP routes: /, /api/*, /api/signals, /health
+│   ├── HTTP routes: /, /api/*, /api/signals, /health, /version
 │   ├── SimiVision card builder: _build_simivision_choices()
 │   ├── Synthetic fallback decisions: _synthesize_decisions()
 │   ├── Registry enrichment: _enrich_registry(), _summarize_registry()
