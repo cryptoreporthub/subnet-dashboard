@@ -16,9 +16,50 @@ jobs:
     # PRs are gated by ci-smoke.yml (job: smoke). Re-run contract here before deploy
     # so production never depends on workflow ordering on main.
     steps:
+      # Merged docs-only fly-deploy vehicles (closed+merged) must deploy
+      # origin/main HEAD — not pull_request.head.sha — so the post-deploy
+      # /version gate simplifies to: /version == main short SHA.
+      # Unmerged labeled PRs still deploy the PR head. workflow_dispatch
+      # still uses github.sha. See #1182/#1183 / run 33832841118.
+      - name: Resolve deploy checkout ref
+        id: deploy_ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "Resolved: workflow_dispatch → github.sha (${{ github.sha }})"
+            exit 0
+          fi
+          MERGED="${{ github.event.pull_request.merged }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          if [ "$MERGED" = "true" ]; then
+            # Closest safe variant: require docs-only under docs/deploy-vehicles/
+            # before retargeting to main. Non-docs merged PRs fail closed.
+            mapfile -t files < <(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/files" --paginate -q '.[].filename')
+            bad=()
+            for f in "${files[@]}"; do
+              case "$f" in
+                docs/deploy-vehicles/*) ;;
+                *) bad+=("$f") ;;
+              esac
+            done
+            if [ "${#bad[@]}" -gt 0 ]; then
+              echo "GUARD FAIL: merged PR #$PR_NUM is not docs-only under docs/deploy-vehicles/; refusing main retarget"
+              printf '%s\n' "${bad[@]}"
+              exit 1
+            fi
+            echo "ref=refs/heads/main" >> "$GITHUB_OUTPUT"
+            echo "Resolved: merged docs-only vehicle PR #$PR_NUM → refs/heads/main (enables /version == main SHA)"
+          else
+            echo "ref=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+            echo "Resolved: unmerged PR #$PR_NUM → head.sha ${HEAD_SHA}"
+          fi
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ steps.deploy_ref.outputs.ref }}
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
@@ -60,9 +101,50 @@ jobs:
     needs: deploy-guard
     if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'fly-deploy' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'cryptoreporthub') }}
     steps:
+      # Merged docs-only fly-deploy vehicles (closed+merged) must deploy
+      # origin/main HEAD — not pull_request.head.sha — so the post-deploy
+      # /version gate simplifies to: /version == main short SHA.
+      # Unmerged labeled PRs still deploy the PR head. workflow_dispatch
+      # still uses github.sha. See #1182/#1183 / run 33832841118.
+      - name: Resolve deploy checkout ref
+        id: deploy_ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "ref=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "Resolved: workflow_dispatch → github.sha (${{ github.sha }})"
+            exit 0
+          fi
+          MERGED="${{ github.event.pull_request.merged }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          PR_NUM="${{ github.event.pull_request.number }}"
+          if [ "$MERGED" = "true" ]; then
+            # Closest safe variant: require docs-only under docs/deploy-vehicles/
+            # before retargeting to main. Non-docs merged PRs fail closed.
+            mapfile -t files < <(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}/files" --paginate -q '.[].filename')
+            bad=()
+            for f in "${files[@]}"; do
+              case "$f" in
+                docs/deploy-vehicles/*) ;;
+                *) bad+=("$f") ;;
+              esac
+            done
+            if [ "${#bad[@]}" -gt 0 ]; then
+              echo "GUARD FAIL: merged PR #$PR_NUM is not docs-only under docs/deploy-vehicles/; refusing main retarget"
+              printf '%s\n' "${bad[@]}"
+              exit 1
+            fi
+            echo "ref=refs/heads/main" >> "$GITHUB_OUTPUT"
+            echo "Resolved: merged docs-only vehicle PR #$PR_NUM → refs/heads/main (enables /version == main SHA)"
+          else
+            echo "ref=${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+            echo "Resolved: unmerged PR #$PR_NUM → head.sha ${HEAD_SHA}"
+          fi
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ steps.deploy_ref.outputs.ref }}
       - uses: superfly/flyctl-actions/setup-flyctl@master
         with:
           version: latest  # Must be >= 0.2.71 #
