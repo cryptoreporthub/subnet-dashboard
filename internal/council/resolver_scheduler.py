@@ -35,6 +35,11 @@ from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.store.soul_map_io import write_soul_map
 
 from internal.liveness import LivenessTracker
+from internal.ops.mutation_log import (
+    bind_patchd_context,
+    log_lifecycle,
+    reset_patchd_context,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -456,6 +461,18 @@ class PredictionResolverScheduler:
                 duration_ms,
                 result.get("error"),
             )
+            log_lifecycle(
+                "timeout",
+                trigger="resolver_cycle",
+                cycle_generation=self._cycle_generation,
+                extra={
+                    "abandoned_live": result.get("abandoned_live"),
+                    "event": "timeout",
+                    "first_tick": first_tick,
+                    "duration_ms": round(duration_ms, 1),
+                    "error": result.get("error"),
+                },
+            )
         elif result.get("skipped"):
             logger.info(
                 "resolver lifecycle event=skip first=%s duration_ms=%.1f reason=%s",
@@ -468,6 +485,17 @@ class PredictionResolverScheduler:
                 "resolver lifecycle event=success first=%s duration_ms=%.1f",
                 first_tick,
                 duration_ms,
+            )
+            log_lifecycle(
+                "success",
+                trigger="resolver_cycle",
+                cycle_generation=self._cycle_generation,
+                extra={
+                    "abandoned_live": result.get("abandoned_live"),
+                    "event": "success",
+                    "first_tick": first_tick,
+                    "duration_ms": round(duration_ms, 1),
+                },
             )
         else:
             logger.warning(
@@ -509,6 +537,13 @@ class PredictionResolverScheduler:
     def _abandon_inflight_cycle(self) -> None:
         """Release wedge after cycle timeout; orphan thread must not double-release."""
         self._cycle_generation += 1
+        log_lifecycle(
+            "abandon",
+            trigger="resolver_cycle",
+            cycle_generation=self._cycle_generation,
+            abandoned=True,
+            extra={"event": "abandon"},
+        )
         try:
             self._cycle_lock.release()
         except RuntimeError:
@@ -542,9 +577,11 @@ class PredictionResolverScheduler:
         if timeout <= 0:
             timing = _CycleTiming(abandoned_live)
             token = _cycle_timing.set(timing)
+            ctx_token = bind_patchd_context(cycle_generation=self._cycle_generation)
             try:
                 return self._run_refresh_cycle()
             finally:
+                reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
                 self._cycle_lock.release()
 
@@ -552,6 +589,7 @@ class PredictionResolverScheduler:
         gen = self._cycle_generation
         pool = ThreadPoolExecutor(max_workers=1)
         timing = _CycleTiming(abandoned_live)
+        ctx_token = bind_patchd_context(cycle_generation=gen)
 
         def _run_cycle() -> Dict[str, Any]:
             token = _cycle_timing.set(timing)
@@ -601,6 +639,18 @@ class PredictionResolverScheduler:
                 self._cycle_lock.release()
             raise
         finally:
+            log_lifecycle(
+                "shutdown",
+                trigger="resolver_cycle",
+                cycle_generation=self._cycle_generation,
+                extra={
+                    "event": "shutdown",
+                    "wait": False,
+                    "cancel_futures": True,
+                    "cancel_futures_requested": True,
+                },
+            )
+            reset_patchd_context(ctx_token)
             pool.shutdown(wait=False, cancel_futures=True)
 
     def _apply_cycle_timing(
