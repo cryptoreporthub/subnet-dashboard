@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/AGENTS.md
+
+Markdown Content:
 # AGENTS.md
 
 ## Cursor Cloud specific instructions
@@ -92,6 +97,13 @@ Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slo
   slice-by-slice into `server.py` (or app-internal routers imported by it), each
   with its routes added to the contract test.
 
+### server.py freeze rule (2026-09-02)
+- **No net-new logic in `server.py`** — new code goes in `internal/*` routers imported by it. The
+  include_router block remains the declared A/B conflict surface.
+- **Opportunistic extraction:** when a route is touched for a bugfix or incident fix, move its
+  handler into a router in the same PR if the move is small. Piggyback, don't campaign.
+- **One planned exception:** council/daily-pick handlers extract WITH the state-layer gateway
+  work (#1060 family) — their I/O rewires anyway; one move, not two.
 ### Deploy (Fly.io)
 - `.github/workflows/fly.yml` deploys on push to `main`: a Deploy Guard (static
   checks + the endpoint-contract test) gates `flyctl deploy --remote-only --no-cache --yes`.
