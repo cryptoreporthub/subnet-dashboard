@@ -10,6 +10,24 @@ from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
+def _log_scheduler_start(name: str, result: object) -> None:
+    """Log every scheduler start() result; WARNING when started=False (never swallow)."""
+    if not isinstance(result, dict):
+        logger.info("%s start result: %s", name, result)
+        return
+    not_started: list = []
+    if result.get("started") is False:
+        not_started.append(result)
+    for key in ("daily", "hour"):
+        nested = result.get(key)
+        if isinstance(nested, dict) and nested.get("started") is False:
+            not_started.append({key: nested})
+    if not_started:
+        logger.warning("%s start result (started=False): %s", name, result)
+    else:
+        logger.info("%s start result: %s", name, result)
+
+
 BOOT_DEFER_SECONDS = int(os.environ.get("BOOT_DEFER_SECONDS", "45"))
 
 
@@ -71,8 +89,8 @@ def _start_pump_ladder() -> None:
     def _run() -> None:
         from internal.pump.scheduler import ensure_pump_ladder_scheduler
 
-        ensure_pump_ladder_scheduler(immediate=_pump_boot_immediate())
-        logger.info("pump ladder scheduler started (immediate=%s)", _pump_boot_immediate())
+        result = ensure_pump_ladder_scheduler(immediate=_pump_boot_immediate())
+        _log_scheduler_start("pump_ladder", result)
 
     from internal.run_mode import inline_worker_expected, is_worker_mode
 
@@ -101,8 +119,8 @@ def _start_resolver() -> None:
             "yes",
             "on",
         )
-        start_prediction_resolver_scheduler(immediate=immediate)
-        logger.info("prediction resolver scheduler started (immediate=%s)", immediate)
+        result = start_prediction_resolver_scheduler(immediate=immediate)
+        _log_scheduler_start("prediction_resolver", result)
 
         def _recover() -> None:
             try:
@@ -191,8 +209,8 @@ def _start_pick_schedulers() -> None:
             "yes",
             "on",
         )
-        start_pick_schedulers(immediate=immediate)
-        logger.info("daily/hour pick schedulers started")
+        result = start_pick_schedulers(immediate=immediate)
+        _log_scheduler_start("daily_hour_pick", result)
 
     # After resolver (+10); avoid coinciding with pump first scan.
     defer_boot("pick-schedulers", _run, delay=max(BOOT_DEFER_SECONDS + 20, 60))
@@ -291,8 +309,8 @@ def _start_score_snapshot_scheduler() -> None:
             "yes",
             "on",
         )
-        start_score_snapshot_scheduler(immediate=immediate)
-        logger.info("score snapshot scheduler started (immediate=%s)", immediate)
+        result = start_score_snapshot_scheduler(immediate=immediate)
+        _log_scheduler_start("score_snapshot", result)
 
     # After pick schedulers; full score is heavier.
     defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
@@ -310,8 +328,8 @@ def _start_pick_audit_scheduler() -> None:
             "yes",
             "on",
         )
-        start_pick_audit_scheduler(immediate=immediate)
-        logger.info("pick selection audit scheduler started (immediate=%s)", immediate)
+        result = start_pick_audit_scheduler(immediate=immediate)
+        _log_scheduler_start("pick_selection_audit", result)
 
     defer_boot("pick-audit-scheduler", _run, delay=max(BOOT_DEFER_SECONDS + 50, 95))
 
@@ -328,8 +346,8 @@ def _start_pump_desk_snapshot_scheduler() -> None:
             "yes",
             "on",
         )
-        start_pump_desk_snapshot_scheduler(immediate=immediate)
-        logger.info("pump desk snapshot scheduler started (immediate=%s)", immediate)
+        result = start_pump_desk_snapshot_scheduler(immediate=immediate)
+        _log_scheduler_start("pump_desk_snapshot", result)
 
     defer_boot("pump-desk-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 55, 100))
 
@@ -346,8 +364,8 @@ def _start_outcome_snapshot_scheduler() -> None:
             "yes",
             "on",
         )
-        start_outcome_snapshot_scheduler(immediate=immediate)
-        logger.info("outcome snapshot scheduler started (immediate=%s)", immediate)
+        result = start_outcome_snapshot_scheduler(immediate=immediate)
+        _log_scheduler_start("learning_outcome_snapshot", result)
 
     defer_boot("outcome-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 30, 75))
 
@@ -366,8 +384,8 @@ def _start_calibration_snapshot_scheduler() -> None:
             "yes",
             "on",
         )
-        start_calibration_snapshot_scheduler(immediate=immediate)
-        logger.info("calibration snapshot scheduler started (immediate=%s)", immediate)
+        result = start_calibration_snapshot_scheduler(immediate=immediate)
+        _log_scheduler_start("calibration_snapshot", result)
 
     defer_boot("calibration-snapshot", _run, delay=max(BOOT_DEFER_SECONDS + 35, 80))
 
@@ -389,7 +407,7 @@ def _start_dev_radar_github_scheduler() -> None:
             "on",
         )
         result = start_dev_radar_github_scheduler(immediate=immediate)
-        logger.info("dev radar github scheduler: %s", result)
+        _log_scheduler_start("dev_radar_github", result)
 
     defer_boot("dev-radar-github", _run, delay=max(BOOT_DEFER_SECONDS + 60, 120))
 

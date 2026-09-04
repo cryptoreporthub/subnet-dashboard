@@ -276,6 +276,7 @@ def test_ops_readiness_contract():
     assert "resolver" in body
     assert "liveness" in body
     assert "pump_desk_trust" in body
+    assert "pump_desk_snapshot_scheduler" in body
     assert "subnet_feed" in body
     assert "daily_pick" in body
     assert "next_levers" in body
