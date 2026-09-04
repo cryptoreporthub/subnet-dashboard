@@ -195,6 +195,12 @@ def build_readiness_report() -> Dict[str, Any]:
     learning = _learning_summary()
     daily = _daily_pick_summary()
     pump_desk_trust = _pump_desk_trust_from_liveness(liveness)
+    try:
+        from internal.pump.desk_snapshot_scheduler import get_pump_desk_snapshot_scheduler_state
+
+        pump_desk_snapshot_scheduler = get_pump_desk_snapshot_scheduler_state()
+    except Exception as exc:
+        pump_desk_snapshot_scheduler = {"enabled": None, "error": str(exc)}
 
     loop_health = _learning_loop_health()
     if loop_health.get("status") == "stalled":
@@ -319,6 +325,7 @@ def build_readiness_report() -> Dict[str, Any]:
         "liveness": public_liveness_registry(liveness),
         "resolver": resolver,
         "pump_desk_trust": pump_desk_trust,
+        "pump_desk_snapshot_scheduler": pump_desk_snapshot_scheduler,
         "registry_sync": {
             "background_running": sync.get("background_running"),
             "last_sync_at": sync.get("last_sync_at"),

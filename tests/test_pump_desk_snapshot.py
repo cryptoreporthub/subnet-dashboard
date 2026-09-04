@@ -151,3 +151,46 @@ def test_pump_desk_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path)
         return sched.PumpDeskSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+def test_scheduler_enabled_registers_liveness_tracker(monkeypatch):
+    monkeypatch.setenv("PUMP_DESK_SNAPSHOT_ENABLED", "on")
+    monkeypatch.setattr(
+        sched,
+        "schedule_interval_seconds",
+        lambda *args, **kwargs: None,
+    )
+    monkeypatch.setattr(sched, "_scheduler", None)
+    # Clear prior registry entry if present
+    try:
+        from internal import liveness as liv
+
+        liv._REGISTRY.pop("pump_desk_snapshot", None)
+    except Exception:
+        pass
+
+    out = sched.start_pump_desk_snapshot_scheduler()
+    assert out["started"] is True
+    from internal.liveness import get_tracker
+
+    assert get_tracker("pump_desk_snapshot") is not None
+    sched.stop_pump_desk_snapshot_scheduler()
+
+
+def test_scheduler_double_start_is_idempotent(monkeypatch):
+    monkeypatch.setenv("PUMP_DESK_SNAPSHOT_ENABLED", "on")
+    scheduled = []
+    monkeypatch.setattr(
+        sched,
+        "schedule_interval_seconds",
+        lambda *args, **kwargs: scheduled.append((args, kwargs)),
+    )
+    monkeypatch.setattr(sched, "_scheduler", None)
+
+    first = sched.start_pump_desk_snapshot_scheduler()
+    second = sched.start_pump_desk_snapshot_scheduler()
+    assert first["started"] is True
+    assert second["started"] is False
+    assert second["reason"] == "already running"
+    assert len(scheduled) == 1
+    sched.stop_pump_desk_snapshot_scheduler()
