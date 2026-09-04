@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~19:14Z (main `24488f4e` #1107 merged; prod recovering; soak **restarted** 18:52:52Z)
+**Snapshot:** 2026-08-29 ~16:45Z — freeze PRs **#1126 #1127 #1128 READY** (smoke green). Do not merge/deploy/restart until Joshua says so. Soak/hold **#1072** expires **2026-08-29 18:52:52Z**.
 
 ---
 
@@ -68,6 +68,15 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 - **G0 harness ×2 → #1058 formal close** — after soak.
 - **Resolver watch** — if tick wedges again past 180s cap, capture phase/subsystem delta; do NOT just bump higher (#1107 is mitigation).
 - Hydrate drafts **#1073 / #1060 / #1061** untouched.
+
+### 2026-08-29 ~16:45Z — freeze PRs ready (no merge/deploy/restart)
+
+- **#1126** pump `_running`→`_active` (`cursor/pump-running-attr-d36d`) — smoke green, **ready**.
+- **#1127** snapshot deferred-completion rearm + start-path (`cursor/1113-snapshot-rearm-d36d`) — smoke green, **ready**.
+- **#1128** pick start-path + singleton `reschedule=False` rearm (`cursor/pick-rearm-gate-d36d`) — smoke green, **ready**.
+- Do **not** merge, deploy, or restart until Joshua says so. `LOOP_STALL_GUARD_KILL=0`. **#1060 / #1112** stay open.
+- After merge: one approved restart is required before `/jobs` can show snapshot+picks (C1 this gen). Resolver CLASS A recovered — no 4th PR.
+- Prod still v2101 / pid 648 / machine `7841024b3712e8`. Hold **#1072** expires **18:52:52Z**.
 
 ---
 
