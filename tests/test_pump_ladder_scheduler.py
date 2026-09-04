@@ -2,12 +2,46 @@
 
 from __future__ import annotations
 
+import json
+
 from contextlib import contextmanager
 from unittest.mock import patch
 
 import pytest
 
 from tests.liveness_conformance import assert_liveness_compliant
+
+
+@pytest.fixture(autouse=True)
+def isolate_liveness_persistence(tmp_path, monkeypatch):
+    """Point internal.liveness soul-map IO at a per-test JSON file (atomic)."""
+    import os
+    import tempfile
+    from internal import liveness as _liv_mod
+
+    sm_path = tmp_path / "liveness_soul_map.json"
+
+    def _read():
+        try:
+            return json.loads(sm_path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+    def _write(mutator):
+        blob = _read() or {}
+        mutator(blob)
+        sm_path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=str(sm_path.parent), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(blob, f)
+            os.replace(tmp, sm_path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+
+    monkeypatch.setattr(_liv_mod, "read_soul_map", _read)
+    monkeypatch.setattr(_liv_mod, "write_soul_map", _write)
 
 
 def _make_scheduler():
@@ -114,8 +148,7 @@ def test_record_ladder_scan_run_persists_meta(tmp_path, monkeypatch):
 
 
 def test_tracker_is_liveness_compliant():
-    sched = _make_scheduler()
-    assert_liveness_compliant(lambda: sched.liveness)
+    assert_liveness_compliant(lambda: _make_scheduler().liveness)
 
 
 def test_ensure_returns_already_running_when_active():
