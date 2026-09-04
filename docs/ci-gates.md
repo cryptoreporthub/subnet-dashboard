@@ -11,7 +11,7 @@ That single job now runs:
 3. `pytest tests/test_endpoint_contract.py tests/test_server.py` with `DISABLE_BACKGROUND_SCANS=1`
 4. `bandit` (high severity)
 5. Lint report (black/flake8, **non-blocking**)
-6. Live `GET /health` and `GET /api/subnets`
+6. Live `GET /health`, `GET /version` (deploy receipt), and `GET /api/subnets`
 
 ## Removed (2026-07-24)
 

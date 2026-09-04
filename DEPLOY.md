@@ -27,6 +27,7 @@ flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattach
 ./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
 flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
+curl -fsS https://subnet-dashboard.fly.dev/version  # {"version":"<short sha>",…} — compare to main
 ```
 
 Or: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (after merging deploy-fix PR).
@@ -38,6 +39,7 @@ CI (`main` push) runs Deploy Guard then deploys automatically when green.
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
+| `GET /version` | 200 JSON `{"version":"<short sha>","sentry_release":"…","python":"…"}` — compare `version` to `main` SHA (first 7 of `git rev-parse origin/main`) |
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
@@ -161,6 +163,7 @@ Wait until `flyctl certs show dashboard.cryptoreporthub.com` reports **Ready**, 
 
 ```bash
 curl -fsS https://dashboard.cryptoreporthub.com/health
+curl -fsS https://dashboard.cryptoreporthub.com/version  # deploy receipt vs main sha
 ```
 
 Human steps — the agent cannot access your registrar or Fly account without credentials.

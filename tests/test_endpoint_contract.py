@@ -23,6 +23,7 @@ from server import app
 CONTRACT = [
     ("GET", "/", None),
     ("GET", "/health", None),
+    ("GET", "/version", None),
     ("GET", "/robots.txt", None),
     ("GET", "/preview/tribunal", None),
     ("GET", "/preview/k3-hold", None),
