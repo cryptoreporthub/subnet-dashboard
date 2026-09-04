@@ -123,7 +123,14 @@ def test_dockerfile_bakes_sentry_release_from_git_sha():
 
 
 def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
-    """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off."""
+    """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off.
+
+    #1185: the deploy checkout ref resolves at runtime via the deploy_ref step
+    (steps.deploy_ref.outputs.ref). Merged docs-only vehicles under
+    docs/deploy-vehicles/* retarget refs/heads/main so /version gates on the main
+    short SHA; unmerged labeled PRs deploy the PR head SHA. The pre-#1185 inline
+    `github.event.pull_request.head.sha || github.sha` expression must be gone.
+    """
     yml = _fly_yml()
     on_block = yml.split("jobs:", 1)[0]
     assert "workflow_dispatch:" in on_block
@@ -138,8 +145,14 @@ def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
         "github.actor == 'cryptoreporthub')"
     )
     assert yml.count(gate) == 2
-    assert "github.event.pull_request.head.sha || github.sha" in yml
-    assert yml.count("ref: ${{ github.event.pull_request.head.sha || github.sha }}") == 2
+    # #1185: ref-resolve step replaced the inline head.sha || github.sha expression.
+    assert "steps.deploy_ref.outputs.ref" in yml
+    assert yml.count("ref: ${{ steps.deploy_ref.outputs.ref }}") == 2
+    # Merged docs-only vehicles retarget origin/main; non-docs merged PRs fail closed.
+    assert "refs/heads/main" in yml
+    assert "docs/deploy-vehicles/*" in yml
+    # Migration guard: the pre-#1185 inline ref expression is gone.
+    assert "github.event.pull_request.head.sha || github.sha" not in yml
 
 
 def test_fly_yml_passes_sentry_release_build_arg():
