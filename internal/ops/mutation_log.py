@@ -1,4 +1,20 @@
-"""Patch D writer/lifecycle mutation logs. Instrumentation only — no control-flow changes."""
+"""Patch D writer/lifecycle mutation logs. Instrumentation only — no control-flow changes.
+
+``resolver_cycle_id`` scheme (when a resolver cycle is in flight)::
+
+    {pid}:{cycle_generation}:{run_at}
+
+``run_at`` is the ISO timestamp captured at submit (may contain colons).
+Parse from the left: pid, generation, remainder is ``run_at``.
+
+The field is always present on the JSON payload. Direct writers
+(``save_predictions``, ``append_prediction``, ``_write_scheduler_state``,
+and ``resolver._save_json`` outside a bound cycle) set it to JSON null —
+unavailable on that path, not silently omitted. Resolver scheduler paths
+bind the id inside the executor ``_run_cycle`` (or the timeout<=0 in-thread
+path) so pool-worker writes inherit the submitted cycle identity even after
+the parent bumps ``_cycle_generation`` on abandon.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +39,11 @@ _ctx: ContextVar[Optional[dict]] = ContextVar("patchd_mutation_ctx", default=Non
 
 def ts_utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def make_resolver_cycle_id(cycle_generation: Any, run_at: str) -> str:
+    """Stable per-cycle id: ``{pid}:{cycle_generation}:{run_at}``."""
+    return f"{os.getpid()}:{cycle_generation}:{run_at}"
 
 
 def bind_patchd_context(
@@ -70,7 +91,13 @@ def log_mutation(
     prefix: str = MUTATION_PREFIX,
     extra: Optional[dict] = None,
 ) -> None:
-    """Emit one structured info line. Never raises."""
+    """Emit one structured info line. Never raises.
+
+    ``resolver_cycle_id`` is always in the payload (JSON null when no cycle
+    is bound — see module docstring). Prefer ``bind_patchd_context`` on the
+    thread that performs the write (executor ``_run_cycle``), not only the
+    scheduling thread.
+    """
     try:
         ctx = _ctx.get() or {}
         if cycle_generation is None:

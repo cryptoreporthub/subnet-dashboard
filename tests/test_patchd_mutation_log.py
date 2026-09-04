@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 from pathlib import Path
 
 import pytest
@@ -181,3 +183,59 @@ def test_lifecycle_helper_emits_timeout_fields(caplog):
     assert p["cycle_generation"] == 3
     assert p["abandoned_live"] == 1
     assert p["wait"] is False
+
+
+def test_direct_writer_resolver_cycle_id_is_json_null(tmp_path, monkeypatch, caplog):
+    """Direct save_predictions is not in a resolver cycle — field is null, not omitted."""
+    from internal.learning import predictions_store
+
+    path = tmp_path / "predictions.json"
+    lock = tmp_path / "predictions.json.lock"
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_PATH", str(path))
+    monkeypatch.setattr(predictions_store, "PREDICTIONS_LOCK_PATH", str(lock))
+    caplog.set_level(logging.INFO, logger="internal.ops.mutation_log")
+    predictions_store.save_predictions(predictions_store._default_data())
+    for payload in _payloads(caplog):
+        assert "resolver_cycle_id" in payload
+        assert payload["resolver_cycle_id"] is None
+
+
+def test_bind_inside_executor_survives_parent_gen_bump(tmp_path, caplog):
+    """Simulates _run_cycle: bind on the worker after parent generation already moved."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from internal.council import resolver
+    from internal.ops.mutation_log import bind_patchd_context, reset_patchd_context
+
+    parent_ident = threading.get_ident()
+    path = tmp_path / "predictions.json"
+    caplog.set_level(logging.INFO, logger="internal.ops.mutation_log")
+    submitted_gen = 7
+    cycle_id = f"{os.getpid()}:{submitted_gen}:2026-09-04T00:00:00Z"
+
+    def _run_cycle():
+        token = bind_patchd_context(
+            cycle_generation=submitted_gen,
+            resolver_cycle_id=cycle_id,
+            trigger="resolver_cycle",
+        )
+        try:
+            resolver._save_json(str(path), {"ok": True}, caller="resolver")
+            return threading.get_ident()
+        finally:
+            reset_patchd_context(token)
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        worker_ident = pool.submit(_run_cycle).result(timeout=5)
+
+    assert worker_ident != parent_ident
+    writes = [
+        p
+        for p in _payloads(caplog)
+        if p.get("writer_function") == "resolver._save_json"
+    ]
+    assert writes
+    for payload in writes:
+        assert payload["cycle_generation"] == submitted_gen
+        assert payload["resolver_cycle_id"] == cycle_id
+        assert payload["thread_id"] == worker_ident

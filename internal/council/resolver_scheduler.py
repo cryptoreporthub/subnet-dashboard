@@ -38,6 +38,7 @@ from internal.liveness import LivenessTracker
 from internal.ops.mutation_log import (
     bind_patchd_context,
     log_lifecycle,
+    make_resolver_cycle_id,
     reset_patchd_context,
 )
 
@@ -464,7 +465,8 @@ class PredictionResolverScheduler:
             log_lifecycle(
                 "timeout",
                 trigger="resolver_cycle",
-                cycle_generation=self._cycle_generation,
+                cycle_generation=result.get("cycle_generation"),
+                resolver_cycle_id=result.get("resolver_cycle_id"),
                 extra={
                     "abandoned_live": result.get("abandoned_live"),
                     "event": "timeout",
@@ -489,7 +491,8 @@ class PredictionResolverScheduler:
             log_lifecycle(
                 "success",
                 trigger="resolver_cycle",
-                cycle_generation=self._cycle_generation,
+                cycle_generation=result.get("cycle_generation"),
+                resolver_cycle_id=result.get("resolver_cycle_id"),
                 extra={
                     "abandoned_live": result.get("abandoned_live"),
                     "event": "success",
@@ -534,13 +537,22 @@ class PredictionResolverScheduler:
         except Exception:
             pass
 
-    def _abandon_inflight_cycle(self) -> None:
+    def _abandon_inflight_cycle(
+        self,
+        *,
+        submitted_gen: Optional[int] = None,
+        resolver_cycle_id: Any = None,
+    ) -> None:
         """Release wedge after cycle timeout; orphan thread must not double-release."""
+        abandoned_gen = (
+            submitted_gen if submitted_gen is not None else self._cycle_generation
+        )
         self._cycle_generation += 1
         log_lifecycle(
             "abandon",
             trigger="resolver_cycle",
-            cycle_generation=self._cycle_generation,
+            cycle_generation=abandoned_gen,
+            resolver_cycle_id=resolver_cycle_id,
             abandoned=True,
             extra={"event": "abandon"},
         )
@@ -575,11 +587,22 @@ class PredictionResolverScheduler:
             else RESOLVER_CYCLE_TIMEOUT_SECONDS
         )
         if timeout <= 0:
+            run_at = _now_iso()
+            gen = self._cycle_generation
+            cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
             token = _cycle_timing.set(timing)
-            ctx_token = bind_patchd_context(cycle_generation=self._cycle_generation)
+            ctx_token = bind_patchd_context(
+                cycle_generation=gen,
+                resolver_cycle_id=cycle_id,
+                trigger="resolver_cycle",
+            )
             try:
-                return self._run_refresh_cycle()
+                result = self._run_refresh_cycle()
+                if isinstance(result, dict):
+                    result["cycle_generation"] = gen
+                    result["resolver_cycle_id"] = cycle_id
+                return result
             finally:
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
@@ -587,11 +610,17 @@ class PredictionResolverScheduler:
 
         self._cycle_generation += 1
         gen = self._cycle_generation
+        run_at = _now_iso()
+        cycle_id = make_resolver_cycle_id(gen, run_at)
         pool = ThreadPoolExecutor(max_workers=1)
         timing = _CycleTiming(abandoned_live)
-        ctx_token = bind_patchd_context(cycle_generation=gen)
 
         def _run_cycle() -> Dict[str, Any]:
+            ctx_token = bind_patchd_context(
+                cycle_generation=gen,
+                resolver_cycle_id=cycle_id,
+                trigger="resolver_cycle",
+            )
             token = _cycle_timing.set(timing)
             try:
                 if gen != self._cycle_generation:
@@ -602,10 +631,17 @@ class PredictionResolverScheduler:
                         "expired_now": 0,
                         "pending": 0,
                         "skipped": "cycle_abandoned",
+                        "cycle_generation": gen,
+                        "resolver_cycle_id": cycle_id,
                     }
-                return self._run_refresh_cycle()
+                result = self._run_refresh_cycle()
+                if isinstance(result, dict):
+                    result["cycle_generation"] = gen
+                    result["resolver_cycle_id"] = cycle_id
+                return result
             finally:
                 _cycle_timing.reset(token)
+                reset_patchd_context(ctx_token)
                 if gen == self._cycle_generation:
                     self._cycle_lock.release()
 
@@ -616,7 +652,9 @@ class PredictionResolverScheduler:
             try:
                 return fut.result(timeout=timeout)
             except FuturesTimeoutError:
-                self._abandon_inflight_cycle()
+                self._abandon_inflight_cycle(
+                    submitted_gen=gen, resolver_cycle_id=cycle_id
+                )
                 with self._lock:
                     self._abandoned_live += 1
                     abandoned_live = self._abandoned_live
@@ -630,6 +668,8 @@ class PredictionResolverScheduler:
                     "pending": 0,
                     "error": f"cycle_timeout_{timeout}s",
                     "abandoned_live": abandoned_live,
+                    "cycle_generation": gen,
+                    "resolver_cycle_id": cycle_id,
                 }
                 self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(result)
@@ -642,7 +682,8 @@ class PredictionResolverScheduler:
             log_lifecycle(
                 "shutdown",
                 trigger="resolver_cycle",
-                cycle_generation=self._cycle_generation,
+                cycle_generation=gen,
+                resolver_cycle_id=cycle_id,
                 extra={
                     "event": "shutdown",
                     "wait": False,
@@ -650,7 +691,6 @@ class PredictionResolverScheduler:
                     "cancel_futures_requested": True,
                 },
             )
-            reset_patchd_context(ctx_token)
             pool.shutdown(wait=False, cancel_futures=True)
 
     def _apply_cycle_timing(

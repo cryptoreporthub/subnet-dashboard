@@ -14,6 +14,7 @@ Covers:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import threading
@@ -883,6 +884,149 @@ def test_resolver_cycle_timeout_does_not_overlap_inflight_work(
     recovered = sched._run_refresh_cycle_with_timeout()
     assert recovered.get("ok") is True
     assert recovered.get("skipped") != "cycle_in_flight"
+
+
+def _patchd_payloads(caplog, prefix: str = "patchd_mutation"):
+    out = []
+    for rec in caplog.records:
+        msg = rec.getMessage()
+        if not msg.startswith(prefix + " "):
+            continue
+        out.append(json.loads(msg[len(prefix) + 1 :]))
+    return out
+
+
+def test_patchd_timeout_and_shutdown_call_args_unchanged():
+    """Smoke-visible: instrumentation must not change timeout defaults or shutdown args."""
+    from pathlib import Path
+
+    sched = Path("internal/council/resolver_scheduler.py").read_text(encoding="utf-8")
+    pick = Path("internal/council/pick_scheduler.py").read_text(encoding="utf-8")
+    assert 'os.environ.get("RESOLVER_CYCLE_TIMEOUT_SECONDS", "120")' in sched
+    assert 'os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90")' in pick
+    assert sched.count("pool.shutdown(wait=False, cancel_futures=True)") == 1
+    assert pick.count("pool.shutdown(wait=False, cancel_futures=True)") == 1
+
+
+def test_patchd_mutation_logs_bind_on_executor_thread(
+    monkeypatch, fresh_scheduler, tmp_path, caplog
+):
+    """Worker-thread resolver._save_json logs use the submitted cycle gen, not the parent thread."""
+    parent_ident = threading.get_ident()
+    worker = {}
+    pred_path = tmp_path / "predictions.json"
+
+    def _work(self):
+        worker["ident"] = threading.get_ident()
+        resolver._save_json(str(pred_path), {"ok": True}, caller="resolver")
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _work,
+    )
+    caplog.set_level(logging.INFO, logger="internal.ops.mutation_log")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = False
+    result = sched._run_refresh_cycle_with_timeout()
+    assert result.get("ok") is True
+    submitted_gen = result["cycle_generation"]
+    cycle_id = result["resolver_cycle_id"]
+    assert submitted_gen == 1
+    parts = str(cycle_id).split(":", 2)
+    assert parts[0] == str(os.getpid())
+    assert parts[1] == str(submitted_gen)
+    assert parts[2]
+    assert worker["ident"] != parent_ident
+    writes = [
+        p
+        for p in _patchd_payloads(caplog)
+        if p.get("writer_function") == "resolver._save_json"
+    ]
+    assert writes
+    for payload in writes:
+        assert payload["cycle_generation"] == submitted_gen
+        assert payload["resolver_cycle_id"] == cycle_id
+        assert payload["thread_id"] == worker["ident"]
+        assert payload["trigger"] == "resolver_save"
+
+
+def test_patchd_abandoned_worker_keeps_submitted_gen(
+    monkeypatch, fresh_scheduler, tmp_path, caplog
+):
+    """Abandon bumps scheduler gen; orphan worker mutation logs keep submitted gen."""
+    started = threading.Event()
+    release = threading.Event()
+    pred_path = tmp_path / "orphan_predictions.json"
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        resolver._save_json(str(pred_path), {"orphan": True}, caller="resolver")
+        return {
+            "ok": True,
+            "run_at": resolver_scheduler._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(
+        resolver_scheduler.PredictionResolverScheduler,
+        "_run_refresh_cycle",
+        _blocked,
+    )
+    caplog.set_level(logging.INFO, logger="internal.ops.mutation_log")
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+    timed_out = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(timed_out["error"])
+    submitted_gen = timed_out["cycle_generation"]
+    cycle_id = timed_out["resolver_cycle_id"]
+    assert submitted_gen == 1
+    assert sched._cycle_generation == submitted_gen + 1
+    lifecycle = _patchd_payloads(caplog, prefix="patchd_lifecycle")
+    abandon_logs = [p for p in lifecycle if p.get("operation") == "abandon"]
+    shutdown_logs = [p for p in lifecycle if p.get("operation") == "shutdown"]
+    assert abandon_logs
+    assert abandon_logs[-1]["cycle_generation"] == submitted_gen
+    assert abandon_logs[-1]["resolver_cycle_id"] == cycle_id
+    assert shutdown_logs[-1]["cycle_generation"] == submitted_gen
+    assert shutdown_logs[-1]["resolver_cycle_id"] == cycle_id
+
+    release.set()
+    writes = []
+    deadline = time.time() + 2
+    while time.time() < deadline:
+        writes = [
+            p
+            for p in _patchd_payloads(caplog)
+            if p.get("writer_function") == "resolver._save_json"
+            and p.get("operation") == "completed"
+        ]
+        if writes:
+            break
+        time.sleep(0.02)
+    assert writes
+    assert writes[-1]["cycle_generation"] == submitted_gen
+    assert writes[-1]["resolver_cycle_id"] == cycle_id
+    assert writes[-1]["thread_id"] != threading.get_ident()
 
 
 def test_resolver_first_tick_success_is_observable(monkeypatch, fresh_scheduler, caplog):
