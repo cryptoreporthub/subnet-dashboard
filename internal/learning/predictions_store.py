@@ -146,32 +146,89 @@ def load_predictions(*, persist: bool = False) -> Dict[str, Any]:
     return data
 
 
-def save_predictions(data: Dict[str, Any]) -> None:
+def save_predictions(data: Dict[str, Any], *, trigger: str = "save_predictions") -> None:
     """Write predictions.json atomically with cross-process file locking.
 
     Uses fcntl.flock to prevent race conditions between web and worker processes.
     Lock acquisition times out after 5 seconds to avoid hanging request handlers.
     """
+    from internal.ops.mutation_log import log_mutation
+
     try:
         with locked_predictions_file(timeout_seconds=5.0):
-            _write_predictions_unlocked(data)
+            _write_predictions_unlocked(
+                data, writer_function="save_predictions", trigger=trigger
+            )
     except FileLockTimeout:
+        log_mutation(
+            operation="failed",
+            path=PREDICTIONS_PATH,
+            writer_function="save_predictions",
+            trigger=trigger,
+        )
         logger.error(
             "Failed to acquire predictions.json lock within 5s - possible deadlock or long-running write"
         )
         raise
     except Exception as exc:
+        log_mutation(
+            operation="failed",
+            path=PREDICTIONS_PATH,
+            writer_function="save_predictions",
+            trigger=trigger,
+        )
         logger.warning("Failed to persist predictions.json: %s", exc)
         raise
 
 
-def _write_predictions_unlocked(data: Dict[str, Any]) -> None:
+def _write_predictions_unlocked(
+    data: Dict[str, Any],
+    *,
+    writer_function: str = "_write_predictions_unlocked",
+    trigger: str = "save_predictions",
+) -> None:
     """Atomically write predictions.json while the caller owns the file lock."""
-    os.makedirs(os.path.dirname(PREDICTIONS_PATH) or ".", exist_ok=True)
-    tmp = PREDICTIONS_PATH + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, indent=2)
-    os.replace(tmp, PREDICTIONS_PATH)
+    from internal.ops.mutation_log import log_mutation
+
+    path = PREDICTIONS_PATH
+    log_mutation(
+        operation="start",
+        path=path,
+        writer_function=writer_function,
+        trigger=trigger,
+    )
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        tmp = path + ".tmp"
+        log_mutation(
+            operation="temp-write",
+            path=path,
+            writer_function=writer_function,
+            trigger=trigger,
+        )
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(data, handle, indent=2)
+        log_mutation(
+            operation="rename",
+            path=path,
+            writer_function=writer_function,
+            trigger=trigger,
+        )
+        os.replace(tmp, path)
+        log_mutation(
+            operation="completed",
+            path=path,
+            writer_function=writer_function,
+            trigger=trigger,
+        )
+    except Exception:
+        log_mutation(
+            operation="failed",
+            path=path,
+            writer_function=writer_function,
+            trigger=trigger,
+        )
+        raise
 
 
 def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bool = False) -> bool:
@@ -190,7 +247,7 @@ def has_pending_duplicate(netuid: Any, horizon_type: str = "hour", *, shadow: bo
     return False
 
 
-def append_prediction(prediction: Dict[str, Any]) -> bool:
+def append_prediction(prediction: Dict[str, Any], *, trigger: str = "append_prediction") -> bool:
     """Append a pending prediction if no duplicate is already pending.
 
     Duplicate key: same ``netuid`` + ``horizon_type`` + shadow flag while pending.
@@ -224,7 +281,9 @@ def append_prediction(prediction: Dict[str, Any]) -> bool:
         pending.append(prediction)
         data["predictions"] = pending
         update_stats(data)
-        _write_predictions_unlocked(data)
+        _write_predictions_unlocked(
+            data, writer_function="append_prediction", trigger=trigger
+        )
     return True
 
 

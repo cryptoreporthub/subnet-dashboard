@@ -190,13 +190,43 @@ def _load_json(path: str, default: Any) -> Any:
     return result
 
 
-def _save_json(path: str, data: Any, *, caller: Optional[str] = None) -> None:
+def _save_json(
+    path: str,
+    data: Any,
+    *,
+    caller: Optional[str] = None,
+    trigger: Optional[str] = None,
+) -> None:
     """Write JSON file atomically with caller attribution."""
+    from internal.ops.mutation_log import log_mutation
+
+    reason = trigger or "resolver_save"
+    log_mutation(
+        operation="start",
+        path=path,
+        writer_function="resolver._save_json",
+        trigger=reason,
+        caller=caller,
+    )
     try:
         from internal.file_utils import safe_write_json
 
         safe_write_json(path, data)
+        log_mutation(
+            operation="completed",
+            path=path,
+            writer_function="resolver._save_json",
+            trigger=reason,
+            caller=caller,
+        )
     except Exception as exc:
+        log_mutation(
+            operation="failed",
+            path=path,
+            writer_function="resolver._save_json",
+            trigger=reason,
+            caller=caller,
+        )
         src = caller or "unknown"
         logger.warning(
             "Failed to persist %s (source=%s): %s",

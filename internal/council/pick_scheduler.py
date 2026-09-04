@@ -92,22 +92,48 @@ def _today_pick_ready() -> bool:
         return False
 
 
-def _write_scheduler_state(extra: Optional[Dict[str, Any]] = None) -> None:
+def _write_scheduler_state(
+    extra: Optional[Dict[str, Any]] = None, *, trigger: str = "daily_pick_tick"
+) -> None:
     """Volume file so web /api/learning/health can see worker scheduler status."""
+    from internal.ops.mutation_log import log_mutation
+
+    writer = "_write_scheduler_state"
+    path = PICK_SCHEDULER_STATE_PATH
+    log_mutation(
+        operation="start", path=path, writer_function=writer, trigger=trigger
+    )
     try:
         payload = get_pick_scheduler_state()
         if extra:
             payload = {**payload, **extra}
         payload["written_at"] = _now_iso()
-        path = PICK_SCHEDULER_STATE_PATH
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         tmp = path + ".tmp"
         import json
 
+        log_mutation(
+            operation="temp-write",
+            path=path,
+            writer_function=writer,
+            trigger=trigger,
+        )
         with open(tmp, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
+        log_mutation(
+            operation="rename", path=path, writer_function=writer, trigger=trigger
+        )
         os.replace(tmp, path)
+        log_mutation(
+            operation="completed",
+            path=path,
+            writer_function=writer,
+            trigger=trigger,
+        )
     except Exception as exc:
+        log_mutation(
+            operation="failed", path=path, writer_function=writer, trigger=trigger
+        )
         logger.warning("pick scheduler state write failed: %s", exc)
 
 
