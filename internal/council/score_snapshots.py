@@ -762,8 +762,19 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     recycled = False
     with _lock:
         sched = _scheduler
+        live = sched.liveness.snapshot() if sched else {}
+        status_indicates_running = live.get("status") in {
+            "failing",
+            "stale",
+            "starved",
+        }
         running = bool(
-            sched and sched.liveness.snapshot().get("lifecycle") == "started"
+            sched
+            and live.get("lifecycle") != "new"
+            and (
+                live.get("lifecycle") == "started"
+                or status_indicates_running
+            )
         )
         tick_in_progress = (
             _write_future_active()
