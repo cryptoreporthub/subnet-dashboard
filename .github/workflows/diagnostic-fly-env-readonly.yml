@@ -1,0 +1,24 @@
+name: diagnostic-fly-env-readonly
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * *'
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install flyctl
+        run: |
+          curl -L https://fly.io/install.sh | sh
+          echo "$HOME/.fly/bin" >> "$GITHUB_PATH"
+      - name: Machine config
+        run: flyctl machine show 7841024b3712e8
+      - name: Secret names (redacted)
+        run: flyctl secrets list --app subnet-dashboard | awk '{print $1}'
+      - name: Machine inventory
+        run: flyctl machines list --app subnet-dashboard
+      - name: Boot probe
+        run: flyctl logs --app subnet-dashboard -n 200 | grep -iE "skip|inline|worker" || echo "boot line outside window"
