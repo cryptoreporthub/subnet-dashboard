@@ -580,9 +580,10 @@ def lookup_horizon_price(
     now: datetime,
     live_prices: Optional[Dict[Any, float]] = None,
     cache_path: Optional[str] = None,
+    cache: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, float, Dict[str, Any]]:
     """Return (status, price, meta). status: ok | ungradeable."""
-    cache = _load_json(cache_path or PRICE_CACHE_PATH, {})
+    cache = cache if cache is not None else _load_json(cache_path or PRICE_CACHE_PATH, {})
     status, price, meta = price_at_resolve_at(
         prediction.get("netuid"),
         resolve_at,
@@ -912,6 +913,7 @@ def resolve_prediction_at_horizon(
     grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
     subnet_row: Optional[Dict[str, Any]] = None,
     apply_judge_nudge: bool = True,
+    cache: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Grade at ``resolve_at`` price; expire late rows; never use stale live price."""
     if _already_graded(prediction):
@@ -933,6 +935,7 @@ def resolve_prediction_at_horizon(
         resolve_at=resolve_at,
         now=now,
         live_prices=live_prices,
+        cache=cache,
     )
     if status != "ok" or price <= 0:
         if _is_expired(prediction, resolve_at, now, grace_multiple):
@@ -1250,6 +1253,7 @@ def _resolve_due_predictions(
     # silently overwritten when resolve_due_predictions saves its stale in-memory list.
     if regraded_expired.get("ledger_mutated") or int(regraded_expired.get("regraded") or 0) > 0:
         resolved = _merge_regraded_resolved(resolved)
+    cache = _load_json(PRICE_CACHE_PATH, {})
     subnet_by_uid: Dict[Any, Dict[str, Any]] = {}
     if subnets:
         for sn in subnets:
@@ -1308,50 +1312,32 @@ def _resolve_due_predictions(
                 # Non-pump predictions past grace: attempt a candle-based late
                 # grade before retiring so a cold price_cache at the original
                 # deadline does not permanently lose a valid call.
-                # hydrate_candles_for_netuid is rate-limited; if it runs, we
-                # reload the cache inside lookup_horizon_price automatically.
+                # hydrate_candles_for_netuid is rate-limited; reload the shared
+                # cycle snapshot after dispatch before grading through the shim.
                 try:
                     hydrate_candles_for_netuid(uid)
-                    p_status, p_price, p_meta = lookup_horizon_price(
+                    cache = _load_json(PRICE_CACHE_PATH, {})
+                    late_result = resolve_prediction_at_horizon(
                         pred,
-                        resolve_at=resolve_at,
                         now=now,
                         live_prices=prices,
+                        subnet_row=subnet_by_uid.get(uid),
+                        # This branch is explicitly the past-grace recovery
+                        # path; preserve its prior candle-grade opportunity
+                        # while routing the lookup through the shim.
+                        # Keep the date arithmetic finite; this is only a
+                        # bypass for the already-selected late-recovery path.
+                        grace_multiple=1_000_000.0,
+                        cache=cache,
                     )
-                    if p_status == "ok" and p_price > 0:
-                        ref = float(pred.get("reference_price", 0) or 0)
-                        if is_price_unit_mismatch(ref, p_price):
-                            pred["retirement_reason"] = "price_unit_mismatch"
-                            resolved.append(_mark_ungradeable(pred, now))
-                            continue
-                        actual_pct = compute_actual_pct(ref, p_price)
-                        correct, outcome = grade_prediction(pred, actual_pct)
-                        capture = stamp_capture_fields(pred, actual_pct)
-                        resolved_at_str = resolve_at.isoformat().replace("+00:00", "Z")
-                        expert, _ = _stamp_and_nudge_expert(
-                            pred, correct=bool(correct), capture=capture
-                        )
-                        _ensure_subnet_snapshot(pred, subnet_row=subnet_by_uid.get(uid))
-                        if not _skip_council_learning(pred):
-                            _nudge_impact_strength(pred, bool(correct))
-                        atomic_finalize_resolution(
-                            pred,
-                            actual_pct=actual_pct,
-                            outcome=outcome,
-                            correct=correct,
-                            resolved_price=p_price,
-                            resolved_at=resolved_at_str,
-                            price_meta=p_meta,
-                        )
-                        if not _skip_council_learning(pred):
-                            _record_scenario_outcome(pred, actual_pct, outcome, bool(correct), expert)
-                            _nudge_signal_weights(pred, bool(correct), capture=capture)
-                        resolved.append(pred)
-                        resolved_now.append(pred)
+                    if late_result.get("status") in {"resolved", "ungradeable"}:
+                        resolved.append(late_result)
+                        if late_result.get("status") in {"resolved", "ungradeable"}:
+                            resolved_now.append(late_result)
                         continue
-                    else:
-                        # Cache was cold — signal that, not genuine expiry.
-                        pred["price_data_unavailable"] = True
+                    # Cache was cold or the row remained pending — signal that,
+                    # not genuine expiry, before the existing expiry handling.
+                    pred["price_data_unavailable"] = True
                 except Exception:
                     pass
             _expire_prediction(pred, now)
@@ -1367,7 +1353,11 @@ def _resolve_due_predictions(
                 pred["_volume_signal"] = signals["volume"]
             before_status = pred.get("status")
             resolve_prediction_at_horizon(
-                pred, now=now, live_prices=prices, subnet_row=subnet_by_uid.get(uid)
+                pred,
+                now=now,
+                live_prices=prices,
+                subnet_row=subnet_by_uid.get(uid),
+                cache=cache,
             )
             pred.pop("_rsi_signal", None)
             pred.pop("_volume_signal", None)
@@ -1445,6 +1435,7 @@ def regrade_expired_predictions(
     resolved: List[Dict[str, Any]] = list(data.get("resolved", []))
     regraded: List[Dict[str, Any]] = []
     attempted = 0
+    cache: Optional[Dict[str, Any]] = None
 
     too_old_updated: List[int] = []  # indices updated to horizon_too_old_for_history
     hist_stamp_updated: List[int] = []  # indices stamped historical_hydration_attempted but still ungradeable
@@ -1473,7 +1464,7 @@ def regrade_expired_predictions(
         # When historical hydration returns None the prediction is older than
         # CALIBRATION_HIST_MAX_DAYS; retire it with a distinct reason so the
         # regrade loop does not repeatedly attempt an unboundedly large fetch.
-        _historical_hydration_dispatched = False
+        hydration_dispatched = False
         if pred.get("retirement_reason") == "missing_price_at_horizon":
             try:
                 now_for_age = datetime.now(timezone.utc)
@@ -1492,18 +1483,27 @@ def regrade_expired_predictions(
                     # hydrate_result is True (fetched) or False (rate-limited) — either
                     # way the historical hydration path was attempted for this row.
                     copy["historical_hydration_attempted"] = True
-                    _historical_hydration_dispatched = True
+                    hydration_dispatched = True
                     hist_hydration_attempted += 1
                 else:
                     hydrate_candles_for_netuid(copy.get("netuid"))
+                    hydration_dispatched = True
             except Exception:
                 pass
+        if hydration_dispatched:
+            # Unconditionally refresh after every hydration dispatch so the
+            # grade sees any candles written by the dispatch.
+            cache = _load_json(PRICE_CACHE_PATH, {})
+        elif cache is None:
+            # The first row that reaches grading gets the batch snapshot.
+            cache = _load_json(PRICE_CACHE_PATH, {})
         attempt_now = resolve_at + timedelta(minutes=5)
         result = resolve_prediction_at_horizon(
             copy,
             now=attempt_now,
             live_prices=live_prices,
             apply_judge_nudge=False,
+            cache=cache,
         )
         grading_succeeded = (
             result.get("outcome") not in {"duplicate", "expired", "ungradeable"}
@@ -1516,7 +1516,7 @@ def regrade_expired_predictions(
             # Persist the historical_hydration_attempted stamp to the on-disk row
             # so operators can distinguish "hydration was tried, still no price"
             # from "hydration was never triggered at all".
-            if _historical_hydration_dispatched:
+            if hydration_dispatched:
                 if not pred.get("historical_hydration_attempted"):
                     updated = dict(pred)
                     updated["historical_hydration_attempted"] = True

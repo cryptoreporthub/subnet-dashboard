@@ -59,6 +59,7 @@ def apply_resolver_semantics_patch() -> None:
         now: datetime,
         live_prices: Optional[Dict[Any, float]] = None,
         cache_path: Optional[str] = None,
+        cache: Optional[Dict[str, Any]] = None,
     ) -> Tuple[str, float, Dict[str, Any]]:
         status, price, meta = original_lookup_horizon_price(
             prediction,
@@ -66,6 +67,7 @@ def apply_resolver_semantics_patch() -> None:
             now=now,
             live_prices=live_prices,
             cache_path=cache_path,
+            cache=cache,
         )
         if status == "ok" and price > 0:
             prediction.pop("price_data_unavailable", None)
