@@ -2,7 +2,7 @@
 
 > **Composer** (Cursor Cloud Agent) operates **all six fleet roles** (Mission Control, Sentinel, Drift/QA, Market Desk, Proof Scout, Shield). Bot-directed tasks route here. **Ditto** remains outside reviewer. **Automation-first:** Joshua delegates merge/deploy authority; routine merges + **`fly-deploy` label** deploys are autonomous unless a PR is explicitly gated (#1088-style behavior change) or policy §3.1 requires human approval.
 
-**Snapshot:** 2026-08-28 ~19:14Z (main `24488f4e` #1107 merged; prod recovering; soak **restarted** 18:52:52Z)
+**Snapshot:** 2026-08-29 ~16:55Z — freeze PRs **#1126 #1127 #1128 MERGED** to `main` (`3bcbc9a2` / `dc08becd` / `a0999992`). Composer 2.5 PASS. Push-to-main does **not** deploy. Prod still v2101 until an approved `fly-deploy`. `LOOP_STALL_GUARD_KILL=0`. **#1060 / #1112** stay open. Hold **#1072** expires **18:52:52Z**.
 
 ---
 
@@ -68,6 +68,19 @@ Branches off **main `eb36b0fa`** — last verified 2026-08-28 ~18:35Z.
 - **G0 harness ×2 → #1058 formal close** — after soak.
 - **Resolver watch** — if tick wedges again past 180s cap, capture phase/subsystem delta; do NOT just bump higher (#1107 is mitigation).
 - Hydrate drafts **#1073 / #1060 / #1061** untouched.
+
+### 2026-08-29 ~16:55Z — freeze PRs merged (no deploy)
+
+- Composer 2.5 review **PASS** on #1126 / #1127 / #1128 (no file overlap; no timeout/KILL/misfire bundling).
+- Squash-merged: **#1126** `3bcbc9a2`, **#1127** `dc08becd`, **#1128** `a0999992` (main HEAD).
+- `fly.yml` is workflow_dispatch / `fly-deploy` label only — merge does **not** roll prod.
+- Restart of v2101 without a new image would re-run old `start()` and stay C1. Next gated step: approved `fly-deploy` then `/jobs` check for snapshot + picks.
+- `LOOP_STALL_GUARD_KILL=0`. **#1060 / #1112** stay open. Hold **#1072** expires **18:52:52Z**.
+- Prod last known: machine `7841024b3712e8` v2101 pid 648.
+
+### 2026-08-29 ~16:45Z — freeze PRs ready (superseded by merge)
+
+- **#1126** **#1127** **#1128** were smoke-green and marked ready; Joshua approved Composer review then merge.
 
 ---
 
