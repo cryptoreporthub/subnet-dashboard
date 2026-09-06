@@ -1187,3 +1187,92 @@ def test_cycle_timing_snapshot_exposes_nonstage_ms_keys():
     snap = t.snapshot()
     assert "stages_sum_ms" in snap
     assert "nonstage_ms" in snap
+
+def test_b1_complete_false_on_timeout_partial(monkeypatch, fresh_scheduler):
+    """B1 locked decision: an abandoned cycle persists complete=False with start stamp, no end stamp."""
+    started = threading.Event()
+    release = threading.Event()
+
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+
+    def _blocked_provider():
+        started.set()
+        release.wait(timeout=2)
+        return []
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_blocked_provider
+    )
+    sched._active = True
+    sched._first_tick_pending = True
+
+    first = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(first["error"])
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    timing = summary["stage_timing_ms"]
+    gap = timing["gap_timing_ms"]
+    assert gap["complete"] is False
+    assert isinstance(gap["soul_map_bytes_start"], (int, type(None)))
+    assert gap["soul_map_bytes_end"] is None
+    # Fence: stage sums + nonstage unchanged by the presence of the gap bucket.
+    assert "stages_sum_ms" in timing and "nonstage_ms" in timing
+
+    release.set()
+
+
+def test_b1_natural_cycle_complete_true_and_inert(monkeypatch, fresh_scheduler):
+    """Natural completion: complete=True, stamps present, additive-only diff."""
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda resolved_now: {"triggered": False},
+    )
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    result = sched.run_once()
+    assert result["ok"] is True
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    timing = summary["stage_timing_ms"]
+    gap = timing["gap_timing_ms"]
+    assert gap["complete"] is True
+    assert isinstance(gap["soul_map_bytes_start"], (int, type(None)))
+    assert isinstance(gap["soul_map_bytes_end"], (int, type(None)))
+    # Inertness: no flat numeric sibling keys leaked into the aggregate.
+    flat = {k: v for k, v in timing.items() if k != "gap_timing_ms"}
+    assert all(
+        isinstance(v, (int, float))
+        for k, v in flat.items()
+        if k not in ("active_stage",)
+    )
