@@ -1019,6 +1019,7 @@ def test_patchd_abandoned_worker_keeps_submitted_gen(
             for p in _patchd_payloads(caplog)
             if p.get("writer_function") == "resolver._save_json"
             and p.get("operation") == "completed"
+            and p.get("resolver_cycle_id") == cycle_id
         ]
         if writes:
             break
