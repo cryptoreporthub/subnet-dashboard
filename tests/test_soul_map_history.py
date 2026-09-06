@@ -87,3 +87,33 @@ def test_complete_flag_defaults_false_and_sets_true():
     snap = t.snapshot()
     assert snap["gap_timing_ms"]["complete"] is True
 
+def test_gap_buckets_allocate_without_double_counting():
+    """B1b: closing math — gap = interval minus its stage; window closes exactly."""
+    from internal.council.resolver_scheduler import _compute_gap_buckets
+
+    cps = [
+        ("t0", 0.0),
+        ("t1", 250.0),
+        ("t2", 500.0),
+        ("t3", 750.0),
+        ("t4", 1000.0),
+        ("t5", 1250.0),
+        ("t6", 1500.0),
+        ("t7", 1750.0),
+    ]
+    stage_ms = {
+        "ledger_heal": 200.0,
+        "subnet_provider": 200.0,
+        "soul_map_load": 200.0,
+        "resolve_due": 200.0,
+        "expire_stale": 200.0,
+        "auto_retrain": 200.0,
+    }
+    total_ms = 1750.0
+    buckets, gaps_sum = _compute_gap_buckets(cps, stage_ms)
+    assert len(buckets) == 7
+    # Six intervals carry a 200ms stage inside a 250ms interval; t6->t7 is bare.
+    assert all(buckets["gap_%d_ms" % i] == 50.0 for i in range(6))
+    assert buckets["gap_6_ms"] == 250.0
+    assert gaps_sum == 550.0
+    assert abs(total_ms - (sum(stage_ms.values()) + gaps_sum)) < 1e-6
