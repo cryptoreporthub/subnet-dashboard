@@ -61,6 +61,39 @@ _STAGE_TIMING_META_KEYS = frozenset(
 )
 
 
+# B1b: per-interval stage names, in code order (one stage per checkpoint gap).
+_CHECKPOINT_GAP_STAGES = (
+    "ledger_heal",
+    "subnet_provider",
+    "soul_map_load",
+    "resolve_due",
+    "expire_stale",
+    "auto_retrain",
+)
+
+
+def _compute_gap_buckets(checkpoints, stage_ms):
+    """B1b: derive per-region gap buckets from consecutive checkpoint pairs.
+
+    Each checkpoint interval contains exactly one stage (sequential
+    with-timing blocks), so the pure gap for interval i is the interval
+    length minus stage i's recorded duration. The last interval (t6->t7)
+    holds no stage: it is the straight-line assembly region. Returns
+    ({gap_<i>_ms: float}, gaps_sum).
+    """
+    buckets = {}
+    gaps_sum = 0.0
+    for i in range(len(checkpoints) - 1):
+        interval_ms = (checkpoints[i + 1][1] - checkpoints[i][1]) * 1000
+        stage = 0.0
+        if i < len(_CHECKPOINT_GAP_STAGES):
+            stage = stage_ms.get(_CHECKPOINT_GAP_STAGES[i], 0.0) or 0.0
+        gap = max(0.0, interval_ms - stage)
+        buckets["gap_%d_ms" % i] = round(gap, 1)
+        gaps_sum += gap
+    return buckets, gaps_sum
+
+
 def compute_stages_sum_and_nonstage(stage_timing_ms: Dict[str, Any]) -> Dict[str, float]:
     """Pure rollup: sum named stage ms vs total_cycle_ms gap (nonstage_ms)."""
     timing = dict(stage_timing_ms or {})
@@ -187,6 +220,7 @@ class _CycleTiming:
         self._soul_map_bytes_start: Optional[int] = None
         self._soul_map_bytes_end: Optional[int] = None
         self._complete = False
+        self._checkpoints = []
         self._abandoned_live = abandoned_live
         self._abandoned = False
 
@@ -224,6 +258,11 @@ class _CycleTiming:
             elif at == "end":
                 self._soul_map_bytes_end = size_bytes
 
+    def checkpoint(self, name: str) -> None:
+        """B1b: record a named cycle checkpoint (t0..t7); gaps are derived in snapshot()."""
+        with self._lock:
+            self._checkpoints.append((name, time.perf_counter()))
+
     def mark_complete(self) -> None:
         """B1 locked decision: natural completion carries complete=True (field, not inferred)."""
         with self._lock:
@@ -255,6 +294,7 @@ class _CycleTiming:
             soul_map_bytes_start = self._soul_map_bytes_start
             soul_map_bytes_end = self._soul_map_bytes_end
             complete = self._complete
+            checkpoints = list(self._checkpoints)
             active_stage = self._active_stage
             abandoned_live = self._abandoned_live
         stage_timing_ms["total_cycle_ms"] = round(
@@ -268,9 +308,18 @@ class _CycleTiming:
             "soul_map_bytes_end": soul_map_bytes_end,
             "complete": complete,
         }
+        # B1b: per-region gap buckets from t0..t7 checkpoints. unallocated_ms
+        # closes the window: total - (stages + gaps) is ~noise on natural
+        # cycles; a large residual means time leaked outside both stages and
+        # recorded gaps (the B1 hunt).
+        gap_buckets, gaps_sum = _compute_gap_buckets(checkpoints, stage_timing_ms)
+        gap_timing_ms.update(gap_buckets)
         rollup = compute_stages_sum_and_nonstage(stage_timing_ms)
         stage_timing_ms["stages_sum_ms"] = rollup["stages_sum_ms"]
         stage_timing_ms["nonstage_ms"] = rollup["nonstage_ms"]
+        gap_timing_ms["unallocated_ms"] = round(
+            stage_timing_ms["total_cycle_ms"] - rollup["stages_sum_ms"] - gaps_sum, 1
+        )
         return {
             "stage_timing_ms": stage_timing_ms,
             "gap_timing_ms": gap_timing_ms,
@@ -815,6 +864,8 @@ class PredictionResolverScheduler:
         except OSError:
             timing.record_soul_map_size("start", None)
 
+        timing.checkpoint("t0")  # B1b: entry boundary
+
         def persist_partial() -> None:
             if timing.is_abandoned():
                 return
@@ -833,10 +884,12 @@ class PredictionResolverScheduler:
                         "ledger heal in resolver tick failed: %s", heal_exc
                     )
 
-            with timing.stage("subnet_provider", persist_partial):
+            timing.checkpoint("t1")  # B1b
+        with timing.stage("subnet_provider", persist_partial):
                 subnets = self._subnet_provider() or []
 
-            with timing.stage("soul_map_load", persist_partial):
+            timing.checkpoint("t2")  # B1b
+        with timing.stage("soul_map_load", persist_partial):
                 soul_data = _load_json(self.soul_map_path)
             sched_state = soul_data.get("prediction_resolver_scheduler", {})
             if not isinstance(sched_state, dict):
@@ -855,7 +908,8 @@ class PredictionResolverScheduler:
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
-            with timing.stage("resolve_due", persist_partial):
+            timing.checkpoint("t3")  # B1b
+        with timing.stage("resolve_due", persist_partial):
                 resolved = self._resolve_with_timing(subnets, timing)
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
@@ -865,7 +919,8 @@ class PredictionResolverScheduler:
             #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
             #    Most are already retired in step 1; this catches stragglers
             #    (e.g. corrupt records that step 1 skipped).
-            with timing.stage("expire_stale", persist_partial):
+            timing.checkpoint("t4")  # B1b
+        with timing.stage("expire_stale", persist_partial):
                 expired = resolver.expire_stale_predictions()
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count
@@ -876,7 +931,8 @@ class PredictionResolverScheduler:
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
             # N3: optional env-gated auto-retrain after resolver (non-blocking).
-            with timing.stage("auto_retrain", persist_partial):
+            timing.checkpoint("t5")  # B1b
+
                 try:
                     from internal.calibration.scheduler import maybe_trigger_auto_retrain
 
@@ -885,6 +941,7 @@ class PredictionResolverScheduler:
                     )
                 except Exception as exc:
                     result["auto_retrain"] = {"triggered": False, "error": str(exc)}
+        timing.checkpoint("t6")  # B1b: post auto_retrain boundary
         except Exception as exc:
             result["error"] = str(exc)
         finally:
@@ -896,6 +953,7 @@ class PredictionResolverScheduler:
                 except OSError:
                     timing.record_soul_map_size("end", None)
                 timing.mark_complete()
+                timing.checkpoint("t7")  # B1b: window closes at persist entry
                 self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(result)
         return result
