@@ -224,6 +224,70 @@ jobs:
             echo "pattern_hits present — see logs/correlated.md artifact" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+
+      - name: Snapshot prediction_resolver_scheduler from soul_map
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="logs"
+          OUT_FILE="$OUT_DIR/soul_map_prediction_resolver_scheduler.json"
+          mkdir -p "$OUT_DIR"
+          MAX_BYTES=65536
+          # Server-side extract only the prediction_resolver_scheduler block (not full soul_map).
+          if ! flyctl ssh console -a subnet-dashboard -C "python3 -c \"import json; d=json.load(open('data/soul_map.json')); print(json.dumps(d.get('prediction_resolver_scheduler', {}), separators=(',', ':')))\"" \
+            > "$OUT_FILE.raw" 2>"$OUT_FILE.err"; then
+            {
+              echo '{"error":"SOUL_MAP_SCHEDULER_SNAPSHOT_FAIL","detail":"fly ssh extract failed"}'
+              echo "stderr:" 
+              cat "$OUT_FILE.err" || true
+            } > "$OUT_FILE"
+            echo "SOUL_MAP_SCHEDULER_SNAPSHOT_FAIL" >&2
+            exit 0
+          fi
+          # Strip any flyctl chrome; keep last non-empty line as JSON payload when possible
+          python3 - "$OUT_FILE.raw" "$OUT_FILE" "$MAX_BYTES" <<'PY2'
+          import json, sys
+          raw_path, out_path, max_bytes = sys.argv[1], sys.argv[2], int(sys.argv[3])
+          raw = open(raw_path, "rb").read()
+          text = raw.decode("utf-8", errors="replace").strip()
+          # Prefer last line that parses as JSON object
+          payload = None
+          for line in reversed(text.splitlines()):
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  obj = json.loads(line)
+              except Exception:
+                  continue
+              if isinstance(obj, dict):
+                  payload = obj
+                  break
+          if payload is None:
+              # whole text
+              try:
+                  obj = json.loads(text)
+                  if isinstance(obj, dict):
+                      payload = obj
+              except Exception:
+                  payload = {"error": "SOUL_MAP_SCHEDULER_SNAPSHOT_PARSE_FAIL", "raw_preview": text[:500]}
+          body = json.dumps(payload, indent=2) + "\n"
+          original = len(body.encode("utf-8"))
+          if original > max_bytes:
+              # truncate with explicit marker (no silent truncation)
+              marker = f"\n[TRUNCATED — ORIGINAL SIZE: {original} bytes]\n"
+              keep = max_bytes - len(marker.encode("utf-8"))
+              truncated = body.encode("utf-8")[: max(0, keep)].decode("utf-8", errors="ignore") + marker
+              open(out_path, "w").write(truncated)
+              print(f"snapshot_bytes={len(truncated.encode('utf-8'))} original_size={original} truncated=1")
+          else:
+              open(out_path, "w").write(body)
+              print(f"snapshot_bytes={original} original_size={original} truncated=0")
+          PY2
+          wc -c "$OUT_FILE"
+          rm -f "$OUT_FILE.raw" "$OUT_FILE.err" || true
+
       - name: Upload Patch D artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -241,5 +305,6 @@ jobs:
             logs/liveness-after.json
             logs/fly-status.txt
             logs/capture-meta.txt
+            logs/soul_map_prediction_resolver_scheduler.json
           if-no-files-found: error
           retention-days: 7
