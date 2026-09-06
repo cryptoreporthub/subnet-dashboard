@@ -1273,3 +1273,52 @@ def test_b1_natural_cycle_complete_true_and_inert(monkeypatch, fresh_scheduler):
     # Inertness: stage_timing_ms stays numeric-only; recorder is a sibling.
     assert all(isinstance(v, (int, float)) for v in stage_timing.values())
 
+def test_b1b_closing_invariant_soak(monkeypatch, fresh_scheduler):
+    """B1b gate: N natural cycles — total_cycle_ms closes against stages + gap buckets."""
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda resolved_now: {"triggered": False},
+    )
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    for _ in range(5):
+        result = sched.run_once()
+        assert result["ok"] is True
+
+        with open(weights.SOUL_MAP_PATH, "r") as f:
+            soul = json.load(f)
+        summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+        stage_timing = summary["stage_timing_ms"]
+        gap = summary["gap_timing_ms"]
+        assert gap["complete"] is True
+        assert all("gap_%d_ms" % i in gap for i in range(7))
+        allocated = stage_timing["stages_sum_ms"] + sum(
+            gap[k] for k in gap if k.startswith("gap_")
+        )
+        total = stage_timing["total_cycle_ms"]
+        tol = max(5.0, total * 0.05)
+        assert abs(total - allocated) <= tol, (
+            "closing-invariant breach: total=%s allocated=%s" % (total, allocated)
+        )
+        assert abs(gap["unallocated_ms"]) <= tol
