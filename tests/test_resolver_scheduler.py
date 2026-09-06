@@ -1218,13 +1218,14 @@ def test_b1_complete_false_on_timeout_partial(monkeypatch, fresh_scheduler):
     with open(weights.SOUL_MAP_PATH, "r") as f:
         soul = json.load(f)
     summary = soul["prediction_resolver_scheduler"]["last_cycle"]
-    timing = summary["stage_timing_ms"]
-    gap = timing["gap_timing_ms"]
+    stage_timing = summary["stage_timing_ms"]
+    gap = summary["gap_timing_ms"]
     assert gap["complete"] is False
     assert isinstance(gap["soul_map_bytes_start"], (int, type(None)))
     assert gap["soul_map_bytes_end"] is None
-    # Fence: stage sums + nonstage unchanged by the presence of the gap bucket.
-    assert "stages_sum_ms" in timing and "nonstage_ms" in timing
+    # Fence: stage_timing_ms stays numeric-only; gap block is a sibling.
+    assert all(isinstance(v, (int, float)) for v in stage_timing.values())
+    assert "stages_sum_ms" in summary and "nonstage_ms" in summary
 
     release.set()
 
@@ -1264,15 +1265,11 @@ def test_b1_natural_cycle_complete_true_and_inert(monkeypatch, fresh_scheduler):
     with open(weights.SOUL_MAP_PATH, "r") as f:
         soul = json.load(f)
     summary = soul["prediction_resolver_scheduler"]["last_cycle"]
-    timing = summary["stage_timing_ms"]
-    gap = timing["gap_timing_ms"]
+    stage_timing = summary["stage_timing_ms"]
+    gap = summary["gap_timing_ms"]
     assert gap["complete"] is True
     assert isinstance(gap["soul_map_bytes_start"], (int, type(None)))
     assert isinstance(gap["soul_map_bytes_end"], (int, type(None)))
-    # Inertness: no flat numeric sibling keys leaked into the aggregate.
-    flat = {k: v for k, v in timing.items() if k != "gap_timing_ms"}
-    assert all(
-        isinstance(v, (int, float))
-        for k, v in flat.items()
-        if k not in ("active_stage",)
-    )
+    # Inertness: stage_timing_ms stays numeric-only; recorder is a sibling.
+    assert all(isinstance(v, (int, float)) for v in stage_timing.values())
+
