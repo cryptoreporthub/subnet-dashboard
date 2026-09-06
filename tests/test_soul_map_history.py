@@ -82,7 +82,8 @@ def test_complete_flag_defaults_false_and_sets_true():
     """Locked B1 decision: provenance is a field, never inferred."""
     t = _CycleTiming()
     snap = t.snapshot()
-    assert snap["stage_timing_ms"]["gap_timing_ms"]["complete"] is False
+    assert snap["gap_timing_ms"]["complete"] is False
     t.mark_complete()
     snap = t.snapshot()
-    assert snap["stage_timing_ms"]["gap_timing_ms"]["complete"] is True
+    assert snap["gap_timing_ms"]["complete"] is True
+
