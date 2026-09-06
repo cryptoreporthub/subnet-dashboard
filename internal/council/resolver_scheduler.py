@@ -47,7 +47,17 @@ logger = logging.getLogger(__name__)
 # Observability (additive): ring-buffer bound + stage/nonstage rollups for soul_map.
 CYCLE_HISTORY_MAX = 10
 _STAGE_TIMING_META_KEYS = frozenset(
-    {"total_cycle_ms", "hydrate_ms_max", "hydration_count", "stages_sum_ms", "nonstage_ms"}
+    {
+        "total_cycle_ms",
+        "hydrate_ms_max",
+        "hydration_count",
+        "stages_sum_ms",
+        "nonstage_ms",
+        # B1 gap recorder: subordinate dict, NOT a stage. Non-numeric parent is
+        # already skipped by the isinstance gate; the whitelist entry is
+        # belt-and-suspenders so the bucket can never be summed as a stage.
+        "gap_timing_ms",
+    }
 )
 
 
@@ -174,6 +184,9 @@ class _CycleTiming:
         self._hydrate_ms_max = 0.0
         self._hydration_count = 0
         self._tmc_lock_wait_ms = 0.0
+        self._soul_map_bytes_start: Optional[int] = None
+        self._soul_map_bytes_end: Optional[int] = None
+        self._complete = False
         self._abandoned_live = abandoned_live
         self._abandoned = False
 
@@ -203,6 +216,19 @@ class _CycleTiming:
         with self._lock:
             self._tmc_lock_wait_ms += duration_ms
 
+    def record_soul_map_size(self, at: str, size_bytes: Optional[int]) -> None:
+        """Stamp soul-map size at cycle start ('start') / exit ('end')."""
+        with self._lock:
+            if at == "start":
+                self._soul_map_bytes_start = size_bytes
+            elif at == "end":
+                self._soul_map_bytes_end = size_bytes
+
+    def mark_complete(self) -> None:
+        """B1 locked decision: natural completion carries complete=True (field, not inferred)."""
+        with self._lock:
+            self._complete = True
+
     def mark_abandoned(self) -> None:
         with self._lock:
             self._abandoned = True
@@ -226,11 +252,19 @@ class _CycleTiming:
                     "tmc_lock_wait_ms": round(self._tmc_lock_wait_ms, 1),
                 }
             )
+            soul_map_bytes_start = self._soul_map_bytes_start
+            soul_map_bytes_end = self._soul_map_bytes_end
+            complete = self._complete
             active_stage = self._active_stage
             abandoned_live = self._abandoned_live
         stage_timing_ms["total_cycle_ms"] = round(
             (time.perf_counter() - self._started) * 1000, 1
         )
+        stage_timing_ms["gap_timing_ms"] = {
+            "soul_map_bytes_start": soul_map_bytes_start,
+            "soul_map_bytes_end": soul_map_bytes_end,
+            "complete": complete,
+        }
         rollup = compute_stages_sum_and_nonstage(stage_timing_ms)
         stage_timing_ms["stages_sum_ms"] = rollup["stages_sum_ms"]
         stage_timing_ms["nonstage_ms"] = rollup["nonstage_ms"]
@@ -770,6 +804,12 @@ class PredictionResolverScheduler:
         }
         timing = _cycle_timing.get() or _CycleTiming()
 
+        # B1 recorder: size-stamp the soul-map at cycle entry (stat-only, no read).
+        try:
+            timing.record_soul_map_size("start", os.path.getsize(self.soul_map_path))
+        except OSError:
+            timing.record_soul_map_size("start", None)
+
         def persist_partial() -> None:
             if timing.is_abandoned():
                 return
@@ -844,6 +884,13 @@ class PredictionResolverScheduler:
             result["error"] = str(exc)
         finally:
             if not timing.is_abandoned():
+                try:
+                    timing.record_soul_map_size(
+                        "end", os.path.getsize(self.soul_map_path)
+                    )
+                except OSError:
+                    timing.record_soul_map_size("end", None)
+                timing.mark_complete()
                 self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(result)
         return result
@@ -1097,3 +1144,4 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         "start": start_out,
         "tick": tick_out,
     }
+
