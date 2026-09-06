@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 import json
@@ -32,3 +33,9 @@ def test_build_volume_stat_reports_missing_file_honestly(tmp_path):
         assert entry["mtime_iso"] is None
         assert entry["epoch"] is None
         assert entry["size"] is None
+
+
+def test_watch_files_include_soul_map():
+    """Guard: soul_map.json must stay watched — it carries resolver stage truth
+    (R4f/R4g) and is the liveness-gap completeness fallback for Patch D captures."""
+    assert "soul_map.json" in WATCH_FILES

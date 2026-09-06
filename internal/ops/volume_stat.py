@@ -1,3 +1,4 @@
+
 """Read-only statistics for the Patch D persistent-volume watch files."""
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ WATCH_FILES = (
     "predictions.json",
     "pick_score_cache.json",
     "pick_scheduler_state.json",
+    "soul_map.json",  # resolver stage truth (R4f/R4g); mtime fallback for liveness-gap completeness
 )
 
 

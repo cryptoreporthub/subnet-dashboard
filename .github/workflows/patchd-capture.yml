@@ -1,3 +1,5 @@
+
+
 # Patch D Phase 1 — read-only Fly log capture + correlation (no deploy/restart).
 # workflow_dispatch or PR label `patchd-capture` (same-repo, cryptoreporthub).
 name: Patch D capture (read-only)
@@ -50,6 +52,22 @@ jobs:
           fi
           cat "$OUT_FILE"
 
+
+      - name: Liveness sample (pre-capture)
+        run: |
+          set -euo pipefail
+          OUT_DIR="logs"
+          OUT_FILE="$OUT_DIR/liveness-before.json"
+          mkdir -p "$OUT_DIR"
+          if ! curl --fail --silent --show-error --max-time 15 \
+            "https://subnet-dashboard.fly.dev/api/liveness" \
+            > "$OUT_FILE" 2>/dev/null; then
+            {
+              echo "LIVENESS_SAMPLE_FAILED:before"
+              echo "curl /api/liveness failed (endpoint hang or 5xx — is itself a signal)"
+            } > "$OUT_FILE"
+          fi
+          cat "$OUT_FILE"
       - name: Read-only flyctl log capture
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -112,6 +130,22 @@ jobs:
           fi
           cat "$OUT_FILE"
 
+
+      - name: Liveness sample (post-capture)
+        run: |
+          set -euo pipefail
+          OUT_DIR="logs"
+          OUT_FILE="$OUT_DIR/liveness-after.json"
+          mkdir -p "$OUT_DIR"
+          if ! curl --fail --silent --show-error --max-time 15 \
+            "https://subnet-dashboard.fly.dev/api/liveness" \
+            > "$OUT_FILE" 2>/dev/null; then
+            {
+              echo "LIVENESS_SAMPLE_FAILED:after"
+              echo "curl /api/liveness failed (endpoint hang or 5xx — is itself a signal)"
+            } > "$OUT_FILE"
+          fi
+          cat "$OUT_FILE"
       - name: Gate verdict marker (A4.6 completeness)
         if: always()
         run: |
@@ -141,6 +175,30 @@ jobs:
             missing=1
             reason="${reason} STAT_FAIL in volume-stat;"
           fi
+          # Ratified completeness rule: ACCEPT if (liveness-before AND liveness-after) OR (soul_map mtime advanced)
+          # Liveness validity: non-empty, no FAILED marker, and a well-formed registry payload
+          # (JSON object with trackers{} + checked_at str) - rejects 200-with-garbage bodies (review P2).
+          liveness_ok=1
+          for f in logs/liveness-before.json logs/liveness-after.json; do
+            if [ ! -s "$f" ] || grep -q "LIVENESS_SAMPLE_FAILED" "$f" 2>/dev/null || ! jq -e 'type == "object" and (.trackers | type == "object") and (.checked_at | type == "string")' "$f" >/dev/null 2>&1; then
+              liveness_ok=0
+              break
+            fi
+          done
+          soul_map_advanced=0
+          if [ -s logs/volume-stat-before.txt ] && [ -s logs/volume-stat-after.txt ]; then
+            b_epoch=$(jq -r 'first(.files[] | select(.path | endswith("soul_map.json")) | .epoch) // 0' logs/volume-stat-before.txt 2>/dev/null)
+            a_epoch=$(jq -r 'first(.files[] | select(.path | endswith("soul_map.json")) | .epoch) // 0' logs/volume-stat-after.txt 2>/dev/null)
+            if [ "${a_epoch:-0}" -gt "${b_epoch:-0}" ] 2>/dev/null; then
+              soul_map_advanced=1
+            fi
+          fi
+          if [ "$liveness_ok" -eq 0 ] && [ "$soul_map_advanced" -eq 0 ]; then
+            missing=1
+            reason="${reason} no-completion-signal: liveness samples failed-or-invalid AND soul_map did not advance;"
+          elif [ "$liveness_ok" -eq 0 ]; then
+            echo "LIVENESS_GAP_SOUL_MAP_FALLBACK: liveness samples unavailable-or-invalid; completeness via soul_map mtime delta — liveness failure treated as signal (correlator)." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
 
           if [ "$missing" -ne 0 ]; then
             {
@@ -151,7 +209,7 @@ jobs:
             } | tee -a "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
-          echo "Artifact completeness captured for A4.6 (raw.log, correlated.md, both volume-stat files)." | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Artifact completeness captured for A4.6 (raw.log, correlated.md, both volume-stat files, liveness samples (raw evidence, uploaded) when present)." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Loud zero-hit summary (valid outcome)
         if: success()
@@ -179,6 +237,8 @@ jobs:
             logs/volume-stat-after.txt
             logs/volume-stat-before.err
             logs/volume-stat-after.err
+            logs/liveness-before.json
+            logs/liveness-after.json
             logs/fly-status.txt
             logs/capture-meta.txt
           if-no-files-found: error
