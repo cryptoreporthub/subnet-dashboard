@@ -58,3 +58,31 @@ def test_truncate_marker_format_for_capture_pipeline():
     marker = f"\n[TRUNCATED — ORIGINAL SIZE: {original} bytes]\n"
     assert "TRUNCATED" in marker
     assert str(original) in marker
+
+def test_nonstage_unchanged_when_gap_timing_present():
+    """Fence regression: a subordinate gap_timing_ms dict must NOT collapse nonstage_ms."""
+    timing = {
+        "resolve_due_ms": 100.0,
+        "expire_stale_ms": 20.0,
+        "total_cycle_ms": 200.0,
+        "gap_timing_ms": {
+            "setup_ms": 30.0,  # illustrative B1b values — shape, not measurement
+            "teardown_ms": 25.0,
+            "soul_map_bytes_start": 1000,
+            "soul_map_bytes_end": 1000,
+            "complete": True,
+        },
+    }
+    rollup = compute_stages_sum_and_nonstage(timing)
+    assert rollup["stages_sum_ms"] == 120.0
+    assert rollup["nonstage_ms"] == 80.0
+
+
+def test_complete_flag_defaults_false_and_sets_true():
+    """Locked B1 decision: provenance is a field, never inferred."""
+    t = _CycleTiming()
+    snap = t.snapshot()
+    assert snap["stage_timing_ms"]["gap_timing_ms"]["complete"] is False
+    t.mark_complete()
+    snap = t.snapshot()
+    assert snap["stage_timing_ms"]["gap_timing_ms"]["complete"] is True
