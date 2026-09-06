@@ -44,6 +44,37 @@ from internal.ops.mutation_log import (
 
 logger = logging.getLogger(__name__)
 
+# Observability (additive): ring-buffer bound + stage/nonstage rollups for soul_map.
+CYCLE_HISTORY_MAX = 10
+_STAGE_TIMING_META_KEYS = frozenset(
+    {"total_cycle_ms", "hydrate_ms_max", "hydration_count", "stages_sum_ms", "nonstage_ms"}
+)
+
+
+def compute_stages_sum_and_nonstage(stage_timing_ms: Dict[str, Any]) -> Dict[str, float]:
+    """Pure rollup: sum named stage ms vs total_cycle_ms gap (nonstage_ms)."""
+    timing = dict(stage_timing_ms or {})
+    total = float(timing.get("total_cycle_ms") or 0.0)
+    stages_sum = 0.0
+    for key, value in timing.items():
+        if key in _STAGE_TIMING_META_KEYS:
+            continue
+        if isinstance(value, (int, float)):
+            stages_sum += float(value)
+    stages_sum = round(stages_sum, 1)
+    nonstage = round(total - stages_sum, 1)
+    return {"stages_sum_ms": stages_sum, "nonstage_ms": nonstage}
+
+
+def bound_cycle_history(entries: Any, maxlen: int = CYCLE_HISTORY_MAX) -> list:
+    """Return a new list capped to the last ``maxlen`` cycle summaries."""
+    if not isinstance(entries, list):
+        return []
+    if maxlen < 1:
+        return []
+    return list(entries)[-int(maxlen):]
+
+
 # Ensure the data directory exists at module load time. Fly.io root filesystems
 # are ephemeral; without this the cycle-summary write below silently fails.
 try:
@@ -200,10 +231,15 @@ class _CycleTiming:
         stage_timing_ms["total_cycle_ms"] = round(
             (time.perf_counter() - self._started) * 1000, 1
         )
+        rollup = compute_stages_sum_and_nonstage(stage_timing_ms)
+        stage_timing_ms["stages_sum_ms"] = rollup["stages_sum_ms"]
+        stage_timing_ms["nonstage_ms"] = rollup["nonstage_ms"]
         return {
             "stage_timing_ms": stage_timing_ms,
             "active_stage": active_stage,
             "abandoned_live": abandoned_live,
+            "stages_sum_ms": rollup["stages_sum_ms"],
+            "nonstage_ms": rollup["nonstage_ms"],
         }
 
 
@@ -700,6 +736,8 @@ class PredictionResolverScheduler:
         result["stage_timing_ms"] = evidence["stage_timing_ms"]
         result["active_stage"] = evidence["active_stage"]
         result["abandoned_live"] = evidence["abandoned_live"]
+        result["stages_sum_ms"] = evidence.get("stages_sum_ms")
+        result["nonstage_ms"] = evidence.get("nonstage_ms")
 
     def _resolve_with_timing(
         self, subnets: Any, timing: _CycleTiming
@@ -811,6 +849,17 @@ class PredictionResolverScheduler:
         return result
 
     def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
+        stage_timing_ms = dict(result.get("stage_timing_ms") or {})
+        # Prefer explicit rollups on the result; else derive from stage_timing_ms.
+        if "stages_sum_ms" in result and "nonstage_ms" in result:
+            stages_sum_ms = result.get("stages_sum_ms")
+            nonstage_ms = result.get("nonstage_ms")
+        else:
+            rollup = compute_stages_sum_and_nonstage(stage_timing_ms)
+            stages_sum_ms = rollup["stages_sum_ms"]
+            nonstage_ms = rollup["nonstage_ms"]
+            stage_timing_ms["stages_sum_ms"] = stages_sum_ms
+            stage_timing_ms["nonstage_ms"] = nonstage_ms
         summary = {
             "run_at": result["run_at"],
             "ok": result.get("ok", False),
@@ -822,7 +871,9 @@ class PredictionResolverScheduler:
             "watchdog": result.get("watchdog"),
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
-            "stage_timing_ms": dict(result.get("stage_timing_ms") or {}),
+            "stage_timing_ms": stage_timing_ms,
+            "stages_sum_ms": stages_sum_ms,
+            "nonstage_ms": nonstage_ms,
             "active_stage": result.get("active_stage"),
             "abandoned_live": result.get("abandoned_live", 0),
             "lifecycle": self._lifecycle,
@@ -830,6 +881,11 @@ class PredictionResolverScheduler:
         def _mutator(data: Dict[str, Any]) -> None:
             sched = data.setdefault("prediction_resolver_scheduler", {})
             sched["last_cycle"] = summary
+            history = sched.get("cycle_history")
+            if not isinstance(history, list):
+                history = []
+            history.append(summary)
+            sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
             sched["lifecycle"] = self._lifecycle
             sched["lifecycle_error"] = self._lifecycle_error
             if self._first_tick_at is not None:

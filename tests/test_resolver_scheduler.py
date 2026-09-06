@@ -1132,3 +1132,58 @@ def test_skip_burst_never_produces_ok(monkeypatch, fresh_scheduler):
     snap = sched.liveness.snapshot()
     assert snap["status"] != "ok"
     assert snap["consecutive_skips"] >= 3
+
+
+# --- Additive observability tests (cycle_history + nonstage_ms); mock-only ---
+
+def test_persist_cycle_summary_maintains_bounded_cycle_history(monkeypatch, fresh_scheduler, tmp_path):
+    from internal.council import resolver_scheduler as rs
+
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text("{}")
+    sched = rs.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_static_subnets, soul_map_path=str(soul_path)
+    )
+
+    # Persist 12 fake cycle summaries without running live lock/timeout paths.
+    for i in range(12):
+        result = {
+            "run_at": f"2026-09-06T08:00:{i:02d}Z",
+            "ok": True,
+            "resolved_now": i,
+            "expired_now": 0,
+            "pending": 0,
+            "error": None,
+            "stage_timing_ms": {
+                "resolve_due_ms": 10.0 * i,
+                "total_cycle_ms": 100.0 + i,
+                "stages_sum_ms": 10.0 * i,
+                "nonstage_ms": 100.0 + i - 10.0 * i,
+            },
+            "stages_sum_ms": 10.0 * i,
+            "nonstage_ms": 100.0 + i - 10.0 * i,
+            "active_stage": None,
+            "abandoned_live": 0,
+            "batch_size": 0,
+        }
+        sched._persist_cycle_summary(result)
+
+    import json
+
+    soul = json.loads(soul_path.read_text())
+    hist = soul["prediction_resolver_scheduler"]["cycle_history"]
+    assert len(hist) <= 10
+    assert len(hist) == 10
+    assert "cycle_history" in soul["prediction_resolver_scheduler"]
+    assert soul["prediction_resolver_scheduler"]["last_cycle"]["run_at"] == hist[-1]["run_at"]
+    assert "stages_sum_ms" in hist[-1]
+    assert "nonstage_ms" in hist[-1]
+
+
+def test_cycle_timing_snapshot_exposes_nonstage_ms_keys():
+    from internal.council.resolver_scheduler import _CycleTiming
+
+    t = _CycleTiming()
+    snap = t.snapshot()
+    assert "stages_sum_ms" in snap
+    assert "nonstage_ms" in snap
