@@ -260,7 +260,10 @@ class _CycleTiming:
         stage_timing_ms["total_cycle_ms"] = round(
             (time.perf_counter() - self._started) * 1000, 1
         )
-        stage_timing_ms["gap_timing_ms"] = {
+        # B1 gap recorder block: SIBLING of stage_timing_ms, not a member.
+        # stage_timing_ms stays numeric-only (locked invariant); the gap block
+        # carries subordinate provenance for the B1b gap hunt.
+        gap_timing_ms = {
             "soul_map_bytes_start": soul_map_bytes_start,
             "soul_map_bytes_end": soul_map_bytes_end,
             "complete": complete,
@@ -270,6 +273,7 @@ class _CycleTiming:
         stage_timing_ms["nonstage_ms"] = rollup["nonstage_ms"]
         return {
             "stage_timing_ms": stage_timing_ms,
+            "gap_timing_ms": gap_timing_ms,
             "active_stage": active_stage,
             "abandoned_live": abandoned_live,
             "stages_sum_ms": rollup["stages_sum_ms"],
@@ -768,6 +772,7 @@ class PredictionResolverScheduler:
     ) -> None:
         evidence = timing.snapshot()
         result["stage_timing_ms"] = evidence["stage_timing_ms"]
+        result["gap_timing_ms"] = evidence["gap_timing_ms"]
         result["active_stage"] = evidence["active_stage"]
         result["abandoned_live"] = evidence["abandoned_live"]
         result["stages_sum_ms"] = evidence.get("stages_sum_ms")
@@ -919,6 +924,7 @@ class PredictionResolverScheduler:
             "batch_size": result.get("batch_size", 0),
             "round_robin_cursor": result.get("round_robin_cursor"),
             "stage_timing_ms": stage_timing_ms,
+            "gap_timing_ms": result.get("gap_timing_ms"),
             "stages_sum_ms": stages_sum_ms,
             "nonstage_ms": nonstage_ms,
             "active_stage": result.get("active_stage"),
