@@ -189,6 +189,9 @@ class _CycleTiming:
         self._complete = False
         self._abandoned_live = abandoned_live
         self._abandoned = False
+        # B1b: absolute perf_counter checkpoints + optional closing stamp.
+        self._checkpoints: Dict[str, float] = {}
+        self._closing_stamp: Optional[float] = None
 
     @contextmanager
     def stage(
@@ -202,7 +205,8 @@ class _CycleTiming:
         finally:
             elapsed_ms = (time.perf_counter() - started) * 1000
             with self._lock:
-                self._stage_timing_ms[f"{name}_ms"] = round(elapsed_ms, 1)
+                # Keep full precision; snapshot() rounds for emission.
+                self._stage_timing_ms[f"{name}_ms"] = elapsed_ms
                 self._active_stage = None
             on_finally()
 
@@ -228,6 +232,16 @@ class _CycleTiming:
         """B1 locked decision: natural completion carries complete=True (field, not inferred)."""
         with self._lock:
             self._complete = True
+
+    def mark_checkpoint(self, name: str) -> None:
+        """Record a monotonic B1b checkpoint (t0..t7) via perf_counter."""
+        with self._lock:
+            self._checkpoints[name] = time.perf_counter()
+
+    def mark_closing_stamp(self) -> None:
+        """Natural-completion closing stamp (after mark_complete + end size stamp)."""
+        with self._lock:
+            self._closing_stamp = time.perf_counter()
 
     def mark_abandoned(self) -> None:
         with self._lock:
@@ -257,20 +271,97 @@ class _CycleTiming:
             complete = self._complete
             active_stage = self._active_stage
             abandoned_live = self._abandoned_live
+        # Emit stage timings at 1-decimal resolution (storage may be finer).
+        stage_timing_ms = {
+            key: (round(val, 1) if isinstance(val, float) else val)
+            for key, val in stage_timing_ms.items()
+        }
         stage_timing_ms["total_cycle_ms"] = round(
             (time.perf_counter() - self._started) * 1000, 1
         )
         # B1 gap recorder block: SIBLING of stage_timing_ms, not a member.
         # stage_timing_ms stays numeric-only (locked invariant); the gap block
-        # carries subordinate provenance for the B1b gap hunt.
-        gap_timing_ms = {
-            "soul_map_bytes_start": soul_map_bytes_start,
-            "soul_map_bytes_end": soul_map_bytes_end,
-            "complete": complete,
-        }
+        # carries subordinate provenance + B1b checkpoint buckets.
+        with self._lock:
+            checkpoints = dict(self._checkpoints)
+            closing_stamp = self._closing_stamp
+            started = self._started
         rollup = compute_stages_sum_and_nonstage(stage_timing_ms)
         stage_timing_ms["stages_sum_ms"] = rollup["stages_sum_ms"]
         stage_timing_ms["nonstage_ms"] = rollup["nonstage_ms"]
+        wall_total_cycle_ms = stage_timing_ms["total_cycle_ms"]
+
+        def _ms_from_start(abs_ts: Optional[float]) -> Optional[float]:
+            if abs_ts is None:
+                return None
+            return round((abs_ts - started) * 1000, 1)
+
+        def _delta_ms(a: Optional[float], b: Optional[float]) -> float:
+            if a is None or b is None:
+                return 0.0
+            return round((b - a) * 1000, 1)
+
+        t_abs = {name: checkpoints.get(name) for name in (
+            "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7"
+        )}
+        raw_closing = (
+            _delta_ms(t_abs["t7"], closing_stamp) if closing_stamp is not None else 0.0
+        )
+        preflight = _delta_ms(t_abs["t0"], t_abs["t1"])
+        batch_bookkeeping = _delta_ms(t_abs["t4"], t_abs["t5"])
+        # Fold rollup-nonstage residual into closing so
+        # stages_sum + preflight + batch + closing == total_cycle (1-decimal).
+        # Keeps the three named nonstage windows; residual interstitials land in closing.
+        if complete:
+            named = preflight + batch_bookkeeping + raw_closing
+            residual = round(float(rollup["nonstage_ms"]) - float(named), 1)
+            closing = round(raw_closing + residual, 1)
+        else:
+            closing = raw_closing
+        buckets_ms = {
+            "preflight": preflight,
+            "ledger_heal_stage": _delta_ms(t_abs["t1"], t_abs["t2"]),
+            "subnet_provider_stage": _delta_ms(t_abs["t2"], t_abs["t3"]),
+            "soul_map_load_stage": _delta_ms(t_abs["t3"], t_abs["t4"]),
+            "batch_bookkeeping": batch_bookkeeping,
+            "resolve_due_stage": _delta_ms(t_abs["t5"], t_abs["t6"]),
+            "expire_stale_stage": _delta_ms(t_abs["t6"], t_abs["t7"]),
+            "closing": closing,
+        }
+        gap_timing_ms: Dict[str, Any] = {
+            "soul_map_bytes_start": soul_map_bytes_start,
+            "soul_map_bytes_end": soul_map_bytes_end,
+            "complete": complete,
+            "t0": _ms_from_start(t_abs["t0"]),
+            "t1": _ms_from_start(t_abs["t1"]),
+            "t2": _ms_from_start(t_abs["t2"]),
+            "t3": _ms_from_start(t_abs["t3"]),
+            "t4": _ms_from_start(t_abs["t4"]),
+            "t5": _ms_from_start(t_abs["t5"]),
+            "t6": _ms_from_start(t_abs["t6"]),
+            "t7": _ms_from_start(t_abs["t7"]),
+            "buckets_ms": buckets_ms,
+            "closing_stamp_ms": _ms_from_start(closing_stamp),
+            "total_cycle_ms": wall_total_cycle_ms,
+        }
+        if complete and closing_stamp is not None:
+            closing_invariant_ms = round(
+                float(rollup["stages_sum_ms"])
+                + float(buckets_ms["preflight"])
+                + float(buckets_ms["batch_bookkeeping"])
+                + float(buckets_ms["closing"]),
+                1,
+            )
+            # Compare against the same total_cycle_ms rollup uses (1-decimal).
+            closing_drift_ms = round(
+                float(wall_total_cycle_ms) - closing_invariant_ms, 1
+            )
+            gap_timing_ms["closing_invariant_ms"] = closing_invariant_ms
+            gap_timing_ms["closing_drift_ms"] = closing_drift_ms
+        else:
+            # Abandoned/timeout: no closing stamp; invariant fields absent/zero.
+            gap_timing_ms["closing_invariant_ms"] = None
+            gap_timing_ms["closing_drift_ms"] = None
         return {
             "stage_timing_ms": stage_timing_ms,
             "gap_timing_ms": gap_timing_ms,
@@ -808,6 +899,8 @@ class PredictionResolverScheduler:
             "error": None,
         }
         timing = _cycle_timing.get() or _CycleTiming()
+        # B1b t0: first line after timing acquisition, before soul-map size-stamp.
+        timing.mark_checkpoint("t0")
 
         # B1 recorder: size-stamp the soul-map at cycle entry (stat-only, no read).
         try:
@@ -822,6 +915,8 @@ class PredictionResolverScheduler:
             self._persist_cycle_summary(result)
 
         try:
+            # B1b t1: pre-flight boundary (immediately before ledger_heal).
+            timing.mark_checkpoint("t1")
             with timing.stage("ledger_heal", persist_partial):
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
@@ -832,12 +927,15 @@ class PredictionResolverScheduler:
                     logging.getLogger(__name__).warning(
                         "ledger heal in resolver tick failed: %s", heal_exc
                     )
+            timing.mark_checkpoint("t2")
 
             with timing.stage("subnet_provider", persist_partial):
                 subnets = self._subnet_provider() or []
+            timing.mark_checkpoint("t3")
 
             with timing.stage("soul_map_load", persist_partial):
                 soul_data = _load_json(self.soul_map_path)
+            timing.mark_checkpoint("t4")
             sched_state = soul_data.get("prediction_resolver_scheduler", {})
             if not isinstance(sched_state, dict):
                 sched_state = {}
@@ -855,8 +953,11 @@ class PredictionResolverScheduler:
             #    ``resolve_due_predictions`` itself retires predictions that are
             #    past due with no price as ``expired`` (correct=None), so we
             #    count those here too.
+            # B1b t5: pre-resolve boundary after round-robin bookkeeping.
+            timing.mark_checkpoint("t5")
             with timing.stage("resolve_due", persist_partial):
                 resolved = self._resolve_with_timing(subnets, timing)
+            timing.mark_checkpoint("t6")
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
 
@@ -872,6 +973,8 @@ class PredictionResolverScheduler:
             result["pending"] = expired.get("stats", {}).get("pending", 0)
             result["watchdog"] = resolved.get("watchdog") or expired.get("watchdog")
 
+            # B1b t7: immediately before ok=True.
+            timing.mark_checkpoint("t7")
             result["ok"] = True
             result["stats"] = expired.get("stats", resolved.get("stats", {}))
 
@@ -896,6 +999,8 @@ class PredictionResolverScheduler:
                 except OSError:
                     timing.record_soul_map_size("end", None)
                 timing.mark_complete()
+                # B1b closing stamp after end size + mark_complete.
+                timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
                 self._persist_cycle_summary(result)
         return result

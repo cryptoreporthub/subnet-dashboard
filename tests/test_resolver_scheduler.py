@@ -1273,3 +1273,130 @@ def test_b1_natural_cycle_complete_true_and_inert(monkeypatch, fresh_scheduler):
     # Inertness: stage_timing_ms stays numeric-only; recorder is a sibling.
     assert all(isinstance(v, (int, float)) for v in stage_timing.values())
 
+
+
+# --- B1b: checkpoint buckets t0..t7 + closing-invariant soak ---
+
+_B1B_BUCKET_KEYS = (
+    "preflight",
+    "ledger_heal_stage",
+    "subnet_provider_stage",
+    "soul_map_load_stage",
+    "batch_bookkeeping",
+    "resolve_due_stage",
+    "expire_stale_stage",
+    "closing",
+)
+
+
+def _b1b_patch_fast_cycle(monkeypatch):
+    """Shared fast synthetic cycle stubs (no network)."""
+    monkeypatch.setattr(
+        "internal.learning.ledger_heal.heal_daily_pick_ledger",
+        lambda dry_run=False: None,
+    )
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda _subnets: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {"expired_now": [], "stats": {"pending": 0}, "watchdog": {}},
+    )
+    monkeypatch.setattr(
+        "internal.calibration.scheduler.maybe_trigger_auto_retrain",
+        lambda resolved_now: {"triggered": False},
+    )
+
+
+def test_b1b_checkpoints_recorded_and_buckets_cover_cycle(monkeypatch, fresh_scheduler):
+    """One cycle: t0..t7 monotonic; 8 buckets; invariant/drift within tolerance."""
+    _b1b_patch_fast_cycle(monkeypatch)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    result = sched.run_once()
+    assert result["ok"] is True
+
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    gap = summary["gap_timing_ms"]
+    stamps = [gap[name] for name in ("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7")]
+    assert all(isinstance(v, (int, float)) for v in stamps)
+    assert stamps == sorted(stamps)
+    buckets = gap["buckets_ms"]
+    assert set(buckets.keys()) == set(_B1B_BUCKET_KEYS)
+    stages_sum = float(summary["stages_sum_ms"])
+    expected_invariant = round(
+        stages_sum
+        + float(buckets["preflight"])
+        + float(buckets["batch_bookkeeping"])
+        + float(buckets["closing"]),
+        1,
+    )
+    assert abs(float(gap["closing_invariant_ms"]) - expected_invariant) <= 0.2
+    assert -5.0 <= float(gap["closing_drift_ms"]) <= 5.0
+    assert gap["complete"] is True
+    assert gap["closing_stamp_ms"] is not None
+
+
+def test_b1b_stage_timing_numeric_only_fence(monkeypatch, fresh_scheduler):
+    """With B1b buckets present, stage_timing_ms values remain int/float only."""
+    _b1b_patch_fast_cycle(monkeypatch)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: []
+    )
+    assert sched.run_once()["ok"] is True
+    with open(weights.SOUL_MAP_PATH, "r") as f:
+        soul = json.load(f)
+    summary = soul["prediction_resolver_scheduler"]["last_cycle"]
+    stage_timing = summary["stage_timing_ms"]
+    assert "gap_timing_ms" not in stage_timing
+    assert all(isinstance(v, (int, float)) for v in stage_timing.values())
+    assert isinstance(summary["gap_timing_ms"]["buckets_ms"], dict)
+
+
+def test_b1b_closing_invariant_soak(monkeypatch, fresh_scheduler):
+    """25 synthetic cycles: every |closing_drift_ms| <= 5.0; print soak summary."""
+    import statistics
+
+    _b1b_patch_fast_cycle(monkeypatch)
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1, "price": 1.0}]
+    )
+    drifts = []
+    bucket_series = {k: [] for k in _B1B_BUCKET_KEYS}
+    for _ in range(25):
+        result = sched.run_once()
+        assert result["ok"] is True
+        with open(weights.SOUL_MAP_PATH, "r") as f:
+            soul = json.load(f)
+        gap = soul["prediction_resolver_scheduler"]["last_cycle"]["gap_timing_ms"]
+        drift = float(gap["closing_drift_ms"])
+        assert abs(drift) <= 5.0
+        drifts.append(drift)
+        for k, v in gap["buckets_ms"].items():
+            bucket_series[k].append(float(v))
+
+    def _p90(vals):
+        ordered = sorted(vals)
+        if not ordered:
+            return None
+        idx = max(0, int(round(0.9 * (len(ordered) - 1))))
+        return ordered[idx]
+
+    print("B1B_SOAK_SUMMARY n=25")
+    print(f"drift mean={statistics.mean(drifts):.3f} p90={_p90(drifts):.3f} max={max(drifts):.3f}")
+    for k in _B1B_BUCKET_KEYS:
+        vals = bucket_series[k]
+        print(
+            f"bucket {k} mean={statistics.mean(vals):.3f} p90={_p90(vals):.3f} max={max(vals):.3f}"
+        )
