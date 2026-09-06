@@ -932,15 +932,15 @@ class PredictionResolverScheduler:
 
             # N3: optional env-gated auto-retrain after resolver (non-blocking).
             timing.checkpoint("t5")  # B1b
+        with timing.stage("auto_retrain", persist_partial):
+            try:
+                from internal.calibration.scheduler import maybe_trigger_auto_retrain
 
-                try:
-                    from internal.calibration.scheduler import maybe_trigger_auto_retrain
-
-                    result["auto_retrain"] = maybe_trigger_auto_retrain(
-                        resolved_now=result.get("resolved_now", 0)
-                    )
-                except Exception as exc:
-                    result["auto_retrain"] = {"triggered": False, "error": str(exc)}
+                result["auto_retrain"] = maybe_trigger_auto_retrain(
+                    resolved_now=result.get("resolved_now", 0)
+                )
+            except Exception as exc:
+                result["auto_retrain"] = {"triggered": False, "error": str(exc)}
         timing.checkpoint("t6")  # B1b: post auto_retrain boundary
         except Exception as exc:
             result["error"] = str(exc)
