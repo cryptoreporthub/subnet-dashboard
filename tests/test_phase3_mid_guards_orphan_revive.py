@@ -247,7 +247,20 @@ def test_phase3_revive_budget_uses_full_cycle_not_first_tick_cap(monkeypatch):
 
 
 def test_phase3_dark_region_telemetry_t1_5_and_persist_subtimers(monkeypatch):
-    """Successful cycle surfaces t1_5 + persist_* subtimers in gap_timing_ms."""
+    """t1_5 + persist subtimers; rmw/mutator split must be able to diverge."""
+    real_write = resolver_scheduler.write_soul_map
+
+    def _write_with_post_mutator_io(mutator, path=None):
+        # Sleep AFTER the timed mutator returns but still inside write_soul_map's
+        # mutator callback slot → inflates RMW wall, not mutator body.
+        def outer(blob):
+            mutator(blob)
+            time.sleep(0.05)
+
+        return real_write(outer, path)
+
+    monkeypatch.setattr(resolver_scheduler, "write_soul_map", _write_with_post_mutator_io)
+
     sched = resolver_scheduler.PredictionResolverScheduler(
         refresh_minutes=1, subnet_provider=lambda: [{"netuid": 1}]
     )
@@ -262,8 +275,14 @@ def test_phase3_dark_region_telemetry_t1_5_and_persist_subtimers(monkeypatch):
     assert gap["t1"] <= gap["t1_5"] <= gap["t2"]
     assert "persist_apply_cycle_timing_ms" in gap
     assert "persist_summary_rmw_ms" in gap
-    assert "persist_write_ms" in gap
+    assert "persist_summary_mutator_ms" in gap
+    assert "persist_write_ms" not in gap
     assert gap["persist_apply_cycle_timing_ms"] >= 0
+    rmw = float(gap["persist_summary_rmw_ms"])
+    mut = float(gap["persist_summary_mutator_ms"])
+    assert rmw >= mut
+    # 50ms injected I/O must show up in the RMW−mutator delta (fail if double-count).
+    assert (rmw - mut) >= 40.0
     assert result.get("enforced_budget_s") is None or isinstance(
         result.get("enforced_budget_s"), (int, float)
     )

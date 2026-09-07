@@ -197,7 +197,7 @@ class _CycleTiming:
         # Dark-region sub-timers inside persist_partial (ms).
         self._persist_apply_ms: float = 0.0
         self._persist_rmw_ms: float = 0.0
-        self._persist_write_ms: float = 0.0
+        self._persist_mutator_ms: float = 0.0
 
     @contextmanager
     def stage(
@@ -275,8 +275,8 @@ class _CycleTiming:
                 self._persist_apply_ms += duration_ms
             elif name == "summary_rmw":
                 self._persist_rmw_ms += duration_ms
-            elif name == "write":
-                self._persist_write_ms += duration_ms
+            elif name == "summary_mutator":
+                self._persist_mutator_ms += duration_ms
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
@@ -390,7 +390,7 @@ class _CycleTiming:
         with self._lock:
             gap_timing_ms["persist_apply_cycle_timing_ms"] = round(self._persist_apply_ms, 1)
             gap_timing_ms["persist_summary_rmw_ms"] = round(self._persist_rmw_ms, 1)
-            gap_timing_ms["persist_write_ms"] = round(self._persist_write_ms, 1)
+            gap_timing_ms["persist_summary_mutator_ms"] = round(self._persist_mutator_ms, 1)
         return {
             "stage_timing_ms": stage_timing_ms,
             "gap_timing_ms": gap_timing_ms,
@@ -1137,31 +1137,38 @@ class PredictionResolverScheduler:
             "abandoned_live": result.get("abandoned_live", 0),
             "lifecycle": self._lifecycle,
         }
-        def _mutator(data: Dict[str, Any]) -> None:
-            sched = data.setdefault("prediction_resolver_scheduler", {})
-            sched["last_cycle"] = summary
-            history = sched.get("cycle_history")
-            if not isinstance(history, list):
-                history = []
-            history.append(summary)
-            sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
-            sched["lifecycle"] = self._lifecycle
-            sched["lifecycle_error"] = self._lifecycle_error
-            if self._first_tick_at is not None:
-                sched["first_tick_at"] = self._first_tick_at
-            if result.get("round_robin_cursor") is not None:
-                sched["round_robin_cursor"] = result["round_robin_cursor"]
-
         timing = _cycle_timing.get()
+
+        def _mutator(data: Dict[str, Any]) -> None:
+            # Phase 3 fix-up: time mutator body alone (persist_summary_mutator_ms).
+            t_mut = time.perf_counter()
+            try:
+                sched = data.setdefault("prediction_resolver_scheduler", {})
+                sched["last_cycle"] = summary
+                history = sched.get("cycle_history")
+                if not isinstance(history, list):
+                    history = []
+                history.append(summary)
+                sched["cycle_history"] = bound_cycle_history(history, CYCLE_HISTORY_MAX)
+                sched["lifecycle"] = self._lifecycle
+                sched["lifecycle_error"] = self._lifecycle_error
+                if self._first_tick_at is not None:
+                    sched["first_tick_at"] = self._first_tick_at
+                if result.get("round_robin_cursor") is not None:
+                    sched["round_robin_cursor"] = result["round_robin_cursor"]
+            finally:
+                if timing is not None:
+                    timing.record_persist_subtimer(
+                        "summary_mutator", (time.perf_counter() - t_mut) * 1000
+                    )
+
+        # Full RMW wall (read+mutator+disk); invariant: rmw >= mutator.
         t_rmw = time.perf_counter()
         try:
             write_soul_map(_mutator, self.soul_map_path)
             if timing is not None:
                 timing.record_persist_subtimer(
                     "summary_rmw", (time.perf_counter() - t_rmw) * 1000
-                )
-                timing.record_persist_subtimer(
-                    "write", (time.perf_counter() - t_rmw) * 1000
                 )
         except Exception:
             pass
