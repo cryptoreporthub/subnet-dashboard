@@ -107,3 +107,63 @@ def test_revive_honest_when_tick_fresh(tmp_path, monkeypatch):
         assert out.get("reason") == "tick_fresh"
     finally:
         rs.stop_prediction_resolver_scheduler()
+
+
+def test_status_aware_boot_revive_arms_next_run_without_post(tmp_path, monkeypatch):
+    """Worker-boot helper arms next_run_at when lifecycle stopped / next_run null."""
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text("{}", encoding="utf-8")
+    preds.write_text(json.dumps({"predictions": [], "resolved": [], "stats": {}}), encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr(rs, "_default_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda *_a, **_k: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        },
+    )
+
+    @contextmanager
+    def _free_slot(_name):
+        yield True
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _free_slot)
+
+    rs.stop_prediction_resolver_scheduler()
+    # Simulate post-start hung/stopped: singleton present but next_run_at null.
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = False
+    sched._lifecycle = "stopped"
+    sched._next_run_at = None
+    rs._scheduler = sched
+
+    try:
+        out = rs.maybe_status_aware_resolver_revive_on_boot()
+        state = rs.get_prediction_resolver_scheduler_state()
+        assert state.get("next_run_at") is not None or out.get("revived") is True
+        # After force revive, scheduler should be active with an armed schedule
+        # or have just completed a tick (next_run may be set by _schedule_next).
+        armed = rs.get_prediction_resolver_scheduler()
+        assert armed is not None
+        assert armed._active is True
+        assert armed._next_run_at is not None or armed._first_tick_scheduled_at is not None
+    finally:
+        rs.stop_prediction_resolver_scheduler()
+

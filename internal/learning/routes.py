@@ -1329,6 +1329,11 @@ def _resolver_state_cross_process() -> Dict[str, Any]:
         cycle.get("stage_timing_ms") or tick.get("stage_timing_ms") or {}
     )
     state["stage_timing_ms"]["persistence"] = persistence_ms
+    # B1b sibling fence: mirror stage_timing copy for gap_timing_ms.
+    # Prod web is HTTP-only and never sees worker in-process memory.
+    state["gap_timing_ms"] = dict(
+        cycle.get("gap_timing_ms") or tick.get("gap_timing_ms") or {}
+    )
     return state
 
 
@@ -1439,6 +1444,7 @@ def _resolver_timeout_fallback(*, error: str, executor_wait_ms: float) -> Dict[s
                 "worker_peer": tick.get("worker_peer") or {},
                 "source": "volume" if tick.get("at") else "memory",
                 "stage_timing_ms": dict(tick.get("stage_timing_ms") or {}),
+                "gap_timing_ms": dict(tick.get("gap_timing_ms") or {}),
             }
     if data is None:
         data = {**get_prediction_resolver_scheduler_state(), "source": "memory"}

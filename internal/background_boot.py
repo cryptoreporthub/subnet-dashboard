@@ -121,6 +121,19 @@ def _start_resolver() -> None:
         )
         result = start_prediction_resolver_scheduler(immediate=immediate)
         _log_scheduler_start("prediction_resolver", result)
+        try:
+            from internal.council.resolver_scheduler import (
+                maybe_status_aware_resolver_revive_on_boot,
+            )
+
+            revive_out = maybe_status_aware_resolver_revive_on_boot()
+            logger.info(
+                "prediction_resolver status-aware boot revive: %s", revive_out
+            )
+        except Exception as exc:
+            logger.warning(
+                "prediction_resolver status-aware boot revive failed: %s", exc
+            )
 
         def _recover() -> None:
             try:
