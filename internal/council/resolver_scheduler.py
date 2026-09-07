@@ -192,6 +192,12 @@ class _CycleTiming:
         # B1b: absolute perf_counter checkpoints + optional closing stamp.
         self._checkpoints: Dict[str, float] = {}
         self._closing_stamp: Optional[float] = None
+        # Phase 3: cycle generation that owns persist writes for this timing.
+        self._owner_gen: Optional[int] = None
+        # Dark-region sub-timers inside persist_partial (ms).
+        self._persist_apply_ms: float = 0.0
+        self._persist_rmw_ms: float = 0.0
+        self._persist_write_ms: float = 0.0
 
     @contextmanager
     def stage(
@@ -254,6 +260,23 @@ class _CycleTiming:
     def is_abandoned(self) -> bool:
         with self._lock:
             return self._abandoned
+
+    def set_owner_gen(self, gen: Optional[int]) -> None:
+        with self._lock:
+            self._owner_gen = gen
+
+    def owner_gen(self) -> Optional[int]:
+        with self._lock:
+            return self._owner_gen
+
+    def record_persist_subtimer(self, name: str, duration_ms: float) -> None:
+        with self._lock:
+            if name == "apply_cycle_timing":
+                self._persist_apply_ms += duration_ms
+            elif name == "summary_rmw":
+                self._persist_rmw_ms += duration_ms
+            elif name == "write":
+                self._persist_write_ms += duration_ms
 
     def snapshot(self) -> Dict[str, Any]:
         with self._lock:
@@ -334,6 +357,7 @@ class _CycleTiming:
             "complete": complete,
             "t0": _ms_from_start(t_abs["t0"]),
             "t1": _ms_from_start(t_abs["t1"]),
+            "t1_5": _ms_from_start(checkpoints.get("t1_5")),
             "t2": _ms_from_start(t_abs["t2"]),
             "t3": _ms_from_start(t_abs["t3"]),
             "t4": _ms_from_start(t_abs["t4"]),
@@ -362,6 +386,11 @@ class _CycleTiming:
             # Abandoned/timeout: no closing stamp; invariant fields absent/zero.
             gap_timing_ms["closing_invariant_ms"] = None
             gap_timing_ms["closing_drift_ms"] = None
+
+        with self._lock:
+            gap_timing_ms["persist_apply_cycle_timing_ms"] = round(self._persist_apply_ms, 1)
+            gap_timing_ms["persist_summary_rmw_ms"] = round(self._persist_rmw_ms, 1)
+            gap_timing_ms["persist_write_ms"] = round(self._persist_write_ms, 1)
         return {
             "stage_timing_ms": stage_timing_ms,
             "gap_timing_ms": gap_timing_ms,
@@ -399,8 +428,11 @@ class PredictionResolverScheduler:
 
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
+        self._persist_lock = threading.Lock()
         self._cycle_generation = 0
+        self._persist_owner_gen: Optional[int] = None
         self._abandoned_live = 0
+        self._revive_use_full_budget = False
         # Control-flow flag only (start/stop); health reporting goes through
         # the tracker below, never through stored booleans (spec §2).
         self._active = False
@@ -713,6 +745,8 @@ class PredictionResolverScheduler:
             submitted_gen if submitted_gen is not None else self._cycle_generation
         )
         self._cycle_generation += 1
+        # Phase 3: revoked persist ownership so abandoned orphans skip soul_map RMW.
+        self._persist_owner_gen = None
         log_lifecycle(
             "abandon",
             trigger="resolver_cycle",
@@ -746,16 +780,23 @@ class PredictionResolverScheduler:
             self._persist_cycle_summary(result)
             return result
 
+        # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
+        # first-tick min(cycle, 90) cap that starves post-revive run_once.
+        use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
         timeout = (
-            RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
-            if self._first_tick_pending
-            else RESOLVER_CYCLE_TIMEOUT_SECONDS
+            RESOLVER_CYCLE_TIMEOUT_SECONDS
+            if use_full
+            else RESOLVER_FIRST_TICK_TIMEOUT_SECONDS
         )
+        if self._revive_use_full_budget:
+            self._revive_use_full_budget = False
         if timeout <= 0:
             run_at = _now_iso()
             gen = self._cycle_generation
+            self._persist_owner_gen = gen
             cycle_id = make_resolver_cycle_id(gen, run_at)
             timing = _CycleTiming(abandoned_live)
+            timing.set_owner_gen(gen)
             token = _cycle_timing.set(timing)
             ctx_token = bind_patchd_context(
                 cycle_generation=gen,
@@ -775,10 +816,12 @@ class PredictionResolverScheduler:
 
         self._cycle_generation += 1
         gen = self._cycle_generation
+        self._persist_owner_gen = gen
         run_at = _now_iso()
         cycle_id = make_resolver_cycle_id(gen, run_at)
         pool = ThreadPoolExecutor(max_workers=1)
         timing = _CycleTiming(abandoned_live)
+        timing.set_owner_gen(gen)
 
         def _run_cycle() -> Dict[str, Any]:
             ctx_token = bind_patchd_context(
@@ -831,13 +874,18 @@ class PredictionResolverScheduler:
                     "resolved_now": 0,
                     "expired_now": 0,
                     "pending": 0,
+                    # Label reports the ENFORCED budget (local timeout), not a
+                    # stale module constant.
                     "error": f"cycle_timeout_{timeout}s",
+                    "enforced_budget_s": timeout,
                     "abandoned_live": abandoned_live,
                     "cycle_generation": gen,
                     "resolver_cycle_id": cycle_id,
                 }
                 self._apply_cycle_timing(result, timing)
-                self._persist_cycle_summary(result)
+                # force=True: timeout path owns the summary write after orphan
+                # ownership was revoked in _abandon_inflight_cycle.
+                self._persist_cycle_summary(result, force=True)
                 return result
         except BaseException:
             if not submitted:
@@ -911,13 +959,24 @@ class PredictionResolverScheduler:
         def persist_partial() -> None:
             if timing.is_abandoned():
                 return
+            owner = timing.owner_gen()
+            if owner is not None and self._persist_owner_gen != owner:
+                return
+            t_apply = time.perf_counter()
             self._apply_cycle_timing(result, timing)
-            self._persist_cycle_summary(result)
+            timing.record_persist_subtimer(
+                "apply_cycle_timing", (time.perf_counter() - t_apply) * 1000
+            )
+            self._persist_cycle_summary(result, owner_gen=owner)
 
         try:
             # B1b t1: pre-flight boundary (immediately before ledger_heal).
             timing.mark_checkpoint("t1")
-            with timing.stage("ledger_heal", persist_partial):
+            def _persist_after_ledger() -> None:
+                timing.mark_checkpoint("t1_5")
+                persist_partial()
+
+            with timing.stage("ledger_heal", _persist_after_ledger):
                 try:
                     from internal.learning.ledger_heal import heal_daily_pick_ledger
 
@@ -955,8 +1014,21 @@ class PredictionResolverScheduler:
             #    count those here too.
             # B1b t5: pre-resolve boundary after round-robin bookkeeping.
             timing.mark_checkpoint("t5")
+            resolved: Dict[str, Any] = {
+                "resolved_now": [],
+                "expired_now": [],
+                "stats": {},
+                "watchdog": None,
+            }
             with timing.stage("resolve_due", persist_partial):
-                resolved = self._resolve_with_timing(subnets, timing)
+                # Phase 3 mid-guard: stop computing once abandoned.
+                if timing.is_abandoned() or (
+                    timing.owner_gen() is not None
+                    and timing.owner_gen() != self._cycle_generation
+                ):
+                    result["skipped"] = "cycle_abandoned"
+                else:
+                    resolved = self._resolve_with_timing(subnets, timing)
             timing.mark_checkpoint("t6")
             result["resolved_now"] = len(resolved.get("resolved_now", []))
             expired_count = len(resolved.get("expired_now", []))
@@ -966,8 +1038,15 @@ class PredictionResolverScheduler:
             #    ``pending`` rows (delisted subnet / feed outage / corrupt row).
             #    Most are already retired in step 1; this catches stragglers
             #    (e.g. corrupt records that step 1 skipped).
+            expired: Dict[str, Any] = {"expired_now": [], "stats": {}, "watchdog": None}
             with timing.stage("expire_stale", persist_partial):
-                expired = resolver.expire_stale_predictions()
+                if timing.is_abandoned() or (
+                    timing.owner_gen() is not None
+                    and timing.owner_gen() != self._cycle_generation
+                ):
+                    result["skipped"] = result.get("skipped") or "cycle_abandoned"
+                else:
+                    expired = resolver.expire_stale_predictions()
             expired_count += len(expired.get("expired_now", []))
             result["expired_now"] = expired_count
             result["pending"] = expired.get("stats", {}).get("pending", 0)
@@ -992,6 +1071,9 @@ class PredictionResolverScheduler:
             result["error"] = str(exc)
         finally:
             if not timing.is_abandoned():
+                owner = timing.owner_gen()
+                if owner is not None and self._persist_owner_gen != owner:
+                    return result
                 try:
                     timing.record_soul_map_size(
                         "end", os.path.getsize(self.soul_map_path)
@@ -1002,10 +1084,29 @@ class PredictionResolverScheduler:
                 # B1b closing stamp after end size + mark_complete.
                 timing.mark_closing_stamp()
                 self._apply_cycle_timing(result, timing)
-                self._persist_cycle_summary(result)
+                self._persist_cycle_summary(result, owner_gen=owner)
         return result
 
-    def _persist_cycle_summary(self, result: Dict[str, Any]) -> None:
+    def _persist_cycle_summary(
+        self,
+        result: Dict[str, Any],
+        *,
+        owner_gen: Optional[int] = None,
+        force: bool = False,
+    ) -> None:
+        """Persist last_cycle with single-writer ownership (Phase 3).
+
+        Abandoned orphans pass ``owner_gen`` that no longer matches
+        ``_persist_owner_gen`` and skip the 24MB soul_map RMW. Timeout /
+        control-plane writers use ``force=True``.
+        """
+        with self._persist_lock:
+            if not force and owner_gen is not None:
+                if self._persist_owner_gen != owner_gen:
+                    return
+            self._persist_cycle_summary_locked(result)
+
+    def _persist_cycle_summary_locked(self, result: Dict[str, Any]) -> None:
         stage_timing_ms = dict(result.get("stage_timing_ms") or {})
         # Prefer explicit rollups on the result; else derive from stage_timing_ms.
         if "stages_sum_ms" in result and "nonstage_ms" in result:
@@ -1051,8 +1152,17 @@ class PredictionResolverScheduler:
             if result.get("round_robin_cursor") is not None:
                 sched["round_robin_cursor"] = result["round_robin_cursor"]
 
+        timing = _cycle_timing.get()
+        t_rmw = time.perf_counter()
         try:
             write_soul_map(_mutator, self.soul_map_path)
+            if timing is not None:
+                timing.record_persist_subtimer(
+                    "summary_rmw", (time.perf_counter() - t_rmw) * 1000
+                )
+                timing.record_persist_subtimer(
+                    "write", (time.perf_counter() - t_rmw) * 1000
+                )
         except Exception:
             pass
 
@@ -1243,7 +1353,17 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
     with _scheduler_lock:
         sched = _scheduler
     if sched is not None:
+        # Phase 3 revive budget + skip-burst reset.
+        try:
+            sched.liveness.clear_burst_counters()
+        except Exception:
+            pass
+        sched._revive_use_full_budget = True
         tick_out = sched.run_once()
+        # Even if the revive tick timed out, ensure next_run_at is armed.
+        state_after = sched.state()
+        if state_after.get("next_run_at") is None and sched._active:
+            sched._schedule_next(min(2, max(1, sched.refresh_minutes)))
 
     age_after = _resolver_tick_age_seconds()
     revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))
