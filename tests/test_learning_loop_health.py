@@ -163,6 +163,14 @@ def test_resolver_state_cross_process_exposes_cycle_timing(monkeypatch):
                         "resolve_due_ms": 12.5,
                         "total_cycle_ms": 20.0,
                     },
+                    "gap_timing_ms": {
+                        "buckets_ms": {
+                            "preflight": 1.0,
+                            "batch_bookkeeping": 2.0,
+                            "closing": 3.0,
+                        },
+                        "complete": True,
+                    },
                 }
             }
         },
@@ -172,6 +180,54 @@ def test_resolver_state_cross_process_exposes_cycle_timing(monkeypatch):
 
     assert result["stage_timing_ms"]["resolve_due_ms"] == 12.5
     assert result["stage_timing_ms"]["total_cycle_ms"] == 20.0
+    # Sibling fence: gap_timing_ms is a peer of stage_timing_ms, not nested.
+    assert "gap_timing_ms" not in result["stage_timing_ms"]
+    gap = result["gap_timing_ms"]
+    assert isinstance(gap, dict)
+    buckets = gap["buckets_ms"]
+    assert buckets["preflight"] == 1.0
+    assert buckets["batch_bookkeeping"] == 2.0
+    assert buckets["closing"] == 3.0
+
+
+
+
+def test_resolver_timeout_fallback_exposes_gap_timing_from_tick(monkeypatch):
+    """Worker-tick fallback builder must also surface gap_timing_ms sibling."""
+    routes._RESOLVER_STATE_CACHE["at"] = 0.0
+    routes._RESOLVER_STATE_CACHE["payload"] = None
+
+    monkeypatch.setattr(
+        routes,
+        "get_prediction_resolver_scheduler_state",
+        lambda: {"running": False, "last_run_at": None, "lifecycle": "stopped"},
+    )
+    monkeypatch.setattr(
+        "internal.learning.loop_health.cached_resolver_liveness_view",
+        lambda allow_stale=False: {
+            "at": "2099-01-01T00:00:00+00:00",
+            "ok": True,
+            "running": True,
+            "refresh_minutes": 15,
+            "worker_peer": {"alive": True},
+            "stage_timing_ms": {"total_cycle_ms": 11.0},
+            "gap_timing_ms": {
+                "buckets_ms": {
+                    "preflight": 0.5,
+                    "batch_bookkeeping": 0.6,
+                    "closing": 0.7,
+                }
+            },
+        },
+    )
+
+    data = routes._resolver_timeout_fallback(error="timeout", executor_wait_ms=1.5)
+    assert data["stage_timing_ms"]["total_cycle_ms"] == 11.0
+    assert data["stage_timing_ms"]["executor_wait"] == 1.5
+    assert "gap_timing_ms" not in data["stage_timing_ms"]
+    buckets = data["gap_timing_ms"]["buckets_ms"]
+    assert set(buckets) >= {"preflight", "batch_bookkeeping", "closing"}
+    assert buckets["preflight"] == 0.5
 
 
 def _seed_resolver_state_cache(payload):

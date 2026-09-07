@@ -1256,3 +1256,47 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         "tick": tick_out,
     }
 
+
+
+def maybe_status_aware_resolver_revive_on_boot() -> Dict[str, Any]:
+    """Arm the resolver after worker boot when start left it unscheduled.
+
+    Prod symptom: worker heartbeat is fresh but lifecycle stays stopped /
+    ``next_run_at`` is null (or liveness is failing/stale/starved). Idempotent
+    ``start_*`` alone is not enough when the singleton claims started-but-hung
+    or the tracker is skip-burst starved. Force-revive recycles + schedules a
+    tick so ``next_run_at`` arms without an HTTP POST.
+    """
+    state = get_prediction_resolver_scheduler_state()
+    next_run = state.get("next_run_at")
+    lifecycle = str(state.get("lifecycle") or "stopped")
+    status = None
+    try:
+        from internal.liveness import get_tracker
+
+        tracker = get_tracker("prediction_resolver")
+        if tracker is not None:
+            status = tracker.snapshot().get("status")
+    except Exception:
+        status = None
+
+    needs_arm = next_run is None or lifecycle in {"stopped", "new"}
+    status_needs = status in {"failing", "stale", "starved"}
+    if not (needs_arm or status_needs):
+        return {
+            "revived": False,
+            "reason": "already_armed",
+            "lifecycle": lifecycle,
+            "next_run_at": next_run,
+            "status": status,
+        }
+
+    out = revive_prediction_resolver_scheduler(force=True)
+    armed = get_prediction_resolver_scheduler_state()
+    out["boot_reason"] = "next_run_null_or_stopped" if needs_arm else "liveness_status"
+    out["status_before"] = status
+    out["next_run_at_after"] = armed.get("next_run_at")
+    out["lifecycle_after"] = armed.get("lifecycle")
+    return out
+
+
