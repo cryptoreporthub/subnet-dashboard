@@ -284,6 +284,15 @@ class LivenessTracker:
             self._last_skip_reason = str(reason)
         self._save()
 
+    def clear_burst_counters(self) -> None:
+        """Revive/boot helper: clear skip/failure burst without fabricating success."""
+        with self._lock:
+            self._consecutive_skips = 0
+            self._consecutive_failures = 0
+            self._backoff_seconds = 0
+            self._last_skip_reason = None
+        self._save()
+
     def record_failure(self, error: Any = "") -> None:
         with self._lock:
             self._consecutive_failures += 1
