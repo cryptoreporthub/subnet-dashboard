@@ -286,16 +286,13 @@ def _build_resolver_liveness_view() -> Dict[str, Any]:
         if isinstance(merged, dict) and merged:
             cur_status = snap.get("status")
             merged_status = merged.get("status")
-            # Prefer persisted registry when the in-process web tracker is empty,
-            # failing, or stale — or when persisted last_success is strictly newer.
-            # (Blind spot: status=="stale" used to keep the web tracker forever.)
-            # Use _parse_iso/_utcnow — do not call _freshness (not in this module).
+            # Use _parse_iso (not _freshness — out of scope in this module).
+            # Blind spot fix: when web tracker is "stale", still prefer persisted
+            # truth IF its last_success_at is strictly newer. Do NOT yield on
+            # stale→ok alone when timestamps are equal (keeps stale-tick tests).
             cur_success = _parse_iso(snap.get("last_success_at"))
             merged_success = _parse_iso(merged.get("last_success_at"))
-            if (
-                cur_status in ("no_success_yet", "failing", "stale")
-                and merged_status == "ok"
-            ):
+            if cur_status in ("no_success_yet", "failing") and merged_status == "ok":
                 snap = merged
             elif merged_success is not None and (
                 cur_success is None or merged_success > cur_success
