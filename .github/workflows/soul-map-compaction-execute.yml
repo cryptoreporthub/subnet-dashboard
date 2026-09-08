@@ -1,0 +1,88 @@
+# Gated live compaction — Runbook v4 §5. Manual dispatch only.
+# Requires prior DRY_RUN_SUCCESS + CI green. Does NOT bump timeouts.
+name: Soul map compaction execute
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type EXECUTE to run live compaction (backup + --execute + apps restart on exit 0)"
+        required: true
+        default: ""
+jobs:
+  execute:
+    name: compact_soul_map --execute
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event.inputs.confirm == 'EXECUTE'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Backup + execute via fly ssh (one session)
+        id: exec
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          B64="$(base64 -w0 scripts/compact_soul_map.py)"
+          # Orchestrator: install script under /app/scripts (REPO_ROOT=/app), pinned backup,
+          # optional quiescence wait, then --execute. Exit code is the script's.
+          ORCH=$(cat <<PY
+          import base64, os, shutil, subprocess, sys, time
+          open("/app/scripts/compact_soul_map.py", "wb").write(base64.b64decode("${B64}"))
+          src = "/app/data/soul_map.json"
+          ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+          bak = f"/app/data/soul_map.json.bak-{ts}"
+          shutil.copy2(src, bak)
+          sz, bz = os.path.getsize(src), os.path.getsize(bak)
+          print(f"PINNED_BACKUP={bak}")
+          print(f"BACKUP_BYTES_SRC={sz} BACKUP_BYTES_BAK={bz}")
+          if sz != bz:
+              print("BACKUP_BYTE_MISMATCH")
+              sys.exit(3)
+          age = time.time() - os.path.getmtime(src)
+          need = 6.0
+          if age < need:
+              wait = need - age + 0.5
+              print(f"QUIESCENCE_WAIT_S={wait:.2f}")
+              time.sleep(wait)
+          rc = subprocess.call(
+              [sys.executable, "/app/scripts/compact_soul_map.py", "--execute", "--backup", bak],
+              cwd="/app",
+          )
+          print(f"EXECUTE_EXIT={rc}")
+          sys.exit(rc)
+          PY
+          )
+          ORCH_B64="$(printf '%s' "$ORCH" | base64 -w0)"
+          set +e
+          flyctl ssh console -a subnet-dashboard -C "python3 -c \"import base64; exec(base64.b64decode('${ORCH_B64}').decode())\"" | tee "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+          EC=${PIPESTATUS[0]}
+          set -e
+          echo "ssh_exit=$EC" | tee -a "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+          echo "ssh_exit=$EC" >> "$GITHUB_OUTPUT"
+          if grep -q 'PRE_RESTART_VERIFICATION_PASSED' "$RUNNER_TEMP/soul-map-compaction-execute.txt"; then
+            echo "verified=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "verified=no" >> "$GITHUB_OUTPUT"
+          fi
+          # Propagate script exit: 0 continue; 3/4/5 halt (no restart)
+          exit "$EC"
+      - name: Restart app (exit 0 only)
+        if: success() && steps.exec.outputs.verified == 'yes'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "RESTART_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+          flyctl apps restart subnet-dashboard
+          sleep 25
+          curl -fsS --max-time 30 "https://subnet-dashboard.fly.dev/health" | tee -a "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+          echo | tee -a "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+          curl -fsS --max-time 30 "https://subnet-dashboard.fly.dev/version" | tee -a "$RUNNER_TEMP/soul-map-compaction-execute.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: soul-map-compaction-execute-${{ github.run_id }}
+          path: ${{ runner.temp }}/soul-map-compaction-execute.txt
