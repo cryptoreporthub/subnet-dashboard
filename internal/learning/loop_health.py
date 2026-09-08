@@ -578,9 +578,21 @@ def build_learning_loop_health(
     elif _snapshot_stale(worker_peer, snapshot_age, score_snapshot.get("scheduler") or {}):
         status = "degraded"
 
+    try:
+        from internal.council.weights import council_learning_frozen
+
+        learning_frozen = bool(council_learning_frozen())
+    except Exception:
+        learning_frozen = False
+    learning_label = (
+        "learning frozen (P0.0)" if learning_frozen else "learning active"
+    )
+
     return {
         "status": status,
         "checked_at": _utcnow().isoformat().replace("+00:00", "Z"),
+        "learning_frozen": learning_frozen,
+        "learning_label": learning_label,
         "pending": pending,
         "last_resolver_tick": resolver.get("at"),
         "resolver": {

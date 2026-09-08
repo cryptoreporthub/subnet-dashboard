@@ -864,6 +864,11 @@ def _nudge_signal_weights(
     *,
     capture: Optional[CaptureResult] = None,
 ) -> None:
+    from internal.council.weights import council_learning_frozen
+
+    if council_learning_frozen():
+        logger.debug("learning frozen (P0.0): nudge skipped")
+        return
     if _in_replay_mode():
         return
     if capture_mode_enabled() and capture is not None:

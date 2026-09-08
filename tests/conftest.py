@@ -17,6 +17,12 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _unfreeze_council_learning_for_tests(monkeypatch):
+    """P0.0 defaults frozen in prod; tests opt into freeze explicitly."""
+    monkeypatch.setenv("COUNCIL_LEARNING_FROZEN", "0")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_message_intel_db(tmp_path, monkeypatch):
     """Redirect message-intel DB to a per-test temp file (prevents live-DB pollution)."""
     db_path = str(tmp_path / "test_message_intel.db")

@@ -24,6 +24,20 @@ logger = logging.getLogger(__name__)
 DEFAULT_WEIGHTS = {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
 SOUL_MAP_PATH = os.path.join("data", "soul_map.json")
 
+# P0.0 — freeze online directional expert/signal learning until edge is proven (P1.5).
+# Default frozen. Unfreeze: set COUNCIL_LEARNING_FROZEN=0 (or false/off). TODO(P1.5):
+# re-enable only with symmetric/share-normalized nudges after MFE+base-rate gate.
+_COUNCIL_LEARNING_FROZEN_DEFAULT = True
+
+
+def council_learning_frozen() -> bool:
+    """True when online weight mutation is frozen (P0.0). Replay rebase paths unaffected."""
+    raw = os.environ.get("COUNCIL_LEARNING_FROZEN")
+    if raw is None or not str(raw).strip():
+        return _COUNCIL_LEARNING_FROZEN_DEFAULT
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
 # Signal weight learning constants (shared with resolver.py)
 _LEARNING_DELTA_CORRECT = 0.02
 _LEARNING_DELTA_WRONG = -0.03
@@ -586,6 +600,10 @@ def nudge_expert(
     scale: float = 1.0,
 ) -> Optional[float]:
     """Single nudge path for resolver + feedback (§27-4). Returns new weight."""
+    if council_learning_frozen():
+        # One debug line per expert-nudge attempt; signal path logs once upstream.
+        logger.debug("learning frozen (P0.0): nudge skipped")
+        return None
     if not expert:
         return None
     path = path or SOUL_MAP_PATH
@@ -758,6 +776,9 @@ def nudge_signal_weight(
     extra: Optional[Dict[str, Any]] = None,
 ) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
+    if council_learning_frozen():
+        # Silent at per-signal granularity — resolver logs once per resolution.
+        return None
     signal_weights = load_signal_weights(path)
     horizon_weights = signal_weights.setdefault(horizon_type, {})
     base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
