@@ -58,6 +58,14 @@ def _seed_resolver_liveness(monkeypatch, *, fresh: bool = True, stale_seconds: f
         "internal.liveness.get_tracker",
         lambda name: tracker if name == "prediction_resolver" else None,
     )
+    # Pin registry to the seeded tracker so on-disk/CI volume truth cannot
+    # leak a fresher prediction_resolver snapshot into _build_resolver_liveness_view.
+    monkeypatch.setattr(
+        "internal.liveness.build_liveness_registry",
+        lambda probe_worker=False: {
+            "trackers": {"prediction_resolver": tracker.snapshot()}
+        },
+    )
     return tracker
 
 
