@@ -12,6 +12,11 @@ from typing import Any, Dict, Optional
 
 from internal.store.soul_map_io import read_soul_map, write_soul_map
 
+# Mirror CYCLE_HISTORY_MAX=10 / learning_trail[-200:] — memory-only heal; on-disk
+# shrink is the compaction operation (Runbook v4), not this constant alone.
+FEEDBACK_LOGS_MAX = 10
+
+
 class MindmapBridge:
     def __init__(self, persistence_path: str = "data/soul_map.json", registry_path: str = "config/registry.json"):
         self.persistence_path = persistence_path
@@ -24,7 +29,13 @@ class MindmapBridge:
         try:
             data = read_soul_map(self.persistence_path)
             self.soul_map_state = data.get("soul_map_state", {})
-            self.feedback_logs = data.get("feedback_logs", [])
+            logs = data.get("feedback_logs", [])
+            if isinstance(logs, list):
+                self.feedback_logs = logs[-FEEDBACK_LOGS_MAX:]
+            else:
+                # Non-list payload: preserve as empty list in memory (safe); do not
+                # rewrite disk here — compaction owns on-disk shape.
+                self.feedback_logs = []
         except Exception:
             self.soul_map_state = {}
             self.feedback_logs = []
@@ -187,5 +198,7 @@ class MindmapBridge:
             "status": status
         }
         self.feedback_logs.append(feedback)
+        if len(self.feedback_logs) > FEEDBACK_LOGS_MAX:
+            self.feedback_logs = self.feedback_logs[-FEEDBACK_LOGS_MAX:]
         self._save_to_disk()
         return feedback
