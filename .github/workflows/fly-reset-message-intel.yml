@@ -23,7 +23,7 @@ on:
     types: [labeled]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   reset-message-intel:
