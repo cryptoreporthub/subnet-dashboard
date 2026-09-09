@@ -66,6 +66,8 @@ jobs:
       - name: Dispatch live reset workflow (all internal gates still apply)
         run: |
           set -euo pipefail
-          gh workflow run fly-reset-message-intel.yml --ref main \
-            -f dry_run=false -f confirm=RESET_TO_ZERO -f mode="$MODE"
-          echo "Dispatched live reset (mode=$MODE). All internal gates (quiescence, prod-version==main, confirm) still enforce."
+          payload="$(printf '{"confirm":"RESET_TO_ZERO","mode":"%s","dry_run":false}' "$MODE")"
+          gh api -X POST "repos/${{ github.repository }}/dispatches" \
+            -f event_type=live-reset \
+            -f client_payload="$payload"
+          echo "Dispatched live-reset event (mode=$MODE) via repository_dispatch. All internal gates (quiescence, prod-version==main, confirm) still enforce."
