@@ -125,6 +125,28 @@ def test_horizon_fields_are_present_for_pending_calls(intel_db):
     assert set(proof["horizon_summary"]) == {"1h", "4h", "24h"}
 
 
+def test_magnitude_quality_separates_claim_from_realized_move(intel_db):
+    from internal.message_intel.proof import classify_call
+
+    proof = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 80,
+            "tao_usd_price": 1.0,
+            "netuid": 7,
+            "predicted_magnitude": 0.10,
+            "price_24h": 1.02,
+            "outcome": "stable",
+        }
+    )
+    assert proof["magnitude_quality"] == {
+        "tier": "under_delivered",
+        "call_claimed": 10.0,
+        "move_realized": 2.0,
+    }
+
+
 def test_down_hit_miss_mapping(intel_db):
     from internal.message_intel.proof import classify_call
     base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
