@@ -257,7 +257,7 @@ def test_unqualified_chatter_not_a_prediction(intel_db):
 def test_direction_resolution_mirrors_locked_rule(intel_db):
     """Conflicting verdict / predicted_direction must resolve like the locked rule:
     bull verdict OR up direction → up; bear verdict OR down direction → down."""
-    from internal.message_intel.proof import resolve_direction
+    from internal.message_intel.proof import classify_call, resolve_direction
     # Locked rule checks the up branch FIRST: bull verdict OR up direction → up,
     # then bear verdict OR down direction → down (self_learning._is_correct_prediction).
     assert resolve_direction("bullish", "down") == "up"     # bull verdict → up branch
@@ -268,6 +268,19 @@ def test_direction_resolution_mirrors_locked_rule(intel_db):
     assert resolve_direction("bearish", "down") == "down"
     assert resolve_direction("bullish", "up") == "up"
     assert resolve_direction("neutral", "sideways") == "flat"
+    assert resolve_direction("neutral", "neutral") is None
+    chatter = classify_call(
+        {
+            "source": "telegram",
+            "verdict": "neutral",
+            "predicted_direction": "neutral",
+            "conviction": 90,
+            "tao_usd_price": 1.0,
+            "netuid": 7,
+            "outcome": "stable",
+        }
+    )
+    assert chatter["eligible"] is False
     assert resolve_direction(None, None) is None             # no signal → chatter
 
 

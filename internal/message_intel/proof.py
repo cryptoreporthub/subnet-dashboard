@@ -57,7 +57,9 @@ EV_UNQUALIFIED = "unqualified"
 
 _UP_DIRS = frozenset(("up", "bullish", "long", "buy"))
 _DOWN_DIRS = frozenset(("down", "bearish", "short", "sell"))
-_FLAT_DIRS = frozenset(("flat", "sideways", "neutral", "hold"))
+# ``neutral`` is jury chatter, not an explicit flat market call.  Keeping it
+# out of this set prevents neutral chatter from earning a stable-market hit.
+_FLAT_DIRS = frozenset(("flat", "sideways", "hold"))
 _PUMP_OUTCOMES = frozenset(("pump", "mild_pump"))
 _DUMP_OUTCOMES = frozenset(("dump", "mild_dump"))
 _STABLE_OUTCOME = "stable"
