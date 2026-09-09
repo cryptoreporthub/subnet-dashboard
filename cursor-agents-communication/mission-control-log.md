@@ -232,3 +232,11 @@ Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1
 - tests: test_p0_council_day_horizon.py (5); phase_j known fails UNTOUCHED
 - full suite 2620 passed / 139 failed; named-list delta vs P0.2: +0/-0
 - no PR / no merge / no deploy; paused for Gate before P0.6
+
+## 2026-09-09 00:03 PT — P0.6 signed hype momentum (abs inversion fix)
+- branch: p0-expanded-batch
+- _hype_price_momentum: signed chg24/20+chg7/60 with ±0.20 cap; abs() removed
+- tests: test_p0_hype_momentum_sign.py (4); dump −40% no longer boosts hype
+- full suite 2624 passed / 139 failed; named-list delta +0/-0
+- surrounding note: final hype still clamped to [0,1] at L1476 (pre-existing; not changed)
+- no PR / no merge / no deploy; paused for Gate before P0.7

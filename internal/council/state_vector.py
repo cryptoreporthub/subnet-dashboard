@@ -1413,6 +1413,18 @@ _DEFAULT_WEIGHTS = {
 }
 
 
+
+def _hype_price_momentum(chg24: float, chg7: float) -> float:
+    """Signed hype momentum from 24h/7d price change (P0.6).
+
+    Same scale as the historical formula (chg24/20 + chg7/60) with a ±0.20
+    magnitude cap. Sign is preserved — a dump no longer inverts into positive
+    hype momentum via abs().
+    """
+    raw = float(chg24) / 20.0 + float(chg7) / 60.0
+    return max(-0.20, min(0.20, raw))
+
+
 def _expert_contributions(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
@@ -1459,7 +1471,7 @@ def _expert_contributions(
         hype_sens = 1.0
     hype = 0.45
     hype += min(0.30, mentions / 5_000.0)
-    mom = min(0.20, abs(chg24) / 20.0 + abs(chg7) / 60.0)
+    mom = _hype_price_momentum(chg24, chg7)
     hype += mom * min(1.5, 0.5 + 0.5 * hype_sens)  # large-cap momentum counts less
     hype = min(1.0, max(0.0, hype))
 
