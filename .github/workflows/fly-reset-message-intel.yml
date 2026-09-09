@@ -148,7 +148,21 @@ jobs:
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
             "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --dry-run --clean-alerts'" \
-            --app "$APP" --timeout 120 > reset_output.json 2>&1
+            --app "$APP" --timeout 120 > reset_output.json 2>&1 || echo "reset-exec rc=$?" >> reset_output.json
+          echo "---- read-back probe ----"
+          flyctl machine exec "$TARGET_ID" \
+            "bash -lc 'echo SENTINEL-$(date -u +%s); cat /app/reset_output.json 2>/dev/null | head -c 400'" \
+            --app "$APP" --timeout 30 > readback.txt 2>&1 || true
+          {
+            echo "### reset_output.json"
+            echo '```'
+            head -c 2000 reset_output.json
+            echo '```'
+            echo "### readback.txt"
+            echo '```'
+            head -c 2000 readback.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run reset (live - destructive)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
@@ -178,6 +192,8 @@ jobs:
           print("---- reset_output.json content ----")
           print(text)
           print("---- end content ----")
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as fh:
+              fh.write("### validate saw\n\n```\n" + text[:2000] + "\n```\n")
 
           def _pick(payload_text):
               # try each non-empty line as standalone JSON; pick the first dict
