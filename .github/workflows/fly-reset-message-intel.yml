@@ -226,6 +226,27 @@ jobs:
           print(json.dumps(payload, sort_keys=True))
           PY
 
+      - name: Publish diagnostics branch
+        if: always()
+        env:
+          DIAG_BRANCH: reset-dry-run-diagnostics
+        run: |
+          set -euo pipefail
+          git config user.name "reset-diagnostics-bot"
+          git config user.email "actions@localhost"
+          git fetch origin "$DIAG_BRANCH" 2>/dev/null || true
+          if git rev-parse --verify origin/"$DIAG_BRANCH" >/dev/null 2>&1; then
+            git checkout -B "$DIAG_BRANCH" origin/"$DIAG_BRANCH"
+          else
+            git checkout -B "$DIAG_BRANCH" "$GITHUB_SHA"
+          fi
+          mkdir -p diagnostics
+          cp reset_output.json diagnostics/reset_output.txt 2>/dev/null || echo "MISSING reset_output.json" > diagnostics/reset_output.txt
+          cp readback.txt diagnostics/readback.txt 2>/dev/null || echo "MISSING readback.txt" > diagnostics/readback.txt
+          git add diagnostics/
+          git commit -m "reset dry-run diagnostics from run $GITHUB_RUN_ID" || echo "nothing to commit"
+          git push origin "$DIAG_BRANCH"
+
       - name: Upload reset output artifact
         if: ${{ always() && ((github.event_name == 'workflow_dispatch') || (github.event_name == 'pull_request' && steps.label-guard.outputs.should_run == 'true')) }}
         uses: actions/upload-artifact@v4
