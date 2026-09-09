@@ -98,8 +98,16 @@ class Database:
                     price_1h REAL,
                     price_4h REAL,
                     price_24h REAL,
+                    price_1h_recorded_at TEXT,
+                    price_4h_recorded_at TEXT,
                     price_7d REAL,
                     pump_pct_max REAL,
+                    outcome_1h TEXT,
+                    outcome_4h TEXT,
+                    outcome_24h TEXT,
+                    pump_pct_1h REAL,
+                    pump_pct_4h REAL,
+                    pump_pct_24h REAL,
                     time_to_pump REAL,
                     pump_duration REAL,
                     resurgence REAL,
@@ -157,6 +165,23 @@ class Database:
                     )
                 except sqlite3.OperationalError:
                     pass
+            for name, kind in (
+                ("price_1h_recorded_at", "TEXT"),
+                ("price_4h_recorded_at", "TEXT"),
+                ("outcome_1h", "TEXT"),
+                ("outcome_4h", "TEXT"),
+                ("outcome_24h", "TEXT"),
+                ("pump_pct_1h", "REAL"),
+                ("pump_pct_4h", "REAL"),
+                ("pump_pct_24h", "REAL"),
+            ):
+                if name not in outcome_cols:
+                    try:
+                        conn.execute(
+                            f"ALTER TABLE price_outcomes ADD COLUMN {name} {kind}"
+                        )
+                    except sqlite3.OperationalError:
+                        pass
             msg_cols = {r[1] for r in conn.execute("PRAGMA table_info(messages)").fetchall()}
             if "reply_to_message_id" not in msg_cols:
                 try:
@@ -315,51 +340,107 @@ class Database:
     def save_price_outcome(self, message_id: int, outcome: Dict[str, Any]) -> None:
         with self._connect() as conn:
             existing = conn.execute(
-                """SELECT id, price_24h_recorded_at FROM price_outcomes
+                """SELECT id, price_1h_recorded_at, price_4h_recorded_at,
+                          price_24h_recorded_at
+                   FROM price_outcomes
                    WHERE message_id = ? ORDER BY id LIMIT 1""",
                 (message_id,),
             ).fetchone()
-            price_24h = outcome.get("price_24h")
-            recorded_at = outcome.get("price_24h_recorded_at") if price_24h is not None else None
+            horizon_fields = {
+                "price_1h": outcome.get("price_1h"),
+                "price_4h": outcome.get("price_4h"),
+                "price_24h": outcome.get("price_24h"),
+                "price_1h_recorded_at": outcome.get("price_1h_recorded_at"),
+                "price_4h_recorded_at": outcome.get("price_4h_recorded_at"),
+                "price_24h_recorded_at": outcome.get("price_24h_recorded_at"),
+                "outcome_1h": outcome.get("outcome_1h"),
+                "outcome_4h": outcome.get("outcome_4h"),
+                "outcome_24h": outcome.get("outcome_24h"),
+                "pump_pct_1h": outcome.get("pump_pct_1h"),
+                "pump_pct_4h": outcome.get("pump_pct_4h"),
+                "pump_pct_24h": outcome.get("pump_pct_24h"),
+            }
             if existing:
                 conn.execute(
                     """UPDATE price_outcomes
-                       SET price_1h = ?, price_4h = ?, price_24h = ?, price_7d = ?,
+                       SET price_1h = COALESCE(price_1h, ?),
+                           price_4h = COALESCE(price_4h, ?),
+                           price_24h = COALESCE(price_24h, ?),
+                           price_1h_recorded_at = COALESCE(price_1h_recorded_at, ?),
+                           price_4h_recorded_at = COALESCE(price_4h_recorded_at, ?),
+                           price_24h_recorded_at = COALESCE(price_24h_recorded_at, ?),
+                           outcome_1h = COALESCE(outcome_1h, ?),
+                           outcome_4h = COALESCE(outcome_4h, ?),
+                           outcome_24h = COALESCE(outcome_24h, ?),
+                           pump_pct_1h = COALESCE(pump_pct_1h, ?),
+                           pump_pct_4h = COALESCE(pump_pct_4h, ?),
+                           pump_pct_24h = COALESCE(pump_pct_24h, ?),
+                           price_7d = COALESCE(price_7d, ?),
                            pump_pct_max = ?, time_to_pump = ?, pump_duration = ?,
-                           resurgence = ?, outcome = ?,
-                           price_24h_recorded_at = COALESCE(?, price_24h_recorded_at)
+                           resurgence = ?, outcome = ?
                        WHERE id = ?""",
                     (
-                        outcome.get("price_1h"),
-                        outcome.get("price_4h"),
-                        price_24h,
+                        horizon_fields["price_1h"],
+                        horizon_fields["price_4h"],
+                        horizon_fields["price_24h"],
+                        horizon_fields["price_1h_recorded_at"],
+                        horizon_fields["price_4h_recorded_at"],
+                        horizon_fields["price_24h_recorded_at"],
+                        horizon_fields["outcome_1h"],
+                        horizon_fields["outcome_4h"],
+                        horizon_fields["outcome_24h"],
+                        horizon_fields["pump_pct_1h"],
+                        horizon_fields["pump_pct_4h"],
+                        horizon_fields["pump_pct_24h"],
                         outcome.get("price_7d"),
                         outcome.get("pump_pct_max"),
                         outcome.get("time_to_pump"),
                         outcome.get("pump_duration"),
                         outcome.get("resurgence"),
                         outcome.get("outcome"),
-                        recorded_at,
                         existing["id"],
                     ),
                 )
+                # Legacy callers predate per-horizon timestamps and may send a
+                # corrected 1h value while enriching the same row. New
+                # horizon-aware writes always carry outcome_1h/timestamp and
+                # remain immutable.
+                if (
+                    horizon_fields["price_1h"] is not None
+                    and horizon_fields["price_1h_recorded_at"] is None
+                    and horizon_fields["outcome_1h"] is None
+                ):
+                    conn.execute(
+                        "UPDATE price_outcomes SET price_1h = ? WHERE id = ?",
+                        (horizon_fields["price_1h"], existing["id"]),
+                    )
                 return
             conn.execute(
                 """INSERT INTO price_outcomes (message_id, price_1h, price_4h, price_24h, price_7d,
-                   pump_pct_max, time_to_pump, pump_duration, resurgence, outcome, price_24h_recorded_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   price_1h_recorded_at, price_4h_recorded_at, price_24h_recorded_at,
+                   outcome_1h, outcome_4h, outcome_24h, pump_pct_1h, pump_pct_4h,
+                   pump_pct_24h, pump_pct_max, time_to_pump, pump_duration, resurgence, outcome)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     message_id,
-                    outcome.get("price_1h"),
-                    outcome.get("price_4h"),
-                    price_24h,
+                    horizon_fields["price_1h"],
+                    horizon_fields["price_4h"],
+                    horizon_fields["price_24h"],
                     outcome.get("price_7d"),
+                    horizon_fields["price_1h_recorded_at"],
+                    horizon_fields["price_4h_recorded_at"],
+                    horizon_fields["price_24h_recorded_at"],
+                    horizon_fields["outcome_1h"],
+                    horizon_fields["outcome_4h"],
+                    horizon_fields["outcome_24h"],
+                    horizon_fields["pump_pct_1h"],
+                    horizon_fields["pump_pct_4h"],
+                    horizon_fields["pump_pct_24h"],
                     outcome.get("pump_pct_max"),
                     outcome.get("time_to_pump"),
                     outcome.get("pump_duration"),
                     outcome.get("resurgence"),
                     outcome.get("outcome"),
-                    recorded_at,
                 ),
             )
 
@@ -495,7 +576,10 @@ class Database:
             rows = conn.execute(
                 """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
                            v.verdict, v.predicted_direction, v.conviction,
-                           po.id AS outcome_id, po.price_24h_recorded_at
+                           po.id AS outcome_id, po.price_1h, po.price_4h, po.price_24h,
+                           po.outcome_1h, po.outcome_4h, po.outcome_24h,
+                           po.price_1h_recorded_at, po.price_4h_recorded_at,
+                           po.price_24h_recorded_at
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
                    LEFT JOIN price_outcomes po ON po.message_id = m.id

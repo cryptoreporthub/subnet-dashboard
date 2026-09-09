@@ -1473,6 +1473,10 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "move_pct": proof["move_pct"],
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
+        "correct_1h": proof["correct_1h"],
+        "correct_4h": proof["correct_4h"],
+        "correct_24h": proof["correct_24h"],
+        "horizon_summary": proof["horizon_summary"],
     }
 
 
@@ -1541,10 +1545,20 @@ def build_telegram_caller_leaderboard(*, days: int = 30, limit: int = 25, db=Non
             "author_id": aid, "author_name": row.get("author_name") or "Unknown",
             "author_username": row.get("author_username") or "", "hits": 0,
             "misses": 0, "neutral": 0, "sample_size": 0, "recent": [],
+            "horizon_summary": {
+                horizon: {"hits": 0, "misses": 0, "neutral": 0, "graded": 0}
+                for horizon in ("1h", "4h", "24h")
+            },
         })
         entry["sample_size"] += 1
         _status_counter = {"hit": "hits", "miss": "misses", "neutral": "neutral"}
         entry[_status_counter.get(proof["status"], "neutral")] += 1
+        for horizon, grade in proof["horizon_summary"].items():
+            if grade["status"] not in ("hit", "miss", "neutral"):
+                continue
+            bucket = entry["horizon_summary"][horizon]
+            bucket[f'{grade["status"]}s' if grade["status"] != "neutral" else "neutral"] += 1
+            bucket["graded"] += 1
         if len(entry["recent"]) < 3:
             entry["recent"].append(_receipt(row, proof))
     results = []
@@ -1553,6 +1567,13 @@ def build_telegram_caller_leaderboard(*, days: int = 30, limit: int = 25, db=Non
         item["accuracy"] = round(item["hits"] / scored * 100.0, 1) if scored else None
         item["qualified"] = item["sample_size"] >= MIN_LEADERBOARD_SAMPLE and scored > 0
         item["minimum_sample"] = MIN_LEADERBOARD_SAMPLE
+        for bucket in item["horizon_summary"].values():
+            horizon_scored = bucket["hits"] + bucket["misses"]
+            bucket["accuracy"] = (
+                round(bucket["hits"] / horizon_scored * 100.0, 1)
+                if horizon_scored
+                else None
+            )
         results.append(item)
     results.sort(key=lambda item: (item["qualified"], item["accuracy"] or -1, item["sample_size"]), reverse=True)
     return {

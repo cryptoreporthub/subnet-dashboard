@@ -280,6 +280,20 @@ class PriceTracker:
             )
         return price
 
+    @staticmethod
+    def _horizon_outcome(pct_change: float) -> tuple[str, Optional[float]]:
+        """Classify one immutable horizon observation."""
+        pct = round(float(pct_change), 2)
+        if pct > 5.0:
+            return "pump", pct
+        if pct > 2.0:
+            return "mild_pump", pct
+        if pct < -5.0:
+            return "dump", pct
+        if pct < -2.0:
+            return "mild_dump", pct
+        return "stable", None
+
     def check_outcomes(self) -> None:
         """
         Background task: check outcomes through each receipt's 24-hour observation.
@@ -348,45 +362,29 @@ class PriceTracker:
                 (current_price - snapshot_price) / snapshot_price
             ) * 100.0
 
-            outcome_data: Dict[str, Any] = {
-                "price_1h": None,
-                "price_4h": None,
-                "price_24h": None,
-                "price_7d": None,
-                "pump_pct_max": None,
-                "time_to_pump": None,
-                "pump_duration": None,
-                "resurgence": None,
-                "outcome": None,
-            }
-
-            if hours_elapsed >= 1:
-                outcome_data["price_1h"] = current_price
-            if hours_elapsed >= 4:
-                outcome_data["price_4h"] = current_price
-            if hours_elapsed >= 24:
-                outcome_data["price_24h"] = current_price
-                outcome_data["price_24h_recorded_at"] = datetime.now(timezone.utc).isoformat()
-            if hours_elapsed >= 168:  # 7 days
+            outcome_data: Dict[str, Any] = {}
+            # Each field is emitted only at its own maturity.  The model layer
+            # keeps the first observation, so a late resolver tick cannot
+            # silently replace a 1h grade with a 24h price.
+            for hours, suffix in ((1, "1h"), (4, "4h"), (24, "24h")):
+                if hours_elapsed < hours or msg.get(f"price_{suffix}") is not None:
+                    continue
+                outcome, pump_pct = self._horizon_outcome(pct_change)
+                outcome_data[f"price_{suffix}"] = current_price
+                outcome_data[f"outcome_{suffix}"] = outcome
+                outcome_data[f"pump_pct_{suffix}"] = pump_pct
+                outcome_data[f"price_{suffix}_recorded_at"] = (
+                    datetime.now(timezone.utc).isoformat()
+                )
+                outcome_data["outcome"] = outcome
+                if pump_pct is not None:
+                    outcome_data["pump_pct_max"] = pump_pct
+                    outcome_data["time_to_pump"] = round(hours_elapsed, 2)
+            if hours_elapsed >= 168 and msg.get("price_7d") is None:
                 outcome_data["price_7d"] = current_price
 
-            # Determine outcome
-            if pct_change > 5.0:
-                outcome_data["outcome"] = "pump"
-                outcome_data["pump_pct_max"] = round(pct_change, 2)
-                outcome_data["time_to_pump"] = round(hours_elapsed, 2)
-            elif pct_change > 2.0:
-                outcome_data["outcome"] = "mild_pump"
-                outcome_data["pump_pct_max"] = round(pct_change, 2)
-            elif pct_change < -5.0:
-                outcome_data["outcome"] = "dump"
-            elif pct_change < -2.0:
-                outcome_data["outcome"] = "mild_dump"
-            else:
-                outcome_data["outcome"] = "stable"
-
             # Record the outcome if we have at least 1h data
-            if outcome_data["price_1h"] is not None:
+            if outcome_data.get("price_1h") is not None or outcome_data.get("price_4h") is not None or outcome_data.get("price_24h") is not None:
                 self.db.save_price_outcome(message_id, outcome_data)
                 try:
                     verdict = msg.get("verdict")
