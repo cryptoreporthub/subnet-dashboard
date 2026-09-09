@@ -1,0 +1,167 @@
+# Manual reset only. Dry runs are read-only; live runs require an explicit
+# confirmation string and must be dispatched from main.
+name: Reset Message Intel
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no writes) when true"
+        required: false
+        default: true
+        type: boolean
+      confirm:
+        description: "Required for live reset: type RESET_TO_ZERO"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reset-message-intel:
+    name: Reset Message Intel (dry-run vs LIVE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: message-intel-reset
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize reset output artifact
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"ok":false,"status":"not_started"}' > reset_output.json
+
+      - name: Block unsafe live runs
+        if: ${{ inputs.dry_run == false }}
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != "RESET_TO_ZERO" ]]; then
+            echo "::error::Live reset requires confirm=RESET_TO_ZERO"
+            exit 1
+          fi
+          if [[ "$REF" != "refs/heads/main" ]]; then
+            echo "::error::Live reset must be dispatched from refs/heads/main"
+            exit 1
+          fi
+
+      - name: Verify production revision matches main
+        if: ${{ inputs.dry_run == false }}
+        env:
+          VERSION_URL: https://subnet-dashboard.fly.dev/version
+        run: |
+          set -euo pipefail
+          main_sha="$(git rev-parse HEAD)"
+          main_short="${main_sha:0:7}"
+          production_version="$(
+            curl --fail --silent --show-error --max-time 20 "$VERSION_URL" |
+              jq -r '.version // empty'
+          )"
+          if [[ "$production_version" != "$main_short" && "$production_version" != "$main_sha" ]]; then
+            echo "::error::Production version ($production_version) does not match main ($main_short)"
+            exit 1
+          fi
+          echo "Production revision matches main: $production_version"
+
+      - name: Set up Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Resolve mounted target machine
+        id: target
+        env:
+          APP: subnet-dashboard
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          target_id="$(
+            flyctl machines list -a "$APP" --json |
+              jq -r '
+                [
+                  .[]
+                  | select(.state == "running" or .state == "started")
+                  | select(((.config.mounts // []) | length) > 0)
+                  | {
+                      id,
+                      process_group: (
+                        .process_group
+                        // .config.process_group
+                        // .config.metadata.fly_process_group
+                        // "web"
+                      )
+                    }
+                ]
+                | sort_by(if (.process_group | ascii_downcase) == "worker" then 0 else 1 end)
+                | .[0].id // empty
+              '
+          )"
+          if [[ -z "$target_id" || "$target_id" == "null" ]]; then
+            echo "::error::No running Fly machine with a persistent volume was found"
+            exit 1
+          fi
+          echo "target_id=$target_id" >> "$GITHUB_OUTPUT"
+          echo "Selected mounted reset target: $target_id"
+
+      - name: Run reset (dry-run)
+        if: ${{ inputs.dry_run == true }}
+        env:
+          APP: subnet-dashboard
+          TARGET_ID: ${{ steps.target.outputs.target_id }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl machine exec "$TARGET_ID" \
+            "cd /app && python3 scripts/reset_message_intel.py --keep-week --dry-run" \
+            --app "$APP" --timeout 120 > reset_output.json 2>&1
+
+      - name: Run reset (live — destructive)
+        if: ${{ inputs.dry_run == false }}
+        env:
+          APP: subnet-dashboard
+          TARGET_ID: ${{ steps.target.outputs.target_id }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl machine exec "$TARGET_ID" \
+            "cd /app && python3 scripts/reset_message_intel.py --keep-week" \
+            --app "$APP" --timeout 120 > reset_output.json 2>&1
+
+      - name: Validate reset output
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("reset_output.json")
+          if not path.is_file() or path.stat().st_size == 0:
+              raise SystemExit("reset_output.json is missing or empty")
+
+          try:
+              payload = json.loads(path.read_text(encoding="utf-8"))
+          except json.JSONDecodeError as exc:
+              raise SystemExit(f"reset_output.json is not valid JSON: {exc}") from exc
+
+          if not isinstance(payload, dict) or not isinstance(payload.get("ok"), bool):
+              raise SystemExit("reset_output.json must be an object with boolean ok")
+          print(json.dumps(payload, sort_keys=True))
+          PY
+
+      - name: Upload reset output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reset-output-${{ github.run_id }}
+          path: reset_output.json
+          if-no-files-found: error
