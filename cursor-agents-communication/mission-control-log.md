@@ -88,6 +88,16 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 
 <!-- Append dated entries below. Newest first. -->
 
+### 2026-09-09 ~10:45 UTC — Telegram grading C1→C3→A1→A3 draft work
+
+- Started fresh from `main` @ `f94e581`; did not chase the unpushed Grok branch.
+- Branch: `cursor/telegram-grading-c-a-1aa2`; six separate commits are pushed:
+  C1 immutable horizon schema, C2 per-horizon resolver writes, C3 canonical proof
+  fields, A1 caller horizon rollups, A2 Task B runbook, A3 acceptance test.
+- Focused proof/outcome tests pass (`36 passed` on the final focused pair).
+- Two unrelated existing rollup-name assertions fail in the broader Telegram
+  slice; no merge, deploy, Fly action, or reset was performed.
+
 ### 2026-09-03 ~22:47 UTC / 3:47pm PT — PR #1176 per-card stale-flow chips (OPEN, no merge/deploy)
 
 - **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1176 — `fix/pump-card-stale-chips` @ `e74d338` from main `795ecde` (#1175 already on main).
