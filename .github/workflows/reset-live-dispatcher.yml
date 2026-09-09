@@ -17,7 +17,7 @@ jobs:
       group: message-intel-reset
       cancel-in-progress: false
     steps:
-      - name: Guard: actor, repo, merged, docs-only vehicle, confirm + mode in body
+      - name: 'Guard: actor, repo, merged, docs-only vehicle, confirm + mode in body'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
