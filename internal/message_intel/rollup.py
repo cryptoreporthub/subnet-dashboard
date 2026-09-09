@@ -987,7 +987,7 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
                       m.content, m.timestamp, m.created_at, m.external_message_id,
                       m.reply_to_message_id,
                       a.entities_json,
-                      v.predicted_direction, v.conviction,
+                      v.predicted_direction, v.conviction, v.predicted_magnitude,
                       ps.tao_usd_price, ps.netuid, po.outcome, po.pump_pct_max,
                       po.price_1h, po.price_4h, po.price_24h,
                       pm.content AS reply_parent_content,
@@ -1026,6 +1026,7 @@ def _conviction_rows(db=None) -> List[Dict[str, Any]]:
                       m.content, m.timestamp, m.created_at, a.entities_json,
                       m.external_message_id,
                       v.verdict, v.predicted_direction, v.conviction,
+                      v.predicted_magnitude,
                       ps.tao_usd_price, ps.netuid AS snap_netuid, ps.netuid AS netuid,
                       po.outcome, po.pump_pct_max, po.price_24h, po.price_24h_recorded_at
                FROM messages m
@@ -1477,6 +1478,8 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "correct_4h": proof["correct_4h"],
         "correct_24h": proof["correct_24h"],
         "horizon_summary": proof["horizon_summary"],
+        "magnitude_tier": proof["magnitude_tier"],
+        "magnitude_quality": proof["magnitude_quality"],
     }
 
 

@@ -125,6 +125,28 @@ def test_horizon_fields_are_present_for_pending_calls(intel_db):
     assert set(proof["horizon_summary"]) == {"1h", "4h", "24h"}
 
 
+def test_magnitude_quality_separates_claim_from_realized_move(intel_db):
+    from internal.message_intel.proof import classify_call
+
+    proof = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 80,
+            "tao_usd_price": 1.0,
+            "netuid": 7,
+            "predicted_magnitude": 0.10,
+            "price_24h": 1.02,
+            "outcome": "stable",
+        }
+    )
+    assert proof["magnitude_quality"] == {
+        "tier": "under_delivered",
+        "call_claimed": 10.0,
+        "move_realized": 2.0,
+    }
+
+
 def test_down_hit_miss_mapping(intel_db):
     from internal.message_intel.proof import classify_call
     base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
@@ -257,7 +279,7 @@ def test_unqualified_chatter_not_a_prediction(intel_db):
 def test_direction_resolution_mirrors_locked_rule(intel_db):
     """Conflicting verdict / predicted_direction must resolve like the locked rule:
     bull verdict OR up direction → up; bear verdict OR down direction → down."""
-    from internal.message_intel.proof import resolve_direction
+    from internal.message_intel.proof import classify_call, resolve_direction
     # Locked rule checks the up branch FIRST: bull verdict OR up direction → up,
     # then bear verdict OR down direction → down (self_learning._is_correct_prediction).
     assert resolve_direction("bullish", "down") == "up"     # bull verdict → up branch
@@ -268,6 +290,19 @@ def test_direction_resolution_mirrors_locked_rule(intel_db):
     assert resolve_direction("bearish", "down") == "down"
     assert resolve_direction("bullish", "up") == "up"
     assert resolve_direction("neutral", "sideways") == "flat"
+    assert resolve_direction("neutral", "neutral") is None
+    chatter = classify_call(
+        {
+            "source": "telegram",
+            "verdict": "neutral",
+            "predicted_direction": "neutral",
+            "conviction": 90,
+            "tao_usd_price": 1.0,
+            "netuid": 7,
+            "outcome": "stable",
+        }
+    )
+    assert chatter["eligible"] is False
     assert resolve_direction(None, None) is None             # no signal → chatter
 
 
@@ -306,6 +341,22 @@ def test_classifier_parity_with_locked_rule(intel_db):
         correct = outcome == "stable"
         assert (proof["status"] == "hit") is correct
     assert cases > 0
+
+
+def test_proof_and_self_learning_correctness_match(intel_db):
+    from internal.message_intel.proof import is_correct
+    from message_intel.self_learning import SelfLearning
+
+    outcomes = ("pump", "mild_pump", "dump", "mild_dump", "stable")
+    for direction in ("up", "down", "flat"):
+        verdict = {"up": "bullish", "down": "bearish", "flat": "neutral"}[direction]
+        for outcome in outcomes:
+            for pump_pct in (None, 0.0, 2.5, -2.5):
+                assert is_correct(direction, outcome, pump_pct) == (
+                    SelfLearning._is_correct_prediction(
+                        verdict, direction, outcome, pump_pct
+                    )
+                )
 
 
 def test_stable_author_identity_fallbacks(intel_db):

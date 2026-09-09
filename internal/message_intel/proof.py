@@ -57,7 +57,9 @@ EV_UNQUALIFIED = "unqualified"
 
 _UP_DIRS = frozenset(("up", "bullish", "long", "buy"))
 _DOWN_DIRS = frozenset(("down", "bearish", "short", "sell"))
-_FLAT_DIRS = frozenset(("flat", "sideways", "neutral", "hold"))
+# ``neutral`` is jury chatter, not an explicit flat market call.  Keeping it
+# out of this set prevents neutral chatter from earning a stable-market hit.
+_FLAT_DIRS = frozenset(("flat", "sideways", "hold"))
 _PUMP_OUTCOMES = frozenset(("pump", "mild_pump"))
 _DUMP_OUTCOMES = frozenset(("dump", "mild_dump"))
 _STABLE_OUTCOME = "stable"
@@ -213,6 +215,40 @@ def horizon_summary(row: Dict[str, Any], direction: Optional[str] = None) -> Dic
     }
 
 
+def magnitude_quality(
+    row: Dict[str, Any], realized_move: Optional[float] = None
+) -> Dict[str, Any]:
+    """Compare a claimed move with the independently observed move."""
+    claimed = _to_float(row.get("predicted_magnitude"))
+    if claimed is None:
+        claimed = _to_float(row.get("predicted_pct"))
+    if claimed is not None and abs(claimed) <= 1:
+        claimed *= 100.0
+    if realized_move is None:
+        baseline = _to_float(row.get("tao_usd_price"))
+        price = _to_float(row.get("price_24h"))
+        if baseline and baseline > 0 and price and price > 0:
+            realized_move = round((price - baseline) / baseline * 100.0, 2)
+        else:
+            realized_move = _to_float(row.get("pump_pct_max"))
+    if claimed is None or realized_move is None:
+        tier = "unavailable"
+    elif claimed == 0:
+        tier = "unavailable"
+    elif claimed * realized_move < 0:
+        tier = "wrong_way"
+    else:
+        ratio = abs(realized_move) / abs(claimed)
+        tier = "under_delivered" if ratio < 0.5 else (
+            "over_delivered" if ratio > 1.5 else "matched"
+        )
+    return {
+        "tier": tier,
+        "call_claimed": round(claimed, 2) if claimed is not None else None,
+        "move_realized": realized_move,
+    }
+
+
 def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
     """Subnet identity: structured netuid first, then stored entities / text.
 
@@ -296,6 +332,10 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         "correct_24h": horizons["24h"]["correct"],
         "horizon_summary": horizons,
     }
+    realized_24h = horizons["24h"]["move_pct"]
+    quality = magnitude_quality(row, realized_24h)
+    horizon_fields["magnitude_quality"] = quality
+    horizon_fields["magnitude_tier"] = quality["tier"]
 
     eligible = (
         source == "telegram"

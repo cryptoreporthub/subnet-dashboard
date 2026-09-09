@@ -88,7 +88,7 @@ def test_check_outcomes_increments_when_verdict_present(intel_env):
             "source": "telegram",
             "author_id": "u1",
             "author_name": "Alice",
-            "content": "bullish",
+            "content": "SN7 bullish",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
     )
@@ -99,9 +99,10 @@ def test_check_outcomes_increments_when_verdict_present(intel_env):
     snapshot_ts = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
     with db._connect() as conn:
         conn.execute(
-            """INSERT INTO price_snapshots (message_id, tao_usd_price, snapshot_timestamp)
-               VALUES (?, ?, ?)""",
-            (msg_id, 100.0, snapshot_ts),
+            """INSERT INTO price_snapshots
+                   (message_id, tao_usd_price, netuid, snapshot_timestamp)
+               VALUES (?, ?, ?, ?)""",
+            (msg_id, 100.0, 7, snapshot_ts),
         )
 
     tracker = PriceTracker(db=db)
@@ -139,6 +140,50 @@ def test_check_outcomes_skips_when_verdict_absent(intel_env):
         tracker.check_outcomes()
 
     spy.assert_not_called()
+
+
+def test_tao_only_neutral_rows_do_not_inflate_reliability(intel_env):
+    from message_intel.self_learning import SelfLearning
+
+    db = Database(intel_env["db_path"])
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    first, _ = db.save_message(
+        {
+            "source": "telegram",
+            "author_id": "tao-only",
+            "author_name": "TAO Chatter",
+            "content": "TAO is stable",
+            "timestamp": old,
+        }
+    )
+    db.save_verdict(
+        first,
+        {"verdict": "neutral", "predicted_direction": "neutral", "conviction": 90},
+    )
+    db.save_price_snapshot(first, 100.0)
+    db.save_price_outcome(first, {"outcome": "stable", "price_1h": 100.0})
+
+    SelfLearning(db=db).update_author_reliability()
+    assert db.get_author_reliability("tao-only") is None
+
+    second, _ = db.save_message(
+        {
+            "source": "telegram",
+            "author_id": "tao-only-2",
+            "author_name": "TAO Chatter 2",
+            "content": "TAO is stable",
+            "timestamp": old,
+        }
+    )
+    db.save_verdict(
+        second,
+        {"verdict": "neutral", "predicted_direction": "neutral", "conviction": 90},
+    )
+    db.save_price_snapshot(second, 100.0)
+    tracker = PriceTracker(db=db)
+    with patch("message_intel.price_tracker.fetch_tao_usd", return_value=100.0):
+        tracker.check_outcomes()
+    assert db.get_author_reliability("tao-only-2") is None
 
 
 def test_evaluate_message_cold_start_identical(intel_env):
