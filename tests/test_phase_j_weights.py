@@ -33,10 +33,19 @@ def isolate_weights(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.judges.weights.SOUL_MAP_PATH", soul_path)
 
 
-def test_symmetric_weight_deltas():
-    assert resolver._LEARNING_DELTA_CORRECT == 0.02
-    assert resolver._LEARNING_DELTA_WRONG == -0.02
-    assert resolver._LEARNING_MIN_WEIGHT == 0.3
+def test_learning_constants_live_in_weights_module():
+    # P0.4: resolver must not carry a second divergent learning-constant copy.
+    for name in (
+        "_LEARNING_DELTA_CORRECT",
+        "_LEARNING_DELTA_WRONG",
+        "_LEARNING_MIN_WEIGHT",
+        "_LEARNING_MAX_WEIGHT",
+    ):
+        assert not hasattr(resolver, name), name
+    assert weights._LEARNING_DELTA_CORRECT == 0.02
+    assert weights._LEARNING_DELTA_WRONG == -0.03
+    assert weights._LEARNING_MIN_WEIGHT == 0.1
+    assert weights._LEARNING_MAX_WEIGHT == 2.0
 
 
 def test_replay_mode_pauses_weight_nudges():
@@ -76,4 +85,4 @@ def test_wrong_pick_applies_symmetric_penalty():
     resolver.resolve_prediction(pred, current_price=95.0)
     after = weights.load_weights()["quant"]
     assert after == pytest.approx(before + weights._LEARNING_DELTA_WRONG, abs=1e-4)
-    assert after >= resolver._LEARNING_MIN_WEIGHT
+    assert after >= weights._LEARNING_MIN_WEIGHT
