@@ -1,1 +1,183 @@
-IyBNYW51YWwgcmVzZXQgb25seS4gRHJ5IHJ1bnMgYXJlIHJlYWQtb25seTsgbGl2ZSBydW5zIHJlcXVpcmUgYW4gZXhwbGljaXQKIyBjb25maXJtYXRpb24gc3RyaW5nIGFuZCBtdXN0IGJlIGRpc3BhdGNoZWQgZnJvbSBtYWluLgpuYW1lOiBSZXNldCBNZXNzYWdlIEludGVsCgpvbjoKICB3b3JrZmxvd19kaXNwYXRjaDoKICAgIGlucHV0czoKICAgICAgZHJ5X3J1bjoKICAgICAgICBkZXNjcmlwdGlvbjogIkRyeSBydW4gKG5vIHdyaXRlcykgd2hlbiB0cnVlIgogICAgICAgIHJlcXVpcmVkOiBmYWxzZQogICAgICAgIGRlZmF1bHQ6IHRydWUKICAgICAgICB0eXBlOiBib29sZWFuCiAgICAgIGNvbmZpcm06CiAgICAgICAgZGVzY3JpcHRpb246ICJSZXF1aXJlZCBmb3IgbGl2ZSByZXNldDogdHlwZSBSRVNFVF9UT19aRVJPIgogICAgICAgIHJlcXVpcmVkOiBmYWxzZQogICAgICAgIGRlZmF1bHQ6ICIiCiAgICAgICAgdHlwZTogc3RyaW5nCgpwZXJtaXNzaW9uczoKICBjb250ZW50czogcmVhZAoKam9iczoKICByZXNldC1tZXNzYWdlLWludGVsOgogICAgbmFtZTogUmVzZXQgTWVzc2FnZSBJbnRlbCAoZHJ5LXJ1biB2cyBMSVZFKQogICAgcnVucy1vbjogdWJ1bnR1LWxhdGVzdAogICAgdGltZW91dC1taW51dGVzOiAxNQogICAgY29uY3VycmVuY3k6CiAgICAgIGdyb3VwOiBtZXNzYWdlLWludGVsLXJlc2V0CiAgICAgIGNhbmNlbC1pbi1wcm9ncmVzczogZmFsc2UKICAgIHN0ZXBzOgogICAgICAtIG5hbWU6IENoZWNrb3V0CiAgICAgICAgdXNlczogYWN0aW9ucy9jaGVja291dEB2NAogICAgICAgIHdpdGg6CiAgICAgICAgICBmZXRjaC1kZXB0aDogMAoKICAgICAgLSBuYW1lOiBJbml0aWFsaXplIHJlc2V0IG91dHB1dCBhcnRpZmFjdAogICAgICAgIHJ1bjogfAogICAgICAgICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgICAgICAgIHByaW50ZiAnJXNcbicgJ3sib2siOmZhbHNlLCJzdGF0dXMiOiJub3Rfc3RhcnRlZCJ9JyA+IHJlc2V0X291dHB1dC5qc29uCgogICAgICAtIG5hbWU6IEJsb2NrIHVuc2FmZSBsaXZlIHJ1bnMKICAgICAgICBpZjogJHt7IGlucHV0cy5kcnlfcnVuID09IGZhbHNlIH19CiAgICAgICAgZW52OgogICAgICAgICAgQ09ORklSTTogJHt7IGlucHV0cy5jb25maXJtIH19CiAgICAgICAgICBSRUY6ICR7eyBnaXRodWIucmVmIH19CiAgICAgICAgcnVuOiB8CiAgICAgICAgICBzZXQgLWV1byBwaXBlZmFpbAogICAgICAgICAgaWYgW1sgIiRDT05GSVJNIiAhPSAiUkVTRVRfVE9fWkVSTyIgXV07IHRoZW4KICAgICAgICAgICAgZWNobyAiOjplcnJvcjo6TGl2ZSByZXNldCByZXF1aXJlcyBjb25maXJtPVJFU0VUX1RPX1pFUk8iCiAgICAgICAgICAgIGV4aXQgMQogICAgICAgICAgZmkKICAgICAgICAgIGlmIFtbICIkUkVGIiAhPSAicmVmcy9oZWFkcy9tYWluIiBdXTsgdGhlbgogICAgICAgICAgICBlY2hvICI6OmVycm9yOjpMaXZlIHJlc2V0IG11c3QgYmUgZGlzcGF0Y2hlZCBmcm9tIHJlZnMvaGVhZHMvbWFpbiIKICAgICAgICAgICAgZXhpdCAxCiAgICAgICAgICBmaQoKICAgICAgLSBuYW1lOiBCbG9jayBsaXZlIHJlc2V0IHVudGlsIHF1aWVzY2VuY2UgYm91bmRhcnkgaXMgdmVyaWZpZWQKICAgICAgICBpZjogJHt7IGlucHV0cy5kcnlfcnVuID09IGZhbHNlIH19CiAgICAgICAgcnVuOiB8CiAgICAgICAgICBzZXQgLWV1byBwaXBlZmFpbAogICAgICAgICAgZWNobyAiOjplcnJvcjo6TGl2ZSByZXNldCBpcyBkaXNhYmxlZDogbm8gdmVyaWZpZWQgbWVzc2FnZS1pbnRlbCBxdWllc2NlbmNlIG9yIGxvY2sgYm91bmRhcnkgZXhpc3RzIgogICAgICAgICAgZXhpdCAxCgogICAgICAtIG5hbWU6IFZlcmlmeSBwcm9kdWN0aW9uIHJldmlzaW9uIG1hdGNoZXMgbWFpbgogICAgICAgIGlmOiAke3sgaW5wdXRzLmRyeV9ydW4gPT0gZmFsc2UgfX0KICAgICAgICBlbnY6CiAgICAgICAgICBWRVJTSU9OX1VSTDogaHR0cHM6Ly9zdWJuZXQtZGFzaGJvYXJkLmZseS5kZXYvdmVyc2lvbgogICAgICAgIHJ1bjogfAogICAgICAgICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgICAgICAgIG1haW5fc2hhPSIkKGdpdCByZXYtcGFyc2UgSEVBRCkiCiAgICAgICAgICBtYWluX3Nob3J0PSIke21haW5fc2hhOjA6N30iCiAgICAgICAgICBwcm9kdWN0aW9uX3ZlcnNpb249IiQoCiAgICAgICAgICAgIGN1cmwgLS1mYWlsIC0tc2lsZW50IC0tc2hvdy1lcnJvciAtLW1heC10aW1lIDIwICIkVkVSU0lPTl9VUkwiIHwKICAgICAgICAgICAgICBqcSAtciAnLnZlcnNpb24gLy8gZW1wdHknCiAgICAgICAgICApIgogICAgICAgICAgaWYgW1sgIiRwcm9kdWN0aW9uX3ZlcnNpb24iICE9ICIkbWFpbl9zaG9ydCIgJiYgIiRwcm9kdWN0aW9uX3ZlcnNpb24iICE9ICIkbWFpbl9zaGEiIF1dOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIjo6ZXJyb3I6OlByb2R1Y3Rpb24gdmVyc2lvbiAoJHByb2R1Y3Rpb25fdmVyc2lvbikgZG9lcyBub3QgbWF0Y2ggbWFpbiAoJG1haW5fc2hvcnQpIgogICAgICAgICAgICBleGl0IDEKICAgICAgICAgIGZpCiAgICAgICAgICBlY2hvICJQcm9kdWN0aW9uIHJldmlzaW9uIG1hdGNoZXMgbWFpbjogJHByb2R1Y3Rpb25fdmVyc2lvbiIKCiAgICAgIC0gbmFtZTogU2V0IHVwIEZseWN0bAogICAgICAgIHVzZXM6IHN1cGVyZmx5L2ZseWN0bC1hY3Rpb25zL3NldHVwLWZseWN0bEBtYXN0ZXIKICAgICAgICB3aXRoOgogICAgICAgICAgdmVyc2lvbjogbGF0ZXN0CgogICAgICAtIG5hbWU6IFJlc29sdmUgbW91bnRlZCB0YXJnZXQgbWFjaGluZQogICAgICAgIGlkOiB0YXJnZXQKICAgICAgICBlbnY6CiAgICAgICAgICBBUFA6IHN1Ym5ldC1kYXNoYm9hcmQKICAgICAgICAgIEZMWV9BUElfVE9LRU46ICR7eyBzZWNyZXRzLkZMWV9BUElfVE9LRU4gfX0KICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICB0YXJnZXRfaWQ9IiQoCiAgICAgICAgICAgIGZseWN0bCBtYWNoaW5lcyBsaXN0IC1hICIkQVBQIiAtLWpzb24gfAogICAgICAgICAgICAgIGpxIC1yICcKICAgICAgICAgICAgICAgIFsKICAgICAgICAgICAgICAgICAgLltdCiAgICAgICAgICAgICAgICAgIHwgc2VsZWN0KC5zdGF0ZSA9PSAicnVubmluZyIgb3IgLnN0YXRlID09ICJzdGFydGVkIikKICAgICAgICAgICAgICAgICAgfCBzZWxlY3QoKCguY29uZmlnLm1vdW50cyAvLyBbXSkgfCBsZW5ndGgpID4gMCkKICAgICAgICAgICAgICAgICAgfCB7CiAgICAgICAgICAgICAgICAgICAgICBpZCwKICAgICAgICAgICAgICAgICAgICAgIHByb2Nlc3NfZ3JvdXA6ICgKICAgICAgICAgICAgICAgICAgICAgICAgLnByb2Nlc3NfZ3JvdXAKICAgICAgICAgICAgICAgICAgICAgICAgLy8gLmNvbmZpZy5wcm9jZXNzX2dyb3VwCiAgICAgICAgICAgICAgICAgICAgICAgIC8vIC5jb25maWcubWV0YWRhdGEuZmx5X3Byb2Nlc3NfZ3JvdXAKICAgICAgICAgICAgICAgICAgICAgICAgLy8gIndlYiIKICAgICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICBdCiAgICAgICAgICAgICAgICB8IHNvcnRfYnkoaWYgKC5wcm9jZXNzX2dyb3VwIHwgYXNjaWlfZG93bmNhc2UpID09ICJ3b3JrZXIiIHRoZW4gMCBlbHNlIDEgZW5kKQogICAgICAgICAgICAgICAgfCAuWzBdLmlkIC8vIGVtcHR5CiAgICAgICAgICAgICAgJwogICAgICAgICAgKSIKICAgICAgICAgIGlmIFtbIC16ICIkdGFyZ2V0X2lkIiB8fCAiJHRhcmdldF9pZCIgPT0gIm51bGwiIF1dOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIjo6ZXJyb3I6Ok5vIHJ1bm5pbmcgRmx5IG1hY2hpbmUgd2l0aCBhIHBlcnNpc3RlbnQgdm9sdW1lIHdhcyBmb3VuZCIKICAgICAgICAgICAgZXhpdCAxCiAgICAgICAgICBmaQogICAgICAgICAgZWNobyAidGFyZ2V0X2lkPSR0YXJnZXRfaWQiID4+ICIkR0lUSFVCX09VVFBVVCIKICAgICAgICAgIGVjaG8gIlNlbGVjdGVkIG1vdW50ZWQgcmVzZXQgdGFyZ2V0OiAkdGFyZ2V0X2lkIgoKICAgICAgLSBuYW1lOiBSdW4gcmVzZXQgKGRyeS1ydW4pCiAgICAgICAgaWY6ICR7eyBpbnB1dHMuZHJ5X3J1biA9PSB0cnVlIH19CiAgICAgICAgZW52OgogICAgICAgICAgQVBQOiBzdWJuZXQtZGFzaGJvYXJkCiAgICAgICAgICBUQVJHRVRfSUQ6ICR7eyBzdGVwcy50YXJnZXQub3V0cHV0cy50YXJnZXRfaWQgfX0KICAgICAgICAgIEZMWV9BUElfVE9LRU46ICR7eyBzZWNyZXRzLkZMWV9BUElfVE9LRU4gfX0KICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICBmbHljdGwgbWFjaGluZSBleGVjICIkVEFSR0VUX0lEIiBcCiAgICAgICAgICAgICJiYXNoIC1sYyAnY2QgL2FwcCAmJiBleGVjIHB5dGhvbjMgc2NyaXB0cy9yZXNldF9tZXNzYWdlX2ludGVsLnB5IC0ta2VlcC13ZWVrIC0tZHJ5LXJ1biAtLWNsZWFuLWFsZXJ0cyciIFwKICAgICAgICAgICAgLS1hcHAgIiRBUFAiIC0tdGltZW91dCAxMjAgPiByZXNldF9vdXRwdXQuanNvbgoKICAgICAgLSBuYW1lOiBSdW4gcmVzZXQgKGxpdmUgundefinedCBkZXN0cnVjdGl2ZSkKICAgICAgICBpZjogJHt7IGlucHV0cy5kcnlfcnVuID09IGZhbHNlIH19CiAgICAgICAgZW52OgogICAgICAgICAgQVBQOiBzdWJuZXQtZGFzaGJvYXJkCiAgICAgICAgICBUQVJHRVRfSUQ6ICR7eyBzdGVwcy50YXJnZXQub3V0cHV0cy50YXJnZXRfaWQgfX0KICAgICAgICAgIEZMWV9BUElfVE9LRU46ICR7eyBzZWNyZXRzLkZMWV9BUElfVE9LRU4gfX0KICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICBmbHljdGwgbWFjaGluZSBleGVjICIkVEFSR0VUX0lEIiBcCiAgICAgICAgICAgICJiYXNoIC1sYyAnY2QgL2FwcCAmJiBleGVjIHB5dGhvbjMgc2NyaXB0cy9yZXNldF9tZXNzYWdlX2ludGVsLnB5IC0ta2VlcC13ZWVrIC0tY2xlYW4tYWxlcnRzJyIgXAogICAgICAgICAgICAtLWFwcCAiJEFQUCIgLS10aW1lb3V0IDEyMCA+IHJlc2V0X291dHB1dC5qc29uCgogICAgICAtIG5hbWU6IFZhbGlkYXRlIHJlc2V0IG91dHB1dAogICAgICAgIGlmOiBhbHdheXMoKQogICAgICAgIHJ1bjogfAogICAgICAgICAgc2V0IC1ldW8gcGlwZWZhaWwKICAgICAgICAgIHB5dGhvbjMgLSA8PCdQWScKICAgICAgICAgIGltcG9ydCBqc29uCiAgICAgICAgICBmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKCiAgICAgICAgICBwYXRoID0gUGF0aCgicmVzZXRfb3V0cHV0Lmpzb24iKQogICAgICAgICAgaWYgbm90IHBhdGguaXNfZmlsZSgpIG9yIHBhdGguc3RhdCgpLnN0X3NpemUgPT0gMDoKICAgICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCJyZXNldF9vdXRwdXQuanNvbiBpcyBtaXNzaW5nIG9yIGVtcHR5IikKCiAgICAgICAgICB0ZXh0ID0gcGF0aC5yZWFkX3RleHQoZW5jb2Rpbmc9InV0Zi04IiwgZXJyb3JzPSJyZXBsYWNlIikKICAgICAgICAgIHRyeToKICAgICAgICAgICAgICBwYXlsb2FkID0ganNvbi5sb2Fkcyh0ZXh0KQogICAgICAgICAgZXhjZXB0IGpzb24uSlNPTkRlY29kZUVycm9yOgogICAgICAgICAgICAgICMgVG9sZXJhdGUgcmVzaWR1YWwgZmx5Y3RsIGNoYXR0ZXIgYXJvdW5kIHRoZSBKU09OIHN1bW1hcnk6CiAgICAgICAgICAgICAgIyB0YWtlIHRoZSB3aWRlc3Qgey4uLn0gc3BhbiBhbmQgcGFyc2UgdGhhdC4KICAgICAgICAgICAgICBzdGFydCwgZW5kID0gdGV4dC5maW5kKCJ7IiksIHRleHQucmZpbmQoIn0iKQogICAgICAgICAgICAgIGlmIHN0YXJ0ID09IC0xIG9yIGVuZCA8PSBzdGFydDoKICAgICAgICAgICAgICAgICAgcmFpc2UgU3lzdGVtRXhpdCgicmVzZXRfb3V0cHV0Lmpzb24gY29udGFpbnMgbm8gSlNPTiBvYmplY3QiKQogICAgICAgICAgICAgIHRyeToKICAgICAgICAgICAgICAgICAgcGF5bG9hZCA9IGpzb24ubG9hZHModGV4dFtzdGFydCA6IGVuZCArIDFdKQogICAgICAgICAgICAgIGV4Y2VwdCBqc29uLkpTT05EZWNvZGVFcnJvciBhcyBleGM6CiAgICAgICAgICAgICAgICAgIHJhaXNlIFN5c3RlbUV4aXQoZiJyZXNldF9vdXRwdXQuanNvbiBpcyBub3QgdmFsaWQgSlNPTjoge2V4Y30iKSBmcm9tIGV4YwoKICAgICAgICAgIGlmIG5vdCBpc2luc3RhbmNlKHBheWxvYWQsIGRpY3QpIG9yIG5vdCBpc2luc3RhbmNlKHBheWxvYWQuZ2V0KCJvayIpLCBib29sKToKICAgICAgICAgICAgICByYWlzZSBTeXN0ZW1FeGl0KCJyZXNldF9vdXRwdXQuanNvbiBtdXN0IGJlIGFuIG9iamVjdCB3aXRoIGJvb2xlYW4gb2siKQogICAgICAgICAgcHJpbnQoanNvbi5kdW1wcyhwYXlsb2FkLCBzb3J0X2tleXM9VHJ1ZSkpCiAgICAgICAgICBQWQoKICAgICAgLSBuYW1lOiBVcGxvYWQgcmVzZXQgb3V0cHV0IGFydGlmYWN0CiAgICAgICAgaWY6IGFsd2F5cygpCiAgICAgICAgdXNlczogYWN0aW9ucy91cGxvYWQtYXJ0aWZhY3RAdjQKICAgICAgICB3aXRoOgogICAgICAgICAgbmFtZTogcmVzZXQtb3V0cHV0LSR7eyBnaXRodWIucnVuX2lkIH19CiAgICAgICAgICBwYXRoOiByZXNldF9vdXRwdXQuanNvbgogICAgICAgICAgaWYtbm8tZmlsZXMtZm91bmQ6IGVycm9yCg==
+# Manual reset only. Dry runs are read-only; live runs require an explicit
+# confirmation string and must be dispatched from main.
+name: Reset Message Intel
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (no writes) when true"
+        required: false
+        default: true
+        type: boolean
+      confirm:
+        description: "Required for live reset: type RESET_TO_ZERO"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  reset-message-intel:
+    name: Reset Message Intel (dry-run vs LIVE)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: message-intel-reset
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Initialize reset output artifact
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"ok":false,"status":"not_started"}' > reset_output.json
+
+      - name: Block unsafe live runs
+        if: ${{ inputs.dry_run == false }}
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != "RESET_TO_ZERO" ]]; then
+            echo "::error::Live reset requires confirm=RESET_TO_ZERO"
+            exit 1
+          fi
+          if [[ "$REF" != "refs/heads/main" ]]; then
+            echo "::error::Live reset must be dispatched from refs/heads/main"
+            exit 1
+          fi
+
+      - name: Block live reset until quiescence boundary is verified
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          set -euo pipefail
+          echo "::error::Live reset is disabled: no verified message-intel quiescence or lock boundary exists"
+          exit 1
+
+      - name: Verify production revision matches main
+        if: ${{ inputs.dry_run == false }}
+        env:
+          VERSION_URL: https://subnet-dashboard.fly.dev/version
+        run: |
+          set -euo pipefail
+          main_sha="$(git rev-parse HEAD)"
+          main_short="${main_sha:0:7}"
+          production_version="$(
+            curl --fail --silent --show-error --max-time 20 "$VERSION_URL" |
+              jq -r '.version // empty'
+          )"
+          if [[ "$production_version" != "$main_short" && "$production_version" != "$main_sha" ]]; then
+            echo "::error::Production version ($production_version) does not match main ($main_short)"
+            exit 1
+          fi
+          echo "Production revision matches main: $production_version"
+
+      - name: Set up Flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+
+      - name: Resolve mounted target machine
+        id: target
+        env:
+          APP: subnet-dashboard
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          target_id="$(
+            flyctl machines list -a "$APP" --json |
+              jq -r '
+                [
+                  .[]
+                  | select(.state == "running" or .state == "started")
+                  | select(((.config.mounts // []) | length) > 0)
+                  | {
+                      id,
+                      process_group: (
+                        .process_group
+                        // .config.process_group
+                        // .config.metadata.fly_process_group
+                        // "web"
+                      )
+                    }
+                ]
+                | sort_by(if (.process_group | ascii_downcase) == "worker" then 0 else 1 end)
+                | .[0].id // empty
+              '
+          )"
+          if [[ -z "$target_id" || "$target_id" == "null" ]]; then
+            echo "::error::No running Fly machine with a persistent volume was found"
+            exit 1
+          fi
+          echo "target_id=$target_id" >> "$GITHUB_OUTPUT"
+          echo "Selected mounted reset target: $target_id"
+
+      - name: Run reset (dry-run)
+        if: ${{ inputs.dry_run == true }}
+        env:
+          APP: subnet-dashboard
+          TARGET_ID: ${{ steps.target.outputs.target_id }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl machine exec "$TARGET_ID" \
+            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --dry-run --clean-alerts'" \
+            --app "$APP" --timeout 120 > reset_output.json
+
+      - name: Run reset (live - destructive)
+        if: ${{ inputs.dry_run == false }}
+        env:
+          APP: subnet-dashboard
+          TARGET_ID: ${{ steps.target.outputs.target_id }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl machine exec "$TARGET_ID" \
+            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --clean-alerts'" \
+            --app "$APP" --timeout 120 > reset_output.json
+
+      - name: Validate reset output
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("reset_output.json")
+          if not path.is_file() or path.stat().st_size == 0:
+              raise SystemExit("reset_output.json is missing or empty")
+
+          text = path.read_text(encoding="utf-8", errors="replace")
+          try:
+              payload = json.loads(text)
+          except json.JSONDecodeError:
+              # Tolerate residual flyctl chatter around the JSON summary:
+              # take the widest {...} span and parse that.
+              start, end = text.find("{"), text.rfind("}")
+              if start == -1 or end <= start:
+                  raise SystemExit("reset_output.json contains no JSON object")
+              try:
+                  payload = json.loads(text[start : end + 1])
+              except json.JSONDecodeError as exc:
+                  raise SystemExit(f"reset_output.json is not valid JSON: {exc}") from exc
+
+          if not isinstance(payload, dict) or not isinstance(payload.get("ok"), bool):
+              raise SystemExit("reset_output.json must be an object with boolean ok")
+          print(json.dumps(payload, sort_keys=True))
+          PY
+
+      - name: Upload reset output artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reset-output-${{ github.run_id }}
+          path: reset_output.json
+          if-no-files-found: error
