@@ -144,6 +144,7 @@ def _finalize_grade(
     price: float,
     meta: Dict[str, Any],
     resolve_at: datetime,
+    cache: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     ref = float(prediction.get("reference_price") or 0)
     if is_price_unit_mismatch(ref, price):
@@ -164,6 +165,13 @@ def _finalize_grade(
     out["candles_in_window"] = meta.get("candles_in_window")
     out["sample_quality"] = "high"
     out["graded_via"] = "pump_lead_candle_recover"
+    # P0.3 — additive MFE instrumentation (does not alter correct/outcome).
+    try:
+        from internal.learning.pump_mfe import stamp_pump_mfe_fields
+
+        stamp_pump_mfe_fields(out, terminal_price=price, cache=cache)
+    except Exception as exc:
+        logger.debug("pump_mfe stamp skipped: %s", exc)
     return out
 
 
@@ -382,7 +390,9 @@ def grade_pump_lead_at_resolve_candle(
         # Honest empty — do not invent a late live price.
         return _mark_ungradeable(prediction, reason="missing_horizon_candles", now=now)
 
-    return _finalize_grade(prediction, price=price, meta=meta, resolve_at=resolve_at)
+    return _finalize_grade(
+        prediction, price=price, meta=meta, resolve_at=resolve_at, cache=cache
+    )
 
 
 def recover_overdue_pump_leads(

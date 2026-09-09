@@ -824,6 +824,15 @@ def resolve_prediction(
         correct, outcome = grade_prediction(prediction, actual_pct)
         capture = stamp_capture_fields(prediction, actual_pct)
         resolved_at = now.isoformat().replace("+00:00", "Z")
+        # P0.3 — additive MFE fields for pump desk (measurement only).
+        try:
+            from internal.council.grading import is_pump_desk_claim
+            from internal.learning.pump_mfe import stamp_pump_mfe_fields
+
+            if is_pump_desk_claim(prediction):
+                stamp_pump_mfe_fields(prediction, terminal_price=current_price)
+        except Exception:
+            pass
         expert, _nudge_expert = _stamp_and_nudge_expert(
             prediction, correct=bool(correct), capture=capture
         )
@@ -953,6 +962,15 @@ def resolve_prediction_at_horizon(
     actual_pct = compute_actual_pct(ref, price)
     correct, outcome = grade_prediction(prediction, actual_pct)
     capture = stamp_capture_fields(prediction, actual_pct)
+    # P0.3 — additive MFE fields for pump desk (measurement only).
+    try:
+        from internal.council.grading import is_pump_desk_claim
+        from internal.learning.pump_mfe import stamp_pump_mfe_fields
+
+        if is_pump_desk_claim(prediction):
+            stamp_pump_mfe_fields(prediction, terminal_price=price)
+    except Exception:
+        pass
     resolved_at = resolve_at.isoformat().replace("+00:00", "Z")
     expert, _nudge_expert = _stamp_and_nudge_expert(
         prediction, correct=bool(correct), capture=capture

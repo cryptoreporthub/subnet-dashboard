@@ -209,3 +209,10 @@ Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1
 - deleted resolver.py L107–110 dead _LEARNING_* block
 - test: test_learning_constants_live_in_weights_module; L88 → weights._LEARNING_MIN_WEIGHT
 - no PR / no merge / no deploy; paused for Gate before P0.3
+
+## 2026-09-08 22:42 PT — P0.3 MFE instrumentation
+- branch: p0-expanded-batch
+- additive terminal_return_1h + mfe_max_1h; frozen signal_snapshot untouched
+- scripts/backfill_pump_mfe.py dry-run default; report terminal vs MFE hit rates
+- tests: tests/test_p0_pump_mfe.py (5)
+- no PR / no merge / no deploy; paused for Gate before P0.2
