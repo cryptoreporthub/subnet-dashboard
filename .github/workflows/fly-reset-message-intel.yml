@@ -182,6 +182,7 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           path = Path("reset_output.json")
