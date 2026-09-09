@@ -645,6 +645,12 @@ def _process_update(update: Dict[str, Any]) -> None:
         chat_id = int(chat_id)
     except (TypeError, ValueError):
         return
+    try:
+        from internal.message_intel.trend_alert import record_seen_chat
+
+        record_seen_chat(chat_id)
+    except Exception as exc:  # best-effort capture; never break command flow
+        logger.debug("trend alert chat capture failed: %s", exc)
 
     cmd, _ = _parse_command_text(text)
     rate_key = (cmd or "unknown", chat_id)

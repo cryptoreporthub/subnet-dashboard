@@ -308,6 +308,23 @@ def _maybe_start_summary_bot() -> None:
     defer_boot("telegram-summary-bot", _run, delay=max(BOOT_DEFER_SECONDS + 15, 60))
 
 
+def _maybe_start_trend_alert() -> None:
+    """Trending #1 takeover push alert (SS-TG follow-on; independent of /summary commands)."""
+    from internal.message_intel.trend_alert import trend_alert_enabled
+
+    if not trend_alert_enabled():
+        return
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+        return
+
+    def _run() -> None:
+        from internal.message_intel.trend_alert import start_trend_alert_watcher
+
+        start_trend_alert_watcher()
+
+    defer_boot("trend-takeover-alert", _run, delay=max(BOOT_DEFER_SECONDS + 20, 90))
+
+
 def _start_score_snapshot_scheduler() -> None:
     """Phase 2 — full-universe scores off the hot path (essential / worker)."""
 
@@ -514,6 +531,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pick_schedulers()
     _maybe_start_message_intel()
     _maybe_start_summary_bot()
+    _maybe_start_trend_alert()
 
     # Pump-desk snapshots are an essential worker-owned artifact, not a
     # live-subnet/heavy feed. Keep combined web mode behavior unchanged while
