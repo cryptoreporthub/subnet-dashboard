@@ -338,6 +338,8 @@ def test_leaderboard_gating_and_accuracy(intel_db):
     assert top["qualified"] is True
     assert top["sample_size"] == 5
     assert top["hits"] == 5 and top["misses"] == 0 and top["neutral"] == 0
+    assert top["horizon_summary"]["1h"]["graded"] == 5
+    assert top["horizon_summary"]["24h"]["graded"] == 0
 
 
 def test_leaderboard_window_boundaries(intel_db):
