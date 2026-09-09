@@ -47,17 +47,52 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard label trigger
+      - name: Guard label trigger (dry-run vs live)
         id: label-guard
         if: ${{ github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           LABEL="${{ github.event.label.name }}"
-          if [[ "$LABEL" == "run-reset-dry-run" ]]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "Label '$LABEL' does not match run-reset-dry-run; nothing to do."
+          if [[ "$LABEL" != "run-reset-dry-run" && "$LABEL" != "run-reset-live" ]]; then
+            echo "Label '$LABEL' does not match run-reset-dry-run or run-reset-live; nothing to do."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "is_live=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$LABEL" == "run-reset-live" ]]; then
+            # ---- LIVE: actor, same-repo, merged, body confirm+mode ----
+            if [[ "${{ github.actor }}" != "cryptoreporthub" ]]; then
+              echo "::error::run-reset-live requires actor cryptoreporthub"
+              exit 1
+            fi
+            if [[ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]]; then
+              echo "::error::run-reset-live on fork PRs is not allowed"
+              exit 1
+            fi
+            MERGED="$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" -q .merged)"
+            if [[ "$MERGED" != "true" ]]; then
+              echo "::error::run-reset-live requires a MERGED PR"
+              exit 1
+            fi
+            BODY="$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}" -q .body)"
+            if ! printf '%s\n' "$BODY" | grep -qx "confirm: RESET_TO_ZERO"; then
+              echo "::error::PR body must contain the exact line 'confirm: RESET_TO_ZERO' (human confirmation). Add it, then re-add the label."
+              exit 1
+            fi
+            MODE="$(printf '%s\n' "$BODY" | grep -x "mode: \\(full\\|keep-week\\)" | sed 's/^mode: //')"
+            if [[ -z "$MODE" ]]; then
+              echo "::error::PR body must contain the exact line 'mode: full' or 'mode: keep-week'"
+              exit 1
+            fi
+            echo "is_live=true" >> "$GITHUB_OUTPUT"
+            echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+            echo "run-reset-live guards passed; live reset mode=$MODE"
+          else
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "is_live=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Initialize reset output artifact
@@ -82,7 +117,7 @@ jobs:
           fi
 
       - name: Verify quiescence boundary (live only)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) || steps.label-guard.outputs.is_live == 'true' }}
         env:
           STATUS_URL: https://subnet-dashboard.fly.dev/api/message-intel/status
           APP: subnet-dashboard
@@ -110,7 +145,7 @@ jobs:
           echo "Quiescence boundary stamped and verified on volume."
 
       - name: Verify production revision matches main
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) || steps.label-guard.outputs.is_live == 'true' }}
         env:
           VERSION_URL: https://subnet-dashboard.fly.dev/version
         run: |
@@ -194,7 +229,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run reset (live - destructive)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) || steps.label-guard.outputs.is_live == 'true' }}
         env:
           APP: subnet-dashboard
           TARGET_ID: ${{ steps.target.outputs.target_id }}
@@ -202,11 +237,11 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --${{ inputs.mode }} --clean-alerts'" \
+            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --${{ steps.label-guard.outputs.mode || inputs.mode }} --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Validate reset output
-        if: ${{ always() && ((github.event_name == 'workflow_dispatch') || (github.event_name == 'pull_request' && steps.label-guard.outputs.should_run == 'true')) }}
+        if: ${{ always() && ((github.event_name == 'workflow_dispatch') || (github.event_name == 'pull_request' && (steps.label-guard.outputs.should_run == 'true' || steps.label-guard.outputs.is_live == 'true'))) }}
         run: |
           set -euo pipefail
           python3 - <<'PY'
@@ -284,3 +319,4 @@ jobs:
           name: reset-output-${{ github.run_id }}
           path: reset_output.json
           if-no-files-found: error
+
