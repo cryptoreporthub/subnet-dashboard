@@ -58,7 +58,7 @@ jobs:
           printf '%s\n' '{"ok":false,"status":"not_started"}' > reset_output.json
 
       - name: Block unsafe live runs
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
         env:
           CONFIRM: ${{ inputs.confirm }}
           REF: ${{ github.ref }}
@@ -74,14 +74,14 @@ jobs:
           fi
 
       - name: Block live reset until quiescence boundary is verified
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
         run: |
           set -euo pipefail
           echo "::error::Live reset is disabled: no verified message-intel quiescence or lock boundary exists"
           exit 1
 
       - name: Verify production revision matches main
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
         env:
           VERSION_URL: https://subnet-dashboard.fly.dev/version
         run: |
@@ -151,7 +151,7 @@ jobs:
             --app "$APP" --timeout 120 > reset_output.json
 
       - name: Run reset (live - destructive)
-        if: ${{ inputs.dry_run == false }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
         env:
           APP: subnet-dashboard
           TARGET_ID: ${{ steps.target.outputs.target_id }}
