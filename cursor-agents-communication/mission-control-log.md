@@ -216,3 +216,11 @@ Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1
 - scripts/backfill_pump_mfe.py dry-run default; report terminal vs MFE hit rates
 - tests: tests/test_p0_pump_mfe.py (5)
 - no PR / no merge / no deploy; paused for Gate before P0.2
+
+## 2026-09-08 23:18 PT — P0.2 base-rate benchmark
+- branch: p0-expanded-batch
+- Checkpoint Zero: scanned=0 (local predictions empty)
+- scripts/base_rate_benchmark.py + internal/learning/base_rate.py
+- Council labeled UNAUDITED (P0.-2 not executed)
+- unfreeze bar: Wilson LB > base-rate point estimate, N>=100, 95%
+- no PR / no merge / no deploy; paused for Gate before P0.5
