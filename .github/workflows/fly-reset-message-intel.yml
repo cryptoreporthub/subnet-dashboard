@@ -54,6 +54,13 @@ jobs:
             exit 1
           fi
 
+      - name: Block live reset until quiescence boundary is verified
+        if: ${{ inputs.dry_run == false }}
+        run: |
+          set -euo pipefail
+          echo "::error::Live reset is disabled: no verified message-intel quiescence or lock boundary exists"
+          exit 1
+
       - name: Verify production revision matches main
         if: ${{ inputs.dry_run == false }}
         env:
@@ -121,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "cd /app && python3 scripts/reset_message_intel.py --keep-week --dry-run" \
+            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --dry-run --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Run reset (live — destructive)
@@ -133,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "cd /app && python3 scripts/reset_message_intel.py --keep-week" \
+            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Validate reset output
