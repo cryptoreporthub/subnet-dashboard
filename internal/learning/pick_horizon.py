@@ -1,20 +1,17 @@
-"""Day-pick horizon config (Acc-2 knob A — align ledger with 24h council lens)."""
+"""Council day-pick horizon — canonical 24h (P0.5).
+
+Short-term desks (hour picks, pump_lead) keep their own horizons. Council day
+predictions evaluate on a fixed 24h window. The Acc-2 env rollback knobs
+``ACC2_DAY_HORIZON_HOURS`` / ``DAY_PICK_HORIZON_HOURS`` are no longer honored
+so a 4h desk horizon cannot silently reattach to Council.
+"""
 
 from __future__ import annotations
 
-import os
-
-_DEFAULT_DAY_HOURS = 24
+# Canonical Council day evaluation horizon (hours).
+COUNCIL_DAY_HORIZON_HOURS = 24
 
 
 def day_horizon_hours() -> int:
-    """Horizon for council day picks and ledger rows (rollback: ACC2_DAY_HORIZON_HOURS=4)."""
-    raw = os.environ.get(
-        "ACC2_DAY_HORIZON_HOURS",
-        os.environ.get("DAY_PICK_HORIZON_HOURS", str(_DEFAULT_DAY_HOURS)),
-    ).strip()
-    try:
-        hours = int(raw)
-    except ValueError:
-        hours = _DEFAULT_DAY_HOURS
-    return max(1, min(48, hours))
+    """Horizon for council day picks and ledger rows — locked to 24h (P0.5)."""
+    return int(COUNCIL_DAY_HORIZON_HOURS)

@@ -224,3 +224,11 @@ Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1
 - Council labeled UNAUDITED (P0.-2 not executed)
 - unfreeze bar: Wilson LB > base-rate point estimate, N>=100, 95%
 - no PR / no merge / no deploy; paused for Gate before P0.5
+
+## 2026-09-08 23:42 PT — P0.5 Council day horizon locked to 24h
+- branch: p0-expanded-batch
+- day_horizon_hours() always 24; Acc-2 4h env ignored
+- record_pick_prediction pins day horizon_hours/resolve_at
+- tests: test_p0_council_day_horizon.py (5); phase_j known fails UNTOUCHED
+- full suite 2620 passed / 139 failed; named-list delta vs P0.2: +0/-0
+- no PR / no merge / no deploy; paused for Gate before P0.6

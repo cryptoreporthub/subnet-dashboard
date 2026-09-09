@@ -7,7 +7,7 @@ memory, and the Soul-Map / Mindmap trail so outcomes feed the next scoring pass.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from internal.council.state_vector import build_prediction_statement
@@ -247,12 +247,17 @@ def record_pick_prediction(
         predicted_pct, magnitude_source = _predicted_pct_from_pick(pick, subnet)
     from internal.learning.pick_horizon import day_horizon_hours
 
-    horizon_hours = 1 if horizon_type == "hour" else day_horizon_hours()
-    if existing_pred and existing_pred.get("horizon_hours") is not None:
-        try:
-            horizon_hours = int(existing_pred["horizon_hours"])
-        except (TypeError, ValueError):
-            pass
+    # P0.5: Council day picks are strictly 24h. Hour desk stays 1h.
+    # Do not inherit a shorter horizon_hours from a preattached prediction on day rows.
+    if str(horizon_type or "").lower() == "hour":
+        horizon_hours = 1
+        if existing_pred and existing_pred.get("horizon_hours") is not None:
+            try:
+                horizon_hours = max(1, int(existing_pred["horizon_hours"]))
+            except (TypeError, ValueError):
+                horizon_hours = 1
+    else:
+        horizon_hours = int(day_horizon_hours())
     now = datetime.now(timezone.utc)
 
     # Prefer tech signal stamps on the pick root; fall back to nested score shape.
@@ -289,6 +294,20 @@ def record_pick_prediction(
             horizon_type=horizon_type,
             active_signals=active_signals or None,
         )
+    # P0.5: pin day/Council horizon fields even when reusing a preattached statement.
+    if str(horizon_type or "").lower() != "hour":
+        prediction["horizon_type"] = str(horizon_type or "day")
+        prediction["horizon_hours"] = int(horizon_hours)
+        created_raw = prediction.get("created_at")
+        try:
+            created_dt = datetime.fromisoformat(str(created_raw).replace("Z", "+00:00"))
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            created_dt = now
+        prediction["resolve_at"] = (
+            created_dt + timedelta(hours=int(horizon_hours))
+        ).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
     prediction["pick_source"] = "council_shadow" if shadow else "council"
     prediction["pick_score"] = pick.get("score")
     prediction["pick_confidence"] = pick.get("confidence", pick.get("final_confidence"))

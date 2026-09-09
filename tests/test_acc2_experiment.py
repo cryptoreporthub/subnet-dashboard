@@ -18,9 +18,11 @@ def test_day_horizon_defaults_24(monkeypatch):
     assert day_horizon_hours() == 24
 
 
-def test_day_horizon_rollback_env(monkeypatch):
+def test_day_horizon_rollback_env_ignored_p05(monkeypatch):
+    # P0.5: Acc-2 4h rollback env must not shrink Council day horizon.
     monkeypatch.setenv("ACC2_DAY_HORIZON_HOURS", "4")
-    assert day_horizon_hours() == 4
+    monkeypatch.setenv("DAY_PICK_HORIZON_HOURS", "4")
+    assert day_horizon_hours() == 24
 
 
 def test_publish_gate_defaults_50(monkeypatch):
