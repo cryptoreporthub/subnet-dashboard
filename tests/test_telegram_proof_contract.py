@@ -422,6 +422,10 @@ def test_caller_receipts_api(client, intel_db):
     assert body["total"] == 1
     rec = body["receipts"][0]
     assert rec["proof"]["status"] == "hit"
+    assert {"correct_1h", "correct_4h", "correct_24h", "horizon_summary"} <= set(
+        rec["proof"]
+    )
+    assert set(rec["proof"]["horizon_summary"]) == {"1h", "4h", "24h"}
     # proof object must not leak internal DB fields
     assert "conviction" not in rec["proof"] and "tao_usd_price" not in rec["proof"]
 
