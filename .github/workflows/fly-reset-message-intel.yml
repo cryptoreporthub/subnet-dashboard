@@ -24,6 +24,9 @@ on:
           - keep-week
           - full
 
+  repository_dispatch:
+    types: [live-reset]
+
   # Label-only trigger: adding the label 'run-reset-dry-run' to any PR runs a
   # READ-ONLY dry-run. This path can never perform a live/destructive reset:
   # live steps are gated on workflow_dispatch inputs only.
@@ -47,6 +50,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Normalize payload inputs (repository_dispatch bridge)
+        id: normalize
+        if: ${{ github.event_name == 'repository_dispatch' }}
+        run: |
+          set -euo pipefail
+          payload="$(echo '${{ toJson(github.event.client_payload) }}' | base64 -d 2>/dev/null || echo '${{ toJson(github.event.client_payload) }}')"
+          confirm="$(printf '%s\n' "$payload" | jq -r '.confirm // empty')"
+          mode="$(printf '%s\n' "$payload" | jq -r '.mode // empty')"
+          if [[ "$confirm" != "RESET_TO_ZERO" ]]; then
+            echo "::error::repository_dispatch payload missing confirm=RESET_TO_ZERO"
+            exit 1
+          fi
+          case "$mode" in full|keep-week) ;; *) echo "::error::repository_dispatch payload missing mode=(full|keep-week)"; exit 1;; esac
+          echo "confirm=$confirm" >> "$GITHUB_OUTPUT"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "Repository dispatch bridge normalized: confirm ok, mode=$mode"
+
       - name: Guard label trigger
         id: label-guard
         if: ${{ github.event_name == 'pull_request' }}
@@ -66,9 +86,9 @@ jobs:
           printf '%s\n' '{"ok":false,"status":"not_started"}' > reset_output.json
 
       - name: Block unsafe live runs
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run == false) || github.event_name == 'repository_dispatch' }}
         env:
-          CONFIRM: ${{ inputs.confirm }}
+          CONFIRM: ${{ github.event_name == 'repository_dispatch' && steps.normalize.outputs.confirm || inputs.confirm }}
           REF: ${{ github.ref }}
         run: |
           set -euo pipefail
@@ -202,7 +222,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --${{ inputs.mode }} --clean-alerts'" \
+            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --${{ github.event_name == 'repository_dispatch' && steps.normalize.outputs.mode || inputs.mode }} --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Validate reset output
