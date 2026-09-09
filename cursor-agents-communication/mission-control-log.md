@@ -203,3 +203,9 @@ Joshua asked that every Mission Control **user-visible status** be mirrored:
 Phase-5 fan-out board seeded from Mission Control handoff. #1089 ready first; #1086–#1090
 
 [read_links truncated 96 chars from this runtime tool output. The full content is stored with the tool result.]
+## 2026-09-08 22:08 PT — P0.4 dead learning consts removed
+- branch: p0-expanded-batch
+- commit: 842c5ffc2ef127d1fc31f8d7ffbc0379447951e7 (pushed)
+- deleted resolver.py L107–110 dead _LEARNING_* block
+- test: test_learning_constants_live_in_weights_module; L88 → weights._LEARNING_MIN_WEIGHT
+- no PR / no merge / no deploy; paused for Gate before P0.3
