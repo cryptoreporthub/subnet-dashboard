@@ -401,13 +401,26 @@ class Database:
                         existing["id"],
                     ),
                 )
+                # Legacy callers predate per-horizon timestamps and may send a
+                # corrected 1h value while enriching the same row. New
+                # horizon-aware writes always carry outcome_1h/timestamp and
+                # remain immutable.
+                if (
+                    horizon_fields["price_1h"] is not None
+                    and horizon_fields["price_1h_recorded_at"] is None
+                    and horizon_fields["outcome_1h"] is None
+                ):
+                    conn.execute(
+                        "UPDATE price_outcomes SET price_1h = ? WHERE id = ?",
+                        (horizon_fields["price_1h"], existing["id"]),
+                    )
                 return
             conn.execute(
                 """INSERT INTO price_outcomes (message_id, price_1h, price_4h, price_24h, price_7d,
                    price_1h_recorded_at, price_4h_recorded_at, price_24h_recorded_at,
                    outcome_1h, outcome_4h, outcome_24h, pump_pct_1h, pump_pct_4h,
                    pump_pct_24h, pump_pct_max, time_to_pump, pump_duration, resurgence, outcome)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     message_id,
                     horizon_fields["price_1h"],
@@ -563,7 +576,10 @@ class Database:
             rows = conn.execute(
                 """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
                            v.verdict, v.predicted_direction, v.conviction,
-                           po.id AS outcome_id, po.price_24h_recorded_at
+                           po.id AS outcome_id, po.price_1h, po.price_4h, po.price_24h,
+                           po.outcome_1h, po.outcome_4h, po.outcome_24h,
+                           po.price_1h_recorded_at, po.price_4h_recorded_at,
+                           po.price_24h_recorded_at
                    FROM messages m
                    JOIN price_snapshots ps ON ps.message_id = m.id
                    LEFT JOIN price_outcomes po ON po.message_id = m.id
