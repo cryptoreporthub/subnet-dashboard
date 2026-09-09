@@ -29,6 +29,14 @@ BEARISH_WORDS: List[str] = [
     "resistance", "selloff", "overbought", "death",
 ]
 
+# Explicit deception/rug language is bearish evidence even when a message
+# contains promotional words elsewhere.
+DECEPTIVE_WORDS: List[str] = [
+    "scam", "rug", "fake", "liar", "ponzi", "honeypot",
+]
+DECEPTIVE_PHRASES = ("rug pull", "exit liquidity")
+NEGATION_WORDS = frozenset(("not", "no", "never", "against", "won't", "wouldn't", "can't", "don't"))
+
 # ── Hype / pump language ──────────────────────────────────────────────
 HYPE_WORDS: List[str] = [
     "pump", "moon", "rocket", "x100", "x10", "x1000", "gem",
@@ -67,9 +75,25 @@ class NLPAnalyzer:
 
     def __init__(self):
         self.bullish_set = set(w.lower() for w in BULLISH_WORDS)
-        self.bearish_set = set(w.lower() for w in BEARISH_WORDS)
+        self.bearish_set = set(w.lower() for w in BEARISH_WORDS + DECEPTIVE_WORDS)
         self.hype_set = set(w.lower() for w in HYPE_WORDS)
         self.cta_list = CTA_PHRASES
+
+    @staticmethod
+    def _normalize_word(word: str) -> str:
+        """Normalize the small set of inflections used by the lexicons."""
+        if len(word) > 5 and word.endswith("ing"):
+            return word[:-3]
+        if len(word) > 4 and word.endswith("ies"):
+            return word[:-3] + "y"
+        return word
+
+    @staticmethod
+    def _is_negated(words: List[str], index: int) -> bool:
+        return any(
+            word in NEGATION_WORDS
+            for word in words[max(0, index - 3):index]
+        )
 
     def analyze(self, text: Optional[str]) -> Dict[str, Any]:
         """
@@ -88,12 +112,32 @@ class NLPAnalyzer:
                 "entities": {},
             }
 
-        text_lower = text.lower()
-        words = re.findall(r"[a-z0-9#$]+", text_lower)
+        text_lower = text.lower().replace("’", "'")
+        words = re.findall(
+            r"[a-z]+(?:n't|['’]t)?|[0-9]+(?:\.[0-9]+)?|[$#][a-z0-9]+",
+            text_lower,
+        )
 
         # ── Sentiment ─────────────────────────────────────────────
-        bullish_count = sum(1 for w in words if w in self.bullish_set)
-        bearish_count = sum(1 for w in words if w in self.bearish_set)
+        bullish_count = 0
+        bearish_count = 0
+        for index, raw_word in enumerate(words):
+            word = self._normalize_word(raw_word)
+            if word not in self.bullish_set and word not in self.bearish_set:
+                continue
+            negated = self._is_negated(words, index)
+            if word in self.bullish_set:
+                if negated:
+                    bearish_count += 1
+                else:
+                    bullish_count += 1
+            elif negated:
+                bullish_count += 1
+            else:
+                bearish_count += 1
+        bearish_count += sum(
+            1 for phrase in DECEPTIVE_PHRASES if phrase in text_lower
+        )
 
         total_sentiment_words = bullish_count + bearish_count
         if total_sentiment_words == 0:
