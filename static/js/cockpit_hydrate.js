@@ -2216,36 +2216,177 @@
     }
   }
 
-  function buildPumpHeroVisual(phase, progress) {
-    var phaseSlug = String(phase || 'STIRRING').toLowerCase();
-    var arc = '';
-    var pts = Array.isArray(progress)
-      ? progress
-          .map(function (v) {
-            return Number(v);
-          })
-          .filter(function (n) {
-            return !isNaN(n);
-          })
-      : [];
-    if (pts.length >= 2) {
-      var lo = Math.min.apply(null, pts);
-      var hi = Math.max.apply(null, pts);
-      var span = hi - lo;
-      var arcPct = Math.min(92, Math.max(28, Math.round((span / Math.max(hi, 1)) * 100 + 20)));
-      arc =
-        '<svg class="pds-hero__arc" viewBox="0 0 120 72" aria-hidden="true">' +
-        '<path class="pds-hero__arc-track" d="M8 64 A52 52 0 0 1 112 64" fill="none"/>' +
-        '<path class="pds-hero__arc-fill" d="M8 64 A52 52 0 0 1 112 64" fill="none" pathLength="100" stroke-dasharray="' +
-        arcPct +
-        ' 100"/></svg>';
+  function pumpOrbitKind(row) {
+    var t = pumpTrigPct(row);
+    if (row && row.timing === 'exit') return 'widening';
+    if ((row && row.timing === 'confirmed') || t >= 70) return 'crossing';
+    if (t >= 50) return 'tightening';
+    return 'unstable';
+  }
+
+  function pumpDecayLabel(row) {
+    var s = row && row.progress_series;
+    if (Array.isArray(s) && s.length >= 2) return s[s.length - 1] - s[0] + '%/tick';
+    return row && row.distance != null ? String(row.distance) : '—';
+  }
+
+  function gwRowChrome(row) {
+    var orbit = pumpOrbitKind(row);
+    return (
+      '<span class="gw-row__dot" aria-hidden="true"></span><span class="gw-row__name">' +
+      esc(pumpRowDisplayName(row)) +
+      ' <b>SN' +
+      esc(row.netuid) +
+      '</b></span><span class="gw-row__orbit">' +
+      orbit.toUpperCase() +
+      '</span><span class="gw-row__decay">' +
+      esc(pumpDecayLabel(row)) +
+      '</span><span class="gw-row__impact">' +
+      pumpTrigPct(row) +
+      '%</span>'
+    );
+  }
+
+  function pumpTrigPct(row) {
+    if (!row) return 0;
+    var score = row.score != null ? Number(row.score) : 0;
+    var trigger = row.trigger_score != null ? Number(row.trigger_score) : 0.72;
+    if (!trigger) return 0;
+    return Math.min(100, Math.round((score / trigger) * 100));
+  }
+
+  function renderGravityWell(rows, hero) {
+    var list = (rows || [])
+      .slice()
+      .sort(function (a, b) {
+        return (Number(b.score) || 0) - (Number(a.score) || 0);
+      })
+      .slice(0, 6);
+    var slots = [
+      [180, 108],
+      [252, 152],
+      [108, 168],
+      [222, 208],
+      [88, 118],
+      [278, 122],
+    ];
+    var hues = ['amber', 'teal', 'cyan', 'amber', 'teal', 'cyan'];
+    var bodies = '';
+    var i;
+    for (i = 0; i < list.length; i++) {
+      var row = list[i];
+      var xy = slots[i];
+      var nm = String(row.name || 'SN' + row.netuid)
+        .toUpperCase()
+        .slice(0, 10);
+      bodies +=
+        '<g class="gw-body gw-body--' +
+        hues[i] +
+        '" transform="translate(' +
+        xy[0] +
+        ', ' +
+        xy[1] +
+        ')"><circle class="gw-body__halo" r="11" fill="none"/><circle class="gw-body__dot" r="4.2"/><text class="gw-body__lbl" x="0" y="-16" text-anchor="middle">' +
+        esc(nm) +
+        ' ' +
+        pumpTrigPct(row) +
+        '%</text></g>';
+    }
+    var capRow = list[0] || hero;
+    var cap = '';
+    if (capRow && capRow.netuid != null) {
+      cap =
+        '<figcaption class="gw-caption"><p class="gw-caption__lead">' +
+        esc(String(capRow.name || 'SN' + capRow.netuid).toUpperCase()) +
+        ' SN' +
+        esc(capRow.netuid) +
+        ' · ' +
+        pumpTrigPct(capRow) +
+        '% TO IMPACT</p><p class="gw-caption__sub">CLOSEST APPROACH IN FIELD</p></figcaption>';
     }
     return (
+      '<figure class="gw-stage"><svg class="gw-well" viewBox="0 0 360 280" role="img" aria-label="Gravity well of live formations">' +
+      '<defs><radialGradient id="gw-core" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fff8e8"/><stop offset="18%" stop-color="#fde68a"/><stop offset="42%" stop-color="#38bdf8"/><stop offset="100%" stop-color="rgba(8,12,28,0)"/></radialGradient>' +
+      '<filter id="gw-bloom" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>' +
+      '<ellipse class="gw-orbit gw-orbit--4" cx="180" cy="148" rx="168" ry="92"/>' +
+      '<ellipse class="gw-orbit gw-orbit--3" cx="180" cy="148" rx="128" ry="70"/>' +
+      '<ellipse class="gw-orbit gw-orbit--2" cx="180" cy="148" rx="88" ry="48"/>' +
+      '<ellipse class="gw-orbit gw-orbit--1" cx="180" cy="148" rx="48" ry="26"/>' +
+      '<circle class="gw-core" cx="180" cy="148" r="14" fill="url(#gw-core)" filter="url(#gw-bloom)"/>' +
+      '<circle class="gw-core__hot" cx="180" cy="148" r="4.5" fill="#fff"/>' +
+      '<text class="gw-eh" x="180" y="178" text-anchor="middle">EVENT HORIZON</text>' +
+      bodies +
+      '</svg>' +
+      cap +
+      '</figure>'
+    );
+  }
+
+  function buildPumpHeroVisual(phase, progress, metrics) {
+    var m = metrics || {};
+    var trig = Math.min(100, Math.max(0, Number(m.trigPct) || 0));
+    var form = Math.min(100, Math.max(0, Number(m.formPct) || 0));
+    var conf = Math.min(100, Math.max(0, Number(m.confirmPct) || 0));
+    var pat = Math.min(100, Math.max(0, Number(m.patternPct) || 0));
+    var nid = m.netuid != null ? String(m.netuid) : 'x';
+    var phaseNow = String(phase || 'STIRRING').toUpperCase();
+    var rays = '';
+    var i;
+    for (i = 0; i < 18; i++) {
+      var mix = [form, conf, pat][i % 3];
+      var reach = 36 + (mix / 100) * (0.45 + trig / 180) * 50;
+      var ang = i * 20 - 90;
+      rays +=
+        '<line class="pf-print__ray pf-print__ray--' +
+        (i % 3) +
+        '" x1="100" y1="100" x2="' +
+        (100 + reach) +
+        '" y2="100" transform="rotate(' +
+        ang +
+        ' 100 100)"/>';
+    }
+    var orbit = [
+      ['STIRRING', 'Stir'],
+      ['ACCUMULATING', 'Build'],
+      ['PUMPING', 'Pump'],
+      ['COOLING', 'Cool'],
+    ]
+      .map(function (pair, idx) {
+        return (
+          '<li class="pf-orbit__step pf-orbit__step--' +
+          (idx + 1) +
+          (phaseNow === pair[0] ? ' pf-orbit__step--now' : '') +
+          '">' +
+          pair[1] +
+          '</li>'
+        );
+      })
+      .join('');
+    return (
       '<div class="pds-hero__visual pds-hero__visual--' +
-      esc(phaseSlug) +
+      esc(String(phase || 'STIRRING').toLowerCase()) +
       '" data-slot="hero-visual">' +
-      arc +
-      '</div>'
+      '<div class="pf-instrument" style="--pf-trig:' +
+      trig +
+      '" data-trig="' +
+      trig +
+      '"><svg class="pf-print" viewBox="0 0 200 200" aria-hidden="true">' +
+      '<defs><radialGradient id="pf-halo-' +
+      esc(nid) +
+      '" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(56,189,248,0.5)"/><stop offset="65%" stop-color="rgba(167,139,250,0.12)"/><stop offset="100%" stop-color="rgba(2,6,23,0)"/></radialGradient></defs>' +
+      '<circle cx="100" cy="100" r="94" fill="url(#pf-halo-' +
+      esc(nid) +
+      ')"/><circle class="pf-print__iso" cx="100" cy="100" r="44" fill="none"/><circle class="pf-print__iso pf-print__iso--slow" cx="100" cy="100" r="68" fill="none"/><circle class="pf-print__gate" cx="100" cy="100" r="80" fill="none"/>' +
+      '<circle class="pf-print__ring" cx="100" cy="100" r="58" fill="none" pathLength="100" stroke-dasharray="' +
+      trig +
+      ' 100"/>' +
+      rays +
+      '</svg><div class="pf-instrument__core"><span class="pf-instrument__pct">' +
+      trig +
+      '<i>%</i></span><span class="pf-instrument__lbl">to trigger</span></div>' +
+      '<ol class="pf-orbit" aria-hidden="true">' +
+      orbit +
+      '</ol></div><div class="pf-horizon" aria-hidden="true"><span>Trigger horizon · 80%</span></div></div>'
     );
   }
 
@@ -2296,6 +2437,18 @@
     var thesis = row.thesis || '';
     var triggerCopy = row.trigger || row.subtitle || '';
     var patternLine = pumpPatternLineHtml(row, 'pump-pattern-line--hero');
+    var visual = buildPumpHeroVisual(phase, progress, {
+      trigPct: trigPct,
+      formPct: formPct,
+      confirmPct: confirmPct,
+      patternPct:
+        row.pattern_confidence == null
+          ? 0
+          : Number(row.pattern_confidence) <= 1
+            ? Math.round(Number(row.pattern_confidence) * 100)
+            : Math.round(Number(row.pattern_confidence)),
+      netuid: row.netuid,
+    });
     return (
       '<article class="pds-hero pds-hero--' +
       esc(timing) +
@@ -2304,8 +2457,8 @@
       '" data-name="' +
       esc(pumpRowDisplayName(row)) +
       '">' +
-      '<div class="pds-hero__stage">' +
-      buildPumpHeroVisual(phase, progress) +
+      '<div class="pds-hero__stage pds-hero__stage--field">' +
+      visual +
       '<div class="pds-hero__copy">' +
       '<div class="pds-hero__top">' +
       '<span class="pds-hero__badge pds-hero__badge--' +
@@ -2323,19 +2476,9 @@
       (row.updated_ago ? '<span class="pds-hero__ago">' + esc(row.updated_ago) + '</span>' : '') +
       '</div>' +
       patternLine +
-      '<div class="pds-hero__headline" aria-label="' +
-      trigPct +
-      ' percent to trigger"><span class="pds-hero__pct">' +
-      trigPct +
-      '<i>%</i></span><span class="pds-hero__pct-lbl">to trigger</span></div>' +
-      '<div class="pds-hero__bar" role="progressbar" aria-valuenow="' +
-      trigPct +
-      '" aria-valuemin="0" aria-valuemax="100"><span class="pds-hero__bar-fill" style="width:' +
-      trigPct +
-      '%"></span>' +
       sparkHtml +
-      '</div></div></div>' +
-      '<ol class="pds-phase" aria-label="Formation phase">' +
+      '</div></div>' +
+      '<ol class="pds-phase sr-only" aria-label="Formation phase">' +
       phaseHtml +
       '</ol>' +
       (thesis ? '<p class="pds-hero__thesis">' + esc(thesis) + '</p>' : '') +
@@ -2482,11 +2625,19 @@
           ? Number(row.momentum_pct)
           : formPct;
     var line1 =
-      '<span>Form <b>' +
+      '<span title="How developed the pre-pump formation is (0–100).">Formation <b>' +
       esc(formPct) +
-      '</b></span><span>Conf <b>' +
+      '</b></span><span title="How strongly flow/momentum confirms the setup. Not hit-rate.">Confirm <b>' +
       esc(confirmPct) +
-      '</b></span><span>Gap <b>' +
+      '</b></span><span title="How closely the path matches a known pattern. Not council conviction.">Pattern <b>' +
+      esc(
+        row.pattern_confidence == null
+          ? '—'
+          : Number(row.pattern_confidence) <= 1
+            ? Math.round(Number(row.pattern_confidence) * 100)
+            : Math.round(Number(row.pattern_confidence))
+      ) +
+      '</b></span><span title="Distance to the desk trigger line — lower usually means closer to firing.">Gap <b>' +
       esc(row.distance != null ? row.distance : '—') +
       '</b></span>';
     var line2Parts = [];
@@ -2716,14 +2867,28 @@
     var labels = row.triad_labels || {};
     var triad = row.triad || {};
     var why = row.trigger || row.subtitle || '';
+    var prox = Math.min(
+      100,
+      Math.round(
+        ((row.score != null ? Number(row.score) : 0) /
+          (row.trigger_score != null ? Number(row.trigger_score) : 0.72)) *
+          100
+      )
+    );
     return (
       '<a class="pds-ladder pds-ladder--' +
       esc(tone) +
+      ' gw-row gw-row--' +
+      pumpOrbitKind(row) +
       '" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
-      '"><div class="pds-ladder__head">' +
+      '" style="--pf-prox:' +
+      prox +
+      '">' +
+      gwRowChrome(row) +
+      '<div class="pds-ladder__head">' +
       '<span class="pds-ladder__badge pds-ladder__badge--' +
       esc(badgeSlug) +
       '">' +
@@ -2861,6 +3026,18 @@
     if (row.owner_chip) chipsHtml += '<p class="pd-chip pd-chip--owner">' + esc(row.owner_chip) + '</p>';
     var patternLine = pumpPatternLineHtml(row, 'pump-pattern-line--hero');
     var highlightCls = row.pattern_highlight ? ' pd-lead--pattern-highlight' : '';
+    var fieldVisual = buildPumpHeroVisual(phase, progress, {
+      trigPct: trigPct,
+      formPct: formPct,
+      confirmPct: confirmPct,
+      patternPct:
+        row.pattern_confidence == null
+          ? 0
+          : Number(row.pattern_confidence) <= 1
+            ? Math.round(Number(row.pattern_confidence) * 100)
+            : Math.round(Number(row.pattern_confidence)),
+      netuid: row.netuid,
+    });
     return (
       '<article class="pd-lead pd-lead--' +
       esc(timing) +
@@ -2870,6 +3047,7 @@
       '" data-name="' +
       esc(pumpRowDisplayName(row)) +
       '">' +
+      fieldVisual +
       '<div class="pd-lead__identity">' +
       '<span class="pd-lead__badge pd-lead__badge--' +
       esc(badgeSlug) +
@@ -2884,21 +3062,10 @@
       esc(row.netuid) +
       '</b></a>' +
       (row.updated_ago ? '<span class="pd-lead__ago">' + esc(row.updated_ago) + '</span>' : '') +
-      '</div>' +
-      '<div class="pd-lead__meter" aria-label="' +
-      trigPct +
-      ' percent of the way to trigger"><span class="pd-lead__meter-val">' +
-      trigPct +
-      '<i>%</i></span><span class="pd-lead__meter-lbl">to trigger</span></div></div>' +
+      '</div></div>' +
       patternLine +
-      '<div class="pd-lead__bar" role="progressbar" aria-valuenow="' +
-      trigPct +
-      '" aria-valuemin="0" aria-valuemax="100"><span class="pd-lead__bar-fill" style="width:' +
-      trigPct +
-      '%"></span>' +
       trendHtml +
-      '</div>' +
-      phaseHtml +
+      phaseHtml.replace('class="pd-phase"', 'class="pd-phase sr-only"') +
       '<div class="pd-verdict"><p class="pd-verdict__move">' +
       esc(move) +
       '</p>' +
@@ -2995,16 +3162,29 @@
       }[badge] || badge;
     var why = row.trigger || row.subtitle || row.badge || '';
     if (why.length > 72) why = why.slice(0, 69).replace(/\s+\S*$/, '') + '…';
+    var prox = Math.min(
+      100,
+      Math.round(
+        ((row.score != null ? Number(row.score) : 0) /
+          (row.trigger_score != null ? Number(row.trigger_score) : 0.72)) *
+          100
+      )
+    );
     return (
       '<a class="pd-r pd-r--' +
       esc(tone) +
-      ' pump-desk__row" href="/subnet/' +
+      ' pump-desk__row gw-row gw-row--' +
+      pumpOrbitKind(row) +
+      '" href="/subnet/' +
       esc(row.netuid) +
       '" data-netuid="' +
       esc(row.netuid) +
       '" title="' +
       esc(badge) +
+      '" style="--pf-prox:' +
+      prox +
       '">' +
+      gwRowChrome(row) +
       '<div class="pd-r__top"><div class="pd-r__id">' +
       '<span class="pd-r__badge pd-r__badge--' +
       esc(badgeSlug) +
@@ -3083,7 +3263,9 @@
       hero = payloadHero;
     }
     var html = '';
+    var fieldRows = warm.concat(active).concat(exits);
     if (compact && hero) {
+      html += renderGravityWell(fieldRows, hero);
       if (isPumpScanMode()) {
         html += renderPumpScanHeroCard(hero);
         var moreScan = '';
@@ -3114,7 +3296,11 @@
             moreScan += renderPumpScanRow(row, 'exit');
           });
         }
-        if (moreScan) html += '<div class="pds-board" id="pump-desk-more">' + moreScan + '</div>';
+        if (moreScan)
+          html +=
+            '<div class="pds-board gw-board" id="pump-desk-more"><div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>' +
+            moreScan +
+            '</div>';
         renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
         liveHost.innerHTML = html;
         if (typeof window.__paintSparks === 'function') window.__paintSparks();
@@ -3152,7 +3338,11 @@
         });
         more += '</div></section>';
       }
-      if (more) html += '<div class="pd-board" id="pump-desk-more">' + more + '</div>';
+      if (more)
+        html +=
+          '<div class="pd-board gw-board" id="pump-desk-more"><div class="gw-thead" aria-hidden="true"><span>FORMATION</span><span>ORBIT</span><span>DECAY RATE</span><span>IMPACT</span></div>' +
+          more +
+          '</div>';
       renderPumpMetaWrap(payload && payload.trust, warm.length, active.length, exits.length);
       liveHost.innerHTML = html;
       if (typeof window.__paintSparks === 'function') window.__paintSparks();
