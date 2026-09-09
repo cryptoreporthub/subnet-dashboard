@@ -1,8 +1,1 @@
-{
-  "mode": "before_cutoff",
-  "ok": true,
-  "cutoff": "2026-09-02T17:15:12.933025+00:00",
-  "dry_run": true,
-  "would_delete_messages": 3325,
-  "remaining_messages": 1078
-}
+{"ok":false,"status":"not_started"}
