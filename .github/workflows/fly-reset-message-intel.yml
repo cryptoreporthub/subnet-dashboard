@@ -15,6 +15,14 @@ on:
         required: false
         default: ""
         type: string
+      mode:
+        description: "Reset mode for live runs: keep-week (default) or full (wipe all messages, fresh epoch)"
+        required: false
+        default: "keep-week"
+        type: choice
+        options:
+          - keep-week
+          - full
 
   # Label-only trigger: adding the label 'run-reset-dry-run' to any PR runs a
   # READ-ONLY dry-run. This path can never perform a live/destructive reset:
@@ -73,12 +81,33 @@ jobs:
             exit 1
           fi
 
-      - name: Block live reset until quiescence boundary is verified
+      - name: Verify quiescence boundary (live only)
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
+        env:
+          STATUS_URL: https://subnet-dashboard.fly.dev/api/message-intel/status
+          APP: subnet-dashboard
+          TARGET_ID: ${{ steps.target.outputs.target_id }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set -euo pipefail
-          echo "::error::Live reset is disabled: no verified message-intel quiescence or lock boundary exists"
-          exit 1
+          status="$(curl --fail --silent --show-error --max-time 20 "$STATUS_URL")"
+          echo "$status" | jq -e \
+            '.listener.running == true and .listener.group_connected == true and .listener.feed_stale == false' \
+            > /dev/null || { echo "::error::Listener not live/stable: refusing reset"; exit 1; }
+          echo "$status" | jq -e \
+            '.outcomes.running == true and .outcomes.live == true and .store.ok == true and .live == true' \
+            > /dev/null || { echo "::error::Outcome loop/store not live/stable: refusing reset"; exit 1; }
+          echo "Listener + outcome loop verified live and stable at boundary."
+          # Timestamped boundary marker on the persistent volume (auditable quiescence stamp)
+          flyctl machine exec "$TARGET_ID" \
+            "bash -lc 'date -u +%FT%TZ > /app/data/.reset_boundary && sync'" \
+            --app "$APP" --timeout 30 > /dev/null 2>&1
+          flyctl machine exec "$TARGET_ID" \
+            "bash -lc 'cat /app/data/.reset_boundary'" \
+            --app "$APP" --timeout 30 > boundary.txt 2>&1
+          cat boundary.txt
+          grep -qE "^20[0-9]{2}-" boundary.txt || { echo "::error::Boundary marker not verified on volume"; exit 1; }
+          echo "Quiescence boundary stamped and verified on volume."
 
       - name: Verify production revision matches main
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run == false }}
@@ -173,7 +202,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --keep-week --clean-alerts'" \
+            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --${{ inputs.mode }} --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Validate reset output
