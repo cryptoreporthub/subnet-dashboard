@@ -76,17 +76,26 @@ class SelfLearning:
         with self.db._connect() as conn:
             rows = conn.execute(
                 """SELECT m.author_id, m.author_name, m.id as message_id,
-                          v.verdict, v.predicted_direction,
+                          m.source, m.content, a.entities_json,
+                          v.verdict, v.predicted_direction, v.conviction,
+                          ps.tao_usd_price, ps.netuid,
                           po.outcome, po.pump_pct_max
                    FROM messages m
                    JOIN message_verdicts v ON v.message_id = m.id
                    JOIN price_outcomes po ON po.message_id = m.id
+                   LEFT JOIN message_analysis a ON a.message_id = m.id
+                   LEFT JOIN price_snapshots ps ON ps.message_id = m.id
                    ORDER BY m.author_id"""
             ).fetchall()
 
         author_stats: Dict[str, Dict[str, Any]] = {}
         for row in rows:
             row = dict(row)
+            from internal.message_intel.proof import classify_call
+
+            proof = classify_call(row)
+            if not proof["eligible"] or not proof["resolved"]:
+                continue
             author_id = row.get("author_id") or "unknown"
             if author_id not in author_stats:
                 author_stats[author_id] = {
@@ -100,7 +109,7 @@ class SelfLearning:
             verdict = row.get("verdict", "neutral")
             direction = row.get("predicted_direction", "neutral")
             outcome = row.get("outcome", "stable")
-            pump_pct = row.get("pump_pct_max") or 0.0
+            pump_pct = row.get("pump_pct_max")
             if self._is_correct_prediction(verdict, direction, outcome, pump_pct):
                 stats["correct_predictions"] += 1
 
@@ -114,10 +123,12 @@ class SelfLearning:
 
     @staticmethod
     def _is_correct_prediction(
-        verdict: str, direction: str, outcome: str, pump_pct: float
+        verdict: str, direction: str, outcome: str, pump_pct: Optional[float]
     ) -> bool:
         if verdict in ("bullish",) or direction == "up":
-            return outcome in ("pump", "mild_pump") or pump_pct > 2.0
+            return outcome in ("pump", "mild_pump") or (
+                pump_pct is not None and pump_pct > 2.0
+            )
         elif verdict in ("bearish",) or direction == "down":
             return outcome in ("dump", "mild_dump")
         else:
