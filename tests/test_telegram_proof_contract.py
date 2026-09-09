@@ -321,6 +321,22 @@ def test_classifier_parity_with_locked_rule(intel_db):
     assert cases > 0
 
 
+def test_proof_and_self_learning_correctness_match(intel_db):
+    from internal.message_intel.proof import is_correct
+    from message_intel.self_learning import SelfLearning
+
+    outcomes = ("pump", "mild_pump", "dump", "mild_dump", "stable")
+    for direction in ("up", "down", "flat"):
+        verdict = {"up": "bullish", "down": "bearish", "flat": "neutral"}[direction]
+        for outcome in outcomes:
+            for pump_pct in (None, 0.0, 2.5, -2.5):
+                assert is_correct(direction, outcome, pump_pct) == (
+                    SelfLearning._is_correct_prediction(
+                        verdict, direction, outcome, pump_pct
+                    )
+                )
+
+
 def test_stable_author_identity_fallbacks(intel_db):
     from internal.message_intel.proof import stable_author_id
     assert stable_author_id({"author_id": "12345", "author_username": "nick",
