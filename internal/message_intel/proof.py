@@ -61,6 +61,7 @@ _FLAT_DIRS = frozenset(("flat", "sideways", "neutral", "hold"))
 _PUMP_OUTCOMES = frozenset(("pump", "mild_pump"))
 _DUMP_OUTCOMES = frozenset(("dump", "mild_dump"))
 _STABLE_OUTCOME = "stable"
+HORIZONS = ("1h", "4h", "24h")
 
 
 def resolve_direction(verdict: Optional[str], predicted_direction: Optional[str]) -> Optional[str]:
@@ -172,6 +173,46 @@ def _classify_status(direction: Optional[str], outcome: str, pump_pct: Optional[
     return OC_UNQUALIFIED
 
 
+def _horizon_status(
+    direction: Optional[str], baseline: Optional[float], price: Optional[float]
+) -> Dict[str, Any]:
+    """Grade one observed price without borrowing another horizon's price."""
+    if baseline is None or baseline <= 0 or price is None or price <= 0:
+        return {"status": OC_PENDING, "correct": None, "move_pct": None, "price": price}
+    move_pct = round((price - baseline) / baseline * 100.0, 2)
+    if move_pct > 5:
+        outcome = "pump"
+    elif move_pct > 2:
+        outcome = "mild_pump"
+    elif move_pct < -5:
+        outcome = "dump"
+    elif move_pct < -2:
+        outcome = "mild_dump"
+    else:
+        outcome = "stable"
+    status = _classify_status(direction, outcome, move_pct)
+    return {
+        "status": status,
+        "correct": status == OC_HIT if status != OC_NEUTRAL else False,
+        "move_pct": move_pct,
+        "price": price,
+    }
+
+
+def horizon_summary(row: Dict[str, Any], direction: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+    """Return independent 1h/4h/24h proof for a message row."""
+    direction = direction if direction is not None else resolve_direction(
+        row.get("verdict"), row.get("predicted_direction")
+    )
+    baseline = _to_float(row.get("tao_usd_price"))
+    return {
+        horizon: _horizon_status(
+            direction, baseline, _to_float(row.get(f"price_{horizon}"))
+        )
+        for horizon in HORIZONS
+    }
+
+
 def _row_netuid(row: Dict[str, Any]) -> Optional[int]:
     """Subnet identity: structured netuid first, then stored entities / text.
 
@@ -248,6 +289,13 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
     netuid, subnet_name, subnet_source = _resolve_subnet_identity(row)
     has_subnet_identity = netuid is not None or bool(subnet_name)
     price_basis = "subnet" if has_subnet_identity else None
+    horizons = horizon_summary(row, direction)
+    horizon_fields = {
+        "correct_1h": horizons["1h"]["correct"],
+        "correct_4h": horizons["4h"]["correct"],
+        "correct_24h": horizons["24h"]["correct"],
+        "horizon_summary": horizons,
+    }
 
     eligible = (
         source == "telegram"
@@ -276,6 +324,7 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "subnet_source": subnet_source,
             "raw_outcome": outcome or None,
             "threshold": min_conviction,
+            **horizon_fields,
         }
 
     if not outcome:
@@ -291,9 +340,14 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
             "subnet_source": subnet_source,
             "raw_outcome": None,
             "threshold": min_conviction,
+            **horizon_fields,
         }
 
-    status = _classify_status(direction, outcome, pump_pct)
+    # Keep the historical top-level grade stable for old consumers, while
+    # preferring the audited 24h observation when it exists.
+    horizon_outcome = row.get("outcome_24h") or outcome
+    horizon_pump_pct = _to_float(row.get("pump_pct_24h"))
+    status = _classify_status(direction, horizon_outcome, horizon_pump_pct if horizon_pump_pct is not None else pump_pct)
     return {
         "eligible": True,
         "status": status,
@@ -306,4 +360,5 @@ def classify_call(row: Dict[str, Any], min_conviction: float = MIN_CONVICTION) -
         "subnet_source": subnet_source,
         "raw_outcome": outcome,
         "threshold": min_conviction,
+        **horizon_fields,
     }

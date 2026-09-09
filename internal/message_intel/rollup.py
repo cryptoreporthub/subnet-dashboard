@@ -1473,6 +1473,10 @@ def proof_for_message(row: Dict[str, Any]) -> Dict[str, Any]:
         "move_pct": proof["move_pct"],
         "outcome": proof["raw_outcome"],
         "threshold": proof["threshold"],
+        "correct_1h": proof["correct_1h"],
+        "correct_4h": proof["correct_4h"],
+        "correct_24h": proof["correct_24h"],
+        "horizon_summary": proof["horizon_summary"],
     }
 
 

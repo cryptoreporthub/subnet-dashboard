@@ -84,6 +84,47 @@ def test_up_hit_miss_neutral_mapping(intel_db):
     assert transient["status"] == "hit"
 
 
+def test_horizon_grades_are_independent(intel_db):
+    from internal.message_intel.proof import classify_call
+
+    proof = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "up",
+            "conviction": 70,
+            "tao_usd_price": 100.0,
+            "netuid": 7,
+            "price_1h": 103.0,
+            "price_4h": 97.0,
+            "price_24h": 100.5,
+            "outcome": "stable",
+        }
+    )
+    assert proof["correct_1h"] is True
+    assert proof["correct_4h"] is False
+    assert proof["correct_24h"] is False
+    assert proof["horizon_summary"]["1h"]["move_pct"] == 3.0
+    assert proof["horizon_summary"]["4h"]["status"] == "miss"
+    assert proof["horizon_summary"]["24h"]["status"] == "neutral"
+
+
+def test_horizon_fields_are_present_for_pending_calls(intel_db):
+    from internal.message_intel.proof import classify_call
+
+    proof = classify_call(
+        {
+            "source": "telegram",
+            "predicted_direction": "down",
+            "conviction": 70,
+            "tao_usd_price": 100.0,
+            "netuid": 7,
+        }
+    )
+    assert proof["status"] == "pending"
+    assert proof["correct_1h"] is None
+    assert set(proof["horizon_summary"]) == {"1h", "4h", "24h"}
+
+
 def test_down_hit_miss_mapping(intel_db):
     from internal.message_intel.proof import classify_call
     base = {"source": "telegram", "conviction": 70, "tao_usd_price": 1.0, "netuid": 7}
