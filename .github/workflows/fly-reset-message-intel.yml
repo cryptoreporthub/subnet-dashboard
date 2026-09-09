@@ -147,7 +147,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --dry-run --clean-alerts'" \
+            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --keep-week --dry-run --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1 || echo "reset-exec rc=$?" >> reset_output.json
           echo "---- read-back probe ----"
           flyctl machine exec "$TARGET_ID" \
@@ -173,7 +173,7 @@ jobs:
         run: |
           set -euo pipefail
           flyctl machine exec "$TARGET_ID" \
-            "bash -lc 'cd /app && exec python3 scripts/reset_message_intel.py --keep-week --clean-alerts'" \
+            "bash -lc 'cd /app && PYTHONPATH=/app exec python3 scripts/reset_message_intel.py --keep-week --clean-alerts'" \
             --app "$APP" --timeout 120 > reset_output.json 2>&1
 
       - name: Validate reset output
