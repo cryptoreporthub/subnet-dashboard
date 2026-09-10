@@ -317,7 +317,7 @@
         cache &&
         cache.picksEmittedAt &&
         (now - Date.parse(cache.picksEmittedAt)) < CACHE_TTL_MS;
-      if (cacheFresh() && cache.dailyPick && cache.subnets) {
+      if (cacheFresh() && cache.dailyPick && Array.isArray(cache.subnets) && cache.subnets.length > 0) {
         patchHomeDailyCall(cache.dailyPick);
         if (cache.resolved) {
           patchStoryStrip(buildStoryStrip(cache.resolved));
@@ -412,3 +412,4 @@
     buildStoryStrip: buildStoryStrip,
   };
 })();
+

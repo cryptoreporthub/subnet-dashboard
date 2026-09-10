@@ -157,7 +157,10 @@ def test_parallel_faster_than_sequential(fast_latency, monkeypatch):
         daily_pick.select_daily_pick(subnets, {})
         elapsed = time.perf_counter() - t0
 
-    assert elapsed < 0.45
+    # The gate proves the actual contract (overlapping scorer execution)
+    # without coupling the test to shared CI-host scheduling delays.
+    assert gate.max_active == 6
+    assert elapsed < 1.0
 
 
 def test_latency_rows_still_written(fast_latency, monkeypatch):
@@ -188,3 +191,4 @@ def test_scorer_exception_propagates(fast_latency, monkeypatch):
         _enter_select_patches(stack)
         with pytest.raises(RuntimeError, match="boom"):
             daily_pick.select_daily_pick(subnets, {})
+

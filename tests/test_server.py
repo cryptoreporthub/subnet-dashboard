@@ -1,6 +1,8 @@
 import json
 
 import pytest
+
+import server
 from fastapi.testclient import TestClient
 
 from server import app
@@ -84,6 +86,75 @@ def test_stats_route(client):
     assert 'flagged_subnets' in data
 
 
+def test_summary_retains_registry_contract(client, monkeypatch):
+    registry = {
+        "1": {
+            "id": 1,
+            "name": "Registry subnet",
+            "status": "active",
+            "staking_data": {"total_stake": 2.5, "apy": 0.1},
+            "emission": 1.5,
+        }
+    }
+    monkeypatch.setattr(server, "load_data", lambda path: registry)
+
+    def fail_if_live_universe_is_requested():
+        raise AssertionError("/api/summary must not use the live subnet universe")
+
+    monkeypatch.setattr(server, "_list_subnets_base_rows", fail_if_live_universe_is_requested)
+    response = client.get("/api/summary")
+
+    assert response.status_code == 200
+    assert response.json()["summary"]["total_subnets"] == 1
+
+
+def test_stats_uses_live_universe_and_excludes_root(client, monkeypatch):
+    live_rows = [{"netuid": 0, "name": "Root", "status": "active"}] + [
+        {"netuid": netuid, "name": f"SN{netuid}", "status": "active"}
+        for netuid in range(1, 129)
+    ]
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": live_rows,
+            "feed_meta": {"source": "live", "universe_status": "fresh"},
+        },
+    )
+    monkeypatch.setattr(server, "load_data", lambda path: {"stale-registry": {}})
+
+    response = client.get("/api/stats")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["total_subnets"] == 129
+    assert data["summary"]["active_count"] == 129
+    assert data["summary"]["active_count_excluding_root"] == 128
+    assert data["summary"]["root_present"] is True
+    assert data["summary"]["subnet_source"] == "live"
+    assert {"top_emitters", "top_staked", "top_mentioned", "flagged_subnets"} <= set(data)
+
+
+def test_stats_preserves_empty_live_universe(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": [],
+            "feed_meta": {"source": "live", "universe_status": "empty"},
+        },
+    )
+
+    response = client.get("/api/stats")
+
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["total_subnets"] == 0
+    assert summary["active_count"] == 0
+    assert summary["active_count_excluding_root"] == 0
+    assert summary["universe_status"] == "empty"
+
+
 def test_subnets_list_route(client):
     response = client.get('/api/subnets?status=active&sort=emission&order=desc&limit=2')
     assert response.status_code == 200
@@ -118,3 +189,4 @@ def test_daily_rotation_route(client):
     assert 'data' in data
     assert 'decisions' in data['data']
     assert 'recommendations' in data['data']
+
