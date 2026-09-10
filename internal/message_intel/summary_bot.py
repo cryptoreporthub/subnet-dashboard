@@ -111,6 +111,32 @@ def _format_error(msg: str) -> str:
     return f"<b>Subnet Summers</b>\n\n{msg}"
 
 
+def build_help_text() -> str:
+    lines = [
+        "<b>🤖 Subnet Summers Bot</b>",
+        "",
+        "Your intel desk for Bittensor subnets — trending movers, subnet stats, and the people calling them.",
+        "",
+        "<b>Commands</b>",
+        "📊 /summary — market pulse: top movers, picks, desk stats",
+        "📊 /summary &lt;sn&gt; — deep-dive on one subnet (e.g. /summary 62)",
+        "🔥 /trending — ChatterPower trending, last 24h",
+        "🔥 /trending 1h — fast-moving 1-hour window",
+        "🥇 /rank &lt;sn&gt; — a subnet's trending position",
+        "📌 /track &lt;sn&gt; — pin a subnet to your watchlist",
+        "🔔 /alerts on|off — toggle your watchlist alerts",
+        "🔗 /link &lt;code&gt; — connect My Desk for personalized tracking",
+        "👥 /who — 30-day author reliability leaderboard",
+        "📝 /subnetsummers — full SubnetSummer write-ups",
+        "",
+        "💬 Posting any command registers this chat for push alerts —",
+        "including the 🚨 <b>New #1 Trending</b> takeover alert.",
+    ]
+    return "\n".join(lines)
+
+
+
+
 def _format_trending(items: list[Dict[str, Any]], window: str) -> str:
     lines = [f"<b>ChatterPower Trending — {window}</b>", ""]
     if not items:
@@ -519,6 +545,8 @@ def handle_summary_command(chat_id: int, *, db=None) -> tuple[str, bool]:
 
 def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=None) -> Optional[str]:
     cmd, arg = _parse_command_text(text)
+    if cmd == "/help" or cmd == "/start":
+        return build_help_text()
     if cmd == "/subnetsummers":
         return build_subnetsummers_text(db=db)
     if cmd == "/summary":
@@ -723,3 +751,5 @@ def stop_summary_bot() -> None:
         _POLL_THREAD.join(timeout=8)
         _POLL_THREAD = None
     _STOP.clear()
+
+
