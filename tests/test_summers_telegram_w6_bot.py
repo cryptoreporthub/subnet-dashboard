@@ -340,3 +340,53 @@ def test_fly_toml_summary_bot_on():
 
     fly = Path("fly.toml").read_text(encoding="utf-8")
     assert 'TELEGRAM_SUMMARY_BOT = "on"' in fly
+
+
+def test_subnetsummers_full_desk_includes_call_leaders(intel_env):
+    from internal.message_intel import rollup
+
+    rows = [
+        {
+            "author_name": "Trend Man",
+            "author_username": "",
+            "author_id": "3",
+            "total_graded_calls": 9,
+            "accuracy_pct": 55.0,
+        },
+        {
+            "author_name": "Call Queen",
+            "author_username": "",
+            "author_id": "1",
+            "total_graded_calls": 12,
+            "accuracy_pct": 71.0,
+        },
+        {
+            "author_name": "Quiet Bob",
+            "author_username": "",
+            "author_id": "2",
+            "total_graded_calls": 0,
+            "accuracy_pct": None,
+        },
+    ]
+
+    with patch.object(rollup, "build_author_reliability_rows", return_value=rows):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "<b>Call leaders</b>" in text
+    queen_at = text.find("1. Call Queen")
+    trend_at = text.find("2. Trend Man")
+    assert queen_at != -1 and trend_at != -1
+    assert "Quiet Bob" not in text
+    chatter_at = text.find("<b>Chatter</b>")
+    call_at = text.find("<b>Call leaders</b>")
+    reactions_at = text.find("<b>Reactions</b>")
+    assert chatter_at != -1 and chatter_at < call_at < reactions_at
+
+
+def test_subnetsummers_full_desk_call_leaders_empty(intel_env):
+    from internal.message_intel import rollup
+
+    with patch.object(rollup, "build_author_reliability_rows", return_value=[]):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "No graded calls yet" in text

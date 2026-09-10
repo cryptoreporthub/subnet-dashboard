@@ -428,6 +428,7 @@ def build_subnetsummers_text(*, db=None) -> str:
     """Render the complete, bounded Telegram desk in one response."""
     from internal.message_intel.rollup import (
         build_24h_summary,
+        build_author_reliability_rows,
         build_high_conviction_strip,
         build_reaction_crowns,
         build_trending_subnets,
@@ -486,6 +487,30 @@ def build_subnetsummers_text(*, db=None) -> str:
             )
     else:
         lines.append("No high-conviction chatter yet.")
+
+    lines.extend(["", "<b>Call leaders</b>"])
+    try:
+        reliability_rows = build_author_reliability_rows(days=30, limit=8, db=db)
+        qualified = [
+            row
+            for row in reliability_rows
+            if int(row.get("total_graded_calls") or row.get("graded") or 0) > 0
+        ]
+        qualified.sort(
+            key=lambda row: (
+                int(row.get("total_graded_calls") or row.get("graded") or 0),
+                float(row.get("accuracy_pct") or 0.0),
+            ),
+            reverse=True,
+        )
+        if qualified:
+            for index, row in enumerate(qualified[:3], 1):
+                lines.append(f"• {_format_author_line(row, index)}")
+        else:
+            lines.append("No graded calls yet — call leaders appear as calls resolve.")
+    except Exception as exc:
+        logger.warning("subnetsummers call leaders failed: %s", exc)
+        lines.append("No graded calls yet — call leaders appear as calls resolve.")
 
     lines.extend(["", "<b>Reactions</b>"])
     if crowns:
@@ -751,5 +776,4 @@ def stop_summary_bot() -> None:
         _POLL_THREAD.join(timeout=8)
         _POLL_THREAD = None
     _STOP.clear()
-
 
