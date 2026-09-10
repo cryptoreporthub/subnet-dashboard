@@ -216,7 +216,37 @@ class Database:
                     (source, str(group_id), external_id),
                 ).fetchone()
                 if row:
-                    return int(row["id"]), True
+                    message_id = int(row["id"])
+                    metrics = msg.get("metrics")
+                    if metrics:
+                        # Engagement metrics evolve after first ingest (views
+                        # climb, reaction counts shift). Refresh the stored
+                        # snapshot instead of dropping the update on dedup.
+                        cur = conn.execute(
+                            """UPDATE message_metrics
+                               SET views = ?, forwards = ?, replies = ?, reactions = ?
+                               WHERE message_id = ?""",
+                            (
+                                metrics.get("views", 0),
+                                metrics.get("forwards", 0),
+                                metrics.get("replies", 0),
+                                json.dumps(metrics.get("reactions", {})),
+                                message_id,
+                            ),
+                        )
+                        if cur.rowcount == 0:
+                            conn.execute(
+                                """INSERT INTO message_metrics (message_id, views, forwards, replies, reactions)
+                                   VALUES (?, ?, ?, ?, ?)""",
+                                (
+                                    message_id,
+                                    metrics.get("views", 0),
+                                    metrics.get("forwards", 0),
+                                    metrics.get("replies", 0),
+                                    json.dumps(metrics.get("reactions", {})),
+                                ),
+                            )
+                    return message_id, True
 
             cur = conn.execute(
                 """INSERT INTO messages (source, group_id, group_name, author_id,
@@ -706,3 +736,4 @@ class Database:
 
 # Backward-compatible alias used by analytics routes.
 MessageIntelDB = Database
+
