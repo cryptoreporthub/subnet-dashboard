@@ -193,15 +193,6 @@ class Database:
                    ON messages(source, group_id, external_message_id)
                    WHERE external_message_id IS NOT NULL AND group_id IS NOT NULL"""
             )
-            try:
-                conn.execute(
-                    """CREATE UNIQUE INDEX IF NOT EXISTS idx_message_metrics_message
-                       ON message_metrics(message_id)"""
-                )
-            except sqlite3.OperationalError:
-                # Legacy rows may hold duplicate metric entries; the
-                # UPDATE-then-INSERT path in save_message stays safe either way.
-                pass
 
     # ── Messages ──────────────────────────────────────────────────────
 
@@ -732,4 +723,17 @@ class Database:
     def _get_price_snapshot(conn: sqlite3.Connection, message_id: int) -> Optional[Dict]:
         row = conn.execute(
             "SELECT * FROM price_snapshots WHERE message_id = ?", (message_id,)
-    
+        ).fetchone()
+        return dict(row) if row else None
+
+    @staticmethod
+    def _get_price_outcome(conn: sqlite3.Connection, message_id: int) -> Optional[Dict]:
+        row = conn.execute(
+            "SELECT * FROM price_outcomes WHERE message_id = ?", (message_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+# Backward-compatible alias used by analytics routes.
+MessageIntelDB = Database
+
