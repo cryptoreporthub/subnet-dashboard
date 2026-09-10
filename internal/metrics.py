@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from prometheus_client import Gauge, generate_latest
+from prometheus_client import Counter, Gauge, generate_latest
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -49,6 +49,12 @@ SCHEDULER_FAILURES = Gauge(
 SCHEDULER_JOB_COUNT = Gauge(
     "subnet_scheduler_job_count",
     "APScheduler jobs currently registered",
+)
+
+UNIVERSE_EMERGENCY_TOTAL = Counter(
+    "subnet_universe_emergency_total",
+    "Times the registry emergency fallback defined the subnet universe",
+    ["reason"],
 )
 
 
@@ -133,3 +139,5 @@ async def metrics_endpoint(request: Request) -> Response:
     refresh_from_state()
     body = generate_latest()
     return Response(content=body, media_type="text/plain; version=0.0.4; charset=utf-8")
+
+
