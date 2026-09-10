@@ -1,13 +1,1 @@
-{
-  "mode": "full",
-  "ok": true,
-  "removed_files": [
-    "data/message_intel.db",
-    "data/message_intel.db-wal",
-    "data/message_intel.db-shm"
-  ],
-  "alerts": {
-    "ok": true,
-    "social_intel_alerts_removed": 0
-  }
-}
+{"ok":false,"status":"not_started"}
