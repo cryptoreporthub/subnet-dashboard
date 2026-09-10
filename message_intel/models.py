@@ -193,6 +193,15 @@ class Database:
                    ON messages(source, group_id, external_message_id)
                    WHERE external_message_id IS NOT NULL AND group_id IS NOT NULL"""
             )
+            try:
+                conn.execute(
+                    """CREATE UNIQUE INDEX IF NOT EXISTS idx_message_metrics_message
+                       ON message_metrics(message_id)"""
+                )
+            except sqlite3.OperationalError:
+                # Legacy rows may hold duplicate metric entries; the
+                # UPDATE-then-INSERT path in save_message stays safe either way.
+                pass
 
     # ── Messages ──────────────────────────────────────────────────────
 
@@ -216,7 +225,37 @@ class Database:
                     (source, str(group_id), external_id),
                 ).fetchone()
                 if row:
-                    return int(row["id"]), True
+                    message_id = int(row["id"])
+                    metrics = msg.get("metrics")
+                    if metrics:
+                        # Engagement metrics evolve after first ingest (views
+                        # climb, reaction counts shift). Refresh the stored
+                        # snapshot instead of dropping the update on dedup.
+                        cur = conn.execute(
+                            """UPDATE message_metrics
+                               SET views = ?, forwards = ?, replies = ?, reactions = ?
+                               WHERE message_id = ?""",
+                            (
+                                metrics.get("views", 0),
+                                metrics.get("forwards", 0),
+                                metrics.get("replies", 0),
+                                json.dumps(metrics.get("reactions", {})),
+                                message_id,
+                            ),
+                        )
+                        if cur.rowcount == 0:
+                            conn.execute(
+                                """INSERT INTO message_metrics (message_id, views, forwards, replies, reactions)
+                                   VALUES (?, ?, ?, ?, ?)""",
+                                (
+                                    message_id,
+                                    metrics.get("views", 0),
+                                    metrics.get("forwards", 0),
+                                    metrics.get("replies", 0),
+                                    json.dumps(metrics.get("reactions", {})),
+                                ),
+                            )
+                    return message_id, True
 
             cur = conn.execute(
                 """INSERT INTO messages (source, group_id, group_name, author_id,
@@ -693,16 +732,4 @@ class Database:
     def _get_price_snapshot(conn: sqlite3.Connection, message_id: int) -> Optional[Dict]:
         row = conn.execute(
             "SELECT * FROM price_snapshots WHERE message_id = ?", (message_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-    @staticmethod
-    def _get_price_outcome(conn: sqlite3.Connection, message_id: int) -> Optional[Dict]:
-        row = conn.execute(
-            "SELECT * FROM price_outcomes WHERE message_id = ?", (message_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
-# Backward-compatible alias used by analytics routes.
-MessageIntelDB = Database
+    
