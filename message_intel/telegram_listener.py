@@ -45,6 +45,10 @@ try:
         FloodWaitError,
         RPCError,
     )
+    try:
+        from telethon.tl.types import UpdateMessageReactions
+    except ImportError:  # pragma: no cover — older telethon layers
+        UpdateMessageReactions = None
     HAS_TELETHON = True
 except ImportError:
     HAS_TELETHON = False
@@ -186,6 +190,17 @@ class TelegramListener:
                 @self._client.on(events.NewMessage(chats=entity))
                 async def handler(event) -> None:  # noqa: F811
                     await self._handle_event(event)
+
+                # Edits and reaction updates carry evolving engagement metrics;
+                # re-normalize so store-level dedup can refresh the snapshots.
+                @self._client.on(events.MessageEdited(chats=entity))
+                async def edited_handler(event) -> None:  # noqa: F811
+                    await self._handle_event(event)
+
+                if UpdateMessageReactions is not None:
+                    @self._client.on(events.Raw(UpdateMessageReactions))
+                    async def reactions_handler(update) -> None:  # noqa: F811
+                        await self._handle_reactions_update(update)
 
                 asyncio.create_task(self._backfill_on_connect(entity))
 
@@ -507,6 +522,44 @@ class TelegramListener:
         except Exception as e:
             logger.error("Error handling message event: %s", e)
 
+    async def _handle_reactions_update(self, update) -> None:
+        """Re-ingest a message whose reactions changed so metrics stay fresh."""
+        try:
+            msg_id = getattr(update, "msg_id", None)
+            peer = getattr(update, "peer", None)
+            if msg_id is None or peer is None or not self._client:
+                return
+            try:
+                entity = await self._client.get_entity(peer)
+            except Exception:
+                entity = None
+            target = entity if entity is not None else self._monitor_entity
+            if target is None:
+                return
+            # Raw events are global — only ingest updates for the monitored group.
+            mon_id = getattr(self._monitor_entity, "id", None)
+            tgt_id = getattr(target, "id", None)
+            if mon_id is not None and tgt_id is not None and int(mon_id) != int(tgt_id):
+                return
+            msg = await self._client.get_messages(target, ids=msg_id)
+            if msg is None:
+                return
+            chat_id = getattr(msg, "chat_id", None)
+            if chat_id is None:
+                chat_id = getattr(target, "id", None)
+            sender = await msg.get_sender()
+            normalized = self._normalize_message(msg, sender, chat_id)
+            if normalized is None:
+                return
+            if self.on_message:
+                from internal.message_intel.engine import ingest_message
+
+                ingest_message(normalized, snapshot_price=False)
+            elif self.forward_to_ingest:
+                await self._forward_to_ingest(normalized)
+        except Exception as exc:
+            logger.warning("Telegram reactions update handling failed: %s", exc)
+
     def _normalize_message(
         self,
         msg: Any,
@@ -675,3 +728,4 @@ class TelegramListener:
             except Exception:
                 pass
         logger.info("Telegram listener stopped")
+
