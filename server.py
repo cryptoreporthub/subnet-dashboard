@@ -2153,9 +2153,14 @@ def get_summary():
 @app.get("/api/stats")
 def get_stats():
     """Aggregated registry intelligence for dashboard hero panels."""
-    data = load_data("config/registry.json")
-    subnets = list(data.values())
+    # Derive stats from the same shared/live universe exposed by /api/subnets.
+    # config/registry.json is only an emergency fallback and must not define the
+    # dashboard universe or its active-subnet KPI.
+    live_payload = _list_subnets_base_rows()
+    subnets = list(live_payload.get("items") or [])
+    from internal.subnets.summary import summarize_subnets
 
+    universe_summary = summarize_subnets(subnets)
     status_counts = {}
     total_stake = 0.0
     total_emission = 0.0
