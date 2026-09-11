@@ -390,3 +390,97 @@ def test_subnetsummers_full_desk_call_leaders_empty(intel_env):
         text = summary_bot.build_subnetsummers_text(db=intel_env)
 
     assert "No graded calls yet" in text
+def test_subnetsummers_reaction_crowns_show_emoji_and_label(intel_env):
+    """Crowns must name the reaction (emoji + label), not just the person."""
+    from internal.message_intel import rollup
+
+    crowns = [
+        {
+            "key": "fire",
+            "emoji": "U0001F525",
+            "label": "Hype",
+            "author_id": "1",
+            "author_name": "RVCrypto",
+            "author_username": "@RVCrypto",
+            "display_name": "@RVCrypto",
+            "count": 87,
+            "days": 7,
+        },
+        {
+            "key": "heart",
+            "emoji": "❤️",
+            "label": "Love",
+            "author_id": "2",
+            "author_name": "Cryptonic",
+            "author_username": "",
+            "display_name": "Cryptonic",
+            "count": 12,
+            "days": 7,
+        },
+    ]
+
+    with patch.object(rollup, "build_reaction_crowns", return_value=crowns):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "U0001F525 Hype: @RVCrypto (87)" in text
+    assert "❤️ Love: Cryptonic (12)" in text
+
+
+def test_subnet_label_does_not_double_prefix():
+    assert summary_bot._subnet_label(39, "SN39 (deprecated)") == "SN39 (deprecated)"
+    assert summary_bot._subnet_label(39, "SN39") == "SN39"
+    assert summary_bot._subnet_label(39, "Nineteen") == "SN39 Nineteen"
+    assert summary_bot._subnet_label(39, None) == "SN39"
+
+
+def test_format_author_line_pluralizes_single_call():
+    solo = summary_bot._format_author_line(
+        {"author_name": "Solo", "total_graded_calls": 1, "accuracy_pct": 100.0}, 1
+    )
+    assert "1 call," in solo
+    assert "1 calls" not in solo
+    duo = summary_bot._format_author_line(
+        {"author_name": "Duo", "total_graded_calls": 2, "accuracy_pct": 50.0}, 1
+    )
+    assert "2 calls," in duo
+
+
+def test_clamp_telegram_text_stays_under_limit_and_keeps_lines():
+    body = "\n".join(f"line {i}" for i in range(300))
+    out = summary_bot._clamp_telegram_text(body, limit=200)
+    assert len(out) <= 200
+    assert out.startswith("line 0")
+    assert out.endswith("\u2026")
+    assert summary_bot._clamp_telegram_text("short", limit=200) == "short"
+
+
+def test_subnetsummers_full_desk_stays_within_telegram_limit(intel_env):
+    from internal.message_intel import rollup
+
+    rows = [
+        {
+            "author_name": "Caller %d" % i,
+            "author_username": "@caller%d" % i,
+            "author_id": str(i),
+            "total_graded_calls": 50,
+            "accuracy_pct": 60.0,
+        }
+        for i in range(40)
+    ]
+    trending = [
+        {
+            "netuid": 100 + i,
+            "name": "Subnet Number %d With A Long Registry Name" % i,
+            "mentions": 30,
+            "chatter_power": 0.1234,
+            "why": "velocity 3.42 x conviction 0.78 x quality 0.91",
+        }
+        for i in range(20)
+    ]
+
+    with patch.object(rollup, "build_author_reliability_rows", return_value=rows), \
+         patch.object(rollup, "build_trending_subnets", return_value=trending):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert len(text) <= summary_bot._TELEGRAM_TEXT_LIMIT
+    assert "Open the full Subnet Summers desk" in text
