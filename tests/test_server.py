@@ -86,26 +86,54 @@ def test_stats_route(client):
     assert 'flagged_subnets' in data
 
 
-def test_summary_retains_registry_contract(client, monkeypatch):
-    registry = {
-        "1": {
-            "id": 1,
-            "name": "Registry subnet",
-            "status": "active",
-            "staking_data": {"total_stake": 2.5, "apy": 0.1},
-            "emission": 1.5,
-        }
-    }
-    monkeypatch.setattr(server, "load_data", lambda path: registry)
+def test_summary_uses_live_universe(client, monkeypatch):
+    live_rows = [{"netuid": 0, "name": "Root", "status": "active"}] + [
+        {"netuid": n, "name": f"SN{n}", "status": "active"} for n in range(1, 129)
+    ]
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": live_rows,
+            "feed_meta": {"source": "live", "universe_status": "fresh"},
+        },
+    )
+    # Registry must NOT supply the counts: if it did, totals would be 0.
+    monkeypatch.setattr(server, "load_data", lambda path: {})
 
-    def fail_if_live_universe_is_requested():
-        raise AssertionError("/api/summary must not use the live subnet universe")
-
-    monkeypatch.setattr(server, "_list_subnets_base_rows", fail_if_live_universe_is_requested)
     response = client.get("/api/summary")
 
     assert response.status_code == 200
-    assert response.json()["summary"]["total_subnets"] == 1
+    summary = response.json()["summary"]
+    assert summary["total_subnets"] == 129
+    assert summary["active_count"] == 129
+    assert summary["active_count_excluding_root"] == 128
+    assert summary["root_present"] is True
+    assert summary["subnet_source"] == "live"
+
+
+def test_summary_preserves_empty_live_universe(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": [],
+            "feed_meta": {"source": "live", "universe_status": "empty"},
+        },
+    )
+
+    response = client.get("/api/summary")
+
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["total_subnets"] == 0
+    assert summary["active_count"] == 0
+    assert summary["active_count_excluding_root"] == 0
+    assert summary["universe_status"] == "empty"
+    # Honest-empty: uncalculated highlights must be [] not fabricated rows.
+    highlights = response.json()["highlights"]
+    assert highlights["top_consensus"] == []
+    assert highlights["riskiest"] == []
 
 
 def test_stats_uses_live_universe_and_excludes_root(client, monkeypatch):

@@ -2018,8 +2018,14 @@ def get_subnet_pool(subnet_id: int):
 @app.get("/api/summary")
 def get_summary():
     """Lightweight aggregated hero-card data for the dashboard."""
-    data = load_data("config/registry.json")
-    subnets = list(data.values())
+    # Derive from the same shared/live universe exposed by /api/subnets.
+    # config/registry.json is only an emergency fallback and must not define
+    # the dashboard universe or its hero-card counts.
+    live_payload = _list_subnets_base_rows()
+    subnets = list(live_payload.get("items") or [])
+    from internal.subnets.summary import summarize_subnets
+
+    universe_summary = summarize_subnets(subnets)
 
     status_counts = {}
     total_stake = 0.0
@@ -2118,10 +2124,16 @@ def get_summary():
     return {
         "status": "success",
         "summary": {
-            "total_subnets": len(subnets),
+            "total_subnets": universe_summary["total_subnets"],
             "status_counts": status_counts,
             "status_distribution": status_distribution,
-            "active_count": status_counts.get("active", 0),
+            "active_count": universe_summary["active_count"],
+            "active_count_excluding_root": universe_summary["active_count_excluding_root"],
+            "root_present": universe_summary["root_present"],
+            "root_netuid": universe_summary["root_netuid"],
+            "active_subnet_policy": universe_summary["active_subnet_policy"],
+            "universe_status": (live_payload.get("feed_meta") or {}).get("universe_status"),
+            "subnet_source": (live_payload.get("feed_meta") or {}).get("source"),
             "at_risk_count": status_counts.get("at-risk", 0),
             "deprecated_count": status_counts.get("deprecated", 0),
             "unknown_count": status_counts.get("unknown", 0),
