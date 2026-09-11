@@ -330,3 +330,4 @@ def test_author_reliability_rows_expose_strike_rate_and_caution(intel_env):
     assert row["correct_predictions"] == 3
     assert row["total_graded_calls"] == 4
     assert row["caution"] is True
+
