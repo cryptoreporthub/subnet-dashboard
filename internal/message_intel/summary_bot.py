@@ -24,6 +24,27 @@ _RUNNING = False
 
 _ENABLED = frozenset({"1", "true", "yes", "on"})
 
+# Telegram hard-caps message text at 4096 characters.
+_TELEGRAM_TEXT_LIMIT = 4096
+
+
+def _clamp_telegram_text(text: str, *, limit: int = _TELEGRAM_TEXT_LIMIT) -> str:
+    """Trim on line boundaries so HTML tags are never cut mid-token."""
+    if len(text) <= limit:
+        return text
+    marker = "\n…"
+    kept: List[str] = []
+    used = 0
+    for line in text.split("\n"):
+        add = len(line) + (1 if kept else 0)
+        if used + add + len(marker) > limit:
+            break
+        kept.append(line)
+        used += add
+    if not kept:
+        return text[: max(0, limit - len(marker))] + marker
+    return "\n".join(kept) + marker
+
 
 def summary_bot_enabled() -> bool:
     from internal.run_mode import stage2_hop_mode
@@ -215,7 +236,8 @@ def _format_author_line(item: Dict[str, Any], rank: int) -> str:
     calls = int(item.get("total_graded_calls") or item.get("graded") or 0)
     return (
         f"{rank}. {_author_display_name(item)} – "
-        f"{calls} calls, {_format_accuracy_pct(item.get('accuracy_pct'))} accuracy"
+        f"{calls} {'call' if calls == 1 else 'calls'}, "
+        f"{_format_accuracy_pct(item.get('accuracy_pct'))} accuracy"
     )
 
 
@@ -276,14 +298,23 @@ def _telegram_watchlist_owner(message: Optional[Dict[str, Any]]) -> Optional[str
     return linked_owner(telegram_owner) or telegram_owner
 
 
-def _format_subnet_chip(row: Dict[str, Any]) -> str:
-    netuid = row.get("netuid")
-    raw_name = str(row.get("name") or "").strip()
+def _subnet_label(netuid: Any, name: Any) -> str:
+    """'SN39 (deprecated)' — never 'SN39 SN39 (deprecated)'.
+
+    Registry names sometimes already carry the SN# prefix; guard so the
+    prefix is applied exactly once.
+    """
     sn = f"SN{netuid}"
-    if not raw_name or raw_name.upper() == sn.upper() or raw_name.upper().startswith(f"{sn} "):
-        label = html.escape(raw_name or sn)
+    raw = str(name or "").strip()
+    if not raw or raw.upper() == sn.upper() or raw.upper().startswith(f"{sn} "):
+        label = raw or sn
     else:
-        label = f"{sn} {html.escape(raw_name)}"
+        label = f"{sn} {raw}"
+    return html.escape(label)
+
+
+def _format_subnet_chip(row: Dict[str, Any]) -> str:
+    label = _subnet_label(row.get("netuid"), row.get("name"))
     mentions = int(row.get("mentions") or 0)
     mention_word = "mention" if mentions == 1 else "mentions"
     bits = [f"{mentions} {mention_word}"]
@@ -464,10 +495,9 @@ def build_subnetsummers_text(*, db=None) -> str:
     ]
     if trending:
         for index, row in enumerate(trending, 1):
-            name = html.escape(str(row.get("name") or f"Subnet {row.get('netuid')}"))
             why = html.escape(str(row.get("why") or "chatter power"))
             lines.append(
-                f"{index}. SN{row.get('netuid')} {name} · "
+                f"{index}. {_subnet_label(row.get('netuid'), row.get('name'))} · "
                 f"{row.get('mentions', 0)} mentions · power {row.get('chatter_power', 0)}"
             )
             lines.append(f"   <i>{why}</i>")
@@ -524,8 +554,11 @@ def build_subnetsummers_text(*, db=None) -> str:
     else:
         lines.append("No reaction leaders yet — reaction metrics have not arrived.")
 
-    lines.extend(["", f'<a href="{desk}">Open the full Subnet Summers desk</a>'])
-    return "\n".join(lines)
+    link = f'<a href="{desk}">Open the full Subnet Summers desk</a>'
+    body = _clamp_telegram_text(
+        "\n".join(lines), limit=max(0, _TELEGRAM_TEXT_LIMIT - len(link) - 2)
+    )
+    return f"{body}\n\n{link}"
 
 
 def build_summary_text(*, db=None) -> str:
@@ -776,4 +809,3 @@ def stop_summary_bot() -> None:
         _POLL_THREAD.join(timeout=8)
         _POLL_THREAD = None
     _STOP.clear()
-
