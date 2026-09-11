@@ -1,3 +1,8 @@
+Title: 
+
+URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/internal/message_intel/rollup.py
+
+Markdown Content:
 """Trending subnets + weekly author leaderboard rollups for message-intel UI."""
 
 from __future__ import annotations
@@ -1021,7 +1026,9 @@ def _conviction_rows(db=None) -> List[Dict[str, Any]]:
                       v.verdict, v.predicted_direction, v.conviction,
                       v.predicted_magnitude,
                       ps.tao_usd_price, ps.netuid AS snap_netuid, ps.netuid AS netuid,
-                      po.outcome, po.pump_pct_max, po.price_24h, po.price_24h_recorded_at
+                      po.outcome, po.pump_pct_max,
+                      po.price_1h, po.price_4h,
+                      po.price_24h, po.price_24h_recorded_at
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_verdicts v ON v.message_id = m.id
@@ -1692,7 +1699,9 @@ def list_telegram_caller_activity(
                       mm.reactions,
                       v.conviction, v.verdict, v.predicted_direction,
                       ps.netuid, ps.tao_usd_price,
-                      po.outcome, po.pump_pct_max, po.price_24h
+                      po.outcome, po.pump_pct_max,
+                      po.price_1h, po.price_4h,
+                      po.price_24h
                FROM messages m
                LEFT JOIN message_analysis a ON a.message_id = m.id
                LEFT JOIN message_metrics mm ON mm.message_id = m.id
