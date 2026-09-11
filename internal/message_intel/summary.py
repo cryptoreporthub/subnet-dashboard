@@ -1,4 +1,5 @@
 
+
 """Plain-language summary for the message-intel panel (Phase C)."""
 
 from __future__ import annotations
@@ -123,7 +124,8 @@ def summarize_message_intel() -> Dict[str, Any]:
             parts.append(
                 f"Author trust (closed loop): {top.get('author_name') or top.get('author_id')} leads at "
                 f"{float(top.get('accuracy_pct') or 0):.0f}% over "
-                f"{int(top.get('total_graded_calls') or 0)} graded calls."
+                f"{int(top.get('total_graded_calls') or 0)} graded "
+                f"{'call' if int(top.get('total_graded_calls') or 0) == 1 else 'calls'}."
             )
         elif stats.get("ok"):
             parts.append(
