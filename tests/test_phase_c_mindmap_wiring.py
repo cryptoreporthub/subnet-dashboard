@@ -1,3 +1,4 @@
+
 """Phase C — mindmap display wiring (dev signals, judges PM/weights, MI trust, pump snapshots)."""
 
 from __future__ import annotations
@@ -184,7 +185,10 @@ def test_summarize_message_intel_author_trust(intel_env):
     db.increment_author_reliability("u2", "Bob", correct=False)
 
     summary = summarize_message_intel()
-    assert "author trust" in summary["text"].lower() or "alice" in summary["text"].lower()
+    # The legacy ledger records messages, not proof-graded calls, so it must
+    # never surface as an author-trust call record.
+    assert "graded calls" not in summary["text"]
+    assert "Alice leads" not in summary["text"]
 
 
 @pytest.fixture
@@ -195,3 +199,22 @@ def intel_env(tmp_path, monkeypatch):
 
     store.reset_db_cache()
     yield {"db_path": db_path}
+
+def test_summarize_message_intel_reports_proof_graded_leader(intel_env, monkeypatch):
+    from internal.message_intel.summary import summarize_message_intel
+
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_author_reliability_rows",
+        lambda **kw: [
+            {
+                "author_id": "id:7915797706",
+                "author_name": "KaWis",
+                "accuracy_pct": 60.0,
+                "total_graded_calls": 5,
+                "influence_score": 1.0,
+            }
+        ],
+    )
+
+    out = summarize_message_intel()
+    assert "KaWis leads at 60% over 5 graded calls" in out["text"]
