@@ -354,7 +354,9 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
             row["source"] = "registry"
             row["sources"] = list(row.get("sources") or ["registry"])
         else:
-            row = {"netuid": netuid, "id": netuid}
+            # Deregistered netuid slot (no TMC or registry row): label it
+            # explicitly so it never inherits a majority-vote feed label.
+            row = {"netuid": netuid, "id": netuid, "source": "none", "sources": ["none"]}
         try:
             from internal.subnet_names import enrich_subnet_row
 
