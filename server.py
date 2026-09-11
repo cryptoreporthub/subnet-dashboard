@@ -2018,8 +2018,14 @@ def get_subnet_pool(subnet_id: int):
 @app.get("/api/summary")
 def get_summary():
     """Lightweight aggregated hero-card data for the dashboard."""
-    data = load_data("config/registry.json")
-    subnets = list(data.values())
+    # Derive from the same shared/live universe exposed by /api/subnets.
+    # config/registry.json is only an emergency fallback and must not define
+    # the dashboard universe or its hero-card counts.
+    live_payload = _list_subnets_base_rows()
+    subnets = list(live_payload.get("items") or [])
+    from internal.subnets.summary import summarize_subnets
+
+    universe_summary = summarize_subnets(subnets)
 
     status_counts = {}
     total_stake = 0.0
@@ -2032,12 +2038,12 @@ def get_summary():
     for subnet in subnets:
         status = subnet.get("status", "unknown")
         status_counts[status] = status_counts.get(status, 0) + 1
-        total_stake += subnet.get("staking_data", {}).get("total_stake", 0.0) or 0.0
+        total_stake += (subnet.get("staking_data") or {}).get("total_stake", 0.0) or 0.0
         total_emission += subnet.get("emission", 0.0) or 0.0
         total_mentions += subnet.get("social_mentions", 0) or 0
         if subnet.get("is_overvalued"):
             overvalued += 1
-        apy = subnet.get("staking_data", {}).get("apy")
+        apy = (subnet.get("staking_data") or {}).get("apy")
         if apy is not None:
             apys.append(apy)
         updated = subnet.get("last_updated")
@@ -2048,7 +2054,7 @@ def get_summary():
     def top_by(field, n=1):
         def key(s):
             if field in ("total_stake", "apy"):
-                return s.get("staking_data", {}).get(field, 0.0) or 0.0
+                return (s.get("staking_data") or {}).get(field, 0.0) or 0.0
             return s.get(field, 0.0) or 0.0
 
         ranked = sorted(subnets, key=key, reverse=True)[:n]
@@ -2063,6 +2069,11 @@ def get_summary():
         ]
 
     def top_by_consensus(n=1):
+        # Live membership rows carry no council consensus enrichment. Without
+        # this guard every row scores 0.0 and the slice below returns an
+        # arbitrary phantom row of nulls rather than an honest empty list.
+        if not any(s.get("consensus") for s in subnets):
+            return []
         ranked = sorted(
             subnets,
             key=lambda s: (s.get("consensus", {}) or {}).get("score", 0.0) or 0.0,
@@ -2118,10 +2129,16 @@ def get_summary():
     return {
         "status": "success",
         "summary": {
-            "total_subnets": len(subnets),
+            "total_subnets": universe_summary["total_subnets"],
             "status_counts": status_counts,
             "status_distribution": status_distribution,
-            "active_count": status_counts.get("active", 0),
+            "active_count": universe_summary["active_count"],
+            "active_count_excluding_root": universe_summary["active_count_excluding_root"],
+            "root_present": universe_summary["root_present"],
+            "root_netuid": universe_summary["root_netuid"],
+            "active_subnet_policy": universe_summary["active_subnet_policy"],
+            "universe_status": (live_payload.get("feed_meta") or {}).get("universe_status"),
+            "subnet_source": (live_payload.get("feed_meta") or {}).get("source"),
             "at_risk_count": status_counts.get("at-risk", 0),
             "deprecated_count": status_counts.get("deprecated", 0),
             "unknown_count": status_counts.get("unknown", 0),

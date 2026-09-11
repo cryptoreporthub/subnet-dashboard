@@ -86,26 +86,54 @@ def test_stats_route(client):
     assert 'flagged_subnets' in data
 
 
-def test_summary_retains_registry_contract(client, monkeypatch):
-    registry = {
-        "1": {
-            "id": 1,
-            "name": "Registry subnet",
-            "status": "active",
-            "staking_data": {"total_stake": 2.5, "apy": 0.1},
-            "emission": 1.5,
-        }
-    }
-    monkeypatch.setattr(server, "load_data", lambda path: registry)
+def test_summary_uses_live_universe(client, monkeypatch):
+    live_rows = [{"netuid": 0, "name": "Root", "status": "active"}] + [
+        {"netuid": n, "name": f"SN{n}", "status": "active"} for n in range(1, 129)
+    ]
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": live_rows,
+            "feed_meta": {"source": "live", "universe_status": "fresh"},
+        },
+    )
+    # Registry must NOT supply the counts: if it did, totals would be 0.
+    monkeypatch.setattr(server, "load_data", lambda path: {})
 
-    def fail_if_live_universe_is_requested():
-        raise AssertionError("/api/summary must not use the live subnet universe")
-
-    monkeypatch.setattr(server, "_list_subnets_base_rows", fail_if_live_universe_is_requested)
     response = client.get("/api/summary")
 
     assert response.status_code == 200
-    assert response.json()["summary"]["total_subnets"] == 1
+    summary = response.json()["summary"]
+    assert summary["total_subnets"] == 129
+    assert summary["active_count"] == 129
+    assert summary["active_count_excluding_root"] == 128
+    assert summary["root_present"] is True
+    assert summary["subnet_source"] == "live"
+
+
+def test_summary_preserves_empty_live_universe(client, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": [],
+            "feed_meta": {"source": "live", "universe_status": "empty"},
+        },
+    )
+
+    response = client.get("/api/summary")
+
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["total_subnets"] == 0
+    assert summary["active_count"] == 0
+    assert summary["active_count_excluding_root"] == 0
+    assert summary["universe_status"] == "empty"
+    # Honest-empty: uncalculated highlights must be [] not fabricated rows.
+    highlights = response.json()["highlights"]
+    assert highlights["top_consensus"] == []
+    assert highlights["riskiest"] == []
 
 
 def test_stats_uses_live_universe_and_excludes_root(client, monkeypatch):
@@ -190,3 +218,65 @@ def test_daily_rotation_route(client):
     assert 'decisions' in data['data']
     assert 'recommendations' in data['data']
 
+def test_summary_highlights_on_live_membership_rows(client, monkeypatch):
+    """Live membership rows carry no council consensus: highlights must be honest-empty."""
+    live_rows = [
+        {
+            "netuid": n,
+            "id": n,
+            "name": f"SN{n}",
+            "status": "active",
+            "emission": float(n) / 10.0,
+        }
+        for n in range(0, 130)
+    ]
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": live_rows,
+            "feed_meta": {"source": "taomarketcap", "universe_status": "degraded"},
+        },
+    )
+
+    response = client.get("/api/summary")
+
+    # The unedited highlights block runs against a new input shape: must not 500.
+    assert response.status_code == 200
+    data = response.json()
+
+    # Observability parity with /api/stats.
+    assert data["summary"]["subnet_source"] == "taomarketcap"
+    assert data["summary"]["universe_status"] == "degraded"
+
+    highlights = data["highlights"]
+    # No consensus exists on these rows, so no ranking may be invented.
+    assert highlights["top_consensus"] == []
+    assert highlights["riskiest"] == []
+    # Non-consensus highlights still populate from real live fields.
+    assert highlights["top_emitter"][0]["id"] == 129
+    assert highlights["top_emitter"][0]["emission"] == 12.9
+
+
+def test_summary_survives_null_staking_data(client, monkeypatch):
+    """An explicit null staking_data must not raise AttributeError."""
+    live_rows = [
+        {"netuid": 1, "id": 1, "name": "Apex", "status": "active", "staking_data": None},
+        {"netuid": 2, "id": 2, "name": "DSperse", "status": "active", "staking_data": None},
+    ]
+    monkeypatch.setattr(
+        server,
+        "_list_subnets_base_rows",
+        lambda: {
+            "items": live_rows,
+            "feed_meta": {"source": "live", "universe_status": "fresh"},
+        },
+    )
+
+    response = client.get("/api/summary")
+
+    assert response.status_code == 200
+    summary = response.json()["summary"]
+    assert summary["total_stake"] == 0.0
+    assert summary["avg_apy"] == 0.0
+    assert response.json()["highlights"]["top_staked"][0]["total_stake"] == 0.0
