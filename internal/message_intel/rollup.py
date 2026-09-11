@@ -2812,3 +2812,4 @@ def build_high_conviction_strip(
             }
         )
     return out
+

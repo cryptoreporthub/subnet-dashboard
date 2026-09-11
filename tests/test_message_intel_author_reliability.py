@@ -326,7 +326,13 @@ def test_author_reliability_rows_expose_strike_rate_and_caution(intel_env):
     rows = build_author_reliability_rows(days=30, limit=8, db=db)
     assert rows
     row = rows[0]
-    assert row["accuracy_pct"] == row["strike_rate_pct"]
-    assert row["correct_predictions"] == 3
-    assert row["total_graded_calls"] == 4
-    assert row["caution"] is True
+    # The legacy ledger records messages, not proof-graded calls.
+    assert row["accuracy_pct"] is None
+    assert row["strike_rate_pct"] is None
+    assert row["total_graded_calls"] == 0
+    assert row["correct_predictions"] == 0
+    assert row["stats_source"] == "none"
+    assert row["caution"] is False
+    assert row["reliability_total_messages"] == 4
+    assert row["reliability_correct_predictions"] == 3
+
