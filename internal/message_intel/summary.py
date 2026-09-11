@@ -1,3 +1,4 @@
+
 """Plain-language summary for the message-intel panel (Phase C)."""
 
 from __future__ import annotations
@@ -99,19 +100,34 @@ def summarize_message_intel() -> Dict[str, Any]:
         )
 
     try:
-        from internal.message_intel.store import get_db
+        from internal.message_intel.rollup import build_author_reliability_rows
 
-        authors = get_db().list_author_reliability(limit=3, min_messages=2)
-        if authors:
-            top = authors[0]
+        # Proof-gated: only calls resolved under the subnet-only proof contract
+        # count as "graded". The legacy author_reliability ledger records
+        # pre-contract message counts and must never be shown as graded calls.
+        leaders = [
+            row
+            for row in build_author_reliability_rows(days=30, limit=50)
+            if int(row.get("total_graded_calls") or 0) > 0
+        ]
+        if leaders:
+            leaders.sort(
+                key=lambda r: (
+                    float(r.get("accuracy_pct") or 0.0),
+                    int(r.get("total_graded_calls") or 0),
+                    float(r.get("influence_score") or 0.0),
+                ),
+                reverse=True,
+            )
+            top = leaders[0]
             parts.append(
                 f"Author trust (closed loop): {top.get('author_name') or top.get('author_id')} leads at "
-                f"{float(top.get('accuracy_score') or 0) * 100:.0f}% over "
-                f"{int(top.get('total_messages') or 0)} graded calls."
+                f"{float(top.get('accuracy_pct') or 0):.0f}% over "
+                f"{int(top.get('total_graded_calls') or 0)} graded calls."
             )
         elif stats.get("ok"):
             parts.append(
-                "Author reliability tracking is wired — trust multipliers apply after price outcomes resolve."
+                "No graded callers yet — leaderboard fills as calls resolve."
             )
     except Exception:
         pass
