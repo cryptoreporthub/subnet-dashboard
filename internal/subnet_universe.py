@@ -439,7 +439,27 @@ class UniverseSnapshot:
         )
 
     @classmethod
-    def emergency_registry(cls, message: str = "") -> "UniverseSnapshot":
+    def emergency_registry(
+        cls, message: str = "", *, reason: str = "unspecified"
+    ) -> "UniverseSnapshot":
+        """Registry-only fallback universe (netuids 0..74).
+
+        Instrumented deliberately: this path silently narrows the universe and
+        previously emitted no metric and no log, which left the 2026-08-25
+        occurrence unattributable. Both the counter and the log are best-effort
+        -- instrumentation must never break universe resolution.
+        """
+        try:
+            from internal.metrics import UNIVERSE_EMERGENCY_TOTAL
+
+            UNIVERSE_EMERGENCY_TOTAL.labels(reason=reason).inc()
+        except Exception:
+            pass
+        logger.warning(
+            "subnet_universe emergency_registry (reason=%s): %s",
+            reason,
+            message or "registry-only rows",
+        )
         rows = _emergency_rows()
         netuids = tuple(sorted(_netuid_of(row) or 0 for row in rows if _netuid_of(row) is not None))
         return cls(
@@ -489,7 +509,7 @@ class SnapshotBuilder:
             probe_map, probe_complete = _default_probe_fetch(probe_candidates, deadline=deadline)
 
         if not tmc_complete and not probe_complete and not prior_map:
-            return UniverseSnapshot.emergency_registry()
+            return UniverseSnapshot.emergency_registry(reason="refresh_unresolvable")
 
         netuids, validity_map, cap_reached, refresh_incomplete = _compute_membership(
             prior_map,
@@ -524,7 +544,8 @@ class SnapshotBuilder:
                         message="Empty membership from sources — retained prior universe",
                     )
                 return UniverseSnapshot.emergency_registry(
-                    "Empty membership from sources — emergency registry fallback"
+                    "Empty membership from sources — emergency registry fallback",
+                    reason="empty_membership",
                 )
             if prior and prior.netuids and refresh_incomplete:
                 return UniverseSnapshot(
@@ -581,8 +602,10 @@ class SubnetUniverseProvider:
         self._loop_lock = threading.Lock()
 
     def _load_initial_snapshot(self) -> UniverseSnapshot:
+        reason = "lkg_missing"
         try:
             if os.path.isfile(self._persist_file):
+                reason = "lkg_unusable"
                 self._disk_mtime = os.path.getmtime(self._persist_file)
                 with open(self._persist_file, "r") as handle:
                     payload = json.load(handle)
@@ -591,8 +614,9 @@ class SubnetUniverseProvider:
                     logger.info("subnet_universe loaded LKG: %d netuids", len(snap.netuids))
                     return snap
         except Exception as exc:
+            reason = "lkg_corrupt"
             logger.warning("subnet_universe corrupt/missing persistence: %s", exc)
-        return UniverseSnapshot.emergency_registry()
+        return UniverseSnapshot.emergency_registry(reason=reason)
 
     def reload_from_disk_if_stale(self) -> UniverseSnapshot:
         """Reader path: pick up worker-published snapshot without refreshing."""
@@ -721,7 +745,7 @@ class SubnetUniverseProvider:
     def get_lkg_or_emergency(self) -> UniverseSnapshot:
         snap = self._snapshot
         if snap.status == "emergency_registry" or not snap.netuids:
-            return UniverseSnapshot.emergency_registry()
+            return UniverseSnapshot.emergency_registry(reason="no_usable_snapshot")
         return snap
 
     def replace_snapshot_for_tests(self, snap: UniverseSnapshot, *, persist: bool = False) -> None:
@@ -781,3 +805,5 @@ def _reset_provider_for_tests() -> None:
     global _provider
     with _provider_lock:
         _provider = None
+
+
