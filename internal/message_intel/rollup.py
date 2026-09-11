@@ -241,9 +241,31 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return int(default)
 
 
+# Desk-generated accounts post the product
+# own summaries back into the groups the listener ingests. They are never
+# community callers or contributors, so every leaderboard, ranking, and crown
+# path drops them silently -- no "filtered" note is surfaced to users.
+DESK_AUTHOR_ID_VALUES = frozenset({"8661669822"})
+DESK_AUTHOR_USERNAMES = frozenset({"subnetsummerbot"})
+
+
+def is_desk_author(*, author_id: Any = None, author_username: Any = None) -> bool:
+    """True for product-generated accounts that must never rank as community."""
+    raw_id = str(author_id or "").strip().lower()
+    if raw_id.startswith(("id:", "u:", "n:")):
+        raw_id = raw_id.split(":", 1)[1]
+    if raw_id in DESK_AUTHOR_ID_VALUES:
+        return True
+    handle = str(author_username or "").strip().lower().lstrip("@")
+    return bool(handle) and handle in DESK_AUTHOR_USERNAMES
+
+
 def _author_rolling_quality(stats: Dict[str, Any]) -> float:
-    graded = max(0, _coerce_int(stats.get("graded") or stats.get("total_messages")))
-    hits = max(0, _coerce_int(stats.get("hits") or stats.get("correct_predictions")))
+    # Proof-gated only: "graded" counts calls resolved under the subnet-only
+    # proof contract. The legacy author_reliability ledger counts messages from
+    # before the contract and must never feed ranking quality.
+    graded = max(0, _coerce_int(stats.get("graded")))
+    hits = max(0, _coerce_int(stats.get("hits")))
     if graded <= 0:
         return 0.5
     return (min(hits, graded) + 2.0) / (graded + 4.0)
@@ -288,6 +310,8 @@ def build_trending_subnets(
         s_val = _sentiment_value(row.get("sentiment"))
         conviction = _coerce_float(row.get("conviction"))
         author_id = stable_author_id(row)
+        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+            continue
         netuids = _netuids_from_row(row)
         for netuid in netuids:
             b = buckets[netuid]
@@ -321,7 +345,7 @@ def build_trending_subnets(
                 b["spark"][hour_idx] += 1
 
     out: List[Dict[str, Any]] = []
-    reliability_rows = _author_reliability_rows(db)
+    outcome_stats = _author_outcome_stats(db)
     for netuid, b in buckets.items():
         rank = b["rank"]
         mentions = int(rank["mentions"])
@@ -332,7 +356,7 @@ def build_trending_subnets(
             avg_sentiment = bucket["sentiment_sum"] / count if count else 0.0
             avg_conviction = bucket["conviction_sum"] / count if count else 0.0
             qualities = [
-                _author_rolling_quality(reliability_rows.get(aid, {}))
+                _author_rolling_quality(outcome_stats.get(aid, {}))
                 for aid in bucket["author_ids"]
             ]
             quality_value = sum(qualities) / len(qualities) if qualities else 0.5
@@ -539,6 +563,8 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
         if ts is None or ts < cutoff:
             continue
         author_id = stable_author_id(row)
+        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+            continue
         entry = authors.setdefault(
             author_id,
             {
@@ -589,7 +615,7 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
                 "strike_rate": graded.get("strike_rate"),
                 "correct_predictions": int(graded.get("correct_predictions") or 0),
                 "total_graded_calls": int(graded.get("total_graded_calls") or 0),
-                "caution": canonical_caution or (canonical_graded == 0 and 0 < persisted_total < 5),
+                "caution": canonical_caution,
                 "reliability_total_messages": persisted_total,
                 "reliability_correct_predictions": persisted_hits,
                 "reliability_accuracy_pct": (
@@ -613,72 +639,36 @@ def build_weekly_authors(*, days: int = 7, limit: int = 8, db=None) -> List[Dict
 
 
 def build_author_reliability_rows(*, days: int = 7, limit: int = 8, db=None) -> List[Dict[str, Any]]:
-    """Expose SQLite-backed author reliability with strike-rate fields."""
+    """Community authors with proof-gated call stats; desk accounts excluded.
+
+    Only the subnet-only proof contract grades a call. The legacy
+    author_reliability ledger (pre-contract TAO-price grading, recorded as
+    message counts) stays reachable through _author_reliability_rows for the
+    caller-receipt view and never contributes to this leaderboard.
+    """
     rows = build_weekly_authors(days=days, limit=max(limit, 50), db=db)
-    reliability_rows = _author_reliability_rows(db)
-    present_ids = {str(row.get("author_id")) for row in rows}
-    for author_id, persisted in reliability_rows.items():
-        if author_id in present_ids:
-            continue
-        total = persisted["total_messages"]
-        hits = min(persisted["correct_predictions"], total)
-        name = str(persisted.get("author_name") or "Unknown")
-        rows.append(
-            {
-                "author_id": author_id,
-                "author_name": name,
-                "author_username": "",
-                "initials": "".join(part[0].upper() for part in name.split()[:2]) or "?",
-                "message_count": 0,
-                "subnet_count": 0,
-                "influence_score": 0.0,
-                "reactions": {key: 0 for key, _, _ in _REACTION_KEYS},
-                "graded": total,
-                "hits": hits,
-                "hit_rate": round((hits / total) * 100.0, 1) if total else None,
-                "strike_rate": round((hits / total) * 100.0, 1) if total else None,
-                "correct_predictions": hits,
-                "total_graded_calls": total,
-                "caution": total < 5,
-                "receipt_friendly": {
-                    "author_id": author_id,
-                    "author_name": name,
-                    "author_username": "",
-                    "graded": total,
-                    "hit_rate": round((hits / total) * 100.0, 1) if total else None,
-                    "strike_rate": round((hits / total) * 100.0, 1) if total else None,
-                },
-            }
-        )
     out: List[Dict[str, Any]] = []
     for row in rows:
+        if is_desk_author(
+            author_id=row.get("author_id"),
+            author_username=row.get("author_username"),
+        ):
+            continue
         graded = int(row.get("graded") or 0)
         hits = int(row.get("hits") or 0)
         strike_rate = row.get("strike_rate")
         if strike_rate is None and graded:
             strike_rate = round((hits / graded) * 100.0, 1)
-        reliability_total = int(row.get("reliability_total_messages") or 0)
-        reliability_hits = int(row.get("reliability_correct_predictions") or 0)
-        reliability_rate = row.get("reliability_accuracy_pct")
-        display_total = graded or reliability_total
-        display_hits = hits if graded else reliability_hits
-        display_rate = strike_rate if graded else reliability_rate
         out.append(
             {
                 **row,
-                "accuracy_pct": display_rate,
-                "strike_rate_pct": display_rate,
-                "correct_predictions": int(row.get("correct_predictions") or display_hits),
-                "total_graded_calls": int(row.get("total_graded_calls") or display_total),
-                "stats_source": "proof_contract" if graded else (
-                    "author_reliability" if reliability_total else "none"
-                ),
-                "caution": bool(row.get("caution")) if graded else (
-                    0 < reliability_total < 5
-                ),
-                "graded_calls_caution": bool(row.get("caution")) if graded else (
-                    0 < reliability_total < 5
-                ),
+                "accuracy_pct": strike_rate,
+                "strike_rate_pct": strike_rate,
+                "correct_predictions": hits,
+                "total_graded_calls": graded,
+                "stats_source": "proof_contract" if graded else "none",
+                "caution": bool(row.get("caution")) if graded else False,
+                "graded_calls_caution": bool(row.get("caution")) if graded else False,
             }
         )
     out.sort(key=lambda r: (r["influence_score"], r["message_count"], r["total_graded_calls"]), reverse=True)
@@ -701,6 +691,8 @@ def build_reaction_crowns(*, days: int = 7, db=None) -> List[Dict[str, Any]]:
         if not any(rx.values()):
             continue
         author_id = stable_author_id(row)
+        if is_desk_author(author_id=author_id, author_username=row.get("author_username")):
+            continue
         name = row.get("author_name") or "Unknown"
         username = row.get("author_username") or ""
         for key, _, _ in _REACTION_KEYS:
@@ -2467,20 +2459,20 @@ def _subnet_names_phrase(rows: List[Dict[str, Any]], *, limit: int = 3) -> str:
 def _yesterday_top_accuracy(
     author_counts: Dict[str, int],
     author_names: Dict[str, str],
-    reliability_rows: Dict[str, Dict[str, Any]],
+    outcome_stats: Dict[str, Dict[str, Any]],
     *,
     min_graded: int = 5,
 ) -> Optional[Dict[str, Any]]:
     best_name: Optional[str] = None
     best_score = -1.0
     for key in author_counts:
-        rel = reliability_rows.get(key) or reliability_rows.get(f"id:{key}")
+        rel = outcome_stats.get(key) or outcome_stats.get(f"id:{key}")
         if not rel:
             continue
-        graded = int(rel.get("total_messages") or 0)
+        graded = int(rel.get("graded") or 0)
         if graded < min_graded:
             continue
-        score = float(rel.get("accuracy_score") or 0.0)
+        score = float(rel.get("hit_rate") or 0.0)
         if score > best_score:
             best_score = score
             best_name = author_names.get(key) or rel.get("author_name") or key
@@ -2749,7 +2741,7 @@ def build_yesterday_chat_summary(
         highlight = {**highlight, "content": _clip_snippet(highlight.get("content"))}
 
     reliability_rows = _author_reliability_rows(db)
-    top_accuracy = _yesterday_top_accuracy(author_counts, author_names, reliability_rows)
+    top_accuracy = _yesterday_top_accuracy(author_counts, author_names, _author_outcome_stats(db))
 
     out = {
         **base,
@@ -2820,5 +2812,3 @@ def build_high_conviction_strip(
             }
         )
     return out
-
-
