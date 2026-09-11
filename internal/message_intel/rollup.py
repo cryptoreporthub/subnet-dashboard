@@ -389,6 +389,7 @@ def build_trending_subnets(
                 "netuid": netuid,
                 "name": _rollup_subnet_name(netuid, registry_names),
                 "mentions": mentions,
+                "authors": len(rank["author_ids"]),
                 "velocity": round(velocity, 3),
                 "conviction": round(avg_conv, 1),
                 "quality": round(quality, 3),
