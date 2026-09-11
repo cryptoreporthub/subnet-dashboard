@@ -372,14 +372,14 @@ def test_subnetsummers_full_desk_includes_call_leaders(intel_env):
     with patch.object(rollup, "build_author_reliability_rows", return_value=rows):
         text = summary_bot.build_subnetsummers_text(db=intel_env)
 
-    assert "<b>Call leaders</b>" in text
+    assert "CALL LEADERS" in text
     queen_at = text.find("1. Call Queen")
     trend_at = text.find("2. Trend Man")
     assert queen_at != -1 and trend_at != -1
     assert "Quiet Bob" not in text
-    chatter_at = text.find("<b>Chatter</b>")
-    call_at = text.find("<b>Call leaders</b>")
-    reactions_at = text.find("<b>Reactions</b>")
+    chatter_at = text.find("HIGH-CONVICTION CHATTER")
+    call_at = text.find("CALL LEADERS")
+    reactions_at = text.find("REACTION CROWNS")
     assert chatter_at != -1 and chatter_at < call_at < reactions_at
 
 
@@ -484,3 +484,90 @@ def test_subnetsummers_full_desk_stays_within_telegram_limit(intel_env):
 
     assert len(text) <= summary_bot._TELEGRAM_TEXT_LIMIT
     assert "Open the full Subnet Summers desk" in text
+def test_rank_meta_pluralizes_single_author():
+    assert summary_bot._rank_meta({"mentions": 4, "authors": 1}) == "4 mentions · 1 author"
+    assert summary_bot._rank_meta({"mentions": 4, "authors": 3}) == "4 mentions · 3 authors"
+    assert summary_bot._rank_meta({"mentions": 4}) == "4 mentions"
+
+
+def test_telegram_age_labels():
+    assert summary_bot._telegram_age(None) == ""
+    assert summary_bot._telegram_age("not-a-date") == ""
+    now = datetime.now(timezone.utc)
+    assert summary_bot._telegram_age(now.isoformat()) == "just now"
+    assert summary_bot._telegram_age((now - timedelta(hours=2)).isoformat()) == "2h ago"
+    assert summary_bot._telegram_age((now - timedelta(days=3)).isoformat()) == "3d ago"
+
+
+def test_subnetsummers_rank_line_shows_authors_and_real_formula(intel_env):
+    from internal.message_intel import rollup
+
+    trending = [
+        {
+            "netuid": 26,
+            "name": "Perturb",
+            "mentions": 42,
+            "authors": 6,
+            "chatter_power": 1.28,
+            "delta": 0.34,
+            "sentiment": "Bullish",
+            "why": "velocity 1.75 × conviction 0.68 × quality 0.81",
+        },
+    ]
+    with patch.object(rollup, "build_trending_subnets", return_value=trending):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "1. SN26 Perturb · 42 mentions · 6 authors" in text
+    # the desk must never claim a formula it does not use
+    assert "velocity 1.75" in text
+    assert "recency decay" not in text
+    assert "caller reliability" not in text
+    assert "Bullish" in text
+
+
+def test_subnetsummers_chatter_shows_handle_and_age(intel_env):
+    from internal.message_intel import rollup
+
+    chatter = [
+        {
+            "id": 1,
+            "author_name": "RV Crypto",
+            "author_username": "RVCrypto",
+            "content": "SN26 accumulation looks real into the epoch close",
+            "conviction": 78.5,
+            "direction": "bullish",
+            "netuid": 26,
+            "subnet_name": "Perturb",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    ]
+    with patch.object(rollup, "build_high_conviction_strip", return_value=chatter):
+        text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "@RVCrypto" in text
+    assert "78.5% conviction" in text
+    assert "just now" in text
+
+
+def test_subnetsummers_sections_and_footer(intel_env):
+    text = summary_bot.build_subnetsummers_text(db=intel_env)
+
+    assert "SUBNET SUMMERS — FULL DESK" in text
+    for heading in ("TOP SUBNETS", "HIGH-CONVICTION CHATTER", "CALL LEADERS", "REACTION CROWNS"):
+        assert heading in text
+    assert "Windows differ per section" in text
+    assert "Not financial advice" in text
+
+
+def test_trending_subnets_exposes_author_count(intel_env):
+    from internal.message_intel import rollup
+
+    _seed_messages(intel_env, count=12)
+    rows = rollup.build_trending_subnets(
+        registry_names={}, limit=5, rank_hours=24, window_hours=24, db=intel_env
+    )
+    assert rows, "seeded messages should produce at least one ranked subnet"
+    assert "authors" in rows[0]
+    assert rows[0]["authors"] >= 1
+    assert rows[0]["authors"] <= rows[0]["mentions"]
+
