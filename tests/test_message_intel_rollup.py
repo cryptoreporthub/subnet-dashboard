@@ -159,9 +159,8 @@ def test_author_reliability_rows_caution_and_receipts(intel_env):
         }
     )
     rows = build_author_reliability_rows(days=30, limit=8, db=db)
-    assert rows[0]["caution"] is True
-    assert rows[0]["graded_calls_caution"] is True
-    assert "receipt_friendly" in rows[0]
+    # A legacy ledger row with no ingested messages is not a community author.
+    assert rows == []
 
 
 def test_trending_v2_endpoint(client):
@@ -1025,3 +1024,87 @@ def test_telegram_proof_band_and_high_conviction_strip(intel_env):
     assert hc_item["subnet_name"] == "Base Alpha"
     assert hc_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
 
+def test_desk_author_helper_matches_bot_identity():
+    from internal.message_intel import rollup
+
+    assert rollup.is_desk_author(author_id="8661669822")
+    assert rollup.is_desk_author(author_id="id:8661669822")
+    assert rollup.is_desk_author(author_username="@SubnetSummerBot")
+    assert rollup.is_desk_author(author_username="subnetsummerbot")
+    assert not rollup.is_desk_author(author_id="u1", author_username="@alice")
+
+
+def test_weekly_authors_exclude_desk_account(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "timestamp": now,
+            "author_id": "8661669822",
+            "author_name": "Subnet Summer Bot",
+            "author_username": "@SubnetSummerBot",
+            "reactions": [{"emoji": "\U0001F525", "count": 40}],
+            "influence_score": 99.0,
+        },
+        {
+            "timestamp": now,
+            "author_id": "u1",
+            "author_name": "Alice",
+            "author_username": "alice",
+            "reactions": [],
+            "influence_score": 1.0,
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(rollup, "_author_outcome_stats", lambda *a, **k: {})
+    monkeypatch.setattr(rollup, "_author_reliability_rows", lambda db=None: {})
+
+    authors = rollup.build_weekly_authors(days=7, limit=8, db=None)
+    assert authors
+    assert all("8661669822" not in str(a.get("author_id")) for a in authors)
+    assert authors[0]["author_name"] == "Alice"
+
+
+def test_trending_and_crowns_exclude_desk_account(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "timestamp": now,
+            "author_id": "8661669822",
+            "author_name": "Subnet Summer Bot",
+            "author_username": "@SubnetSummerBot",
+            "content": "SN7 is building",
+            "sentiment": "bullish",
+            "conviction": 90.0,
+            "reactions": [{"emoji": "\U0001F525", "count": 40}],
+            "influence_score": 99.0,
+        },
+        {
+            "timestamp": now,
+            "author_id": "u1",
+            "author_name": "Alice",
+            "author_username": "alice",
+            "content": "SN7 looks strong",
+            "sentiment": "bullish",
+            "conviction": 60.0,
+            "reactions": [],
+            "influence_score": 1.0,
+        },
+    ]
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(rollup, "_author_outcome_stats", lambda *a, **k: {})
+    monkeypatch.setattr(rollup, "_netuids_from_row", lambda row: [7])
+
+    trending = rollup.build_trending_subnets(limit=5, window_hours=24, rank_hours=1, db=None)
+    assert [t["netuid"] for t in trending] == [7]
+    assert trending[0]["mentions"] == 1
+
+    crowns = rollup.build_reaction_crowns(days=7)
+    assert all("8661669822" not in str(c.get("author_id")) for c in crowns)
