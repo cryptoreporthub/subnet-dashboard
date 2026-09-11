@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import json
 import html
 import logging
@@ -455,6 +457,71 @@ def format_summary_message(summary: Dict[str, Any], *, desk_url: Optional[str] =
     )
 
 
+def _parse_iso(value: Any) -> Optional[datetime]:
+    """Best-effort ISO-8601 parse; returns None for anything unusable."""
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _telegram_age(value: Any) -> str:
+    """Compact relative age such as "2h ago"; empty when unparseable."""
+    parsed = _parse_iso(value)
+    if parsed is None:
+        return ""
+    secs = max(0, int((datetime.now(timezone.utc) - parsed).total_seconds()))
+    if secs < 60:
+        return "just now"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    return f"{secs // 86400}d ago"
+
+
+def _thousands(value: Any) -> str:
+    try:
+        return f"{int(value or 0):,}"
+    except (TypeError, ValueError):
+        return "0"
+
+
+def _section_rule(title: str, width: int = 30) -> str:
+    """A light divider under a section title, e.g. "<b>TOP SUBNETS</b> ─────"."""
+    label = html.escape(title)
+    pad = max(2, width - len(title) - 1)
+    return f"<b>{label}</b> {chr(9472) * pad}"
+
+
+def _local_float(value: Any) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _rank_meta(row: Dict[str, Any]) -> str:
+    parts = [f"{int(row.get('mentions') or 0)} mentions"]
+    authors = row.get("authors")
+    if authors:
+        count = int(authors)
+        parts.append(f"{count} {'author' if count == 1 else 'authors'}")
+    return " · ".join(parts)
+
+
+def _rank_mood(row: Dict[str, Any]) -> str:
+    mood = html.escape(str(row.get("sentiment") or "Cautious"))
+    delta = _local_float(row.get("delta"))
+    arrow = chr(9650) if delta > 0 else (chr(9660) if delta < 0 else "·")
+    return f"{mood} · {arrow} {delta:+.2f} vs prior window"
+
 def build_subnetsummers_text(*, db=None) -> str:
     """Render the complete, bounded Telegram desk in one response."""
     from internal.message_intel.rollup import (
@@ -483,42 +550,58 @@ def build_subnetsummers_text(*, db=None) -> str:
     crowns = build_reaction_crowns(days=7, db=db)
     desk = _full_desk_url()
 
+    stamp = datetime.now(timezone.utc).strftime("%a %d %b")
     lines = [
-        "<b>Subnet Summers — Full desk</b>",
-        "",
+        "<b>" + chr(10022) + " SUBNET SUMMERS — FULL DESK</b>",
         (
-            f"Messages: {summary.get('message_count', 0)} · "
-            f"High conviction: {summary.get('high_conviction_count', 0)}"
+            f"{stamp} · last 24h · "
+            f"{_thousands(summary.get('message_count'))} messages · "
+            f"{_thousands(summary.get('high_conviction_count'))} high-conviction"
         ),
         "",
-        "<b>Subnet ranks</b>",
+        _section_rule("TOP SUBNETS"),
     ]
     if trending:
         for index, row in enumerate(trending, 1):
             why = html.escape(str(row.get("why") or "chatter power"))
             lines.append(
                 f"{index}. {_subnet_label(row.get('netuid'), row.get('name'))} · "
-                f"{row.get('mentions', 0)} mentions · power {row.get('chatter_power', 0)}"
+                f"{_rank_meta(row)}"
             )
-            lines.append(f"   <i>{why}</i>")
+            lines.append(f"   <i>{why}</i> · {_rank_mood(row)}")
     else:
         lines.append("No subnet ranks yet — the source needs explicit SN# or Subnet # mentions.")
 
-    lines.extend(["", "<b>Chatter</b>"])
+    lines.extend(["", _section_rule("HIGH-CONVICTION CHATTER")])
     if chatter:
         for row in chatter:
             direction = html.escape(str(row.get("direction") or "neutral").upper())
             snippet = html.escape(str(row.get("content") or "call recorded").strip())
-            if len(snippet) > 120:
-                snippet = snippet[:117].rstrip() + "…"
-            subnet = f" · SN{row.get('netuid')}" if row.get("netuid") is not None else ""
-            lines.append(
-                f"• {direction}{subnet} · {row.get('conviction', 0)}% conviction — {snippet}"
+            if len(snippet) > 110:
+                snippet = snippet[:107].rstrip() + chr(8230)
+            netuid = row.get("netuid")
+            subnet = (
+                f" · {_subnet_label(netuid, row.get('subnet_name'))}"
+                if netuid is not None
+                else ""
             )
+            lines.append(
+                f"• <b>{direction}</b>{subnet} · {row.get('conviction', 0)}% conviction"
+            )
+            lines.append(f"   <i>{snippet}</i>")
+            handle = str(row.get("author_username") or "").strip()
+            who = f"@{handle.lstrip('@')}" if handle else str(row.get("author_name") or "Unknown")
+            attribution = " · ".join(
+                part
+                for part in (html.escape(who), _telegram_age(row.get("timestamp")))
+                if part
+            )
+            if attribution:
+                lines.append(f"   {attribution}")
     else:
         lines.append("No high-conviction chatter yet.")
 
-    lines.extend(["", "<b>Call leaders</b>"])
+    lines.extend(["", _section_rule("CALL LEADERS — 30d")])
     try:
         reliability_rows = build_author_reliability_rows(days=30, limit=8, db=db)
         qualified = [
@@ -542,10 +625,12 @@ def build_subnetsummers_text(*, db=None) -> str:
         logger.warning("subnetsummers call leaders failed: %s", exc)
         lines.append("No graded calls yet — call leaders appear as calls resolve.")
 
-    lines.extend(["", "<b>Reactions</b>"])
+    lines.extend(["", _section_rule("REACTION CROWNS — 7d")])
     if crowns:
         for row in crowns[:5]:
-            handle = html.escape(str(row.get("display_name") or row.get("author_name") or "Unknown"))
+            handle = html.escape(
+                str(row.get("display_name") or row.get("author_name") or "Unknown")
+            )
             lines.append(
                 f"• {html.escape(str(row.get('emoji') or ''))} "
                 f"{html.escape(str(row.get('label') or row.get('key') or 'Reaction'))}: "
@@ -554,12 +639,12 @@ def build_subnetsummers_text(*, db=None) -> str:
     else:
         lines.append("No reaction leaders yet — reaction metrics have not arrived.")
 
+    lines.extend(["", "<i>Windows differ per section · Not financial advice</i>"])
     link = f'<a href="{desk}">Open the full Subnet Summers desk</a>'
     body = _clamp_telegram_text(
         "\n".join(lines), limit=max(0, _TELEGRAM_TEXT_LIMIT - len(link) - 2)
     )
     return f"{body}\n\n{link}"
-
 
 def build_summary_text(*, db=None) -> str:
     from internal.message_intel.rollup import (
@@ -809,3 +894,4 @@ def stop_summary_bot() -> None:
         _POLL_THREAD.join(timeout=8)
         _POLL_THREAD = None
     _STOP.clear()
+
