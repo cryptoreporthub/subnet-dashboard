@@ -1848,7 +1848,7 @@ function renderTrendingSky(rows) {
     '<div class="message-intel__sky-hub-plasma"></div>' +
     '</div>';
   var i;
-  for (i = 0; i < 3; i++) {
+  for (i = 0; i < list.length; i++) {
     var row = list[i];
     var rank = i + 1;
     var size = rank === 1 ? 30 : rank === 2 ? 22 : 15;
