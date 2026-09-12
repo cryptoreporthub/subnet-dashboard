@@ -1,3 +1,4 @@
+
 # Required PR/main gate — single job named "smoke" (branch protection).
 # Homepage hydration smoke is also registered below; this comment commit re-queues PR validation.
 # Replaces the old health-only smoke + duplicate ci-check + Phase K gate stack.
@@ -128,4 +129,3 @@ jobs:
           sleep 5
           curl --fail http://localhost:8080/health
           curl --fail http://localhost:8080/api/subnets
-
