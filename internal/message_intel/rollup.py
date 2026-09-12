@@ -1,8 +1,3 @@
-Title: 
-
-URL Source: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/main/internal/message_intel/rollup.py
-
-Markdown Content:
 """Trending subnets + weekly author leaderboard rollups for message-intel UI."""
 
 from __future__ import annotations
