@@ -1,3 +1,4 @@
+
 """Activity receipts — reactions/influence show in caller receipts drawer."""
 
 from __future__ import annotations
@@ -17,7 +18,8 @@ def intel_db(tmp_path, monkeypatch):
     yield store.get_db(db_path)
 
 
-def _seed_activity(db, *, author_id="1403956677", reactions=None, influence=0.5, content="Thanks!"):
+def _seed_activity(db, *, author_id="1403956677", reactions=None, influence=0.5, content="Thanks!",
+                   entities=None):
     ts = datetime.now(timezone.utc).isoformat()
     mid, _ = db.save_message(
         {
@@ -31,7 +33,7 @@ def _seed_activity(db, *, author_id="1403956677", reactions=None, influence=0.5,
             "message_id": "215000",
         }
     )
-    db.save_analysis(mid, {"influence_score": influence, "entities": {"subnets": []}})
+    db.save_analysis(mid, {"influence_score": influence, "entities": entities or {"subnets": []}})
     if reactions:
         with db._connect() as conn:
             conn.execute(
@@ -77,3 +79,39 @@ def test_legacy_reliability_trace_in_receipts_response(intel_db):
     assert legacy["total_messages"] == 7
     assert legacy["correct_predictions"] == 7
     assert legacy["source"] == "author_reliability"
+
+def test_activity_receipt_horizons_match_proof_receipt(intel_db):
+    """Activity receipts must report the same resolved horizons as proof receipts.
+
+    Regression: the activity query selected only price_24h, so a message whose
+    1h/4h horizons had resolved rendered them as "pending" in the activity card
+    while the proof receipt for the same message showed them graded.
+    """
+    from internal.message_intel.rollup import list_telegram_caller_receipts
+
+    mid = _seed_activity(
+        intel_db,
+        reactions=[{"emoji": "\U0001F525", "count": 3}],
+        influence=0.24,
+        content="SN7 looking strong",
+        entities={"subnets": [7]},
+    )
+    intel_db.save_verdict(
+        mid,
+        {"verdict": "bullish", "conviction": 72.0, "predicted_direction": "up"},
+    )
+    intel_db.save_price_snapshot(mid, 1.0, netuid=7)
+    intel_db.save_price_outcome(
+        mid,
+        {"outcome": "pump", "price_1h": 1.02, "price_4h": 1.03, "price_24h": 1.05},
+    )
+
+    result = list_telegram_caller_receipts(author_id="id:1403956677", days=7, db=intel_db)
+
+    assert result["receipts"], "expected a resolved proof receipt"
+    assert result["activity"], "expected an activity receipt"
+    proof_hz = result["receipts"][0]["proof"]["horizon_summary"]
+    act_hz = result["activity"][0]["proof"]["horizon_summary"]
+    assert act_hz == proof_hz, "activity horizons drifted from the proof receipt"
+    assert act_hz["1h"]["status"] != "pending"
+    assert act_hz["4h"]["status"] != "pending"
