@@ -1,6 +1,6 @@
 # Subnet Dashboard Coordination Board
 
-> **Live Mission Control board:** [`mission-control-log.md`](mission-control-log.md) — Ditto-readable snapshot + dated MC status (mirrored from Mission Control per Joshua 2026-08-27). This file below is the historical Aug 5 coordination snapshot; do not delete.
+> **Historical Aug 5 coordination snapshot — do not delete.** Live STATUS/GATE for this sprint is maintained in this file (`board.md`) — see `README.md` read order (item 1), and `docs/master-plan-merged.md` ("Live STATUS / GATE"); legacy `concurrent-protocol.md` (§9) is superseded for current work. The former `mission-control-log.md` mirror is retired; its contents remain in git history.
 
 **Last updated:** 2026-08-05T19:05:00Z  
 **main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
@@ -161,3 +161,4 @@ Babysit: `./scripts/babysit_phase.sh <phase>`
 ## Out of scope
 
 - Chutes billing / live LLM chat replies
+
