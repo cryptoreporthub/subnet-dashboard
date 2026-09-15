@@ -81,6 +81,20 @@ Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slo
 
 **Conflict surface only:** `server.py` (`include_router` lines) + `tests/test_endpoint_contract.py` — rebase before merge if both agents had open PRs.
 
+**Verify repo content by pinned SHA, not by branch name.**
+When a file's content gates a decision, read it at a full commit SHA
+(`raw.githubusercontent.com/<owner>/<repo>/<FULL_SHA>/<path>`) — not `main` and not a
+branch name. Branch refs can serve stale cached content. Two corollaries:
+
+1. **`create_or_update_file` does not base64-decode.** It writes the string you give it
+   literally. Read the file back after any write; a copy-pasted base64 blob has been
+   committed as a file body before and would have destroyed the target.
+2. **`search` returning nothing is not evidence of absence.** Enumerate and read the
+   target directly before reporting a path as missing.
+
+Origin: PR #1288 — one session produced a stale-cache read, a near-destructive write,
+and a phantom dangling pointer, all three caught only by re-reading at a pinned SHA.
+
 ### The rebuild (Option B, FastAPI foundation)
 - The current `server.py` serves a clean subset (subnets/registry/summary/stats/
   soul-map/recommendations/daily-rotation). The full product (SimiVision picks,
@@ -109,3 +123,4 @@ Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slo
   `internal/council/resolver_scheduler.py`) and the Telegram listener
   (`message_intel/telegram_listener.py`, needs `telethon` + Telegram creds) are
   optional enrichment and are not required to run or demo the dashboard.
+
