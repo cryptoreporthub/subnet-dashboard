@@ -1,1 +1,164 @@
-IyBTdWJuZXQgRGFzaGJvYXJkIENvb3JkaW5hdGlvbiBCb2FyZAoKPiAqKkhpc3RvcmljYWwgQXVnIDUgY29vcmRpbmF0aW9uIHNuYXBzaG90IOKAlCBkbyBub3QgZGVsZXRlLioqIExpdmUgU1RBVFVTL0dBVEUgZm9yIHRoaXMgc3ByaW50IGlzIG1haW50YWluZWQgaW4gdGhpcyBmaWxlIChgYm9hcmQubWRgKSDigJQgc2VlIGBSRUFETUUubWRgIHJlYWQgb3JkZXIsIGBjb25jdXJyZW50LXByb3RvY29sLm1kYCDCpzksIGFuZCBgZG9jcy9tYXN0ZXItcGxhbi1tZXJnZWQubWRgICgiTGl2ZSBTVEFUVVMgLyBHQVRFIikuIFRoZSBmb3JtZXIgYG1pc3Npb24tY29udHJvbC1sb2cubWRgIG1pcnJvciBpcyByZXRpcmVkOyBpdHMgY29udGVudHMgcmVtYWluIGluIGdpdCBoaXN0b3J5LgoKKipMYXN0IHVwZGF0ZWQ6KiogMjAyNi0wOC0wNVQxOTowNTowMFogIAoqKm1haW46KiogYDdiMDdiNjRgICgjODQ04oCTIzg0NyBtZXJnZWQpIMK3ICoqUGhhc2UgMyBDU1MgcHVyZ2U6KiogKipET05FKiog4oCUIGB1aS1sZWdhY3kuY3NzYCBzdHViOyBgdWkuY3NzYCBzb2xlIHNwaW5lICAKKipBY3RpdmUgcGxhbjoqKiBgZGl0dG8tb3B1cy10cmFuc2l0aW9uLWhhbmRvZmYtMjAyNi0wOC0wMy5tZGAgKCM3ODkpIMK3IEgyIHNvYWsgKioyMDI2LTA4LTA0KiogIAoqKk1vZGVsczoqKiBgbW9kZWwtZ3VpZGUubWRgIOKAlCBHcm9rIExPQ0svcmV2aWV3OyBDb21wb3NlciBpbXBsZW1lbnRzOyBTb25uZXQgbG93IHJldmlld3MgIAoqKlBsYW5zOioqIGBkaXR0by1vcHVzLXRyYW5zaXRpb24taGFuZG9mZi0yMDI2LTA4LTAzLm1kYCDCtyBgcG9zdC1oZXJvLWZpbmlzaC1wbGFuLm1kYCDCtyBgY29tcGxldGlvbi1ydW5ib29rLm1kYCDCtyBgYWNjdXJhY3ktbGlmdC1sb2NrLm1kYAoKIyMgU1RBVFVTIFNOQVBTSE9UICgyMDI2LTA4LTAzKQoKfCBJdGVtIHwgU3RhdHVzIHwKfC0tLS0tLXwtLS0tLS0tLXwKfCBQaGFzZSAx4oCTMiBzb3VsX21hcCBJL08gKyByZWFkIGNhY2hlIHwgKipNRVJHRUQqKiAjNzE4IMK3ICM3MTkgfAp8IFBoYXNlIEEvQiBKdWRnZXMgKyBUZWxlZ3JhbSBQdWxzZSBsb29wcyB8ICoqTUVSR0VEKiogIzcyMCDCtyAjNzIxIHwKfCBQaGFzZSBDIG1pbmRtYXAgZGlzcGxheSB3aXJpbmcgfCAqKk1FUkdFRCoqICM3NDEgKCsgTTHigJNNNSAjNzI14oCTIzczNSkgfAp8IEhlcm8gSDEvSDIgKyBBLXRpZXIgQUNzIHwgKipNRVJHRUQqKiAjNzI0IMK3ICM3MjcgwrcgIzczMiDCtyAjNzM2IHwKfCBNaW5kbWFwIGdyYXBoIHdlZGdlIChmdWxsIHN0YXRlIG9uIGdyYXBoKSB8ICoqTUVSR0VEKiogIzc0NCDigJQgZ3JhcGggc2tpcHMgYGJ1aWxkX21pbmRtYXBfc3RhdGVgIHwKfCBBUEkgdW53ZWRnZSAoc3VibmV0cy9qdWRnZXMvc2ltaXZpc2lvbi9jb2NrcGl0KSB8ICoqTUVSR0VEKiogIzc0MyDCtyAjNzU54oCTIzc2MSB8CnwgQVBJIHRpbWVvdXQgd3JhcHBlcnMgKyBtaW5kbWFwIGJvdW5kcyB8ICoqTUVSR0VEKiogIzczNCDCtyAjNzM3IMK3ICM3NTEgwrcgIzc1MyDCtyAjNzU0IHwKfCBGaW5pc2ggcXVldWUgU3RlcHMgMOKAkzYgfCAqKk1FUkdFRCoqICM3NDXigJMjNzUyIMK3ICM3NTXigJMjNzYzIChzdW1tYXJ5L2hlYWx0aCBHSUwgdW53ZWRnZSkgfAp8IEZyb250ZW5kIG1pc3QvcGV3dGVyIHdhdmUgfCAqKk1FUkdFRCoqICM3NjfigJMjNzc5ICh0aHVtYiBkb2NrLCB1aS5jc3Mgc2hlbGwsIGRlYWQgQ1NTIHB1cmdlKSB8CnwgSHlkcmF0ZSBkZXNrIFAx4oCTUDMgfCAqKkNMT1NFRCoqICM3ODHigJMjNzg3IOKAlCBob25lc3QgSE9MRCwgdHJ1c3QgYmFubmVyLCBqdWRnZXMgbm8gbmFrZWQgYnVzeSB8CnwgKipEaXR0byB0cmFuc2l0aW9uKiogfCAqKkFDVElWRSoqIOKAlCBgZGl0dG8tb3B1cy10cmFuc2l0aW9uLWhhbmRvZmYtMjAyNi0wOC0wMy5tZGAgKCM3ODkpIHwKfCBPcHVzIHRyaWJ1bmFsIGhlcm8gfCAqKlBBUktFRCoqIFBSICM3ODgg4oCUIHByZXZpZXcgc2Vlbjsgbm8gbGl2ZSB3aXJlIHVudGlsIGV4cGxpY2l0IGFzayB8CnwgTWluZG1hcCBzdW1tYXJ5IC8gbGVhcm5pbmcgaGVhbHRoIHwgKipQQVNTKiog4oCUIHN1bW1hcnkgfjAuNXMgZmlsZS1vbmx5OyBoZWFsdGggY2FjaGUrcGVlcjsgRmx5IGdyZWVuIHwKfCBBZ2VudCBiYWJ5c2l0ICsgZzAgKDIwMjYtMDgtMDIpIHwgKipQQVNTKiog4oCUIHJlLXJ1biBhZnRlciBtYWpvciBtZXJnZXMgfAp8ICoqUGhhc2UgMyBDU1MgcHVyZ2UgKFAzLTNt4oCTNCkqKiB8ICoqTUVSR0VEKiogIzg0NOKAkyM4NDUg4oCUIHVpLWxlZ2FjeSByZXRpcmVkOyBgdWkuY3NzYCBzb2xlIHNwaW5lIHwKfCAqKlB1bXAgZGVzayBoYXJkZW5pbmcgKFRyYWNrIEIpKiogfCAqKk1FUkdFRCoqICM4NDYg4oCUIGxvY2sgc2NvcGUgKyBmYXN0IEdFVCB8CnwgKipNaW5kbWFwIGhvbmVzdHkgKFRyYWNrIEMzKSoqIHwgKipNRVJHRUQqKiAjODQ3IOKAlCBgc291cmNlOiByZWdpc3RyeV9oZXVyaXN0aWNgIG9uIGdyYXBoIHwKfCBIdW1hbiAzOTBweCBnbGFuY2UgKEFDNykgfCAqKlBFTkRJTkcqKiDigJQgcHJvZCBkZXBsb3llZDsgZzAgYmxvY2tlZCBvbiBpbnN0YW50IGJhaWxvdXQgc2hlbGwgKHNlcGFyYXRlKSB8CnwgQWNjdXJhY3kgUFJFUCAocmVhZC1vbmx5IGV2aWRlbmNlKSB8ICoqTUVSR0VEKiogIzc0MCDigJQgZXhwZXJpbWVudHMgKipHQVRFRCoqIEF1ZyA0IEgyIHNvYWsgR08gfAp8IFN0YWxlIGRyYWZ0cyAoIzY4Ni8jNjc1LyM2OTIvIzY1MCkgfCAqKkRvIG5vdCBibGluZC1tZXJnZSoqIOKAlCBzdXBlcnNlZGVkIC8gYWxyZWFkeSBvbiBtYWluIHwKCiMjIEluZnJhIFNUQVRVUyAobGF1bmNoIGJsb2NrZXIpCgp8IEl0ZW0gfCBTdGF0dXMgfAp8LS0tLS0tfC0tLS0tLS0tfAp8ICoqUm9vdCBjYXVzZSAodjIgcm9sbGJhY2spKiogfCBzcGxpdF92MiB3ZWLihpJ3b3JrZXIgcHJpdmF0ZSBIVFRQIHVucmVhY2hhYmxlOyB2b2x1bWUgQVBJcyBzb2Z0LWRlZ3JhZGVkIGZvciB3ZWVrcyB8CnwgKipSb2xsYmFjayBmaXgqKiB8IFN0b3AgZm9yY2luZyBgZmx5Lndvcmtlci12Mi50b21sYCAvIGBGT1JDRV9XT1JLRVJfU1BMSVRfVjJgIGluIEZseSBEZXBsb3k7IGF1dG8tcm9sbGJhY2sgdG8gYGZseS50b21sYCArIGlubGluZSB3b3JrZXIgfAp8ICoqQmFuZGFpZHMqKiB8IFNvZnQgc3R1YnMgLyBsb2NhbCBmYWxsdGhyb3VnaCAoIzY5OOKAkyM3MDUpIOKAlCBrZWVwIGFzIGRlZmVuc2Ugb25seTsgZG8gbm90IHRyZWF0IGFzIHByb2R1Y3QgZml4IHwKfCAqKkRvIG5vdCoqIHwgUmUtZW5hYmxlIHYyIHdpdGhvdXQgcHJvdmVuIHBlZXIgcHJvYmUgc29hayArIGh1bWFuIGFwcHJvdmUgfAp8ICoqUG9zdC1yb2xsYmFjayB3ZWRnZSAoQVVESVRfSEFORE9GRiAjNzA5KSoqIHwgUm9vdC1jYXVzZWQgbGl2ZSB2aWEgYHB5LXNweSBkdW1wYCBvbiBwcm9kOiBgR0VUIC9hcGkvbWluZG1hcC9ncmFwaGAgd2Fsa2VkIHRoZSBmdWxsIHB1bXAgbGFkZGVyIGFuZCByZS1yZXNvbHZlZCBldmVyeSBzdWJuZXQgbmFtZSB3aXRoIGB1c2VfdGFvc3RhdHNfZmFsbGJhY2s9VHJ1ZWAg4oCUIFRhb1N0YXRzIGlzIHJhdGUtbGltaXRlZCB0byA1IGNhbGxzL21pbiBhbmQgYF9yYXRlX2xpbWl0KClgIHNsZWVwcyBzeW5jaHJvbm91c2x5LCBibG9ja2luZyB0aGUgc2luZ2xlIGFzeW5jaW8gZXZlbnQtbG9vcCB0aHJlYWQgKGluY2wuIGAvaGVhbHRoYCkgZm9yIG1pbnV0ZXMg4oaSIEZseSBtYXJrcyB0aGUgbWFjaGluZSB1bmhlYWx0aHkg4oaSIDUwMyB3aG9sZSBzaXRlLiBUaGlzIHdhcyB0aGUgImRhdGEgaXNuJ3QgaHlkcmF0aW5nIC8gZW1wdHkgc3BhY2VzIiBidWcuIHwKfCAqKldlZGdlIGZpeCoqIHwgUFIgIzcxMCDigJQgZHJvcHBlZCBgdXNlX3Rhb3N0YXRzX2ZhbGxiYWNrPVRydWVgIGZyb20gdGhlIDMgaG90IHJlYWQgcGF0aHMgKGBpbnRlcm5hbC9wdW1wL3N0YXRlLnB5Ojpfbm9ybWFsaXplX2xhZGRlcl9zdWJuZXRgLCBgaW50ZXJuYWwvcHVtcC9zaWduYWxzLnB5Ojpfc2lnbmFsX2Rpc3BsYXlfbmFtZWAsIGBpbnRlcm5hbC9sZWFybmluZy9wdW1wX2FsZXJ0LnB5OjpfcmVzb2x2ZV9uYW1lYCk7IG5hbWVzIGFyZSBhbHJlYWR5IHJlc29sdmVkIG9uY2UgaW4gdGhlIGJhY2tncm91bmQgYnkgYHRyYW5zaXRpb25fc3VibmV0YC4gQWRkZWQgbmVnYXRpdmUtcmVzdWx0IGNhY2hpbmcgaW4gYGludGVybmFsL3N1Ym5ldF9uYW1lcy5weWAuIFRoaXMgYW5zd2VycyBgQVVESVRfSEFORE9GRi5tZGAgT3B0aW9uIEMgKCJmaXggdjEgcHJvcGVybHkuLi4gbmV2ZXIgYmxvY2sgZXZlbnQgbG9vcCBvbiBtaW5kbWFwL2hvbWVwYWdlIikg4oCUICoqbm8gd29ya2VyLXNwbGl0L0ZseSB0b3BvbG9neSBjaGFuZ2UgbmVlZGVkKiosIGl0IHdhcyBhIGNvZGUgYnVnLiB8CgojIyBGdWxsIHJvYWRtYXAKCnwgUGhhc2UgfCBTdGF0dXMgfAp8LS0tLS0tLXwtLS0tLS0tLXwKfCAqKjAqKiBOYW1lcyB8IERPTkUgKCM1NTQsICM1NjApIHwKfCAqKjEqKiBEaXR0byBwbGF5Ym9vayB8ICoqRE9ORSoqIChodW1hbiAyMDI2LTA3LTI4KSB8CnwgKioyKiogVHJhY2sgMSBzb2FrIHwgQUNUSVZFIOKAlCByZXZpZXcgKioyMDI2LTA4LTA0KiogLyAyMDI2LTA4LTExIChgdHJhY2sxLXNvYWstbG9jay5tZGApIHwKfCAqKjMqKiBTUy1URyBXMeKAk1czIHwgKipvbiBtYWluKiogKCM1NTcpIOKAlCBIMSAqKmNsZWFyZWQqKiB8CnwgKio0KiogQWNjdXJhY3kgbGlmdCB8IEFjYy0w4oCTMiAqKkRPTkUqKjsgUFJFUCAjNzQwIG9uIG1haW47IFNsaWNlIDdiLzdjICsgQ29tYmluZWQgdHVuZSAqKmFmdGVyIEgyIEdPKiogfCBgYWNjdXJhY3ktbGlmdC1sb2NrLm1kYCB8CgotIEh1bWFuOiBwdW1wIERpdHRvIGZldGNoIGRpc2FibGVkIMK3IEhlYWx0aCBNb25pdG9yIGFydGlmYWN0IG1vZGUgwrcgc3RhbGUgbWVtb3JpZXMgc3VwZXJzZWRlZAotIExvY2s6IGBkaXR0by1hdXRvbWF0aW9uLW1pZ3JhdGlvbi1sb2NrLm1kYCAoR2F0ZSAxIGNsZWFyZWQpCgojIyBQaGFzZSAzIOKAlCBodW1hbiBnYXRlCgotIFcwICM1NDkgwrcgVzHigJNXMyAjNTU3IG9uIHByb2QgKEhUTUwgbWFya2VycyBsaXZlKQotICoqSDE6KiogY2xlYXJlZCAyMDI2LTA3LTMwIOKAlCBhZ2VudCBTUy1URyAzOTBweCArIFY1IHBvbGlzaCBpbiBmbGlnaHQgKGBwcmUtYXVnNC1wb2xpc2gtcGxhbi5tZGApCgojIyBNYXN0ZXIgc3ByaW50IChMQy9MRCArIEFjYyArIFBQKQoKKipMb2NrOioqIGBtYXN0ZXItc3ByaW50LWV4ZWN1dGlvbi1wbGFuLm1kYCDigJQgbWVyZ2Ug4oaSIGJhYnlzaXQg4oaSIGh1bWFuIHJldmlldyBiZXR3ZWVuIGV2ZXJ5IHN0ZXAKCnwgU3RlcCB8IFBoYXNlIHwgU3RhdHVzIHwKfC0tLS0tLXwtLS0tLS0tfC0tLS0tLS0tfAp8IE0wIHwgTWVyZ2UgcGxhbiBQUnMgfCAqKkRPTkUqKiAjNjQ3IHwKfCAxIHwgQWNjLTAgbGVkZ2VyIHBsdW1iaW5nIHwgKipET05FKiogIzY0OSsjNjUxIHwKfCAyIHwgUFAtMCBzZWdtZW50IGxlZGdlciB8ICoqRE9ORSoqICM2NTErIzY1MyB8CnwgMyB8IExDIGxlZ2FsL3RydXN0L1NFTyB8ICoqRE9ORSoqICM2NTIgfAp8IDQgfCBMRCBzdXJmYWNlIGhvbmVzdHkgfCAqKkRPTkUqKiAjNjU0IHwKfCA1IHwgQWNjLTEgYXJjaGl2ZSBtZWFzdXJlIHwgKipET05FKiogIzY1NSB8CnwgNiB8IFBQLTEgcGF0dGVybiBjbGFzc2VzIHwgKipET05FKiogIzY1NiB8CnwgNyB8IEFjYy0yIGV4cGVyaW1lbnQgKEErRCBibGVuZCkgfCAqKkRPTkUqKiAjNjU5IHwKfCA4IHwgUFAtMiBkZXNrICsgY291bmNpbCB8ICoqRE9ORSoqICM2NjEgfAp8IDkgfCBGUS00IGNvbWJpbmVkIGFuZ2xlcyB8ICoqRE9ORSoqICM2NjQrIzY2NSDigJQgYXJ0aWZhY3QgKyBvcHMvZXZpZGVuY2UgKHN0cmljdCBiYWJ5c2l0IGdhdGVkIGBncmFkZWQ+MGApIHwKCkJhYnlzaXQ6IGAuL3NjcmlwdHMvYmFieXNpdF9waGFzZS5zaCA8cGhhc2U+YCDCtyByb2xsdXA6IGAuL3NjcmlwdHMvYmFieXNpdF9waGFzZS5zaCBzcHJpbnRgCgojIyBMYXVuY2ggcmVhZGluZXNzIChoZXJvICsgaW50ZWdyYXRpb25zKQoKfCBQaGFzZSB8IFN0YXR1cyB8IExvY2sgfAp8LS0tLS0tLXwtLS0tLS0tLXwtLS0tLS18CnwgKipMQSoqIEhlcm8gc291cmNlLW9mLXRydXRoIHwgKipET05FKiogIzY0MCB8IOKAlCB8CnwgKipMQioqIEludGVncmF0aW9ucyArIHB1bHNlIHJhaWwgfCAqKkRPTkUqKiAjNjQ1IHwg4oCUIHwKfCAqKkxDKiogTGVnYWwgLyB0cnVzdCAvIFNFTyB8ICoqRE9ORSoqICM2NTIgfCDigJQgfAp8ICoqTEQqKiBTdXJmYWNlIGhvbmVzdHkgfCAqKkRPTkUqKiAjNjU0IHwg4oCUIHwKCiMjIEFjY3VyYWN5ICsgcHVtcCBwYXR0ZXJuIChwYXJhbGxlbCB0cmFja3MpCgp8IFBoYXNlIHwgU3RhdHVzIHwgTG9jayB8CnwtLS0tLS0tfC0tLS0tLS0tfC0tLS0tLXwKfCAqKkFjYy0wKiogTGVkZ2VyIHBsdW1iaW5nICsgZXBvY2ggZm9vdGd1biB8ICoqRE9ORSoqICM2NDkrIzY1MCAoaW4gUFAtMCBQUikgfCBgYWNjdXJhY3ktcHVtcC1wYXR0ZXJuLXBsYW4ubWRgIHwKfCAqKkFjYy0xKiogQXJjaGl2ZSBtZWFzdXJlbWVudCB8ICoqRE9ORSoqICM2NTUgfCBgYWNjdXJhY3ktcHVtcC1wYXR0ZXJuLXBsYW4ubWRgIHwKfCAqKkFjYy0yKiogSG9yaXpvbiAyNGggKyBnYXRlIDUwJSB8ICoqRE9ORSoqICM2NTkgfCBzYW1lIHwKfCAqKlBQLTAqKiBTZWdtZW50IGxlZGdlciAod2F2ZWZvcm0pIHwgKipET05FKiogIzY1MSsjNjUzIHwgc2FtZSB8CnwgKipQUC0xKiogUGF0dGVybiB0YXhvbm9teSArIGNsYXNzaWZpZXIgfCAqKkRPTkUqKiAjNjU2IHwgc2FtZSB8CnwgKipQUC0yKiogUHVtcCBkZXNrICsgY291bmNpbCBzdXJmYWNlcyB8ICoqRE9ORSoqICM2NjEgfCBzYW1lIHwKCkJhYnlzaXQ6IGAuL3NjcmlwdHMvYmFieXNpdF9waGFzZS5zaCBhY2MwYCDCtyBgYWNjMWAgwrcgYHBwMGAgwrcgYHBwMWAgwrcgYHBwMmAKCi0gUHJvZCBlcG9jaCByZXNldCAyMDI2LTA3LTI5OiBwcmlvciA0OTYgZ3JhZGVkIEAgMzMuNyU7IGN1cnJlbnQgZ3JhZGVkPTA7IHRvZGF5J3MgTE9ORyBoYXMgbGVkZ2VyIGdhcCB1bnRpbCBBY2MtMAoKIyMgUG9zdC1hdWRpdCBzcHJpbnQKCnwgUGhhc2UgfCBTdGF0dXMgfCBMb2NrIHwKfC0tLS0tLS18LS0tLS0tLS18LS0tLS0tfAp8IEEgT3BzIHF1aWNrIHdpbnMgfCBET05FICM1NjIgfCBgb3BzLXF1aWNrLXdpbnMtbG9jay5tZGAgfAp8IEIgT3V0Y29tZSBib290IHwgRE9ORSAjNTYzIHwgYG91dGNvbWUtYm9vdC1wb2xpc2gtbG9jay5tZGAgfAp8ICoqQyBXb3JrZXIgc3BsaXQgdjIqKiB8ICoqRE9ORSoqICgjNTk44oCTIzYwMSDCtyBwZWVyIGFsaXZlIMK3IEdIQSBncmVlbikgfCBgZmx5LXdvcmtlci1zcGxpdC12Mi1sb2NrLm1kYCB8CnwgRCBTZWN1cml0eSB8IERPTkUgIzU2NyB8IGBzZWN1cml0eS1ob3VzZWtlZXBpbmctbG9jay5tZGAgfAp8IEUgU1MtVEcgVzQgfCBET05FICM1NzAgfCBgc3VibmV0LXN1bW1lcnMtdGVsZWdyYW0tbG9jay5tZGAgfAp8IEYgU1MtVEcgVzUgfCBET05FICM1NzEgfCB8CnwgRyBTUy1URyBXNiB8IERPTkUgIzU2OSAoZW52LWdhdGVkKSB8IHwKfCBIIFNvYWsgcmV2aWV3IHwgbW9uaXRvciAjNTY4IHwgYHRyYWNrLTEtc29hay1yZXZpZXctbG9jay5tZGAgfAoKQmFieXNpdDogYC4vc2NyaXB0cy9iYWJ5c2l0X3BoYXNlLnNoIDxwaGFzZT5gCgotIExvY2s6IGB0cmFjazEtc29hay1sb2NrLm1kYCDigJQgc29hayBkYXkgMCA9IDIwMjYtMDctMjg7IHJldmlldyAyMDI2LTA4LTA0IC8gMjAyNi0wOC0xMQoKIyMgT3BzIGV2aWRlbmNlIOKAlCBET05FCgp8IFBpZWNlIHwgUFIgfCBBcnRpZmFjdCB8CnwtLS0tLS0tfC0tLS0tfC0tLS0tLS0tLS18CnwgUGljayBhdWRpdCB8ICM1NDYgfCBgZGF0YS9waWNrX2F1ZGl0cy9gIHwKfCBQdW1wIGRlc2sgfCAjNTQ3IHwgYGRhdGEvcHVtcF9kZXNrL2xhdGVzdC5qc29uYCB8CnwgT3V0Y29tZXMgfCAjNTUwIHwgYGRhdGEvbGVhcm5pbmdfb3V0Y29tZXMvbGF0ZXN0Lmpzb25gIHwKfCBBUEkgfCAjNTUwIHwgYEdFVCAvYXBpL29wcy9ldmlkZW5jZWAgfAoKIyMgTGVhcm5pbmcgbG9vcAoKLSBQcm9kOiBgL2FwaS9sZWFybmluZy9oZWFsdGhgICoqb2sqKiDigJQgcmVzb2x2ZXIgdGljayBsaXZlIG9uIHdvcmtlciB2b2x1bWUgKHByb3h5IGZyb20gd2ViKQotIFJlYWRpbmVzcyBgbGVhcm5pbmdfbG9vcF9oZWFsdGhgIGZpeCAqKkRPTkUqKiAoIzYwMikg4oCUIG9ycGhhbiB3ZWIgYHNvdWxfbWFwYCBubyBsb25nZXIgZGlzYWJsZXMgcHJveHkKLSBUcmFjayAxIHNvYWsgcnVubmluZyB1bmRlciAjNTUxIGNhbGlicmF0aW9uCgojIyBBY3RpdmUgKG1vbml0b3IpCgp8IFRyYWNrIHwgR2F0ZSB8CnwtLS0tLS0tfC0tLS0tLXwKfCAqKkRpdHRvIG9yY2hlc3RyYXRpb24qKiB8ICoqQUNUSVZFKiog4oCUIGhhbmRvZmYgYGRpdHRvLW9wdXMtdHJhbnNpdGlvbi1oYW5kb2ZmLTIwMjYtMDgtMDMubWRgIHwKfCBQaWNrIGF1ZGl0IHwgMjM6NDUgVVRDIG5pZ2h0bHkgfAp8IEhlYWx0aCBNb25pdG9yIHwgRGl0dG8gYXJ0aWZhY3QgbW9kZSB8CnwgVHJhY2sgMSBzb2FrIHwgKipIMiByZXZpZXcgMjAyNi0wOC0wNCoqIC8gSDMgMjAyNi0wOC0xMSAoYHRyYWNrLTEtc29hay1yZXZpZXctbG9jay5tZGApIHwKfCBTUy1URyBHYXRlIDMgfCBIMSBjbGVhcmVkIOKAlCBwb2xpc2ggd2F2ZSAoIzY3MuKAkyM2NzQgb3BlbikgfAp8IE9wdXMgdHJpYnVuYWwgIzc4OCB8ICoqUEFSS0VEKiog4oCUIHByZXZpZXcgc2VlbjsgbGl2ZSB3aXJlIG9uIGV4cGxpY2l0IGh1bWFuIGFzayBvbmx5IHwKfCBGaW5pc2ggcXVldWUgfCBTdGVwcyAw4oCTNiAqKkRPTkUqKjsgU3RlcCA3IHNvYWsgZ2F0ZWQgQXVnIDQgfAp8IEh1bWFuIDM5MHB4IGdsYW5jZSB8IFBFTkRJTkcgcG9zdC1sYXlvdXQgfAoKIyMgUHJvZCBjYWNoZSAoMjAyNi0wOC0wMyBwb3N0LSM3ODcpCgotIEh5ZHJhdGUgZGVzayBQMeKAk1AzICoqY2xvc2VkKiog4oCUIGhvbmVzdCBIT0xELCB0cnVzdCBgMS8zMGAgd2l0aCBzaGFkb3cgZXhwbGFuYXRpb24sIGp1ZGdlcyB1c2FibGUKLSBGcm9udGVuZCBtaXN0L3Bld3RlciBzdGFjayBsaXZlICgjNzY34oCTIzc3OSkKLSBNaW5kbWFwIGdyYXBoL3RyYWlsL3N0YXRlL3N0b3J5LXBhdGg6ICoqbm9uLTV4eCoqOyBsYXRlbmN5IDAuNeKAkzE3cyBkZXBlbmRpbmcgb24gY2FjaGUgd2FybXRoCi0gYGRhaWx5LXBpY2tgIGhvbmVzdCBIT0xEIMK3IGBwdW1wLWFsZXJ0c2Agc3VjY2VzcyDCtyBgb3BzL2xpdmVgIHdvcmtlciBhbGl2ZQotICoqTmV4dDoqKiBIMiBzb2FrICoqMjAyNi0wOC0wNCoqIMK3IGh1bWFuIDM5MHB4IGdsYW5jZSDCtyBhY2N1cmFjeSBsaWZ0IGdhdGVkIHVudGlsIEgyIEdPCgojIyBPdXQgb2Ygc2NvcGUKCi0gQ2h1dGVzIGJpbGxpbmcgLyBsaXZlIExMTSBjaGF0IHJlcGxpZXMKCg==
+# Subnet Dashboard Coordination Board
+
+> **Historical Aug 5 coordination snapshot — do not delete.** Live STATUS/GATE for this sprint is maintained in this file (`board.md`) — see `README.md` read order, `concurrent-protocol.md` §9, and `docs/master-plan-merged.md` ("Live STATUS / GATE"). The former `mission-control-log.md` mirror is retired; its contents remain in git history.
+
+**Last updated:** 2026-08-05T19:05:00Z  
+**main:** `7b07b64` (#844–#847 merged) · **Phase 3 CSS purge:** **DONE** — `ui-legacy.css` stub; `ui.css` sole spine  
+**Active plan:** `ditto-opus-transition-handoff-2026-08-03.md` (#789) · H2 soak **2026-08-04**  
+**Models:** `model-guide.md` — Grok LOCK/review; Composer implements; Sonnet low reviews  
+**Plans:** `ditto-opus-transition-handoff-2026-08-03.md` · `post-hero-finish-plan.md` · `completion-runbook.md` · `accuracy-lift-lock.md`
+
+## STATUS SNAPSHOT (2026-08-03)
+
+| Item | Status |
+|------|--------|
+| Phase 1–2 soul_map I/O + read cache | **MERGED** #718 · #719 |
+| Phase A/B Judges + Telegram Pulse loops | **MERGED** #720 · #721 |
+| Phase C mindmap display wiring | **MERGED** #741 (+ M1–M5 #725–#735) |
+| Hero H1/H2 + A-tier ACs | **MERGED** #724 · #727 · #732 · #736 |
+| Mindmap graph wedge (full state on graph) | **MERGED** #744 — graph skips `build_mindmap_state` |
+| API unwedge (subnets/judges/simivision/cockpit) | **MERGED** #743 · #759–#761 |
+| API timeout wrappers + mindmap bounds | **MERGED** #734 · #737 · #751 · #753 · #754 |
+| Finish queue Steps 0–6 | **MERGED** #745–#752 · #755–#763 (summary/health GIL unwedge) |
+| Frontend mist/pewter wave | **MERGED** #767–#779 (thumb dock, ui.css shell, dead CSS purge) |
+| Hydrate desk P1–P3 | **CLOSED** #781–#787 — honest HOLD, trust banner, judges no naked busy |
+| **Ditto transition** | **ACTIVE** — `ditto-opus-transition-handoff-2026-08-03.md` (#789) |
+| Opus tribunal hero | **PARKED** PR #788 — preview seen; no live wire until explicit ask |
+| Mindmap summary / learning health | **PASS** — summary ~0.5s file-only; health cache+peer; Fly green |
+| Agent babysit + g0 (2026-08-02) | **PASS** — re-run after major merges |
+| **Phase 3 CSS purge (P3-3m–4)** | **MERGED** #844–#845 — ui-legacy retired; `ui.css` sole spine |
+| **Pump desk hardening (Track B)** | **MERGED** #846 — lock scope + fast GET |
+| **Mindmap honesty (Track C3)** | **MERGED** #847 — `source: registry_heuristic` on graph |
+| Human 390px glance (AC7) | **PENDING** — prod deployed; g0 blocked on instant bailout shell (separate) |
+| Accuracy PREP (read-only evidence) | **MERGED** #740 — experiments **GATED** Aug 4 H2 soak GO |
+| Stale drafts (#686/#675/#692/#650) | **Do not blind-merge** — superseded / already on main |
+
+## Infra STATUS (launch blocker)
+
+| Item | Status |
+|------|--------|
+| **Root cause (v2 rollback)** | split_v2 web→worker private HTTP unreachable; volume APIs soft-degraded for weeks |
+| **Rollback fix** | Stop forcing `fly.worker-v2.toml` / `FORCE_WORKER_SPLIT_V2` in Fly Deploy; auto-rollback to `fly.toml` + inline worker |
+| **Bandaids** | Soft stubs / local fallthrough (#698–#705) — keep as defense only; do not treat as product fix |
+| **Do not** | Re-enable v2 without proven peer probe soak + human approve |
+| **Post-rollback wedge (AUDIT_HANDOFF #709)** | Root-caused live via `py-spy dump` on prod: `GET /api/mindmap/graph` walked the full pump ladder and re-resolved every subnet name with `use_taostats_fallback=True` — TaoStats is rate-limited to 5 calls/min and `_rate_limit()` sleeps synchronously, blocking the single asyncio event-loop thread (incl. `/health`) for minutes → Fly marks the machine unhealthy → 503 whole site. This was the "data isn't hydrating / empty spaces" bug. |
+| **Wedge fix** | PR #710 — dropped `use_taostats_fallback=True` from the 3 hot read paths (`internal/pump/state.py::_normalize_ladder_subnet`, `internal/pump/signals.py::_signal_display_name`, `internal/learning/pump_alert.py::_resolve_name`); names are already resolved once in the background by `transition_subnet`. Added negative-result caching in `internal/subnet_names.py`. This answers `AUDIT_HANDOFF.md` Option C ("fix v1 properly... never block event loop on mindmap/homepage") — **no worker-split/Fly topology change needed**, it was a code bug. |
+
+## Full roadmap
+
+| Phase | Status |
+|-------|--------|
+| **0** Names | DONE (#554, #560) |
+| **1** Ditto playbook | **DONE** (human 2026-07-28) |
+| **2** Track 1 soak | ACTIVE — review **2026-08-04** / 2026-08-11 (`track1-soak-lock.md`) |
+| **3** SS-TG W1–W3 | **on main** (#557) — H1 **cleared** |
+| **4** Accuracy lift | Acc-0–2 **DONE**; PREP #740 on main; Slice 7b/7c + Combined tune **after H2 GO** | `accuracy-lift-lock.md` |
+
+- Human: pump Ditto fetch disabled · Health Monitor artifact mode · stale memories superseded
+- Lock: `ditto-automation-migration-lock.md` (Gate 1 cleared)
+
+## Phase 3 — human gate
+
+- W0 #549 · W1–W3 #557 on prod (HTML markers live)
+- **H1:** cleared 2026-07-30 — agent SS-TG 390px + V5 polish in flight (`pre-aug4-polish-plan.md`)
+
+## Master sprint (LC/LD + Acc + PP)
+
+**Lock:** `master-sprint-execution-plan.md` — merge → babysit → human review between every step
+
+| Step | Phase | Status |
+|------|-------|--------|
+| M0 | Merge plan PRs | **DONE** #647 |
+| 1 | Acc-0 ledger plumbing | **DONE** #649+#651 |
+| 2 | PP-0 segment ledger | **DONE** #651+#653 |
+| 3 | LC legal/trust/SEO | **DONE** #652 |
+| 4 | LD surface honesty | **DONE** #654 |
+| 5 | Acc-1 archive measure | **DONE** #655 |
+| 6 | PP-1 pattern classes | **DONE** #656 |
+| 7 | Acc-2 experiment (A+D blend) | **DONE** #659 |
+| 8 | PP-2 desk + council | **DONE** #661 |
+| 9 | FQ-4 combined angles | **DONE** #664+#665 — artifact + ops/evidence (strict babysit gated `graded>0`) |
+
+Babysit: `./scripts/babysit_phase.sh <phase>` · rollup: `./scripts/babysit_phase.sh sprint`
+
+## Launch readiness (hero + integrations)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **LA** Hero source-of-truth | **DONE** #640 | — |
+| **LB** Integrations + pulse rail | **DONE** #645 | — |
+| **LC** Legal / trust / SEO | **DONE** #652 | — |
+| **LD** Surface honesty | **DONE** #654 | — |
+
+## Accuracy + pump pattern (parallel tracks)
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| **Acc-0** Ledger plumbing + epoch footgun | **DONE** #649+#650 (in PP-0 PR) | `accuracy-pump-pattern-plan.md` |
+| **Acc-1** Archive measurement | **DONE** #655 | `accuracy-pump-pattern-plan.md` |
+| **Acc-2** Horizon 24h + gate 50% | **DONE** #659 | same |
+| **PP-0** Segment ledger (waveform) | **DONE** #651+#653 | same |
+| **PP-1** Pattern taxonomy + classifier | **DONE** #656 | same |
+| **PP-2** Pump desk + council surfaces | **DONE** #661 | same |
+
+Babysit: `./scripts/babysit_phase.sh acc0` · `acc1` · `pp0` · `pp1` · `pp2`
+
+- Prod epoch reset 2026-07-29: prior 496 graded @ 33.7%; current graded=0; today's LONG has ledger gap until Acc-0
+
+## Post-audit sprint
+
+| Phase | Status | Lock |
+|-------|--------|------|
+| A Ops quick wins | DONE #562 | `ops-quick-wins-lock.md` |
+| B Outcome boot | DONE #563 | `outcome-boot-polish-lock.md` |
+| **C Worker split v2** | **DONE** (#598–#601 · peer alive · GHA green) | `fly-worker-split-v2-lock.md` |
+| D Security | DONE #567 | `security-housekeeping-lock.md` |
+| E SS-TG W4 | DONE #570 | `subnet-summers-telegram-lock.md` |
+| F SS-TG W5 | DONE #571 | |
+| G SS-TG W6 | DONE #569 (env-gated) | |
+| H Soak review | monitor #568 | `track-1-soak-review-lock.md` |
+
+Babysit: `./scripts/babysit_phase.sh <phase>`
+
+- Lock: `track1-soak-lock.md` — soak day 0 = 2026-07-28; review 2026-08-04 / 2026-08-11
+
+## Ops evidence — DONE
+
+| Piece | PR | Artifact |
+|-------|-----|----------|
+| Pick audit | #546 | `data/pick_audits/` |
+| Pump desk | #547 | `data/pump_desk/latest.json` |
+| Outcomes | #550 | `data/learning_outcomes/latest.json` |
+| API | #550 | `GET /api/ops/evidence` |
+
+## Learning loop
+
+- Prod: `/api/learning/health` **ok** — resolver tick live on worker volume (proxy from web)
+- Readiness `learning_loop_health` fix **DONE** (#602) — orphan web `soul_map` no longer disables proxy
+- Track 1 soak running under #551 calibration
+
+## Active (monitor)
+
+| Track | Gate |
+|-------|------|
+| **Ditto orchestration** | **ACTIVE** — handoff `ditto-opus-transition-handoff-2026-08-03.md` |
+| Pick audit | 23:45 UTC nightly |
+| Health Monitor | Ditto artifact mode |
+| Track 1 soak | **H2 review 2026-08-04** / H3 2026-08-11 (`track-1-soak-review-lock.md`) |
+| SS-TG Gate 3 | H1 cleared — polish wave (#672–#674 open) |
+| Opus tribunal #788 | **PARKED** — preview seen; live wire on explicit human ask only |
+| Finish queue | Steps 0–6 **DONE**; Step 7 soak gated Aug 4 |
+| Human 390px glance | PENDING post-layout |
+
+## Prod cache (2026-08-03 post-#787)
+
+- Hydrate desk P1–P3 **closed** — honest HOLD, trust `1/30` with shadow explanation, judges usable
+- Frontend mist/pewter stack live (#767–#779)
+- Mindmap graph/trail/state/story-path: **non-5xx**; latency 0.5–17s depending on cache warmth
+- `daily-pick` honest HOLD · `pump-alerts` success · `ops/live` worker alive
+- **Next:** H2 soak **2026-08-04** · human 390px glance · accuracy lift gated until H2 GO
+
+## Out of scope
+
+- Chutes billing / live LLM chat replies
+
