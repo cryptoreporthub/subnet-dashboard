@@ -36,7 +36,7 @@ def client(intel_db):
 
 def _seed(db, *, author_name="Nick", author_username="nick_tg", author_id=None,
           direction="up", conviction=72.0, outcome=None, pump_pct=None,
-          price_24h=None, netuid=7, days_ago=0):
+          price_1h=None, price_4h=None, price_24h=None, netuid=7, days_ago=0):
     timestamp = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
     mid, _ = db.save_message({
         "source": "telegram",
@@ -55,13 +55,26 @@ def _seed(db, *, author_name="Nick", author_username="nick_tg", author_id=None,
     })
     db.save_price_snapshot(mid, 1.0, netuid=netuid)
     if outcome is not None:
-        fields = {"outcome": outcome, "price_1h": 1.01}
+        fields = {"outcome": outcome, "price_1h": 1.01 if price_1h is None else price_1h}
         if pump_pct is not None:
             fields["pump_pct_max"] = pump_pct
+        if price_4h is not None:
+            fields["price_4h"] = price_4h
         if price_24h is not None:
             fields["price_24h"] = price_24h
         db.save_price_outcome(mid, fields)
     return mid
+
+
+_STATUS_COUNTER = {"hit": "hits", "miss": "misses", "neutral": "neutral"}
+
+
+def _assert_horizon_status_parity(caller):
+    for status, key in _STATUS_COUNTER.items():
+        horizon_total = sum(
+            caller["horizon_summary"][horizon][key] for horizon in ("1h", "4h", "24h")
+        )
+        assert horizon_total == caller[key], f"mismatched status: {status}"
 
 
 # ── Classifier contract ────────────────────────────────────────────────────
@@ -441,6 +454,41 @@ def test_empty_archives(intel_db):
     assert board["empty"] is True and board["callers"] == []
     band = build_telegram_proof_band(db=intel_db)
     assert band["graded"] == 0 and band["hit_rate"] is None and band["ready"] is False
+
+
+def test_leaderboard_horizon_status_counter_parity(intel_db):
+    """Horizon buckets must use the same status map as top-level counts.
+
+    A resolved miss used to KeyError on hand-built 'misss'. Seed hit/miss/neutral
+    with a single matching 1h grade so per-horizon totals equal top-level counts.
+    """
+    from internal.message_intel.rollup import build_telegram_caller_leaderboard
+
+    _seed(intel_db, outcome="pump", price_1h=1.06, days_ago=0)
+    _seed(intel_db, outcome="dump", price_1h=0.93, days_ago=3)
+    _seed(intel_db, outcome="stable", price_1h=1.00, days_ago=0)
+
+    for days in (7, 30, 90):
+        board = build_telegram_caller_leaderboard(days=days, db=intel_db)
+        top = board["callers"][0]
+        assert (top["hits"], top["misses"], top["neutral"]) == (1, 1, 1)
+        _assert_horizon_status_parity(top)
+
+    board_1d = build_telegram_caller_leaderboard(days=1, db=intel_db)
+    top_1d = board_1d["callers"][0]
+    assert top_1d["misses"] == 0
+    assert (top_1d["hits"], top_1d["neutral"]) == (1, 1)
+    _assert_horizon_status_parity(top_1d)
+
+
+def test_leaderboard_recent_miss_inside_1d(intel_db):
+    from internal.message_intel.rollup import build_telegram_caller_leaderboard
+
+    _seed(intel_db, outcome="dump", price_1h=0.93, days_ago=0)
+    board = build_telegram_caller_leaderboard(days=1, db=intel_db)
+    top = board["callers"][0]
+    assert top["misses"] == 1
+    _assert_horizon_status_parity(top)
 
 
 # ── API surface ────────────────────────────────────────────────────────────
