@@ -72,6 +72,9 @@ def test_build_snapshot_scores_all(monkeypatch):
     subnets = [{"netuid": 3, "price": 1}, {"netuid": 8, "price": 1}]
     out = snaps.build_full_universe_snapshot(subnets, {})
     assert out["count"] == 2
+    assert out["status"] == "complete"
+    assert out["completed_count"] == 2
+    assert out["target_count"] == 2
     assert out["day"][0]["netuid"] == 8
     assert out["hour"][0]["netuid"] == 8
 
@@ -588,3 +591,128 @@ def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
         return snaps.ScoreSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+def _mock_score_fns(monkeypatch, hour_calls, day_calls):
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: hour_calls.append(sn["netuid"]) or {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: day_calls.append(sn["netuid"]) or {"total_score": 2.0},
+    )
+    monkeypatch.setattr("internal.subnets.tradable.tradable_subnets", lambda rows: rows)
+
+
+def test_build_deadline_already_expired_is_partial_without_scoring(monkeypatch):
+    """Deterministic expiry: deadline_mono in the past — no sleep, no scores."""
+    hour_calls: list[int] = []
+    day_calls: list[int] = []
+    _mock_score_fns(monkeypatch, hour_calls, day_calls)
+    subnets = [{"netuid": 1}, {"netuid": 2}, {"netuid": 3}]
+    out = snaps.build_full_universe_snapshot(
+        subnets,
+        {},
+        score_hour=False,
+        deadline_mono=time.monotonic() - 1,
+    )
+    assert out["status"] == "partial"
+    assert out["count"] == 3
+    assert out["target_count"] == 3
+    assert out["completed_count"] == 0
+    assert out["day"] == []
+    assert out["hour"] == []
+    assert hour_calls == []
+    assert day_calls == []
+
+
+def test_build_complete_is_distinguishable_from_partial(monkeypatch):
+    hour_calls: list[int] = []
+    day_calls: list[int] = []
+    _mock_score_fns(monkeypatch, hour_calls, day_calls)
+    subnets = [{"netuid": 4}, {"netuid": 9}]
+    complete = snaps.build_full_universe_snapshot(
+        subnets, {}, score_hour=False, deadline_mono=None
+    )
+    partial = snaps.build_full_universe_snapshot(
+        subnets, {}, score_hour=False, deadline_mono=time.monotonic() - 1
+    )
+    assert complete["status"] == "complete"
+    assert complete["completed_count"] == 2
+    assert complete["count"] == 2
+    assert {r["netuid"] for r in complete["day"]} == {4, 9}
+    assert partial["status"] == "partial"
+    assert partial["completed_count"] == 0
+    assert partial["count"] == 2
+    assert partial["status"] != complete["status"]
+
+
+def test_build_deadline_stops_scoring_before_next_subnet(monkeypatch):
+    """Check is before score_subnet_for_*; expiry mid-loop scores only the current boundary."""
+    now = {"t": 1000.0}
+    monkeypatch.setattr(snaps.time, "monotonic", lambda: now["t"])
+    day_calls: list[int] = []
+
+    def _day(sn, ctx):
+        day_calls.append(int(sn["netuid"]))
+        now["t"] += 1.0
+        return {"total_score": 2.0}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: (_ for _ in ()).throw(AssertionError("hour must not run")),
+    )
+    monkeypatch.setattr("internal.subnets.tradable.tradable_subnets", lambda rows: rows)
+    subnets = [{"netuid": 10}, {"netuid": 20}, {"netuid": 30}]
+    out = snaps.build_full_universe_snapshot(
+        subnets, {}, score_hour=False, deadline_mono=1000.5
+    )
+    assert day_calls == [10]
+    assert out["status"] == "partial"
+    assert out["completed_count"] == 1
+    assert out["target_count"] == 3
+    assert out["count"] == 3
+    assert [r["netuid"] for r in out["day"]] == [10]
+
+
+def test_write_partial_saves_and_releases_lock(monkeypatch, tmp_path):
+    """Expired inner deadline: save marked partial, write returns ok, occupancy clear."""
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 600)
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    hydrate = [{"netuid": i, "name": str(i)} for i in range(1, 4)]
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback")
+    )
+    hour_calls: list[int] = []
+    day_calls: list[int] = []
+    _mock_score_fns(monkeypatch, hour_calls, day_calls)
+    monkeypatch.setattr(snaps, "_snapshot_build_deadline_mono", lambda: time.monotonic() - 1)
+    _reset_write_occupancy()
+    out = snaps.write_full_universe_snapshot()
+    assert out.get("ok") is True
+    assert out.get("status") == "partial"
+    assert out.get("completed_count") == 0
+    assert path.is_file()
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["status"] == "partial"
+    assert saved["count"] == 3
+    assert saved["target_count"] == 3
+    assert saved["completed_count"] == 0
+    assert saved["day"] == []
+    assert "universe_cap" not in saved
+    assert day_calls == []
+    assert not snaps._scoring_write_in_progress()
+    with snaps._lock:
+        assert snaps._write_future is None
+
+
+def test_build_deadline_budget_defaults_to_timeout_minus_slack(monkeypatch):
+    monkeypatch.delenv("SCORE_SNAPSHOT_BUILD_DEADLINE_SECONDS", raising=False)
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 480)
+    assert snaps._snapshot_build_deadline_budget_seconds() == 450
+    monkeypatch.setenv("SCORE_SNAPSHOT_BUILD_DEADLINE_SECONDS", "100")
+    assert snaps._snapshot_build_deadline_budget_seconds() == 100
