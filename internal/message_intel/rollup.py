@@ -1555,7 +1555,7 @@ def build_telegram_caller_leaderboard(*, days: int = 30, limit: int = 25, db=Non
             if grade["status"] not in ("hit", "miss", "neutral"):
                 continue
             bucket = entry["horizon_summary"][horizon]
-            bucket[f'{grade["status"]}s' if grade["status"] != "neutral" else "neutral"] += 1
+            bucket[_status_counter[grade["status"]]] += 1
             bucket["graded"] += 1
         if len(entry["recent"]) < 3:
             entry["recent"].append(_receipt(row, proof))
