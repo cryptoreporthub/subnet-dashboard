@@ -260,7 +260,7 @@ def _new_subnet_seed_strip(limit: int = 5) -> List[Dict[str, Any]]:
         for sn in registry.values():
             if not isinstance(sn, dict):
                 continue
-            nu = sn.get("netuid")
+            nu = sn.get("netuid", sn.get("id"))
             if nu is None:
                 continue
             try:
