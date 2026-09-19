@@ -2,18 +2,27 @@
   "schema_version": "1",
   "claim_id": "C-014",
   "dedup_key": "c-014-c9449d6490231373748f19f299ed19d423a1c971-tracer-scoring-cap-blindspot",
-  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
   "target_seat": "Tracer",
   "constitution_pass": 3,
   "priority": 1,
   "created_by": "mission-control",
-  "status": "ready_to_dispatch",
+  "status": "dispatched",
   "opened_after_gate": "0b",
   "question": "At pin, does scoring-cap / score-snapshot logic create a blind-spot where small or never-scored subnets are starved on a fresh snapshot or surface via stale snapshot/mtime rather than merit? Cite SHA:path:line and bytes_read for each affirmative subclaim.",
   "hypothesis": {
     "summary": "Blind-spot / inversion: cap or snapshot freshness/mtime can dominate merit for never-scored or small subnets.",
-    "candidate_paths": ["internal/subnets/scoring_cap.py", "internal/council/score_snapshots.py", "tests/test_scoring_cap.py", "tests/test_score_snapshots.py"],
-    "note": "Candidates are search starts only — not proof. No line numbers asserted until Tracer fetch."
+    "candidate_paths": [
+      "internal/subnets/scoring_cap.py",
+      "internal/council/score_snapshots.py",
+      "tests/test_scoring_cap.py",
+      "tests/test_score_snapshots.py"
+    ],
+    "note": "Candidates are search starts only \u2014 not proof. No line numbers asserted until Tracer fetch."
   },
   "expected_evidence_form": "schema v1 bundle(s) with fetch_method, bytes_read, citations[{sha,path,line}], falsifier per subclaim; or NOT_OBSERVABLE naming what was searched",
   "fetch_ladder": [
@@ -29,6 +38,11 @@
     "refutes_if": "No supporting mechanism after fetch ladder, OR cited bytes do not support starvation/stale-vs-merit claim"
   },
   "pass_rule": "Affirmative subclaims require SHA:path:line + bytes_read + fetch_method. No narrative-only answers.",
-  "blocked_by_cleared": ["SMOKE-001"],
-  "notes": "Opened after Gate 0b CLEARED. Dispatch Tracer only after MC says go."
+  "blocked_by_cleared": [
+    "SMOKE-001"
+  ],
+  "notes": "Opened after Gate 0b CLEARED. Dispatch Tracer only after MC says go.",
+  "dispatched_at": "2026-09-19T22:08Z",
+  "dispatched_by": "mission-control",
+  "dispatched_to": "Tracer"
 }
