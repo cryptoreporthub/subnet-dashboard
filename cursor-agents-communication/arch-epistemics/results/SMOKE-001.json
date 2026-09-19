@@ -1,0 +1,18 @@
+{
+  "claim_id": "SMOKE-001",
+  "status": "pending_spotcheck_with_coverify_locus_contradiction",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "mc_byte_match_626_630": true,
+  "mc_locked_line": 628,
+  "mc_locked_text": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
+  "ditto_coverify": {
+    "result": "DIVERGE_line_number_mismatch",
+    "ditto_locked_line": 633,
+    "ditto_line_628": "return response",
+    "offset": "+5",
+    "text_agrees": true
+  },
+  "contradiction_id": "X-SMOKE-001-LOCUS",
+  "constitution_lock": "628 retained (FROZEN) until new freeze Go",
+  "updated_at": "2026-09-19T20:24Z"
+}
