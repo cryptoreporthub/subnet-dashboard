@@ -1,0 +1,5 @@
+{"schema_version":"1","id":"X-001","status":"unverified","claim_a":"WORKER_HEAVY=essential (wedge doc)","claim_b":"WORKER_HEAVY=full (2026-07-26 memory/v2)","tier":"B","evidence_class":"memory+doc"}
+{"schema_version":"1","id":"X-002","status":"unverified","claim_a":"wedge doc no open items","claim_b":"F-1 and B3 open in v2","tier":"B","evidence_class":"doc"}
+{"schema_version":"1","id":"X-003","status":"unverified","claim_a":"blind subnets 88","claim_b":"blind subnets 126","tier":"B","evidence_class":"doc","note":"denominators 128 vs 166"}
+{"schema_version":"1","id":"X-004","status":"unverified","claim_a":"orphan window arithmetic 720s","claim_b":"observed ~18min","tier":"B","evidence_class":"doc"}
+{"schema_version":"1","id":"X-005","status":"unverified","claim_a":"worker_proxy Tier A on price path","claim_b":"B3 unknown; proxy inbound vs scorer egress","tier":"B","evidence_class":"doc"}
