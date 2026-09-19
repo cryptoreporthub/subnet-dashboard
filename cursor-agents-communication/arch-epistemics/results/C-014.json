@@ -1,14 +1,35 @@
 {
   "claim_id": "C-014",
-  "status": "pending_spotcheck",
+  "status": "VERIFIED",
+  "scope": "code-only",
   "verdict": "partial",
   "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
-  "bundle_path": "bundles/C-014.Tracer.json",
-  "mc_citation_checks": "8/8 OK",
+  "pin_is_version_sha": true,
+  "version_endpoint": "https://subnet-dashboard.fly.dev/version",
+  "version_observed": {"version": "c9449d6", "sentry_release": "c9449d6490231373748f19f299ed19d423a1c971"},
+  "tier_A": {
+    "description": "8 line-level facts at pin only",
+    "citations": [
+      "internal/subnets/scoring_cap.py:105",
+      "internal/subnets/scoring_cap.py:107",
+      "internal/council/score_snapshots.py:145",
+      "internal/council/score_snapshots.py:166",
+      "internal/council/score_snapshots.py:276",
+      "internal/council/score_snapshots.py:280",
+      "tests/test_score_snapshots.py:50",
+      "server.py:899"
+    ]
+  },
+  "tier_B": {
+    "claim": "fresh_starvation in prod",
+    "note": "live TOP_SCORING_UNIVERSE value NOT_OBSERVABLE; code path AFFIRMED at pin"
+  },
   "subclaims": {
-    "fresh_starvation": "AFFIRMED",
+    "fresh_starvation_code_path": "AFFIRMED",
     "stale_mtime_surface": "REFUTED"
   },
-  "updated_at": "2026-09-19T22:10Z",
-  "note": "Awaiting Joshua VERIFIED|REJECT|HOLD on partial finding. No code changes authorized."
+  "bundle_path": "bundles/C-014.Tracer.json",
+  "verified_at": "2026-09-19T23:21Z",
+  "verified_by": "joshua",
+  "follow_ups": ["C-015", "C-016", "C-017"]
 }
