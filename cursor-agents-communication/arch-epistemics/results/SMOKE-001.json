@@ -1,0 +1,11 @@
+{
+  "claim_id": "SMOKE-001",
+  "status": "pending_spotcheck",
+  "mc_byte_match": true,
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "bundle_path": "bundles/SMOKE-001.Tracer.json",
+  "locked_line": 628,
+  "locked_text": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
+  "validated_at": "2026-09-19T11:14Z",
+  "note": "MC confirmed bytes_read == pin server.py 626-630. Awaiting Joshua spot-check to mark VERIFIED."
+}
