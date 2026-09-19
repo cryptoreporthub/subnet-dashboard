@@ -1,12 +1,10 @@
 # Arch-epistemics STATUS
 
-- **phase:** Constitution FROZEN; seats packaged; SMOKE-001 ready_to_dispatch
+- **phase:** SMOKE-001 MC-validated (byte match); pending Joshua spot-check for VERIFIED
 - **branch:** `docs/arch-epistemics-pass0-skeleton`
 - **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1294
 - **campaign_pin.repo_sha:** `c9449d6490231373748f19f299ed19d423a1c971`
-- **constitution:** FROZEN (2026-09-19T10:45Z) by Joshua Go via MC
-- **SMOKE-001:** ready_to_dispatch (not executed)
-- **hard claim:** blocked on smoke PASS
-- **fetch_ladder:** raw → api → mc_paste (in CONSTITUTION + ticket)
-- **router_strip:** documented in ROUTER.md
-- **last_updated:** 2026-09-19T10:45Z by Mission Control
+- **constitution:** FROZEN
+- **SMOKE-001:** pending_spotcheck (bundle at bundles/SMOKE-001.Tracer.json)
+- **hard claim:** still blocked until VERIFIED
+- **last_updated:** 2026-09-19T11:14Z by Mission Control
