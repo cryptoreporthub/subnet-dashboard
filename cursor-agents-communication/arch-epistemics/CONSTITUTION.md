@@ -1,7 +1,7 @@
 # Campaign Constitution — Architecture Epistemics
 
 **schema_version:** `1`  
-**status:** DRAFT until frozen in Cursor plan mode  
+**status:** **FROZEN** (Joshua Go 2026-09-19T10:45Z) — do not edit without a new freeze  
 **campaign_pin.repo_sha:** `c9449d6490231373748f19f299ed19d423a1c971`  
 **campaign_pin.deploy_sha:** `NOT_OBSERVABLE`  
 **campaign_pin.runtime_ref:** `NOT_OBSERVABLE`
@@ -14,6 +14,7 @@
 4. Tier A only after Joshua (or named non-author) spot-checks the exact citation.
 5. Grok seats never call Ditto. Memory enters only via Joshua → Ledger as Tier B (`evidence_class: memory`).
 6. Mission Control is the only router. Seats communicate through queue/bundle **files**, not prose DMs.
+7. Answering from model memory without a recorded `fetch_method` is forbidden.
 
 ## Pin protocol
 
@@ -32,23 +33,41 @@ Especially:
 - `falsifier: {probe, expected, refutes_if}` — reject literals `N/A`, `none`, `unknown`, empty
 - `citations[]` with `sha:path:line`
 - `bytes_read` (literal text for smoke / line-range claims) OR structured `NOT_OBSERVABLE` failure
+- `fetch_method`: `raw` | `api` | `mc_paste` (required on every code-read bundle)
 
-## Router failure rule (MC)
+## Fetch ladder (Tracer / ConfigTruth code reads)
 
-If Tracer or ConfigTruth returns non-JSON, wrong `schema_version`, or missing required fields:
+1. **raw** — `https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/<repo_sha>/<path>`
+2. On 403 / empty / truncate / tool failure → **api** —  
+   `GET https://api.github.com/repos/cryptoreporthub/subnet-dashboard/contents/<path>?ref=<repo_sha>`  
+   Decode `content` (base64). Do not trust HTML preview pages.
+3. On tool failure → ask **Mission Control** for a bounded paste; set `fetch_method: mc_paste`.
+4. Never invent lines from pretraining. If no bytes → `verdict: NOT_OBSERVABLE` with exact error.
 
-- MC **rejects** and returns the ticket to that seat only.
-- MC **never** forwards malformed output to Ledger.
-- Ledger never sees Tracer/ConfigTruth chain-of-thought — bundles only.
+## Router rules (Mission Control)
+
+1. Seats do not DM each other. MC carries tickets and bundles as files / paste packs.
+2. **Strip before validate:** if a seat reply has prose or markdown fences, MC extracts the first JSON object (strip leading chatter and ```json fences). If no parseable JSON → reject to that seat only.
+3. Validate against `schema/v1.json`. On failure → return to producing seat; **never** forward to Ledger.
+4. On success → write `bundles/<claim_id>.<seat>.json`; Ledger merges from **files only**.
+5. Malformed / chatty / memory-only code claims never enter `claims.jsonl`.
+
+## Line anchors (smoke)
+
+At pin `c9449d6490231373748f19f299ed19d423a1c971`, `TOP_SCORING_UNIVERSE = ...` is at **line 628** (verified). Line 633 is `_PICK_READ_EXECUTOR`, not the assignment.  
+PASS requires **exact text match** for the locked assignment and literal bytes for lines **626–630**. Do not widen to a fuzzy window that accepts 633.
+
+Optional: Tracer may report `line_found`; Ledger still requires `locked_assertion.text` substring in `bytes_read` and treats wrong line-number-with-right-text as `partial` + contradiction — not auto-PASS without MC review.
 
 ## Pass order
 
 | Pass | Owner | Satisfied when | Blocked when |
 |------|-------|----------------|--------------|
-| 0 Skeleton | MC | This tree exists on a branch | — |
+| 0 Skeleton | MC | This tree exists; constitution FROZEN | — |
+| 0b Smoke | Tracer | `results/SMOKE-001.json` VERIFIED | Fetch failure / wrong bytes |
 | 1 F-1 config | ConfigTruth | Live vs code bundles for named keys, or NOT_OBSERVABLE | Probe without Go |
 | 2 Contradictions | Ledger | Seeded contradictions registered | — |
-| 3 Re-pin claims | Tracer | Section-0 style claims cited at pin | Wrong pin |
+| 3 Re-pin claims | Tracer | Section-0 style claims cited at pin | Wrong pin / smoke not VERIFIED |
 | 4 Vertical | Tracer | Each hop has bundle or NOT_OBSERVABLE | Hop outside vertical |
 | 5 Census | Tracer | Finite grep list committed | `gates/pass4.exit` missing or pin mismatch |
 | 6 History | ConfigTruth | Guard timeline cited | `gates/pass6.open` missing |
@@ -72,17 +91,13 @@ Refuse new ticket if key exists in `queue/open|in_progress|done`.
 
 If two bundles for same `(claim_id, repo_sha, target_seat)` disagree on verdict/edge: keep both, emit contradiction row, leave tier B, escalate. Use `supersedes` for intentional replacements — do not silent-overwrite.
 
-## Smoke invariant (Gate 0)
+## Smoke invariant (Gate 0b)
 
 Ticket: `queue/open/SMOKE-001.json`.
 
-- **PASS:** Tracer bundle includes literal `server.py` lines **626–630** at campaign `repo_sha`, and line 628 equals  
+- **PASS:** Tracer bundle includes literal `server.py` lines **626–630** at campaign `repo_sha`, and `bytes_read` contains  
   `TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))`
-- **FAIL / BLOCKED:** 404, empty, truncation without those lines, wrong SHA, or prose-only.
-
-Raw fetch pattern (preferred for Grok tools):
-
-`https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/<repo_sha>/server.py`
+- **FAIL / BLOCKED:** 404, empty, truncation without those lines, wrong SHA, prose-only, or `fetch_method` missing.
 
 ## Hard claim
 
