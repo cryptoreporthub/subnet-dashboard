@@ -1,0 +1,29 @@
+{
+  "schema_version": "1",
+  "claim_id": "F-1",
+  "dedup_key": "f-1-c9449d6490231373748f19f299ed19d423a1c971-configtruth-live-vs-code",
+  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "target_seat": "ConfigTruth",
+  "status": "dispatched",
+  "priority": 0,
+  "constitution_pass": 1,
+  "question": "Pass F-1: compare live vs code/fly.toml for WORKER_HEAVY, WORKER_PROXY_* timeouts, SCORE_SNAPSHOT_MAX_SUBNETS, SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS, TOP_SCORING_UNIVERSE. Pin already matches /version (c9449d6490231373748f19f299ed19d423a1c971). Mark each live value log-confirmed or NOT_OBSERVABLE.",
+  "known_code_fly": {
+    "fly.toml": {
+      "WORKER_HEAVY": "essential",
+      "SCORE_SNAPSHOT_MAX_SUBNETS": "40",
+      "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS": "480",
+      "WORKER_PROXY_TIMEOUT_SECONDS": "4",
+      "WORKER_PROXY_LEARNING_TIMEOUT_SECONDS": "25"
+    },
+    "server.py:628_default": "TOP_SCORING_UNIVERSE default 20",
+    "version_live": {"version": "c9449d6", "sentry_release": "c9449d6490231373748f19f299ed19d423a1c971", "observed_at": "2026-09-19T23:21Z"}
+  },
+  "expected_evidence_form": "schema v1 bundles; fetch_method raw|api|mc_paste for file reads; live probes only if Joshua already allowed read-only /version (done by MC)",
+  "falsifier": {
+    "probe": "Read fly.toml + code defaults at pin; use MC-provided /version JSON; do not invent secrets",
+    "expected": "Table of key -> code default -> fly.toml -> live (or NOT_OBSERVABLE)",
+    "refutes_if": "Asserts live env without observation OR skips WORKER_HEAVY / proxy / snapshot keys"
+  },
+  "notes": "Dispatched 2026-09-19T23:21Z after C-014 VERIFIED. Read-only. No deploys."
+}
