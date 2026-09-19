@@ -1,0 +1,41 @@
+{
+  "schema_version": "1",
+  "ticket_required": [
+    "schema_version",
+    "claim_id",
+    "dedup_key",
+    "pin",
+    "target_seat",
+    "question",
+    "expected_evidence_form",
+    "constitution_pass",
+    "priority",
+    "created_by",
+    "falsifier"
+  ],
+  "bundle_required": [
+    "schema_version",
+    "claim_id",
+    "bundle_id",
+    "pin",
+    "verdict",
+    "evidence_class",
+    "citations",
+    "falsifier",
+    "scope_tag",
+    "produced_by"
+  ],
+  "pin_object": {
+    "repo_sha": "required string",
+    "deploy_sha": "string or NOT_OBSERVABLE",
+    "runtime_ref": "string or NOT_OBSERVABLE"
+  },
+  "falsifier_object": {
+    "probe": "non-empty string",
+    "expected": "non-empty string",
+    "refutes_if": "non-empty string; REJECT N/A|none|unknown"
+  },
+  "verdict_enum": ["confirmed", "refuted", "partial", "NOT_OBSERVABLE"],
+  "reject_falsifier_literals": ["N/A", "n/a", "none", "None", "unknown", "UNKNOWN", ""],
+  "router_rule": "Malformed bundles never forward to Ledger; return to producing seat only."
+}
