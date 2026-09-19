@@ -1,0 +1,23 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-017",
+  "dedup_key": "c-017-c9449d6490231373748f19f299ed19d423a1c971-tracer-scoring-cap-fallthrough",
+  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "target_seat": "Tracer",
+  "status": "ready_to_dispatch",
+  "priority": 2,
+  "opened_after": "C-014 VERIFIED",
+  "question": "At internal/subnets/scoring_cap.py:105-107, what is the try/except fall-through path when rank_subnets_by_snapshot fails or returns empty? Cite the heuristic path bytes and when it runs.",
+  "expected_evidence_form": "bytes_read for try/except and fall-through; fetch_method required",
+  "fetch_ladder": [
+    "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/subnets/scoring_cap.py",
+    "https://api.github.com/repos/cryptoreporthub/subnet-dashboard/contents/internal/subnets/scoring_cap.py?ref=c9449d6490231373748f19f299ed19d423a1c971",
+    "mc_paste"
+  ],
+  "falsifier": {
+    "probe": "Read scoring_cap.py around 99-120 at pin",
+    "expected": "Document except path and _heuristic_hunt_pool (or successor) with lines",
+    "refutes_if": "Claims fall-through without citing except body"
+  },
+  "notes": "From Joshua C-014 VERIFIED follow-up (3)."
+}
