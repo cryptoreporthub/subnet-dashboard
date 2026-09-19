@@ -106,3 +106,14 @@ No hard claim (e.g. inversion/scoring_cap) until SMOKE-001 is VERIFIED in `resul
 ## Seeded contradictions (register, do not resolve)
 
 See `contradictions.jsonl` seed rows. Includes WORKER_HEAVY essential vs full; wedge “no open items” vs open F-1/B3; blind-subnet 88 vs 126; orphan 720s vs ~18m; proxy inbound vs scorer egress; rediscovery count drift; Tier A citing memory/PR instead of blobs.
+
+## Ditto coverify lane (Joshua 2026-09-19)
+
+Ditto cross-verifies MCP memories against repo bytes. Grok seats never call Ditto.
+
+When MC requests coverify, the memory/packet MUST include in one shot:
+claim_id, repo, pin_sha (and/or branch), path, line/range, claimed_bytes, fetch_method,
+producer, artifact_path, PR (if any), status, coverify_request=true.
+
+Ditto pulls bytes at the named SHA in that turn. Pull failure = answer.
+Output: line-by-line AGREE/DIVERGE with deciding file:line. No polish.
