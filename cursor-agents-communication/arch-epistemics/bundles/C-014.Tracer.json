@@ -2,50 +2,72 @@
   "schema_version": "1",
   "claim_id": "C-014",
   "bundle_id": "C-014.tracer.1",
-  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
   "verdict": "partial",
   "evidence_class": "repo_blob",
   "fetch_method": "raw",
   "citations": [
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/subnets/scoring_cap.py", "line": 105},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/subnets/scoring_cap.py", "line": 107},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/council/score_snapshots.py", "line": 145},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/council/score_snapshots.py", "line": 166},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/council/score_snapshots.py", "line": 276},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "internal/council/score_snapshots.py", "line": 280},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "tests/test_score_snapshots.py", "line": 50},
-    {"sha": "c9449d6490231373748f19f299ed19d423a1c971", "path": "server.py", "line": 899}
-  ],
-  "mc_validation": {
-    "validated_at": "2026-09-19T22:10Z",
-    "validated_by": "mission-control",
-    "citation_line_checks": "8/8 OK at pin",
-    "subclaims": {
-      "fresh_starvation_via_missing_score_sort_and_cap": {
-        "status": "AFFIRMED",
-        "deciding_lines": [
-          "internal/council/score_snapshots.py:166 scores.get(netuid, -1.0)",
-          "internal/subnets/scoring_cap.py:107 return ranked[:cap]",
-          "internal/council/score_snapshots.py:276-280 write path re-applies _cap_subnets_for_scoring"
-        ]
-      },
-      "stale_mtime_surfaces_stale_scores": {
-        "status": "REFUTED",
-        "deciding_lines": [
-          "internal/council/score_snapshots.py:145-146 age gate returns None",
-          "tests/test_score_snapshots.py:50 assert ranked is None"
-        ]
-      }
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/scoring_cap.py",
+      "line": 105
     },
-    "notes": "bytes_read in Tracer reply is a collage of excerpts; MC re-fetched pin and verified each citation line. Verdict partial stands.",
-    "result": "PASS_schema_and_citations_pending_joshua_spotcheck"
-  },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/scoring_cap.py",
+      "line": 107
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 145
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 166
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 276
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 280
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "tests/test_score_snapshots.py",
+      "line": 50
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 899
+    }
+  ],
+  "bytes_read": "--- internal/subnets/scoring_cap.py:102-109 ---\n102|    try:\n103|        from internal.council.score_snapshots import rank_subnets_by_snapshot\n104|\n105|        ranked = rank_subnets_by_snapshot(subnets, horizon=\"day\")\n106|        if ranked:\n107|            return ranked[:cap]\n108|    except Exception:\n109|        pass\n\n--- internal/council/score_snapshots.py:142-168 ---\n142|    \"\"\"Return subnets sorted by snapshot score, or None if snapshot missing/stale.\"\"\"\n143|    age = snapshot_age_seconds(path)\n144|    limit = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds\n145|    if age is None or age > limit:\n146|        return None\n147|    snap = load_score_snapshot(path)\n148|    if not snap:\n149|        return None\n150|    scores: Dict[int, float] = {}\n151|    for row in snap.get(horizon) or snap.get(\"day\") or []:\n152|        if not isinstance(row, dict):\n153|            continue\n154|        try:\n155|            scores[int(row[\"netuid\"])] = float(row.get(\"total_score\") or 0)\n156|        except (TypeError, ValueError, KeyError):\n157|            continue\n158|    if not scores:\n159|        return None\n160|\n161|    def _key(s: Dict[str, Any]) -> Tuple[float, float]:\n162|        try:\n163|            netuid = int(s.get(\"netuid\") or 0)\n164|        except (TypeError, ValueError):\n165|            netuid = 0\n166|        return (scores.get(netuid, -1.0), float(s.get(\"emission\") or 0))\n167|\n168|    return sorted(subnets, key=_key, reverse=True)\n\n--- internal/council/score_snapshots.py:274-281 ---\n274|            if not subnets:\n275|                subnets, source = _get_subnets_hydrate()\n276|        cap = _snapshot_subnet_cap()\n277|        if cap > 0 and subnets and len(subnets) > cap:\n278|            from server import _cap_subnets_for_scoring\n279|\n280|            subnets = _cap_subnets_for_scoring(subnets, limit=cap)\n281|        ctx = _market_context_with_weights(subnets or [])\n\n--- tests/test_score_snapshots.py:41-50 ---\n41|    # Force mtime into the past\n42|    old = time.time() - 10_000\n43|    os_utime = __import__(\"os\").utime\n44|    os_utime(path, (old, old))\n45|    ranked = snaps.rank_subnets_by_snapshot(\n46|        [{\"netuid\": 1}],\n47|        path=str(path),\n48|        max_age_seconds=60,\n49|    )\n50|    assert ranked is None\n\n--- server.py:892-899 ---\n892|def _cap_subnets_for_scoring(\n893|    subnets: List[Dict[str, Any]],\n894|    limit: Optional[int] = None,\n895|) -> List[Dict[str, Any]]:\n896|    \"\"\"Limit council scoring \u2014 majors represented, mid-cap focus for the rest.\"\"\"\n897|    from internal.subnets.scoring_cap import cap_subnets_for_scoring\n898|\n899|    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)\n",
   "falsifier": {
     "probe": "fetch scoring_cap.py + score_snapshots.py + tests at pin; inspect cap/rank/write and stale mtime gate",
-    "expected": "fresh path: missing snapshot score sorts as -1.0 then [:cap]; write path re-applies cap; stale age returns None",
-    "refutes_if": "missing netuids not defaulted to -1.0 OR cap does not slice ranked[:cap] OR write path never caps when cap>0 OR stale age still returns ranked rows"
+    "expected": "fresh path: missing snapshot score sorts as -1.0 then ranked[:cap]; write path re-applies cap; stale age returns None",
+    "refutes_if": "missing netuids not defaulted to -1.0 OR cap does not slice ranked[:cap] OR write path never caps when cap>0 OR stale age still returns ranked rows OR bytes not from pin raw fetch"
   },
   "scope_tag": "code-only",
   "produced_by": "Tracer",
-  "notes": "AFFIRM fresh-starvation; REFUTE stale-mtime-surfacing. overall partial."
+  "mc_validation": {
+    "validated_by": "mission-control",
+    "citation_line_checks": "8/8 OK",
+    "subclaims": {
+      "fresh_starvation": "AFFIRMED",
+      "stale_mtime_surface": "REFUTED"
+    },
+    "merge_status_requested": "pending_spotcheck"
+  },
+  "notes": "MC re-fetched pin bytes for bytes_read. AFFIRM fresh-starvation; REFUTE stale-mtime-surface; overall partial."
 }
