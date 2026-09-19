@@ -1,0 +1,14 @@
+{
+  "claim_id": "C-014",
+  "status": "pending_spotcheck",
+  "verdict": "partial",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "bundle_path": "bundles/C-014.Tracer.json",
+  "mc_citation_checks": "8/8 OK",
+  "subclaims": {
+    "fresh_starvation": "AFFIRMED",
+    "stale_mtime_surface": "REFUTED"
+  },
+  "updated_at": "2026-09-19T22:10Z",
+  "note": "Awaiting Joshua VERIFIED|REJECT|HOLD on partial finding. No code changes authorized."
+}
