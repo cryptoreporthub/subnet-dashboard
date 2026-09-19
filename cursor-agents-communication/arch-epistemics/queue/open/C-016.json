@@ -1,0 +1,19 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016",
+  "dedup_key": "c-016-c9449d6490231373748f19f299ed19d423a1c971-configtruth-effective-cap",
+  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "target_seat": "ConfigTruth",
+  "status": "ready_to_dispatch",
+  "priority": 1,
+  "opened_after": "C-014 VERIFIED",
+  "related_contradiction": "X-C-016-CAP",
+  "question": "What is the effective scoring/snapshot cap at pin+live? Reconcile server.py:628 TOP_SCORING_UNIVERSE default 20 vs fly.toml SCORE_SNAPSHOT_MAX_SUBNETS=40 (and code default 0). Which env wins on which path?",
+  "expected_evidence_form": "code-only cites + fly.toml cites; live env values log-confirmed or NOT_OBSERVABLE",
+  "falsifier": {
+    "probe": "Read server.py:628, score_snapshots._snapshot_subnet_cap, fly.toml keys; note live /version already matches pin",
+    "expected": "Per-path effective cap stated with citations; live TOP_SCORING_UNIVERSE marked NOT_OBSERVABLE unless observed",
+    "refutes_if": "Asserts a single live cap without path split OR invents live env without observation"
+  },
+  "notes": "Seeded in contradictions.jsonl as X-C-016-CAP. Pair with F-1."
+}
