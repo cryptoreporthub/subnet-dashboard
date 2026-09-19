@@ -27,7 +27,7 @@
   "produced_by": "Tracer",
   "notes": "Line 628 matches locked assignment. Line 633 at pin is _PICK_READ_EXECUTOR (not the assignment).",
   "mc_validation": {
-    "validated_at": "REPLACE_NOW",
+    "validated_at": "2026-09-19T11:14Z",
     "validated_by": "Mission Control",
     "bytes_match_pin_626_630": true,
     "locked_text_present": true,
