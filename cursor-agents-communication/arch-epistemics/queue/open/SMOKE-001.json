@@ -25,16 +25,24 @@
     "path": "server.py",
     "line": 628,
     "text": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
-    "context_lines": [626, 627, 628, 629, 630],
-    "note": "Line 633 at this pin is _PICK_READ_EXECUTOR — not the assignment. Do not treat 633 as drift.",
+    "context_lines": [
+      626,
+      627,
+      628,
+      629,
+      630
+    ],
+    "note": "Line 633 at this pin is _PICK_READ_EXECUTOR \u2014 not the assignment. Do not treat 633 as drift.",
     "verified_by_mc_at_creation": true
   },
   "falsifier": {
     "probe": "Fetch server.py at pin via fetch_ladder; extract lines 626-630",
     "expected": "Line 628 equals TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\")) and bytes_read includes 626-630",
-    "refutes_if": "404 OR empty body OR line 628 missing OR line 628 text differs OR repo_sha in bundle ≠ campaign pin OR fetch_method missing OR bytes from model memory only"
+    "refutes_if": "404 OR empty body OR line 628 missing OR line 628 text differs OR repo_sha in bundle \u2260 campaign pin OR fetch_method missing OR bytes from model memory only"
   },
-  "pass_rule": "Bundle includes literal lines 626-630 + fetch_method; smoke SATISFIED. Else BLOCKED — stop and fix read path before any hard claim.",
-  "blocks": ["hard-claim-tickets"],
+  "pass_rule": "Bundle includes literal lines 626-630 + fetch_method; smoke SATISFIED. Else BLOCKED \u2014 stop and fix read path before any hard claim.",
+  "blocks": [
+    "hard-claim-tickets"
+  ],
   "notes": "Constitution FROZEN. Dispatch Tracer only. Ledger merges from bundles/ file after MC strip+validate."
 }
