@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-015",
+  "dedup_key": "c-015-c9449d6490231373748f19f299ed19d423a1c971-tracer-age-feed-heuristic-callers",
+  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
+  "target_seat": "Tracer",
+  "status": "ready_to_dispatch",
+  "priority": 2,
+  "opened_after": "C-014 VERIFIED",
+  "question": "What feeds `age` at internal/council/score_snapshots.py:145-146 (via snapshot_age_seconds)? List all callers of _heuristic_hunt_pool with SHA:path:line.",
+  "expected_evidence_form": "bundles with fetch_method, bytes_read, citations; caller list finite or NOT_OBSERVABLE",
+  "fetch_ladder": [
+    "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/council/score_snapshots.py",
+    "https://api.github.com/repos/cryptoreporthub/subnet-dashboard/contents/internal/council/score_snapshots.py?ref=c9449d6490231373748f19f299ed19d423a1c971",
+    "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/subnets/scoring_cap.py",
+    "mc_paste"
+  ],
+  "falsifier": {
+    "probe": "Open snapshot_age_seconds definition and all references to _heuristic_hunt_pool at pin",
+    "expected": "Cited definition of age + complete caller list or explicit NOT_OBSERVABLE gaps",
+    "refutes_if": "Age source mis-cited OR callers invented without grep/blob evidence"
+  },
+  "notes": "From Joshua C-014 VERIFIED follow-up (1)."
+}
