@@ -23,7 +23,8 @@
     "citations",
     "falsifier",
     "scope_tag",
-    "produced_by"
+    "produced_by",
+    "fetch_method"
   ],
   "pin_object": {
     "repo_sha": "required string",
@@ -35,7 +36,9 @@
     "expected": "non-empty string",
     "refutes_if": "non-empty string; REJECT N/A|none|unknown"
   },
+  "fetch_method_enum": ["raw", "api", "mc_paste"],
   "verdict_enum": ["confirmed", "refuted", "partial", "NOT_OBSERVABLE"],
   "reject_falsifier_literals": ["N/A", "n/a", "none", "None", "unknown", "UNKNOWN", ""],
-  "router_rule": "Malformed bundles never forward to Ledger; return to producing seat only."
+  "router_rule": "MC strips prose/fences, parses first JSON object, validates schema; malformed never forward to Ledger; return to producing seat only.",
+  "fetch_ladder": ["raw.githubusercontent.com", "api.github.com/repos/.../contents?ref=", "mc_paste"]
 }
