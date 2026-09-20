@@ -1,46 +1,27 @@
-# DRAFT — Read-only live-config probe (DO NOT RUN)
+# PROBE-LIVE-CONFIG — DRAFT ONLY (DO NOT RUN)
 
-**status:** draft_only  
-**created:** 2026-09-20T00:44Z  
-**created_by:** mission-control  
-**joshua_go_to_execute:** REQUIRED before any run  
-**related:** F-1b (live WORKER_HEAVY NOT_OBSERVABLE), C-016, F-1
+**Status:** DRAFT — awaiting separate Joshua Go to execute  
+**Approver:** Joshua  
+**Drafted:** 2026-09-20T13:17Z  
+**Pin context:** campaign pin `c9449d6490231373748f19f299ed19d423a1c971` (code-only); this probe would observe live prod/runtime only
 
 ## Purpose
-Observe whether named process env keys are visible via an already-public or explicitly approved read-only surface, enough to close F-1b / raise config claims toward Tier A. Prefer surfaces that cannot return Fly secrets.
-
-## Named approver
-- **Approver:** Joshua  
-- **Second approver (optional):** none unless Joshua names one  
-- **MC may not self-approve.**
-
-## Proposed methods (pick one at Go time)
-1. **Public `/version` only** (already captured as E-PROD-VERSION) — confirms deploy pin; **cannot** read WORKER_HEAVY.  
-2. **Existing public health/config redacted endpoint** (if one exists at pin) — inventory first code-only; run only if endpoint is already public and redacts secrets.  
-3. **GitHub Actions read-only workflow** (previously designed, never run) — inspect machine config inventory without MC shell `flyctl` — requires separate workflow Go + blast note.  
-4. **Forbidden without new Go:** `flyctl ssh`, `fly secrets`, scraping private admin, injecting debug routes, printing `os.environ` in prod.
+Read-only observation of live process/env and/or filesystem facts that remain NOT_OBSERVABLE from repo blobs (e.g. live WRITE_TIMEOUT / WORKER_HEAVY / whether orphan late-write advances score_snapshots.json mtime in prod).
 
 ## Blast radius
-- **In scope if approved:** one GET to a named public URL, or one read-only GH Actions workflow dispatch already reviewed.  
-- **Max requests:** 1–3 GETs.  
-- **No writes, no deploys, no secret listing, no SSH, no config mutate.**
+- **In scope:** read-only HTTP (`/version`, maybe status endpoints already public), and/or read-only listing of deployed artifact metadata if an approved read-only workflow exists.
+- **Out of scope / cannot affect:** deploys, Fly machine restarts, secret mutation, writes to `data/`, scheduler triggers, traffic generation beyond a single GET, any code change on PR #1294 or main.
 
 ## What it cannot affect
-- Fly machines / scale / image  
-- Fly secrets store  
-- Process env  
-- Deploys / releases  
-- Ditto / Ledger claim tiers (MC records evidence; Joshua still promotes)  
-- Customer data paths beyond the single public GET body  
+- Application code, config files in git, secrets, machine lifecycle, background job schedules, user data mutation.
 
-## Success / fail
-- **Success:** documented response body + timestamp + whether WORKER_HEAVY (or named keys) appear; if absent → remains NOT_OBSERVABLE.  
-- **Fail/abort:** any auth wall, secret material in body, or non-GET method required.
+## Proposed steps (NOT AUTHORIZED until Go)
+1. GET prod `/version` — timestamped receipt (pin check only).
+2. Optional: GET existing read-only status endpoints already in contract tests — no new routes.
+3. Stop. Report raw JSON + timestamps. No follow-on actions.
 
-## Current standing evidence (already attached; not a probe run)
-- `evidence/E-PROD-VERSION-2026-09-20.json` — GET https://subnet-dashboard.fly.dev/version @ 2026-09-20T00:44:36Z  
-- Body: version c9449d6 / sentry_release = campaign pin / python 3.12.14  
-- **Does not close F-1b.**
+## Explicit non-actions
+- Do not `flyctl`, do not SSH, do not `touch`/`write` snapshot files, do not run pytest against prod, do not open remediation PRs.
 
-## Explicit non-execution
-This file is a draft. **No probe was run** under this Go except the already-public `/version` capture requested as pin evidence.
+## Approval line
+`STATUS: DRAFT — do not run without separate Joshua Go naming this probe.`
