@@ -1,0 +1,62 @@
+{
+  "claim_id": "A2-REPIN",
+  "status": "VERIFIED",
+  "verdict": "partial",
+  "evidence_class": "repo_blob",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "map_claim": "A2 timeout-bounds-wait-not-work / orphaned-thread defect",
+  "rows": [
+    {
+      "subclaim": "Timeout on wait does not cancel work \u2014 ThreadPoolExecutor.shutdown(wait=False) leaves running workers",
+      "pin_cites": [
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/resolver_scheduler.py:907",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:382",
+        "c9449d6490231373748f19f299ed19d423a1c971:server.py:810"
+      ],
+      "bytes_note": "census P-CENSUS-001 shutdown(wait=False) + .result(timeout=) sites",
+      "status": "cited_at_pin"
+    },
+    {
+      "subclaim": "Caller uses fut.result(timeout=N) then pool.shutdown(wait=False) \u2014 orphan window between timeout and worker exit",
+      "pin_cites": [
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/resolver_scheduler.py:861",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/resolver_scheduler.py:907",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:382",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/pump/desk_snapshot_scheduler.py:128",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/pump/desk_snapshot_scheduler.py:135"
+      ],
+      "status": "cited_at_pin"
+    },
+    {
+      "subclaim": "Some .result() calls have no timeout \u2014 unbounded wait",
+      "pin_cites": [
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/chain_client.py:589",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/worker_proxy.py:753",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/bots/mission_control.py:509",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:538",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/integrations/status.py:384"
+      ],
+      "status": "cited_at_pin"
+    },
+    {
+      "subclaim": "Daemon Thread( sites for background loops (not the same as orphan-after-timeout, but thread surface census)",
+      "pin_cites": [
+        "c9449d6490231373748f19f299ed19d423a1c971:server.py:273",
+        "c9449d6490231373748f19f299ed19d423a1c971:internal/background_boot.py:46"
+      ],
+      "status": "cited_at_pin",
+      "note": "82 Thread( hits in P-CENSUS-001; list truncated to exemplars"
+    },
+    {
+      "subclaim": "Observed ~18min orphan / freeze magnitude",
+      "pin_cites": [],
+      "status": "NOT_OBSERVABLE",
+      "note": "prod observation / wedge doc \u2014 not a repo blob at pin"
+    }
+  ],
+  "depends_on": "P-CENSUS-001",
+  "verified_by": "mission-control",
+  "verified_at": "2026-09-20T01:06Z",
+  "awaiting_joshua_spotcheck": true,
+  "updated_at": "2026-09-20T01:06Z"
+}
