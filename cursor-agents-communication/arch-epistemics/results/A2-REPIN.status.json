@@ -1,9 +1,6 @@
 {
   "claim_id": "A2-REPIN",
   "status": "HOLD",
-  "hold_reason": "Joshua manual spot-check required before any further action",
-  "prior_status": "pending_spotcheck",
-  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
-  "result_path": "results/A2-REPIN.json",
-  "updated_at": "2026-09-20T01:42Z"
+  "hold_reason": "Joshua manual spot-check",
+  "updated_at": "2026-09-20T01:54Z"
 }
