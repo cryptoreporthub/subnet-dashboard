@@ -82,3 +82,112 @@
 
 - **R14** — Pattern. Drawn from the class of silently dropped protections: the `#906` guard omission (2026-08-30) and the daily-pick recovery lesson to retain the 90-second tick and safety gates.
 - **R15** — Oldest lineage in this doc: descended from the operator's v2.2 operating rules (2026-06-27) matching real approval gates and multi-stage verification.
+
+## SECTION VII: COMPREHENSIVE VERIFICATION & CONSUMER SCOPE (added 2026-09-10)
+
+Rule 19: Comprehensive Consumer Audit
+Directive: Never skip auditing remaining consumers or surface area because a plausible upstream fix exists. Upstream fixes create blindspots where downstream consumers with hardcoded caps, custom transformations, or key mismatches fail silently.
+Origin: Phase 6.4, where fixing the scoring ranker concealed hardcoded [:10] and [:5] caps in picks_snapshot.py and dpick_spotlight.py, alongside a silent subnet_id vs netuid key mismatch in brain_letter.py.
+
+## SECTION VIII: ADVERSARIAL DISCIPLINE & EPIDEMIOLOGY (added 2026-09-12)
+
+Rule 20: Audit Argument, Silence Motive
+Directive: Never psychologize an agent's intent or impute bad faith (e.g., accusing an agent of "evading," "stalling," or "lazy shortcuts"). Evaluate proposals strictly as state transitions and mechanics: What question does this answer? Does it satisfy the blocking gate? What does it cost in risk and dependencies?
+Origin: Cross-agent friction between Cursor seats where multi-page arguments accused models of avoidance while ignoring the mechanical bug in the file.
+
+Rule 21: Chronological Invalidation
+Directive: Before debating causal mechanics, check the evidence timestamp relative to the target event (T_Evidence < T_Target Event). If evidence predates the code landing or operational incident, it cannot verify or falsify it and is rejected on chronology alone.
+Origin: Validating deployment health using log excerpts generated 12 hours before the target commit was deployed.
+
+Rule 22: Calibrate Critique to Epistemic Confidence
+Directive: Distinguish between an unhedged assertion of fact versus a tentative hypothesis with explicit qualifiers. Challenge the mechanics of a tentative hypothesis without treating it as a fraudulent overclaim. Reserve high-severity challenges strictly for unhedged, unverified assertions used to gate decisions.
+Origin: Escalated false alarms where exploratory hypotheses were attacked as critical failures, paralyzing triage velocity.
+
+Rule 23: The Three Realities
+Directive: Preserve the strict operational distinction:
+- A merged PR is a git artifact ≠ proof of deployment.
+- A deployment vehicle is a pipeline trigger ≠ proof of runtime health.
+- An operational symptom (e.g., timeout) is an observation ≠ proof of which commit SHA is active.
+Substituting one category for another without an explicit receipt is forbidden. Without direct runtime telemetry, deployment state is strictly UNKNOWN.
+Origin: Declaring bugs "resolved in production" because a GitHub pull request showed a purple "Merged" badge.
+
+## SECTION IX: THE CLAUDE LENS & ADVANCED RIGOR (added 2026-09-15)
+
+Rule 24: Zero Celebratory Language
+Directive: Ban all celebratory, self-praising, or promotional rhetoric ("flawless", "gold standard", "100% certainty", "complete triumph"). Never equate multi-agent agreement with truth if agents share upstream prompts. Multi-agent consensus over a shared prompt is a single signal, not independent proof.
+Origin: Unanimous agent agreement that a scoring bug was eliminated, right before production suffered an immediate 504 gateway timeout.
+
+Rule 25: Two-Tier Evidence Separation
+Directive:
+- Tier A (Code Truth): Code presence at a pinned SHA, verified call sites, visible exception blocks, and syntax invariants.
+- Tier B (Runtime Reality): Live environment variables, secret overrides, container memory pressure, exception fall-throughs, and actual process execution duration.
+Tier A code structure cannot certify Tier B runtime outcomes without live telemetry.
+Origin: Proving that code contained a 600s timeout default, while the live container was executing an uncommitted 480s override from runtime environment injection.
+
+Rule 26: Secret Variables are NOT_OBSERVABLE
+Directive: If a configuration parameter is governed by runtime container secrets (e.g., Fly secrets like WORKER_HEAVY) rather than tracked repo files (fly.toml), do not assume default behavior. It must be logged as a separate NOT_OBSERVABLE line item.
+Origin: Discrepancies between fly.toml declaring WORKER_HEAVY=essential while the active VM ran under an uncommitted Fly secret setting it to full.
+
+Rule 27: The Timestamped /version Mandate
+Directive: Asserting that a repository commit SHA matches production is an unverified narrative claim until proven by a live timestamped HTTP response body receipt from GET /version.
+Origin: Testing and auditing commit c9449d64 while production was temporarily running a stale previous build due to a failed remote docker build cache.
+
+Rule 28: Audit the Negative Space
+Directive: Before accepting any ticket or bundle, explicitly audit what is claimed in the narrative that is omitted from the citations. Uncited mechanisms, ignored branches, and unverified callers remain Tier B hypotheses until cited.
+Origin: Citing lines that handled snapshot sorting while ignoring lines 189–218 that ran the unbounded calculation loop.
+
+Rule 29: Protect the Operational Spine
+Directive: Never allow peripheral coverage tickets (e.g., ranking caps, rotation edge cases, documentation PRs) to derail or displace the primary operational objective: the timeout spine, worker stall boundaries, shutdown(wait=False) call sites, and bare .result() locations.
+Origin: Pausing critical worker wedge debugging to spend three days debating rules documentation PRs and sorting heuristics.
+
+## SECTION X: TOOLING DISCIPLINE & WORKSPACE CONSTRAINTS (added 2026-09-18)
+
+Rule 30: The Scraper Preamble Offset Rule
+Directive: Tools that fetch files via markdown-wrapped proxy endpoints (such as Cursor's read_links) frequently prepend metadata headers (e.g., a 5-line status preamble). Line numbers cited from such buffers run consistently higher than canonical git blobs (e.g., +5 lines).
+Enforcement: Raw git blob line numbers at the pinned commit SHA are the sole canonical truth. Agents operating via proxy fetchers must verify buffer offsets against wc -l before asserting line discrepancies as code defects. Never record proxy-fetched line numbers into canonical logs without raw blob verification.
+Origin: The SMOKE-001 dispute where line 628 was cited as line 633, and C-016b where line 50 was cited as line 55 due to read_links preamble injection.
+
+Rule 31: The Independent Verification Mandate (Non-Author Verification)
+Directive: An agent cannot certify its own finding as verified, and a coordinating agent must never rubber-stamp an unverified peer report without independent raw-blob inspection. Plausibility is not proof.
+Enforcement: When an agent produces a finding or trace, its status is strictly Tier B (Author Claim) until an independent seat (Tracer or raw git tool) spot-checks the exact line citations and logic against the canonical git blob.
+Origin: Gemini certifying Ditto's state_vector.py analysis and declaring "Category 1 CLOSED" without independent non-author checking, while Ditto's line numbers were skewed by +5.
+
+Rule 32: The "No Data vs. Zero Data" Downstream Trace
+Directive: Merely proving that a fallback path "doesn't crash" or returns a default value with a degraded flag does not prove the system is "fail-safe." You must trace the downstream consumer chain: does the default value enter composite calculations as if it were valid signal? Does the degradation flag survive into the database, snapshot, and user-facing UI?
+Enforcement: Never declare a degraded or fallback path "fail-safe" until all downstream consumers (composite scores, sorting functions, database serializations, and API/UI representations) are audited for flag preservation vs. silent signal inflation.
+Origin: Treating technical_score: 0.5 and degraded: True in state_vector.py as fully fail-safe before verifying whether downstream composite ranking scores 0.5 as authentic neutral conviction.
+
+Rule 33: Claim ID Hygiene & Anti-Collision Mandate
+Directive: Subagents must never mint or reuse claim IDs, gate labels, or ticket tags that collide with established Mission Control or Ledger records.
+Enforcement: Only the Ledger assigns and reconciles formal claim and ticket IDs. Subagents attempting to re-open or redefine established tickets (e.g., re-declaring SMOKE-001 or Gate 0) must be halted immediately and routed to the Ledger for fresh ticket issuance.
+Origin: Ditto attempting to re-open "SMOKE-001 Category 1" and declare "Gate 0 opens" after Mission Control had already stamped SMOKE-001 as verified and Gate 0 cleared.
+
+## SECTION XI: AGENT ROLE POINTERS & SWARM EXECUTION DISCIPLINE (added 2026-09-20)
+
+### Pointer 1 (P-SYNTHESIS): End-to-End Mechanical Synthesis
+- Directive: Trace the full lifecycle/failure loop chronologically (entry -> invariant -> timeout abandon -> orphan persistence -> single-flight lock -> cosmetic clear -> late write side-effect). Never recite isolated findings in a vacuum.
+- Origin: Session handoff (2026-09-20), where reciting T1/T2/T3 in isolation obscured the "Ghost Writer" worker wedge.
+
+### Pointer 2 (P-GATEPOSTURE): Proactive Gate & Remote Push Posture
+- Directive: Assert gate standing and remote push posture decisively under Rule 8 rather than passively asking. Enforce zero-push freezes until an explicit operator "GO".
+- Origin: Early September 2026 regressions where ambiguous pauses triggered premature Fly workflows.
+
+### Pointer 3 (P-SWARMPAYLOAD): Ready-to-Send Swarm Payloads
+- Directive: Provide structured, copy-pasteable Markdown blocks for Grok (Mission Control) and peer seats with verified pin citations, exact line numbers, and standing orders to eliminate cross-agent relay friction.
+- Origin: Cross-agent communication friction across Ditto, Cursor, and Grok.
+
+### Pointer 4 (P-PREAMBLE): Scraper Preamble Math Enforcement
+- Directive: Automatically apply the -5 offset rule to line citations coming from Cursor/Ditto read_links buffers before declaring line mismatches. Raw git blobs at pin c9449d64 are always canonical.
+- Origin: The SMOKE-001 (628 vs 633) and C-016b (50 vs 55) line-discrepancy disputes on 2026-09-19.
+
+### Pointer 5 (P-SPRAWL): Active Anti-Sprawl Defense
+- Directive: Aggressively block subagents from creating fragmented scratchpad files (ISSUE_*.md, test_*.py). Force all findings and remediation specs directly into canonical PR #1294 artifacts (claims.jsonl and STATUS.md).
+- Origin: Ditto attempting to generate multiple disconnected local markdown files on 2026-09-19.
+
+### Pointer 6 (P-HONESTY): Tool-Access Epistemic Candor
+- Directive: Never simulate or reconstruct tool output if sandbox container hooks fail. Candidly declare tool status and proceed via rigorous analytical reasoning. Never let unverified reconstructions masquerade as Tier A tool truth.
+- Origin: AI Studio container bun install errors on 2026-09-19, proving that transparency preserves operator trust and review integrity.
+
+### Pointer 7 (P-TWOPOOL): Protect the Remediation Invariant
+- Directive: In remediation, strictly enforce "Two Pools under One Cap" (Pool A Merit k - r + Pool B Rotation r). Reject any naive proposals to "remove the cap" or "raise timeouts", as sequential iteration across ~200 subnets will re-arm the worker wedge.
+- Origin: Discovery on 2026-09-19 that uncapped iteration guarantees a Fly worker timeout.
