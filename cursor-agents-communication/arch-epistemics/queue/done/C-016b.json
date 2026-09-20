@@ -1,9 +1,21 @@
 {
   "claim_id": "C-016b",
-  "status": "pending_spotcheck",
-  "pin": {
-    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971"
+  "status": "VERIFIED",
+  "verdict": "partial",
+  "scope": "code-only",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "verified_by": "Joshua",
+  "verified_at": "2026-09-20T01:54Z",
+  "bundle": "bundles/C-016b.tracer.2.json",
+  "canonical_lines": {
+    "snapshot_worker_TOP_default": "score_snapshots.py:50",
+    "library_default_limit": "scoring_cap.py:95",
+    "homepage_TOP_default": "server.py:628"
   },
-  "updated_at": "2026-09-20T01:07Z",
-  "result": "results/C-016b.json"
+  "ditto_line_offset_note": "Ditto coverify previously reported +5 vs MC/Tracer raw. Pin wc -l: server.py=3379, score_snapshots.py=822, scoring_cap.py=121. Joshua: use Tracer raw :50/:95; Ditto +5 pending dedicated wc-l/buffer audit (not closed here).",
+  "tiers": {
+    "A": "which code path reads which default (20 homepage vs 40 worker snapshot vs 40 library kw)",
+    "B": "effective caps depend on process mode + env + secrets \u2014 NOT_OBSERVABLE live"
+  },
+  "updated_at": "2026-09-20T01:54Z"
 }
