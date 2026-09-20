@@ -1,9 +1,18 @@
 {
   "claim_id": "C-016b",
-  "status": "awaiting_bundle",
+  "status": "pending_spotcheck",
   "revision": 2,
-  "note": "Joshua 2026-09-20: do not close from Ditto/prior bundle; await Tracer.2 full defaults map",
-  "prior_bundle": "bundles/C-016b.tracer.1.json",
-  "prior_bundle_status": "retained_not_closing",
-  "updated_at": "2026-09-20T01:42Z"
+  "verdict": "confirmed",
+  "evidence_class": "code-only",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "bundle": "bundles/C-016b.tracer.2.json",
+  "path_map_summary": {
+    "homepage_scoring_TOP_default": 20,
+    "snapshot_worker_TOP_default": 40,
+    "library_default_limit": 40,
+    "snapshot_call_site": "score_snapshots.py:276"
+  },
+  "mc_spotcheck": "PASS",
+  "awaiting": "Joshua VERIFIED|REJECT|HOLD",
+  "updated_at": "2026-09-20T01:44Z"
 }
