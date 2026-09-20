@@ -1,17 +1,21 @@
 # Arch-epistemics STATUS
 
-## Confirmed
-- Pin `c9449d6490231373748f19f299ed19d423a1c971`
-- Rules 19-29 operational (no rules PR)
+## Board
+**UNFROZEN** 2026-09-20T08:05Z (Joshua GO). Verification/audit phase only — Rule 8: zero remediation code edits, zero PR merges of product code.
 
-## Claims
-- C-016 / C-016b VERIFIED (code-only partial; Tier B effective caps)
-- P-CENSUS-001 VERIFIED Tier A inventory
-- **P-CENSUS-002 HOLD** — Category A/B accepted (A=4, B=16, OTHER=3). Causal starvation narrative still HOLD.
-- **P-CENSUS-002b VERIFIED (code-only)** — Cat B worker internal deadlines at pin:
-  - desk run_snapshot: **BOUNDED** — upper bound 2 * SNAPSHOT_STAGE_TIMEOUT_SECONDS (default 60s); cite desk_snapshot.py:56 stage Event.wait
-  - score build: **UNBOUNDED** — no wall-clock inside build_full_universe_snapshot loop (score_snapshots.py:189-218); caller fut.result at :382 is Category B external; build continues on timeout
-- **A2-REPIN HOLD**
+## Pin
+`c9449d6490231373748f19f299ed19d423a1c971`
+
+## Accepted / stamped
+- **P-CENSUS-002b VERIFIED (code-only)** — desk BOUNDED; score UNBOUNDED (`score_snapshots.py:189-218`)
+- **C-018 STAMPED** — inversion paradox dual locus + 20/40 asymmetric cap; Two Pools design noted not authorized
+
+## Active
+- **P-CENSUS-002c OPEN → Tracer** — orphaned score-build held state, late `data/score_snapshots.json` write after caller timeout, `_clear_stuck_scoring` (:471 def / ~:610 call) vs concurrent second build. Pin cites only.
+
+## HOLD
+- P-CENSUS-002 causal starvation narrative
+- A2-REPIN
 
 ## last_updated
-2026-09-20T04:36Z
+2026-09-20T08:05Z
