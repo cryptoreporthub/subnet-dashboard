@@ -1,0 +1,63 @@
+{
+  "claim_id": "P-CENSUS-002b",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "fetch_method": "raw",
+  "produced_by": "Tracer",
+  "verdict": "confirmed",
+  "sites": [
+    {
+      "id": "desk_run_snapshot",
+      "entry_cite": "internal/pump/desk_snapshot.py:206",
+      "category_b_submit_cite": "internal/pump/desk_snapshot_scheduler.py:120",
+      "category_b_result_timeout_cite": "internal/pump/desk_snapshot_scheduler.py:128",
+      "internal_timeouts": [
+        {
+          "cite": "internal/pump/desk_snapshot.py:56",
+          "seconds": 30.0,
+          "kind": "other",
+          "notes": "SNAPSHOT_STAGE_TIMEOUT_SECONDS default 30 (env PUMP_DESK_SNAPSHOT_STAGE_TIMEOUT_SECONDS); threading.Event.wait; applied once per collector stage"
+        },
+        {
+          "cite": "internal/worker_proxy.py:760",
+          "seconds": 4.0,
+          "kind": "http",
+          "notes": "fetch_worker_json_sync default WORKER_PEER_TIMEOUT_SECONDS=4 when desk_payload:246 calls without timeout=; httpx read/write; \u22641 timeout failover at worker_proxy.py:672-674"
+        },
+        {
+          "cite": "internal/worker_peer.py:29",
+          "seconds": 12.0,
+          "kind": "http",
+          "notes": "get_worker_peer remote path passes timeout=WORKER_PEER_TIMEOUT_SECONDS default 12 into fetch_worker_json_sync (learning-health collector may hit this)"
+        }
+      ],
+      "thread_duration": "BOUNDED",
+      "upper_bound_formula": "2 * SNAPSHOT_STAGE_TIMEOUT_SECONDS (+ local disk save). Defaults: 2*30=60s wall for Category B worker thread running run_snapshot. Stage wait returns even if daemon collector continues. Category B fut.result(SNAPSHOT_TIMEOUT_SECONDS default 120) is caller-side, not an internal worker deadline.",
+      "unbounded_edge": null,
+      "bytes_read": "=== internal/pump/desk_snapshot_scheduler.py:116-128 ===\n116|        def _run() -> Dict[str, Any]:\n117|            try:\n118|                from internal.pump.desk_snapshot import run_snapshot\n119|\n120|                return run_snapshot(save=True)\n121|            finally:\n122|                _cycle_lock.release()\n123|\n124|        try:\n125|            future = pool.submit(_run)\n126|            submitted = True\n127|            try:\n128|                return future.result(timeout=SNAPSHOT_TIMEOUT_SECONDS)\n\n=== internal/pump/desk_snapshot.py:20-22 ===\n20|SNAPSHOT_STAGE_TIMEOUT_SECONDS = max(\n21|    1.0, float(os.environ.get(\"PUMP_DESK_SNAPSHOT_STAGE_TIMEOUT_SECONDS\", \"30\"))\n22|)\n\n=== internal/pump/desk_snapshot.py:55-62 ===\n55|    threading.Thread(target=_run, daemon=True, name=f\"pump-snapshot-{label}\").start()\n56|    if not done.wait(timeout=SNAPSHOT_STAGE_TIMEOUT_SECONDS):\n57|        logger.warning(\n58|            \"pump desk snapshot stage timed out: %s after %.1fs\",\n59|            label,\n60|            SNAPSHOT_STAGE_TIMEOUT_SECONDS,\n61|        )\n62|        return dict(fallback)\n\n=== internal/pump/desk_snapshot.py:165-167 ===\n165|def build_pump_desk_snapshot() -> Dict[str, Any]:\n166|    pump = _collect_pump_desk()\n167|    health = _collect_learning_health()\n\n=== internal/pump/desk_snapshot.py:206-210 ===\n206|def run_snapshot(*, save: bool = True) -> Dict[str, Any]:\n207|    payload = build_pump_desk_snapshot()\n208|    if save:\n209|        payload[\"path\"] = save_snapshot(payload)\n210|    return payload\n\n=== internal/pump/desk_payload.py:240-246 ===\n240|    try:\n241|        from internal.data_volume import needs_worker_volume_proxy\n242|\n243|        if needs_worker_volume_proxy():\n244|            from internal.worker_proxy import fetch_worker_json_sync\n245|\n246|            remote = fetch_worker_json_sync(\"/api/pump-alerts\")\n\n=== internal/worker_proxy.py:756-775 ===\n756|def fetch_worker_json_sync(path: str, *, timeout: Optional[float] = None) -> Dict[str, Any]:\n757|    \"\"\"Sync GET for listener_status and worker peer probes (retries alternate bases).\"\"\"\n758|    if timeout is None:\n759|        try:\n760|            timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"4\"))\n761|        except ValueError:\n762|            timeout = 4.0\n763|\n764|    async def _load() -> Dict[str, Any]:\n765|        peer_timeout = httpx.Timeout(\n766|            connect=min(3.0, timeout),\n767|            read=timeout,\n768|            write=timeout,\n769|            pool=min(3.0, timeout),\n770|        )\n771|        resp = await _fetch_worker_http(\n772|            path,\n773|            timeout=peer_timeout,\n774|            fast_path=True,\n775|        )\n\n=== internal/worker_proxy.py:618,672-674 ===\n618|    # Allow one timeout failover (flycast\u21926PN) then stop \u2014 never 3\u00d78s storms.\n672|            if saw_timeout:\n673|                break\n674|            saw_timeout = True\n\n=== internal/worker_peer.py:29-33 ===\n29|        timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"12\"))\n30|        probe_path = os.environ.get(\"WORKER_PEER_PROBE_PATH\", \"/api/ops/worker-peer\").strip()\n31|        if not probe_path.startswith(\"/\"):\n32|            probe_path = f\"/{probe_path}\"\n33|        remote = fetch_worker_json_sync(probe_path, timeout=timeout)"
+    },
+    {
+      "id": "score_build",
+      "entry_cite": "internal/council/score_snapshots.py:291",
+      "build_cite": "internal/council/score_snapshots.py:171",
+      "category_b_result_timeout_cite": "internal/council/score_snapshots.py:382",
+      "internal_timeouts": [
+        {
+          "cite": "internal/indicators/price_fetcher.py:46",
+          "seconds": 10,
+          "kind": "http",
+          "notes": "LIVE_PRICE_TIMEOUT default 10; used by requests.get in price_fetcher (e.g. :125). Only reachable from score build if SCORE_SNAPSHOT_SCORE_HOUR enables hour scoring \u2192 score_subnet_for_hour \u2192 _lazy_fill_price_candles \u2192 fetch_ohlcv. Default _score_hour_enabled is off (:249-260). Day path uses allow_hydration=False (:1785-1791) and does not apply this timeout."
+        }
+      ],
+      "thread_duration": "UNBOUNDED",
+      "upper_bound_formula": null,
+      "unbounded_edge": "No wall-clock deadline inside _build_and_save / build_full_universe_snapshot. Loop scores every tradable row (:189-218) with no per-row or aggregate timer. Default day-only path has zero HTTP timeouts. Optional hour path may add per-request LIVE_PRICE_TIMEOUT=10 but still no N-row ceiling. Caller fut.result(SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS default 600) at :382 is Category B external, not internal; on timeout build continues in background (:383-389).",
+      "bytes_read": "=== internal/council/score_snapshots.py:291-306 ===\n291|    def _build_and_save() -> Dict[str, Any]:\n292|        payload = build_full_universe_snapshot(\n293|            subnets or [],\n294|            ctx,\n295|            progress_cb=progress_cb,\n296|        )\n297|        payload[\"source\"] = source\n298|        save_score_snapshot(payload)\n299|        return {\n300|            \"ok\": True,\n301|            \"count\": payload.get(\"count\"),\n302|            \"written_at\": payload.get(\"written_at\"),\n303|            \"path\": SCORE_SNAPSHOTS_PATH,\n304|        }\n305|\n306|    timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS\n\n=== internal/council/score_snapshots.py:380-382 ===\n380|    fut.add_done_callback(_log_build_completion)\n381|    try:\n382|        return fut.result(timeout=timeout)\n\n=== internal/council/score_snapshots.py:171-218 ===\n171|def build_full_universe_snapshot(\n172|    subnets: List[Dict[str, Any]],\n173|    market_context: Optional[Dict[str, Any]] = None,\n174|    *,\n175|    score_hour: Optional[bool] = None,\n176|    progress_cb: Optional[Callable[[int, int], None]] = None,\n177|) -> Dict[str, Any]:\n178|    \"\"\"Score every subnet (background only). Returns serializable snapshot.\"\"\"\n179|    from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour\n180|    from internal.subnets.tradable import tradable_subnets\n181|\n182|    if score_hour is None:\n183|        score_hour = _score_hour_enabled()\n184|    market_context = market_context or {}\n185|    rows = tradable_subnets(subnets) if subnets else []\n186|    hour_rows: List[Dict[str, Any]] = []\n187|    day_rows: List[Dict[str, Any]] = []\n188|    total = len(rows)\n189|    for idx, sn in enumerate(rows):\n190|        try:\n191|            netuid = int(sn.get(\"netuid\"))\n192|        except (TypeError, ValueError):\n193|            continue\n194|        if score_hour:\n195|            try:\n196|                h = score_subnet_for_hour(sn, market_context)\n197|                hour_rows.append(\n198|                    {\n199|                        \"netuid\": netuid,\n200|                        \"total_score\": float(h.get(\"total_score\") or 0),\n201|                        \"name\": sn.get(\"name\"),\n202|                        \"recovery_context\": h.get(\"recovery_context\"),\n203|                    }\n204|                )\n205|            except Exception:\n206|                pass\n207|        try:\n208|            d = score_subnet_for_day(sn, market_context)\n209|            day_rows.append(\n210|                {\n211|                    \"netuid\": netuid,\n212|                    \"total_score\": float(d.get(\"total_score\") or 0),\n213|                    \"name\": sn.get(\"name\"),\n214|                    \"recovery_context\": d.get(\"recovery_context\"),\n215|                }\n216|            )\n217|        except Exception:\n218|            pass\n\n=== internal/council/score_snapshots.py:249-260 ===\n249|def _score_hour_enabled() -> bool:\n250|    \"\"\"Hour scoring doubles CPU on worker \u2014 day-only is enough for ranking.\"\"\"\n251|    default = \"off\"\n252|    try:\n253|        from internal.run_mode import is_worker_mode\n254|\n255|        if is_worker_mode():\n256|            default = \"off\"\n257|    except Exception:\n258|        pass\n259|    flag = os.environ.get(\"SCORE_SNAPSHOT_SCORE_HOUR\", default).strip().lower()\n260|    return flag in (\"1\", \"true\", \"yes\", \"on\")\n\n=== internal/council/state_vector.py:1776-1791 ===\n1776|def score_subnet_for_day(\n1777|    subnet_data: Dict[str, Any],\n1778|    market_context: Optional[Dict[str, Any]] = None,\n1779|) -> Dict[str, Any]:\n1780|    \"\"\"24h score (0-100) emphasizing yield, trend, and lower volatility.\"\"\"\n1781|    sn = subnet_data or {}\n1782|    # Daily picks run on the request/scheduler critical path.  Technical\n1783|    # history is cache-only here; the recovery worker may hydrate cold rows\n1784|    # separately without holding up pick publication.\n1785|    indicators = _compute_technical_indicators(sn, allow_hydration=False)\n1786|    from internal.council.recovery_context import build_recovery_context\n1787|\n1788|    price_history = _get_price_history(\n1789|        sn.get(\"netuid\"),\n1790|        sn,\n1791|        allow_hydration=False,\n\n=== internal/council/state_vector.py:111-116 ===\n111|def _lazy_fill_price_candles(netuid: Any) -> List[Dict[str, Any]]:\n112|    \"\"\"On-demand OHLCV fetch when price_cache is cold (audit #16 / STATUS optional lever).\"\"\"\n113|    try:\n114|        from internal.indicators.price_fetcher import fetch_ohlcv\n115|\n116|        candles = fetch_ohlcv(str(netuid), use_cache=True, allow_synthetic=False)\n\n=== internal/indicators/price_fetcher.py:46 ===\n46|LIVE_PRICE_TIMEOUT = int(os.environ.get(\"LIVE_PRICE_TIMEOUT_SECONDS\", \"10\"))\n\n=== internal/indicators/price_fetcher.py:123-125 ===\n123|    url = f\"{TAO_MARKET_CAP_API}/public/v1/subnets/\"\n124|    params = {\"limit\": 200}\n125|    response = requests.get(url, params=params, timeout=timeout)"
+    }
+  ],
+  "falsifier": {
+    "probe": "raw-fetch desk_snapshot.py, desk_snapshot_scheduler.py, desk_payload.py, worker_proxy.py, worker_peer.py, score_snapshots.py, state_vector.py, price_fetcher.py at pin; list every network/socket/HTTP/other deadline on the Category B worker callables",
+    "expected": "desk BOUNDED by 2*SNAPSHOT_STAGE_TIMEOUT_SECONDS; score UNBOUNDED inside build with no day-path HTTP deadlines",
+    "refutes_if": "Claims desk worker unbounded despite Event.wait stage caps OR invents an internal wall timer inside build_full_universe_snapshot OR treats Category B fut.result timeouts as internal worker deadlines OR cites fly/live env values OR proposes fixes/PRs"
+  },
+  "notes": "Verification only. Parent P-CENSUS-002 Category A/B accepted; causal starvation HOLD; A2-REPIN HOLD. No remediation."
+}
