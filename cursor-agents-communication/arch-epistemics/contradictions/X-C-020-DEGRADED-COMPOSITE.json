@@ -1,23 +1,9 @@
 {
   "contradiction_id": "X-C-020-DEGRADED-COMPOSITE",
-  "status": "OPEN",
-  "registered_at": "2026-09-20T13:17Z",
-  "claim_ids": [
-    "C-020"
-  ],
-  "sides": {
-    "Ditto": "degraded path yields empty signal contributions",
-    "Tracer_C-020": "flat 0.5 enters expert_contributions (technical_score embed)"
-  },
-  "mc_pin_note": {
-    "status": "BOTH_PARTIAL_PENDING_TRACER_COMPOSITE",
-    "cites": [
-      "state_vector.py:632-641 degraded return: signal_contributions={}, technical_score=0.5",
-      "state_vector.py:1759-1763 hour expert_contributions embeds both empty signal_contributions and technical_score=0.5",
-      "state_vector.py:1913-1917 day same"
-    ],
-    "open_question": "How does the composite / total_score treat degraded technical_score=0.5 \u2014 weighted into total, or nested metadata only?"
-  },
-  "follow_up_ticket": "C-020b",
-  "rule_8": true
+  "status": "RESOLVED",
+  "resolved_at": "2026-09-20T13:20Z",
+  "resolution": "BOTH_PARTIAL",
+  "resolution_cite": "C-020b VERIFIED code-only (MC spot-check PASS)",
+  "detail": "Degraded path sets empty signal_contributions AND technical_score=0.5. Both embed under expert_contributions after total_score is finalized \u2014 nested technical_score does not feed total. Ditto correct on empty contributions; Tracer correct that 0.5 appears nested; neither alone was full.",
+  "closes_ticket": "C-020b"
 }
