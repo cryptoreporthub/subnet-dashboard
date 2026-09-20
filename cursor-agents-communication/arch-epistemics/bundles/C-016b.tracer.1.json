@@ -1,0 +1,61 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016b",
+  "bundle_id": "C-016b.tracer.1",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "scope": "code-only",
+  "fetch_method": "raw",
+  "produced_by": "Tracer",
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 34
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 38
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 40
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 50
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 53
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 276
+    }
+  ],
+  "bytes_read": "34:SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\"))\n35:JOB_ID = \"score-snapshot-scheduler\"\n36:\n37:\n38:def _snapshot_subnet_cap() -> int:\n39:    \"\"\"Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE.\"\"\"\n40:    raw = os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\")\n41:    if raw is not None and str(raw).strip() != \"\":\n42:        try:\n43:            return max(0, int(raw))\n44:        except ValueError:\n45:            return 0\n46:    try:\n47:        from internal.run_mode import is_worker_mode\n48:\n49:        if is_worker_mode():\n50:            return int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))\n51:    except Exception:\n52:        pass\n53:    return 0\n276:        cap = _snapshot_subnet_cap()\n277:        if cap > 0 and subnets and len(subnets) > cap:\n278:            from server import _cap_subnets_for_scoring\n279:\n280:            subnets = _cap_subnets_for_scoring(subnets, limit=cap)",
+  "code_defaults": {
+    "line_276": "cap = _snapshot_subnet_cap()",
+    "SCORE_SNAPSHOT_MAX_SUBNETS_module_default": "0",
+    "worker_TOP_SCORING_UNIVERSE_default": "40",
+    "non_worker_fallback": 0,
+    "fly_toml_used": false
+  },
+  "mc_validation": {
+    "validated_at": "2026-09-20T01:07Z",
+    "pin_spotcheck": "PASS",
+    "status": "accepted_pending_joshua_spotcheck",
+    "notes": "All 6 cites match raw pin. No fly.toml in default chain."
+  }
+}
