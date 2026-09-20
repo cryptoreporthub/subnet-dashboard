@@ -1,0 +1,229 @@
+{
+  "claim_id": "P-CENSUS-002",
+  "status": "HOLD",
+  "hold_reason": "Inventory accepted; causal narrative requires Category A/B classification with pin cites \u2014 no VERIFIED until Joshua accepts this table. No fixes.",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "classified_at": "2026-09-20T03:02Z",
+  "classified_by": "mission-control",
+  "method": "read pin bytes at each site (not reconstructed pseudo-code)",
+  "categories": {
+    "A": "Caller stall: `with ThreadPoolExecutor` \u2192 on timeout/exit `__exit__` \u2192 shutdown(wait=True). Caller blocks; no orphan.",
+    "B": "Thread abandonment: `.result(timeout=)` or `wait(timeout=)` then `shutdown(wait=False)`. Caller returns; orphan may live.",
+    "OTHER": "Does not fit A/B as defined \u2014 noted, not forced into a bucket."
+  },
+  "shutdown_wait_false_sites": [
+    {
+      "loc": "server.py:381",
+      "cat": "B",
+      "cites": [
+        "server.py:381"
+      ],
+      "note": "lifespan teardown aio_pool.shutdown(wait=False); no prior result(timeout); abandons in-flight aio-web threads at process exit"
+    },
+    {
+      "loc": "server.py:810",
+      "cat": "B",
+      "cites": [
+        "server.py:804",
+        "server.py:810"
+      ],
+      "note": "after HOMEPAGE_BUILD_TIMEOUT result timeout"
+    },
+    {
+      "loc": "server.py:817",
+      "cat": "B",
+      "cites": [
+        "server.py:804",
+        "server.py:817"
+      ],
+      "note": "exception path same pattern"
+    },
+    {
+      "loc": "server.py:945",
+      "cat": "B",
+      "cites": [
+        "server.py:939",
+        "server.py:945"
+      ],
+      "note": "finally shutdown(wait=False) after result(timeout=timeout_s)"
+    },
+    {
+      "loc": "internal/bots/mission_control.py:534",
+      "cat": "B",
+      "cites": [
+        "internal/bots/mission_control.py:505",
+        "internal/bots/mission_control.py:534"
+      ],
+      "note": "wait(timeout=SPECIALIST_TIMEOUT_SECONDS) then shutdown(wait=False); not .result(timeout=) but same abandon shape"
+    },
+    {
+      "loc": "internal/council/daily_pick.py:221",
+      "cat": "OTHER",
+      "cites": [
+        "internal/council/daily_pick.py:218",
+        "internal/council/daily_pick.py:221"
+      ],
+      "note": "executor.map awaits completion; shutdown(wait=False) only in finally after map returns/raises \u2014 not a result(timeout) abandon pair"
+    },
+    {
+      "loc": "internal/council/pick_scheduler.py:328",
+      "cat": "B",
+      "cites": [
+        "internal/council/pick_scheduler.py:321",
+        "internal/council/pick_scheduler.py:328"
+      ]
+    },
+    {
+      "loc": "internal/council/resolver_scheduler.py:907",
+      "cat": "B",
+      "cites": [
+        "internal/council/resolver_scheduler.py:861",
+        "internal/council/resolver_scheduler.py:907"
+      ]
+    },
+    {
+      "loc": "internal/pump/desk_snapshot_scheduler.py:135",
+      "cat": "B",
+      "cites": [
+        "internal/pump/desk_snapshot_scheduler.py:128",
+        "internal/pump/desk_snapshot_scheduler.py:135"
+      ]
+    },
+    {
+      "loc": "internal/subnets/feed.py:169",
+      "cat": "B",
+      "cites": [
+        "internal/subnets/feed.py:159",
+        "internal/subnets/feed.py:169"
+      ]
+    }
+  ],
+  "result_timeout_sites": [
+    {
+      "loc": "server.py:784",
+      "cat": "A",
+      "cites": [
+        "server.py:782",
+        "server.py:784"
+      ],
+      "note": "`with ThreadPoolExecutor` + result(timeout=8.0); on TimeoutError, __exit__ shutdown(wait=True)"
+    },
+    {
+      "loc": "server.py:804",
+      "cat": "B",
+      "cites": [
+        "server.py:801",
+        "server.py:804",
+        "server.py:810"
+      ],
+      "note": "manual pool (not with-body on timeout path); pairs shutdown wait=False"
+    },
+    {
+      "loc": "server.py:939",
+      "cat": "B",
+      "cites": [
+        "server.py:934",
+        "server.py:939",
+        "server.py:945"
+      ]
+    },
+    {
+      "loc": "message_intel/telegram_listener.py:711",
+      "cat": "OTHER",
+      "cites": [
+        "message_intel/telegram_listener.py:710",
+        "message_intel/telegram_listener.py:711"
+      ],
+      "note": "asyncio.Future via run_coroutine_threadsafe \u2014 no ThreadPoolExecutor shutdown pair"
+    },
+    {
+      "loc": "internal/simivision/chat_service.py:137",
+      "cat": "A",
+      "cites": [
+        "internal/simivision/chat_service.py:135",
+        "internal/simivision/chat_service.py:137"
+      ],
+      "note": "`with ThreadPoolExecutor` + result(timeout=)"
+    },
+    {
+      "loc": "internal/council/score_snapshots.py:382",
+      "cat": "OTHER",
+      "cites": [
+        "internal/council/score_snapshots.py:322",
+        "internal/council/score_snapshots.py:382",
+        "internal/council/score_snapshots.py:384"
+      ],
+      "note": "persistent module executor; on timeout sets caller_abandoned and returns \u2014 no shutdown(wait=False); build may continue (single-flight orphan without B's shutdown call)"
+    },
+    {
+      "loc": "internal/council/pick_scheduler.py:321",
+      "cat": "B",
+      "cites": [
+        "internal/council/pick_scheduler.py:321",
+        "internal/council/pick_scheduler.py:328"
+      ]
+    },
+    {
+      "loc": "internal/council/resolver_scheduler.py:861",
+      "cat": "B",
+      "cites": [
+        "internal/council/resolver_scheduler.py:861",
+        "internal/council/resolver_scheduler.py:907"
+      ]
+    },
+    {
+      "loc": "internal/pump/desk_snapshot_scheduler.py:128",
+      "cat": "B",
+      "cites": [
+        "internal/pump/desk_snapshot_scheduler.py:128",
+        "internal/pump/desk_snapshot_scheduler.py:135"
+      ]
+    },
+    {
+      "loc": "internal/learning/dashboard_context.py:122",
+      "cat": "A",
+      "cites": [
+        "internal/learning/dashboard_context.py:120",
+        "internal/learning/dashboard_context.py:122"
+      ]
+    },
+    {
+      "loc": "internal/subnets/feed.py:159",
+      "cat": "B",
+      "cites": [
+        "internal/subnets/feed.py:159",
+        "internal/subnets/feed.py:169"
+      ]
+    }
+  ],
+  "worker_proxy_753": {
+    "loc": "internal/worker_proxy.py:753",
+    "cat": "A",
+    "cites": [
+      "internal/worker_proxy.py:752",
+      "internal/worker_proxy.py:753"
+    ],
+    "note": "`with ThreadPoolExecutor` + `.result()` with NO timeout=. Caller stalls until coro returns; __exit__ shutdown(wait=True). Cannot hit TimeoutError\u2192wait=True double-stall narrative \u2014 there is no result(timeout=)."
+  },
+  "cycle_lock_claim": {
+    "status": "NOT_PROVEN_STARVATION",
+    "symbol": "_cycle_lock",
+    "file": "internal/pump/desk_snapshot_scheduler.py",
+    "holder_acquire": "internal/pump/desk_snapshot_scheduler.py:110 acquire(blocking=False)",
+    "holder_release": "internal/pump/desk_snapshot_scheduler.py:122 finally inside worker _run",
+    "caller_timeout": "internal/pump/desk_snapshot_scheduler.py:128 future.result(timeout=SNAPSHOT_TIMEOUT_SECONDS)",
+    "worker_upper_bound": "NOT_OBSERVABLE from this site alone \u2014 requires run_snapshot() internal HTTP/IO deadlines (Tier B until cited)",
+    "mechanism_note": "Intentional single-flight mutex. On Category B timeout, caller returns while worker still holds lock until run_snapshot returns \u2014 later ticks get skipped:cycle_in_flight. That is skip-while-held, not proven infinite starve without worker duration bound."
+  },
+  "counts": {
+    "A": 3,
+    "B": 15,
+    "OTHER": 3,
+    "plus_worker_proxy_753": "A"
+  },
+  "forbidden": [
+    "no fixes",
+    "no remediation tickets",
+    "no PRs"
+  ]
+}
