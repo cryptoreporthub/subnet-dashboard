@@ -7,7 +7,7 @@
 
 ## Active queue
 - **C-016:** VERIFIED (code-only partial; Tier A/B split)
-- **C-016b:** **awaiting_bundle** (revision 2) — Tracer re-dispatched for full TOP_SCORING defaults map across homepage vs snapshot paths. Do **not** close from Ditto or tracer.1 alone.
+- **C-016b:** Tracer.2 ACCEPTED — path map homepage TOP default 20 vs snapshot worker TOP default 40 vs library default_limit 40; **pending_spotcheck** (await Joshua)
 - **P-CENSUS-001:** VERIFIED Tier A inventory — revision 2 adds prod/test split + bare `.result()` call-chain analysis (1 blocking prod site: worker_proxy.py:753)
 - **A2-REPIN:** **HOLD** — pending Joshua manual spot-check
 
@@ -15,4 +15,5 @@
 - C-015, C-017 (behind HOLD/spine)
 
 ## last_updated
-2026-09-20T01:42Z
+2026-09-20T01:44Z
+
