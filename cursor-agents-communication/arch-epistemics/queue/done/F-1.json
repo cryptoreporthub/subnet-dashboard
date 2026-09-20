@@ -1,0 +1,13 @@
+{
+  "claim_id": "F-1",
+  "status": "VERIFIED",
+  "dispatched_at": "2026-09-19T23:21Z",
+  "target_seat": "ConfigTruth",
+  "verdict": "partial",
+  "evidence_class": "code-only",
+  "tier": "B",
+  "verified_by": "Joshua",
+  "verified_at": "2026-09-20T00:25Z",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "updated_at": "2026-09-20T00:25Z"
+}
