@@ -1,0 +1,31 @@
+{
+  "schema_version": "1",
+  "claim_id": "F-1b",
+  "dedup_key": "f-1b-c9449d6490231373748f19f299ed19d423a1c971-worker-heavy-live",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "target_seat": "Ledger",
+  "status": "recorded",
+  "priority": 2,
+  "parent": "F-1",
+  "question": "What is the *live* WORKER_HEAVY process env value in prod?",
+  "answer": {
+    "live_WORKER_HEAVY": "NOT_OBSERVABLE",
+    "reason": "Fly secret / runtime env \u2014 not present as authoritative live evidence in repo; /version does not disclose it; no Joshua-approved live secret probe executed",
+    "fly_toml_file_value": "see F-1 / C-016 ConfigTruth (file-only, not live)",
+    "code_default": "essential (run_mode / prior F-1 cites)"
+  },
+  "evidence_class": "NOT_OBSERVABLE",
+  "tier": "B",
+  "wedge_doc_premise": {
+    "status": "remains_Tier_B",
+    "note": "Wedge-doc premise that depends on live WORKER_HEAVY stays Tier B until F-1b closed with observed live value"
+  },
+  "prod_pin_evidence": "evidence/E-PROD-VERSION-2026-09-20.json",
+  "recorded_at": "2026-09-20T00:45Z",
+  "recorded_by": "mission-control",
+  "awaiting": "optional Joshua Go on read-only live-config probe (draft only; not run)"
+}
