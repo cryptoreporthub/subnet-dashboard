@@ -1,32 +1,29 @@
 # Arch-epistemics STATUS
 
-## Board
-Verification open. Rule 8: zero remediation / no issues / no tests / no remediation designs without separate Joshua Go.
-
 ## Pin
 `c9449d6490231373748f19f299ed19d423a1c971`
 
-## Code-level spine traced (code-only)
-COMPLETE label still held pending Joshua confirm of 002b / 002c / C-018.
+## Joshua accepted (VERIFIED code-only)
+- C-019, C-020, C-021 — scope: UI NOT_OBSERVABLE; live env NOT_OBSERVABLE
+- P-CENSUS-002b, P-CENSUS-002c VERIFIED code-only
+- C-018 STAMPED (full Tracer cite spot-check still pending for COMPLETE label)
 
-## Spot-check provenance
-| ID | Status | Spot-check | When |
-|----|--------|------------|------|
-| P-CENSUS-002b | VERIFIED code-only (Joshua accepted) | Tracer + MC pin-cite | 2026-09-20 ~04:35Z |
-| P-CENSUS-002c | VERIFIED code-only (Joshua accepted) | Tracer + MC + Ledger | ~08:07–08:10Z |
-| C-018 | STAMPED (Joshua) | no full Tracer cite spot-check logged | stamp day |
+## Open contradiction
+- **X-C-020-DEGRADED-COMPOSITE** — Ditto empty signal_contributions vs Tracer flat 0.5 in expert_contributions  
+  MC note (BOTH_PARTIAL): degraded return sets `signal_contributions={}` AND `technical_score=0.5` (`state_vector.py:632-641`); both embedded under `expert_contributions` (`:1759-1763` / `:1913-1917`). Follow-up **C-020b**: how composite/total treats the 0.5.
 
-## New claims (Ditto findings → Tracer raw)
-| ID | Status | MC spot-check | Headline |
-|----|--------|---------------|----------|
-| C-019 | VERIFIED code-only (pending Joshua) | PASS 2026-09-20T12:22Z | Stale path: unranked CAN enter capped set via hunt pool; fresh uses -1.0 |
-| C-020 | VERIFIED code-only (pending Joshua) | PASS 2026-09-20T12:22Z | Degraded guard → flat 0.5 score short-circuit; UI NOT_OBSERVABLE |
-| C-021 | VERIFIED code-only (pending Joshua) | PASS 2026-09-20T12:22Z | Duplicate williams_r → later float wins; impact path expects dict |
+## Active → Tracer
+- **C-020b** — composite treatment of degraded 0.5
+- **C-021b** — impact path always unavailable after float overwrite?
+- **C-015** — what updates `data/score_snapshots.json` mtime; can partial/orphan write refresh it?
 
-## HOLD
-- A2-REPIN
-- P-CENSUS-002 causal starvation
-- SPINE-COMPLETE label (use code-level traced, code-only)
+## HOLD / next human
+- **A2-REPIN** — awaiting Joshua spot-check
+- Live probe — **DRAFT ONLY** (`probes/PROBE-LIVE-CONFIG-DRAFT.md`); approver Joshua; do not run
+- SPINE-COMPLETE label held (code-level traced, code-only)
+
+## Rule 8
+Locked. No remediation. No product code on PR #1294.
 
 ## last_updated
-2026-09-20T12:22Z
+2026-09-20T13:17Z
