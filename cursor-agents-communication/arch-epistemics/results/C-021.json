@@ -1,6 +1,6 @@
 {
   "claim_id": "C-021",
-  "status": "VERIFIED_CODE_ONLY_PENDING_JOSHUA",
+  "status": "VERIFIED",
   "pin": "c9449d6490231373748f19f299ed19d423a1c971",
   "accepted_at": "2026-09-20T12:22Z",
   "accepted_by": "mission-control",
@@ -75,5 +75,12 @@
     },
     "falsifier": "Re-raw-fetch internal/council/state_vector.py at pin. Refute if either return has only one williams_r key, if later-key-wins does not leave a float, if score path does not float()-read williams_r, if impact path does not isinstance(dict)-gate, or if citation bytes differ from this turn raw tool output.",
     "produced_by": "Tracer"
-  }
+  },
+  "joshua_accepted": true,
+  "joshua_accepted_at": "2026-09-20T13:17Z",
+  "scope_notes": [
+    "UI consumer NOT_OBSERVABLE",
+    "live env NOT_OBSERVABLE"
+  ],
+  "evidence_class": "code-only"
 }
