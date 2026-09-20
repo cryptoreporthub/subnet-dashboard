@@ -1,0 +1,101 @@
+{
+  "claim_id": "P-CENSUS-001",
+  "status": "VERIFIED",
+  "verdict": "complete",
+  "evidence_class": "repo_blob",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "produced_by": "mission-control",
+  "fetch_method": "codeload_tar_pin",
+  "verified_by": "Joshua-dispatch+MC-execute",
+  "verified_at": "2026-09-20T01:06Z",
+  "scope": {
+    "include": [
+      "**/*.py"
+    ],
+    "exclude_dirs": [
+      ".git",
+      "__pycache__",
+      ".venv",
+      "node_modules",
+      "dist",
+      "build",
+      ".mypy_cache"
+    ]
+  },
+  "patterns": [
+    {
+      "label": "shutdown(wait=False)",
+      "regex": "shutdown\\([^)]*wait\\s*=\\s*False",
+      "hits": [
+        "server.py:381",
+        "server.py:810",
+        "server.py:817",
+        "server.py:945",
+        "internal/bots/mission_control.py:534",
+        "internal/subnets/feed.py:169",
+        "internal/pump/desk_snapshot_scheduler.py:135",
+        "internal/council/resolver_scheduler.py:907",
+        "internal/council/pick_scheduler.py:328",
+        "internal/council/daily_pick.py:221",
+        "tests/test_patchd_mutation_log.py:163",
+        "tests/test_patchd_mutation_log.py:164",
+        "tests/test_job_scheduler.py:14",
+        "tests/test_resolver_scheduler.py:907",
+        "tests/test_resolver_scheduler.py:908"
+      ],
+      "count": 15,
+      "negatives": "none \u2014 pattern found"
+    },
+    {
+      "label": ".result(timeout=",
+      "regex": "\\.result\\(\\s*timeout\\s*=",
+      "hits": [
+        "server.py:784",
+        "server.py:804",
+        "server.py:939",
+        "message_intel/telegram_listener.py:711",
+        "internal/pump/desk_snapshot_scheduler.py:128",
+        "internal/subnets/feed.py:159",
+        "internal/simivision/chat_service.py:137",
+        "internal/council/resolver_scheduler.py:861",
+        "internal/council/pick_scheduler.py:321",
+        "internal/council/score_snapshots.py:382",
+        "internal/learning/dashboard_context.py:122",
+        "tests/test_predictions_write_race.py:41",
+        "tests/test_predictions_write_race.py:42",
+        "tests/test_api_handler_timeouts.py:890",
+        "tests/test_api_handler_timeouts.py:938",
+        "tests/test_api_handler_timeouts.py:990",
+        "tests/test_patchd_mutation_log.py:229"
+      ],
+      "count": 17
+    },
+    {
+      "label": ".result( without timeout= (same-line close)",
+      "regex": "\\.result\\s*\\(\\s*\\)|\\.result\\s*\\([^)]*\\) with no timeout=",
+      "method": "line-window classifier on all .result( hits",
+      "hits": [
+        "internal/chain_client.py:589",
+        "internal/worker_proxy.py:753",
+        "internal/bots/mission_control.py:509",
+        "internal/council/score_snapshots.py:538",
+        "internal/integrations/status.py:384"
+      ],
+      "count": 5,
+      "note": "These block indefinitely on the future unless cancelled elsewhere"
+    },
+    {
+      "label": "ThreadPoolExecutor",
+      "regex": "ThreadPoolExecutor",
+      "count": 41,
+      "note": "full hit list in bundles/P-CENSUS-001.hits.json; includes imports+tests"
+    },
+    {
+      "label": "Thread(",
+      "regex": "\\bThread\\s*\\(",
+      "count": 82,
+      "note": "threading.Thread( sites; includes tests/harness"
+    }
+  ],
+  "updated_at": "2026-09-20T01:06Z"
+}
