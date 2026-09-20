@@ -1,13 +1,8 @@
 {
   "claim_id": "P-CENSUS-002",
-  "status": "pending_spotcheck",
-  "bundle": "bundles/P-CENSUS-002.tracer.1.json",
-  "sha256": "74b97332d93f71c9c36fae63bf4f68f50a4873c13ce4cade12adf3d7de175cdc",
-  "sites": 22,
-  "shutdown_wait_false": 10,
-  "result_timeout": 11,
-  "plus_worker_proxy_753": true,
-  "mc_spotcheck": "PASS",
-  "awaiting": "Joshua VERIFIED|REJECT|HOLD",
-  "updated_at": "2026-09-20T02:09Z"
+  "status": "HOLD",
+  "inventory_bundle": "bundles/P-CENSUS-002.tracer.1.json",
+  "category_ab_table": "results/P-CENSUS-002.category_AB.json",
+  "note": "Joshua: inventory retained; causal narrative HOLD until A/B table accepted. No fixes.",
+  "updated_at": "2026-09-20T03:02Z"
 }
