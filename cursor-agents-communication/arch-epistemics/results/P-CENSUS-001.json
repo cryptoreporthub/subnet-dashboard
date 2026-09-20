@@ -1,105 +1,86 @@
 {
   "claim_id": "P-CENSUS-001",
-  "revision": 2,
+  "revision": 3,
   "status": "VERIFIED",
   "tier": "A",
-  "scope": "code-only inventory",
+  "scope": "code-only inventory (+ guard cites + extended patterns)",
   "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
-  "produced_by": "mission-control",
-  "verified_at": "2026-09-20T01:42Z",
-  "include": "**/*.py",
-  "exclude_dirs": [
-    ".git",
-    "__pycache__",
-    ".venv",
-    "node_modules",
-    "dist",
-    "build",
-    ".mypy_cache"
+  "updated_at": "2026-09-20T01:54Z",
+  "guaranteed_done_guards": [
+    {
+      "bare_result": "internal/chain_client.py:589",
+      "guard": "internal/chain_client.py:587",
+      "guard_kind": "as_completed(..., timeout=remaining_budget)",
+      "also": "internal/chain_client.py:585 while remaining and time.time() < deadline; deadline from :578-579 LIVE_SUBNETS_BATCH_DEADLINE_SECONDS default 85"
+    },
+    {
+      "bare_result": "internal/bots/mission_control.py:509",
+      "guard": "internal/bots/mission_control.py:505",
+      "guard_kind": "wait(futures, timeout=SPECIALIST_TIMEOUT_SECONDS)",
+      "also": "SPECIALIST_TIMEOUT_SECONDS=8 at internal/bots/mission_control.py:39; only iterates done set"
+    },
+    {
+      "bare_result": "internal/council/score_snapshots.py:538",
+      "guard": "internal/council/score_snapshots.py:583",
+      "guard_kind": "fut.done() early path",
+      "also": "internal/council/score_snapshots.py:590 fut.add_done_callback(_on_done) \u2014 .result() only after completion"
+    },
+    {
+      "bare_result": "internal/integrations/status.py:384",
+      "guard": "internal/integrations/status.py:382",
+      "guard_kind": "as_completed(futures) WITHOUT timeout=",
+      "note": ".result() itself non-blocking once yielded; the as_completed wait is UNBOUNDED until all probes finish (Tier A structure; runtime duration Tier B)"
+    }
   ],
-  "split": {
-    "shutdown(wait=False)": {
-      "regex": "shutdown\\([^)]*wait\\s*=\\s*False",
-      "prod": 10,
-      "test": 5,
-      "total": 15
+  "worker_proxy_753_worst_case": {
+    "site": "internal/worker_proxy.py:753",
+    "snippet": "pool.submit(asyncio.run, coro).result()",
+    "bounded": true,
+    "bound_source": "httpx timeouts inside coro \u2014 .result() has no timeout of its own",
+    "inputs": {
+      "T_read": "WORKER_PEER_TIMEOUT_SECONDS default 4.0 (or fetch_worker_json_sync timeout= arg)",
+      "T_connect": "min(3.0, T_read)",
+      "N_bases": "len(worker_internal_bases()) \u2014 typically 2\u20133 (flycast + process [+ regional]); +1 if WORKER_INTERNAL_URL set",
+      "timeout_failovers_max": 2,
+      "cite_loop": "internal/worker_proxy.py:_fetch_worker_http bases loop (~:619-676); saw_timeout breaks after 2nd timeout"
     },
-    ".result(timeout=)": {
-      "regex": "\\.result\\(\\s*timeout\\s*=",
-      "prod": 11,
-      "test": 6,
-      "total": 17
+    "formula": "W_worst \u2248 min(N_bases, 2) * T_read   +   max(0, N_bases - 2) * T_connect_fastfail",
+    "formula_notes": "Read/timeout path stops after 2 timeouts (saw_timeout). Connect errors continue across remaining bases (usually fail fast \u226a T_read; upper-bound each as T_connect).",
+    "default_numeric_example": "N_bases=3, T_read=4, T_connect=3 \u2192 W_worst \u2248 2*4 + 1*3 = 11s (order-of-magnitude upper bound, code-only)",
+    "unbounded": false
+  },
+  "extended_patterns_prod": {
+    "as_completed_without_timeout": {
+      "count": 1,
+      "hits": [
+        "internal/integrations/status.py:382"
+      ]
     },
-    ".result( any)": {
-      "regex": "\\.result\\s*\\(",
-      "prod": 16,
-      "test": 6,
-      "total": 22
+    "wait_without_timeout": {
+      "count": 1,
+      "hits": [
+        "internal/worker.py:147 _shutdown.wait()"
+      ],
+      "note": "Event.wait(interval) sites excluded (they pass a timeout/interval)"
     },
-    "ThreadPoolExecutor": {
-      "regex": "ThreadPoolExecutor",
-      "prod": 32,
-      "test": 9,
-      "total": 41
+    "thread_join_without_timeout": {
+      "count": 0,
+      "note": "tight Thread.join pattern; str.join excluded"
     },
-    "Thread(": {
-      "regex": "\\bThread\\s*\\(",
-      "prod": 58,
-      "test": 24,
-      "total": 82
+    "Queue_get_without_timeout": {
+      "count": 0
+    },
+    "Lock_acquire_without_timeout": {
+      "count": 0,
+      "note": "no bare .acquire() without timeout=/blocking=False in prod under Lock/RLock heuristic"
+    },
+    "requests_without_timeout": {
+      "count": 1,
+      "hits": [
+        "harness/g0_hydration_starvation/run_g0.py:427"
+      ],
+      "note": "harness not runtime web path"
     }
   },
-  "bare_result_prod": [
-    {
-      "loc": "internal/chain_client.py:589",
-      "snippet": "row = fut.result()",
-      "caller_chain": "get_subnet_price_rows \u2192 ThreadPoolExecutor \u2192 as_completed(remaining, timeout=\u2026) \u2192 fut.result()",
-      "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "as_completed yields only completed futures; .result() does not wait on unfinished work. Outer loop also has LIVE_SUBNETS_BATCH_DEADLINE_SECONDS wall clock.",
-      "can_block_active_thread": false
-    },
-    {
-      "loc": "internal/worker_proxy.py:753",
-      "snippet": "return pool.submit(asyncio.run, coro).result()",
-      "caller_chain": "fetch_worker_json_sync(path) \u2192 _run_coro_sync(_load()) \u2192 ThreadPoolExecutor(max_workers=1).submit(asyncio.run, coro).result()",
-      "future_state_at_call": "NOT_DONE \u2014 blocks until coro finishes",
-      "can_block_active_thread": true,
-      "coro_is": "_load() async closure inside fetch_worker_json_sync",
-      "coro_blocks_on": [
-        "await _fetch_worker_http(path) \u2192 httpx AsyncClient GET to worker internal bases (flycast / *.internal / WORKER_INTERNAL_URL)",
-        "TCP connect (IPv6 :: transport) up to connect timeout (~min(3s, timeout))",
-        "HTTP read/write up to WORKER_PEER_TIMEOUT_SECONDS default 4s (or caller-supplied timeout)",
-        "base failover / retry loop inside _fetch_worker_http on connect/timeout/network errors"
-      ],
-      "note": "If no running event loop, path uses asyncio.run(coro) directly (still blocks caller on same HTTP). Pool path used when already inside async (e.g. FastAPI)."
-    },
-    {
-      "loc": "internal/bots/mission_control.py:509",
-      "snippet": "ordered[name] = future.result()",
-      "caller_chain": "_run_parallel \u2192 wait(futures, timeout=SPECIALIST_TIMEOUT_SECONDS) \u2192 for future in done \u2192 future.result()",
-      "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "Only iterates wait()'s done set; not_done specialists filled without .result().",
-      "can_block_active_thread": false
-    },
-    {
-      "loc": "internal/council/score_snapshots.py:538",
-      "snippet": "result = dict(fut.result())",
-      "caller_chain": "_register_write_completion_callback \u2192 if fut.done(): _complete_write_future else add_done_callback(_complete_write_future) \u2192 fut.result()",
-      "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "Only entered when fut.done() or from done-callback. Not on submit path.",
-      "can_block_active_thread": false
-    },
-    {
-      "loc": "internal/integrations/status.py:384",
-      "snippet": "slug, probe = fut.result()",
-      "caller_chain": "collect_integration_status \u2192 ThreadPoolExecutor \u2192 as_completed(futures) \u2192 fut.result()",
-      "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "as_completed yields completed futures only.",
-      "can_block_active_thread": false
-    }
-  ],
-  "blocking_bare_result_prod_count": 1,
-  "blocking_sites": [
-    "internal/worker_proxy.py:753"
-  ]
+  "next_ticket": "P-CENSUS-002"
 }
