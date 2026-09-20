@@ -18,4 +18,5 @@
 ## Probes
 - PROBE-LIVE-CONFIG: **draft only** (`probes/PROBE-LIVE-CONFIG-DRAFT.md`) — not run. Approver: Joshua.
 
-P26-09-20T00:46Z
+## last_updated
+2026-09-20T00:46Z
