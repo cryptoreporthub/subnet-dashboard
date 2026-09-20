@@ -53,39 +53,40 @@
     {
       "loc": "internal/chain_client.py:589",
       "snippet": "row = fut.result()",
-      "caller_chain": "get_subnet_price_rows \u2192 ThreadPoolExecutor \u2192 as_completed(remaining) \u2192 fut.result()",
+      "caller_chain": "get_subnet_price_rows \u2192 ThreadPoolExecutor \u2192 as_completed(remaining, timeout=\u2026) \u2192 fut.result()",
       "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "as_completed yields only completed futures; .result() does not wait on unfinished work. Outer while also has batch wall-clock deadline.",
+      "rationale": "as_completed yields only completed futures; .result() does not wait on unfinished work. Outer loop also has LIVE_SUBNETS_BATCH_DEADLINE_SECONDS wall clock.",
       "can_block_active_thread": false
     },
     {
       "loc": "internal/worker_proxy.py:753",
       "snippet": "return pool.submit(asyncio.run, coro).result()",
-      "caller_chain": "fetch_worker_json_sync(path) \u2192 _run_coro_sync(_load()) \u2192 ThreadPoolExecutor.submit(asyncio.run, coro).result()",
+      "caller_chain": "fetch_worker_json_sync(path) \u2192 _run_coro_sync(_load()) \u2192 ThreadPoolExecutor(max_workers=1).submit(asyncio.run, coro).result()",
       "future_state_at_call": "NOT_DONE \u2014 blocks until coro finishes",
       "can_block_active_thread": true,
+      "coro_is": "_load() async closure inside fetch_worker_json_sync",
       "coro_blocks_on": [
-        "httpx.AsyncClient.get to worker internal bases (flycast / *.internal / WORKER_INTERNAL_URL)",
-        "TCP connect (IPv6 :: bind) up to connect timeout (min(3s, timeout))",
-        "HTTP read/write up to WORKER_PEER_TIMEOUT_SECONDS default 4s (or caller timeout)",
-        "possible base failover retries inside _fetch_worker_http"
+        "await _fetch_worker_http(path) \u2192 httpx AsyncClient GET to worker internal bases (flycast / *.internal / WORKER_INTERNAL_URL)",
+        "TCP connect (IPv6 :: transport) up to connect timeout (~min(3s, timeout))",
+        "HTTP read/write up to WORKER_PEER_TIMEOUT_SECONDS default 4s (or caller-supplied timeout)",
+        "base failover / retry loop inside _fetch_worker_http on connect/timeout/network errors"
       ],
-      "note": "When already in a running event loop, sync callers block the requesting thread on the worker HTTP round-trip; when no loop, asyncio.run(coro) runs inline instead of the pool path."
+      "note": "If no running event loop, path uses asyncio.run(coro) directly (still blocks caller on same HTTP). Pool path used when already inside async (e.g. FastAPI)."
     },
     {
       "loc": "internal/bots/mission_control.py:509",
       "snippet": "ordered[name] = future.result()",
       "caller_chain": "_run_parallel \u2192 wait(futures, timeout=SPECIALIST_TIMEOUT_SECONDS) \u2192 for future in done \u2192 future.result()",
       "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "Only iterates wait()'s done set; not_done handled separately without .result().",
+      "rationale": "Only iterates wait()'s done set; not_done specialists filled without .result().",
       "can_block_active_thread": false
     },
     {
       "loc": "internal/council/score_snapshots.py:538",
       "snippet": "result = dict(fut.result())",
-      "caller_chain": "_register_write_completion_callback \u2192 (fut.done()? immediate : add_done_callback) \u2192 _complete_write_future(fut) \u2192 fut.result()",
+      "caller_chain": "_register_write_completion_callback \u2192 if fut.done(): _complete_write_future else add_done_callback(_complete_write_future) \u2192 fut.result()",
       "future_state_at_call": "GUARANTEED_DONE",
-      "rationale": "Invoked only when fut.done() is true or from done-callback. Not on the hot submit path.",
+      "rationale": "Only entered when fut.done() or from done-callback. Not on submit path.",
       "can_block_active_thread": false
     },
     {
