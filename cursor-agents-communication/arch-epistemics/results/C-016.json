@@ -1,0 +1,32 @@
+{
+  "claim_id": "C-016",
+  "status": "pending_spotcheck",
+  "verdict": "partial",
+  "evidence_class": "code-only",
+  "tier": "B",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "slices": {
+    "tracer": {
+      "bundle": "bundles/C-016.tracer.1.json",
+      "mc": "ACCEPTED"
+    },
+    "configtruth": {
+      "bundle": "bundles/C-016.configtruth.1.json",
+      "mc": "ACCEPTED"
+    }
+  },
+  "synthesis_code_plus_fly": {
+    "snapshot_write_effective_cap_at_pin_with_fly": "40 (SCORE_SNAPSHOT_MAX_SUBNETS set in fly.toml; Tracer: wins in _snapshot_subnet_cap)",
+    "scoring_homepage_cap_code_default": "20 (TOP_SCORING_UNIVERSE); fly NOT_SET; shell/hour-pick min(24, TOP)",
+    "WORKER_HEAVY_fly_file": "essential",
+    "WORKER_HEAVY_live": "NOT_OBSERVABLE (F-1b)",
+    "live_env": "NOT_OBSERVABLE"
+  },
+  "related": [
+    "F-1",
+    "F-1b",
+    "X-C-016-CAP"
+  ],
+  "awaiting": "Joshua VERIFIED|REJECT|HOLD",
+  "updated_at": "2026-09-20T00:47Z"
+}
