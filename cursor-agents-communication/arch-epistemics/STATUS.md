@@ -16,7 +16,7 @@
   - Tier A: snapshot path reads SCORE_SNAPSHOT_MAX_SUBNETS; scoring/home reads TOP_SCORING_UNIVERSE (:628 default 20)
   - Tier B: effective caps 40/20; live env NOT_OBSERVABLE
   - X-C-016-CAP: **resolved code-only**
-  - Follow-up **C-016b** dispatched to Tracer (:276 code default independent of fly)
+  - **C-016b:** Tracer bundle ACCEPTED — code defaults at :276 confirmed (MAX default 0; worker TOP default 40; else 0); **pending_spotcheck**
 - **P-CENSUS-001 VERIFIED** (MC execute at pin) — shutdown(wait=False)=15; .result(timeout=)=17; .result() no timeout=5; ThreadPoolExecutor=41; Thread(=82
 - **A2-REPIN** pending_spotcheck — A2 atoms re-pinned to pin blobs via census cites; ~18min magnitude remains NOT_OBSERVABLE
 - C-015, C-017: open (not dispatched)
@@ -27,4 +27,5 @@
 - Rules 19–23: also absent from that file (historical note: earlier brief flagged 19–23 unratified / Rule 21 blank — still not in-repo)
 
 ## last_updated
-2026-09-20T01:06Z
+2026-09-20T01:07Z
+
