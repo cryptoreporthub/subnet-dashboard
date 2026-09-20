@@ -1,0 +1,92 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016",
+  "slice": "configtruth",
+  "bundle_id": "C-016.configtruth.1",
+  "dedup_key": "c-016-c9449d6490231373748f19f299ed19d423a1c971-configtruth-fly-cap-values",
+  "produced_by": "ConfigTruth",
+  "fetch_method": "raw",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "code-only",
+  "scope_tag": "fly.toml-only",
+  "status": "accepted_pending_joshua_spotcheck",
+  "bytes_read": {
+    "path": "fly.toml",
+    "fetch_method": "raw",
+    "url": "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/fly.toml",
+    "sha256": "dfb0dac75b06f705ade4d4e9bbd50d0c3098e656b3eaea5f4e9726b7ef54c85c",
+    "size_bytes": 5837
+  },
+  "fly_toml_values": [
+    {
+      "key": "SCORE_SNAPSHOT_MAX_SUBNETS",
+      "status": "PRESENT",
+      "value": "40",
+      "line": 82,
+      "literal_bytes": "  SCORE_SNAPSHOT_MAX_SUBNETS = \"40\"",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS",
+      "status": "PRESENT",
+      "value": "480",
+      "line": 83,
+      "literal_bytes": "  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = \"480\"",
+      "evidence_class": "code-only"
+    },
+    {
+      "key": "TOP_SCORING_UNIVERSE",
+      "status": "NOT_SET",
+      "value": "NOT_SET",
+      "line": null,
+      "literal_bytes": null,
+      "evidence_class": "code-only",
+      "note": "Substring TOP_SCORING_UNIVERSE does not appear in fly.toml at pin"
+    },
+    {
+      "key": "WORKER_HEAVY",
+      "status": "PRESENT",
+      "value": "essential",
+      "line": 40,
+      "literal_bytes": "  WORKER_HEAVY = \"essential\"",
+      "evidence_class": "code-only",
+      "note": "fly.toml file value only \u2014 not live secret / process env"
+    }
+  ],
+  "citations": [
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:40",
+      "literal_bytes": "  WORKER_HEAVY = \"essential\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:82",
+      "literal_bytes": "  SCORE_SNAPSHOT_MAX_SUBNETS = \"40\"",
+      "scope_tag": "code-only"
+    },
+    {
+      "sha_path_line": "c9449d6490231373748f19f299ed19d423a1c971:fly.toml:83",
+      "literal_bytes": "  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = \"480\"",
+      "scope_tag": "code-only"
+    }
+  ],
+  "falsifier": {
+    "probe": "Re-fetch fly.toml at pin; sha256 must equal dfb0dac75b06f705ade4d4e9bbd50d0c3098e656b3eaea5f4e9726b7ef54c85c; grep the four keys",
+    "expected": "MAX_SUBNETS=40 L82; WRITE_TIMEOUT=480 L83; TOP_SCORING NOT_SET; WORKER_HEAVY=essential L40; no live secrets",
+    "refutes_if": "Reports live secrets OR claims TOP_SCORING_UNIVERSE present in fly.toml OR includes call-path/effective-cap conclusions in this slice"
+  },
+  "mc_validation": {
+    "validated_at": "2026-09-20T00:47Z",
+    "validated_by": "mission-control",
+    "pin_spotcheck": "PASS",
+    "sha256_match": true,
+    "keys_verified": true,
+    "notes": "Independent raw re-fetch matched sha256+lines. Sibling Tracer slice already accepted. Claim-level VERIFIED awaits Joshua.",
+    "status": "accepted_pending_joshua_spotcheck"
+  }
+}
