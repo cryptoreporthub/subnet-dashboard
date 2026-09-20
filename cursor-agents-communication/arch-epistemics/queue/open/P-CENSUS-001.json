@@ -1,0 +1,25 @@
+{
+  "schema_version": "1",
+  "claim_id": "P-CENSUS-001",
+  "dedup_key": "p-census-001-c9449d6490231373748f19f299ed19d423a1c971-shutdown-result-timeout",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "target_seat": "Tracer",
+  "status": "queued",
+  "priority": 3,
+  "queue_before": [
+    "C-015",
+    "C-017"
+  ],
+  "question": "Pattern census at pin: enumerate every shutdown(wait=False) and every .result(timeout=) site with file:line. Finite list only; no behavior narrative beyond cite.",
+  "expected_evidence_form": "two tables (shutdown_wait_false[], result_timeout[]) with path:line + short snippet; fetch_method; complete or explicitly truncated with search commands",
+  "falsifier": {
+    "probe": "rg -n 'shutdown\\(.*wait\\s*=\\s*False' and rg -n '\\.result\\(.*timeout' at pin",
+    "expected": "Finite cite lists",
+    "refutes_if": "Claims 'none' without showing search commands+output OR invents sites not at pin"
+  },
+  "notes": "Joshua Go: queue next before C-015/C-017. Do not dispatch until MC says Go."
+}
