@@ -1,0 +1,70 @@
+{
+  "schema_version": "1",
+  "claim_id": "P-CENSUS-002",
+  "status": "dispatched",
+  "priority": 1,
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971"
+  },
+  "depends_on": [
+    "P-CENSUS-001"
+  ],
+  "before": [
+    "worker_proxy.py:753 deep-dive after site table"
+  ],
+  "question": "Per-site analysis of the 10 prod shutdown(wait=False) and 11 prod .result(timeout=) sites: what thread work continues after return, what internal deadline exists, what state is held (locks/futures/flags). Do worker_proxy.py:753 last.",
+  "prod_shutdown_wait_False": [
+    "server.py:381",
+    "server.py:810",
+    "server.py:817",
+    "server.py:945",
+    "internal/bots/mission_control.py:534",
+    "internal/council/daily_pick.py:221",
+    "internal/council/pick_scheduler.py:328",
+    "internal/council/resolver_scheduler.py:907",
+    "internal/pump/desk_snapshot_scheduler.py:135",
+    "internal/subnets/feed.py:169"
+  ],
+  "prod_result_timeout": [
+    "server.py:784",
+    "server.py:804",
+    "server.py:939",
+    "message_intel/telegram_listener.py:711",
+    "internal/simivision/chat_service.py:137",
+    "internal/council/score_snapshots.py:382",
+    "internal/council/pick_scheduler.py:321",
+    "internal/council/resolver_scheduler.py:861",
+    "internal/pump/desk_snapshot_scheduler.py:128",
+    "internal/learning/dashboard_context.py:122",
+    "internal/subnets/feed.py:159"
+  ],
+  "expected_evidence_form": "table: site | thread_work_after | internal_deadline | held_state | bounded? | cites",
+  "target_seat": "Tracer",
+  "status_note": "Queued; dispatch when Joshua Gos",
+  "opened_at": "2026-09-20T01:54Z",
+  "dispatched_at": "2026-09-20T02:04Z",
+  "dispatched_by": "mission-control",
+  "joshua_go": true,
+  "execution_mandate": {
+    "analyze": [
+      "10 prod shutdown(wait=False)",
+      "11 prod .result(timeout=)"
+    ],
+    "per_site_fields": [
+      "thread_work",
+      "internal_deadline",
+      "held_state_leak_surface"
+    ],
+    "analyze_last": "internal/worker_proxy.py:753",
+    "accepted_prior": {
+      "integrations/status.py:382": "unbounded as_completed wait noted",
+      "worker_proxy.py:753": "BOUNDED ~11s worst-case at defaults (P-CENSUS-001 rev3)"
+    },
+    "rules": [
+      "R19",
+      "R25",
+      "R28",
+      "R29"
+    ]
+  }
+}
