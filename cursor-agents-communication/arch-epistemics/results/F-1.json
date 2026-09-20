@@ -1,0 +1,46 @@
+{
+  "claim_id": "F-1",
+  "status": "VERIFIED",
+  "verdict": "partial",
+  "evidence_class": "code-only",
+  "tier": "B",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "bundle_path": "bundles/F-1.ConfigTruth.json",
+  "deltas_code_vs_fly": [
+    {
+      "key": "WORKER_PROXY_TIMEOUT_SECONDS",
+      "code": "8",
+      "fly": "4"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS",
+      "code": "600",
+      "fly": "480"
+    },
+    {
+      "key": "SCORE_SNAPSHOT_MAX_SUBNETS",
+      "code": "0",
+      "fly": "40"
+    },
+    {
+      "key": "TOP_SCORING_UNIVERSE",
+      "code": "20",
+      "fly": "NOT_SET"
+    }
+  ],
+  "live": "NOT_OBSERVABLE",
+  "deploy_sha": "NOT_OBSERVABLE",
+  "runtime_ref": "NOT_OBSERVABLE",
+  "c016_note": "With fly SCORE_SNAPSHOT_MAX_SUBNETS=40, snapshot path uses 40; TOP_SCORING_UNIVERSE (default 20) drives server scoring paths; worker-mode fallback string for TOP_SCORING inside _snapshot_subnet_cap is 40 only when SCORE_SNAPSHOT_MAX_SUBNETS unset",
+  "verified_by": "Joshua",
+  "verified_at": "2026-09-20T00:25Z",
+  "spotcheck": "Joshua VERIFIED \u2014 code-only partial; live remains NOT_OBSERVABLE; not Tier A",
+  "updated_at": "2026-09-20T00:25Z",
+  "awaiting": null,
+  "open_followups": [
+    "C-015",
+    "C-016",
+    "C-017",
+    "X-C-016-CAP"
+  ]
+}
