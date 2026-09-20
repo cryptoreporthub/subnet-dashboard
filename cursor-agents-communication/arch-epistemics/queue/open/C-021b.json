@@ -1,0 +1,27 @@
+{
+  "ticket_id": "C-021b",
+  "parent": "C-021",
+  "status": "OPEN",
+  "assignee": "Tracer",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "opened_at": "2026-09-20T13:17Z",
+  "question": "After normal-path williams_r float overwrite, does the impact path dict check always fall to 'Williams %R unavailable'?",
+  "tasks": [
+    {
+      "id": "T1",
+      "ask": "Confirm non-degraded return leaves williams_r as float (:598 then :611)."
+    },
+    {
+      "id": "T2",
+      "ask": "Cite impact builder isinstance(wr, dict) else unavailable (:904-914)."
+    },
+    {
+      "id": "T3",
+      "ask": "State YES/NO/CONDITIONAL: for indicators produced by _compute_technical_indicators (both degraded and non-degraded), does impact always take the else/unavailable branch? List any alternate call path that still supplies a dict williams_r."
+    }
+  ],
+  "mc_hypothesis": "YES for both degraded and non-degraded returns from _compute_technical_indicators \u2014 later-key float makes isinstance(dict) false. Confirm all call sites.",
+  "forbidden": [
+    "no fixes"
+  ]
+}
