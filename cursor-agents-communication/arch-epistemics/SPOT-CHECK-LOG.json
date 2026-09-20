@@ -1,0 +1,54 @@
+{
+  "updated_at": "2026-09-20T12:16Z",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "entries": [
+    {
+      "id": "P-CENSUS-002b",
+      "status": "VERIFIED_code_only",
+      "joshua_accepted": true,
+      "producers": [
+        "Tracer"
+      ],
+      "spot_checkers": [
+        {
+          "who": "Mission Control",
+          "what": "pin-cite spot-check",
+          "when": "2026-09-20T04:35Z"
+        }
+      ],
+      "joshua_confirm_for_spine_complete_label": "pending"
+    },
+    {
+      "id": "P-CENSUS-002c",
+      "status": "VERIFIED_code_only",
+      "joshua_accepted": true,
+      "producers": [
+        "Tracer"
+      ],
+      "spot_checkers": [
+        {
+          "who": "Mission Control",
+          "what": "pin-cite spot-check",
+          "when": "2026-09-20T08:08Z"
+        },
+        {
+          "who": "Ledger",
+          "what": "status confirm VERIFIED",
+          "when": "2026-09-20T08:10Z"
+        }
+      ],
+      "joshua_confirm_for_spine_complete_label": "pending"
+    },
+    {
+      "id": "C-018",
+      "status": "STAMPED",
+      "joshua_accepted": true,
+      "producers": [
+        "Joshua stamp from campaign/Ditto findings"
+      ],
+      "spot_checkers": [],
+      "joshua_confirm_for_spine_complete_label": "pending",
+      "note": "No Tracer raw-blob spot-check of every C-018 cite logged; C-019 re-traces stale promotion"
+    }
+  ]
+}
