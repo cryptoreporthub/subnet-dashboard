@@ -1,24 +1,31 @@
 {
-  "schema_version": "1",
-  "claim_id": "C-015",
-  "dedup_key": "c-015-c9449d6490231373748f19f299ed19d423a1c971-tracer-age-feed-heuristic-callers",
-  "pin": {"repo_sha": "c9449d6490231373748f19f299ed19d423a1c971", "deploy_sha": "NOT_OBSERVABLE", "runtime_ref": "NOT_OBSERVABLE"},
-  "target_seat": "Tracer",
-  "status": "ready_to_dispatch",
-  "priority": 2,
-  "opened_after": "C-014 VERIFIED",
-  "question": "What feeds `age` at internal/council/score_snapshots.py:145-146 (via snapshot_age_seconds)? List all callers of _heuristic_hunt_pool with SHA:path:line.",
-  "expected_evidence_form": "bundles with fetch_method, bytes_read, citations; caller list finite or NOT_OBSERVABLE",
-  "fetch_ladder": [
-    "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/council/score_snapshots.py",
-    "https://api.github.com/repos/cryptoreporthub/subnet-dashboard/contents/internal/council/score_snapshots.py?ref=c9449d6490231373748f19f299ed19d423a1c971",
-    "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/c9449d6490231373748f19f299ed19d423a1c971/internal/subnets/scoring_cap.py",
-    "mc_paste"
+  "ticket_id": "C-015",
+  "status": "OPEN",
+  "assignee": "Tracer",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "opened_at": "2026-09-20T13:17Z",
+  "supersedes_prior_question": "prior C-015 age/_heuristic_hunt_pool callers \u2014 still useful but THIS turn's ask is mtime/orphan write",
+  "question": "What updates data/score_snapshots.json mtime? Can a partial or orphan write refresh it?",
+  "tasks": [
+    {
+      "id": "T1",
+      "ask": "List every pin call site that writes SCORE_SNAPSHOTS_PATH / data/score_snapshots.json (save_score_snapshot and callers). Cite file:line."
+    },
+    {
+      "id": "T2",
+      "ask": "Does save_score_snapshot always rewrite the final path (tmp+os.replace) such that mtime advances on every successful save?"
+    },
+    {
+      "id": "T3",
+      "ask": "After caller Category B timeout (orphan continues), if orphan later completes save_score_snapshot, does that refresh mtime? Cite. Partial write: is there any path that writes incomplete payload yet still replaces the file?"
+    },
+    {
+      "id": "T4",
+      "ask": "What reads mtime/age (snapshot_age_seconds) and how a refreshed mtime changes stale vs fresh ranking."
+    }
   ],
-  "falsifier": {
-    "probe": "Open snapshot_age_seconds definition and all references to _heuristic_hunt_pool at pin",
-    "expected": "Cited definition of age + complete caller list or explicit NOT_OBSERVABLE gaps",
-    "refutes_if": "Age source mis-cited OR callers invented without grep/blob evidence"
-  },
-  "notes": "From Joshua C-014 VERIFIED follow-up (1)."
+  "forbidden": [
+    "no fixes",
+    "no live probes"
+  ]
 }
