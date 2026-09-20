@@ -9,9 +9,10 @@
 - C-016 VERIFIED (code-only partial)
 - **C-016b VERIFIED** (code-only partial) — effective caps Tier B
 - P-CENSUS-001 VERIFIED Tier A inventory (rev3: guards + worker_proxy formula + extended patterns)
-- **P-CENSUS-002 DISPATCHED** to Tracer — per-site analysis of 10 shutdown(wait=False) + 11 .result(timeout=); worker_proxy:753 after
+- **P-CENSUS-002:** Tracer.1 ACCEPTED (22 sites; worker_proxy:753 last) — **pending_spotcheck**
 - **A2-REPIN HOLD** — Joshua spot-check
 
 ## last_updated
-2026-09-20T02:04Z
+2026-09-20T02:09Z
+
 
