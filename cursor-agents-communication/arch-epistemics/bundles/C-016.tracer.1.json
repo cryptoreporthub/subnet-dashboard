@@ -1,0 +1,81 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016",
+  "bundle_id": "C-016.tracer.1",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 628
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 899
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 1028
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 3331
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 34
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 40
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 50
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 276
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 280
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/scoring_cap.py",
+      "line": 98
+    }
+  ],
+  "bytes_read": "server.py:628\nTOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))\n\nserver.py:892-899\ndef _cap_subnets_for_scoring(\n    subnets: List[Dict[str, Any]],\n    limit: Optional[int] = None,\n) -> List[Dict[str, Any]]:\n    \"\"\"Limit council scoring \u2014 majors represented, mid-cap focus for the rest.\"\"\"\n    from internal.subnets.scoring_cap import cap_subnets_for_scoring\n\n    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)\n\nserver.py:1028\n    return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))\n\nserver.py:3331\n            subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))\n\ninternal/council/score_snapshots.py:34-53\nSCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\"))\nJOB_ID = \"score-snapshot-scheduler\"\n\n\ndef _snapshot_subnet_cap() -> int:\n    \"\"\"Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE.\"\"\"\n    raw = os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\")\n    if raw is not None and str(raw).strip() != \"\":\n        try:\n            return max(0, int(raw))\n        except ValueError:\n            return 0\n    try:\n        from internal.run_mode import is_worker_mode\n\n        if is_worker_mode():\n            return int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))\n    except Exception:\n        pass\n    return 0\n\ninternal/council/score_snapshots.py:276-280\n        cap = _snapshot_subnet_cap()\n        if cap > 0 and subnets and len(subnets) > cap:\n            from server import _cap_subnets_for_scoring\n\n            subnets = _cap_subnets_for_scoring(subnets, limit=cap)\n\ninternal/subnets/scoring_cap.py:91-98\ndef cap_subnets_for_scoring(\n    subnets: List[Dict[str, Any]],\n    limit: Optional[int] = None,\n    *,\n    default_limit: int = 40,\n) -> List[Dict[str, Any]]:\n    \"\"\"Return up to ``limit`` subnets to score on hot paths / snapshot jobs.\"\"\"\n    cap = limit if limit is not None else default_limit\n",
+  "fetch_method": "raw",
+  "falsifier": {
+    "probe": "Trace _snapshot_subnet_cap, _cap_subnets_for_scoring, TOP_SCORING_UNIVERSE, SCORE_SNAPSHOT_MAX_SUBNETS readers at pin",
+    "expected": "Path-split table: snapshot-write vs scoring/homepage; SCORE_SNAPSHOT_MAX_SUBNETS wins on snapshot when set; TOP_SCORING_UNIVERSE alone on homepage/scoring",
+    "refutes_if": "Single global cap without path split OR cites fly.toml as code OR invents live env values OR bytes not from this-turn raw fetch"
+  },
+  "scope_tag": "code-only",
+  "produced_by": "Tracer",
+  "notes": "CALLPATH: (1) snapshot write write_full_universe_snapshot:276-280 uses _snapshot_subnet_cap; if SCORE_SNAPSHOT_MAX_SUBNETS set/nonempty it wins; else worker-mode TOP_SCORING_UNIVERSE default 40; else 0 uncapped; then _cap_subnets_for_scoring(..., limit=cap) so numeric cap is snapshot path not default_limit. (2) scoring/homepage: server TOP_SCORING_UNIVERSE:628 + _cap_subnets_for_scoring:899 default_limit; shell 1028 and hour-pick 3331 use min(24,TOP_SCORING_UNIVERSE); SCORE_SNAPSHOT_MAX_SUBNETS not read. Module const SCORE_SNAPSHOT_MAX_SUBNETS:34 import-binds only; effective reader is os.environ.get inside _snapshot_subnet_cap:40. cap_subnets_for_scoring reads no env. No live values. Ticket on governing branch only.",
+  "mc_validation": {
+    "validated_at": "2026-09-20T00:46Z",
+    "validated_by": "mission-control",
+    "pin_spotcheck": "PASS",
+    "notes": "9/10 exact line matches; scoring_cap.py:98 is cap= assignment (docstring at :97) \u2014 cite still load-bearing. Path-split conclusion consistent with bytes. Awaiting ConfigTruth fly.toml slice before claim-level merge.",
+    "status": "accepted_pending_sibling_slice"
+  }
+}
