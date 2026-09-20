@@ -1,0 +1,53 @@
+{
+  "ticket_id": "C-020",
+  "status": "OPEN",
+  "assignee": "Tracer",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "opened_at": "2026-09-20T12:16Z",
+  "opened_by": "mission-control",
+  "intent": "analyze",
+  "title": "Technical degraded guard + flat 0.5 downstream",
+  "rule": "Rule 8 \u2014 verification only. No fixes, issues, tests, remediation designs. Ditto line numbers are +5 vs raw \u2014 DO NOT record Ditto lines; cite raw pin blobs only.",
+  "tasks": [
+    {
+      "id": "T1",
+      "ask": "Cite _compute_technical_indicators guard (when it returns _degraded_technical_indicators) at pin in internal/council/state_vector.py."
+    },
+    {
+      "id": "T2",
+      "ask": "Cite _degraded_technical_indicators body: degraded=True and flat 0.5 / neutral assignments."
+    },
+    {
+      "id": "T3",
+      "ask": "Trace where degraded flag and flat 0.5 flow: _compute_technical_score / composite / snapshot payload / any UI or template consumer. Mark NOT_OBSERVABLE if unread."
+    }
+  ],
+  "seed_raw_cites_for_orientation_only": [
+    "internal/council/state_vector.py:535 _degraded_technical_indicators",
+    "internal/council/state_vector.py:562 _compute_technical_indicators",
+    "internal/council/state_vector.py:616+ _compute_technical_score degraded branch"
+  ],
+  "output_schema": {
+    "claim_id": "C-020",
+    "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "fetch_method": "raw|api|mc_paste",
+    "citations": [
+      {
+        "path": "",
+        "line": 0,
+        "bytes": ""
+      }
+    ],
+    "findings": [],
+    "falsifier": "",
+    "produced_by": "Tracer"
+  },
+  "forbidden": [
+    "no Ditto +5 lines",
+    "no fixes",
+    "no issues",
+    "no tests",
+    "no remediation designs",
+    "no SMOKE-001 reuse"
+  ]
+}
