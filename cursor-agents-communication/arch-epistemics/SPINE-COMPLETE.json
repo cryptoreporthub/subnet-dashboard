@@ -1,0 +1,17 @@
+{
+  "event": "TIMEOUT_SPINE_AUDIT_COMPLETE",
+  "at": "2026-09-20T08:39Z",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "claims": [
+    "P-CENSUS-002b",
+    "P-CENSUS-002c",
+    "C-018"
+  ],
+  "endpoints": {
+    "caller_timeout": "score_snapshots.py:382-390",
+    "orphan_loop": "score_snapshots.py:189-218",
+    "late_write": "score_snapshots.py:298 \u2192 :110-116",
+    "clear_stuck": "score_snapshots.py:471/610 (cosmetic phase only)"
+  },
+  "remote_push_at": "2026-09-20T08:59Z"
+}
