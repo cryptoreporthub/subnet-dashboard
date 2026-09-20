@@ -1,6 +1,9 @@
-# Campaign freeze status
+# Campaign freeze log
 
-**UNFROZEN** 2026-09-20T08:05Z by Joshua GO.
+## Current: UNFROZEN
+Unfrozen `2026-09-20T08:59Z` by Joshua GO — verification-artifact push authorized.
+Rule 8 still: zero remediation / zero product PR merges.
 
-Prior freeze retained as history. Board open for verification tickets only (Rule 8).
-Active: P-CENSUS-002c → Tracer.
+## Prior FREEZE (spine complete)
+See `SPINE-COMPLETE.json`. Timeout spine audit COMPLETE before this push.
+Local-only period held P-CENSUS-002c + C-018 until this GO.
