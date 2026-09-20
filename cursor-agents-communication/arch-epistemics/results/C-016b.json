@@ -1,18 +1,9 @@
 {
   "claim_id": "C-016b",
-  "status": "pending_spotcheck",
-  "verdict": "confirmed",
-  "evidence_class": "code-only",
-  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
-  "bundle": "bundles/C-016b.tracer.1.json",
-  "summary": {
-    "line_276": "cap = _snapshot_subnet_cap()",
-    "module_default_SCORE_SNAPSHOT_MAX_SUBNETS": "0",
-    "worker_default_TOP_SCORING_UNIVERSE": "40",
-    "non_worker_fallback": 0,
-    "independent_of_fly": true
-  },
-  "mc_spotcheck": "PASS",
-  "awaiting": "Joshua VERIFIED|REJECT|HOLD",
-  "updated_at": "2026-09-20T01:07Z"
+  "status": "awaiting_bundle",
+  "revision": 2,
+  "note": "Joshua 2026-09-20: do not close from Ditto/prior bundle; await Tracer.2 full defaults map",
+  "prior_bundle": "bundles/C-016b.tracer.1.json",
+  "prior_bundle_status": "retained_not_closing",
+  "updated_at": "2026-09-20T01:42Z"
 }
