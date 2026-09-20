@@ -1,101 +1,104 @@
 {
   "claim_id": "P-CENSUS-001",
+  "revision": 2,
   "status": "VERIFIED",
-  "verdict": "complete",
-  "evidence_class": "repo_blob",
+  "tier": "A",
+  "scope": "code-only inventory",
   "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
   "produced_by": "mission-control",
-  "fetch_method": "codeload_tar_pin",
-  "verified_by": "Joshua-dispatch+MC-execute",
-  "verified_at": "2026-09-20T01:06Z",
-  "scope": {
-    "include": [
-      "**/*.py"
-    ],
-    "exclude_dirs": [
-      ".git",
-      "__pycache__",
-      ".venv",
-      "node_modules",
-      "dist",
-      "build",
-      ".mypy_cache"
-    ]
-  },
-  "patterns": [
-    {
-      "label": "shutdown(wait=False)",
+  "verified_at": "2026-09-20T01:42Z",
+  "include": "**/*.py",
+  "exclude_dirs": [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "node_modules",
+    "dist",
+    "build",
+    ".mypy_cache"
+  ],
+  "split": {
+    "shutdown(wait=False)": {
       "regex": "shutdown\\([^)]*wait\\s*=\\s*False",
-      "hits": [
-        "server.py:381",
-        "server.py:810",
-        "server.py:817",
-        "server.py:945",
-        "internal/bots/mission_control.py:534",
-        "internal/subnets/feed.py:169",
-        "internal/pump/desk_snapshot_scheduler.py:135",
-        "internal/council/resolver_scheduler.py:907",
-        "internal/council/pick_scheduler.py:328",
-        "internal/council/daily_pick.py:221",
-        "tests/test_patchd_mutation_log.py:163",
-        "tests/test_patchd_mutation_log.py:164",
-        "tests/test_job_scheduler.py:14",
-        "tests/test_resolver_scheduler.py:907",
-        "tests/test_resolver_scheduler.py:908"
-      ],
-      "count": 15,
-      "negatives": "none \u2014 pattern found"
+      "prod": 10,
+      "test": 5,
+      "total": 15
     },
-    {
-      "label": ".result(timeout=",
+    ".result(timeout=)": {
       "regex": "\\.result\\(\\s*timeout\\s*=",
-      "hits": [
-        "server.py:784",
-        "server.py:804",
-        "server.py:939",
-        "message_intel/telegram_listener.py:711",
-        "internal/pump/desk_snapshot_scheduler.py:128",
-        "internal/subnets/feed.py:159",
-        "internal/simivision/chat_service.py:137",
-        "internal/council/resolver_scheduler.py:861",
-        "internal/council/pick_scheduler.py:321",
-        "internal/council/score_snapshots.py:382",
-        "internal/learning/dashboard_context.py:122",
-        "tests/test_predictions_write_race.py:41",
-        "tests/test_predictions_write_race.py:42",
-        "tests/test_api_handler_timeouts.py:890",
-        "tests/test_api_handler_timeouts.py:938",
-        "tests/test_api_handler_timeouts.py:990",
-        "tests/test_patchd_mutation_log.py:229"
-      ],
-      "count": 17
+      "prod": 11,
+      "test": 6,
+      "total": 17
     },
-    {
-      "label": ".result( without timeout= (same-line close)",
-      "regex": "\\.result\\s*\\(\\s*\\)|\\.result\\s*\\([^)]*\\) with no timeout=",
-      "method": "line-window classifier on all .result( hits",
-      "hits": [
-        "internal/chain_client.py:589",
-        "internal/worker_proxy.py:753",
-        "internal/bots/mission_control.py:509",
-        "internal/council/score_snapshots.py:538",
-        "internal/integrations/status.py:384"
-      ],
-      "count": 5,
-      "note": "These block indefinitely on the future unless cancelled elsewhere"
+    ".result( any)": {
+      "regex": "\\.result\\s*\\(",
+      "prod": 16,
+      "test": 6,
+      "total": 22
     },
-    {
-      "label": "ThreadPoolExecutor",
+    "ThreadPoolExecutor": {
       "regex": "ThreadPoolExecutor",
-      "count": 41,
-      "note": "full hit list in bundles/P-CENSUS-001.hits.json; includes imports+tests"
+      "prod": 32,
+      "test": 9,
+      "total": 41
+    },
+    "Thread(": {
+      "regex": "\\bThread\\s*\\(",
+      "prod": 58,
+      "test": 24,
+      "total": 82
+    }
+  },
+  "bare_result_prod": [
+    {
+      "loc": "internal/chain_client.py:589",
+      "snippet": "row = fut.result()",
+      "caller_chain": "get_subnet_price_rows \u2192 ThreadPoolExecutor \u2192 as_completed(remaining) \u2192 fut.result()",
+      "future_state_at_call": "GUARANTEED_DONE",
+      "rationale": "as_completed yields only completed futures; .result() does not wait on unfinished work. Outer while also has batch wall-clock deadline.",
+      "can_block_active_thread": false
     },
     {
-      "label": "Thread(",
-      "regex": "\\bThread\\s*\\(",
-      "count": 82,
-      "note": "threading.Thread( sites; includes tests/harness"
+      "loc": "internal/worker_proxy.py:753",
+      "snippet": "return pool.submit(asyncio.run, coro).result()",
+      "caller_chain": "fetch_worker_json_sync(path) \u2192 _run_coro_sync(_load()) \u2192 ThreadPoolExecutor.submit(asyncio.run, coro).result()",
+      "future_state_at_call": "NOT_DONE \u2014 blocks until coro finishes",
+      "can_block_active_thread": true,
+      "coro_blocks_on": [
+        "httpx.AsyncClient.get to worker internal bases (flycast / *.internal / WORKER_INTERNAL_URL)",
+        "TCP connect (IPv6 :: bind) up to connect timeout (min(3s, timeout))",
+        "HTTP read/write up to WORKER_PEER_TIMEOUT_SECONDS default 4s (or caller timeout)",
+        "possible base failover retries inside _fetch_worker_http"
+      ],
+      "note": "When already in a running event loop, sync callers block the requesting thread on the worker HTTP round-trip; when no loop, asyncio.run(coro) runs inline instead of the pool path."
+    },
+    {
+      "loc": "internal/bots/mission_control.py:509",
+      "snippet": "ordered[name] = future.result()",
+      "caller_chain": "_run_parallel \u2192 wait(futures, timeout=SPECIALIST_TIMEOUT_SECONDS) \u2192 for future in done \u2192 future.result()",
+      "future_state_at_call": "GUARANTEED_DONE",
+      "rationale": "Only iterates wait()'s done set; not_done handled separately without .result().",
+      "can_block_active_thread": false
+    },
+    {
+      "loc": "internal/council/score_snapshots.py:538",
+      "snippet": "result = dict(fut.result())",
+      "caller_chain": "_register_write_completion_callback \u2192 (fut.done()? immediate : add_done_callback) \u2192 _complete_write_future(fut) \u2192 fut.result()",
+      "future_state_at_call": "GUARANTEED_DONE",
+      "rationale": "Invoked only when fut.done() is true or from done-callback. Not on the hot submit path.",
+      "can_block_active_thread": false
+    },
+    {
+      "loc": "internal/integrations/status.py:384",
+      "snippet": "slug, probe = fut.result()",
+      "caller_chain": "collect_integration_status \u2192 ThreadPoolExecutor \u2192 as_completed(futures) \u2192 fut.result()",
+      "future_state_at_call": "GUARANTEED_DONE",
+      "rationale": "as_completed yields completed futures only.",
+      "can_block_active_thread": false
     }
   ],
-  "updated_at": "2026-09-20T01:06Z"
+  "blocking_bare_result_prod_count": 1,
+  "blocking_sites": [
+    "internal/worker_proxy.py:753"
+  ]
 }
