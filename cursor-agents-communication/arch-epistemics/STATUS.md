@@ -1,18 +1,14 @@
 # Arch-epistemics STATUS
 
 ## Confirmed
-- Pin == /version YES (`c9449d6490231373748f19f299ed19d423a1c971`) — E-PROD-VERSION @ 2026-09-20T00:44:36Z
-- wc -l at pin: server.py=3379; score_snapshots.py=822; scoring_cap.py=121
-- Ditto +5 locus: noted vs Tracer raw; C-016b uses Tracer :50/:95 (not Ditto)
+- Pin `c9449d6490231373748f19f299ed19d423a1c971`
+- Rules 19–29 operational (no rules PR)
 
 ## Claims
-- C-016 VERIFIED (code-only partial)
-- **C-016b VERIFIED** (code-only partial) — effective caps Tier B
-- P-CENSUS-001 VERIFIED Tier A inventory (rev3: guards + worker_proxy formula + extended patterns)
-- **P-CENSUS-002:** Tracer.1 ACCEPTED (22 sites; worker_proxy:753 last) — **pending_spotcheck**
-- **A2-REPIN HOLD** — Joshua spot-check
+- C-016 / C-016b VERIFIED (code-only partial; Tier B effective caps)
+- P-CENSUS-001 VERIFIED Tier A inventory
+- **P-CENSUS-002 HOLD** — inventory in ledger; Category A/B classification filed at `results/P-CENSUS-002.category_AB.json` (verification only; no fixes)
+- **A2-REPIN HOLD**
 
 ## last_updated
-2026-09-20T02:09Z
-
-
+2026-09-20T03:02Z
