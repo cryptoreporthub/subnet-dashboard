@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016b",
+  "dedup_key": "c-016b-c9449d6490231373748f19f299ed19d423a1c971-snapshot-cap-code-default-at-276",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "target_seat": "Tracer",
+  "status": "dispatched",
+  "priority": 1,
+  "parent": "C-016",
+  "question": "At pin, cite the *code* default behavior at internal/council/score_snapshots.py:276 independent of fly.toml. Line 276 is `cap = _snapshot_subnet_cap()`. Report: (1) literal bytes at :276; (2) _snapshot_subnet_cap defaults when SCORE_SNAPSHOT_MAX_SUBNETS unset (module default at :34 and function body :40-53); (3) worker-mode TOP_SCORING_UNIVERSE default string; (4) non-worker fallback. Do NOT use fly.toml values.",
+  "expected_evidence_form": "bytes_read for :34,:38-53,:276-280; fetch_method raw; table of defaults with no fly cites",
+  "falsifier": {
+    "probe": "raw fetch score_snapshots.py at pin",
+    "expected": "276 calls _snapshot_subnet_cap; unset MAX \u2192 0 or worker TOP default 40",
+    "refutes_if": "Uses fly.toml to state the default OR skips function body"
+  },
+  "dispatched_at": "2026-09-20T01:06Z",
+  "dispatched_by": "mission-control",
+  "joshua_note": "VERIFIED C-016 follow-up: cite code default at :276 independent of fly.toml"
+}
