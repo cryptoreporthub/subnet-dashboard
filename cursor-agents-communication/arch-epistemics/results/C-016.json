@@ -1,32 +1,56 @@
 {
   "claim_id": "C-016",
-  "status": "pending_spotcheck",
+  "status": "VERIFIED",
   "verdict": "partial",
-  "evidence_class": "code-only",
-  "tier": "B",
+  "scope": "code-only",
   "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
-  "slices": {
-    "tracer": {
-      "bundle": "bundles/C-016.tracer.1.json",
-      "mc": "ACCEPTED"
+  "verified_by": "Joshua",
+  "verified_at": "2026-09-20T01:06Z",
+  "tiers": {
+    "A": {
+      "label": "code facts at pin",
+      "facts": [
+        {
+          "fact": "snapshot write path reads SCORE_SNAPSHOT_MAX_SUBNETS via _snapshot_subnet_cap",
+          "cites": [
+            "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:40",
+            "c9449d6490231373748f19f299ed19d423a1c971:internal/council/score_snapshots.py:276"
+          ]
+        },
+        {
+          "fact": "scoring/homepage path reads TOP_SCORING_UNIVERSE (server.py:628 default 20)",
+          "cites": [
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:628",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:899",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:1028",
+            "c9449d6490231373748f19f299ed19d423a1c971:server.py:3331"
+          ]
+        }
+      ]
     },
-    "configtruth": {
-      "bundle": "bundles/C-016.configtruth.1.json",
-      "mc": "ACCEPTED"
+    "B": {
+      "label": "effective caps (inferred from code+fly file, not live)",
+      "facts": [
+        {
+          "fact": "effective snapshot cap 40 when fly SCORE_SNAPSHOT_MAX_SUBNETS=40",
+          "tier": "B"
+        },
+        {
+          "fact": "effective scoring/homepage default 20 when TOP unset in fly",
+          "tier": "B"
+        },
+        {
+          "fact": "live env including Fly secrets NOT_OBSERVABLE",
+          "tier": "B"
+        }
+      ]
     }
   },
-  "synthesis_code_plus_fly": {
-    "snapshot_write_effective_cap_at_pin_with_fly": "40 (SCORE_SNAPSHOT_MAX_SUBNETS set in fly.toml; Tracer: wins in _snapshot_subnet_cap)",
-    "scoring_homepage_cap_code_default": "20 (TOP_SCORING_UNIVERSE); fly NOT_SET; shell/hour-pick min(24, TOP)",
-    "WORKER_HEAVY_fly_file": "essential",
-    "WORKER_HEAVY_live": "NOT_OBSERVABLE (F-1b)",
-    "live_env": "NOT_OBSERVABLE"
-  },
-  "related": [
-    "F-1",
-    "F-1b",
-    "X-C-016-CAP"
+  "bundles": [
+    "bundles/C-016.tracer.1.json",
+    "bundles/C-016.configtruth.1.json"
   ],
-  "awaiting": "Joshua VERIFIED|REJECT|HOLD",
-  "updated_at": "2026-09-20T00:47Z"
+  "x_c_016_cap": "resolved_code_only",
+  "tracer_followup": "C-016b cite code default at score_snapshots.py:276 independent of fly.toml",
+  "updated_at": "2026-09-20T01:06Z"
 }
