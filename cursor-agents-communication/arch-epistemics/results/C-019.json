@@ -1,6 +1,6 @@
 {
   "claim_id": "C-019",
-  "status": "VERIFIED_CODE_ONLY_PENDING_JOSHUA",
+  "status": "VERIFIED",
   "pin": "c9449d6490231373748f19f299ed19d423a1c971",
   "accepted_at": "2026-09-20T12:22Z",
   "accepted_by": "mission-control",
@@ -76,5 +76,12 @@
     },
     "falsifier": "Re-raw-fetch internal/subnets/scoring_cap.py and internal/council/score_snapshots.py at pin c9449d6490231373748f19f299ed19d423a1c971. Refute if _UNRANKED/_focus_tier/_heuristic_hunt_pool/cap_subnets_for_scoring absent, if :82 omits r>=_UNRANKED, if None-return stale path absent, if :166 default is not -1.0, or if citation bytes differ from this turn raw tool output.",
     "produced_by": "Tracer"
-  }
+  },
+  "joshua_accepted": true,
+  "joshua_accepted_at": "2026-09-20T13:17Z",
+  "scope_notes": [
+    "UI consumer NOT_OBSERVABLE",
+    "live env NOT_OBSERVABLE"
+  ],
+  "evidence_class": "code-only"
 }
