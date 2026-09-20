@@ -56,6 +56,13 @@
     "validated_at": "2026-09-20T01:07Z",
     "pin_spotcheck": "PASS",
     "status": "accepted_pending_joshua_spotcheck",
-    "notes": "All 6 cites match raw pin. No fly.toml in default chain."
+    "notes": "All 6 cites match raw pin. No fly.toml in default chain.",
+    "falsifier_backfill_at": "2026-09-20T01:08Z",
+    "falsifier_backfill_by": "mission-control"
+  },
+  "falsifier": {
+    "probe": "raw fetch internal/council/score_snapshots.py at pin; read :276 and _snapshot_subnet_cap body (:38-53) plus module default :34",
+    "expected": ":276 is `cap = _snapshot_subnet_cap()`; module SCORE_SNAPSHOT_MAX_SUBNETS default string \"0\"; worker branch TOP_SCORING_UNIVERSE default \"40\"; non-worker return 0; no fly.toml consulted for defaults",
+    "refutes_if": "Uses fly.toml to state the code default OR skips function body OR bytes not from this-turn raw fetch OR invents live env"
   }
 }
