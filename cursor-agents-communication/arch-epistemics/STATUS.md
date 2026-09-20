@@ -1,23 +1,30 @@
 # Arch-epistemics STATUS
 
 ## Confirmed
-- Pin == /version SHA: YES (`c9449d6490231373748f19f299ed19d423a1c971`) — prod observation E-PROD-VERSION @ 2026-09-20T00:44:36Z
-- PR #1294: campaign-only files
-- Ditto MCP source tag: **cursor**
+- Pin == /version SHA: YES (`c9449d6490231373748f19f299ed19d423a1c971`) — E-PROD-VERSION @ 2026-09-20T00:44:36Z
+- PR #1294 campaign-only
+- Ditto source tag: **cursor**
+- F-1b row: PRESENT (`results/F-1b.json`) live WORKER_HEAVY=NOT_OBSERVABLE
+- Live-config probe: DRAFT only (`probes/PROBE-LIVE-CONFIG-DRAFT.md`) — **not run**
 
 ## Claims
 - SMOKE-001 VERIFIED
 - C-014 VERIFIED (code-only partial)
-- F-1 VERIFIED (code-only partial) — Joshua 2026-09-20T00:25Z
-- **F-1b RECORDED:** live `WORKER_HEAVY` = **NOT_OBSERVABLE** (Fly secret / not in repo). Wedge-doc premise remains **Tier B** until closed.
-- **C-016:** BOTH slices ACCEPTED — Tracer call-path + ConfigTruth fly.toml — **pending_spotcheck** (awaiting Joshua VERIFIED|REJECT|HOLD). Synthesis: snapshot write cap=40 via fly SCORE_SNAPSHOT_MAX_SUBNETS; scoring/home uses TOP_SCORING_UNIVERSE (fly NOT_SET, code default 20). Live still NOT_OBSERVABLE.
-- **Queued before C-015/C-017:** P-CENSUS-001 (shutdown(wait=False) + .result(timeout=) census); A2-REPIN (re-pin A2 to blobs at pin)
-- C-015, C-017: open (not dispatched; behind census + A2-REPIN)
-- X-C-016-CAP: open (bundles in; claim-level close awaits Joshua spotcheck)
+- F-1 VERIFIED (code-only partial)
+- F-1b RECORDED NOT_OBSERVABLE (Tier B wedge premise)
+- **C-016 VERIFIED** (Joshua) — scope code-only, verdict partial
+  - Tier A: snapshot path reads SCORE_SNAPSHOT_MAX_SUBNETS; scoring/home reads TOP_SCORING_UNIVERSE (:628 default 20)
+  - Tier B: effective caps 40/20; live env NOT_OBSERVABLE
+  - X-C-016-CAP: **resolved code-only**
+  - Follow-up **C-016b** dispatched to Tracer (:276 code default independent of fly)
+- **P-CENSUS-001 VERIFIED** (MC execute at pin) — shutdown(wait=False)=15; .result(timeout=)=17; .result() no timeout=5; ThreadPoolExecutor=41; Thread(=82
+- **A2-REPIN** pending_spotcheck — A2 atoms re-pinned to pin blobs via census cites; ~18min magnitude remains NOT_OBSERVABLE
+- C-015, C-017: open (not dispatched)
 
-## Probes
-- PROBE-LIVE-CONFIG: **draft only** (`probes/PROBE-LIVE-CONFIG-DRAFT.md`) — not run. Approver: Joshua.
+## Rules hygiene
+- Ratified `docs/agent-operating-rules-2026-09-01.md` at pin: **Rules 1–18 only**
+- **Rules 24–29: NOT PRESENT** in ratified doc (no text; not ratified)
+- Rules 19–23: also absent from that file (historical note: earlier brief flagged 19–23 unratified / Rule 21 blank — still not in-repo)
 
 ## last_updated
-2026-09-20T00:47Z
-
+2026-09-20T01:06Z
