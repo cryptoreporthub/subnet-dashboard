@@ -1,5 +1,6 @@
 {
   "claim_id": "A2-REPIN",
-  "status": "HOLD",
-  "updated_at": "2026-09-20T03:02Z"
+  "status": "AWAITING_JOSHUA_SPOTCHECK",
+  "updated_at": "2026-09-20T13:17Z",
+  "note": "Joshua: spot-check next. HOLD until then."
 }
