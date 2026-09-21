@@ -225,6 +225,14 @@ jobs:
           fi
 
 
+      - name: Extract Live Tunables (Keyed Only)
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "=== LIVE CONFIG TUNABLES ==="
+          flyctl ssh console --app subnet-dashboard -C "python3 -c 'import os; print(\"SCORE_SNAPSHOT_MAX_SUBNETS=\", os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\")); print(\"WORKER_HEAVY=\", os.environ.get(\"WORKER_HEAVY\", \"unset\"))'"
+
       - name: Snapshot prediction_resolver_scheduler from soul_map
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
