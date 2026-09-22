@@ -105,12 +105,14 @@ class InstantBailoutASGI:
         get_homepage_html: Callable[[], Optional[str]],
         schedule_warm: Callable[[], None],
         homepage_cache_control: bytes = b"no-store, max-age=0",
+        homepage_is_warm: Optional[Callable[[], bool]] = None,
         static_dir: Optional[str] = None,
     ) -> None:
         self.app = app
         self._get_homepage_html = get_homepage_html
         self._schedule_warm = schedule_warm
         self._homepage_cache_control = homepage_cache_control
+        self._homepage_is_warm = homepage_is_warm
         self._bailout_static = _preload_bailout_static(static_dir or _default_static_dir())
 
     def __getattr__(self, name: str):
@@ -161,7 +163,9 @@ class InstantBailoutASGI:
 
         if method == "GET" and path == "/":
             started = time.perf_counter()
+            warm = True if self._homepage_is_warm is None else bool(self._homepage_is_warm())
             html = self._get_homepage_html()
+            cache_control = self._homepage_cache_control if warm else b"no-store, max-age=0"
             timing_header = [
                 (
                     b"server-timing",
@@ -174,7 +178,7 @@ class InstantBailoutASGI:
                     status=200,
                     body=html.encode("utf-8"),
                     content_type="text/html; charset=utf-8",
-                    cache_control=self._homepage_cache_control,
+                    cache_control=cache_control,
                     extra_headers=timing_header,
                 )
                 return
@@ -184,7 +188,7 @@ class InstantBailoutASGI:
                 status=200,
                 body=HARDCODED_EMERGENCY_HTML,
                 content_type="text/html; charset=utf-8",
-                cache_control=self._homepage_cache_control,
+                cache_control=b"no-store, max-age=0",
                 extra_headers=timing_header,
             )
             return
@@ -198,6 +202,7 @@ def wrap_instant_bailout(
     get_homepage_html,
     schedule_warm,
     homepage_cache_control: bytes = b"no-store, max-age=0",
+    homepage_is_warm: Optional[Callable[[], bool]] = None,
     static_dir: Optional[str] = None,
 ):
     return InstantBailoutASGI(
@@ -205,5 +210,6 @@ def wrap_instant_bailout(
         get_homepage_html=get_homepage_html,
         schedule_warm=schedule_warm,
         homepage_cache_control=homepage_cache_control,
+        homepage_is_warm=homepage_is_warm,
         static_dir=static_dir,
     )

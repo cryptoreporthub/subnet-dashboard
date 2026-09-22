@@ -607,7 +607,7 @@ async def add_cors_headers(request: Request, call_next):
             if path.startswith(prefix + "/") or path == prefix:
                 cache_ttl = ttl
                 break
-    if cache_ttl is not None:
+    if cache_ttl is not None and not response.headers.get("cache-control"):
         response.headers["Cache-Control"] = f"public, max-age={cache_ttl}"
     elif path.startswith("/static/"):
         if path.endswith((".js", ".css")):
@@ -1616,6 +1616,17 @@ def _build_index_context(request: Request) -> Dict[str, Any]:
     context.update(_safe_mindmap_graph_context(timeout_s=2.0))
 
     return context
+
+
+def _homepage_shell_is_warm() -> bool:
+    """True when the in-process shell is fresh enough to advertise a public TTL."""
+    now = time.time()
+    cached_html = _HOMEPAGE_HTML_CACHE.get("html")
+    return bool(
+        isinstance(cached_html, str)
+        and cached_html
+        and now - float(_HOMEPAGE_HTML_CACHE.get("at") or 0) < HOMEPAGE_SHELL_CACHE_SECONDS
+    )
 
 
 def _bailout_homepage_html() -> Optional[str]:
@@ -3368,6 +3379,7 @@ app = wrap_instant_bailout(
     schedule_warm=lambda: _schedule_homepage_warm(None),
     # Edge-cache the shell so concurrent bursts hit CDN/Fly cache, not the app.
     homepage_cache_control=f"public, max-age={_CACHE_PATHS['/']}".encode("ascii"),
+    homepage_is_warm=_homepage_shell_is_warm,
 )
 
 
