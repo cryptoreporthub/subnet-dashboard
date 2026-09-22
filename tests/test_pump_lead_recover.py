@@ -171,6 +171,33 @@ def test_hydrate_skips_when_window_ready(tmp_path, monkeypatch):
     assert calls["n"] == 0
 
 
+def test_hydrate_busts_ttl_under_shared_lock(tmp_path, monkeypatch):
+    resolve_at = datetime(2026, 7, 23, 1, 0, tzinfo=timezone.utc)
+    cache_path = tmp_path / "price_cache.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "54": {"candles": [], "cached_at": 1e12, "source": "test"},
+                "9": {"candles": [{"close": 9.0}], "cached_at": 1e12, "source": "test"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    seen = {}
+
+    def fake_fetch(subnet_id, **_kwargs):
+        saved = json.loads(cache_path.read_text(encoding="utf-8"))
+        seen["cached_at"] = saved[str(subnet_id)]["cached_at"]
+        seen["kept_sibling"] = "9" in saved
+        return []
+
+    monkeypatch.setattr("internal.indicators.price_fetcher.fetch_ohlcv", fake_fetch)
+    out = hydrate_candles_for_resolve(54, resolve_at, cache_path=str(cache_path))
+    assert out["hydrated"] is True
+    assert seen["cached_at"] == 0.0
+    assert seen["kept_sibling"] is True
+
+
 def test_hydrate_then_recover_grades(tmp_path, monkeypatch):
     resolve_at = datetime(2026, 7, 23, 1, 0, tzinfo=timezone.utc)
     created = resolve_at - timedelta(hours=1)
