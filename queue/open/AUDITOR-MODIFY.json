@@ -1,0 +1,48 @@
+{
+  "ticket": "AUDITOR-MODIFY",
+  "title": "External auditor MODIFY verdict and brother-path extract",
+  "status": "HOLD",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "rule_8": "No product patch. The six remediation steps as previously phrased are not approved. Test-first gates below must be written before any GO.",
+  "verdict": "MODIFY. Four mechanisms are defects or contract breaches. Selection-versus-presentation is a provenance mismatch, not a proven scoring-engine defect.",
+  "accepted": [
+    "Homepage cold shell sets no-store and middleware replaces it with public max-age from _CACHE_PATHS. fly.toml:66 makes both HOMEPAGE_SHELL reads 60.",
+    "Price cache is an unlocked whole-file replace. Do not hold a lock across the outbound fetch. Negative-cache unavailable on a short TTL, do not stop caching it.",
+    "Snapshot late publish is real. Single-flight already refuses a second in-process build. Do not treat caller timeout as proof the build is invalid. No timeout increase.",
+    "write_soul_map returns the mutated blob after a swallowed persistence error. Cache is updated only after os.replace. Return the pre-mutation blob. Mutator exceptions are already outside the try."
+  ],
+  "corrections_to_auditor": [
+    "_bust_cache_ttl exists at internal/council/price_reference.py:489 on this pin. SHA-256 of that line is 0a9ccfed8cd9d33eb9d9faba8aaa5ce28ce1b156fa110545bd008e49b26ab25c. It is not in price_fetcher.py. Lock-ordering still applies to that function.",
+    "sqlite3.connect default timeout is 5 seconds in CPython. L3-004's 'no timeout argument' is not 'no timeout'."
+  ],
+  "brothers": [
+    {
+      "id": "L2-PICK",
+      "file": "internal/council/pick_scheduler.py",
+      "sha256": {
+        "306-328": "f40242dda758699a7e78c7b45cf3ef0d921e5ed019bf49ee8038641c2ab489d1",
+        "508-518": "6148729a6091735a0f62a20b639625319818c1669eb36900386e039f936935ec"
+      },
+      "finding": "Timeout bumps _work_generation and shutdown(wait=False). The generation check runs only after get_or_create_today_pick returns, so writes inside that call are not rolled back. stop_pick_schedulers nulls the scheduler objects. DailyPickScheduler.stop cancels the job and does not bump _work_generation."
+    },
+    {
+      "id": "L3-PREDICTIONS",
+      "file": "internal/learning/predictions_store.py",
+      "sha256": {
+        "35-59": "3355f21ce865ca4895872018e9833f61990150703a6728775c8c76d63008ccf9",
+        "149-181": "494d83c5c51e253b03063ca7ca148a221630aba3d1fe943ac69cbac6d97ae6c3",
+        "184-217": "2740ea94f8014f65dbabbda3feca5cd106e6c5e606d3f77fb1ff91af79c00432",
+        "250-287": "118b4d4263e595cefb0f78deb799f1bffee54357a7ded29b2483e9566bfd6391"
+      },
+      "finding": "append_prediction and save_predictions both take locked_predictions_file (fcntl.flock, 5s) before _write_predictions_unlocked os.replace. Callers in expired_recovery, ledger_heal, and expert_backfill use save_predictions. An unlocked os.replace race inside this module is not shown. A caller that loads, mutates, then save_predictions can still drop another writer's rows because the lock covers the write, not the caller's earlier read."
+    }
+  ],
+  "gates_before_code": [
+    "Cache-header precedence: preserve an explicit handler Cache-Control. Tests for cold /, warm /, API, and static.",
+    "Short negative TTL for source unavailable, with tests that two netuids survive concurrent merge.",
+    "Snapshot publication token: superseding generation rejects an older publish. Legacy written_at still ages. No timeout increase.",
+    "Soul-map I/O failure returns the pre-mutation blob, logs without payload, and does not poison the cache.",
+    "Product contract names selection_leader, display_leader, and learning_attribution separately. Do not change day-lens math to match the UI.",
+    "Concurrency tests exist before any persistence or timeout edit."
+  ]
+}
