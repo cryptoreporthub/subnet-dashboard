@@ -10,8 +10,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
+
+import fcntl
 
 from internal.council.daily_pick import select_daily_pick
 from internal.council.scenario_memory import classify_regime
@@ -40,13 +44,96 @@ def _load(path: Optional[str] = None) -> List[Dict[str, Any]]:
     return []
 
 
-def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> None:
+def _parse_iso(raw: Any) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _row_stamp(row: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    """When this attempt started. Legacy rows only have timestamp_utc."""
+    if not isinstance(row, dict):
+        return None
+    return _parse_iso(row.get("build_started_at")) or _parse_iso(row.get("timestamp_utc"))
+
+
+def _now_stamp() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+@contextmanager
+def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
+    """Cross-process lock for the daily-picks read-merge-replace."""
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def _save(records: List[Dict[str, Any]], path: Optional[str] = None) -> bool:
+    """Persist daily picks. Return False when today's incoming row is older.
+
+    Reloads under the file lock so an abandoned worker cannot replace a row
+    whose build_started_at is later, and cannot drop history loaded by the
+    winner. Same check-then-write as score snapshot publish.
+    """
     path = path or DAILY_PICKS_PATH
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(records, f, indent=2)
-    os.replace(tmp, path)
+    incoming_today = _find_today(records)
+    with _locked_daily_picks(path):
+        disk = _load(path)
+        disk_today = _find_today(disk)
+        if (
+            isinstance(incoming_today, dict)
+            and incoming_today.get("scheduler_hold")
+            and isinstance(disk_today, dict)
+            and not disk_today.get("scheduler_hold")
+            and disk_today.get("pick")
+        ):
+            logger.info("daily pick hold skipped: a published pick is already on disk")
+            return False
+        incoming_stamp = _row_stamp(incoming_today)
+        disk_stamp = _row_stamp(disk_today)
+        if (
+            incoming_today is not None
+            and incoming_stamp is not None
+            and disk_stamp is not None
+            and incoming_stamp < disk_stamp
+        ):
+            logger.info(
+                "daily pick publish skipped: incoming %s is older than on-disk %s",
+                incoming_today.get("build_started_at") or incoming_today.get("timestamp_utc"),
+                (disk_today or {}).get("build_started_at") or (disk_today or {}).get("timestamp_utc"),
+            )
+            return False
+        merged = _upsert_today(disk, incoming_today) if incoming_today is not None else list(records)
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(merged, handle, indent=2)
+        os.replace(tmp, path)
+    return True
 
 
 def _today_str() -> str:
@@ -171,13 +258,15 @@ def write_scheduler_hold(reason: str) -> Dict[str, Any]:
         "regime": "unknown",
         "rotation_summary": {},
         "market_context": {},
+        "build_started_at": _now_stamp(),
     }
     existing = _find_today(records)
     if isinstance(existing, dict) and not existing.get("scheduler_hold") and existing.get("pick"):
         # Never clobber a real published pick.
         return existing
     records = _upsert_today(records, payload)
-    _save(records)
+    if not _save(records):
+        return _find_today(_load()) or existing or payload
     return payload
 
 
@@ -224,6 +313,7 @@ def get_or_create_today_pick(
                 return existing
         # Stale Root-era cache: fall through and regenerate.
 
+    started = _now_stamp()
     if not subnets:
         payload: Dict[str, Any] = {
             "status": "ok",
@@ -236,9 +326,11 @@ def get_or_create_today_pick(
             "regime": classify_regime(market_context),
             "rotation_summary": get_rotation_summary(subnets),
             "market_context": market_context,
+            "build_started_at": started,
         }
         records = _upsert_today(records, payload)
-        _save(records)
+        if not _save(records):
+            return _find_today(_load()) or payload
         try:
             from internal.learning.prediction_loop import record_hold_decision
 
@@ -278,10 +370,12 @@ def get_or_create_today_pick(
         "candidate": candidate,
         "reason": reason,
         "market_context": market_context,
+        "build_started_at": started,
     }
 
     records = _upsert_today(records, payload)
-    _save(records)
+    if not _save(records):
+        return _find_today(_load()) or payload
 
     if stored_pick is not None:
         try:
