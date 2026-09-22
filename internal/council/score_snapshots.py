@@ -7,14 +7,16 @@ Request handlers must never call full-universe scoring — they read this file
 
 from __future__ import annotations
 
+import fcntl
 import json
 import logging
 import os
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -89,12 +91,54 @@ def _parse_iso(value: Any) -> Optional[datetime]:
         return None
 
 
+def _snapshot_stamp(payload: Optional[Dict[str, Any]]) -> Optional[datetime]:
+    """Build start when present; legacy files only have written_at."""
+    if not isinstance(payload, dict):
+        return None
+    return _parse_iso(payload.get("build_started_at")) or _parse_iso(payload.get("written_at"))
+
+
 def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
+    """Age for the 7200s freshness gate.
+
+    A snapshot that records build_started_at is as old as the scoring run,
+    not as young as the file mtime of a late publish. Legacy files without
+    that field keep the mtime clock so an old written_at on a fresh file
+    stays readable.
+    """
     snap_path = path or SCORE_SNAPSHOTS_PATH
+    snap = load_score_snapshot(snap_path)
+    started = _parse_iso((snap or {}).get("build_started_at")) if snap else None
+    if started is not None:
+        return max(0.0, datetime.now(timezone.utc).timestamp() - started.timestamp())
     try:
         return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(snap_path))
     except OSError:
         return None
+
+
+@contextmanager
+def _locked_score_snapshot(snap_path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
+    lock_path = snap_path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -110,10 +154,21 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
 def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> None:
     snap_path = path or SCORE_SNAPSHOTS_PATH
     os.makedirs(os.path.dirname(snap_path) or ".", exist_ok=True)
-    tmp = snap_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2)
-    os.replace(tmp, snap_path)
+    with _locked_score_snapshot(snap_path):
+        current = load_score_snapshot(snap_path)
+        incoming = _snapshot_stamp(payload)
+        on_disk = _snapshot_stamp(current)
+        if incoming is not None and on_disk is not None and incoming < on_disk:
+            logger.info(
+                "score snapshot publish skipped: incoming %s is older than on-disk %s",
+                payload.get("build_started_at") or payload.get("written_at"),
+                (current or {}).get("build_started_at") or (current or {}).get("written_at"),
+            )
+            return
+        tmp = snap_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, indent=2)
+        os.replace(tmp, snap_path)
 
 
 def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
@@ -183,6 +238,7 @@ def build_full_universe_snapshot(
         score_hour = _score_hour_enabled()
     market_context = market_context or {}
     rows = tradable_subnets(subnets) if subnets else []
+    build_started_at = _now_iso()
     hour_rows: List[Dict[str, Any]] = []
     day_rows: List[Dict[str, Any]] = []
     total = len(rows)
@@ -225,6 +281,7 @@ def build_full_universe_snapshot(
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
     return {
+        "build_started_at": build_started_at,
         "written_at": _now_iso(),
         "count": len(rows),
         "hour": hour_rows,
