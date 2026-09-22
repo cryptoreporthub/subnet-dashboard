@@ -1,0 +1,25 @@
+{
+  "ticket": "L3-STORAGE",
+  "title": "Local Persistence & Storage Hierarchy (Swallowed I/O Exceptions, Unlocked Snapshot Writes, Fly Volume Scope)",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "findings": [
+    {
+      "id": "L3-001",
+      "issue": "Silent I/O exception swallowing: internal/store/soul_map_io.py:128-129 catches Exception and passes on os.replace failure, returning mutated in-memory blob. Failed disk persistence appears as success until restart."
+    },
+    {
+      "id": "L3-002",
+      "issue": "Unlocked snapshot writes: score_snapshots.py:110-116 performs os.replace without path locks, outside soul_map_io."
+    },
+    {
+      "id": "L3-003",
+      "issue": "Fly volume process binding: fly.toml lines 129-132 mounts data_volume -> /app/data for processes = ['web'] only."
+    },
+    {
+      "id": "L3-004",
+      "issue": "SQLite volume backing: chain_client.py:36-41 connects to data/volume_cache.db with default sqlite3 connection settings."
+    }
+  ],
+  "verified_by": ["Cursor (Grok Parent Tracer)", "Gemini (Blind GitHub Raw API & SHA-256 match)", "Joshua"]
+}
