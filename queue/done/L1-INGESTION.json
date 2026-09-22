@@ -1,0 +1,25 @@
+{
+  "ticket": "L1-INGESTION",
+  "title": "Data Ingestion & Price Hydration Pipeline (Cache Overwrite Race, Stampede Memo, Air-Gap)",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "findings": [
+    {
+      "id": "L1-001",
+      "issue": "Wholesale cache overwrite race: price_fetcher.py:_save_json (lines 70-76) os.replaces the entire dict; concurrent callers drop each other's keys. Live miss with allow_synthetic=False caches empty candles with source: unavailable for 300s (lines 345-356)."
+    },
+    {
+      "id": "L1-002",
+      "issue": "Calibration hydration gate: price_reference.py:_hydrate_on_miss_enabled (lines 473-477) gates network calls. Gated by 900s memo interval and resolver hydration budget (lines 584-616)."
+    },
+    {
+      "id": "L1-003",
+      "issue": "History horizon cutoff: price_reference.py:572-582 returns None for days_needed > CALIBRATION_HIST_MAX_DAYS (30), retiring stale predictions without hitting network."
+    },
+    {
+      "id": "L1-004",
+      "issue": "Air-gap verified: state_vector.py:1785-1791 and resolver.py:1133 pass allow_hydration=False. Day scoring and resolver indicators never hit network for price history."
+    }
+  ],
+  "verified_by": ["Cursor (Grok Parent Tracer)", "Gemini (Blind GitHub Raw API & SHA-256 match)", "Joshua"]
+}
