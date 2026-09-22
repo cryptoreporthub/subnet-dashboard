@@ -1,0 +1,8 @@
+{
+  "ticket": "C-014",
+  "status": "VERIFIED_CLOSED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "blob": "849d78f8ed51239878ac5184acf5c3e995d0f756",
+  "file": "internal/subnets/scoring_cap.py",
+  "findings": "Verified fallback try/except at lines 102-109 calling rank_subnets_by_snapshot and falling through to _heuristic_hunt_pool at lines 115-121."
+}

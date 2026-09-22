@@ -1,0 +1,10 @@
+{
+  "ticket": "REMEDIATION-02",
+  "priority": 3,
+  "title": "Fix Resolver Scheduler 1-2 Min Orphan Spin-Loop (Track 5.3)",
+  "target_files": [
+    "internal/council/resolver_scheduler.py"
+  ],
+  "status": "MAPPED_PENDING_DESIGN",
+  "objective": "Implement backoff (5-10m) on cycle_timeout and heavy_job_busy to stop scheduler from spinning against orphan execution threads."
+}

@@ -1,0 +1,10 @@
+{
+  "ticket": "F-1b",
+  "status": "LIVE_VERIFIED_CLOSED",
+  "receipt": "GitHub Actions Run 35656500026 / Check Job 106521375098",
+  "observed_tunables": {
+    "SCORE_SNAPSHOT_MAX_SUBNETS": 40,
+    "WORKER_HEAVY": "essential"
+  },
+  "impact": "Confirmed live Fly production actively enforces 40-subnet cap, proving C-017 starvation loop is active in live runtime."
+}

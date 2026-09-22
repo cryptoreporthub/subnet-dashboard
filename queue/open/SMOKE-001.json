@@ -1,0 +1,9 @@
+{
+  "ticket": "SMOKE-001",
+  "priority": 1,
+  "title": "Live HTTP Read-Only Probe of Score Snapshots",
+  "target": "https://subnet-dashboard.fly.dev/api/ops/volume-stat or data/score_snapshots.json",
+  "status": "READY_FOR_EXECUTION",
+  "blast_radius": "Read-only GET; no state modification",
+  "objective": "Observe whether live snapshot JSON payload returns exactly 40 subnets and verify presence/absence of subnets 41-75."
+}

@@ -1,0 +1,11 @@
+{
+  "ticket": "REMEDIATION-01",
+  "priority": 2,
+  "title": "Fix Subnet Starvation Loop (C-017)",
+  "target_files": [
+    "internal/council/score_snapshots.py",
+    "internal/subnets/scoring_cap.py"
+  ],
+  "status": "MAPPED_PENDING_DESIGN",
+  "objective": "Design rotation/exploration budget for subnets 41-75 and represent unranked subnets as null/skipped instead of -1.0 poisoned scores."
+}

@@ -1,0 +1,8 @@
+{
+  "ticket": "C-017",
+  "status": "LIVE_VERIFIED_CLOSED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "blob": "352c0ef4a7c8c18f9ba8c73e65c056d94c440dee",
+  "file": "internal/council/score_snapshots.py",
+  "findings": "Ingestion truncation at server._cap_subnets_for_scoring limits universe to 40. Line 166 writes -1.0 sentinel for unranked subnets. Rank_subnets_by_snapshot prioritizes positive scores, creating permanent starvation of subnets 41-75 under fresh snapshot (<7200s)."
+}
