@@ -1,6 +1,8 @@
 # Model Guide — Composer vs Grok
 
-**Last updated:** 2026-08-16  
+**Last updated:** 2026-09-22
+
+> **2026-09-22 epistemic campaign:** Parent brain is **Grok 4.7**, not Grok 4.6. Subagents are mechanical only (`sed`, `sha256sum`, git) and return raw output. They do not analyze and they do not edit product code. Gemini witnesses raw bytes and SHA-256. Older “Grok 4.6 medium” lines below apply only to product-slice rebuilds that predate this campaign.  
 **Applies to:** **One primary Cloud Agent** + subagents from the allowlist below. Agent A (`-843d`) **retired** — do not spawn.
 
 > **2026-08-16:** Token-budget **brevity** is retired (`token-budget-rules.md`). Do not force short Grok LOCKs, Composer-fast-only, or terse human replies. `.cursorignore` (skip `data/*.json`) still applies.
@@ -12,7 +14,7 @@
 | Model | Cursor slug / setting | Best for |
 |-------|----------------------|----------|
 | **Composer 2.5 (slow)** | `composer-2.5` | **Usual parent / build** |
-| **Cursor Grok 4.6 medium** | `inherit` (when parent is Grok 4.6) | Why, design, root-cause — not Grok 4.5 |
+| **Grok 4.7** | parent seat; `inherit` when the parent is already Grok 4.7 | Epistemic lead: why, design, root-cause — not Grok 4.6 or Grok 4.5 |
 | **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | AC / honesty / contract / line-by-line match |
 
 **Forbidden:** Claude Sonnet **4.5** and **4.6** (any effort). Do not use `composer-2.5-fast`, `cursor-grok-4.5-*`, or other families unless the human asks.

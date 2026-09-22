@@ -1,17 +1,19 @@
 ---
-description: Composer slow, Grok 4.6 medium, Luna high. Complementary review — not a hard lane. No Sonnet 4.5/4.6.
+description: Epistemic campaign parent is Grok 4.7. Mechanical subagents only. No Sonnet 4.5/4.6.
 globs:
 alwaysApply: true
 ---
 
-# Subagent models (human 2026-08-16)
+# Subagent models (human 2026-09-22)
 
-Parent is **usually Composer slow**. This pool is not a hard lane (not “Grok always designs, Luna always reviews”).
+Epistemic-campaign parent is **Grok 4.7**. The parent does analysis. Subagents run exact extracts, digests, and git only, serially, and return raw output. They do not edit product code.
+
+Product rebuilds that are outside that campaign may still use Composer slow as the build parent. This pool is not a hard lane (not “Grok always designs, Luna always reviews”).
 
 | Model | Task `model` slug | Best at |
 |-------|-------------------|---------|
-| **Composer slow** | `composer-2.5` | Default parent / build — routes, tests, docs, UI from a decision |
-| **Cursor Grok 4.6 medium** | `inherit` if parent is already Grok 4.6; never Grok 4.5 | Why / design / root-cause / temporal-logic / competing approaches |
+| **Grok 4.7** | parent seat (`inherit` when the parent is already Grok 4.7); never Grok 4.5 or Grok 4.6 | Epistemic campaign lead: why / design / root-cause / falsifiers |
+| **Composer slow** | `composer-2.5` | Product-slice build — routes, tests, docs, UI from a decision |
 | **GPT-4.6 Luna high** | `gpt-5.6-luna-high` | AC match, honesty/empty, contract, line-by-line “did we ship the ask” |
 
 **Review (not a hard set):** first pass = whoever is better at *this* question. **Final pass = the other one.** If Grok did design or first review, Luna is final. If Luna did first review, Grok is final. Do not skip the complementary final on hydration, contract, grading, or honesty diffs. Skip both extras on a one-liner.
@@ -20,6 +22,6 @@ Parent is **usually Composer slow**. This pool is not a hard lane (not “Grok a
 
 Also do not use unless the human explicitly asks: `composer-2.5-fast`, Grok 4.5 (`cursor-grok-4.5-*`), Grok 4.6 high-fast, Opus, Gemini, Sol, Fable, Sonnet 5.
 
-If a Task catalog has no Grok 4.6 **medium** slug, inherit from a Grok 4.6 parent rather than substituting Sonnet or Grok 4.5. Bump Grok to high only when medium is stuck.
+If a Task catalog has no Grok 4.7 slug, inherit from a Grok 4.7 parent rather than substituting Sonnet, Grok 4.6, or Grok 4.5. Bump thinking effort only when the parent is stuck.
 
 Binding copy: `cursor-agents-communication/model-guide.md`

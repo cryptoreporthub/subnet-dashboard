@@ -49,9 +49,15 @@ access are required to run it locally.
 
 Follow [`.cursor/rules/ponytail.mdc`](.cursor/rules/ponytail.mdc) ([Ponytail](https://github.com/DietrichGebert/ponytail)): YAGNI, minimal diff, reuse existing patterns before adding files or dependencies. Do not cut validation, security, error handling, or contract-test coverage.
 
-### Subagent models
+### Epistemic campaign parent (2026-09-22)
 
-Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6. Usual parent is **Composer slow**. **Grok 4.6 medium** and **Luna high** each review what they are best at; **the other is the final pass** (not a hard Luna-only or Grok-only review lane). Binding: [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md).
+Parent brain for the architecture-epistemics campaign is **Grok 4.7**. Do not call this seat Grok 4.6. Claude is offline. Planning authority sits with Grok 4.7; Gemini is the blind raw-byte and SHA-256 witness.
+
+- The parent does the reasoning: cross-file comparison, bug calls, falsifiers, and the next-layer plan.
+- Subagents are mechanical only. They may run an exact `sed -n` extract, `sha256sum`, or a git command, and they return raw terminal output. They do not analyze, summarize, or edit product code (Rule 8). One subagent at a time. No concurrent working-tree edits.
+- Search Ditto at the start of each new problem. Record whether the mechanism was seen before and what was done.
+
+Product-slice rebuilds that are not this campaign still use [`.cursor/rules/subagent-models.mdc`](.cursor/rules/subagent-models.mdc) and [`cursor-agents-communication/model-guide.md`](cursor-agents-communication/model-guide.md). Those files name **Grok 4.7** as the parent for this campaign. Do **not** spawn Claude Sonnet 4.5 or Sonnet 4.6.
 
 ### Agent coordination (two Cursor agents)
 
