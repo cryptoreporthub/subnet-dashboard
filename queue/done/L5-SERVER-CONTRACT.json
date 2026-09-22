@@ -10,7 +10,8 @@
     },
     {
       "id": "L5-002",
-      "issue": "Wire cache header collision: server.py:610-611 middleware overwrites handler response with _CACHE_PATHS['/'] (line 516, default 60s). Browser/CDN sees public, max-age=60 while Python cache invalidates at 45s."
+      "issue": "Wire cache header collision: server.py:610-611 middleware overwrites handler response with _CACHE_PATHS['/'] (line 516, default 60s). Browser/CDN sees public, max-age=60 while Python cache invalidates at 45s.",
+      "remediation": "REMEDIATED at ab85a45b3d16fbe958a008e89e1d51930a2c9d3f (PR #1298, merged to main). Cold GET / sends no-store via InstantBailout. Warm shell still public max-age=60. This pin finding stays true of c9449d6490231373748f19f299ed19d423a1c971."
     },
     {
       "id": "L5-003",

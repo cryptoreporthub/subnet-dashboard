@@ -1,0 +1,10 @@
+{
+  "ticket": "L5-002-REMEDIATION",
+  "title": "Homepage Cache-Control clobber remediated",
+  "status": "REMEDIATED",
+  "finding_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "merge_sha": "ab85a45b3d16fbe958a008e89e1d51930a2c9d3f",
+  "pr": 1298,
+  "main_head": "ab85a45b3d16fbe958a008e89e1d51930a2c9d3f",
+  "note": "Cold homepage shell sends Cache-Control: no-store, max-age=0. Warm in-process shell still sends public, max-age=60. Middleware keeps a handler-set Cache-Control. InstantBailout is the wire path. Step 2 is not started."
+}
