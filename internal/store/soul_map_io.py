@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import copy
 import json
+import logging
 import os
 import tempfile
 import threading
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 _locks: Dict[str, threading.Lock] = {}
 _meta_lock = threading.Lock()
@@ -103,9 +106,11 @@ def write_soul_map(
     Resolves path=None to weights.SOUL_MAP_PATH (lazy import).
     Acquires a lock for this path, reads current blob ({} if missing/bad),
     calls mutator(blob) which mutates the dict in place, then atomically
-    writes it back. Returns the final blob. Never raises from I/O.
-    Successful writes immediately refresh the in-process cache, so a write
-    followed by a read in the same process always sees the new data.
+    writes it back. Exceptions from mutator propagate. Never raises from I/O.
+    On a disk-write failure, logs a warning and returns the pre-mutation blob
+    without updating the cache. Successful writes immediately refresh the
+    in-process cache, so a write followed by a read in the same process
+    always sees the new data.
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved):
@@ -113,6 +118,7 @@ def write_soul_map(
         cached = _cache_get_fresh(resolved, now)
         # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
         blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+        prior = copy.deepcopy(blob)
         mutator(blob)
         temp_path = ""
         try:
@@ -125,8 +131,20 @@ def write_soul_map(
             os.replace(temp_path, resolved)
             _cache_put(resolved, blob, time.monotonic())
             temp_path = ""
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(
+                "soul_map persistence failed path=%s error_type=%s error=%s",
+                resolved,
+                type(exc).__name__,
+                exc,
+                extra={
+                    "event": "soul_map_persistence_failed",
+                    "path": resolved,
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                },
+            )
+            return prior
         finally:
             if temp_path and os.path.exists(temp_path):
                 try:
