@@ -1,0 +1,20 @@
+{
+  "ticket": "L4-010-LEARNING-ATTRIBUTION-POLICY",
+  "title": "Learning Loop Resolver Attribution vs Mathematical Day Lens Selection",
+  "status": "DECIDED — resolver credit stays on the signal-first display leader",
+  "decided_at": "ee9c55873ccb8db42c16bc6f8410850e7dc9c446",
+  "decision": "Do not retarget dominant_expert_for_learning onto selection_weights. Day Lens (1.05 / 0.90 / 1.08 / 1.05, then normalized) remains the day-score tilt inside score_subnet_for_day. The published thesis is leading_expert_for_pick: classifiable signals win, otherwise the learned-weight blend, with alphabetical-later tie-break. record_pick_prediction stores that expert. resolve_expert_attribution keeps an already-stamped expert. New credits therefore match the badge and the historical rows.",
+  "why_not_selection_weights": "Crediting the Day Lens argmax would nudge a different expert from the one shown on the pick, and it would make unstamped replay rows use a second credit definition. The mismatch is provenance, not a scoring defect.",
+  "pin_observed": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
+  "rule": "dominant_expert_for_learning stays an alias of leading_expert_for_pick. No Day Lens factor change.",
+  "observation": "dominant_expert_for_learning() returns leading_expert_for_pick(), the signal-first display leader. Day selection uses selection_weights (Day Lens 1.05 / 0.90 / 1.08 / 1.05, then normalized) inside score_subnet_for_day. A momentum_shift signal can credit hype in the resolver while Day Lens selected dark_horse. That credit is what the learning loop trains. The decision is to keep that split.",
+  "code": {
+    "selection_weights": "internal/council/state_vector.py selection_weights, called from score_subnet_for_day",
+    "display_leader": "internal/council/expert_display.py leading_expert_for_pick",
+    "resolver_credit": "internal/council/expert_display.py dominant_expert_for_learning",
+    "stored_on_prediction": "internal/learning/prediction_loop.py record_pick_prediction",
+    "ledger_stamp": "internal/council/expert_attribution.py resolve_expert_attribution prefers an existing expert"
+  },
+  "decision_needed": "Closed. Bayesian resolver credit stays on the signal-first display_leader.",
+  "verified_by": ["Cursor (read of main ee9c5587)", "Joshua (decision to keep signal-first credit)"]
+}
