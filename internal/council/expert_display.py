@@ -1,4 +1,9 @@
-"""Which council expert led a pick — signal-first, then weighted blend."""
+"""Presentation and learning attribution for a pick.
+
+``display_leader`` is signal-first, then a raw learned-weight blend. It is not
+the Day Lens mix in ``state_vector.selection_weights``, which only feeds the
+mathematical day score.
+"""
 
 from __future__ import annotations
 
@@ -7,6 +12,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from internal.council.signal_expert import expert_from_signal_source
 
 CANONICAL_EXPERTS = frozenset({"quant", "hype", "dark_horse", "technical"})
+
+# (expert_key, label, display_score) for the UI cause-chain and learning credit.
+# display_score is the expert's raw contribution, not a Day Lens selection weight.
+DisplayLeader = Tuple[str, str, float]
 
 # Rogue = tracked-but-untracked: unresolved attribution gets its own bucket so it
 # can never silently credit a real expert (legacy fallback bug) and can be
@@ -60,7 +69,10 @@ def _active_signals(pick: Dict[str, Any]) -> List[str]:
 
 
 def leading_expert_from_signals(active_signals: List[str]) -> Optional[str]:
-    """Vote by signal→expert map; None when no classifiable signals."""
+    """Vote by signal→expert map; None when no classifiable signals.
+
+    Ties break on the alphabetically later expert name.
+    """
     votes: Dict[str, int] = {}
     for sig in active_signals:
         expert = expert_from_signal_source(sig)
@@ -76,7 +88,11 @@ def weighted_expert_blend(
     expert_contributions: Optional[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[str], Dict[str, float]]:
-    """Return (leader, weighted_scores) using learned council weights."""
+    """Return (leader, weighted_scores) from learned council weights.
+
+    This fallback does not apply Day Lens factors. Equal blends break on the
+    alphabetically later expert name.
+    """
     scores = canonical_expert_contributions(expert_contributions)
     if not scores:
         return None, {}
@@ -112,11 +128,12 @@ def weighted_expert_blend(
 def leading_expert_for_pick(
     pick: Dict[str, Any],
     market_context: Optional[Dict[str, Any]] = None,
-) -> Tuple[str, str, float]:
-    """Return (expert_key, label, display_score) for UI cause-chain.
+) -> DisplayLeader:
+    """Return the display_leader ``(expert_key, label, display_score)``.
 
-    Signal-fired experts win when classifiable signals exist; otherwise fall back
-    to learned-weight blend of canonical expert scores.
+    Signal-fired experts win when classifiable signals exist. Otherwise fall
+    back to ``weighted_expert_blend``. Neither step uses Day Lens
+    ``selection_weights``.
     """
     signals = _active_signals(pick)
     signal_leader = leading_expert_from_signals(signals)
@@ -131,6 +148,6 @@ def leading_expert_for_pick(
 
 
 def dominant_expert_for_learning(pick: Dict[str, Any]) -> str:
-    """Resolver / prediction ledger attribution — same signal-first rule."""
+    """Resolver credit. Same signal-first display_leader, not the Day Lens mix."""
     leader, _, _ = leading_expert_for_pick(pick)
     return leader
