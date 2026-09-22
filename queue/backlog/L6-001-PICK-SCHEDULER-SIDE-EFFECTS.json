@@ -1,0 +1,17 @@
+{
+  "ticket": "L6-001-PICK-SCHEDULER-SIDE-EFFECTS",
+  "title": "Pick Scheduler Abandoned Worker Side-Effect Leak & Unlocked Daily Picks Write",
+  "status": "RESOLVED — PR #1304 merged into main",
+  "resolved_at": "e2755ad39e0b9a115d1846421824a1d6edba9d94",
+  "resolution": "daily_picks.json is locked with fcntl.flock on daily_picks.json.lock. _save reloads under that lock and skips os.replace when build_started_at is older than the on-disk today row. get_or_create_today_pick returns before record_pick_prediction when _save returns False, so a discarded pick is not appended. A scheduler HOLD does not replace a published pick.",
+  "pin_observed": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
+  "rule": "Do not patch pick_scheduler or daily_pick_engine until an explicit GO.",
+  "pattern": "Fourth instance of the house style: generation counter checked late, side effects committed early, disk writes unlocked by default. This is not a one-off. Remediate with the check-then-write file lock already proven in PR #1300 (score snapshot publish): a cross-process lock on daily_picks.json.lock, then compare generation or build stamp and write only while that lock is held.",
+  "finding": "pick_scheduler.py:305-330 bumps _work_generation on timeout and pool.shutdown(wait=False, cancel_futures=True) does not stop the thread already inside get_or_create_today_pick. The generation compare at 314-316 runs only after that call returns and only drops the return value. daily_pick_engine.py:282-284 builds the payload and calls _save(records) before that check. _save at lines 43-49 is a bare os.replace of data/daily_picks.json with no flock.",
+  "two_writes": {
+    "daily_picks_json": "UNLOCKED. daily_pick_engine._save at lines 43-49. This is the race.",
+    "predictions_json_from_this_path": "LOCKED. daily_pick_engine.py:286-299 calls record_pick_prediction. prediction_loop.py:15 imports append_prediction. prediction_loop.py:372 calls append_prediction, which takes locked_predictions_file(timeout_seconds=5.0) and then _write_predictions_unlocked. fcntl.flock(LOCK_EX|LOCK_NB), predictions_store.py:35-59. Do not read both persistence calls as unlocked."
+  },
+  "out_of_scope": "resolver._save_json and pump_lead_recover.recover_overdue_pump_leads still replace predictions.json without locked_predictions_file. They are not this abandoned-worker path.",
+  "verified_by": ["Cursor (read of main dcaf9b64)", "Claude (asked for the two-write split)"]
+}

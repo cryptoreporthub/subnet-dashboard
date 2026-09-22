@@ -1,0 +1,9 @@
+{
+  "tickets": ["C-019", "C-020", "C-021"],
+  "status": "VERIFIED (code-only)",
+  "summary": [
+    "C-020: degraded technical indicator payload floors experts['technical'] at exactly 0.50 (hot/sell signals cannot reach the 5-point threshold from a fully-neutral degraded indicator set); this DOES enter the weighted composite total. The separate nested technical_score field does not enter total_score.",
+    "C-021: williams_r is written twice in the same dict literal (state_vector.py:598/611); the float score silently wins, so dict-shaped consumers (_compute_signal_impact, oversold/overbought convergence) always take the 'unavailable' branch on the normal producer path."
+  ],
+  "verified_by": ["Cursor (Tracer)", "Gemini (blind digest match)", "Joshua"]
+}

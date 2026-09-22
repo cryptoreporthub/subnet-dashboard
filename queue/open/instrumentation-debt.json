@@ -1,0 +1,8 @@
+{
+  "title": "Non-functional diagnostics found during audit",
+  "items": [
+    {"file": ".github/workflows/diagnostic-fly-env-readonly.yml", "issue": "Machine config step uses invalid flyctl syntax, prints help text, error masked (exits 0)", "authorized": false},
+    {"file": ".github/workflows/diagnostic-fly-env-readonly.yml", "issue": "Boot probe step uses invalid flyctl logs syntax, error masked by '|| echo'", "authorized": false},
+    {"note": "No status endpoint echoes loop_stall_guard settings (KILL_ENABLED, thresholds) - confirmed NOT_OBSERVABLE by design, not a bug"}
+  ]
+}

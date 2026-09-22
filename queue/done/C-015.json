@@ -1,0 +1,10 @@
+{
+  "ticket": "C-015",
+  "title": "score_snapshots.json mtime / orphan-write semantics",
+  "status": "RESOLVED — remediated by PR #1300 (build_started_at + check-then-write snapshot lock)",
+  "resolved_at": "e2755ad39e0b9a115d1846421824a1d6edba9d94",
+  "remediation": "PR #1300 (a821bb21, contained in main e2755ad3) stamps build_started_at before the snapshot loop, ages freshness from that stamp, flocks the snapshot file, and skips os.replace when the incoming stamp is older than the on-disk stamp.",
+  "residual": "That close covers the titled orphan late-publish / mtime freshness defect. It does not add a generation token that aborts an in-flight scorer before replace. SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS already existed and does not cancel a running build; a timed-out build can still finish and publish, then lose to a newer build_started_at.",
+  "finding": "Unbounded build + no generation guard confirmed at code level. Wedge-doc mechanism (network hydration on day path) was live 2026-07-27 through 2026-08-15 (PR #950), then closed by allow_hydration=False. Soul-map RMW cost (~101s/cycle @ 24MB) plausible cause of 08-28/09-07 resolver stalls, resolved by compaction 2026-09-08.",
+  "remaining_risk_at_open": "Score-snapshot writer still has no generation guard or wall-clock deadline; latent, not currently firing (healthy samples 09-21)."
+}

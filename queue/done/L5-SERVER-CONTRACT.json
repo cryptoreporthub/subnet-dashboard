@@ -1,0 +1,26 @@
+{
+  "ticket": "L5-SERVER-CONTRACT",
+  "title": "FastAPI Server Routes, Wire Cache Header Collision & Deploy Guard Contract",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "findings": [
+    {
+      "id": "L5-001",
+      "issue": "App topology: server.py:384 declares FastAPI root app; / is a local handler (line 1658) caching in-memory at 45s default (line 627)."
+    },
+    {
+      "id": "L5-002",
+      "issue": "Wire cache header collision: server.py:610-611 middleware overwrites handler response with _CACHE_PATHS['/'] (line 516, default 60s). Browser/CDN sees public, max-age=60 while Python cache invalidates at 45s.",
+      "remediation": "REMEDIATED at ab85a45b3d16fbe958a008e89e1d51930a2c9d3f (PR #1298, merged to main). Cold GET / sends no-store via InstantBailout. Warm shell still public max-age=60. This pin finding stays true of c9449d6490231373748f19f299ed19d423a1c971."
+    },
+    {
+      "id": "L5-003",
+      "issue": "Deploy Guard bounds: tests/test_endpoint_contract.py:271-294 asserts non-404 and 200 status codes only; zero schema, payload, or cache-header assertions."
+    },
+    {
+      "id": "L5-004",
+      "issue": "One-way contract coverage: test_registered_routes_cover_contract (lines 297-312) asserts contract is a subset of registered routes; uncontracted live endpoints are permitted."
+    }
+  ],
+  "verified_by": ["Cursor (Grok Parent Tracer)", "Gemini (Blind GitHub Raw API & SHA-256 match)", "Joshua"]
+}

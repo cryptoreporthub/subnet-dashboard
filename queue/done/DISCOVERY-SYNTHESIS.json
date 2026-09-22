@@ -1,0 +1,55 @@
+{
+  "ticket": "DISCOVERY-SYNTHESIS",
+  "title": "Tri-agent synthesis corrections after Gemini/Ditto inversion audit",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "head_when_ratified": "08fd3a44",
+  "main_after_steps_1_to_5": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
+  "rule_8": "Steps 1-6 are on main at e2755ad3. C-015 and AUDITOR-MODIFY are retired to queue/done. L4-010 and instrumentation-debt stay open. No Fly deploy without an explicit GO.",
+  "remediation_status": [
+    "1. Homepage Cache-Control preserve: on main (PR #1298).",
+    "2. Price-cache file lock, including pump-lead bust: on main (PR #1299, PR #1301 at 6c694f75).",
+    "3. Snapshot build_started_at and refuse older publish: on main (PR #1300 at a821bb21).",
+    "4. Soul-map persistence returns the pre-mutation blob: on main (PR #1302 at a1714cba).",
+    "5. Display provenance documented; Day Lens factors unchanged: on main (PR #1303 at dcaf9b64). Learning-loop credit is open policy ticket L4-010, not a patch.",
+    "6. RESOLVED on main e2755ad3 (PR #1304). daily_picks.json uses fcntl.flock and build_started_at check-then-write. Skipped writes do not call record_pick_prediction. L4-010 remains Joshua's policy decision."
+  ],
+  "corrections": [
+    {
+      "id": "SYN-001",
+      "issue": "In-process snapshot time-travel is falsified. score_snapshots.py:319-320 refuses a second write_full_universe_snapshot submit while _write_future is running. The scheduler repeats that guard at 595-606 and, while the future is active, only registers a completion callback (649-650). os.replace runs inside the future before the next tick can start. A second process on the same volume is outside this falsification. The confirmed defect is staleness drift: line 228 stamps written_at at build completion onto a subnet set chosen before the loop (276-280), so a late orphan looks fresh and can hold C-014's fresh path for SCORE_SNAPSHOT_MAX_AGE_SECONDS (7200)."
+    },
+    {
+      "id": "SYN-002",
+      "issue": "soul_map_io.py:116-136 returns the mutated blob after except Exception: pass skips _cache_put. Later read_soul_map sees the pre-mutation cache or file. The docstring's always-sees-new-data sentence applies to successful writes only (107-108). The lie is the return value, not a naked raise."
+    },
+    {
+      "id": "SYN-003",
+      "issue": "price_fetcher.py:308-356 plus _save_json 70-76 is an unlocked whole-file replace. Different netuids drop each other's new keys. The same netuid is not safe: the last replace can store unavailable over a good candle block. Unavailable is retained for CACHE_TTL_SECONDS (default 300) at lines 313-314. Line 316 is not the eviction check."
+    },
+    {
+      "id": "SYN-004",
+      "issue": "server.py:610-611 overwrites Cache-Control for paths in _CACHE_PATHS, including the handler no-store at 1693. fly.toml:66 sets HOMEPAGE_SHELL_CACHE_SECONDS=60, so the 45-vs-60 default collision is the unset-env case, not the live header value."
+    },
+    {
+      "id": "SYN-005",
+      "issue": "expert_display.py has no signal_votes.get('consensus'). Signal override is leading_expert_from_signals (62-72) then the early return at 124. Tie-break max(score, name) at lines 72 and 108 prefers the alphabetically later expert name. Day Lens removal would not make the displayed leader equal the selected subnet."
+    }
+  ],
+  "severity_by_frequency": [
+    "1. Price-cache lost update and 300s unavailable retention. No exception required.",
+    "2. Homepage no-store replaced with public max-age on every / response, including the emergency shell.",
+    "3. Late snapshot publish with a fresh written_at and the subnet set from build start. Single-flight. Not a newer-cycle overwrite.",
+    "4. Soul-map return value lies only when json.dump or os.replace throws.",
+    "5. Day-pick attribution (Day Lens, signal override, alphabetical tie-break). Display fact, not silent data loss."
+  ],
+  "remediation_sequence": [
+    "1. Homepage: if the handler set Cache-Control, keep it. Do not change the 45/60 defaults.",
+    "2. Price cache: one file lock around read-modify-replace in fetch_ohlcv and _bust_cache_ttl. Do not keep unavailable for the full 300s. One two-netuid test.",
+    "3. Snapshot: keep single-flight. Stamp build_started_at or refuse os.replace when abandoned and the on-disk file is newer. No timeout increase.",
+    "4. Soul map: on I/O failure return the pre-mutation blob and log. No new exception until callers are audited.",
+    "5. Display: documentation of attribution, not a data-loss patch.",
+    "6. Read-only extract of pick_scheduler.py:322-328 and predictions_store.py before any patch there."
+  ],
+  "verified_by": ["Cursor (Grok Parent Tracer)", "Joshua (ratified the audit)", "Gemini and Ditto claims kept only where the pin bytes held"]
+}

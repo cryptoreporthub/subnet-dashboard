@@ -1,0 +1,12 @@
+{
+  "title": "Historical incident timeline (commit/operator evidence, not telemetry)",
+  "rows": [
+    {"date": "2026-07-26", "symptom": "full-mode wedge", "fix_commit": "4544a958"},
+    {"date": "2026-07-27/28", "symptom": "score-snapshot contention (day-path hydration live)", "fix_commit": "cf562faa/09326352"},
+    {"date": "2026-08-12", "symptom": "live-subnet price batch wedge", "fix_commit": "5dace6f2"},
+    {"date": "2026-08-15", "symptom": "day-path hydration closed", "fix_commit": "4e9397dd / PR #950"},
+    {"date": "2026-08-28", "symptom": "resolver stall ~16:56Z", "fix_commit": "24488f4e"},
+    {"date": "2026-09-07", "symptom": "resolver ~250s cycles, ~101s soul-map RMW; machine restart 18:38-18:41", "fix": "timeout bump + compaction scheduled"},
+    {"date": "2026-09-08", "symptom": "soul-map growth", "fix": "compaction dry-run 02:20Z, execute 02:26Z"}
+  ]
+}

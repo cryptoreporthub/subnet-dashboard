@@ -1,0 +1,15 @@
+{
+  "ticket": "C-014",
+  "title": "Stale-path over-promotion of unranked subnets",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "evidence": [
+    "internal/subnets/scoring_cap.py:15 (_UNRANKED)",
+    "internal/subnets/scoring_cap.py:59 (_focus_tier)",
+    "internal/subnets/scoring_cap.py:69 (_heuristic_hunt_pool)",
+    "internal/subnets/scoring_cap.py:91 (cap_subnets_for_scoring)",
+    "internal/council/score_snapshots.py:166 (fresh path: scores.get(netuid, -1.0))"
+  ],
+  "finding": "Stale snapshot -> rank_subnets_by_snapshot returns None -> falls into _heuristic_hunt_pool -> unranked netuids (r >= _UNRANKED) admitted into capped set. Fresh snapshot -> unranked netuids assigned -1.0, sorted last, truncated. Two different admission rules keyed on snapshot age.",
+  "verified_by": ["Cursor (Tracer)", "Gemini (blind digest match)", "Joshua"]
+}
