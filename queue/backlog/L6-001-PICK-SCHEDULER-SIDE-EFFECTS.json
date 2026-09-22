@@ -1,0 +1,16 @@
+{
+  "ticket": "L6-001-PICK-SCHEDULER-SIDE-EFFECTS",
+  "title": "Abandoned daily-pick worker still writes daily_picks.json",
+  "status": "VERIFIED (code-only) — read-only audit, no patch",
+  "pin_observed": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
+  "rule": "Do not patch pick_scheduler or daily_pick_engine until an explicit GO.",
+  "finding": "pick_scheduler._tick bumps _work_generation, runs get_or_create_today_pick on a one-thread pool, and on FuturesTimeoutError bumps the generation again and calls pool.shutdown(wait=False, cancel_futures=True). cancel_futures does not stop the thread already inside get_or_create_today_pick. The generation compare runs only after that call returns, and it only drops the return value. Before that compare, get_or_create_today_pick calls _save(records).",
+  "code": {
+    "timeout_and_generation": "internal/council/pick_scheduler.py:306-328",
+    "generation_check_after_call": "internal/council/pick_scheduler.py:312-317",
+    "unlocked_save": "internal/council/daily_pick_engine.py:43-49 _save uses a fixed .tmp path and os.replace with no flock. Called at line 284. Path is data/daily_picks.json.",
+    "prediction_side_effect": "internal/council/daily_pick_engine.py:286-299 then calls record_pick_prediction, which appends through predictions_store.append_prediction under locked_predictions_file."
+  },
+  "predictions_lock": "internal/learning/predictions_store.py:35-59 locked_predictions_file is fcntl.flock(LOCK_EX|LOCK_NB) with a 5s timeout. save_predictions and append_prediction use it. resolver._save_json and pump_lead_recover.recover_overdue_pump_leads still replace predictions.json without that lock. Those writers are outside this ticket.",
+  "verified_by": ["Cursor (read of main dcaf9b64)"]
+}
