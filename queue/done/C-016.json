@@ -1,0 +1,13 @@
+{
+  "ticket": "C-016",
+  "title": "Cap value divergence: TOP_SCORING_UNIVERSE vs SCORE_SNAPSHOT_MAX_SUBNETS",
+  "status": "VERIFIED (code-only)",
+  "evidence": [
+    "server.py:628 (TOP_SCORING_UNIVERSE default 20)",
+    "internal/council/score_snapshots.py:50 (_snapshot_subnet_cap worker fallback 40)",
+    "internal/subnets/scoring_cap.py:95 (default_limit=40)",
+    "fly.toml:82 (SCORE_SNAPSHOT_MAX_SUBNETS=40)"
+  ],
+  "finding": "Homepage/scoring path caps at 20 by default; snapshot-write path caps at 40 via env var, falling back to code default 40 in worker mode. Effective live cap confirmed 40 via prod GET (last_cycle.count=40).",
+  "verified_by": ["Cursor (Tracer)", "Gemini", "Joshua"]
+}
