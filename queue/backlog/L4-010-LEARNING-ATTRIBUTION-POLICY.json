@@ -1,6 +1,6 @@
 {
   "ticket": "L4-010-LEARNING-ATTRIBUTION-POLICY",
-  "title": "Product decision: resolver credit follows the signal-first display leader",
+  "title": "Learning Loop Resolver Attribution vs Mathematical Day Lens Selection",
   "status": "OPEN — policy, not a code defect",
   "pin_observed": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
   "rule": "Do not change dominant_expert_for_learning until Joshua decides. PR #1303 documents the current behavior and is already on main.",

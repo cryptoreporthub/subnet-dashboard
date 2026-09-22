@@ -12,7 +12,7 @@
     "3. Snapshot build_started_at and refuse older publish: on main (PR #1300 at a821bb21).",
     "4. Soul-map persistence returns the pre-mutation blob: on main (PR #1302 at a1714cba).",
     "5. Display provenance documented; Day Lens factors unchanged: on main (PR #1303 at dcaf9b64). Learning-loop credit is open policy ticket L4-010, not a patch.",
-    "6. Read-only audit complete on main dcaf9b64. Ticket L6-001: abandoned get_or_create_today_pick still _save()s data/daily_picks.json with an unlocked os.replace. predictions_store locked_predictions_file is cross-process fcntl.flock."
+    "6. Read-only audit complete on main dcaf9b64. L6-001: only daily_picks.json _save is unlocked. record_pick_prediction appends through locked_predictions_file. House style: generation checked late, side effects committed early, disk writes unlocked by default. Fix with the PR #1300 check-then-write lock. L4-010 remains Joshua's policy decision."
   ],
   "corrections": [
     {
