@@ -1,0 +1,21 @@
+{
+  "ticket": "L2-SNAPSHOT",
+  "title": "Background Schedulers & Snapshot Lifecycle (Orphan Overwrite, Concurrent Cycles, Single-Shot Boot)",
+  "status": "VERIFIED (code-only)",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "findings": [
+    {
+      "id": "L2-001",
+      "issue": "Orphan overwrite: score_snapshots.py has no generation check before os.replace (line 116). After FuturesTimeoutError (lines 383-390), the abandoned thread still overwrites the file on disk."
+    },
+    {
+      "id": "L2-002",
+      "issue": "Concurrent execution: resolver_scheduler.py uses shutdown(wait=False) (line 907) and releases _cycle_lock on abandon (line 759). The 1-2 min retry (line 651) launches a second cycle while the first is still running."
+    },
+    {
+      "id": "L2-003",
+      "issue": "Single-shot boot failure: background_boot.py:30-55 catches Exception, logs a warning, and never retries. Any failure drops the service for container lifetime."
+    }
+  ],
+  "verified_by": ["Cursor (Grok Parent Tracer)", "Gemini (Blind GitHub Raw API & SHA-256 match)", "Joshua"]
+}
