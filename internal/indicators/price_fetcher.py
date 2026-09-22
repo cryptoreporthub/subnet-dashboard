@@ -11,12 +11,14 @@ Tiered strategy:
 3. Synthetic optional fallback (deterministic, tests only when allow_synthetic=True).
 """
 
+import fcntl
 import json
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import requests
 
@@ -39,6 +41,9 @@ TAO_MARKET_CAP_API = "https://api.taomarketcap.com"
 GECKO_TERMINAL_API = "https://api.geckoterminal.com/api/v2"
 DEFAULT_DAYS = int(os.environ.get("PRICE_LOOKBACK_DAYS", "7"))
 CACHE_TTL_SECONDS = int(os.environ.get("PRICE_CACHE_TTL_SECONDS", "300"))
+# Empty fetches are a short negative cache. A 300s hold turns a blip into a
+# five-minute hole for that subnet.
+UNAVAILABLE_CACHE_TTL_SECONDS = 30
 TMC_CACHE_TTL_SECONDS = int(os.environ.get("TMC_CACHE_TTL_SECONDS", "60"))
 # Use live prices by default. TaoMarketCap is the primary source, GeckoTerminal
 # is the fallback. Synthetic candles are opt-in only (tests / explicit flag).
@@ -66,6 +71,41 @@ def _load_json(path: str) -> Dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+def _entry_ttl_seconds(entry: Dict[str, Any]) -> int:
+    if entry.get("source") == "unavailable":
+        return UNAVAILABLE_CACHE_TTL_SECONDS
+    return CACHE_TTL_SECONDS
+
+
+@contextmanager
+def _locked_price_cache(cache_path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
+    """Cross-process lock for the price-cache read-merge-replace only.
+
+    Callers must finish the network fetch before entering. The critical
+    section reloads the file so a sibling writer is not overwritten.
+    """
+    lock_path = cache_path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
 
 def _save_json(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -305,13 +345,13 @@ def fetch_ohlcv(
     sources = _price_sources_for_subnet(subnet_id, pairs, include_synthetic=allow_synthetic)
     cache_key = str(subnet_id)
 
-    cache = _load_json(cache_path) if use_cache else {}
     now = time.time()
-    cached = cache.get(cache_key)
-    if cached and cached.get("source") == "synthetic" and not allow_synthetic:
-        cached = None
-    if cached and (now - cached.get("cached_at", 0)) < CACHE_TTL_SECONDS:
-        return cached.get("candles", [])
+    if use_cache:
+        cached = _load_json(cache_path).get(cache_key)
+        if cached and cached.get("source") == "synthetic" and not allow_synthetic:
+            cached = None
+        if cached and (now - cached.get("cached_at", 0)) < _entry_ttl_seconds(cached):
+            return cached.get("candles", [])
 
     candles: List[Dict[str, Any]] = []
     source = "unknown"
@@ -346,13 +386,16 @@ def fetch_ohlcv(
         source = "unavailable"
 
     if use_cache:
-        cache[cache_key] = {
+        entry = {
             "source": source,
             "cached_at": now,
             "fetched_at": _now_iso(),
             "error": error,
             "candles": candles,
         }
-        _save_json(cache_path, cache)
+        with _locked_price_cache(cache_path):
+            latest = _load_json(cache_path)
+            latest[cache_key] = entry
+            _save_json(cache_path, latest)
 
     return candles
