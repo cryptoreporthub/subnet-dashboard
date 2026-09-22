@@ -13,6 +13,7 @@ Tiered strategy:
 
 import fcntl
 import json
+import logging
 import os
 import tempfile
 import time
@@ -21,6 +22,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Iterator, List, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 try:
     from internal.chain_client import ChainClient
@@ -393,9 +396,16 @@ def fetch_ohlcv(
             "error": error,
             "candles": candles,
         }
-        with _locked_price_cache(cache_path):
-            latest = _load_json(cache_path)
-            latest[cache_key] = entry
-            _save_json(cache_path, latest)
+        try:
+            with _locked_price_cache(cache_path):
+                latest = _load_json(cache_path)
+                latest[cache_key] = entry
+                _save_json(cache_path, latest)
+        except TimeoutError:
+            # Candles are already in hand. A stuck lock must not discard them.
+            logger.warning(
+                "price cache lock timeout for %s; returning fetched candles unsaved",
+                cache_key,
+            )
 
     return candles

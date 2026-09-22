@@ -493,32 +493,18 @@ def _bust_cache_ttl(netuid: Any, cache_path: str) -> None:
     use_cache=True would serve the stale-but-window-missing entry straight back
     within CACHE_TTL, making the hydration a silent no-op.
     """
-    import tempfile
+    from internal.indicators.price_fetcher import _load_json, _locked_price_cache, _save_json
 
     key = str(netuid)
-    disk: Dict[str, Any] = {}
-    try:
-        with open(cache_path, "r", encoding="utf-8") as fh:
-            loaded = json.load(fh)
-        if isinstance(loaded, dict):
-            disk = loaded
-    except Exception:
-        pass
-    block = disk.get(key)
-    if not isinstance(block, dict):
-        return
-    block = dict(block)
-    block["cached_at"] = 0.0
-    disk[key] = block
-    os.makedirs(os.path.dirname(cache_path) or ".", exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(cache_path) or ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w") as fh:
-            json.dump(disk, fh)
-        os.replace(tmp_path, cache_path)
-    finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    with _locked_price_cache(cache_path):
+        disk = _load_json(cache_path)
+        block = disk.get(key)
+        if not isinstance(block, dict):
+            return
+        block = dict(block)
+        block["cached_at"] = 0.0
+        disk[key] = block
+        _save_json(cache_path, disk)
 
 
 def hydrate_candles_for_netuid(netuid: Any, cache_path: str = PRICE_CACHE_PATH) -> bool:
