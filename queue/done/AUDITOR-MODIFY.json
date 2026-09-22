@@ -1,10 +1,20 @@
 {
   "ticket": "AUDITOR-MODIFY",
   "title": "External auditor MODIFY verdict and brother-path extract",
-  "status": "HOLD",
+  "status": "VERIFIED & CLOSED — all six remediation gates implemented and merged on main",
   "pin": "c9449d6490231373748f19f299ed19d423a1c971",
-  "rule_8": "No product patch. The six remediation steps as previously phrased are not approved. Test-first gates below must be written before any GO.",
+  "closed_at": "e2755ad39e0b9a115d1846421824a1d6edba9d94",
+  "rule_8": "Hold lifted. The six gates below are implemented and merged on main e2755ad3 (PRs #1298 through #1304). The historical pin remains c9449d64.",
   "verdict": "MODIFY. Four mechanisms are defects or contract breaches. Selection-versus-presentation is a provenance mismatch, not a proven scoring-engine defect.",
+  "closure": {
+    "1": "PR #1298 preserves an explicit handler Cache-Control.",
+    "2": "PR #1299 and PR #1301 lock the price-cache merge, including pump-lead bust, with a short negative TTL.",
+    "3": "PR #1300 stamps build_started_at and refuses an older snapshot publish. No timeout increase.",
+    "4": "PR #1302 returns the pre-mutation soul-map blob and logs persistence failure without poisoning the cache.",
+    "5": "PR #1303 names selection versus display versus learning attribution and does not change Day Lens math.",
+    "6": "Concurrency tests landed with those persistence edits. PR #1304 then locked daily_picks.json."
+  },
+  "brothers_after_close": "L2-PICK daily_picks writes are gated inside _save (PR #1304). The scheduler still does not roll back a running get_or_create. L3-PREDICTIONS caller read-modify-write is unchanged and was not one of the six gates.",
   "accepted": [
     "Homepage cold shell sets no-store and middleware replaces it with public max-age from _CACHE_PATHS. fly.toml:66 makes both HOMEPAGE_SHELL reads 60.",
     "Price cache is an unlocked whole-file replace. Do not hold a lock across the outbound fetch. Negative-cache unavailable on a short TTL, do not stop caching it.",

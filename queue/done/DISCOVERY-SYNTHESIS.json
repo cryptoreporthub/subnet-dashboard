@@ -5,7 +5,7 @@
   "pin": "c9449d6490231373748f19f299ed19d423a1c971",
   "head_when_ratified": "08fd3a44",
   "main_after_steps_1_to_5": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
-  "rule_8": "Steps 1-5 are on main at dcaf9b64. Step 6 is a read-only audit. Further product patches still need an explicit GO.",
+  "rule_8": "Steps 1-6 are on main at e2755ad3. C-015 and AUDITOR-MODIFY are retired to queue/done. L4-010 and instrumentation-debt stay open. No Fly deploy without an explicit GO.",
   "remediation_status": [
     "1. Homepage Cache-Control preserve: on main (PR #1298).",
     "2. Price-cache file lock, including pump-lead bust: on main (PR #1299, PR #1301 at 6c694f75).",
