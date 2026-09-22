@@ -5,14 +5,14 @@
   "pin": "c9449d6490231373748f19f299ed19d423a1c971",
   "head_when_ratified": "08fd3a44",
   "main_after_steps_1_to_5": "dcaf9b64d83a8573a67903a55800595c79c5b8f8",
-  "rule_8": "Steps 1-6 are on main at e2755ad3. C-015 and AUDITOR-MODIFY are retired to queue/done. L4-010 and instrumentation-debt stay open. No Fly deploy without an explicit GO.",
+  "rule_8": "Steps 1-6 are on main at e2755ad3. C-015, AUDITOR-MODIFY, and L4-010 are retired to queue/done. L4-010 stays signal-first; no credit retarget. instrumentation-debt stays open. No Fly deploy without an explicit GO.",
   "remediation_status": [
     "1. Homepage Cache-Control preserve: on main (PR #1298).",
     "2. Price-cache file lock, including pump-lead bust: on main (PR #1299, PR #1301 at 6c694f75).",
     "3. Snapshot build_started_at and refuse older publish: on main (PR #1300 at a821bb21).",
     "4. Soul-map persistence returns the pre-mutation blob: on main (PR #1302 at a1714cba).",
-    "5. Display provenance documented; Day Lens factors unchanged: on main (PR #1303 at dcaf9b64). Learning-loop credit is open policy ticket L4-010, not a patch.",
-    "6. RESOLVED on main e2755ad3 (PR #1304). daily_picks.json uses fcntl.flock and build_started_at check-then-write. Skipped writes do not call record_pick_prediction. L4-010 remains Joshua's policy decision."
+    "5. Display provenance documented; Day Lens factors unchanged: on main (PR #1303 at dcaf9b64). L4-010 decided: resolver credit stays signal-first. No retarget onto selection_weights.",
+    "6. RESOLVED on main e2755ad3 (PR #1304). daily_picks.json uses fcntl.flock and build_started_at check-then-write. Skipped writes do not call record_pick_prediction."
   ],
   "corrections": [
     {
