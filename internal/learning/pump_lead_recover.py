@@ -22,7 +22,11 @@ from internal.council.grading import (
     is_pump_desk_claim,
     is_pump_lead,
 )
-from internal.council.price_reference import PRICE_CACHE_PATH, price_at_resolve_at
+from internal.council.price_reference import (
+    PRICE_CACHE_PATH,
+    _bust_cache_ttl,
+    price_at_resolve_at,
+)
 from internal.file_utils import safe_read_json, safe_write_json
 
 logger = logging.getLogger(__name__)
@@ -257,18 +261,10 @@ def hydrate_candles_for_resolve(
     if horizon_candles_ready(netuid, resolve_at, cache=cache):
         return {"netuid": netuid, "hydrated": False, "ready": True, "reason": "already_ready"}
 
-    key = str(netuid)
     try:
-        disk = safe_read_json(resolved_cache, default={})
-        if not isinstance(disk, dict):
-            disk = {}
-        block = disk.get(key)
-        if isinstance(block, dict):
-            # Force fetch_ohlcv past CACHE_TTL without editing indicators module.
-            block = dict(block)
-            block["cached_at"] = 0.0
-            disk[key] = block
-            safe_write_json(resolved_cache, disk)
+        # Same locked read-modify-replace as fetch_ohlcv. A bare safe_write_json
+        # here replaced the whole file and dropped a sibling netuid's write.
+        _bust_cache_ttl(netuid, resolved_cache)
     except Exception as exc:
         logger.debug("pump_lead hydrate cache bust SN%s: %s", netuid, exc)
 
