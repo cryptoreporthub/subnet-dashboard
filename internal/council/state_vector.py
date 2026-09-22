@@ -1773,11 +1773,34 @@ def score_subnet_for_hour(
     }
 
 
+def selection_weights(weights: Dict[str, Any]) -> Dict[str, float]:
+    """Normalized Day Lens weights for mathematical day selection.
+
+    These multipliers choose the subnet score inside ``score_subnet_for_day``.
+    They are not the UI or learning leader. That path is signal-first in
+    ``expert_display.leading_expert_for_pick`` and does not apply 1.05, 0.90,
+    or 1.08.
+    """
+    day_weights = {
+        "quant": weights.get("quant", 0.30) * 1.05,
+        "hype": weights.get("hype", 0.25) * 0.90,
+        "dark_horse": weights.get("dark_horse", 0.20) * 1.08,
+        "technical": weights.get("technical", 0.25) * 1.05,
+    }
+    total_weight = sum(day_weights.values()) or 1.0
+    return {k: v / total_weight for k, v in day_weights.items()}
+
+
 def score_subnet_for_day(
     subnet_data: Dict[str, Any],
     market_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """24h score (0-100) emphasizing yield, trend, and lower volatility."""
+    """24h score (0-100) emphasizing yield, trend, and lower volatility.
+
+    The expert mix uses ``selection_weights`` (Day Lens, then renormalized).
+    The badge and resolver credit use ``expert_display`` and can name a
+    different expert.
+    """
     sn = subnet_data or {}
     # Daily picks run on the request/scheduler critical path.  Technical
     # history is cache-only here; the recovery worker may hydrate cold rows
@@ -1816,15 +1839,8 @@ def score_subnet_for_day(
     if market_context and isinstance(market_context.get("weights"), dict):
         weights.update(market_context["weights"])
 
-    # Day lens: slight quant/dark_horse tilt — toned down so technical+hype signals can lead.
-    day_weights = {
-        "quant": weights.get("quant", 0.30) * 1.05,
-        "hype": weights.get("hype", 0.25) * 0.90,
-        "dark_horse": weights.get("dark_horse", 0.20) * 1.08,
-        "technical": weights.get("technical", 0.25) * 1.05,
-    }
-    total_weight = sum(day_weights.values()) or 1.0
-    day_weights = {k: v / total_weight for k, v in day_weights.items()}
+    # Day Lens selection mix only. Display attribution does not read this dict.
+    day_weights = selection_weights(weights)
 
     weighted = sum(experts[k] * day_weights[k] for k in experts)
     from internal.subnets.apy import undervalued_score
