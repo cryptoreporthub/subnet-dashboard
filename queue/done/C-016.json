@@ -1,13 +1,21 @@
 {
   "ticket": "C-016",
   "title": "Cap value divergence: TOP_SCORING_UNIVERSE vs SCORE_SNAPSHOT_MAX_SUBNETS",
-  "status": "VERIFIED (code-only)",
-  "evidence": [
-    "server.py:628 (TOP_SCORING_UNIVERSE default 20)",
-    "internal/council/score_snapshots.py:50 (_snapshot_subnet_cap worker fallback 40)",
-    "internal/subnets/scoring_cap.py:95 (default_limit=40)",
-    "fly.toml:82 (SCORE_SNAPSHOT_MAX_SUBNETS=40)"
-  ],
-  "finding": "Homepage/scoring path caps at 20 by default; snapshot-write path caps at 40 via env var, falling back to code default 40 in worker mode. Effective live cap confirmed 40 via prod GET (last_cycle.count=40).",
+  "status": "VERIFIED (code-only) for Tier A; Tier B is PROD-OBSERVED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "tier_a": {
+    "status": "VERIFIED (code-only)",
+    "evidence": [
+      "server.py:628 (TOP_SCORING_UNIVERSE default 20)",
+      "internal/council/score_snapshots.py:50 (_snapshot_subnet_cap worker fallback 40)",
+      "internal/subnets/scoring_cap.py:95 (default_limit=40)",
+      "fly.toml:82 (SCORE_SNAPSHOT_MAX_SUBNETS=40, image env, not a live GET)"
+    ],
+    "finding": "Code default collision: server.py:628 defaults TOP_SCORING_UNIVERSE to 20. score_snapshots.py:50 falls back to 40 in worker mode when SCORE_SNAPSHOT_MAX_SUBNETS is unset. scoring_cap.py:95 default_limit is 40."
+  },
+  "tier_b": {
+    "status": "PROD-OBSERVED",
+    "finding": "last_cycle.count=40 is a Tier B runtime observation from SMOKE-001 / the live probe. It is not code-only truth."
+  },
   "verified_by": ["Cursor (Tracer)", "Gemini", "Joshua"]
 }

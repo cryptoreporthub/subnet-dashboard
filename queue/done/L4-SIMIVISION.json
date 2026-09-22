@@ -18,7 +18,7 @@
     },
     {
       "id": "L4-009-010",
-      "issue": "FALSIFIER FIRED: Selection vs Display Divergence. Daily pick selects using Day Lens multipliers (1.05/0.90/1.08/1.05) renormalized to 1.0 (state_vector.py:1820-1827). Display blend (expert_display.py:104) ignores Day Lens, does not renormalize, and lines 124-125 override leader with signal votes."
+      "issue": "FALSIFIER FIRED: Selection vs Display Divergence. Daily pick selects using Day Lens multipliers (1.05/0.90/1.08/1.05) renormalized to 1.0 (state_vector.py:1820-1827). Display blend (expert_display.py:104) ignores Day Lens, does not renormalize, and lines 124-125 override leader with signal votes. Finding is an attribution mismatch between selection math (Day Lens applied + normalized) and presentation layer (Day Lens ignored, unnormalized, signal overrides). This explains day-pick cause-chain divergence, but is NOT the root cause of historical Hour vs Day pick divergence (which are separate scoring functions by construction)."
     }
   ],
   "verified_by": ["Cursor (Tracer)", "Gemini (Blind GitHub Raw API & SHA-256 match)", "Joshua"]
