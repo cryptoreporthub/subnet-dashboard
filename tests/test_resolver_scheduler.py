@@ -833,11 +833,11 @@ def test_resolver_timeout_persists_partial_timing_and_abandoned_live(
     assert first_timing["total_cycle_ms"] >= first_timing["ledger_heal_ms"]
 
     second = sched._run_refresh_cycle_with_timeout()
-    assert second["abandoned_live"] == 2
+    assert second == {"ok": False, "skipped": "previous_cycle_inflight"}
     with open(weights.SOUL_MAP_PATH, "r") as f:
         soul = json.load(f)
     second_summary = soul["prediction_resolver_scheduler"]["last_cycle"]
-    assert second_summary["abandoned_live"] == 2
+    assert second_summary["abandoned_live"] == 1
 
     release.set()
 
