@@ -210,8 +210,10 @@ def _save_json(
     )
     try:
         from internal.file_utils import safe_write_json
+        from internal.learning.predictions_store import locked_predictions_file
 
-        safe_write_json(path, data)
+        with locked_predictions_file():
+            safe_write_json(path, data)
         log_mutation(
             operation="completed",
             path=path,

@@ -250,5 +250,8 @@ def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = N
     tmp = picks_path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as handle:
         json.dump(out, handle, indent=2)
-    os.replace(tmp, picks_path)
+    from internal.council.daily_pick_engine import _locked_daily_picks
+
+    with _locked_daily_picks(picks_path):
+        os.replace(tmp, picks_path)
     return True
