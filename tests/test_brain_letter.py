@@ -225,3 +225,45 @@ def test_brain_letter_surfaces_scenario_tags_and_streak_whisper(monkeypatch):
     assert out["working"]["top_scenario_tags"] == [{"tag": "yield_trap:True", "hit_rate": 0.62, "n": 9}]
     assert "yield_trap:True" in out["markdown"]
     assert "Quant · 4 in a row" in out["markdown"]
+
+
+def _seed_strip_rows(monkeypatch, registry):
+    import server
+    from internal.letter.brain_letter import _new_subnet_seed_strip
+
+    monkeypatch.setattr(server, "load_data", lambda path: registry)
+    return _new_subnet_seed_strip(limit=10)
+
+
+def test_new_subnet_seed_strip_netuid_and_id_only_agree(monkeypatch):
+    """Both mapping shapes must resolve the same netuid (id-only is the regression)."""
+    expected = 120
+    rows_netuid = _seed_strip_rows(
+        monkeypatch, {"120": {"netuid": expected, "name": "NewNet"}}
+    )
+    rows_id = _seed_strip_rows(
+        monkeypatch, {"120": {"id": expected, "name": "NewNet"}}
+    )
+    assert [r["netuid"] for r in rows_netuid] == [expected]
+    assert [r["netuid"] for r in rows_id] == [expected]
+    assert rows_id == rows_netuid
+
+
+def test_new_subnet_seed_strip_counter_parity_every_status(monkeypatch):
+    """netuid-key vs id-only counters must match for every status, not one crashed case."""
+    from collections import Counter
+
+    statuses = ("active", "inactive", "crashed", "unknown", "deregistered")
+
+    def counters(key):
+        registry = {
+            str(i): {key: 100 + i, "name": status, "status": status}
+            for i, status in enumerate(statuses)
+        }
+        rows = _seed_strip_rows(monkeypatch, registry)
+        return Counter(r["netuid"] for r in rows)
+
+    by_netuid = counters("netuid")
+    by_id = counters("id")
+    assert by_netuid == by_id
+    assert by_netuid == Counter(100 + i for i in range(len(statuses)))
