@@ -98,7 +98,24 @@ def normalize_price_cache_keys(cache_path: str = PRICE_CACHE_PATH) -> int:
     Writers (``fetch_ohlcv``) already use ``str(subnet_id)`` as the cache key,
     so in practice this function is a safety net for existing files written by
     older code or external tools.
+
+    The read and replace share ``_locked_price_cache`` with ``fetch_ohlcv`` and
+    ``_bust_cache_ttl``. A startup rename must not replace the file out from
+    under a sibling netuid write.
     """
+    from internal.indicators.price_fetcher import _locked_price_cache
+
+    try:
+        with _locked_price_cache(cache_path):
+            return _normalize_price_cache_keys_locked(cache_path)
+    except TimeoutError as exc:
+        logger.warning(
+            "normalize_price_cache_keys: lock timeout %s: %s", cache_path, exc
+        )
+        return 0
+
+
+def _normalize_price_cache_keys_locked(cache_path: str) -> int:
     try:
         with open(cache_path, "r", encoding="utf-8") as fh:
             disk: Dict[str, Any] = json.load(fh)
