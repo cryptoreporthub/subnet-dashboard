@@ -6,9 +6,12 @@ import json
 import threading
 from datetime import datetime, timezone
 
+from datetime import timedelta
+
 import internal.council.daily_pick_engine as daily_engine
 import internal.council.resolver as resolver
 import internal.learning.ledger_heal as ledger_heal
+from internal.learning.pump_lead_recover import recover_overdue_pump_leads
 
 
 def _today() -> str:
@@ -134,3 +137,86 @@ def test_resolver_save_respects_predictions_lock(tmp_path, monkeypatch):
 
     saved = json.loads(pred_path.read_text(encoding="utf-8"))
     assert saved["predictions"][0]["id"] == "pred_lock_test"
+
+
+def _iso(moment: datetime) -> str:
+    return moment.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def test_pump_lead_recover_respects_predictions_lock(tmp_path, monkeypatch):
+    pred_path = tmp_path / "predictions.json"
+    lock_path = tmp_path / "predictions.json.lock"
+    resolve_at = datetime(2026, 7, 23, 1, 0, tzinfo=timezone.utc)
+    pred_path.write_text(
+        json.dumps(
+            {
+                "predictions": [
+                    {
+                        "id": "junk",
+                        "netuid": 0,
+                        "pick_source": "pump_lead",
+                        "reference_price": 1.0,
+                        "predicted_pct": 2.0,
+                        "pump_phase": "STIRRING",
+                        "pump_badge": "WARMING UP",
+                        "pump_claim": "STIRRING",
+                        "created_at": _iso(resolve_at - timedelta(hours=1)),
+                        "resolve_at": _iso(resolve_at),
+                        "status": "pending",
+                        "signal_snapshot": {"buy_ratio": 0.5, "volume_intensity": 1.0},
+                    }
+                ],
+                "resolved": [],
+                "stats": {},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.PREDICTIONS_PATH", str(pred_path)
+    )
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.PREDICTIONS_LOCK_PATH", str(lock_path)
+    )
+    monkeypatch.setattr(
+        "internal.learning.pump_lead_recover.PREDICTIONS_PATH", str(pred_path)
+    )
+
+    lock_held = threading.Event()
+    release_holder = threading.Event()
+
+    def hold_lock() -> None:
+        from internal.learning.predictions_store import locked_predictions_file
+
+        with locked_predictions_file():
+            lock_held.set()
+            assert release_holder.wait(timeout=5)
+
+    holder = threading.Thread(target=hold_lock, name="predictions-lock-holder")
+    holder.start()
+    assert lock_held.wait(timeout=2)
+
+    recover_done = threading.Event()
+    box: dict = {}
+
+    def recover() -> None:
+        box["summary"] = recover_overdue_pump_leads(
+            path=str(pred_path),
+            dry_run=False,
+            hydrate=False,
+        )
+        recover_done.set()
+
+    worker = threading.Thread(target=recover, name="pump-lead-recover")
+    worker.start()
+    assert recover_done.wait(timeout=0.2) is False
+
+    release_holder.set()
+    holder.join(timeout=2)
+    assert recover_done.wait(timeout=2)
+    worker.join(timeout=2)
+    assert box["summary"]["rejected_ungradeable"] == 1
+
+    saved = json.loads(pred_path.read_text(encoding="utf-8"))
+    assert saved["predictions"] == []
+    assert saved["resolved"][0]["outcome"] == "ungradeable"

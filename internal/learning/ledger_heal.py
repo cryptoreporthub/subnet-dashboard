@@ -227,31 +227,31 @@ def archive_predictions_epoch(
 def _downgrade_today_to_hold(*, reason: str, daily_picks_path: Optional[str] = None) -> bool:
     picks_path = daily_picks_path or DAILY_PICKS_PATH
     today = _utcnow().date().isoformat()
-    try:
-        with open(picks_path, "r", encoding="utf-8") as handle:
-            records = json.load(handle)
-    except Exception:
-        return False
-    if not isinstance(records, list):
-        return False
-    changed = False
-    out: List[Dict[str, Any]] = []
-    for rec in records:
-        if isinstance(rec, dict) and rec.get("date") == today:
-            rec = dict(rec)
-            rec["action"] = "HOLD"
-            rec["pick"] = None
-            rec["reason"] = reason
-            rec["epoch_reset_note"] = True
-            changed = True
-        out.append(rec)
-    if not changed:
-        return False
-    tmp = picks_path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as handle:
-        json.dump(out, handle, indent=2)
     from internal.council.daily_pick_engine import _locked_daily_picks
 
     with _locked_daily_picks(picks_path):
+        try:
+            with open(picks_path, "r", encoding="utf-8") as handle:
+                records = json.load(handle)
+        except Exception:
+            return False
+        if not isinstance(records, list):
+            return False
+        changed = False
+        out: List[Dict[str, Any]] = []
+        for rec in records:
+            if isinstance(rec, dict) and rec.get("date") == today:
+                rec = dict(rec)
+                rec["action"] = "HOLD"
+                rec["pick"] = None
+                rec["reason"] = reason
+                rec["epoch_reset_note"] = True
+                changed = True
+            out.append(rec)
+        if not changed:
+            return False
+        tmp = picks_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(out, handle, indent=2)
         os.replace(tmp, picks_path)
-    return True
+        return True
