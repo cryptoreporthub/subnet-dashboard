@@ -691,6 +691,7 @@ _HOMEPAGE_HTML_CACHE: Dict[str, Any] = {"at": 0.0, "html": None}
 _EMERGENCY_HOME_HTML: str = ""
 _HOMEPAGE_WARM_LOCK = threading.Lock()
 _HOMEPAGE_WARMING = False
+_HOMEPAGE_RENDER_THREAD: Optional[threading.Thread] = None
 # ponytail: zero I/O — never block GET / waiting for Jinja or pump ladder lock
 _INSTANT_HOME_SHELL = """<!DOCTYPE html>
 <html lang="en">
@@ -836,7 +837,7 @@ def _render_index_html(request: Request) -> str:
 
 def _warm_homepage_cache(request: Optional[Request] = None) -> None:
     """Build homepage HTML off the request hot path — minimal shell only (never full/degraded build)."""
-    global _HOMEPAGE_WARMING, _EMERGENCY_HOME_HTML
+    global _HOMEPAGE_WARMING, _EMERGENCY_HOME_HTML, _HOMEPAGE_RENDER_THREAD
     now = time.time()
     cached_html = _HOMEPAGE_HTML_CACHE.get("html")
     if (
@@ -848,7 +849,11 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
     with _HOMEPAGE_WARM_LOCK:
         if _HOMEPAGE_WARMING:
             return
+        # Same guard as live_subnets: a timed-out render is still alive.
+        if _HOMEPAGE_RENDER_THREAD is not None and _HOMEPAGE_RENDER_THREAD.is_alive():
+            return
         _HOMEPAGE_WARMING = True
+    t: Optional[threading.Thread] = None
     try:
         req: Any = request if request is not None else _HomepageStubRequest()
         warm_timeout = HOMEPAGE_BUILD_TIMEOUT + 5.0
@@ -856,15 +861,23 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
         box: Dict[str, Any] = {}
 
         def _run() -> None:
+            global _HOMEPAGE_WARMING
             try:
                 box["html"] = _render_index_html(req)
             except Exception as exc:
                 box["exc"] = exc
+            finally:
+                # The render thread owns the flag. The joiner must not clear it
+                # while this thread is still inside _render_index_html.
+                with _HOMEPAGE_WARM_LOCK:
+                    _HOMEPAGE_WARMING = False
 
         # ponytail: daemon thread — ThreadPoolExecutor workers are non-daemon;
         # a hung render joined at pytest/CI atexit and cancelled required smoke
         # after "2 passed" (job timeout-minutes=15).
         t = threading.Thread(target=_run, daemon=True, name="homepage-warm-render")
+        with _HOMEPAGE_WARM_LOCK:
+            _HOMEPAGE_RENDER_THREAD = t
         t.start()
         t.join(timeout=warm_timeout)
         if t.is_alive() or "html" not in box:
@@ -886,7 +899,8 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
         logger.warning("homepage cache warm failed: %s", exc)
     finally:
         with _HOMEPAGE_WARM_LOCK:
-            _HOMEPAGE_WARMING = False
+            if t is None or not t.is_alive():
+                _HOMEPAGE_WARMING = False
 
 
 def _cap_subnets_for_scoring(
