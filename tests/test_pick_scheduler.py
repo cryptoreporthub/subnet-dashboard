@@ -342,9 +342,14 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
     assert "timed out" in str(first.get("error") or "")
 
     second = sched._tick(reschedule=False)
+    assert second.get("skipped") == "previous_cycle_inflight"
+    assert calls["n"] == 1
+    sched._inflight_future.result(timeout=15)
+
+    third = sched._tick(reschedule=False)
     assert calls["n"] >= 2
     assert second_started.wait(timeout=2)
-    assert "skipped" not in str(second.get("error") or "").lower()
+    assert third.get("skipped") != "previous_cycle_inflight"
 
 
 def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch):

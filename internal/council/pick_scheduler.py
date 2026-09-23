@@ -236,9 +236,11 @@ class DailyPickScheduler:
     def __init__(self) -> None:
         self._last_result: Dict[str, Any] = {}
         self._work_lock = threading.Lock()
+        self._submit_lock = threading.Lock()
         # ponytail: timeout abandons in-flight work via generation bump; orphan
         # threads may still finish in the background but cannot commit results.
         self._work_generation = 0
+        self._inflight_future: Optional[Any] = None
         retry_seconds = max(1, min(DAILY_PICK_RETRY_MINUTES, 120)) * 60
         self.liveness = LivenessTracker(
             name=DAILY_PICK_TRACKER_NAME,
@@ -293,6 +295,23 @@ class DailyPickScheduler:
     def run_once(self) -> Dict[str, Any]:
         return self._tick(reschedule=False)
 
+    def _refuse_inflight(self, reschedule: bool) -> Dict[str, Any]:
+        logger.warning("daily pick tick skipped: previous worker still running")
+        result = {
+            "ok": False,
+            "skipped": "previous_cycle_inflight",
+            "run_at": _now_iso(),
+            "error": None,
+        }
+        if reschedule:
+            with _lock:
+                still_scheduled = _daily is self
+            if still_scheduled:
+                delay = _seconds_until_next_daily_tick(today_ready=False)
+                schedule_in_seconds(DAILY_JOB_ID, self._tick, delay)
+                result["next_delay_seconds"] = delay
+        return result
+
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
         today_ready = False
@@ -307,8 +326,6 @@ class DailyPickScheduler:
                 self._work_generation += 1
                 tick_generation = self._work_generation
 
-            pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
-
             def _run_pick() -> Optional[Dict[str, Any]]:
                 out = get_or_create_today_pick(subnets, ctx, False)
                 with self._work_lock:
@@ -316,8 +333,15 @@ class DailyPickScheduler:
                         return None
                 return out
 
-            try:
+            with self._submit_lock:
+                inflight = self._inflight_future
+                if inflight is not None and not inflight.done():
+                    return self._refuse_inflight(reschedule)
+                pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
                 fut = pool.submit(_run_pick)
+                self._inflight_future = fut
+
+            try:
                 payload = fut.result(timeout=timeout)
             except FuturesTimeoutError:
                 with self._work_lock:

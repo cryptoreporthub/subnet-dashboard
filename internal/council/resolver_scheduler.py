@@ -427,9 +427,11 @@ class PredictionResolverScheduler:
         self._subnet_provider = subnet_provider or _default_subnets
 
         self._lock = threading.Lock()
+        self._submit_lock = threading.Lock()
         self._cycle_lock = threading.Lock()
         self._persist_lock = threading.Lock()
         self._cycle_generation = 0
+        self._inflight_future: Optional[Any] = None
         self._persist_owner_gen: Optional[int] = None
         self._abandoned_live = 0
         self._revive_use_full_budget = False
@@ -766,20 +768,24 @@ class PredictionResolverScheduler:
             return self._abandoned_live
 
     def _run_refresh_cycle_with_timeout(self) -> Dict[str, Any]:
-        abandoned_live = self._get_abandoned_live()
-        logger.info("resolver abandoned_live=%d", abandoned_live)
-        if not self._cycle_lock.acquire(blocking=False):
-            result = {
-                "run_at": _now_iso(),
-                "resolved_now": 0,
-                "expired_now": 0,
-                "pending": 0,
-                "skipped": "cycle_in_flight",
-                "abandoned_live": abandoned_live,
-            }
-            self._persist_cycle_summary(result)
-            return result
-
+        with self._submit_lock:
+            inflight = self._inflight_future
+            if inflight is not None and not inflight.done():
+                logger.warning("resolver cycle skipped: previous worker still running")
+                return {"ok": False, "skipped": "previous_cycle_inflight"}
+            abandoned_live = self._get_abandoned_live()
+            logger.info("resolver abandoned_live=%d", abandoned_live)
+            if not self._cycle_lock.acquire(blocking=False):
+                result = {
+                    "run_at": _now_iso(),
+                    "resolved_now": 0,
+                    "expired_now": 0,
+                    "pending": 0,
+                    "skipped": "cycle_in_flight",
+                    "abandoned_live": abandoned_live,
+                }
+                self._persist_cycle_summary(result)
+                return result
         # Phase 3 revive budget: boot revive uses full cycle ceiling, not the
         # first-tick min(cycle, 90) cap that starves post-revive run_once.
         use_full = bool(self._revive_use_full_budget) or not self._first_tick_pending
@@ -819,7 +825,7 @@ class PredictionResolverScheduler:
         self._persist_owner_gen = gen
         run_at = _now_iso()
         cycle_id = make_resolver_cycle_id(gen, run_at)
-        pool = ThreadPoolExecutor(max_workers=1)
+        pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="resolver-cycle-work")
         timing = _CycleTiming(abandoned_live)
         timing.set_owner_gen(gen)
 
@@ -855,7 +861,9 @@ class PredictionResolverScheduler:
 
         submitted = False
         try:
-            fut = pool.submit(_run_cycle)
+            with self._submit_lock:
+                fut = pool.submit(_run_cycle)
+                self._inflight_future = fut
             submitted = True
             try:
                 return fut.result(timeout=timeout)

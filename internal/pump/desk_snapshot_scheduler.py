@@ -55,6 +55,8 @@ class PumpDeskSnapshotScheduler:
     def __init__(self, interval_minutes: int = INTERVAL_MINUTES) -> None:
         self.interval_minutes = max(5, min(int(interval_minutes), 60))
         self._last_result: Dict[str, Any] = {}
+        self._inflight_future: Optional[Any] = None
+        self._submit_lock = threading.Lock()
         self._active = False
         self.liveness = LivenessTracker(
             name="pump_desk_snapshot",
@@ -107,23 +109,29 @@ class PumpDeskSnapshotScheduler:
         return self._tick()
 
     def _run_snapshot_with_timeout(self) -> Dict[str, Any]:
-        if not _cycle_lock.acquire(blocking=False):
-            return {"ok": False, "skipped": "cycle_in_flight"}
+        with self._submit_lock:
+            inflight = self._inflight_future
+            if inflight is not None and not inflight.done():
+                logger.warning("desk snapshot skipped: previous worker still running")
+                return {"ok": False, "skipped": "previous_cycle_inflight"}
+            if not _cycle_lock.acquire(blocking=False):
+                return {"ok": False, "skipped": "cycle_in_flight"}
 
-        pool = ThreadPoolExecutor(max_workers=1)
-        submitted = False
+            pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="desk-snapshot-work")
+            submitted = False
 
-        def _run() -> Dict[str, Any]:
-            try:
-                from internal.pump.desk_snapshot import run_snapshot
+            def _run() -> Dict[str, Any]:
+                try:
+                    from internal.pump.desk_snapshot import run_snapshot
 
-                return run_snapshot(save=True)
-            finally:
-                _cycle_lock.release()
+                    return run_snapshot(save=True)
+                finally:
+                    _cycle_lock.release()
 
-        try:
             future = pool.submit(_run)
+            self._inflight_future = future
             submitted = True
+        try:
             try:
                 return future.result(timeout=SNAPSHOT_TIMEOUT_SECONDS)
             except FuturesTimeoutError:
