@@ -1,0 +1,11 @@
+{
+  "ticket": "L6-002-PICK-SCHEDULER-PRE-SAVE-ABORT",
+  "title": "Abandoned daily-pick worker can still save and record a prediction before the timeout hold lands",
+  "status": "OPEN — backlog, not a patch in the pre-deploy hardening",
+  "pin_observed": "843930a8250a68c5bd0ec01ebda847b6b78676ac",
+  "rule": "Do not pass a cancellation callback into get_or_create_today_pick until an explicit GO. The disk guard from PR #1304 stays.",
+  "finding": "pick_scheduler._tick compares _work_generation only after get_or_create_today_pick returns. FuturesTimeoutError bumps the generation and pool.shutdown(wait=False, cancel_futures=True) does not stop the thread already inside that call. write_scheduler_hold runs later, on the timeout path, and stamps build_started_at at hold time. _save then skips an older build_started_at, so a late worker loses to a hold that is already on disk and does not call record_pick_prediction.",
+  "remaining_window": "If the abandoned worker reaches _save before write_scheduler_hold, the worker's row is the first write. _save returns True and record_pick_prediction runs. The later hold can replace today's daily_picks.json row, leaving a prediction for a pick the daily file no longer shows. That window is the gap between the timeout and the hold, not a missing flock.",
+  "recommendation": "Pass a cancellation check into get_or_create_today_pick and call it immediately before _save. When the scheduler generation has moved, return the on-disk row and do not save or record a prediction. Keep the build_started_at check-then-write as the cross-process backstop.",
+  "not_this_patch": "Pre-deploy hardening locks normalize_price_cache_keys and adds the homepage cold-miss Cache-Control test. It does not change pick_scheduler.py or daily_pick_engine.py."
+}

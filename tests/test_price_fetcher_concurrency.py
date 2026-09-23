@@ -156,3 +156,47 @@ def test_lock_timeout_returns_fetched_candles(tmp_path, monkeypatch):
     candles = pf.fetch_ohlcv("3", cache_path=str(cache_path), use_cache=True)
     assert candles[0]["close"] == 4.0
     assert not cache_path.exists()
+
+
+def test_normalize_waits_for_price_cache_lock(tmp_path):
+    """A startup rename must not replace a file a sibling writer is updating."""
+    cache_path = tmp_path / "price_cache.json"
+    cache_path.write_text(json.dumps({"01": {"candles": [1]}}))
+    started = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with pf._locked_price_cache(str(cache_path)):
+            started.set()
+            assert release.wait(timeout=5)
+            latest = pf._load_json(str(cache_path))
+            latest["2"] = {"candles": [2]}
+            pf._save_json(str(cache_path), latest)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert started.wait(timeout=5)
+
+    from internal.council.price_reference import normalize_price_cache_keys
+
+    outcome = {}
+
+    def rename():
+        outcome["renamed"] = normalize_price_cache_keys(str(cache_path))
+
+    renamer = threading.Thread(target=rename)
+    renamer.start()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and not renamer.is_alive() and "renamed" not in outcome:
+        time.sleep(0.01)
+    assert "renamed" not in outcome
+    assert renamer.is_alive()
+    release.set()
+    renamer.join(timeout=5)
+    holder.join(timeout=5)
+
+    assert outcome["renamed"] == 1
+    saved = json.loads(cache_path.read_text())
+    assert "1" in saved
+    assert "2" in saved
+    assert "01" not in saved
