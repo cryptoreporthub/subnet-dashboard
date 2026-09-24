@@ -324,7 +324,6 @@ class DailyPickScheduler:
             payload = None
             with self._work_lock:
                 self._work_generation += 1
-                tick_generation = self._work_generation
 
             def _run_pick() -> Optional[Dict[str, Any]]:
                 with self._work_lock:
