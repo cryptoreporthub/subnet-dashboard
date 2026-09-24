@@ -30,7 +30,7 @@ _start_inline_worker() {
     fi
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  # Lower CPU priority so HTTP wins under contention on shared 2GB machine.
+  # Lower CPU priority so HTTP wins under contention on the shared web+worker VM.
   nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" python -m internal.worker &
   echo $! > "$INLINE_WORKER_PIDFILE"
   echo "inline worker pid=$(cat "$INLINE_WORKER_PIDFILE")"
