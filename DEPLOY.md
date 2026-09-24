@@ -2,7 +2,7 @@
 
 ## Fly.io (production)
 
-App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `shared-cpu-1x` / 1GB
+App: `subnet-dashboard` · region: `sjc` (data_volume lives here) · machine: `shared-cpu-2x` / 1GB
 
 ### Deploy
 
@@ -91,7 +91,7 @@ If `GET /api/subnets` times out, the app falls back to registry after `SUBNETS_L
 
 `scripts/fly_web_entrypoint.sh` starts `python -m internal.worker` in the background (nice +10), then `exec uvicorn`. Web has `BACKGROUND_ON_WEB=off`; worker runs pump/resolver/whale warm (`WORKER_HEAVY=essential`).
 
-**VM:** `2gb` on `shared-cpu-1x` — required headroom for inline worker + HTTP on one machine (1GB OOMs/wedges).
+**VM:** `1gb` on `shared-cpu-2x` — web + inline essential worker on one machine (2026-09-24 soak: ~330 MB RSS peak on `26e7dec2`; prior 4GB performance was leak-era over-provision).
 
 **Do not** add a separate `worker` Fly process group to `fly.toml` or `fly scale count worker=1` without a volume strategy — a second machine steals HTTP with no shared volume. `fly.toml` v1 lists only `web`; dedicated worker lives in `fly.worker-v2.toml`. After every v1 deploy, `flyctl scale count worker=0` is required (GHA Fly Deploy does this, then fails the job if a worker machine remains).
 
@@ -280,7 +280,7 @@ Revert to live delivery with `telegram` or `webhook` secrets above, or `CONVICTI
 
 Live social ingest uses a **Telethon user session** (not the conviction-alert bot). `fly.toml` keeps `MESSAGE_INTEL_LISTENER=off` so CI/cold boots stay safe — enable **`auto`** only after a session file exists on the volume.
 
-**Do not set `WORKER_HEAVY=full` on the current single 2GB Fly machine** — it adds live-subnet sync and wedges HTTP. Telegram runs on the **essential** inline worker (deferred boot; see `internal/background_boot.py`).
+**Do not set `WORKER_HEAVY=full` on the current single-machine v1 topology** — it adds live-subnet sync and wedges HTTP. Telegram runs on the **essential** inline worker (deferred boot; see `internal/background_boot.py`).
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
@@ -403,7 +403,7 @@ You do **not** need a desktop. Session file is created **on the Fly volume** in 
 
 #### Single-VM stability (learning loop audit 2026-07-27)
 
-On the current **one 2GB machine** (web + inline essential worker), `MESSAGE_INTEL_LISTENER=auto` is safe only when:
+On the current **one-machine v1** setup (web + inline essential worker), `MESSAGE_INTEL_LISTENER=auto` is safe only when:
 
 - `WORKER_HEAVY=essential` (**never `full`** — #517/#520 wedge),
 - Telegram session already exists on the volume,
@@ -446,7 +446,7 @@ curl -fsS https://subnet-dashboard.fly.dev/metrics | head
 | `CONVICTION_ALERTS_ENABLED` | **on** (fly.toml) | O1 notify evaluation |
 | `CONVICTION_ALERT_DELIVERY` | **off** | Outbound delivery: off/dry_run/webhook/telegram |
 | `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto` when session on volume) |
-| `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker: pump/resolver + deferred Telegram on `essential`; **`full` wedges 2GB VM** |
+| `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker: pump/resolver + deferred Telegram on `essential`; **`full` wedges HTTP on shared VM** |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 
 ---

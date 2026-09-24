@@ -36,7 +36,7 @@ primary_region = "sjc"
   INLINE_WORKER = "1"
   ENABLE_INLINE_WORKER = "1"
   WORKER_SPLIT_V2 = "off"
-  # essential = pump/resolver/whale on worker; full adds live-subnet wedge (2GB+ only).
+  # essential = pump/resolver/whale on worker; full enables live-subnet sync (heavier).
   WORKER_HEAVY = "essential"
   # auto: start Telethon listener when session exists on worker volume (see DEPLOY.md).
   MESSAGE_INTEL_LISTENER = "auto"
@@ -132,8 +132,8 @@ primary_region = "sjc"
   processes = ["web"]
 
 [[vm]]
-  size = "performance-1x"
-  memory = "4gb"
+  size = "shared-cpu-2x"
+  memory = "1gb"
   processes = ["web"]
 
 
