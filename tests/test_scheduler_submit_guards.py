@@ -15,7 +15,7 @@ def test_hung_daily_pick_refuses_second_submit(monkeypatch):
     release = threading.Event()
     calls = []
 
-    def hang(subnets, market_context=None, force=False):
+    def hang(subnets, market_context=None, force=False, is_cancelled=None):
         calls.append(1)
         started.set()
         assert release.wait(timeout=20)
