@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from pathlib import Path
 
 import internal.store.soul_map_io as soul_map_io
@@ -134,6 +135,46 @@ def test_write_soul_map_refreshes_cache_without_stale_hit(tmp_path):
     write_soul_map(lambda blob: blob.update({"v": 1}), path=str(soul_path))
     write_soul_map(lambda blob: blob.__setitem__("v", 2), path=str(soul_path))
     assert read_soul_map(str(soul_path))["v"] == 2
+
+
+def test_write_soul_map_waits_for_file_lock(tmp_path):
+    """A concurrent writer must not replace soul_map while another holds .lock."""
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    started = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with soul_map_io._locked_soul_map_file(str(soul_path)):
+            started.set()
+            assert release.wait(timeout=5)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert started.wait(timeout=5)
+
+    outcome = {}
+
+    def write():
+        outcome["returned"] = write_soul_map(
+            lambda blob: blob.__setitem__("v", 99),
+            path=str(soul_path),
+        )
+
+    writer = threading.Thread(target=write)
+    writer.start()
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and writer.is_alive() and "returned" not in outcome:
+        time.sleep(0.01)
+    assert "returned" not in outcome
+    assert writer.is_alive()
+    release.set()
+    writer.join(timeout=5)
+    holder.join(timeout=5)
+
+    assert outcome["returned"] == {"v": 99}
+    assert json.loads(soul_path.read_text(encoding="utf-8")) == {"v": 99}
+    assert (tmp_path / "soul_map.json.lock").exists()
 
 
 def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):

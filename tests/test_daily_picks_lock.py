@@ -101,3 +101,47 @@ def test_timeout_hold_beats_abandoned_worker(tmp_path, monkeypatch):
     assert today[0]["reason"] == hold["reason"]
     assert holder["out"]["scheduler_hold"] is True
     assert recorded["n"] == 0
+
+
+def test_cancelled_worker_skips_save_and_prediction(tmp_path, monkeypatch):
+    path = tmp_path / "daily_picks.json"
+    monkeypatch.setattr(engine, "DAILY_PICKS_PATH", str(path))
+    monkeypatch.setattr(engine, "publish_gate_fraction", lambda: 0.0)
+    monkeypatch.setattr(
+        engine,
+        "directional_publish_guard",
+        lambda _pick: {"approved": True, "reason": ""},
+    )
+    save_calls = {"n": 0}
+    real_save = engine._save
+
+    def counting_save(records, save_path=None):
+        save_calls["n"] += 1
+        return real_save(records, save_path)
+
+    monkeypatch.setattr(engine, "_save", counting_save)
+    recorded = {"n": 0}
+    monkeypatch.setattr(
+        "internal.learning.prediction_loop.record_pick_prediction",
+        lambda *_a, **_k: recorded.__setitem__("n", recorded["n"] + 1),
+    )
+    monkeypatch.setattr(
+        engine,
+        "select_daily_pick",
+        lambda _subnets, _ctx: {
+            "action": "long",
+            "final_confidence": 0.9,
+            "subnet": {"netuid": 54, "price": 1.0},
+        },
+    )
+
+    out = engine.get_or_create_today_pick(
+        [{"netuid": 54, "price": 1.0}],
+        {},
+        is_cancelled=lambda: True,
+    )
+
+    assert out is None
+    assert save_calls["n"] == 0
+    assert not path.exists()
+    assert recorded["n"] == 0

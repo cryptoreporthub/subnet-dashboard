@@ -1,0 +1,12 @@
+{
+  "ticket": "L6-002-PICK-SCHEDULER-PRE-SAVE-ABORT",
+  "title": "Abandoned daily-pick worker can still save and record a prediction before the timeout hold lands",
+  "status": "RESOLVED",
+  "pin_observed": "843930a8250a68c5bd0ec01ebda847b6b78676ac",
+  "resolved_at": "2026-09-24",
+  "resolved_by": "fix/l6-002-and-soulmap-flock",
+  "rule": "Pass is_cancelled into get_or_create_today_pick; abort before _save when the scheduler generation has moved. PR #1304 build_started_at disk guard remains the cross-process backstop.",
+  "finding": "pick_scheduler._tick compared _work_generation only after get_or_create_today_pick returned. FuturesTimeoutError bumped the generation while the worker could still reach _save and record_pick_prediction before write_scheduler_hold landed.",
+  "fix": "is_cancelled callback checked immediately before _save in daily_pick_engine.get_or_create_today_pick; pick_scheduler passes lambda comparing _work_generation to the tick generation captured at worker start.",
+  "recommendation": "Keep the build_started_at check-then-write as the cross-process backstop alongside the pre-save cancellation gate."
+}
