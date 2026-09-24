@@ -507,7 +507,10 @@ def recover_overdue_pump_leads(
         data["stats"] = _compute_stats(data)
     except Exception:
         pass
-    safe_write_json(resolved_path, data)
+    from internal.learning.predictions_store import locked_predictions_file
+
+    with locked_predictions_file():
+        safe_write_json(resolved_path, data)
     logger.info(
         "pump_lead recover graded=%s rejected=%s hits=%s misses=%s",
         summary["graded"],
