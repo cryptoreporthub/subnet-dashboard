@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import copy
+import fcntl
 import json
 import logging
 import os
 import tempfile
 import threading
 import time
-from typing import Any, Callable, Dict, Optional, Tuple
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Iterator, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,31 @@ def _lock_for(path: str) -> threading.Lock:
         if path not in _locks:
             _locks[path] = threading.Lock()
         return _locks[path]
+
+
+@contextmanager
+def _locked_soul_map_file(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
+    """Cross-process lock for soul_map read-modify-replace."""
+    lock_path = path + ".lock"
+    os.makedirs(os.path.dirname(lock_path) or ".", exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        deadline = time.monotonic() + timeout_seconds
+        acquired = False
+        while time.monotonic() < deadline:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except (BlockingIOError, OSError):
+                time.sleep(0.01)
+        if not acquired:
+            raise TimeoutError(
+                f"Timed out after {timeout_seconds}s waiting for {lock_path}"
+            )
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def _read_blob(path: str) -> Dict[str, Any]:
@@ -114,41 +141,42 @@ def write_soul_map(
     """
     resolved = _resolve_path(path)
     with _lock_for(resolved):
-        now = time.monotonic()
-        cached = _cache_get_fresh(resolved, now)
-        # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
-        blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
-        prior = copy.deepcopy(blob)
-        mutator(blob)
-        temp_path = ""
-        try:
-            os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
-            fd, temp_path = tempfile.mkstemp(
-                dir=os.path.dirname(resolved) or ".", suffix=".tmp"
-            )
-            with os.fdopen(fd, "w") as f:
-                json.dump(blob, f, indent=2)
-            os.replace(temp_path, resolved)
-            _cache_put(resolved, blob, time.monotonic())
+        with _locked_soul_map_file(resolved):
+            now = time.monotonic()
+            cached = _cache_get_fresh(resolved, now)
+            # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
+            blob = copy.deepcopy(cached) if cached is not None else _read_blob(resolved)
+            prior = copy.deepcopy(blob)
+            mutator(blob)
             temp_path = ""
-        except Exception as exc:
-            logger.warning(
-                "soul_map persistence failed path=%s error_type=%s error=%s",
-                resolved,
-                type(exc).__name__,
-                exc,
-                extra={
-                    "event": "soul_map_persistence_failed",
-                    "path": resolved,
-                    "error_type": type(exc).__name__,
-                    "error": str(exc),
-                },
-            )
-            return prior
-        finally:
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                except Exception:
-                    pass
-        return blob
+            try:
+                os.makedirs(os.path.dirname(resolved) or ".", exist_ok=True)
+                fd, temp_path = tempfile.mkstemp(
+                    dir=os.path.dirname(resolved) or ".", suffix=".tmp"
+                )
+                with os.fdopen(fd, "w") as f:
+                    json.dump(blob, f, indent=2)
+                os.replace(temp_path, resolved)
+                _cache_put(resolved, blob, time.monotonic())
+                temp_path = ""
+            except Exception as exc:
+                logger.warning(
+                    "soul_map persistence failed path=%s error_type=%s error=%s",
+                    resolved,
+                    type(exc).__name__,
+                    exc,
+                    extra={
+                        "event": "soul_map_persistence_failed",
+                        "path": resolved,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                return prior
+            finally:
+                if temp_path and os.path.exists(temp_path):
+                    try:
+                        os.unlink(temp_path)
+                    except Exception:
+                        pass
+            return blob

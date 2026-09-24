@@ -13,7 +13,7 @@ import os
 import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 import fcntl
 
@@ -274,7 +274,8 @@ def get_or_create_today_pick(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
     force: bool = False,
-) -> Dict[str, Any]:
+    is_cancelled: Optional[Callable[[], bool]] = None,
+) -> Optional[Dict[str, Any]]:
     """
     Return today's daily pick, creating it if necessary.
 
@@ -374,6 +375,9 @@ def get_or_create_today_pick(
     }
 
     records = _upsert_today(records, payload)
+    if is_cancelled is not None and is_cancelled():
+        logger.warning("daily pick aborted before save: worker was cancelled or timed out")
+        return None
     if not _save(records):
         return _find_today(_load()) or payload
 

@@ -327,11 +327,14 @@ class DailyPickScheduler:
                 tick_generation = self._work_generation
 
             def _run_pick() -> Optional[Dict[str, Any]]:
-                out = get_or_create_today_pick(subnets, ctx, False)
                 with self._work_lock:
-                    if tick_generation != self._work_generation:
-                        return None
-                return out
+                    tick_gen = self._work_generation
+                return get_or_create_today_pick(
+                    subnets,
+                    ctx,
+                    False,
+                    is_cancelled=lambda: self._work_generation != tick_gen,
+                )
 
             with self._submit_lock:
                 inflight = self._inflight_future
