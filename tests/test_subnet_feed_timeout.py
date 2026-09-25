@@ -11,6 +11,12 @@ def test_subnet_feed_timeout_does_not_block(monkeypatch):
         return []
 
     monkeypatch.setattr("internal.subnets.feed._load_subnets_inner", _hang)
+    monkeypatch.setattr("internal.subnets.feed.load_subnets_snapshot_rows", lambda: [])
+    monkeypatch.setattr("internal.subnets.feed.load_live_cache_rows", lambda: [])
+    monkeypatch.setattr(
+        "internal.subnets.feed._registry_fallback_rows",
+        lambda: [{"netuid": 1, "name": "Fallback"}],
+    )
     monkeypatch.setattr("internal.subnets.feed.SUBNETS_LOAD_TIMEOUT", 0.5)
 
     t0 = time.time()
