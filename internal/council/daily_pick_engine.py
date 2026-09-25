@@ -425,6 +425,16 @@ def get_or_create_today_pick(
     return payload
 
 
+def read_today_pick() -> Optional[Dict[str, Any]]:
+    """Read today's stored daily pick without scoring or writing.
+
+    Read-path accessor for GET handlers. Unlike get_or_create_today_pick this
+    never scores the universe, never writes daily_picks.json, and never records
+    a learning-loop prediction. Returns None when no record exists for today.
+    """
+    return _find_today(_load())
+
+
 def load_past_picks(limit: int = 7) -> List[Dict[str, Any]]:
     """Return the most recent ``limit`` daily-pick records."""
     records = _load()
