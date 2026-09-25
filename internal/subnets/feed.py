@@ -118,11 +118,10 @@ def load_subnets_snapshot_rows() -> List[Dict[str, Any]]:
     return []
 
 
-def load_live_cache_rows() -> List[Dict[str, Any]]:
-    """Non-blocking read of Blockmachine live_subnets cache (no outbound network)."""
+def _read_live_cache_subnets() -> List[Dict[str, Any]]:
+    """Raw subnets from live_subnets.json — no outbound network."""
     try:
         from internal.live_subnets import _cache_path
-        from internal.subnet_names import enrich_subnet_rows
 
         cache_file = _cache_path()
         if not os.path.exists(cache_file):
@@ -139,7 +138,36 @@ def load_live_cache_rows() -> List[Dict[str, Any]]:
         )
         if live_bm == 0:
             return []
-        return enrich_subnet_rows([dict(row) for row in subnets])
+        return [dict(row) for row in subnets]
+    except Exception as exc:
+        logger.debug("live cache read failed: %s", exc)
+    return []
+
+
+def live_cache_by_netuid() -> Dict[int, Dict[str, Any]]:
+    """Blockmachine live cache rows keyed by netuid (no outbound network)."""
+    out: Dict[int, Dict[str, Any]] = {}
+    for row in _read_live_cache_subnets():
+        netuid = row.get("netuid")
+        if netuid is None:
+            netuid = row.get("id")
+        try:
+            key = int(netuid)
+        except (TypeError, ValueError):
+            continue
+        out[key] = row
+    return out
+
+
+def load_live_cache_rows() -> List[Dict[str, Any]]:
+    """Non-blocking read of Blockmachine live_subnets cache (no outbound network)."""
+    try:
+        from internal.subnet_names import enrich_subnet_rows
+
+        subnets = _read_live_cache_subnets()
+        if not subnets:
+            return []
+        return enrich_subnet_rows(subnets)
     except Exception as exc:
         logger.debug("live cache feed unavailable: %s", exc)
     return []

@@ -57,6 +57,11 @@ UNIVERSE_EMERGENCY_TOTAL = Counter(
     ["reason"],
 )
 
+UNIVERSE_CAP_EXCLUDED_TOTAL = Counter(
+    "subnet_universe_cap_excluded_total",
+    "Subnet netuids dropped because membership exceeded MAX_NETUIDS",
+)
+
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
     if value is None:

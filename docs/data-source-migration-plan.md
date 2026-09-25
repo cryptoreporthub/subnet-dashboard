@@ -1,7 +1,7 @@
 # Data Source Migration Plan (Grok 4.7)
 
 **Date:** 2026-09-25  
-**Status:** Phase 1 in progress  
+**Status:** Phase 2 complete (local branch)  
 **Supersedes:** Any “freeze at 24/40” directive — those caps are migration oracles only.
 
 ## Problem statement
@@ -46,11 +46,11 @@ Separately, universe **scoring caps** (20/24/40) were OOM-era workarounds. Prod 
 
 **Does not change:** pick scheduler caps, `TOP_SCORING_UNIVERSE`, or published pick contract.
 
-### Phase 2 — Universe snapshot enrichment
+### Phase 2 — Universe snapshot enrichment (done on `cursor/data-source-migration-bf32`)
 
-1. **`subnet_universe._build_rows`** — overlay BM live cache fields over TMC rows (price, volume, computed deltas).
-2. Fix **`MAX_NETUIDS=200` sort-truncate** — replace with explicit cap telemetry + no silent drop (separate PR if large).
-3. Label `emergency_registry` honestly in feed meta.
+1. **`subnet_universe._build_rows`** — overlays BM live cache fields over TMC rows; runs `price_history.enrich_rows`.
+2. **`MAX_NETUIDS=200`** — `_apply_membership_cap()` logs excluded netuids, sets `cap_excluded_netuids` on snapshot, increments `subnet_universe_cap_excluded_total`.
+3. Label `emergency_registry` honestly in feed meta (unchanged — already instrumented).
 
 ### Phase 3 — Full eligible universe scoring
 

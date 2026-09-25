@@ -248,6 +248,35 @@ def _shrink_allowed(prior: UniverseSnapshot, built: UniverseSnapshot) -> bool:
     return True
 
 
+def _apply_membership_cap(
+    netuids: List[int],
+    validity_map: Dict[str, Any],
+) -> Tuple[List[int], Dict[str, Any], bool, Tuple[int, ...]]:
+    """Trim to MAX_NETUIDS with explicit excluded-netuid telemetry (no silent drop)."""
+    sorted_ids = sorted(netuids)
+    if len(sorted_ids) <= MAX_NETUIDS:
+        return sorted_ids, validity_map, False, tuple()
+    kept = sorted_ids[:MAX_NETUIDS]
+    excluded = tuple(sorted_ids[MAX_NETUIDS:])
+    trimmed_map = {str(n): validity_map[str(n)] for n in kept if str(n) in validity_map}
+    preview = list(excluded[:10])
+    suffix = "..." if len(excluded) > 10 else ""
+    logger.warning(
+        "subnet_universe MAX_NETUIDS=%d excludes %d netuids (e.g. %s%s)",
+        MAX_NETUIDS,
+        len(excluded),
+        preview,
+        suffix,
+    )
+    try:
+        from internal.metrics import UNIVERSE_CAP_EXCLUDED_TOTAL
+
+        UNIVERSE_CAP_EXCLUDED_TOTAL.inc(len(excluded))
+    except Exception:
+        pass
+    return kept, trimmed_map, True, excluded
+
+
 def _compute_membership(
     prior_map: Dict[str, Any],
     *,
@@ -255,14 +284,13 @@ def _compute_membership(
     tmc_complete: bool,
     probe_map: Dict[int, Optional[bool]],
     probe_complete: bool,
-) -> Tuple[List[int], Dict[str, Any], bool, bool]:
+) -> Tuple[List[int], Dict[str, Any], bool, bool, Tuple[int, ...]]:
     """Resolve membership with no-shrink and 48h removal rules."""
     now = datetime.now(timezone.utc)
     prior_netuids = sorted(int(k) for k in prior_map.keys() if str(k).isdigit())
     candidates = set(prior_netuids) | set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
     validity_map: Dict[str, Any] = {}
     refresh_incomplete = not (tmc_complete and probe_complete)
-    cap_reached = False
 
     for netuid in sorted(candidates):
         key = str(netuid)
@@ -296,10 +324,6 @@ def _compute_membership(
             validity_map[key] = entry
 
     netuids = sorted(int(k) for k in validity_map.keys())
-    if len(netuids) > MAX_NETUIDS:
-        cap_reached = True
-        netuids = netuids[:MAX_NETUIDS]
-        validity_map = {str(n): validity_map[str(n)] for n in netuids}
 
     # Forbidden shrink: retain prior members unless explicitly removed after grace.
     for netuid in prior_netuids:
@@ -310,19 +334,54 @@ def _compute_membership(
         if _eligible_for_removal(entry, now):
             continue
         if len(netuids) >= MAX_NETUIDS:
-            cap_reached = True
             break
         validity_map[key] = dict(entry)
         validity_map[key]["refresh_incomplete"] = True
         netuids.append(netuid)
         netuids = sorted(set(netuids))
 
-    if len(netuids) > MAX_NETUIDS:
-        cap_reached = True
-        netuids = sorted(netuids)[:MAX_NETUIDS]
-        validity_map = {str(n): validity_map[str(n)] for n in netuids if str(n) in validity_map}
+    netuids, validity_map, cap_reached, cap_excluded = _apply_membership_cap(netuids, validity_map)
+    return netuids, validity_map, cap_reached, refresh_incomplete, cap_excluded
 
-    return netuids, validity_map, cap_reached, refresh_incomplete
+
+_BM_OVERLAY_FIELDS = (
+    "price",
+    "stake",
+    "total_stake",
+    "emission",
+    "liquidity",
+    "total_tao",
+    "total_alpha",
+    "volume",
+    "buy_volume_24h",
+    "sell_volume_24h",
+    "buys_24hr",
+    "sells_24hr",
+    "price_change_24h",
+    "price_change_7d",
+    "price_change_30d",
+    "market_cap",
+    "marketcap_rank",
+)
+
+
+def _overlay_bm_fields(row: Dict[str, Any], bm_row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not bm_row:
+        return row
+    merged = dict(row)
+    for field in _BM_OVERLAY_FIELDS:
+        value = bm_row.get(field)
+        if value not in (None, ""):
+            merged[field] = value
+    if bm_row.get("live") or str(bm_row.get("source") or "").lower() == "blockmachine":
+        merged["live"] = True
+        sources = list(merged.get("sources") or [])
+        if "blockmachine" not in sources:
+            sources.insert(0, "blockmachine")
+        merged["sources"] = sources
+        if str(merged.get("source") or "") in ("", "registry", "taomarketcap", "none"):
+            merged["source"] = "blockmachine"
+    return merged
 
 
 def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -331,6 +390,13 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
         netuid = _netuid_of(rec)
         if netuid is not None:
             registry_by_netuid[netuid] = dict(rec)
+
+    try:
+        from internal.subnets.feed import live_cache_by_netuid
+
+        bm_rows = live_cache_by_netuid()
+    except Exception:
+        bm_rows = {}
 
     rows: List[Dict[str, Any]] = []
     for netuid in netuids:
@@ -357,6 +423,7 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
             # Deregistered netuid slot (no TMC or registry row): label it
             # explicitly so it never inherits a majority-vote feed label.
             row = {"netuid": netuid, "id": netuid, "source": "none", "sources": ["none"]}
+        row = _overlay_bm_fields(row, bm_rows.get(netuid))
         try:
             from internal.subnet_names import enrich_subnet_row
 
@@ -364,6 +431,12 @@ def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List
         except Exception:
             pass
         rows.append(row)
+    try:
+        from internal.subnets.price_history import enrich_rows
+
+        rows = enrich_rows(rows)
+    except Exception as exc:
+        logger.debug("universe row price_history enrich skipped: %s", exc)
     return rows
 
 
@@ -406,6 +479,7 @@ class UniverseSnapshot:
     degraded: bool
     validity_map: Dict[str, Any] = field(default_factory=dict)
     cap_reached: bool = False
+    cap_excluded_netuids: Tuple[int, ...] = ()
     refresh_incomplete: bool = False
     message: str = ""
 
@@ -419,6 +493,7 @@ class UniverseSnapshot:
             "degraded": self.degraded,
             "validity_map": self.validity_map,
             "cap_reached": self.cap_reached,
+            "cap_excluded_netuids": list(self.cap_excluded_netuids),
             "refresh_incomplete": self.refresh_incomplete,
             "message": self.message,
         }
@@ -436,6 +511,9 @@ class UniverseSnapshot:
             degraded=bool(payload.get("degraded")),
             validity_map=dict(payload.get("validity_map") or {}),
             cap_reached=bool(payload.get("cap_reached")),
+            cap_excluded_netuids=tuple(
+                int(n) for n in (payload.get("cap_excluded_netuids") or [])
+            ),
             refresh_incomplete=bool(payload.get("refresh_incomplete")),
             message=str(payload.get("message") or ""),
         )
@@ -513,7 +591,7 @@ class SnapshotBuilder:
         if not tmc_complete and not probe_complete and not prior_map:
             return UniverseSnapshot.emergency_registry(reason="refresh_unresolvable")
 
-        netuids, validity_map, cap_reached, refresh_incomplete = _compute_membership(
+        netuids, validity_map, cap_reached, refresh_incomplete, cap_excluded = _compute_membership(
             prior_map,
             tmc_positive=tmc_positive,
             tmc_complete=tmc_complete,
@@ -574,10 +652,19 @@ class SnapshotBuilder:
             )
 
         rows = _build_rows(netuids, tmc_rows)
-        degraded = not (tmc_complete and probe_complete) or refresh_incomplete
+        degraded = not (tmc_complete and probe_complete) or refresh_incomplete or cap_reached
         status = "degraded" if degraded else "ok"
+        cap_message = ""
         if cap_reached:
-            logger.warning("subnet_universe reached MAX_NETUIDS=%d cap", MAX_NETUIDS)
+            cap_message = (
+                f"MAX_NETUIDS={MAX_NETUIDS} cap excludes "
+                f"{len(cap_excluded)} netuids"
+            )
+        message = cap_message
+        if degraded and not cap_message:
+            message = "Refresh incomplete or source degraded"
+        elif degraded and cap_message and refresh_incomplete:
+            message = f"{cap_message}; refresh incomplete or source degraded"
         return UniverseSnapshot(
             netuids=tuple(netuids),
             rows=tuple(rows),
@@ -586,8 +673,9 @@ class SnapshotBuilder:
             degraded=degraded,
             validity_map=validity_map,
             cap_reached=cap_reached,
+            cap_excluded_netuids=cap_excluded,
             refresh_incomplete=refresh_incomplete,
-            message="" if not degraded else "Refresh incomplete or source degraded",
+            message=message,
         )
 
 
