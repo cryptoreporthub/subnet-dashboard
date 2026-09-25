@@ -1,0 +1,9 @@
+{
+  "ticket_id": "P-CENSUS-002c",
+  "status": "DONE",
+  "closed_at": "2026-09-20T08:59Z",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "result": "results/P-CENSUS-002c.json",
+  "bundle": "bundles/P-CENSUS-002c.tracer.1.json",
+  "summary": "T1 none held across loop; T2 late write YES; T3 clear_stuck cosmetic"
+}

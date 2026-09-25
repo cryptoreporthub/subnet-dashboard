@@ -1,0 +1,13 @@
+{
+  "claim_id": "F-1b",
+  "status": "RECORDED",
+  "verdict": "NOT_OBSERVABLE",
+  "evidence_class": "NOT_OBSERVABLE",
+  "tier": "B",
+  "pin_repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+  "live_WORKER_HEAVY": "NOT_OBSERVABLE",
+  "wedge_doc_premise": "Tier B until live value observed",
+  "updated_at": "2026-09-20T00:45Z",
+  "verified_by": null,
+  "notes": "Row added by Joshua Go 2026-09-19 PT; not a VERIFIED claim \u2014 explicit NOT_OBSERVABLE placeholder"
+}

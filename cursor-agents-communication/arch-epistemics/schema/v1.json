@@ -1,0 +1,58 @@
+{
+  "schema_version": "1",
+  "ticket_required": [
+    "schema_version",
+    "claim_id",
+    "dedup_key",
+    "pin",
+    "target_seat",
+    "question",
+    "expected_evidence_form",
+    "constitution_pass",
+    "priority",
+    "created_by",
+    "falsifier"
+  ],
+  "bundle_required": [
+    "schema_version",
+    "claim_id",
+    "bundle_id",
+    "pin",
+    "verdict",
+    "evidence_class",
+    "citations",
+    "falsifier",
+    "scope_tag",
+    "produced_by",
+    "fetch_method"
+  ],
+  "bundle_code_read_also_required": [
+    "bytes_read"
+  ],
+  "pin_object": {
+    "repo_sha": "required string",
+    "deploy_sha": "string or NOT_OBSERVABLE",
+    "runtime_ref": "string or NOT_OBSERVABLE"
+  },
+  "falsifier_object": {
+    "probe": "non-empty string",
+    "expected": "non-empty string",
+    "refutes_if": "non-empty string; REJECT N/A|none|unknown"
+  },
+  "fetch_method_enum": ["raw", "api", "mc_paste", "n/a_ledger_merge"],
+  "fetch_ladder": [
+    "1_raw: https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/<repo_sha>/<path>",
+    "2_api: GET /repos/cryptoreporthub/subnet-dashboard/contents/<path>?ref=<repo_sha> (base64 content)",
+    "3_mc_paste: Mission Control bounded paste"
+  ],
+  "verdict_enum": ["confirmed", "refuted", "partial", "NOT_OBSERVABLE"],
+  "reject_falsifier_literals": ["N/A", "n/a", "none", "None", "unknown", "UNKNOWN", ""],
+  "router_rule": "MC strips prose/fences, parses first JSON object, validates schema including fetch_method; malformed never forward to Ledger; return to producing seat only.",
+  "smoke_lock": {
+    "path": "server.py",
+    "line": 628,
+    "text": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
+    "context_lines": [626, 627, 628, 629, 630],
+    "not_line": 633
+  }
+}

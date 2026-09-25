@@ -1,0 +1,87 @@
+{
+  "claim_id": "C-019",
+  "status": "VERIFIED",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "accepted_at": "2026-09-20T12:22Z",
+  "accepted_by": "mission-control",
+  "method": "MC spot-checked Tracer raw cites against pin blobs",
+  "tracer_bundle": "bundles/C-019.tracer.1.json",
+  "mc_spot_check": "PASS",
+  "rule_8": "verification only \u2014 no remediation",
+  "summary": "stale path: rank_subnets_by_snapshot None \u2192 cap_subnets_for_scoring \u2192 _heuristic_hunt_pool; unranked CAN enter capped set (:82). Fresh: scores.get(netuid,-1.0):166",
+  "tracer": {
+    "claim_id": "C-019",
+    "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "fetch_method": "raw",
+    "citations": [
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 15,
+        "bytes": "_UNRANKED = 10_000"
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 59,
+        "bytes": "def _focus_tier(sn: Dict[str, Any], *, mid_min: int, mid_max: int) -> int:"
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 69,
+        "bytes": "def _heuristic_hunt_pool("
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 82,
+        "bytes": "        if mid_min <= r <= mid_max or r > mid_max or r >= _UNRANKED:"
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 105,
+        "bytes": "        ranked = rank_subnets_by_snapshot(subnets, horizon=\"day\")"
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 115,
+        "bytes": "    pool = _heuristic_hunt_pool("
+      },
+      {
+        "path": "internal/subnets/scoring_cap.py",
+        "line": 121,
+        "bytes": "    return pool[:cap]"
+      },
+      {
+        "path": "internal/council/score_snapshots.py",
+        "line": 146,
+        "bytes": "        return None"
+      },
+      {
+        "path": "internal/council/score_snapshots.py",
+        "line": 166,
+        "bytes": "        return (scores.get(netuid, -1.0), float(s.get(\"emission\") or 0))"
+      }
+    ],
+    "findings": [
+      "Exact blob symbols: _UNRANKED (scoring_cap.py:15), _focus_tier (:59), _heuristic_hunt_pool (:69), cap_subnets_for_scoring (:91).",
+      "Stale path: rank_subnets_by_snapshot returns None when snapshot age missing/stale (score_snapshots.py:145-146), snap falsy (:148-149), or scores empty (:158-159). cap_subnets_for_scoring calls it (:103-105); if ranked falsy (:105-109) falls through to _heuristic_hunt_pool (:115-120) and returns pool[:cap] (:121).",
+      "Unranked can enter capped set on stale path: marketcap_rank maps non-positive/invalid to _UNRANKED (:29,:31). _heuristic_hunt_pool includes r when mid_min<=r<=mid_max OR r>mid_max OR r>=_UNRANKED (:82), skipping only r<=mega_ceiling_rank (:80-81). Unranked get _focus_tier 2 (:64-65).",
+      "Fresh contrast: rank_subnets_by_snapshot key uses scores.get(netuid, -1.0) (:166) \u2014 missing scores sort last under reverse sort; not the UNRANKED hunt-pool path."
+    ],
+    "bytes_read": {
+      "scoring_cap": "15|_UNRANKED = 10_000\n16|\n17|\n18|def _env_int(name: str, default: int) -> int:\n19|    try:\n20|        return int(os.environ.get(name, str(default)))\n21|    except ValueError:\n22|        return default\n23|\n24|\n25|def marketcap_rank(sn: Dict[str, Any]) -> int:\n26|    raw = sn.get(\"marketcap_rank\")\n27|    try:\n28|        r = int(raw)\n29|        return r if r > 0 else _UNRANKED\n30|    except (TypeError, ValueError):\n31|        return _UNRANKED\n59|def _focus_tier(sn: Dict[str, Any], *, mid_min: int, mid_max: int) -> int:\n60|    \"\"\"Higher = prefer for hunt-pool slots.\"\"\"\n61|    r = marketcap_rank(sn)\n62|    if mid_min <= r <= mid_max:\n63|        return 3  # mid-cap focus band\n64|    if r > mid_max or r >= _UNRANKED:\n65|        return 2  # low cap / unranked\n66|    return 0\n67|\n68|\n69|def _heuristic_hunt_pool(\n70|    subnets: List[Dict[str, Any]],\n71|    *,\n72|    mega_ceiling_rank: int,\n73|    mid_min: int,\n74|    mid_max: int,\n75|) -> List[Dict[str, Any]]:\n76|    \"\"\"Subnets eligible for heuristic cap \u2014 mega ranks excluded.\"\"\"\n77|    pool: List[Dict[str, Any]] = []\n78|    for sn in subnets:\n79|        r = marketcap_rank(sn)\n80|        if r <= mega_ceiling_rank:\n81|            continue\n82|        if mid_min <= r <= mid_max or r > mid_max or r >= _UNRANKED:\n83|            pool.append(sn)\n84|    pool.sort(\n85|        key=lambda sn: (_focus_tier(sn, mid_min=mid_min, mid_max=mid_max), activity_rank_key(sn)),\n86|        reverse=True,\n87|    )\n88|    return pool\n89|\n90|\n91|def cap_subnets_for_scoring(\n92|    subnets: List[Dict[str, Any]],\n93|    limit: Optional[int] = None,\n94|    *,\n95|    default_limit: int = 40,\n96|) -> List[Dict[str, Any]]:\n97|    \"\"\"Return up to ``limit`` subnets to score on hot paths / snapshot jobs.\"\"\"\n98|    cap = limit if limit is not None else default_limit\n99|    if not subnets or len(subnets) <= cap:\n100|        return list(subnets)\n101|\n102|    try:\n103|        from internal.council.score_snapshots import rank_subnets_by_snapshot\n104|\n105|        ranked = rank_subnets_by_snapshot(subnets, horizon=\"day\")\n106|        if ranked:\n107|            return ranked[:cap]\n108|    except Exception:\n109|        pass\n110|\n111|    mega_ceiling = _env_int(\"SCORING_CAP_MEGA_CEILING_RANK\", 10)\n112|    mid_min = _env_int(\"SCORING_CAP_MID_RANK_MIN\", 11)\n113|    mid_max = _env_int(\"SCORING_CAP_MID_RANK_MAX\", 75)\n114|\n115|    pool = _heuristic_hunt_pool(\n116|        subnets,\n117|        mega_ceiling_rank=mega_ceiling,\n118|        mid_min=mid_min,\n119|        mid_max=mid_max,\n120|    )\n121|    return pool[:cap]",
+      "score_snapshots_rank": "141|) -> Optional[List[Dict[str, Any]]]:\n142|    \"\"\"Return subnets sorted by snapshot score, or None if snapshot missing/stale.\"\"\"\n143|    age = snapshot_age_seconds(path)\n144|    limit = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds\n145|    if age is None or age > limit:\n146|        return None\n147|    snap = load_score_snapshot(path)\n148|    if not snap:\n149|        return None\n150|    scores: Dict[int, float] = {}\n151|    for row in snap.get(horizon) or snap.get(\"day\") or []:\n152|        if not isinstance(row, dict):\n153|            continue\n154|        try:\n155|            scores[int(row[\"netuid\"])] = float(row.get(\"total_score\") or 0)\n156|        except (TypeError, ValueError, KeyError):\n157|            continue\n158|    if not scores:\n159|        return None\n160|\n161|    def _key(s: Dict[str, Any]) -> Tuple[float, float]:\n162|        try:\n163|            netuid = int(s.get(\"netuid\") or 0)\n164|        except (TypeError, ValueError):\n165|            netuid = 0\n166|        return (scores.get(netuid, -1.0), float(s.get(\"emission\") or 0))\n167|\n168|    return sorted(subnets, key=_key, reverse=True)"
+    },
+    "file_sha256": {
+      "scoring_cap.py": "5c3bb38619084903a2a57e5a1f107b5f754af3bf1dc85243198a35626c4f6f9b",
+      "score_snapshots.py": "ad0ad36f5448ab2758075fc22ac213fdb5003f73b8162ad180ab44e03c0163e3"
+    },
+    "falsifier": "Re-raw-fetch internal/subnets/scoring_cap.py and internal/council/score_snapshots.py at pin c9449d6490231373748f19f299ed19d423a1c971. Refute if _UNRANKED/_focus_tier/_heuristic_hunt_pool/cap_subnets_for_scoring absent, if :82 omits r>=_UNRANKED, if None-return stale path absent, if :166 default is not -1.0, or if citation bytes differ from this turn raw tool output.",
+    "produced_by": "Tracer"
+  },
+  "joshua_accepted": true,
+  "joshua_accepted_at": "2026-09-20T13:17Z",
+  "scope_notes": [
+    "UI consumer NOT_OBSERVABLE",
+    "live env NOT_OBSERVABLE"
+  ],
+  "evidence_class": "code-only"
+}

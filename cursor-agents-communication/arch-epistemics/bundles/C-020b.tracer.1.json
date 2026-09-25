@@ -1,0 +1,118 @@
+{
+  "claim_id": "C-020b",
+  "parent": "C-020",
+  "contradiction": "X-C-020-DEGRADED-COMPOSITE",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "fetch_method": "raw",
+  "citations": [
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 632,
+      "bytes": "    if indicators.get(\"degraded\"):"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 634,
+      "bytes": "            \"technical_score\": 0.5,"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 635,
+      "bytes": "            \"signal_contributions\": {},"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1740,
+      "bytes": "    total = round((weighted + momentum_boost) * 100 + memory_adj, 2)"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1755,
+      "bytes": "    tech_score = _compute_technical_score(sn, \"hour\", indicators, market_context)"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1758,
+      "bytes": "        \"total_score\": total,"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1761,
+      "bytes": "            \"signal_contributions\": tech_score[\"signal_contributions\"],"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1763,
+      "bytes": "            \"technical_score\": tech_score[\"technical_score\"],"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1865,
+      "bytes": "    total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1909,
+      "bytes": "    tech_score = _compute_technical_score(sn, \"day\", indicators, market_context)"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1912,
+      "bytes": "        \"total_score\": total,"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1915,
+      "bytes": "            \"signal_contributions\": tech_score[\"signal_contributions\"],"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1917,
+      "bytes": "            \"technical_score\": tech_score[\"technical_score\"],"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1719,
+      "bytes": "    weighted = sum(experts[k] * hour_weights[k] for k in experts)"
+    },
+    {
+      "path": "internal/council/state_vector.py",
+      "line": 1490,
+      "bytes": "        \"technical\": round(technical, 4),"
+    }
+  ],
+  "findings": [
+    "BOTH_PARTIAL confirmed at pin: degraded short-circuit returns technical_score=0.5 AND signal_contributions={} together (state_vector.py:632-640).",
+    "Hour path: total finalized at :1740 from weighted expert floats (+momentum/memory); tech_score computed only afterward at :1755; return embeds signal_contributions/technical_score under expert_contributions (:1758-1763) without writing back into total.",
+    "Day path: same order \u2014 total at :1865 (plus later adjustments through :1903), then tech_score at :1909, then embed (:1912-1917).",
+    "Verdict: total_score does NOT weight nested technical_score. Nested metadata only. Expert float 'technical' (:1490) is a separate input to the pre-embed weighted sum (:1719) and is NOT the technical_score field."
+  ],
+  "answer": {
+    "total_weights_technical_score_field": "no",
+    "nested_metadata_only": "yes",
+    "total_finalized_before_embed": "yes",
+    "hour_total_line": 1740,
+    "hour_embed_lines": [
+      1755,
+      1761,
+      1763
+    ],
+    "day_total_line": 1865,
+    "day_embed_lines": [
+      1909,
+      1915,
+      1917
+    ]
+  },
+  "bytes_read": {
+    "degraded_short_circuit": "632|    if indicators.get(\"degraded\"):\n633|        return {\n634|            \"technical_score\": 0.5,\n635|            \"signal_contributions\": {},\n636|            \"active_signals\": [],\n637|            \"horizon_type\": horizon_type,\n638|            \"degraded\": True,\n639|            \"history_source\": indicators.get(\"history_source\", \"unavailable\"),\n640|            \"history_length\": indicators.get(\"history_length\", 0),",
+    "hour_total_then_embed": "1719|    weighted = sum(experts[k] * hour_weights[k] for k in experts)\n1720|    chg24 = float(sn.get(\"price_change_24h\", 0) or 0)\n1721|    # Short-horizon: impact-weighted momentum (thin names move more per TAO).\n1722|    try:\n1723|        from internal.subnets.impact import impact_scale_factor\n1724|\n1725|        mom_scale = min(1.5, 0.55 + 0.45 * impact_scale_factor(sn))\n1726|    except Exception:\n1727|        mom_scale = 1.0\n1728|    momentum_boost = max(-0.10, min(0.10, (chg24 / 100.0) * mom_scale))\n1729|    try:\n1730|        from internal.council.memory_scoring import (\n1731|            disposition_score_adjustment,\n1732|            scenario_outcome_adjustment,\n1733|        )\n1734|\n1735|        memory_adj = disposition_score_adjustment(sn) + scenario_outcome_adjustment(\n1736|            sn, market_context\n1737|        )\n1738|    except Exception:\n1739|        memory_adj = 0.0\n1740|    total = round((weighted + momentum_boost) * 100 + memory_adj, 2)\n1741|    total = min(100.0, max(0.0, total))\n1742|    pump_overlay = None\n1743|    if not (market_context or {}).get(\"skip_pump_overlay\"):\n1744|        try:\n1745|            from internal.council.pump_overlay import apply_pump_score_overlay\n1746|\n1747|            total, pump_overlay = apply_pump_score_overlay(total, sn)\n1748|        except Exception:\n1749|            pass\n1750|\n1751|    confidence = _compute_confidence(sn, indicators, experts, total_score=total)\n1752|    tags = _scenario_tags(sn, indicators, market_context)\n1753|\n1754|    # Compute weighted technical score for hour horizon\n1755|    tech_score = _compute_technical_score(sn, \"hour\", indicators, market_context)\n1756|\n1757|    return {\n1758|        \"total_score\": total,\n1759|        \"expert_contributions\": {\n1760|            **experts,\n1761|            \"signal_contributions\": tech_score[\"signal_contributions\"],\n1762|            \"active_signals\": tech_score[\"active_signals\"],\n1763|            \"technical_score\": tech_score[\"technical_score\"],\n1764|        },",
+    "day_total_then_embed": "1865|    total = round((weighted + value_boost + flow_boost + size_tilt) * 100 + memory_adj, 2)\n1866|    total = min(100.0, max(0.0, total))\n1867|    telegram_calibration = None\n1868|    try:\n1869|        # Lazy, read-only boundary: Telegram history never changes council weights\n1870|        # and is default-off until operators explicitly enable it.\n1871|        from internal.message_intel.calibration import calibration_for_subnet\n1872|\n1873|        conviction_rows = (market_context or {}).get(\"telegram_conviction_rows\")\n1874|        telegram_calibration = calibration_for_subnet(\n1875|            sn.get(\"netuid\") or sn.get(\"id\"),\n1876|            conviction_rows=conviction_rows,\n1877|        )\n1878|        total = min(100.0, max(0.0, round(total + telegram_calibration[\"adjustment_points\"], 2)))\n1879|    except Exception:\n1880|        telegram_calibration = {\n1881|            \"active\": False, \"applied\": False, \"adjustment_points\": 0.0,\n1882|            \"withheld_reasons\": [\"calibration_unavailable\"],\n1883|        }\n1884|    pump_overlay = None\n1885|    if not (market_context or {}).get(\"skip_pump_overlay\"):\n1886|        try:\n1887|            from internal.council.pump_overlay import apply_pump_score_overlay\n1888|\n1889|            total, pump_overlay = apply_pump_score_overlay(total, sn)\n1890|        except Exception:\n1891|            pass\n1892|\n1893|    # Long-pick guard: distinguish recovery from correction.  A subnet with a\n1894|    # prolonged downtrend, lower lows, bearish technicals, and no positive flow\n1895|    # takes an explicit risk haircut; genuine mean-reversion candidates\n1896|    # (>=2 recovery evidence cells) keep their full score.\n1897|    from internal.council.recovery_context import recovery_risk_adjustment\n1898|\n1899|    risk_adjustment = recovery_risk_adjustment(recovery_context)\n1900|    if risk_adjustment[\"applied\"]:\n1901|        risk_adjustment[\"score_before\"] = total\n1902|        total = round(max(0.0, total * (1.0 - risk_adjustment[\"haircut\"])), 2)\n1903|        risk_adjustment[\"score_after\"] = total\n1904|\n1905|    confidence = _compute_confidence(sn, indicators, experts, total_score=total)\n1906|    tags = _scenario_tags(sn, indicators, market_context)\n1907|\n1908|    # Compute weighted technical score for day horizon\n1909|    tech_score = _compute_technical_score(sn, \"day\", indicators, market_context)\n1910|\n1911|    return {\n1912|        \"total_score\": total,\n1913|        \"expert_contributions\": {\n1914|            **experts,\n1915|            \"signal_contributions\": tech_score[\"signal_contributions\"],\n1916|            \"active_signals\": tech_score[\"active_signals\"],\n1917|            \"technical_score\": tech_score[\"technical_score\"],\n1918|        },",
+    "expert_technical_float": "1470|    # Technical: indicator consensus\n1471|    technical = 0.50\n1472|    if macd.get(\"crossover\") == \"bullish\":\n1473|        technical += 0.15\n1474|    elif macd.get(\"crossover\") == \"bearish\":\n1475|        technical -= 0.15\n1476|    if ma.get(\"signal\") == \"bullish\":\n1477|        technical += 0.10\n1478|    elif ma.get(\"signal\") == \"bearish\":\n1479|        technical -= 0.10\n1480|    if hot.get(\"active\"):\n1481|        technical += 0.10\n1482|    if sell.get(\"active\"):\n1483|        technical -= 0.20\n1484|    technical = min(1.0, max(0.0, technical))\n1485|\n1486|    return {\n1487|        \"quant\": round(quant, 4),\n1488|        \"hype\": round(hype, 4),\n1489|        \"dark_horse\": round(dark_horse, 4),\n1490|        \"technical\": round(technical, 4),\n1491|    }"
+  },
+  "file_sha256": {
+    "state_vector.py": "7b4e011c1f310672ac2ca3156f92964df795564cba4d000eec25c10e51b8e1cc"
+  },
+  "falsifier": "Re-raw-fetch internal/council/state_vector.py at pin. Refute if degraded return omits either technical_score=0.5 or signal_contributions={}, if tech_score is computed before total assignment on hour/day paths, if total_score is reassigned from technical_score after embed, or if citation bytes differ from this turn raw tool output.",
+  "produced_by": "Tracer"
+}

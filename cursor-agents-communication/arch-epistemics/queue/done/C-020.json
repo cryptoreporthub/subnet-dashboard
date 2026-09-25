@@ -1,0 +1,7 @@
+{
+  "ticket_id": "C-020",
+  "status": "DONE",
+  "closed_at": "2026-09-20T12:22Z",
+  "result": "results/C-020.json",
+  "bundle": "bundles/C-020.tracer.1.json"
+}
