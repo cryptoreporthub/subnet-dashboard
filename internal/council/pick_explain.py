@@ -48,9 +48,24 @@ def explain_subnet(
     if row is None:
         return {"status": "not_found", "netuid": int(netuid)}
 
-    from internal.council.daily_pick_engine import get_or_create_today_pick
+    from internal.council.daily_pick_engine import read_today_pick
 
-    today = get_or_create_today_pick(subnets, market_context)
+    today = read_today_pick()
+    if today is None:
+        return {
+            "status": "pending",
+            "pending": True,
+            "netuid": int(netuid),
+            "name": row.get("name"),
+            "verdict": "pending",
+            "reason": "today's pick forming",
+            "final_confidence": None,
+            "total_score": None,
+            "score_source": None,
+            "confidence_source": None,
+            "score_gap_vs_candidate": None,
+            "blockers": [],
+        }
     pick = today.get("pick") if isinstance(today.get("pick"), dict) else {}
     cand = today.get("candidate") if isinstance(today.get("candidate"), dict) else {}
     pick_sn = pick.get("subnet") if isinstance(pick.get("subnet"), dict) else {}
@@ -61,6 +76,9 @@ def explain_subnet(
     scored = score_subnet_for_day(row, market_context)
     audit = audit_daily_pick({**row, "confidence": scored["confidence"]}, subnets)
     final_conf = float(audit.get("adjusted_confidence") or 0.0)
+    total_score = scored.get("total_score")
+    score_source = "live"
+    confidence_source = "live"
 
     blockers: List[str] = []
     concerns = [str(c) for c in (audit.get("concerns") or [])[:4]]
@@ -85,13 +103,24 @@ def explain_subnet(
         elif candidate_n is not None:
             blockers.insert(0, f"Today's top candidate is SN{candidate_n}")
 
+    if verdict == "published" and isinstance(pick, dict):
+        if pick.get("score") is not None:
+            total_score = pick.get("score")
+            score_source = "persisted"
+        if pick.get("final_confidence") is not None:
+            final_conf = float(pick.get("final_confidence"))
+            confidence_source = "persisted"
+        elif isinstance(pick.get("audit"), dict) and pick["audit"].get("adjusted_confidence") is not None:
+            final_conf = float(pick["audit"]["adjusted_confidence"])
+            confidence_source = "persisted"
+
     score_gap = None
     if candidate_n is not None and int(candidate_n) != int(netuid):
         cand_row = _subnet_row(subnets, int(candidate_n))
         if cand_row:
             cand_score = score_subnet_for_day(cand_row, market_context)
             score_gap = round(
-                float(cand_score.get("total_score") or 0) - float(scored.get("total_score") or 0),
+                float(cand_score.get("total_score") or 0) - float(total_score or 0),
                 2,
             )
             if score_gap > 0:
@@ -120,8 +149,11 @@ def explain_subnet(
         "netuid": int(netuid),
         "name": row.get("name"),
         "verdict": verdict,
+        "pending": False,
         "final_confidence": round(final_conf, 4),
-        "total_score": scored.get("total_score"),
+        "total_score": total_score,
+        "score_source": score_source,
+        "confidence_source": confidence_source,
         "score_gap_vs_candidate": score_gap,
         "blockers": _unique_blockers(blockers)[:6],
         "audit": audit,

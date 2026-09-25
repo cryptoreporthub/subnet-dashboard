@@ -88,7 +88,7 @@ _FIXTURE_AUDIT = {"adjusted_confidence": 0.82, "concerns": []}
 # Fixture subnet row — survives tradable_subnets filter (integer netuid > 0).
 _FIXTURE_SUBNET = {"netuid": 42, "name": "MockNet", "symbol": "MOCK", "price": 1.0}
 
-# Fixture get_or_create_today_pick result — SN42 is the published pick.
+# Fixture read_today_pick result — SN42 is the published pick.
 # Carries the sentinel calibration on the pick sub-object so the fix can
 # return the persisted value instead of the live re-score (_LIVE_SCORE_CAL).
 _FIXTURE_TODAY_PICK_STATE = {
@@ -191,7 +191,7 @@ def test_pick_explain_calibration_field_contract():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.read_today_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -256,7 +256,7 @@ def test_calibration_field_consistent_across_endpoints():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.read_today_pick",
             return_value=_FIXTURE_TODAY_PICK_STATE,
         ),
     ):
@@ -324,7 +324,7 @@ def test_pick_explain_calibration_source_live_when_persisted_record_lacks_field(
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.read_today_pick",
             return_value=_FIXTURE_TODAY_PICK_NO_CAL,
         ),
     ):
@@ -393,7 +393,7 @@ def test_pick_explain_gated_candidate_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.read_today_pick",
             return_value=_FIXTURE_TODAY_PICK_GATED_CANDIDATE,
         ),
     ):
@@ -433,7 +433,7 @@ def test_pick_explain_not_today_pick_calibration_from_live_score():
         patch("internal.council.pick_explain.score_subnet_for_day", return_value=_FIXTURE_SCORE),
         patch("internal.council.pick_explain.audit_daily_pick", return_value=_FIXTURE_AUDIT),
         patch(
-            "internal.council.daily_pick_engine.get_or_create_today_pick",
+            "internal.council.daily_pick_engine.read_today_pick",
             return_value=_FIXTURE_TODAY_PICK_OTHER_PUBLISHED,
         ),
     ):
@@ -460,3 +460,186 @@ def test_pick_explain_not_today_pick_calibration_from_live_score():
         f"Expected calibration_source 'live' for not_today_pick; "
         f"got {body.get('calibration_source')!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# F1 — read-only pick explain + invariant score/confidence for published picks
+# ---------------------------------------------------------------------------
+
+# Persisted pick carries score/confidence distinct from live re-score.
+_PERSISTED_SCORE = 88.5
+_PERSISTED_CONFIDENCE = 0.82
+_LIVE_SCORE_TOTAL = 42.0
+_LIVE_CONFIDENCE = 0.55
+
+_FIXTURE_PUBLISHED_PICK_RECORD = {
+    "date": _TODAY,
+    "action": "long",
+    "pick": {
+        "subnet": {"netuid": 42, "name": "MockNet"},
+        "score": _PERSISTED_SCORE,
+        "final_confidence": _PERSISTED_CONFIDENCE,
+        "audit": {"adjusted_confidence": _PERSISTED_CONFIDENCE, "concerns": []},
+        "telegram_evidence_calibration": _SENTINEL_CAL,
+    },
+    "candidate": None,
+    "reason": None,
+}
+
+_LIVE_SCORE_DRIFT = {
+    **_FIXTURE_SCORE,
+    "total_score": _LIVE_SCORE_TOTAL,
+    "confidence": _LIVE_CONFIDENCE,
+    "telegram_evidence_calibration": _LIVE_SCORE_CAL,
+}
+
+_LIVE_AUDIT_DRIFT = {"adjusted_confidence": _LIVE_CONFIDENCE, "concerns": ["Thin volume"]}
+
+
+def test_explain_subnet_pending_when_no_today_pick():
+    """read_today_pick returns None → fail-closed pending, no scoring side effects."""
+    from internal.council.pick_explain import explain_subnet
+
+    with (
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=None),
+        patch(
+            "internal.council.pick_explain.score_subnet_for_day",
+            side_effect=AssertionError("must not score when today's pick is absent"),
+        ),
+    ):
+        out = explain_subnet(42, [_FIXTURE_SUBNET])
+
+    assert out["status"] == "pending"
+    assert out["pending"] is True
+    assert out["verdict"] == "pending"
+    assert out["netuid"] == 42
+    assert out["name"] == "MockNet"
+    assert out["reason"] == "today's pick forming"
+    assert out["final_confidence"] is None
+    assert out["total_score"] is None
+    assert out["score_source"] is None
+    assert out["confidence_source"] is None
+
+
+def test_explain_subnet_does_not_call_get_or_create_today_pick():
+    """GET explain path must use read_today_pick only — never the mutator."""
+    from internal.council.pick_explain import explain_subnet
+
+    def _boom(*_a, **_k):
+        raise AssertionError("get_or_create_today_pick must not run on pick-explain")
+
+    with (
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=_FIXTURE_PUBLISHED_PICK_RECORD),
+        patch("internal.council.daily_pick_engine.get_or_create_today_pick", _boom),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_LIVE_SCORE_DRIFT),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_LIVE_AUDIT_DRIFT),
+    ):
+        out = explain_subnet(42, [_FIXTURE_SUBNET])
+
+    assert out["status"] == "ok"
+    assert out["verdict"] == "published"
+
+
+def test_explain_published_uses_persisted_score_and_confidence():
+    """Published subnet must return persisted score/confidence, not live re-score drift."""
+    from internal.council.pick_explain import explain_subnet
+
+    with (
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=_FIXTURE_PUBLISHED_PICK_RECORD),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_LIVE_SCORE_DRIFT),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_LIVE_AUDIT_DRIFT),
+    ):
+        out = explain_subnet(42, [_FIXTURE_SUBNET])
+
+    assert out["status"] == "ok"
+    assert out["verdict"] == "published"
+    assert out["pending"] is False
+    assert out["total_score"] == _PERSISTED_SCORE
+    assert out["final_confidence"] == _PERSISTED_CONFIDENCE
+    assert out["score_source"] == "persisted"
+    assert out["confidence_source"] == "persisted"
+    assert out["total_score"] != _LIVE_SCORE_TOTAL
+    assert out["final_confidence"] != _LIVE_CONFIDENCE
+
+
+def test_explain_published_score_invariant_matches_daily_pick():
+    """Pick-explain total_score must match the persisted pick sub-object score."""
+    from internal.council.pick_explain import explain_subnet
+
+    with (
+        patch("internal.council.daily_pick_engine._load", return_value=[_FIXTURE_PICK_RECORD]),
+        patch("internal.council.daily_pick_engine._find_today", return_value=_FIXTURE_PICK_RECORD),
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=_FIXTURE_PICK_RECORD),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_LIVE_SCORE_DRIFT),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_LIVE_AUDIT_DRIFT),
+    ):
+        daily_resp = client.get("/api/daily-pick")
+        explain_out = explain_subnet(42, [_FIXTURE_SUBNET])
+
+    assert daily_resp.status_code == 200
+    daily_pick = daily_resp.json().get("pick") or {}
+    assert explain_out["total_score"] == daily_pick.get("score")
+    assert explain_out["final_confidence"] == daily_pick.get("final_confidence")
+    assert explain_out["score_source"] == "persisted"
+    assert explain_out["confidence_source"] == "persisted"
+
+
+def test_explain_gated_candidate_uses_live_score_sources():
+    """Non-published verdicts keep live score_source and confidence_source."""
+    from internal.council.pick_explain import explain_subnet
+
+    with (
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=_FIXTURE_TODAY_PICK_GATED_CANDIDATE),
+        patch("internal.council.pick_explain.score_subnet_for_day", return_value=_LIVE_SCORE_DRIFT),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_LIVE_AUDIT_DRIFT),
+    ):
+        out = explain_subnet(42, [_FIXTURE_SUBNET])
+
+    assert out["verdict"] == "gated_candidate"
+    assert out["score_source"] == "live"
+    assert out["confidence_source"] == "live"
+    assert out["total_score"] == _LIVE_SCORE_TOTAL
+    assert out["final_confidence"] == _LIVE_CONFIDENCE
+
+
+def test_explain_score_gap_uses_total_score_variable():
+    """score_gap_vs_candidate must subtract persisted total_score for published picks."""
+    from internal.council.pick_explain import explain_subnet
+
+    gated = {
+        "date": _TODAY,
+        "action": "HOLD",
+        "pick": None,
+        "candidate": {
+            "subnet": {"netuid": 99, "name": "CandNet"},
+            "score": 95.0,
+        },
+        "reason": "Below gate",
+    }
+    candidate_score = {"total_score": 95.0, "confidence": 0.9}
+
+    with (
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=gated),
+        patch("internal.council.pick_explain.score_subnet_for_day", side_effect=[_LIVE_SCORE_DRIFT, candidate_score]),
+        patch("internal.council.pick_explain.audit_daily_pick", return_value=_LIVE_AUDIT_DRIFT),
+    ):
+        out = explain_subnet(42, [_FIXTURE_SUBNET, {"netuid": 99, "name": "CandNet", "price": 1.0}])
+
+    assert out["verdict"] == "not_today_pick"
+    assert out["score_gap_vs_candidate"] == round(95.0 - _LIVE_SCORE_TOTAL, 2)
+
+
+def test_pick_explain_api_pending_when_no_today_pick():
+    """HTTP pick-explain returns pending when read_today_pick finds no record."""
+    with (
+        patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
+        patch("server._market_context_with_weights", return_value={"weights": {}}),
+        patch("internal.council.daily_pick_engine.read_today_pick", return_value=None),
+    ):
+        resp = client.get("/api/pick-explain/42")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "pending"
+    assert body["pending"] is True
+    assert body["verdict"] == "pending"
