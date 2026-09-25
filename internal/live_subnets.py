@@ -281,8 +281,16 @@ def _sync_once() -> bool:
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
             return False
         merged = _merge_into_registry(raw)
+        synced_at = _now_iso()
+        try:
+            from internal.subnets.price_history import enrich_rows, record_sync_samples
+
+            record_sync_samples(merged, synced_at=synced_at)
+            merged = enrich_rows(merged)
+        except Exception as exc:
+            logger.debug("live_subnets price_history enrich skipped: %s", exc)
         payload = {
-            "synced_at": _now_iso(),
+            "synced_at": synced_at,
             "source": "blockmachine",
             "count": len(merged),
             "subnets": merged,

@@ -118,11 +118,41 @@ def load_subnets_snapshot_rows() -> List[Dict[str, Any]]:
     return []
 
 
+def load_live_cache_rows() -> List[Dict[str, Any]]:
+    """Non-blocking read of Blockmachine live_subnets cache (no outbound network)."""
+    try:
+        from internal.live_subnets import _cache_path
+        from internal.subnet_names import enrich_subnet_rows
+
+        cache_file = _cache_path()
+        if not os.path.exists(cache_file):
+            return []
+        with open(cache_file, "r") as handle:
+            data = json.load(handle)
+        subnets = data.get("subnets") or []
+        if not subnets:
+            return []
+        live_bm = sum(
+            1
+            for row in subnets
+            if row.get("live") or str(row.get("source") or "").lower() == "blockmachine"
+        )
+        if live_bm == 0:
+            return []
+        return enrich_subnet_rows([dict(row) for row in subnets])
+    except Exception as exc:
+        logger.debug("live cache feed unavailable: %s", exc)
+    return []
+
+
 def load_subnets_source(timeout: float | None = None) -> List[Dict[str, Any]]:
     """Return subnets for /api/subnets with a hard timeout and registry fallback."""
     snapshot_rows = load_subnets_snapshot_rows()
     if snapshot_rows:
         return snapshot_rows
+    live_rows = load_live_cache_rows()
+    if live_rows:
+        return live_rows
     limit = SUBNETS_LOAD_TIMEOUT if timeout is None else timeout
     if limit <= 0:
         return _load_subnets_inner()
