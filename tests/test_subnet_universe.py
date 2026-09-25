@@ -16,6 +16,7 @@ from internal.subnet_universe import (
     SnapshotBuilder,
     SubnetUniverseProvider,
     UniverseSnapshot,
+    _apply_membership_cap,
     _build_rows,
     _reset_provider_for_tests,
     _validity_entry,
@@ -110,6 +111,15 @@ def test_t3_source_failure_serves_lkg_not_registry_only(universe_tmp):
   assert lkg.status != "emergency_registry"
 
 
+def test_apply_membership_cap_records_excluded_netuids():
+    validity = {str(n): _validity_entry(validity="positive") for n in range(205)}
+    kept, trimmed, capped, excluded = _apply_membership_cap(list(range(205)), validity)
+    assert capped is True
+    assert len(kept) == MAX_NETUIDS
+    assert excluded == tuple(range(200, 205))
+    assert len(trimmed) == MAX_NETUIDS
+
+
 def test_t4_cap_at_max_netuids(universe_tmp):
   """Builder stops at MAX_NETUIDS=200 with cap_reached."""
   big = list(range(250))
@@ -120,6 +130,8 @@ def test_t4_cap_at_max_netuids(universe_tmp):
   built = builder.build(None)
   assert len(built.netuids) == MAX_NETUIDS
   assert built.cap_reached is True
+  assert built.cap_excluded_netuids == tuple(range(200, 250))
+  assert "excludes 50 netuids" in built.message
 
 
 def test_t5_corrupt_persistence_emergency_registry(universe_tmp, caplog):
@@ -423,6 +435,37 @@ def test_build_rows_tags_tmc_source():
     assert meta["source"] == "taomarketcap"
     assert "taomarketcap" in meta["sources"]
     assert subnet_enrichment_status(rows) == "names_only"
+
+
+def test_build_rows_overlays_blockmachine_fields(monkeypatch):
+    """Universe rows prefer live BM price/volume over stale TMC fields."""
+    from internal.subnets.feed import subnet_enrichment_status, subnet_feed_meta
+
+    monkeypatch.setattr(
+        "internal.subnets.feed.live_cache_by_netuid",
+        lambda: {
+            1: {
+                "netuid": 1,
+                "price": 0.42,
+                "volume": 9000,
+                "live": True,
+                "source": "blockmachine",
+            }
+        },
+    )
+    rows = _build_rows(
+        [1],
+        {1: {"netuid": 1, "price": 0.01, "volume": 10, "price_change_24h": 1.0}},
+    )
+    assert rows[0]["price"] == 0.42
+    assert rows[0]["volume"] == 9000
+    assert rows[0]["live"] is True
+    assert rows[0]["source"] == "blockmachine"
+    assert "blockmachine" in rows[0]["sources"]
+    assert "taomarketcap" in rows[0]["sources"]
+    meta = subnet_feed_meta(rows)
+    assert meta["source"] == "blockmachine"
+    assert subnet_enrichment_status(rows) == "live"
 
 
 def test_build_rows_preserves_membership_netuids():
