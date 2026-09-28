@@ -460,3 +460,28 @@ def test_pick_explain_not_today_pick_calibration_from_live_score():
         f"Expected calibration_source 'live' for not_today_pick; "
         f"got {body.get('calibration_source')!r}"
     )
+
+
+def test_pick_explain_handles_get_subnets_exception():
+    """Verify Patch B': if _get_subnets_with_source raises an exception,
+    api_pick_explain catches it and returns a 200 JSON error payload rather than 500.
+    """
+    with patch("server._get_subnets_with_source", side_effect=RuntimeError("Subnet feed failure")):
+        resp = client.get("/api/pick-explain/42")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"status": "error", "netuid": 42, "error": "Subnet feed failure"}
+
+
+def test_pick_explain_handles_market_context_exception():
+    """Verify Patch B': if _market_context_with_weights raises an exception,
+    api_pick_explain catches it and returns a 200 JSON error payload rather than 500.
+    """
+    with (
+        patch("server._get_subnets_with_source", return_value=([_FIXTURE_SUBNET], "mock")),
+        patch("server._market_context_with_weights", side_effect=ValueError("Market context calc failed")),
+    ):
+        resp = client.get("/api/pick-explain/42")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"status": "error", "netuid": 42, "error": "Market context calc failed"}
