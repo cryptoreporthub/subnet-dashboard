@@ -3287,9 +3287,9 @@ async def api_daily_pick(full: bool = False):
 @app.get("/api/pick-explain/{netuid}")
 def api_pick_explain(netuid: int):
     """§32 — why this subnet was or was not today's council pick."""
-    subnets, _ = _get_subnets_with_source()
-    market_context = _market_context_with_weights(subnets)
     try:
+        subnets, _ = _get_subnets_with_source()
+        market_context = _market_context_with_weights(subnets)
         from internal.council.pick_explain import explain_subnet
 
         return explain_subnet(netuid, subnets, market_context)
