@@ -49,7 +49,10 @@ def test_bootstrap_defers_until_registry_ready(monkeypatch, tmp_path):
     monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
     monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
     monkeypatch.setattr(live_subnets, "_registry_netuids", lambda: [])
-    with patch.object(live_subnets, "_sync_once") as sync:
+    with (
+        patch("internal.subnet_universe.get_netuids", return_value=[]),
+        patch.object(live_subnets, "_sync_once") as sync,
+    ):
         assert live_subnets.bootstrap_live_subnets_cache() is False
     sync.assert_not_called()
     status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
@@ -105,9 +108,12 @@ def test_sync_empty_registry_has_distinct_boot_reason(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     from internal import live_subnets
 
-    with patch.object(live_subnets, "_registry_netuids", return_value=[]):
-        with patch.object(live_subnets, "_fetch_chain_data", return_value=[]):
-            assert live_subnets._sync_once() is False
+    with (
+        patch.object(live_subnets, "_registry_netuids", return_value=[]),
+        patch("internal.subnet_universe.get_netuids", return_value=[]),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=[]),
+    ):
+        assert live_subnets._sync_once() is False
 
     status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
     assert status["reason"] == "registry_not_ready"
@@ -181,3 +187,73 @@ def test_fetch_chain_data_passes_registry_netuids(monkeypatch):
         out = live_subnets._fetch_chain_data()
     assert out and out[0]["netuid"] == 1
     assert seen["netuids"] and len(seen["netuids"]) >= 100
+
+
+# ---------------------------------------------------------------------------
+# Slice A: Comprehensive registry_ready alignment coverage
+# ---------------------------------------------------------------------------
+
+
+def test_registry_ready_universe_snapshot_only():
+    """Verify Slice A: universe snapshot populated alone satisfies readiness."""
+    from internal.live_subnets import registry_ready
+    with (
+        patch("internal.live_subnets._registry_netuids", return_value=[]),
+        patch("internal.subnet_universe.get_netuids", return_value=[1, 2, 3]),
+    ):
+        assert registry_ready() is True
+
+
+def test_registry_ready_registry_fallback_only():
+    """Verify Slice A: registry populated alone satisfies readiness if universe empty."""
+    from internal.live_subnets import registry_ready
+    with (
+        patch("internal.live_subnets._registry_netuids", return_value=[4, 5]),
+        patch("internal.subnet_universe.get_netuids", return_value=[]),
+    ):
+        assert registry_ready() is True
+
+
+def test_registry_ready_both_empty_defers():
+    """Verify Slice A: when both sources are empty, registry_ready defers (False)."""
+    from internal.live_subnets import registry_ready
+    with (
+        patch("internal.live_subnets._registry_netuids", return_value=[]),
+        patch("internal.subnet_universe.get_netuids", return_value=[]),
+    ):
+        assert registry_ready() is False
+
+
+def test_registry_ready_handles_get_netuids_exception():
+    """Verify Slice A: exception in get_netuids gracefully falls back to registry."""
+    from internal.live_subnets import registry_ready
+    with (
+        patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot read failed")),
+        patch("internal.live_subnets._registry_netuids", return_value=[7]),
+    ):
+        assert registry_ready() is True
+
+
+def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkeypatch):
+    """Verify _fetch_chain_data falls back to _registry_netuids when get_netuids raises."""
+    from internal import live_subnets
+
+    seen = {}
+
+    class _Client:
+        def get_subnet_price_rows(self, netuids):
+            seen["netuids"] = netuids
+            return [{"netuid": 42, "price": 1.0}]
+
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+
+    with (
+        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot corrupt")),
+        patch.object(live_subnets, "_registry_netuids", return_value=[42]),
+    ):
+        out = live_subnets._fetch_chain_data()
+
+    assert out and out[0]["netuid"] == 42
+    assert seen["netuids"] == [42]
