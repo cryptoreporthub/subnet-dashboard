@@ -232,3 +232,28 @@ def test_registry_ready_handles_get_netuids_exception():
         patch("internal.live_subnets._registry_netuids", return_value=[7]),
     ):
         assert registry_ready() is True
+
+
+def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkeypatch):
+    """Verify _fetch_chain_data falls back to _registry_netuids when get_netuids raises."""
+    from internal import live_subnets
+
+    seen = {}
+
+    class _Client:
+        def get_subnet_price_rows(self, netuids):
+            seen["netuids"] = netuids
+            return [{"netuid": 42, "price": 1.0}]
+
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+
+    with (
+        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot corrupt")),
+        patch.object(live_subnets, "_registry_netuids", return_value=[42]),
+    ):
+        out = live_subnets._fetch_chain_data()
+
+    assert out and out[0]["netuid"] == 42
+    assert seen["netuids"] == [42]

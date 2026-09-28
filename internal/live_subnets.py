@@ -176,9 +176,10 @@ def registry_ready() -> bool:
     try:
         from internal.subnet_universe import get_netuids
 
-        return bool(get_netuids() or _registry_netuids())
+        netuids = get_netuids()
     except Exception:
-        return bool(_registry_netuids())
+        netuids = []
+    return bool(netuids or _registry_netuids())
 
 
 def _fetch_chain_data():
@@ -189,10 +190,17 @@ def _fetch_chain_data():
     def _run():
         try:
             from internal.chain_client import get_default_client
-            from internal.subnet_universe import get_netuids
 
             client = get_default_client()
-            netuids = get_netuids() or _registry_netuids()
+            try:
+                from internal.subnet_universe import get_netuids
+
+                netuids = get_netuids()
+            except Exception:
+                netuids = []
+
+            if not netuids:
+                netuids = _registry_netuids()
             mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
             if mode in ("lite", "price"):
                 result["data"] = client.get_subnet_price_rows(netuids)
