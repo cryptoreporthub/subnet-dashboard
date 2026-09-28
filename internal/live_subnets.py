@@ -172,8 +172,13 @@ def _registry_netuids() -> List[int]:
 
 
 def registry_ready() -> bool:
-    """The chain probe needs registry netuids; defer instead of probing empty."""
-    return bool(_registry_netuids())
+    """The chain probe needs netuids from universe snapshot or registry; defer instead of probing empty."""
+    try:
+        from internal.subnet_universe import get_netuids
+
+        return bool(get_netuids() or _registry_netuids())
+    except Exception:
+        return bool(_registry_netuids())
 
 
 def _fetch_chain_data():
