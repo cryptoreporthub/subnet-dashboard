@@ -631,7 +631,12 @@ def nudge_expert(
     path = path or SOUL_MAP_PATH
     # Preserve the legacy contrarian-ledger repair that load_weights() used to
     # trigger before applying a nudge; the repair produces a fresh full map.
-    repair_stale_contrarian_weights(path)
+    try:
+        repair_stale_contrarian_weights(path)
+    except ConcurrentWeightUpdate:
+        # Another same-process nudge repaired the legacy map first; the delta
+        # below recomputes from that latest serialized state.
+        pass
     base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
