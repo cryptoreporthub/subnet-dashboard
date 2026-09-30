@@ -12,6 +12,13 @@ latest Replit PARTIAL review. It is pending named human design approval. It does
 not choose an implementation contract, authorize product-code changes, or
 expand the no-production gate.
 
+**Revision note (2026-09-30):** This file is a **derivative F04 review copy**
+within the evidence-only transfer package (`docs/audit/evidence/f04/`). It
+incorporates Replit's recommended documentation corrections. It does not
+retract, replace, or rewrite the canonical source-store record at
+`/cursor/stores/self/internal/stale-code-repro-registry.md` or any prior public
+history. Later edits to this derivative copy are additive documentation only.
+
 ## 1. Executive summary
 
 F04 is a locally verified concurrency mechanism in the soul-map persistence
@@ -136,8 +143,8 @@ count.
 | `_save_raw` | `internal.council.formula_versions.record_calibration_version` → `_save_raw` | `adversarial_state.formula_versions.council_weights.current`; `.history` entries | `UNRESOLVED` | Current local rule retains the last 20 history entries; concurrent append/identity semantics **UNRESOLVED** | None identified | No intentional section replacement; whole-blob behavior is unresolved |
 | `_save_raw` | `internal.council.score_snapshots.ScoreSnapshotScheduler._persist_cycle_summary` → `_save_raw` | `score_snapshot_scheduler.last_cycle` summary (`run_at,ok,count,written_at,path,error,skipped,phase,progress`) | `UNRESOLVED` | N/A | None identified | No intentional section replacement; whole-blob behavior is unresolved |
 | direct gateway | `internal.council.mindmap_bridge.MindmapBridge._save_to_disk` → `write_soul_map` | Whole owned `soul_map_state` section from `self.soul_map_state`; whole `feedback_logs` list from `self.feedback_logs` | **UNRESOLVED**; absent keys in the in-memory section may delete newer disk keys | `learning_trail` is locally capped at 200; `feedback_logs` is a whole-list snapshot; concurrent append/identity semantics **UNRESOLVED** | None identified | **CURRENTLY YES:** replaces both owned top-level values, so section-replacement semantics require explicit approval |
-| direct gateway | `internal.council.resolver_scheduler.ResolverScheduler._persist_lifecycle_state` → `write_soul_map` | `prediction_resolver_scheduler.lifecycle`, `started_at`, `first_tick_scheduled_at`, `first_tick_at`, `first_tick_ok`, `lifecycle_error` | **UNRESOLVED** | N/A | None identified | No; nested field update |
-| direct gateway | `internal.council.resolver_scheduler.ResolverScheduler._persist_cycle_summary` → `write_soul_map` | `prediction_resolver_scheduler.last_cycle`; `.cycle_history`; `lifecycle`; `lifecycle_error`; optional `first_tick_at`, `round_robin_cursor` | **UNRESOLVED** | Current local rule appends and bounds `cycle_history` to 10; concurrent append/identity semantics **UNRESOLVED** | None identified | No; nested field update |
+| direct gateway | `internal.council.resolver_scheduler.PredictionResolverScheduler._persist_lifecycle_state` → `write_soul_map` | `prediction_resolver_scheduler.lifecycle`, `started_at`, `first_tick_scheduled_at`, `first_tick_at`, `first_tick_ok`, `lifecycle_error` | **UNRESOLVED** | N/A | None identified | No; nested field update |
+| direct gateway | `internal.council.resolver_scheduler.PredictionResolverScheduler._persist_cycle_summary` → `write_soul_map` | `prediction_resolver_scheduler.last_cycle`; `.cycle_history`; `lifecycle`; `lifecycle_error`; optional `first_tick_at`, `round_robin_cursor` | **UNRESOLVED** | Current local rule appends and bounds `cycle_history` to 10; concurrent append/identity semantics **UNRESOLVED** | None identified | No; nested field update |
 | direct gateway | `internal.scheduler.AdversarialScheduler._persist_cycle_summary` → `write_soul_map` | `adversarial_scheduler.last_cycle`; `emission_monitor.last_emissions`; `.snapshot_at` | **UNRESOLVED** | N/A | None identified | No; nested field update |
 | direct gateway | `internal.indicators.indicator_scheduler.IndicatorScheduler._persist_cycle_summary` → `write_soul_map` | `indicator_scheduler.last_cycle` (`run_at,ok,subnets_processed,signals_emitted,error`) | **UNRESOLVED** | N/A | None identified | No; nested field update |
 | direct gateway | `internal.simivision.engine._persist_convictions` → `write_soul_map` | root `simivision_convictions`; root `simivision_convictions_updated_at` | **UNRESOLVED** | The convictions mapping is replaced as a snapshot; per-subnet merge/identity semantics **UNRESOLVED** | None identified | No; root-key replacement |
@@ -263,7 +270,7 @@ conviction fixture and not a resolver-cycle fixture. Do not label
 is also tested, use a separate named variant with the exact writer:
 `internal.simivision.engine._persist_convictions` for root
 `simivision_convictions` plus `simivision_convictions_updated_at`, or
-`ResolverScheduler._persist_cycle_summary` for
+`PredictionResolverScheduler._persist_cycle_summary` for
 `prediction_resolver_scheduler.last_cycle` and bounded `cycle_history`.
 
 Use a temporary soul-map document containing the canonical nested state plus an
@@ -394,7 +401,7 @@ The selected contract must specify behavior before implementation begins:
 | Existing JSON is a non-object | Unchanged; no overwrite | Not replaced by an empty object | Absent | Type/schema failure is visible; no silent coercion to `{}` |
 | Existing JSON is unreadable | Unchanged; no overwrite | Unchanged | Absent | Read failure is visible; no stale-success result |
 | Cache and disk disagree | Must use a defined version/freshness rule; never destructive cache-base replacement | Must not advance from an uncommitted value | Absent | Conflict/stale-base result is distinguishable from successful persistence |
-| Process terminates during write | Prior or new complete document only | Must not claim an uncommitted value | Atomic-write cleanup on restart | Recovery remains parseable; no partial target is accepted |
+| Process terminates during write | Prior or new complete document only | Must not claim an uncommitted value | Orphan temp file may remain; no restart cleanup mechanism evidenced at pin | Hard termination/recovery **UNVERIFIED**; no test claimed; target must remain parseable if present |
 
 Existing behavior that catches I/O failures and returns a prior blob must be
 reviewed for ambiguity: a return value that looks like a successful document
@@ -428,7 +435,16 @@ must assert both the selected caller-facing form and these outcomes:
 - malformed, non-object, or unreadable input: fail closed without coercing to
   `{}` or returning a stale success;
 - cache/disk disagreement: conflict or revalidation outcome is distinguishable
-  from a committed success.
+  from a committed success;
+- hard termination during write: no orphan-temp cleanup on restart is promised
+  unless an existing mechanism is separately evidenced; recovery behavior
+  remains **UNVERIFIED** and is not claimed by any current test.
+
+At the canonical pin, `write_soul_map` unlinks a temp file in a `finally`
+block during the normal in-process path (`internal/store/soul_map_io.py:177-179`).
+No separate restart-time orphan cleanup is evidenced. Hard termination and
+post-crash recovery are therefore **UNVERIFIED** and must not be inferred from
+the in-process cleanup path.
 
 ## 8. Compatibility and data-shape concerns
 
@@ -476,7 +492,9 @@ includes:
 
 The existing evidence package contains one raw Cursor receipt for local F04
 mechanism verification. The stored receipt is linked in
-[`internal/stale-code-repro-registry.md`](../internal/stale-code-repro-registry.md),
+[`historical-registry.md`](historical-registry.md) (derivative copy of the
+canonical source-store registry; canonical record preserved at
+`/cursor/stores/self/internal/stale-code-repro-registry.md`),
 under **F04 raw receipt**. It records the pin, exit code, final JSON fields,
 lost-update booleans, empty thread errors, and clean-tree result. This brief
 identifies the stored receipt. A positive local existence/identity check also
