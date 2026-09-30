@@ -22,7 +22,7 @@ def _write_weights(path) -> None:
                         "dark_horse": 1.0,
                         "technical": 1.0,
                     }
-                }
+                },
             }
         ),
         encoding="utf-8",
@@ -137,7 +137,9 @@ def test_nudge_preserves_contrarian_ledger_repair_before_delta(tmp_path):
         ),
         encoding="utf-8",
     )
-    predictions.write_text(json.dumps({"predictions": [], "resolved": []}), encoding="utf-8")
+    predictions.write_text(
+        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
+    )
 
     # repair_stale_contrarian_weights derives predictions.json beside the map.
     predictions.rename(soul.parent / "predictions.json")
@@ -207,8 +209,12 @@ def test_concurrent_save_signal_weights_is_last_writer_wins(
     _run_forced_order(
         monkeypatch,
         {
-            first_label: lambda: weights.save_signal_weights(maps[first_label], str(soul)),
-            second_label: lambda: weights.save_signal_weights(maps[second_label], str(soul)),
+            first_label: lambda: weights.save_signal_weights(
+                maps[first_label], str(soul)
+            ),
+            second_label: lambda: weights.save_signal_weights(
+                maps[second_label], str(soul)
+            ),
         },
     )
 
@@ -289,7 +295,9 @@ def test_signal_and_impact_nudges_tolerate_unrelated_malformed_signal(tmp_path):
     assert data["adversarial_state"]["impact_strength"] == 1.02
 
 
-def test_failed_weight_delivery_retries_without_double_application(tmp_path, monkeypatch):
+def test_failed_weight_delivery_retries_without_double_application(
+    tmp_path, monkeypatch
+):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
 
