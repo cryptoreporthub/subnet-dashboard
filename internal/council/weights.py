@@ -86,6 +86,7 @@ def _load_raw(path: str = SOUL_MAP_PATH, *, copy_blob: bool = True) -> Dict[str,
 
 
 def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
+    """Replace the serialized blob; callers intentionally provide full-blob state."""
     from internal.store.soul_map_io import write_soul_map
 
     write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
@@ -567,8 +568,11 @@ def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
 
 
 def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
-    """Persist weights to adversarial_state.council_weights (canonical slot)
-    AND mirror to root expert_weights for legacy compatibility."""
+    """Replace the full council weight map and mirror it to the root compatibility map.
+
+    The replacement is applied to the latest locked blob, so unrelated keys are
+    retained and a same-key caller wins by serialized write order.
+    """
     path = path or SOUL_MAP_PATH
     canonical = normalize_council_weights(weights)
 
@@ -771,7 +775,7 @@ def save_signal_weights(
     signal_weights: Dict[str, Dict[str, float]],
     path: str = SOUL_MAP_PATH,
 ) -> None:
-    """Persist signal weights to adversarial_state.signal_weights."""
+    """Replace the full signal-weight map against the latest locked blob."""
     def replace_signal_weights(data: Dict[str, Any]) -> None:
         adv = data.setdefault("adversarial_state", {})
         if not isinstance(adv, dict):
@@ -808,9 +812,13 @@ def nudge_signal_weight(
         if isinstance(raw, dict):
             for raw_horizon, raw_weights in raw.items():
                 if isinstance(raw_weights, dict):
-                    signal_weights[raw_horizon] = {
-                        key: float(value) for key, value in raw_weights.items()
-                    }
+                    clean_weights = {}
+                    for key, value in raw_weights.items():
+                        try:
+                            clean_weights[key] = float(value)
+                        except (TypeError, ValueError):
+                            continue
+                    signal_weights.setdefault(raw_horizon, {}).update(clean_weights)
         horizon_weights = signal_weights.setdefault(horizon_type, {})
         before = float(horizon_weights.get(signal_name, 1.0))
         new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
