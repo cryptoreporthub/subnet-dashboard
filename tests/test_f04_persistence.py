@@ -172,19 +172,35 @@ def test_concurrent_nudges_repair_legacy_map_then_compose_deltas(tmp_path, monke
         encoding="utf-8",
     )
     original_repair = weights.repair_stale_contrarian_weights
+    original_save = weights.save_weights
     entered = [threading.Event(), threading.Event()]
+    first_saved = threading.Event()
     errors = []
     results = {}
     current = threading.local()
+    conflicts = []
 
-    def synchronized_repair(path):
+    def synchronized_save(weight_map, path, **kwargs):
         index = current.index
         entered[index].set()
         assert entered[0].wait(2)
         assert entered[1].wait(2)
-        return original_repair(path)
+        if index == 1:
+            assert first_saved.wait(2)
+        result = original_save(weight_map, path, **kwargs)
+        if index == 0:
+            first_saved.set()
+        return result
 
-    monkeypatch.setattr(weights, "repair_stale_contrarian_weights", synchronized_repair)
+    def repair_spy(path):
+        try:
+            return original_repair(path)
+        except weights.ConcurrentWeightUpdate:
+            conflicts.append(True)
+            raise
+
+    monkeypatch.setattr(weights, "save_weights", synchronized_save)
+    monkeypatch.setattr(weights, "repair_stale_contrarian_weights", repair_spy)
 
     def run(index, expert, correct):
         try:
@@ -204,6 +220,7 @@ def test_concurrent_nudges_repair_legacy_map_then_compose_deltas(tmp_path, monke
         assert not thread.is_alive()
 
     assert errors == []
+    assert conflicts == [True]
     assert results == {"quant": 1.02, "hype": 0.97}
     data = json.loads(soul.read_text(encoding="utf-8"))
     assert data["adversarial_state"]["council_weights"]["quant"] == 1.02
