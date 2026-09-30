@@ -188,6 +188,35 @@ def test_concurrent_save_signal_weights_is_last_writer_wins(
     assert data["sentinel"] == "keep"
 
 
+@pytest.mark.parametrize("first_writer", ["council", "signal"])
+def test_concurrent_disjoint_setters_preserve_both_sections(
+    tmp_path, monkeypatch, first_writer
+):
+    soul = tmp_path / "soul_map.json"
+    _write_weights(soul)
+    second_writer = "signal" if first_writer == "council" else "council"
+    council_map = {"quant": 1.31, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}
+    signal_map = {"hour": {"rsi_crossover": 1.41}, "day": {"macd_cross": 1.42}}
+    operations = {
+        "council": lambda: weights.save_weights(council_map, str(soul)),
+        "signal": lambda: weights.save_signal_weights(signal_map, str(soul)),
+    }
+
+    _run_forced_order(
+        monkeypatch,
+        {
+            first_writer: operations[first_writer],
+            second_writer: operations[second_writer],
+        },
+    )
+
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert data["adversarial_state"]["council_weights"]["quant"] == 1.31
+    assert data["expert_weights"]["quant"] == 1.31
+    assert data["adversarial_state"]["signal_weights"] == signal_map
+    assert data["sentinel"] == "keep"
+
+
 def test_save_worker_exception_propagates(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)
