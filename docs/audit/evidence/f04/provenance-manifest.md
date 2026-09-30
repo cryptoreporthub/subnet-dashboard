@@ -149,10 +149,12 @@ git -C /tmp/f04-worktree status --short
   evidence-only package) validates repository CI gates only. It is **not** F04
   package validation, F04 mechanism verification, or independent receipt
   verification.
-- For smoke run `36660928417` / job `109715295869`, the conclusion is
-  successful, but a failure-level annotation remains; annotation source is unknown.
-  The job-log endpoint returned HTTP `403`, so it is not attributed to
-  lint or another step.
+- For smoke run `36671087327`, the conclusion is successful, but a
+  failure-level annotation remains from the non-blocking Black step. The
+  retrieved job output was:
+  `black --check --line-length 88 server.py internal tests` failed with
+  `540 files would be reformatted, 198 files would be left unchanged`.
+  This is CI evidence only, not F04 package validation.
 - The smoke result is separate from F04 package validation. F04 validation is
   limited to the read-only provenance commands and content checks recorded in
   `validation-receipt.txt`.
@@ -167,10 +169,10 @@ the current source materials. This package does not claim F04 completion.
 
 | File | Source origin | Bytes | SHA-256 |
 |---|---|---:|---|
-| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36420 | `aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603` |
+| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36455 | `aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603` |
 | `f04-historical-registry-excerpt.md` | F04-only excerpt from `/cursor/stores/self/internal/stale-code-repro-registry.md` | 645 | `6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c` |
 | `derived-f04-receipt-payload.txt` | Registry `## F04 raw receipt` ` ```text ` fence bytes per extraction rule | 366 | `7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9` |
-| `validation-receipt.txt` | Generated raw provenance/content validation output | 6885 | `e114c0261c58ed02d496bd957a25e2ad338e712ba5463975034c1bd24b583032` |
+| `validation-receipt.txt` | Generated raw provenance/content validation output | 3206 | `0b86939d4ea0eb936d3618f706b7f26b0d0abbcb3d8dad751e7f49d8e736b8ed` |
 
 The standalone raw F04 artifact is unavailable in the source store, so no
 standalone raw-artifact hash can be established. The derived payload hash above
