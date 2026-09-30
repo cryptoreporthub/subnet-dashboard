@@ -150,6 +150,85 @@ def test_nudge_preserves_contrarian_ledger_repair_before_delta(tmp_path):
     assert data["expert_weights"]["quant"] == 1.02
 
 
+def test_concurrent_nudges_repair_legacy_map_then_compose_deltas(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    (soul.parent / "predictions.json").write_text(
+        json.dumps({"predictions": [], "resolved": []}), encoding="utf-8"
+    )
+    soul.write_text(
+        json.dumps(
+            {
+                "sentinel": "keep",
+                "adversarial_state": {
+                    "council_weights": {
+                        "quant": 1.0,
+                        "hype": 1.0,
+                        "contrarian": 1.8,
+                        "technical": 1.0,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    original_repair = weights.repair_stale_contrarian_weights
+    entered = [threading.Event(), threading.Event()]
+    errors = []
+    results = {}
+    current = threading.local()
+
+    def synchronized_repair(path):
+        index = current.index
+        entered[index].set()
+        assert entered[0].wait(2)
+        assert entered[1].wait(2)
+        return original_repair(path)
+
+    monkeypatch.setattr(weights, "repair_stale_contrarian_weights", synchronized_repair)
+
+    def run(index, expert, correct):
+        try:
+            current.index = index
+            results[expert] = weights.nudge_expert(expert, correct, str(soul))
+        except BaseException as exc:
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=run, args=(0, "quant", True)),
+        threading.Thread(target=run, args=(1, "hype", False)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+
+    assert errors == []
+    assert results == {"quant": 1.02, "hype": 0.97}
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert data["adversarial_state"]["council_weights"]["quant"] == 1.02
+    assert data["adversarial_state"]["council_weights"]["hype"] == 0.97
+    assert data["expert_weights"]["quant"] == 1.02
+    assert data["sentinel"] == "keep"
+    json.dumps(data)
+
+
+def test_stale_full_replacement_is_rejected_without_overwrite(tmp_path):
+    soul = tmp_path / "soul_map.json"
+    _write_weights(soul)
+    expected = weights.load_weights(str(soul))
+    assert weights.nudge_expert("quant", True, str(soul)) == 1.02
+
+    with pytest.raises(weights.ConcurrentWeightUpdate):
+        weights.save_weights(
+            {"quant": 1.2, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0},
+            str(soul),
+            expected_weights=expected,
+        )
+
+    assert weights.load_weights(str(soul))["quant"] == 1.02
+
+
 def test_concurrent_same_key_nudges_compose_and_mirror_quant(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)

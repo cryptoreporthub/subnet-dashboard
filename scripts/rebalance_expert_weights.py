@@ -55,7 +55,7 @@ def main() -> int:
         print("[dry-run] no changes persisted.")
         return 0
 
-    save_weights(after, SOUL_MAP_PATH)
+    save_weights(after, SOUL_MAP_PATH, expected_weights=before)
     for name in ("quant", "hype", "dark_horse", "technical"):
         b = float(before.get(name, 1.0))
         if abs(after[name] - b) > 0.001:

@@ -36,6 +36,10 @@ _IMPACT_STRENGTH_MIN = 0.0
 _IMPACT_STRENGTH_MAX = 2.0
 _IMPACT_STRENGTH_DELTA = 0.02
 
+
+class ConcurrentWeightUpdate(RuntimeError):
+    """A full-map replacement observed a newer weight map than its snapshot."""
+
 # Per-signal, per-horizon default weights
 DEFAULT_SIGNAL_WEIGHTS: Dict[str, Dict[str, float]] = {
     "hour": {
@@ -425,7 +429,7 @@ def rebalance_council_weights(
     if save:
         if os.environ.get("GRADING_REBASE", "").strip().lower() in {"1", "true", "yes", "on"}:
             blended = apply_rebase_guards(blended, merged_rows)
-        save_weights(blended, soul)
+        save_weights(blended, soul, expected_weights=before)
         try:
             from internal.learning.trail_bus import emit_weight_change
 
@@ -471,7 +475,14 @@ def repair_stale_contrarian_weights(
         base = os.path.dirname(path) or "data"
         predictions_path = os.path.join(base, "predictions.json")
     weights = replay_weights_from_predictions(predictions_path)
-    save_weights(weights, path)
+    raw_weights = (
+        (data.get("adversarial_state") or {}).get("council_weights")
+        if isinstance(data.get("adversarial_state"), dict)
+        else None
+    )
+    if not isinstance(raw_weights, dict):
+        raw_weights = data.get("expert_weights")
+    save_weights(weights, path, expected_weights=normalize_council_weights(raw_weights or {}))
     return True
 
 
@@ -567,16 +578,32 @@ def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
     return rebalance_council_weights(save=True)
 
 
-def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
+def save_weights(
+    weights: Dict[str, float],
+    path: Optional[str] = None,
+    *,
+    expected_weights: Optional[Dict[str, float]] = None,
+) -> None:
     """Replace the full council weight map and mirror it to the root compatibility map.
 
     The replacement is applied to the latest locked blob, so unrelated keys are
-    retained and a same-key caller wins by serialized write order.
+    retained and a same-key caller wins by serialized write order. Callers that
+    computed a map from a prior snapshot may pass ``expected_weights``; a newer
+    map then raises ``ConcurrentWeightUpdate`` instead of silently overwriting it.
     """
     path = path or SOUL_MAP_PATH
     canonical = normalize_council_weights(weights)
+    expected = normalize_council_weights(expected_weights) if expected_weights is not None else None
 
     def replace_weights(data: Dict[str, Any]) -> None:
+        if expected is not None:
+            adv = data.get("adversarial_state")
+            current_raw = adv.get("council_weights") if isinstance(adv, dict) else None
+            if not isinstance(current_raw, dict):
+                current_raw = data.get("expert_weights")
+            current = normalize_council_weights(current_raw or {})
+            if current != expected:
+                raise ConcurrentWeightUpdate("weight map changed before replacement")
         adv = data.setdefault("adversarial_state", {})
         if not isinstance(adv, dict):
             adv = {}
