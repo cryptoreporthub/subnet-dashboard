@@ -1,0 +1,22 @@
+F04_EVIDENCE_VALIDATION_BEGIN
+worktree=$(git rev-parse --show-toplevel)
+head=e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
+--- source-copy cmp ---
+brief_cmp_exit=0
+registry_cmp_exit=0
+--- source and package hashes ---
+33efd2675c9e4244ef8d3680e3840e481cd544400f7ba05eacd3cb3ae4b2d50b  /cursor/stores/self/docs/f04-design-brief.md
+33efd2675c9e4244ef8d3680e3840e481cd544400f7ba05eacd3cb3ae4b2d50b  docs/audit/evidence/f04/f04-design-brief.md
+07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c  /cursor/stores/self/internal/stale-code-repro-registry.md
+07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c  docs/audit/evidence/f04/historical-registry.md
+7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9  docs/audit/evidence/f04/derived-f04-receipt-payload.txt
+--- package content checks ---
+full_brief_present=True
+full_registry_present=True
+explicit_limitations=True
+payload_matches_registry_fence=True
+content_checks_exit=0
+--- product-code scope ---
+diff_exit=0
+?? docs/audit/
+F04_EVIDENCE_VALIDATION_END
