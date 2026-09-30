@@ -14,20 +14,21 @@ claim.
 
 ## Public copy scope and canonical preservation
 
-- The **canonical historical record** remains
+- There is no explicit authorization in the available review record to publish
+  the full historical registry. Therefore this current PR copy is narrowed to
+  the F04-only excerpt `f04-historical-registry-excerpt.md`. The canonical
+  historical record remains
   `/cursor/stores/self/internal/stale-code-repro-registry.md` (SHA-256
-  `07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c`). This
-  package's `historical-registry.md` is an immutable derivative copy of that
-  file. It is not edited, replaced, or retracted by later derivative work.
+  `07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c`) and
+  was not edited.
 - `f04-design-brief.md` in this package is a **derivative F04 review copy**.
   The 2026-09-30 Replit corrections apply only to this derivative copy. They
   do **not** imply that a later commit retracts, rewrites, or supersedes prior
   public history in the source store or in PR #1316's earlier commit
   `bf3828baed74445b821512dae4314fb875da75ee`.
-- Without separate authorization, reviewers must treat only this derivative
-  review copy (and its validation receipt) as the narrowed correction scope.
-  The canonical source-store registry and any prior public commit bytes remain
-  the preserved historical record.
+- Earlier public commit bytes, including the full-registry copy in commit
+  `bf3828baed74445b821512dae4314fb875da75ee`, were not rewritten or retracted.
+  Any history removal requires separate approval.
 - No implementation, production probe, deploy, restart, rollback, merge, or PR
   change is authorized by this manifest.
 
@@ -38,15 +39,16 @@ claim.
   `bf3828baed74445b821512dae4314fb875da75ee`.
 - Source bytes were read from `/cursor/stores/self`. The source-store files
   were not edited, replaced, or deleted.
-- `historical-registry.md` is an immutable, byte-for-byte copy of
-  `/cursor/stores/self/internal/stale-code-repro-registry.md`.
+- `f04-historical-registry-excerpt.md` is an immutable F04-only byte excerpt
+  copied from `/cursor/stores/self/internal/stale-code-repro-registry.md`; it
+  is not the full registry.
 - `f04-design-brief.md` is a derivative review copy. It was sourced from
   `/cursor/stores/self/docs/f04-design-brief.md` and then corrected per
   Replit's 2026-09-30 recommendations (resolver class label, hard-termination
   scope, registry link, and public-copy boundaries). It is **not** claimed to
   be byte-for-byte equal to the source-store brief after correction.
-- `derived-f04-receipt-payload.txt` was extracted from the historical
-  registry's `## F04 raw receipt` fenced block using the rule below. It is
+- `derived-f04-receipt-payload.txt` was extracted from the F04-only registry
+  excerpt's fenced block using the rule below. It is
   explicitly a derived payload, not a standalone raw artifact.
 - Transfer destination is this repository path: `docs/audit/evidence/f04/`.
 
@@ -68,14 +70,14 @@ Equivalent extraction at the canonical registry copy:
 ```sh
 python3 - <<'PY'
 from pathlib import Path
-text = Path('docs/audit/evidence/f04/historical-registry.md').read_text()
-section = text.split('## F04 raw receipt', 1)[1]
-start = section.index('```text\n') + len('```text\n')
-end = section.index('\n```', start)
-payload = section[start:end]
-Path('docs/audit/evidence/f04/derived-f04-receipt-payload.txt').write_bytes(payload.encode())
+import hashlib
+registry = Path('docs/audit/evidence/f04/f04-historical-registry-excerpt.md').read_bytes()
+start = registry.index(b'```text\n') + len(b'```text\n')
+end = registry.index(b'\n```', start)
+payload = registry[start:end]
+Path('docs/audit/evidence/f04/derived-f04-receipt-payload.txt').write_bytes(payload)
 print(f'payload_bytes={len(payload)}')
-print(__import__('hashlib').sha256(payload.encode()).hexdigest())
+print(hashlib.sha256(payload).hexdigest())
 PY
 ```
 
@@ -90,8 +92,8 @@ git -C /tmp/f04-worktree show --no-patch --format='PIN=%H%nDATE=%cI' e58bd17fd2b
 
 # 2. Registry immutability (canonical source-store vs package copy)
 cmp -s /cursor/stores/self/internal/stale-code-repro-registry.md \
-  /tmp/f04-worktree/docs/audit/evidence/f04/historical-registry.md
-echo "registry_cmp_exit=$?"
+  /tmp/f04-worktree/docs/audit/evidence/f04/f04-historical-registry-excerpt.md
+echo "full_registry_cmp_exit=$? (expected 1: current PR copy is F04-only)"
 
 # 3. Package hashes (record stdout exactly)
 sha256sum /tmp/f04-worktree/docs/audit/evidence/f04/*
@@ -101,11 +103,10 @@ python3 - <<'PY'
 import hashlib
 from pathlib import Path
 pkg = Path('/tmp/f04-worktree/docs/audit/evidence/f04')
-registry = (pkg / 'historical-registry.md').read_text()
-section = registry.split('## F04 raw receipt', 1)[1]
-start = section.index('```text\n') + len('```text\n')
-end = section.index('\n```', start)
-expected = section[start:end].encode()
+registry = (pkg / 'f04-historical-registry-excerpt.md').read_bytes()
+start = registry.index(b'```text\n') + len(b'```text\n')
+end = registry.index(b'\n```', start)
+expected = registry[start:end]
 actual = (pkg / 'derived-f04-receipt-payload.txt').read_bytes()
 print('payload_matches_registry_fence=', actual == expected)
 print('derived_payload_sha256=', hashlib.sha256(actual).hexdigest())
@@ -134,8 +135,8 @@ git -C /tmp/f04-worktree status --short
   code are recorded**.
 - The source store (`/cursor/stores/self`) and this package may diverge after
   derivative corrections. In that case:
-  - `historical-registry.md` must remain equal to the canonical registry
-    (required `cmp_exit=0`).
+  - `f04-historical-registry-excerpt.md` is intentionally only the F04 suffix,
+    so a full-registry equality check is expected to return `cmp_exit=1`.
   - `f04-design-brief.md` is explicitly allowed to differ from the
     source-store brief once Replit corrections are applied to the derivative
     copy only.
@@ -148,24 +149,28 @@ git -C /tmp/f04-worktree status --short
   evidence-only package) validates repository CI gates only. It is **not** F04
   package validation, F04 mechanism verification, or independent receipt
   verification.
-- PR #1316 head `bf3828ba` recorded `smoke` conclusion `success`, while the
-  non-blocking `Lint report` step emitted a failure-level annotation
-  (`Process completed with exit code 1`). That lint annotation is unresolved
-  CI noise relative to F04 evidence and must not be treated as F04 validation
-  output.
-- No HTTP `403` response in unrelated repository code or CI log lines
-  constitutes F04 package validation. F04 validation is limited to the
-  read-only provenance commands and content checks recorded in
+- For smoke run `36660928417` / job `109715295869`, the conclusion is
+  successful, but a failure-level annotation remains; annotation source is unknown.
+  The job-log endpoint returned HTTP `403`, so it is not attributed to
+  lint or another step.
+- The smoke result is separate from F04 package validation. F04 validation is
+  limited to the read-only provenance commands and content checks recorded in
   `validation-receipt.txt`.
+
+## F04 evidence-chain sign-off
+
+**BLOCKED.** The standalone raw artifact is unavailable, its standalone hash
+cannot be established, and provenance cannot be independently completed from
+the current source materials. This package does not claim F04 completion.
 
 ## Package hashes and sizes
 
 | File | Source origin | Bytes | SHA-256 |
 |---|---|---:|---|
-| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36418 | `d28c01d5bcc65385be82735a1bff13227dc34c947589c924a979962b8b47cc80` |
-| `historical-registry.md` | `/cursor/stores/self/internal/stale-code-repro-registry.md` | 9473 | `07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c` |
+| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36420 | `aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603` |
+| `f04-historical-registry-excerpt.md` | F04-only excerpt from `/cursor/stores/self/internal/stale-code-repro-registry.md` | 645 | `6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c` |
 | `derived-f04-receipt-payload.txt` | Registry `## F04 raw receipt` ` ```text ` fence bytes per extraction rule | 366 | `7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9` |
-| `validation-receipt.txt` | Generated raw provenance/content validation output | 5423 | `deeaba7a7aa54ea7e578058942ba5e617c9ea932aeb0dd33faf00496625da8c8` |
+| `validation-receipt.txt` | Generated raw provenance/content validation output | 6885 | `e114c0261c58ed02d496bd957a25e2ad338e712ba5463975034c1bd24b583032` |
 
 The standalone raw F04 artifact is unavailable in the source store, so no
 standalone raw-artifact hash can be established. The derived payload hash above

@@ -1,85 +1,137 @@
 F04_EVIDENCE_VALIDATION_BEGIN
-worktree=/tmp/f04-worktree
-head=bf3828baed74445b821512dae4314fb875da75ee
-canonical_pin=e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
-revision=replit-corrections-2026-09-30
-phase=pre-commit-push
---- public-copy scope ---
-derivative_brief=true
-canonical_registry_preserved=true
-prior_public_history_retracted=false
---- source-copy cmp ---
-registry_cmp_exit=0
-brief_cmp_exit=1
-brief_source_store_equality_required=false
-brief_derivative_copy_expected=true
---- source and package hashes ---
-33efd2675c9e4244ef8d3680e3840e481cd544400f7ba05eacd3cb3ae4b2d50b  /cursor/stores/self/docs/f04-design-brief.md
-d28c01d5bcc65385be82735a1bff13227dc34c947589c924a979962b8b47cc80  docs/audit/evidence/f04/f04-design-brief.md
-07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c  /cursor/stores/self/internal/stale-code-repro-registry.md
-07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c  docs/audit/evidence/f04/historical-registry.md
-7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9  docs/audit/evidence/f04/derived-f04-receipt-payload.txt
---- derived payload extraction (one-LF rule) ---
-payload_matches_registry_fence=True
-derived_payload_sha256=7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9
---- package content checks ---
-full_brief_present=True
-full_registry_present=True
-explicit_limitations=True
-public_copy_scope=True
-source_store_equality_limitation=True
-derived_payload_rule=True
-prediction_resolver_scheduler_label=True
-no_wrong_resolver_scheduler_label=True
-hard_termination_unverified=True
-no_atomic_write_cleanup_on_restart=True
-ci_smoke_not_f04_validation=True
-content_checks_exit=0
---- count convention at pin ---
+phase=local_documentation_only_no_commit_push_pr_mutation
+smoke_run=36660928417 job=109715295869 conclusion=success annotation_source=unknown job_log_http=403
+smoke_is_f04_validation=false
+--- pin ---
+command=git -C /tmp/f04-evidence-worktree show --no-patch --format=PIN=%H%nDATE=%cI e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
+stdout_begin
 PIN=e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
 DATE=2026-09-28T05:04:24-07:00
---- _save_raw matches ---
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/calibration/pipeline.py:78:    _save_raw(data, soul_map_path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/formula_versions.py:216:    _save_raw(data, soul_map_path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/rotation_tokens.py:92:        _save_raw(data, SOUL_MAP_PATH)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/score_snapshots.py:735:                weights._save_raw(data, path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/weights.py:88:def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/weights.py:576:    _save_raw(data, path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/weights.py:748:    _save_raw(data, path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/weights.py:868:    _save_raw(data, path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/learning/prediction_loop.py:514:        _save_raw(data)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/learning/prediction_loop.py:585:        _save_raw(data)
---- write_soul_map runtime matches ---
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/mindmap_bridge.py:48:            write_soul_map(
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/resolver_scheduler.py:735:            write_soul_map(_mutator, self.soul_map_path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/resolver_scheduler.py:1176:            write_soul_map(_mutator, self.soul_map_path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/council/weights.py:91:    write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/indicators/indicator_scheduler.py:244:        write_soul_map(
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/judges/weights.py:58:    write_soul_map(_mutate, path=path or SOUL_MAP_PATH)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/liveness.py:399:            write_soul_map(mutator)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/scheduler.py:222:            write_soul_map(_mutator, self.soul_map_path)
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/simivision/engine.py:97:    write_soul_map(
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/store/soul_map_io.py:108:    through write_soul_map() are always immediately visible regardless of the cache.
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:internal/store/soul_map_io.py:127:def write_soul_map(
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:scripts/compact_soul_map.py:123:    write_soul_map(_mutator, path=path)
---- test write_soul_map counts ---
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:tests/test_api_handler_timeouts.py:1
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:tests/test_judge_weights.py:3
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:tests/test_ops_readiness.py:1
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:tests/test_soul_map_io.py:14
-e58bd17fd2b24a821c1c59a92111c4b4744f8d6a:tests/test_soul_map_io_failure.py:3
-count_convention_exit=0
---- product-code scope ---
-tracked_diff_exit=0
-docs/audit/evidence/f04/derived-f04-receipt-payload.txt
-docs/audit/evidence/f04/f04-design-brief.md
-docs/audit/evidence/f04/historical-registry.md
-docs/audit/evidence/f04/provenance-manifest.md
-docs/audit/evidence/f04/validation-receipt.txt
- M docs/audit/evidence/f04/f04-design-brief.md
- M docs/audit/evidence/f04/provenance-manifest.md
- M docs/audit/evidence/f04/validation-receipt.txt
---- ci smoke distinction ---
-smoke_green_is_f04_package_validation=false
-lint_nonblocking_failure_annotation_unresolved=true
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- source_registry_sha ---
+command=sha256sum /cursor/stores/self/internal/stale-code-repro-registry.md
+stdout_begin
+07071ddde786519059eefc173cb61b118350c0a971ae1be49dc10e39ebd07d7c  /cursor/stores/self/internal/stale-code-repro-registry.md
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- package_sha ---
+command=sha256sum docs/audit/evidence/f04/f04-design-brief.md docs/audit/evidence/f04/f04-historical-registry-excerpt.md docs/audit/evidence/f04/derived-f04-receipt-payload.txt
+stdout_begin
+d99fe6325e2e9cafa5260d8aa54116ecaf47f558301b940a3faf855aa42a58fc  docs/audit/evidence/f04/f04-design-brief.md
+6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c  docs/audit/evidence/f04/f04-historical-registry-excerpt.md
+7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9  docs/audit/evidence/f04/derived-f04-receipt-payload.txt
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- byte_exact_extraction ---
+command=python3 -c from pathlib import Path
+import hashlib
+s=Path('/cursor/stores/self/internal/stale-code-repro-registry.md').read_bytes(); e=Path('docs/audit/evidence/f04/f04-historical-registry-excerpt.md').read_bytes(); m=b'## F04 raw receipt\n'; assert s[s.index(m):]==e
+x=e.index(b'```text\n')+8; y=e.index(b'\n```',x); p=Path('docs/audit/evidence/f04/derived-f04-receipt-payload.txt').read_bytes(); assert p==e[x:y]
+print('f04_excerpt_matches_source_suffix=True'); print('payload_matches_registry_fence=True'); print('payload_sha256='+hashlib.sha256(p).hexdigest())
+
+stdout_begin
+f04_excerpt_matches_source_suffix=True
+payload_matches_registry_fence=True
+payload_sha256=7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- count_convention ---
+command=git -C /tmp/f04-evidence-worktree grep -n -E _save_raw[[:space:]]*\( e58bd17fd2b24a821c1c59a92111c4b4744f8d6 -- *.py
+stdout_begin
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/calibration/pipeline.py:78:    _save_raw(data, soul_map_path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/formula_versions.py:216:    _save_raw(data, soul_map_path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/rotation_tokens.py:92:        _save_raw(data, SOUL_MAP_PATH)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/score_snapshots.py:735:                weights._save_raw(data, path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/weights.py:88:def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/weights.py:576:    _save_raw(data, path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/weights.py:748:    _save_raw(data, path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/council/weights.py:868:    _save_raw(data, path)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/learning/prediction_loop.py:514:        _save_raw(data)
+e58bd17fd2b24a821c1c59a92111c4b4744f8d6:internal/learning/prediction_loop.py:585:        _save_raw(data)
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- content_checks ---
+command=python3 -c from pathlib import Path
+b=Path('docs/audit/evidence/f04/f04-design-brief.md').read_text(); m=Path('docs/audit/evidence/f04/provenance-manifest.md').read_text(); q={'full_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6a' in b,'no_truncated_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6`' not in b,'narrowed':'F04-only excerpt' in m,'unknown_annotation':'annotation source is unknown' in m and '403' in m,'blocked':'**BLOCKED.**' in m}; [print(k+'='+str(v)) for k,v in q.items()]; raise SystemExit(0 if all(q.values()) else 1)
+
+stdout_begin
+full_pin=True
+no_truncated_pin=True
+narrowed=True
+unknown_annotation=False
+blocked=True
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=1
+--- product_code_scope ---
+command=git -C /tmp/f04-evidence-worktree diff --name-only e58bd17fd2b24a821c1c59a92111c4b4744f8d6a -- *.py
+stdout_begin
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+F04_SIGNOFF=BLOCKED
+reason=standalone_raw_artifact_unavailable_and_provenance_unresolved
 F04_EVIDENCE_VALIDATION_END
+--- final_package_hashes_after_manifest-relevant-edits ---
+command=sha256sum docs/audit/evidence/f04/*
+stdout_begin
+7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9  docs/audit/evidence/f04/derived-f04-receipt-payload.txt
+aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603  docs/audit/evidence/f04/f04-design-brief.md
+6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c  docs/audit/evidence/f04/f04-historical-registry-excerpt.md
+c10cc2b66d7058f4d3e1d0cc8a95bff060bda50233eaa8cdb63440c07284b305  docs/audit/evidence/f04/provenance-manifest.md
+f97db3315affcc036b7a0c48519fba00b510a9d1ff9daa8314adb66dcbb01d96  docs/audit/evidence/f04/validation-receipt.txt
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+--- content_checks_rerun ---
+command=python3 -c from pathlib import Path
+b=Path('docs/audit/evidence/f04/f04-design-brief.md').read_text(); m=Path('docs/audit/evidence/f04/provenance-manifest.md').read_text(); q={'full_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6a' in b,'no_truncated_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6`' not in b,'narrowed':'F04-only excerpt' in m,'unknown_annotation':'annotation source is unknown' in m and '403' in m,'blocked':'**BLOCKED.**' in m}; [print(k+'='+str(v)) for k,v in q.items()]; raise SystemExit(0 if all(q.values()) else 1)
+stdout_begin
+full_pin=True
+no_truncated_pin=True
+narrowed=True
+unknown_annotation=False
+blocked=True
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=1
+final_content_checks_exit=1
+--- content_checks_final ---
+command=python3 -c from pathlib import Path
+b=Path('docs/audit/evidence/f04/f04-design-brief.md').read_text(); m=Path('docs/audit/evidence/f04/provenance-manifest.md').read_text(); q={'full_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6a' in b,'no_truncated_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6`' not in b,'narrowed':'F04-only excerpt' in m,'unknown_annotation':'annotation source is unknown' in m and '403' in m,'blocked':'**BLOCKED.**' in m}; [print(k+'='+str(v)) for k,v in q.items()]; raise SystemExit(0 if all(q.values()) else 1)
+stdout_begin
+full_pin=True
+no_truncated_pin=True
+narrowed=True
+unknown_annotation=True
+blocked=True
+stdout_end
+stderr_begin
+<empty>
+stderr_end
+exit_code=0
+final_validation_exit=0

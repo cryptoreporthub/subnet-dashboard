@@ -91,7 +91,7 @@ proposal. `UNRESOLVED` means that the current behavior is visible in source
 but the cross-writer contract is not approved.
 
 **Pinned-tree count convention (canonical SHA
-`e58bd17fd2b24a821c1c59a92111c4b4744f8d6`):**
+`e58bd17fd2b24a821c1c59a92111c4b4744f8d6a`):**
 
 - The `_save_raw` count is **nine application/runtime call expressions**:
   `internal/calibration/pipeline.py:78`,
@@ -492,7 +492,8 @@ includes:
 
 The existing evidence package contains one raw Cursor receipt for local F04
 mechanism verification. The stored receipt is linked in
-[`historical-registry.md`](historical-registry.md) (derivative copy of the
+[`f04-historical-registry-excerpt.md`](f04-historical-registry-excerpt.md)
+(F04-only derivative excerpt of the
 canonical source-store registry; canonical record preserved at
 `/cursor/stores/self/internal/stale-code-repro-registry.md`),
 under **F04 raw receipt**. It records the pin, exit code, final JSON fields,
