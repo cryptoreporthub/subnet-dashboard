@@ -119,6 +119,35 @@ def test_same_key_nudges_compose_and_mirror_quant(tmp_path):
     assert data["sentinel"] == "keep"
 
 
+def test_nudge_preserves_contrarian_ledger_repair_before_delta(tmp_path):
+    soul = tmp_path / "soul_map.json"
+    predictions = tmp_path / "predictions.json"
+    soul.write_text(
+        json.dumps(
+            {
+                "adversarial_state": {
+                    "council_weights": {
+                        "quant": 1.0,
+                        "hype": 1.0,
+                        "contrarian": 1.8,
+                        "technical": 1.0,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    predictions.write_text(json.dumps({"predictions": [], "resolved": []}), encoding="utf-8")
+
+    # repair_stale_contrarian_weights derives predictions.json beside the map.
+    predictions.rename(soul.parent / "predictions.json")
+    assert weights.nudge_expert("quant", True, str(soul)) == 1.02
+    data = json.loads(soul.read_text(encoding="utf-8"))
+    assert "contrarian" not in data["adversarial_state"]["council_weights"]
+    assert data["adversarial_state"]["council_weights"]["dark_horse"] == 1.0
+    assert data["expert_weights"]["quant"] == 1.02
+
+
 def test_concurrent_same_key_nudges_compose_and_mirror_quant(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     _write_weights(soul)

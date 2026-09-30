@@ -602,6 +602,9 @@ def nudge_expert(
     if not expert:
         return None
     path = path or SOUL_MAP_PATH
+    # Preserve the legacy contrarian-ledger repair that load_weights() used to
+    # trigger before applying a nudge; the repair produces a fresh full map.
+    repair_stale_contrarian_weights(path)
     base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
