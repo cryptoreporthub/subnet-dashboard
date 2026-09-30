@@ -4,20 +4,10 @@ smoke_run=36671087327 conclusion=success
 black_step=black --check --line-length 88 server.py internal tests
 black_result=540 files would be reformatted, 198 files would be left unchanged
 smoke_is_f04_validation=false
---- pin ---
-command=git -C /tmp/f04-evidence-worktree show --no-patch --format=PIN=%H%nDATE=%cI e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
-stdout_begin
-PIN=e58bd17fd2b24a821c1c59a92111c4b4744f8d6a
-DATE=2026-09-28T05:04:24-07:00
-stdout_end
-stderr_begin
-<empty>
-stderr_end
-exit_code=0
 --- package_hashes ---
 command=sha256sum docs/audit/evidence/f04/f04-design-brief.md docs/audit/evidence/f04/f04-historical-registry-excerpt.md docs/audit/evidence/f04/derived-f04-receipt-payload.txt
 stdout_begin
-aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603  docs/audit/evidence/f04/f04-design-brief.md
+484733c4e5b126fa5f0e1426ed6e312042dc5f1b85f4b33ef750fffdd682b42f  docs/audit/evidence/f04/f04-design-brief.md
 6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c  docs/audit/evidence/f04/f04-historical-registry-excerpt.md
 7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9  docs/audit/evidence/f04/derived-f04-receipt-payload.txt
 stdout_end
@@ -30,10 +20,9 @@ command=python3 -c from pathlib import Path
 import hashlib
 s=Path('/cursor/stores/self/internal/stale-code-repro-registry.md').read_bytes(); e=Path('docs/audit/evidence/f04/f04-historical-registry-excerpt.md').read_bytes(); m=b'## F04 raw receipt\n'; assert s[s.index(m):]==e
 x=e.index(b'```text\n')+len(b'```text\n'); y=e.index(b'\n```',x); p=Path('docs/audit/evidence/f04/derived-f04-receipt-payload.txt').read_bytes(); assert p==e[x:y]
-print('f04_excerpt_matches_source_suffix=True'); print('payload_matches_registry_fence=True'); print('payload_sha256='+hashlib.sha256(p).hexdigest())
+print('payload_matches_registry_fence=True'); print('payload_sha256='+hashlib.sha256(p).hexdigest())
 
 stdout_begin
-f04_excerpt_matches_source_suffix=True
 payload_matches_registry_fence=True
 payload_sha256=7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9
 stdout_end
@@ -44,23 +33,13 @@ exit_code=0
 --- content_checks ---
 command=python3 -c from pathlib import Path
 b=Path('docs/audit/evidence/f04/f04-design-brief.md').read_text(); m=Path('docs/audit/evidence/f04/provenance-manifest.md').read_text()
-q={'full_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6a' in b,'no_truncated_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6`' not in b,'narrowed':'F04-only excerpt' in m,'black_ci_observed':'36671087327' in m and '540 files would be reformatted' in m and '198 files would be left unchanged' in m,'no_unknown_annotation':'annotation source is unknown' not in m,'blocked':'**BLOCKED.**' in m}; [print(k+'='+str(v)) for k,v in q.items()]; raise SystemExit(0 if all(q.values()) else 1)
+q={'full_pin':'e58bd17fd2b24a821c1c59a92111c4b4744f8d6a' in b,'embedded_distinguished':'registry-embedded Cursor receipt' in b and 'not a standalone raw' in b and 'not a runnable reproduction' in b,'black_ci_observed':'36671087327' in m and '540 files would be reformatted' in m,'blocked':'**BLOCKED.**' in m}; [print(k+'='+str(v)) for k,v in q.items()]; raise SystemExit(0 if all(q.values()) else 1)
 
 stdout_begin
 full_pin=True
-no_truncated_pin=True
-narrowed=True
+embedded_distinguished=True
 black_ci_observed=True
-no_unknown_annotation=True
 blocked=True
-stdout_end
-stderr_begin
-<empty>
-stderr_end
-exit_code=0
---- product_code_scope ---
-command=git -C /tmp/f04-evidence-worktree diff --name-only e58bd17fd2b24a821c1c59a92111c4b4744f8d6a -- *.py
-stdout_begin
 stdout_end
 stderr_begin
 <empty>

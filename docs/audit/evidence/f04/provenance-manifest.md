@@ -169,10 +169,10 @@ the current source materials. This package does not claim F04 completion.
 
 | File | Source origin | Bytes | SHA-256 |
 |---|---|---:|---|
-| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36455 | `aa5786dba6bc1921ef6b6b97aa8cb1d6c709a116eb69da6e4d49769a56f8a603` |
+| `f04-design-brief.md` | Derivative review copy (source: `/cursor/stores/self/docs/f04-design-brief.md`, Replit corrections applied) | 36553 | `484733c4e5b126fa5f0e1426ed6e312042dc5f1b85f4b33ef750fffdd682b42f` |
 | `f04-historical-registry-excerpt.md` | F04-only excerpt from `/cursor/stores/self/internal/stale-code-repro-registry.md` | 645 | `6a82494203d0afdb8ee4424dece8e127f70fd80a5f2ab81ac36789e78869684c` |
 | `derived-f04-receipt-payload.txt` | Registry `## F04 raw receipt` ` ```text ` fence bytes per extraction rule | 366 | `7058129a0414f713a0ce5a4e1ab74bd2b8ff5ff96f2ece49d6a492c919fd8cc9` |
-| `validation-receipt.txt` | Generated raw provenance/content validation output | 3206 | `0b86939d4ea0eb936d3618f706b7f26b0d0abbcb3d8dad751e7f49d8e736b8ed` |
+| `validation-receipt.txt` | Generated raw provenance/content validation output | 2520 | `ffb88f497122e0d12c5e86ba5e2804e63e4d17f8e83c1bd881269b3dcbb28383` |
 
 The standalone raw F04 artifact is unavailable in the source store, so no
 standalone raw-artifact hash can be established. The derived payload hash above

@@ -490,8 +490,9 @@ includes:
 - no network or production access in local synthetic testing; and
 - an explicit boundary stating what remains unverified.
 
-The existing evidence package contains one raw Cursor receipt for local F04
-mechanism verification. The stored receipt is linked in
+The existing evidence package contains one **registry-embedded Cursor receipt
+payload** for local F04 mechanism verification. It is not a standalone raw
+artifact and is not a runnable reproduction. The stored payload is linked in
 [`f04-historical-registry-excerpt.md`](f04-historical-registry-excerpt.md)
 (F04-only derivative excerpt of the
 canonical source-store registry; canonical record preserved at
