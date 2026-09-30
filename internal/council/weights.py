@@ -91,6 +91,13 @@ def _save_raw(data: Dict[str, Any], path: str = SOUL_MAP_PATH) -> None:
     write_soul_map(lambda blob: (blob.clear(), blob.update(data)), path)
 
 
+def _mutate_raw(mutator: Any, path: str = SOUL_MAP_PATH) -> Dict[str, Any]:
+    """Apply a mutation to the latest serialized blob under the store lock."""
+    from internal.store.soul_map_io import write_soul_map
+
+    return write_soul_map(mutator, path)
+
+
 def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
     """Merge legacy ``contrarian`` into ``dark_horse``; return canonical experts only.
 
@@ -563,17 +570,19 @@ def save_weights(weights: Dict[str, float], path: Optional[str] = None) -> None:
     """Persist weights to adversarial_state.council_weights (canonical slot)
     AND mirror to root expert_weights for legacy compatibility."""
     path = path or SOUL_MAP_PATH
-    data = _load_raw(path)
-    adv = data.setdefault("adversarial_state", {})
-    if not isinstance(adv, dict):
-        adv = {}
-        data["adversarial_state"] = adv
     canonical = normalize_council_weights(weights)
-    adv["council_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
-    adv["last_weight_update"] = _now_iso()
-    # Mirror to root expert_weights so legacy readers always see learned values.
-    data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
-    _save_raw(data, path)
+
+    def replace_weights(data: Dict[str, Any]) -> None:
+        adv = data.setdefault("adversarial_state", {})
+        if not isinstance(adv, dict):
+            adv = {}
+            data["adversarial_state"] = adv
+        adv["council_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
+        adv["last_weight_update"] = _now_iso()
+        # Mirror to root expert_weights so legacy readers always see learned values.
+        data["expert_weights"] = {k: round(float(v), 4) for k, v in canonical.items()}
+
+    _mutate_raw(replace_weights, path)
 
 
 def nudge_expert(
@@ -589,23 +598,50 @@ def nudge_expert(
     if not expert:
         return None
     path = path or SOUL_MAP_PATH
-    weights = load_weights(path)
-    if expert not in weights:
-        return None
     base = (
         (delta_correct if delta_correct is not None else _LEARNING_DELTA_CORRECT)
         if correct
         else (delta_wrong if delta_wrong is not None else _LEARNING_DELTA_WRONG)
     )
     delta = round(base * max(0.0, float(scale)), 4)
-    before = float(weights[expert])
-    after = round(
-        max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
-        4,
+    desired: Optional[float] = None
+
+    def apply_delta(data: Dict[str, Any]) -> None:
+        nonlocal desired
+        adv = data.get("adversarial_state")
+        raw = adv.get("council_weights") if isinstance(adv, dict) else None
+        if not isinstance(raw, dict):
+            sms = data.get("soul_map_state")
+            raw = sms.get("expert_weights") if isinstance(sms, dict) else None
+        if not isinstance(raw, dict):
+            raw = data.get("expert_weights")
+        weights = normalize_council_weights(raw if isinstance(raw, dict) else {})
+        if expert not in weights:
+            return
+        before = float(weights[expert])
+        desired = round(
+            max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta)),
+            4,
+        )
+        weights[expert] = desired
+        canonical = {k: round(float(v), 4) for k, v in weights.items()}
+        adv = data.setdefault("adversarial_state", {})
+        if not isinstance(adv, dict):
+            adv = {}
+            data["adversarial_state"] = adv
+        adv["council_weights"] = canonical
+        adv["last_weight_update"] = _now_iso()
+        data["expert_weights"] = dict(canonical)
+
+    persisted = _mutate_raw(apply_delta, path)
+    root_weights = persisted.get("expert_weights")
+    return (
+        desired
+        if desired is not None
+        and isinstance(root_weights, dict)
+        and root_weights.get(expert) == desired
+        else None
     )
-    weights[expert] = after
-    save_weights(weights, path)
-    return after
 
 
 def detect_regime(market_data: Optional[Dict[str, Any]] = None) -> str:
@@ -736,16 +772,17 @@ def save_signal_weights(
     path: str = SOUL_MAP_PATH,
 ) -> None:
     """Persist signal weights to adversarial_state.signal_weights."""
-    data = _load_raw(path)
-    adv = data.setdefault("adversarial_state", {})
-    if not isinstance(adv, dict):
-        adv = {}
-        data["adversarial_state"] = adv
-    adv["signal_weights"] = {
-        horizon: {k: round(float(v), 4) for k, v in weights.items()}
-        for horizon, weights in signal_weights.items()
-    }
-    _save_raw(data, path)
+    def replace_signal_weights(data: Dict[str, Any]) -> None:
+        adv = data.setdefault("adversarial_state", {})
+        if not isinstance(adv, dict):
+            adv = {}
+            data["adversarial_state"] = adv
+        adv["signal_weights"] = {
+            horizon: {k: round(float(v), 4) for k, v in weights.items()}
+            for horizon, weights in signal_weights.items()
+        }
+
+    _mutate_raw(replace_signal_weights, path)
 
 
 def nudge_signal_weight(
@@ -758,15 +795,41 @@ def nudge_signal_weight(
     extra: Optional[Dict[str, Any]] = None,
 ) -> Optional[float]:
     """Nudge a single signal weight up (correct) or down (wrong), clamped to [0.1, 2.0]."""
-    signal_weights = load_signal_weights(path)
-    horizon_weights = signal_weights.setdefault(horizon_type, {})
     base = _LEARNING_DELTA_CORRECT if correct else _LEARNING_DELTA_WRONG
     delta = base * max(0.0, float(scale))
-    current = horizon_weights.get(signal_name, 1.0)
-    before = float(current)
-    new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, current + delta))
-    horizon_weights[signal_name] = round(new_val, 4)
-    save_signal_weights(signal_weights, path)
+    before = 1.0
+    new_val = 1.0
+
+    def apply_signal_delta(data: Dict[str, Any]) -> None:
+        nonlocal before, new_val
+        signal_weights = copy.deepcopy(DEFAULT_SIGNAL_WEIGHTS)
+        adv = data.get("adversarial_state")
+        raw = adv.get("signal_weights") if isinstance(adv, dict) else None
+        if isinstance(raw, dict):
+            for raw_horizon, raw_weights in raw.items():
+                if isinstance(raw_weights, dict):
+                    signal_weights[raw_horizon] = {
+                        key: float(value) for key, value in raw_weights.items()
+                    }
+        horizon_weights = signal_weights.setdefault(horizon_type, {})
+        before = float(horizon_weights.get(signal_name, 1.0))
+        new_val = max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, before + delta))
+        horizon_weights[signal_name] = round(new_val, 4)
+        target = data.setdefault("adversarial_state", {})
+        if not isinstance(target, dict):
+            target = {}
+            data["adversarial_state"] = target
+        target["signal_weights"] = {
+            raw_horizon: {key: round(float(value), 4) for key, value in raw_weights.items()}
+            for raw_horizon, raw_weights in signal_weights.items()
+        }
+
+    persisted = _mutate_raw(apply_signal_delta, path)
+    persisted_adv = persisted.get("adversarial_state")
+    persisted_signal = persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
+    persisted_horizon = persisted_signal.get(horizon_type) if isinstance(persisted_signal, dict) else None
+    if not isinstance(persisted_horizon, dict) or persisted_horizon.get(signal_name) != round(new_val, 4):
+        return None
     try:
         from internal.learning.trail_bus import emit_weight_change
 
@@ -858,14 +921,16 @@ def save_impact_strength(strength: float, path: Optional[str] = None) -> float:
     """Persist impact_strength under adversarial_state for SimiVision learning."""
     path = path or SOUL_MAP_PATH
     clamped = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, float(strength)))
-    data = _load_raw(path)
-    adv = data.setdefault("adversarial_state", {})
-    if not isinstance(adv, dict):
-        adv = {}
-        data["adversarial_state"] = adv
-    adv["impact_strength"] = round(clamped, 4)
-    adv["last_impact_strength_update"] = _now_iso()
-    _save_raw(data, path)
+
+    def replace_impact_strength(data: Dict[str, Any]) -> None:
+        adv = data.setdefault("adversarial_state", {})
+        if not isinstance(adv, dict):
+            adv = {}
+            data["adversarial_state"] = adv
+        adv["impact_strength"] = round(clamped, 4)
+        adv["last_impact_strength_update"] = _now_iso()
+
+    _mutate_raw(replace_impact_strength, path)
     return clamped
 
 
@@ -887,13 +952,35 @@ def nudge_impact_strength(
     if os.environ.get("IMPACT_STRENGTH", "").strip() != "":
         return load_impact_strength(path)
     tier_l = str(tier or "").lower()
-    current = load_impact_strength(path)
     if tier_l == "large":
         delta = -_IMPACT_STRENGTH_DELTA if correct else _IMPACT_STRENGTH_DELTA
     else:
         # small / mid / unknown
         delta = _IMPACT_STRENGTH_DELTA if correct else -_IMPACT_STRENGTH_DELTA
-    return save_impact_strength(current + delta, path)
+    new_value = DEFAULT_IMPACT_STRENGTH
+
+    def apply_impact_delta(data: Dict[str, Any]) -> None:
+        nonlocal new_value
+        adv = data.get("adversarial_state")
+        current = DEFAULT_IMPACT_STRENGTH
+        if isinstance(adv, dict) and adv.get("impact_strength") is not None:
+            try:
+                current = float(adv["impact_strength"])
+            except (TypeError, ValueError):
+                pass
+        new_value = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta))
+        target = data.setdefault("adversarial_state", {})
+        if not isinstance(target, dict):
+            target = {}
+            data["adversarial_state"] = target
+        target["impact_strength"] = round(new_value, 4)
+        target["last_impact_strength_update"] = _now_iso()
+
+    persisted = _mutate_raw(apply_impact_delta, path)
+    persisted_adv = persisted.get("adversarial_state")
+    if isinstance(persisted_adv, dict) and persisted_adv.get("impact_strength") == round(new_value, 4):
+        return new_value
+    return load_impact_strength(path)
 
 
 def compute_weighted_signal_score(
