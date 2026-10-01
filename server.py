@@ -1027,18 +1027,23 @@ def _today_daily_pick_for_board() -> Optional[Dict[str, Any]]:
 
 
 def _registry_shell_subnets() -> List[Dict[str, Any]]:
-    """Registry-only rows for fast homepage shell — no live feed, no blocking network.
+    """Registry-first rows with a bounded live fallback for the homepage shell.
 
     ``use_tmc_names=False`` keeps the 8s emergency-prime budget from being blown
-    by a slow TaoMarketCap fetch (up to a 25s deadline), which used to wedge GET /
-    on the "Loading council desk…" shell instead of upgrading to the real page.
+    by a slow TaoMarketCap fetch. A missing local registry still gets a short,
+    bounded live-feed attempt so a fresh volume keeps subnet context.
     """
     from internal.subnet_names import enrich_subnet_rows
 
-    subnets = enrich_subnet_rows(
-        list(load_data("config/registry.json").values()),
-        use_tmc_names=False,
-    )
+    local_registry = load_data("config/registry.json")
+    rows = list(local_registry.values()) if isinstance(local_registry, dict) else []
+    if not rows:
+        try:
+            rows = load_subnets_source(timeout=2.0)
+        except Exception as exc:
+            logger.debug("homepage shell live subnet fallback failed: %s", exc)
+            rows = []
+    subnets = enrich_subnet_rows(rows, use_tmc_names=False)
     return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
 
 
