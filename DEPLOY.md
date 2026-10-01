@@ -55,9 +55,6 @@ If CI fails with `insufficient resources to create new machine with existing vol
 Recovery (manual or re-run workflow):
 
 ```bash
-flyctl machines list -a subnet-dashboard          # expect none
-flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
-./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
 if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then
   echo "ABORT: unable to inspect checkout status"
   exit 1
@@ -74,6 +71,27 @@ if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then
   echo "ABORT: checkout HEAD is not a valid commit"
   exit 1
 fi
+if ! MACHINE_JSON="$(flyctl machines list -a subnet-dashboard --json)"; then
+  echo "ABORT: unable to inspect Fly machines; no recovery mutation attempted"
+  exit 1
+fi
+if ! MACHINE_COUNT="$(printf '%s' "$MACHINE_JSON" | python3 -c '
+import json, sys
+machines = json.load(sys.stdin)
+print(len(machines))
+')"; then
+  echo "ABORT: unable to parse Fly machine state; no recovery mutation attempted"
+  exit 1
+fi
+if [ "$MACHINE_COUNT" -ne 0 ]; then
+  echo "ABORT: expected zero Fly machines before volume recovery; no recovery mutation attempted"
+  exit 1
+fi
+if ! flyctl volumes list -a subnet-dashboard; then
+  echo "ABORT: unable to inspect Fly volumes; no recovery mutation attempted"
+  exit 1
+fi
+./scripts/fly_volume_recover.sh                     # preserves volumes unless explicitly confirmed
 if ! flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
   --build-arg "GIT_SHA=${GIT_SHA}"; then
   echo "ABORT: Fly recovery deploy failed"

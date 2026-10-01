@@ -129,19 +129,80 @@ def test_dockerfile_bakes_sentry_release_from_git_sha():
 
 def test_manual_deploy_paths_pass_and_verify_full_git_sha():
     deploy = _deploy_md()
-    assert deploy.count(
-        'if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then'
-    ) == 2
+    assert (
+        deploy.count(
+            'if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then'
+        )
+        == 2
+    )
     assert deploy.count('if ! GIT_SHA="$(git rev-parse HEAD)"; then') == 2
-    assert deploy.count(
-        'if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then'
-    ) == 2
+    assert (
+        deploy.count(
+            'if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then'
+        )
+        == 2
+    )
     assert deploy.count('--build-arg "GIT_SHA=${GIT_SHA}"; then') == 2
     assert deploy.count("if ! flyctl deploy") == 2
     assert deploy.count("if ! flyctl scale count web=1") == 1
     assert deploy.count("if ! flyctl scale count worker=0") == 1
     assert deploy.count('payload["version"] == expected') == 2
     assert "short sha" not in deploy.lower()
+
+
+def test_manual_recovery_guards_precede_destructive_script():
+    deploy = _deploy_md()
+    recovery = deploy.split("Recovery (manual or re-run workflow):", 1)[1]
+    recovery = recovery.split("\n```bash", 1)[1].split("\n```", 1)[0]
+    assert recovery.index("if ! GIT_STATUS=") < recovery.index(
+        "./scripts/fly_volume_recover.sh"
+    )
+    assert recovery.index("if ! GIT_SHA=") < recovery.index(
+        "./scripts/fly_volume_recover.sh"
+    )
+    assert recovery.index("MACHINE_JSON=") < recovery.index(
+        "./scripts/fly_volume_recover.sh"
+    )
+    assert recovery.index("MACHINE_COUNT=") < recovery.index(
+        "./scripts/fly_volume_recover.sh"
+    )
+    assert recovery.index('if [ "$MACHINE_COUNT" -ne 0 ]') < recovery.index(
+        "./scripts/fly_volume_recover.sh"
+    )
+    assert "no recovery mutation attempted" in recovery
+    script = Path("scripts/fly_volume_recover.sh").read_text(encoding="utf-8")
+    assert "FLY_VOLUME_RECOVER_CONFIRM:-" in script
+    assert '!= "destroy"' in script
+    assert "volumes destroy" in script
+
+
+def test_recovery_script_aborts_before_scale_when_machines_exist(tmp_path):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    calls = tmp_path / "calls"
+    fake_flyctl = fake_bin / "flyctl"
+    fake_flyctl.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> '{calls}'\n"
+        'if [ "$1" = machines ] && [ "$2" = list ]; then\n'
+        "  printf '%s\\n' '[{\"id\":\"machine-1\"}]'\n"
+        "else\n"
+        "  exit 1\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    fake_flyctl.chmod(0o755)
+    env = dict(os.environ, PATH=f"{fake_bin}:{os.environ['PATH']}")
+    result = subprocess.run(
+        ["sh", "scripts/fly_volume_recover.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "expected zero machines" in result.stderr
+    assert "scale count" not in calls.read_text(encoding="utf-8")
 
 
 def test_dockerignore_excludes_secrets_and_runtime_data():
@@ -226,7 +287,9 @@ def test_fly_yml_scales_v1_inline():
     deploy_pos = yml.find("flyctl deploy --config fly.toml")
     scale_pos = yml.find("Scale web=1 worker=0 (v1 inline, required)")
     verify_pos = yml.find("Verify Fly process topology (web=1, no dedicated worker)")
-    assert deploy_pos > 0 and scale_pos > deploy_pos, "worker=0 scale must run after deploy"
+    assert (
+        deploy_pos > 0 and scale_pos > deploy_pos
+    ), "worker=0 scale must run after deploy"
     assert verify_pos > scale_pos, "topology verify must run after worker=0 scale"
 
 
@@ -341,16 +404,22 @@ def test_fly_stage2_representative_scripts_exist():
     ):
         path = Path("scripts") / name
         assert path.is_file(), f"missing {path}"
-    worker = Path("scripts/fly_stage2_representative_worker.sh").read_text(encoding="utf-8")
+    worker = Path("scripts/fly_stage2_representative_worker.sh").read_text(
+        encoding="utf-8"
+    )
     assert "fly_v1_freshness_gate.sh" in worker
     assert "fly.worker-v2-essential-soak.toml" in worker
     assert "flyctl secrets set WORKER_SPLIT_V2=on" not in worker
-    rollback = Path("scripts/fly_stage2_representative_rollback.sh").read_text(encoding="utf-8")
+    rollback = Path("scripts/fly_stage2_representative_rollback.sh").read_text(
+        encoding="utf-8"
+    )
     assert "fly.toml" in rollback
 
 
 def test_fly_stage2_representative_soak_gha_workflow():
-    yml = Path(".github/workflows/fly-stage2-representative-soak.yml").read_text(encoding="utf-8")
+    yml = Path(".github/workflows/fly-stage2-representative-soak.yml").read_text(
+        encoding="utf-8"
+    )
     assert "soak-representative" in yml
     assert "fly_soak_probe_worker.sh" in yml
     assert "fly_v1_freshness_gate.sh" in yml
@@ -500,7 +569,9 @@ def test_diag_scripts_use_grep_not_rg():
     assert not re.search(r"\brg\b", diag), "worker-diag.sh must not use rg"
     for line in diag.splitlines():
         if "jq -r" in line:
-            assert '\\"' not in line, f"jq line must not use backslash-escaped quotes: {line}"
+            assert (
+                '\\"' not in line
+            ), f"jq line must not use backslash-escaped quotes: {line}"
 
 
 def test_worker_diag_jq_machine_selectors():
@@ -524,7 +595,11 @@ def test_worker_diag_jq_machine_selectors():
     list_q = r'.[] | "\(.id) state=\(.state) pg=\(.process_group // .config.process_group // "web")"'
 
     worker = subprocess.run(
-        ["jq", "-r", worker_q], input=payload, text=True, capture_output=True, check=True
+        ["jq", "-r", worker_q],
+        input=payload,
+        text=True,
+        capture_output=True,
+        check=True,
     )
     assert worker.stdout.strip() == "k1"
 
@@ -553,7 +628,11 @@ def test_machine_process_group_counts_v1():
     machine_process_group = mod.machine_process_group
 
     machines = [
-        {"id": "w1", "config": {"metadata": {"fly_process_group": "web"}}, "state": "started"},
+        {
+            "id": "w1",
+            "config": {"metadata": {"fly_process_group": "web"}},
+            "state": "started",
+        },
     ]
     counts = {"web": 0, "worker": 0}
     for m in machines:
