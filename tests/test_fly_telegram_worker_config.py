@@ -129,12 +129,23 @@ def test_dockerfile_bakes_sentry_release_from_git_sha():
 
 def test_manual_deploy_paths_pass_and_verify_full_git_sha():
     deploy = _deploy_md()
-    assert deploy.count('git status --porcelain --untracked-files=all') == 2
-    assert deploy.count('GIT_SHA="$(git rev-parse HEAD)"') == 2
-    assert deploy.count('git rev-parse --verify "${GIT_SHA}^{commit}"') == 2
+    assert deploy.count(
+        'if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then'
+    ) == 2
+    assert deploy.count('if ! GIT_SHA="$(git rev-parse HEAD)"; then') == 2
+    assert deploy.count(
+        'if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then'
+    ) == 2
     assert deploy.count('--build-arg "GIT_SHA=${GIT_SHA}"') == 2
     assert deploy.count('payload["version"] == expected') == 2
     assert "short sha" not in deploy.lower()
+
+
+def test_dockerignore_excludes_secrets_and_runtime_data():
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+    assert ".env" in dockerignore
+    assert ".env.*" in dockerignore
+    assert "data/" in dockerignore
 
 
 def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
