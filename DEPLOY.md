@@ -96,7 +96,10 @@ if ! flyctl volumes list -a subnet-dashboard; then
   echo "ABORT: unable to inspect Fly volumes; no recovery mutation attempted"
   exit 1
 fi
-./scripts/fly_volume_recover.sh                     # preserves volumes unless explicitly confirmed
+if ! ./scripts/fly_volume_recover.sh; then
+  echo "ABORT: volume recovery failed; deploy not attempted"
+  exit 1
+fi
 if ! flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
   --build-arg "GIT_SHA=${GIT_SHA}"; then
   echo "ABORT: Fly recovery deploy failed"

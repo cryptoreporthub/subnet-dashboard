@@ -163,6 +163,10 @@ def test_manual_recovery_guards_precede_destructive_script():
     assert recovery.index('if [ "$MACHINE_COUNT" -ne 0 ]') < recovery.index(
         "./scripts/fly_volume_recover.sh"
     )
+    recovery_guard = "if ! ./scripts/fly_volume_recover.sh; then"
+    assert recovery_guard in recovery
+    assert recovery.index(recovery_guard) < recovery.index("if ! flyctl deploy")
+    assert "volume recovery failed; deploy not attempted" in recovery
     assert "no recovery mutation attempted" in recovery
     script = Path("scripts/fly_volume_recover.sh").read_text(encoding="utf-8")
     assert "FLY_VOLUME_RECOVER_CONFIRM:-" in script
