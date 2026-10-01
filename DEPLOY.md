@@ -11,10 +11,19 @@ Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptore
 Manual v1 deploy — `worker=0` is **required**, not optional. Removing `worker` from `fly.toml` does not delete a leftover Fly worker process group:
 
 ```bash
-flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false
+GIT_SHA="$(git rev-parse HEAD)"
+flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"
 flyctl scale count web=1 --app subnet-dashboard --yes
 flyctl scale count worker=0 --app subnet-dashboard --yes
 flyctl machines list -a subnet-dashboard   # expect one started web machine, zero worker
+curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+expected = os.environ["EXPECTED_SHA"]
+assert payload["version"] == expected, (payload, expected)
+print(f"version verified: {expected}")
+'
 ```
 
 If CI fails with `insufficient resources to create new machine with existing volume`, prod has **zero machines** (TLS error in browser). The deploy workflow only runs `fly_volume_recover.sh` after repeated deploy failures — not before every deploy.
@@ -25,21 +34,30 @@ Recovery (manual or re-run workflow):
 flyctl machines list -a subnet-dashboard          # expect none
 flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
 ./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
-flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false
+GIT_SHA="$(git rev-parse HEAD)"
+flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
-curl -fsS https://subnet-dashboard.fly.dev/version  # {"version":"<short sha>",…} — compare to main
+curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+expected = os.environ["EXPECTED_SHA"]
+assert payload["version"] == expected, (payload, expected)
+print(f"version verified: {expected}")
+'
 ```
 
 Or: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (after merging deploy-fix PR).
 
-CI (`main` push) runs Deploy Guard then deploys automatically when green.
+Deploys are manual (`workflow_dispatch`) or owner-gated via the `fly-deploy`
+label; a `main` push does not deploy automatically.
 
 ### Post-deploy verification
 
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
-| `GET /version` | 200 JSON `{"version":"<short sha>","sentry_release":"…","python":"…"}` — compare `version` to `main` SHA (first 7 of `git rev-parse origin/main`) |
+| `GET /version` | 200 JSON `{"version":"<full git sha>","sentry_release":"…","python":"…"}` — compare `version` to the full expected SHA from `git rev-parse HEAD` |
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
@@ -163,7 +181,7 @@ Wait until `flyctl certs show dashboard.cryptoreporthub.com` reports **Ready**, 
 
 ```bash
 curl -fsS https://dashboard.cryptoreporthub.com/health
-curl -fsS https://dashboard.cryptoreporthub.com/version  # deploy receipt vs main sha
+curl -fsS https://dashboard.cryptoreporthub.com/version  # full-SHA deploy receipt vs expected SHA
 ```
 
 Human steps — the agent cannot access your registrar or Fly account without credentials.

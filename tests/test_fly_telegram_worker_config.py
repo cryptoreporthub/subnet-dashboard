@@ -20,6 +20,10 @@ def _fly_yml() -> str:
     return Path(".github/workflows/fly.yml").read_text(encoding="utf-8")
 
 
+def _deploy_md() -> str:
+    return Path("DEPLOY.md").read_text(encoding="utf-8")
+
+
 def test_fly_toml_preserves_web_process():
     fly = _fly_toml()
     assert 'web = "sh ./scripts/fly_web_entrypoint.sh"' in fly
@@ -123,13 +127,21 @@ def test_dockerfile_bakes_sentry_release_from_git_sha():
     assert "ENV SENTRY_RELEASE=${GIT_SHA}" in docker
 
 
+def test_manual_deploy_paths_pass_and_verify_full_git_sha():
+    deploy = _deploy_md()
+    assert deploy.count('GIT_SHA="$(git rev-parse HEAD)"') == 2
+    assert deploy.count('--build-arg "GIT_SHA=${GIT_SHA}"') == 2
+    assert deploy.count('payload["version"] == expected') == 2
+    assert "short sha" not in deploy.lower()
+
+
 def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
     """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off.
 
     #1185: the deploy checkout ref resolves at runtime via the deploy_ref step
     (steps.deploy_ref.outputs.ref). Merged docs-only vehicles under
     docs/deploy-vehicles/* retarget refs/heads/main so /version gates on the main
-    short SHA; unmerged labeled PRs deploy the PR head SHA. The pre-#1185 inline
+    full SHA; unmerged labeled PRs deploy the PR head SHA. The pre-#1185 inline
     `github.event.pull_request.head.sha || github.sha` expression must be gone.
     """
     yml = _fly_yml()
