@@ -139,6 +139,18 @@ def normalize_council_weights(raw: Dict[str, float]) -> Dict[str, float]:
     return out
 
 
+def _council_weight_snapshot(data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Return the canonical serialized council map used for CAS/read fallback."""
+    adv = data.get("adversarial_state")
+    if isinstance(adv, dict) and isinstance(adv.get("council_weights"), dict):
+        return adv["council_weights"]
+    sms = data.get("soul_map_state")
+    if isinstance(sms, dict) and isinstance(sms.get("expert_weights"), dict):
+        return sms["expert_weights"]
+    root = data.get("expert_weights")
+    return root if isinstance(root, dict) else None
+
+
 def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
     """True when soul_map still stores a separate contrarian weight key."""
     for slot in (
@@ -501,20 +513,7 @@ def repair_stale_contrarian_weights(
         base = os.path.dirname(path) or "data"
         predictions_path = os.path.join(base, "predictions.json")
     weights = replay_weights_from_predictions(predictions_path)
-    raw_weights = (
-        (data.get("adversarial_state") or {}).get("council_weights")
-        if isinstance(data.get("adversarial_state"), dict)
-        else None
-    )
-    if not isinstance(raw_weights, dict):
-        raw_weights = data.get("expert_weights")
-    if not isinstance(raw_weights, dict):
-        soul_map_state = data.get("soul_map_state")
-        raw_weights = (
-            soul_map_state.get("expert_weights")
-            if isinstance(soul_map_state, dict)
-            else None
-        )
+    raw_weights = _council_weight_snapshot(data)
     save_weights(
         weights, path, expected_weights=normalize_council_weights(raw_weights or {})
     )
@@ -534,14 +533,9 @@ def load_weights(path: Optional[str] = None) -> Dict[str, float]:
                     "legacy weight repair did not settle after bounded retries"
                 ) from exc
     data = _load_raw(path)
-    adv = data.get("adversarial_state")
-    if isinstance(adv, dict) and isinstance(adv.get("council_weights"), dict):
-        return normalize_council_weights(adv["council_weights"])
-    sms = data.get("soul_map_state")
-    if isinstance(sms, dict) and isinstance(sms.get("expert_weights"), dict):
-        return normalize_council_weights(sms["expert_weights"])
-    if isinstance(data.get("expert_weights"), dict):
-        return normalize_council_weights(data["expert_weights"])
+    raw_weights = _council_weight_snapshot(data)
+    if isinstance(raw_weights, dict):
+        return normalize_council_weights(raw_weights)
     return dict(DEFAULT_WEIGHTS)
 
 
@@ -653,17 +647,7 @@ def save_weights(
 
     def replace_weights(data: Dict[str, Any]) -> None:
         if expected is not None:
-            adv = data.get("adversarial_state")
-            current_raw = adv.get("council_weights") if isinstance(adv, dict) else None
-            if not isinstance(current_raw, dict):
-                current_raw = data.get("expert_weights")
-            if not isinstance(current_raw, dict):
-                soul_map_state = data.get("soul_map_state")
-                current_raw = (
-                    soul_map_state.get("expert_weights")
-                    if isinstance(soul_map_state, dict)
-                    else None
-                )
+            current_raw = _council_weight_snapshot(data)
             current = normalize_council_weights(current_raw or {})
             if current != expected:
                 raise ConcurrentWeightUpdate("weight map changed before replacement")

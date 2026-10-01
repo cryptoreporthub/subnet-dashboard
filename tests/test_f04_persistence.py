@@ -208,7 +208,7 @@ def test_concurrent_load_weights_retries_legacy_repair_conflict(tmp_path, monkey
     assert all(result["dark_horse"] == 1.0 for result in results)
 
 
-def test_save_weights_accepts_soul_map_state_expected_snapshot(tmp_path):
+def test_save_weights_prefers_soul_map_state_expected_snapshot(tmp_path):
     soul = tmp_path / "soul_map.json"
     soul.write_text(
         json.dumps(
@@ -221,6 +221,12 @@ def test_save_weights_accepts_soul_map_state_expected_snapshot(tmp_path):
                         "dark_horse": 1.0,
                         "technical": 1.0,
                     }
+                },
+                "expert_weights": {
+                    "quant": 1.7,
+                    "hype": 1.0,
+                    "dark_horse": 1.0,
+                    "technical": 1.0,
                 },
             }
         ),
