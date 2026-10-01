@@ -7,3 +7,7 @@
   and GitHub smoke run 36805718494 at head
   `6212dcbacf368f24086e0486ed17b71d93d6e12f`. PR remains Draft; no merge or
   deploy. Same-process-only and cache/cross-process limitations remain.
+- 2026-10-01 — Post-merge provenance slice: PR #1319 adds the full `GIT_SHA` as
+  the OCI image revision label and returns the full SHA from `/version`.
+  Deterministic route/config tests pass (43), endpoint contract passes (148),
+  and no Fly settings or deployment were changed.
