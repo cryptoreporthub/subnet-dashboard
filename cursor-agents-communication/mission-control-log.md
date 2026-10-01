@@ -17,3 +17,11 @@
   pass (67), endpoint contract passes (148), and GitHub smoke run 36910091566
   succeeds at `ec9dae80bafa031d0f748aaa9a1aa0a4f956939d`. PR remains Draft;
   no deploy or Fly setting changes.
+- 2026-10-01 — PR #1319 recovery safety follow-up: manual recovery now checks
+  clean Git/HEAD and zero machines before invoking the destructive helper;
+  unconfirmed duplicate unattached `data_volume` copies abort nonzero, while
+  `FLY_VOLUME_RECOVER_CONFIRM=destroy` explicitly authorizes machine and
+  duplicate-volume deletion. Focused/server tests pass (70), endpoint contract
+  passes (148), and smoke run 36911463205 succeeds at
+  `81bba20f53ecdafcdfcdde6d8a33918457be15aa`. PR remains Draft; no deploy or
+  Fly setting changes.
