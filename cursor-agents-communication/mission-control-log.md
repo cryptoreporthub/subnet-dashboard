@@ -25,3 +25,9 @@
   passes (148), and smoke run 36911463205 succeeds at
   `81bba20f53ecdafcdfcdde6d8a33918457be15aa`. PR remains Draft; no deploy or
   Fly setting changes.
+- 2026-10-01 — PR #1319 final recovery runbook guard: `DEPLOY.md` now wraps
+  `fly_volume_recover.sh` in an explicit failure check, preventing a failed
+  recovery from reaching `flyctl deploy`. The propagation regression is covered;
+  focused/server tests pass (70), endpoint contract passes (148), and smoke run
+  36911953654 succeeds at `057dba0692d9e7dff9d78fef3cbaea077f1f2257`. PR
+  remains Draft; no deploy or Fly setting changes.
