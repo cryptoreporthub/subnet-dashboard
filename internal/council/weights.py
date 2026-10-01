@@ -40,6 +40,7 @@ _IMPACT_STRENGTH_DELTA = 0.02
 class ConcurrentWeightUpdate(RuntimeError):
     """A full-map replacement observed a newer weight map than its snapshot."""
 
+
 # Per-signal, per-horizon default weights
 DEFAULT_SIGNAL_WEIGHTS: Dict[str, Dict[str, float]] = {
     "hour": {
@@ -79,7 +80,12 @@ REGIME_ADJUSTMENTS: Dict[str, Dict[str, float]] = {
     "risk_on": {"quant": 1.05, "hype": 1.10, "dark_horse": 0.95, "technical": 1.05},
     "risk_off": {"quant": 1.05, "hype": 0.85, "dark_horse": 1.10, "technical": 1.05},
     "chop": {"quant": 1.00, "hype": 0.95, "dark_horse": 1.00, "technical": 1.00},
-    "high_volatility": {"quant": 0.95, "hype": 1.05, "dark_horse": 0.95, "technical": 1.10},
+    "high_volatility": {
+        "quant": 0.95,
+        "hype": 1.05,
+        "dark_horse": 0.95,
+        "technical": 1.10,
+    },
 }
 
 
@@ -148,7 +154,9 @@ def _raw_has_legacy_contrarian(data: Dict[str, Any]) -> bool:
 
 
 ARCHIVE_REPLAY_MIN_CURRENT = 5
-PREDICTIONS_ARCHIVE_DIR = os.environ.get("PREDICTIONS_ARCHIVE_DIR", "data/predictions_archive")
+PREDICTIONS_ARCHIVE_DIR = os.environ.get(
+    "PREDICTIONS_ARCHIVE_DIR", "data/predictions_archive"
+)
 # ponytail: ±6% from 1.0 still reads as EVEN in UI after a single nudge (e.g. quant 1.04)
 NEAR_FLAT_MAX_DEVIATION = 0.06
 
@@ -184,7 +192,9 @@ def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
             row.get("reference_price"), row.get("resolved_price")
         )
     ]
-    rows.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
+    rows.sort(
+        key=lambda row: str(row.get("resolved_at") or row.get("created_at") or "")
+    )
     return rows
 
 
@@ -236,7 +246,9 @@ def merged_replay_rows(
             continue
         seen.add(key)
         merged.append(row)
-    merged.sort(key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""))
+    merged.sort(
+        key=lambda row: str(row.get("resolved_at") or row.get("created_at") or "")
+    )
     meta["archive_used"] = True
     meta["total_graded"] = len(merged)
     return merged, meta
@@ -285,7 +297,9 @@ def replay_weights_from_predictions(
             else:
                 continue
         else:
-            delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+            delta = (
+                _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+            )
         weights[expert] = round(
             max(
                 _LEARNING_MIN_WEIGHT,
@@ -373,7 +387,9 @@ def apply_rebase_guards(
         if last is None or last < cutoff:
             # 50% of remaining distance toward 1.0
             target = target + 0.5 * (1.0 - target)
-        out[name] = round(max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, target)), 4)
+        out[name] = round(
+            max(_LEARNING_MIN_WEIGHT, min(_LEARNING_MAX_WEIGHT, target)), 4
+        )
     return out
 
 
@@ -407,7 +423,9 @@ def rebalance_council_weights(
     before = load_weights(soul)
     merged_rows, merge_meta = merged_replay_rows(path)
     replayed = replay_weights_from_predictions(path)
-    blended = soft_blend_weights(replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=replay_share)
+    blended = soft_blend_weights(
+        replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=replay_share
+    )
 
     rows_skipped_pump = 0
     try:
@@ -427,14 +445,22 @@ def rebalance_council_weights(
     trail_emitted = True
     warnings: List[str] = []
     if save:
-        if os.environ.get("GRADING_REBASE", "").strip().lower() in {"1", "true", "yes", "on"}:
+        if os.environ.get("GRADING_REBASE", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             blended = apply_rebase_guards(blended, merged_rows)
         save_weights(blended, soul, expected_weights=before)
         try:
             from internal.learning.trail_bus import emit_weight_change
 
             for name in DEFAULT_WEIGHTS:
-                if abs(float(blended.get(name, 0)) - float(before.get(name, 0))) > 0.001:
+                if (
+                    abs(float(blended.get(name, 0)) - float(before.get(name, 0)))
+                    > 0.001
+                ):
                     emit_weight_change(
                         name,
                         before=float(before.get(name, 1.0)),
@@ -482,17 +508,32 @@ def repair_stale_contrarian_weights(
     )
     if not isinstance(raw_weights, dict):
         raw_weights = data.get("expert_weights")
-    save_weights(weights, path, expected_weights=normalize_council_weights(raw_weights or {}))
+    if not isinstance(raw_weights, dict):
+        soul_map_state = data.get("soul_map_state")
+        raw_weights = (
+            soul_map_state.get("expert_weights")
+            if isinstance(soul_map_state, dict)
+            else None
+        )
+    save_weights(
+        weights, path, expected_weights=normalize_council_weights(raw_weights or {})
+    )
     return True
 
 
 def load_weights(path: Optional[str] = None) -> Dict[str, float]:
     """Read learned weights from soul_map.json, defaulting to DEFAULT_WEIGHTS."""
     path = path or SOUL_MAP_PATH
-    if repair_stale_contrarian_weights(path):
-        data = _load_raw(path)
-    else:
-        data = _load_raw(path)
+    for attempt in range(2):
+        try:
+            repair_stale_contrarian_weights(path)
+            break
+        except ConcurrentWeightUpdate as exc:
+            if attempt == 1:
+                raise ConcurrentWeightUpdate(
+                    "legacy weight repair did not settle after bounded retries"
+                ) from exc
+    data = _load_raw(path)
     adv = data.get("adversarial_state")
     if isinstance(adv, dict) and isinstance(adv.get("council_weights"), dict):
         return normalize_council_weights(adv["council_weights"])
@@ -529,7 +570,10 @@ def load_weights_for_ui(path: Optional[str] = None) -> Dict[str, Any]:
 def weights_are_default_flat(weights: Optional[Dict[str, float]] = None) -> bool:
     """True when every expert is still at the neutral 1.0 baseline."""
     src = weights if isinstance(weights, dict) else load_weights()
-    return all(abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) < 0.001 for name in DEFAULT_WEIGHTS)
+    return all(
+        abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) < 0.001
+        for name in DEFAULT_WEIGHTS
+    )
 
 
 def weights_are_near_flat(
@@ -540,7 +584,10 @@ def weights_are_near_flat(
     """True when all experts are within max_deviation of the 1.0 baseline."""
     src = weights if isinstance(weights, dict) else load_weights()
     band = max(0.0, float(max_deviation))
-    return all(abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) <= band for name in DEFAULT_WEIGHTS)
+    return all(
+        abs(float(src.get(name, 1.0)) - DEFAULT_WEIGHTS[name]) <= band
+        for name in DEFAULT_WEIGHTS
+    )
 
 
 def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
@@ -571,8 +618,13 @@ def maybe_rebalance_council_weights_on_boot() -> Optional[Dict[str, Any]]:
             return None
         current = load_weights()
         replayed = replay_weights_from_predictions()
-        blended = soft_blend_weights(replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=0.7)
-        if all(abs(float(blended.get(name, 1.0)) - float(current.get(name, 1.0))) < 0.02 for name in DEFAULT_WEIGHTS):
+        blended = soft_blend_weights(
+            replayed, prior=dict(DEFAULT_WEIGHTS), replay_share=0.7
+        )
+        if all(
+            abs(float(blended.get(name, 1.0)) - float(current.get(name, 1.0))) < 0.02
+            for name in DEFAULT_WEIGHTS
+        ):
             return None
 
     return rebalance_council_weights(save=True)
@@ -593,7 +645,11 @@ def save_weights(
     """
     path = path or SOUL_MAP_PATH
     canonical = normalize_council_weights(weights)
-    expected = normalize_council_weights(expected_weights) if expected_weights is not None else None
+    expected = (
+        normalize_council_weights(expected_weights)
+        if expected_weights is not None
+        else None
+    )
 
     def replace_weights(data: Dict[str, Any]) -> None:
         if expected is not None:
@@ -601,6 +657,13 @@ def save_weights(
             current_raw = adv.get("council_weights") if isinstance(adv, dict) else None
             if not isinstance(current_raw, dict):
                 current_raw = data.get("expert_weights")
+            if not isinstance(current_raw, dict):
+                soul_map_state = data.get("soul_map_state")
+                current_raw = (
+                    soul_map_state.get("expert_weights")
+                    if isinstance(soul_map_state, dict)
+                    else None
+                )
             current = normalize_council_weights(current_raw or {})
             if current != expected:
                 raise ConcurrentWeightUpdate("weight map changed before replacement")
@@ -701,9 +764,7 @@ def detect_regime(market_data: Optional[Dict[str, Any]] = None) -> str:
     return "chop"
 
 
-def apply_regime_adjustment(
-    weights: Dict[str, float], regime: str
-) -> Dict[str, float]:
+def apply_regime_adjustment(weights: Dict[str, float], regime: str) -> Dict[str, float]:
     """Apply regime multipliers to a weight dict (does not normalize)."""
     adj = learned_regime_adjustment(regime)
     adjusted = {}
@@ -740,7 +801,11 @@ def _expert_hits_by_regime() -> Dict[str, Dict[str, List[bool]]]:
             # Skip catch-all / unknown — do not bake into any expert's hit rate.
             if expert == "unclassified" or expert not in DEFAULT_WEIGHTS:
                 continue
-            snap = pred.get("subnet_snapshot") if isinstance(pred.get("subnet_snapshot"), dict) else {}
+            snap = (
+                pred.get("subnet_snapshot")
+                if isinstance(pred.get("subnet_snapshot"), dict)
+                else {}
+            )
             regime = detect_regime(snap) if snap else "chop"
             out.setdefault(regime, {}).setdefault(expert, []).append(bool(correct))
     except Exception:
@@ -783,6 +848,7 @@ def effective_weights(
 
 def _now_iso() -> str:
     from datetime import datetime, timezone
+
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -801,7 +867,9 @@ def load_signal_weights(path: str = SOUL_MAP_PATH) -> Dict[str, Dict[str, float]
         for horizon in ("hour", "day"):
             if isinstance(raw.get(horizon), dict):
                 for signal_name, default_val in DEFAULT_SIGNAL_WEIGHTS[horizon].items():
-                    signal_weights[horizon][signal_name] = float(raw[horizon].get(signal_name, default_val))
+                    signal_weights[horizon][signal_name] = float(
+                        raw[horizon].get(signal_name, default_val)
+                    )
         return signal_weights
     return signal_weights
 
@@ -811,6 +879,7 @@ def save_signal_weights(
     path: str = SOUL_MAP_PATH,
 ) -> None:
     """Replace the full signal-weight map against the latest locked blob."""
+
     def replace_signal_weights(data: Dict[str, Any]) -> None:
         adv = data.setdefault("adversarial_state", {})
         if not isinstance(adv, dict):
@@ -863,15 +932,25 @@ def nudge_signal_weight(
             target = {}
             data["adversarial_state"] = target
         target["signal_weights"] = {
-            raw_horizon: {key: round(float(value), 4) for key, value in raw_weights.items()}
+            raw_horizon: {
+                key: round(float(value), 4) for key, value in raw_weights.items()
+            }
             for raw_horizon, raw_weights in signal_weights.items()
         }
 
     persisted = _mutate_raw(apply_signal_delta, path)
     persisted_adv = persisted.get("adversarial_state")
-    persisted_signal = persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
-    persisted_horizon = persisted_signal.get(horizon_type) if isinstance(persisted_signal, dict) else None
-    if not isinstance(persisted_horizon, dict) or persisted_horizon.get(signal_name) != round(new_val, 4):
+    persisted_signal = (
+        persisted_adv.get("signal_weights") if isinstance(persisted_adv, dict) else None
+    )
+    persisted_horizon = (
+        persisted_signal.get(horizon_type)
+        if isinstance(persisted_signal, dict)
+        else None
+    )
+    if not isinstance(persisted_horizon, dict) or persisted_horizon.get(
+        signal_name
+    ) != round(new_val, 4):
         return None
     try:
         from internal.learning.trail_bus import emit_weight_change
@@ -927,7 +1006,9 @@ def replay_signal_weights_from_predictions(
             else:
                 continue
         else:
-            delta = _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+            delta = (
+                _LEARNING_DELTA_CORRECT if row.get("correct") else _LEARNING_DELTA_WRONG
+            )
         names = row.get("active_signals") or list(contrib.keys())
         for signal_name in names:
             current = float(signal_weights[horizon].get(signal_name, 1.0))
@@ -1011,7 +1092,9 @@ def nudge_impact_strength(
                 current = float(adv["impact_strength"])
             except (TypeError, ValueError):
                 pass
-        new_value = max(_IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta))
+        new_value = max(
+            _IMPACT_STRENGTH_MIN, min(_IMPACT_STRENGTH_MAX, current + delta)
+        )
         target = data.setdefault("adversarial_state", {})
         if not isinstance(target, dict):
             target = {}
@@ -1021,7 +1104,9 @@ def nudge_impact_strength(
 
     persisted = _mutate_raw(apply_impact_delta, path)
     persisted_adv = persisted.get("adversarial_state")
-    if isinstance(persisted_adv, dict) and persisted_adv.get("impact_strength") == round(new_value, 4):
+    if isinstance(persisted_adv, dict) and persisted_adv.get(
+        "impact_strength"
+    ) == round(new_value, 4):
         return new_value
     return load_impact_strength(path)
 

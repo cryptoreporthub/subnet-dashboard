@@ -25,7 +25,9 @@ def mean_revert(weights: Dict[str, float], share: float = 0.5) -> Dict[str, floa
     """w' = 1 + share*(w-1), clamped to the same [0.1, 2.0] band as the learner."""
     lo, hi = 0.1, 2.0
     return {
-        name: round(max(lo, min(hi, 1.0 + share * (float(weights.get(name, 1.0)) - 1.0))), 4)
+        name: round(
+            max(lo, min(hi, 1.0 + share * (float(weights.get(name, 1.0)) - 1.0))), 4
+        )
         for name in ("quant", "hype", "dark_horse", "technical")
     }
 
@@ -33,8 +35,12 @@ def mean_revert(weights: Dict[str, float], share: float = 0.5) -> Dict[str, floa
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--dry-run", action="store_true", help="print before/after, change nothing")
-    group.add_argument("--save", action="store_true", help="persist weights + emit trail rows")
+    group.add_argument(
+        "--dry-run", action="store_true", help="print before/after, change nothing"
+    )
+    group.add_argument(
+        "--save", action="store_true", help="persist weights + emit trail rows"
+    )
     args = parser.parse_args()
 
     from internal.council.weights import SOUL_MAP_PATH, load_weights, save_weights

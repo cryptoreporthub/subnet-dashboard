@@ -9,7 +9,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.deduplication import mark_duplicates_in_resolved
-from internal.council.grading import direction_correct, hybrid_score, hybrid_score_status
+from internal.council.grading import (
+    direction_correct,
+    hybrid_score,
+    hybrid_score_status,
+)
 from internal.council.resolver import PREDICTIONS_PATH, _normalize_expert
 from internal.council.weights import DEFAULT_WEIGHTS, load_weights, save_weights
 
@@ -148,7 +152,8 @@ def compute_proposed_weights(
 
     capture_on = capture_mode_enabled()
     stats: Dict[str, Dict[str, float]] = {
-        name: {"correct": 0.0, "capture_sum": 0.0, "total": 0.0} for name in DEFAULT_WEIGHTS
+        name: {"correct": 0.0, "capture_sum": 0.0, "total": 0.0}
+        for name in DEFAULT_WEIGHTS
     }
     for row in rows:
         expert = _normalize_expert(row)
@@ -285,7 +290,9 @@ def certify_weights(
     holdout = _holdout_rows(rows, backtest_n)
     sanity_errors = _sanity_checks(proposed)
     hybrid_status = hybrid_score_status(rows=holdout)
-    hybrid_sample_n = int(hybrid_status.get("n") or 0) if hybrid_status.get("ready") else None
+    hybrid_sample_n = (
+        int(hybrid_status.get("n") or 0) if hybrid_status.get("ready") else None
+    )
     proposed_accuracy = _weighted_accuracy(
         holdout, proposed, hybrid_sample_n=hybrid_sample_n
     )
@@ -293,7 +300,9 @@ def certify_weights(
         holdout, current, hybrid_sample_n=hybrid_sample_n
     )
     signal_impact_n = sum(
-        1 for row in holdout if str(row.get("magnitude_source") or "") == "signal_impact"
+        1
+        for row in holdout
+        if str(row.get("magnitude_source") or "") == "signal_impact"
     )
 
     report: Dict[str, Any] = {
@@ -305,7 +314,9 @@ def certify_weights(
         "current_accuracy": current_accuracy,
         "sanity_errors": sanity_errors,
         "reason": None,
-        "scoring_mode": "hybrid" if hybrid_status.get("ready") and signal_impact_n else "direction",
+        "scoring_mode": (
+            "hybrid" if hybrid_status.get("ready") and signal_impact_n else "direction"
+        ),
         "hybrid_ready": bool(hybrid_status.get("ready")),
         "signal_impact_holdout": signal_impact_n,
     }
@@ -395,9 +406,7 @@ def run_calibration_pipeline(
             key=lambda row: str(row.get("resolved_at") or row.get("created_at") or ""),
         )
         holdout_n = min(max(0, int(CERT_BACKTEST_N)), len(ordered_rows))
-        training_rows = (
-            ordered_rows[:-holdout_n] if holdout_n else ordered_rows
-        )
+        training_rows = ordered_rows[:-holdout_n] if holdout_n else ordered_rows
         proposed = compute_proposed_weights(training_rows)
         cert = certify_weights(proposed, rows, current=backup)
         cert["training_size"] = len(training_rows)
@@ -529,7 +538,9 @@ def get_calibration_status(
             "last_cert": cal.get("last_cert"),
             "resolved_sample": len(rows),
             "retrain_in_progress": _retrain_in_progress,
-            "auto_retrain_enabled": os.environ.get("CALIBRATION_AUTO_RETRAIN", "").lower()
+            "auto_retrain_enabled": os.environ.get(
+                "CALIBRATION_AUTO_RETRAIN", ""
+            ).lower()
             in {"1", "true", "on", "yes"},
             "history": cal.get("history", []),
             "impact_strength": {
