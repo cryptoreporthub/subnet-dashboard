@@ -54,6 +54,11 @@ If CI fails with `insufficient resources to create new machine with existing vol
 
 Recovery (manual or re-run workflow):
 
+The recovery script aborts if any machine exists or if duplicate unattached
+`data_volume` copies are found. Set `FLY_VOLUME_RECOVER_CONFIRM=destroy` only
+after reviewing the machine and volume lists; that explicit confirmation
+authorizes both machine destruction and duplicate-volume deletion.
+
 ```bash
 if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then
   echo "ABORT: unable to inspect checkout status"

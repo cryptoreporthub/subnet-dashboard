@@ -61,7 +61,8 @@ for v in vols:
 ")"
 if [ -n "$duplicate_ids" ]; then
   if [ "${FLY_VOLUME_RECOVER_CONFIRM:-}" != "destroy" ]; then
-    echo "WARNING: duplicate unattached volumes preserved; set FLY_VOLUME_RECOVER_CONFIRM=destroy to authorize deletion" >&2
+    echo "ERROR: duplicate unattached volumes found; set FLY_VOLUME_RECOVER_CONFIRM=destroy to authorize both machine and duplicate-volume deletion" >&2
+    exit 1
   else
     while IFS= read -r volume_id; do
       [ -z "$volume_id" ] && continue

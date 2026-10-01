@@ -199,6 +199,47 @@ def test_recovery_script_aborts_before_scale_when_machines_exist(tmp_path):
     assert "scale count" not in calls.read_text(encoding="utf-8")
 
 
+def test_recovery_script_aborts_before_duplicate_volume_delete_without_confirmation(
+    tmp_path,
+):
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    calls = tmp_path / "calls"
+    fake_flyctl = fake_bin / "flyctl"
+    fake_flyctl.write_text(
+        "#!/bin/sh\n"
+        f"printf '%s\\n' \"$*\" >> '{calls}'\n"
+        'if [ "$1" = machines ] && [ "$2" = list ]; then\n'
+        "  printf '%s\\n' '[]'\n"
+        'elif [ "$1" = volumes ] && [ "$2" = list ] && [ "$3" = -a ]; then\n'
+        "  printf '%s\\n' "
+        "'[{\"id\":\"vol-old\",\"name\":\"data_volume\",\"region\":\"sjc\","
+        "\"created_at\":\"2026-01-01T00:00:00Z\"},"
+        "{\"id\":\"vol-new\",\"name\":\"data_volume\",\"region\":\"sjc\","
+        "\"created_at\":\"2026-02-01T00:00:00Z\"}]'\n"
+        "else\n"
+        "  exit 1\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    fake_flyctl.chmod(0o755)
+    fake_sleep = fake_bin / "sleep"
+    fake_sleep.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_sleep.chmod(0o755)
+    env = dict(os.environ, PATH=f"{fake_bin}:{os.environ['PATH']}")
+    result = subprocess.run(
+        ["sh", "scripts/fly_volume_recover.sh"],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "duplicate unattached volumes found" in result.stderr
+    assert "FLY_VOLUME_RECOVER_CONFIRM=destroy" in result.stderr
+    assert "volumes destroy" not in calls.read_text(encoding="utf-8")
+
+
 def test_dockerignore_excludes_secrets_and_runtime_data():
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
     for pattern in (
