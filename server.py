@@ -2365,7 +2365,7 @@ async def health():
 
 @app.get("/version")
 async def version():
-    """Deploy receipt: short sha from SENTRY_RELEASE (GIT_SHA build-arg). Always 200."""
+    """Deploy receipt: full SHA from SENTRY_RELEASE (GIT_SHA build-arg). Always 200."""
     from internal.deploy_version import build_version_payload
 
     return JSONResponse(build_version_payload())

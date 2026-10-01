@@ -16,7 +16,7 @@ def test_version_route_returns_200_with_version_key(monkeypatch):
     assert response.headers.get("content-type", "").startswith("application/json")
     body = response.json()
     assert "version" in body
-    assert body["version"] == "abcdef0"
+    assert body["version"] == "abcdef0123456789deadbeef"
     assert body["sentry_release"] == "abcdef0123456789deadbeef"
     assert body["python"]
     assert isinstance(body["python"], str)

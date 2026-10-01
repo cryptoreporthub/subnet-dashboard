@@ -119,6 +119,7 @@ def test_fly_worker_entrypoint_runs_uvicorn_worker_mode():
 def test_dockerfile_bakes_sentry_release_from_git_sha():
     docker = Path("Dockerfile").read_text(encoding="utf-8")
     assert "ARG GIT_SHA" in docker
+    assert 'LABEL org.opencontainers.image.revision="${GIT_SHA}"' in docker
     assert "ENV SENTRY_RELEASE=${GIT_SHA}" in docker
 
 
