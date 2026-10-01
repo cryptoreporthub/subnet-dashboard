@@ -53,7 +53,7 @@ jobs:
           DISABLE_BACKGROUND_SCANS: "1"
         run: |
           set -o pipefail
-          python -m pytest tests/test_endpoint_contract.py tests/test_server.py \
+          python -m pytest tests/test_endpoint_contract.py tests/test_f04_persistence.py tests/test_server.py \
             tests/test_learning_loop_health.py \
             tests/test_prediction_loop_closure.py \
             tests/test_learning_loop_impact.py \
