@@ -82,6 +82,29 @@ Or: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub
 Deploys are manual (`workflow_dispatch`) or owner-gated via the `fly-deploy`
 label; a `main` push does not deploy automatically.
 
+### Image context and fresh volumes
+
+The Docker build context intentionally excludes local-only inputs: `.env` and
+`.env.*`, `*.db`/`*.db-*`, `*.session`, `config/registry.json`,
+`config/watchlist.json`, and the entire `data/` runtime tree. The image contains
+tracked application code and static `config/*.json` files only.
+
+No excluded file is a required image seed:
+
+- `data/` is the persistent Fly volume at `/app/data`; its JSON/SQLite state is
+  created lazily by the application and workers.
+- `config/registry.json` is an emergency local fallback; missing or empty
+  registry data falls back to the live subnet feed.
+- `config/watchlist.json` is a legacy ignored path; the active watchlist is
+  `data/watchlist.json` and missing state normalizes to an empty watchlist.
+- Database files and Telegram `.session` files are runtime state or secrets,
+  supplied on the volume or through Fly secrets when those optional features are
+  enabled.
+
+The endpoint-contract test runs without these ignored files, providing the
+fresh-volume startup check. Do not re-include local state to make an image
+build pass; seed the Fly volume or configure the external feed/secret instead.
+
 ### Post-deploy verification
 
 | Endpoint | Expected |

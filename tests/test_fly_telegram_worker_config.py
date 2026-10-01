@@ -143,9 +143,29 @@ def test_manual_deploy_paths_pass_and_verify_full_git_sha():
 
 def test_dockerignore_excludes_secrets_and_runtime_data():
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
-    assert ".env" in dockerignore
-    assert ".env.*" in dockerignore
-    assert "data/" in dockerignore
+    for pattern in (
+        ".env",
+        ".env.*",
+        "*.db",
+        "*.db-*",
+        "*.session",
+        "config/registry.json",
+        "config/watchlist.json",
+        "data/",
+    ):
+        assert pattern in dockerignore
+
+
+def test_fresh_volume_optional_state_fallbacks(tmp_path, monkeypatch):
+    from internal.subnets.feed import registry_subnet_rows
+    from internal.watchlist.store import load_watchlist
+
+    missing_watchlist = tmp_path / "watchlist.json"
+    missing_registry = tmp_path / "registry.json"
+    monkeypatch.setenv("REGISTRY_PATH", str(missing_registry))
+
+    assert load_watchlist(str(missing_watchlist))["netuids"] == []
+    assert registry_subnet_rows() == []
 
 
 def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
