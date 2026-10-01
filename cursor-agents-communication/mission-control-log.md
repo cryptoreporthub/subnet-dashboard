@@ -11,3 +11,9 @@
   the OCI image revision label and returns the full SHA from `/version`.
   Deterministic route/config tests pass (43), endpoint contract passes (148),
   and no Fly settings or deployment were changed.
+- 2026-10-01 — PR #1319 homepage fresh-volume follow-up: `_registry_shell_subnets()`
+  now uses a bounded live-feed fallback when `config/registry.json` is absent,
+  preserving subnet rows in degraded homepage shell paths. Focused/server tests
+  pass (67), endpoint contract passes (148), and GitHub smoke run 36910091566
+  succeeds at `ec9dae80bafa031d0f748aaa9a1aa0a4f956939d`. PR remains Draft;
+  no deploy or Fly setting changes.
