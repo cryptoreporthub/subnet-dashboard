@@ -1747,6 +1747,17 @@ def get_registry():
     from internal.subnet_names import enrich_subnet_row
 
     data = load_data("config/registry.json")
+    if not data:
+        try:
+            live_rows = load_subnets_source(timeout=4.0)
+            data = {
+                str(row.get("id", row.get("netuid"))): row
+                for row in live_rows
+                if isinstance(row, dict)
+                and row.get("id", row.get("netuid")) is not None
+            }
+        except Exception:
+            data = {}
     consensus = _consensus_map()
     enriched = {}
     for key, value in data.items():

@@ -5,6 +5,7 @@ __pycache__
 .pytest_cache
 .cursor
 node_modules
+VERSION.txt
 # Never send local secrets or persisted runtime state to Docker build context.
 .env
 .env.*

@@ -29,6 +29,27 @@ def test_registry_route(client):
         assert first.get('id') == first.get('netuid')
 
 
+def test_registry_route_uses_live_feed_when_local_registry_is_absent(
+    client, monkeypatch
+):
+    monkeypatch.setattr(
+        server,
+        "load_data",
+        lambda path: {} if path == "config/registry.json" else {},
+    )
+    monkeypatch.setattr(
+        server,
+        "load_subnets_source",
+        lambda timeout=None: [{"netuid": 42, "name": "Live fallback"}],
+    )
+
+    response = client.get("/api/registry")
+
+    assert response.status_code == 200
+    assert response.json()["42"]["id"] == 42
+    assert response.json()["42"]["name"] == "Live fallback"
+
+
 def test_subnet_route_found(client):
     # Subnet 1 should exist in config/registry.json
     response = client.get('/api/subnet/1')

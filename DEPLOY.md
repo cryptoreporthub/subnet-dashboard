@@ -27,10 +27,19 @@ if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then
   echo "ABORT: checkout HEAD is not a valid commit"
   exit 1
 fi
-flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false \
-  --build-arg "GIT_SHA=${GIT_SHA}"
-flyctl scale count web=1 --app subnet-dashboard --yes
-flyctl scale count worker=0 --app subnet-dashboard --yes
+if ! flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"; then
+  echo "ABORT: Fly deploy failed; no scale mutation attempted"
+  exit 1
+fi
+if ! flyctl scale count web=1 --app subnet-dashboard --yes; then
+  echo "ABORT: web scale failed; worker scale not attempted"
+  exit 1
+fi
+if ! flyctl scale count worker=0 --app subnet-dashboard --yes; then
+  echo "ABORT: worker scale failed"
+  exit 1
+fi
 flyctl machines list -a subnet-dashboard   # expect one started web machine, zero worker
 curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
 import json, os, sys
@@ -65,8 +74,11 @@ if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then
   echo "ABORT: checkout HEAD is not a valid commit"
   exit 1
 fi
-flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
-  --build-arg "GIT_SHA=${GIT_SHA}"
+if ! flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"; then
+  echo "ABORT: Fly recovery deploy failed"
+  exit 1
+fi
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
 curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
 import json, os, sys
@@ -94,7 +106,8 @@ No excluded file is a required image seed:
 - `data/` is the persistent Fly volume at `/app/data`; its JSON/SQLite state is
   created lazily by the application and workers.
 - `config/registry.json` is an emergency local fallback; missing or empty
-  registry data falls back to the live subnet feed.
+  registry data makes `/api/registry` and `/api/subnet/{id}` fall back to the
+  live subnet feed.
 - `config/watchlist.json` is a legacy ignored path; the active watchlist is
   `data/watchlist.json` and missing state normalizes to an empty watchlist.
 - Database files and Telegram `.session` files are runtime state or secrets,

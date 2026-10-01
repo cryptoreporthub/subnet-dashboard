@@ -136,7 +136,10 @@ def test_manual_deploy_paths_pass_and_verify_full_git_sha():
     assert deploy.count(
         'if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then'
     ) == 2
-    assert deploy.count('--build-arg "GIT_SHA=${GIT_SHA}"') == 2
+    assert deploy.count('--build-arg "GIT_SHA=${GIT_SHA}"; then') == 2
+    assert deploy.count("if ! flyctl deploy") == 2
+    assert deploy.count("if ! flyctl scale count web=1") == 1
+    assert deploy.count("if ! flyctl scale count worker=0") == 1
     assert deploy.count('payload["version"] == expected') == 2
     assert "short sha" not in deploy.lower()
 
@@ -151,6 +154,7 @@ def test_dockerignore_excludes_secrets_and_runtime_data():
         "*.session",
         "config/registry.json",
         "config/watchlist.json",
+        "VERSION.txt",
         "data/",
     ):
         assert pattern in dockerignore
