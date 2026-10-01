@@ -11,7 +11,12 @@ Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptore
 Manual v1 deploy — `worker=0` is **required**, not optional. Removing `worker` from `fly.toml` does not delete a leftover Fly worker process group:
 
 ```bash
+if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+  echo "ABORT: checkout must be clean at the intended HEAD before building"
+  exit 1
+fi
 GIT_SHA="$(git rev-parse HEAD)"
+git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null
 flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false \
   --build-arg "GIT_SHA=${GIT_SHA}"
 flyctl scale count web=1 --app subnet-dashboard --yes
@@ -34,7 +39,12 @@ Recovery (manual or re-run workflow):
 flyctl machines list -a subnet-dashboard          # expect none
 flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
 ./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
+if [ -n "$(git status --porcelain --untracked-files=all)" ]; then
+  echo "ABORT: checkout must be clean at the intended HEAD before building"
+  exit 1
+fi
 GIT_SHA="$(git rev-parse HEAD)"
+git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null
 flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
   --build-arg "GIT_SHA=${GIT_SHA}"
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
