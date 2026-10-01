@@ -51,6 +51,7 @@ def test_registry_route_uses_live_feed_when_local_registry_is_absent(
 
 
 def test_homepage_shell_uses_live_feed_when_registry_is_absent(monkeypatch):
+    calls = []
     monkeypatch.setattr(
         server,
         "load_data",
@@ -59,14 +60,15 @@ def test_homepage_shell_uses_live_feed_when_registry_is_absent(monkeypatch):
     monkeypatch.setattr(
         server,
         "load_subnets_source",
-        lambda timeout=None: [{"netuid": 43, "name": "Shell fallback"}],
+        lambda timeout=None: calls.append(timeout)
+        or [{"netuid": 43, "name": "Shell fallback"}],
     )
 
     rows = server._registry_shell_subnets()
 
     assert rows
     assert rows[0]["netuid"] == 43
-    assert rows[0]["name"] == "Shell fallback"
+    assert calls == [2.0]
 
 
 def test_subnet_route_found(client):
