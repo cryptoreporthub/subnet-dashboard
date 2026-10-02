@@ -2,8 +2,8 @@
 
 Release identity comes from the existing Fly/Docker path: Dockerfile
 ``ARG GIT_SHA`` → ``ENV SENTRY_RELEASE=${GIT_SHA}`` (see ``fly.yml``
-``--build-arg GIT_SHA=…``). Short ``version`` is the first 7 chars of that
-env value — same SHA the app already attributes to Sentry. No separate
+``--build-arg GIT_SHA=…``). Full ``version`` is that value — the same SHA
+the app already attributes to Sentry. No separate
 git/subprocess lookup.
 """
 
@@ -17,7 +17,7 @@ def build_version_payload() -> dict[str, str]:
     """Return deploy-receipt JSON; never raises — missing env → version unknown."""
     release = os.environ.get("SENTRY_RELEASE", "").strip()
     if release and release.lower() != "unknown":
-        version = release[:7]
+        version = release
     else:
         version = "unknown"
     return {

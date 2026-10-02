@@ -2,6 +2,7 @@ FROM python:3.12-slim
 
 # Build-time release attribution for Sentry (read by internal/sentry_setup.py).
 ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
 ENV SENTRY_RELEASE=${GIT_SHA}
 
 WORKDIR /app

@@ -5,3 +5,14 @@ __pycache__
 .pytest_cache
 .cursor
 node_modules
+VERSION.txt
+# Never send local secrets or persisted runtime state to Docker build context.
+.env
+.env.*
+# Runtime databases/sessions and ignored local fallback caches are never image inputs.
+*.db
+*.db-*
+*.session
+config/registry.json
+config/watchlist.json
+data/

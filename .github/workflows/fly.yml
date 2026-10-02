@@ -18,7 +18,7 @@ jobs:
     steps:
       # Merged docs-only fly-deploy vehicles (closed+merged) must deploy
       # origin/main HEAD — not pull_request.head.sha — so the post-deploy
-      # /version gate simplifies to: /version == main short SHA.
+      # /version gate simplifies to: /version == the full main SHA.
       # Unmerged labeled PRs still deploy the PR head. workflow_dispatch
       # still uses github.sha. See #1182/#1183 / run 33832841118.
       - name: Resolve deploy checkout ref
@@ -103,7 +103,7 @@ jobs:
     steps:
       # Merged docs-only fly-deploy vehicles (closed+merged) must deploy
       # origin/main HEAD — not pull_request.head.sha — so the post-deploy
-      # /version gate simplifies to: /version == main short SHA.
+      # /version gate simplifies to: /version == the full main SHA.
       # Unmerged labeled PRs still deploy the PR head. workflow_dispatch
       # still uses github.sha. See #1182/#1183 / run 33832841118.
       - name: Resolve deploy checkout ref

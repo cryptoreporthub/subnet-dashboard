@@ -11,35 +11,145 @@ Preferred: [Actions → Fly Deploy → Run workflow](https://github.com/cryptore
 Manual v1 deploy — `worker=0` is **required**, not optional. Removing `worker` from `fly.toml` does not delete a leftover Fly worker process group:
 
 ```bash
-flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false
-flyctl scale count web=1 --app subnet-dashboard --yes
-flyctl scale count worker=0 --app subnet-dashboard --yes
+if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then
+  echo "ABORT: unable to inspect checkout status"
+  exit 1
+fi
+if [ -n "$GIT_STATUS" ]; then
+  echo "ABORT: checkout must be clean at the intended HEAD before building"
+  exit 1
+fi
+if ! GIT_SHA="$(git rev-parse HEAD)"; then
+  echo "ABORT: unable to resolve checkout HEAD"
+  exit 1
+fi
+if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then
+  echo "ABORT: checkout HEAD is not a valid commit"
+  exit 1
+fi
+if ! flyctl deploy --app subnet-dashboard --config fly.toml --remote-only --regions sjc --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"; then
+  echo "ABORT: Fly deploy failed; no scale mutation attempted"
+  exit 1
+fi
+if ! flyctl scale count web=1 --app subnet-dashboard --yes; then
+  echo "ABORT: web scale failed; worker scale not attempted"
+  exit 1
+fi
+if ! flyctl scale count worker=0 --app subnet-dashboard --yes; then
+  echo "ABORT: worker scale failed"
+  exit 1
+fi
 flyctl machines list -a subnet-dashboard   # expect one started web machine, zero worker
+curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+expected = os.environ["EXPECTED_SHA"]
+assert payload["version"] == expected, (payload, expected)
+print(f"version verified: {expected}")
+'
 ```
 
 If CI fails with `insufficient resources to create new machine with existing volume`, prod has **zero machines** (TLS error in browser). The deploy workflow only runs `fly_volume_recover.sh` after repeated deploy failures — not before every deploy.
 
 Recovery (manual or re-run workflow):
 
+The recovery script aborts if any machine exists or if duplicate unattached
+`data_volume` copies are found. Set `FLY_VOLUME_RECOVER_CONFIRM=destroy` only
+after reviewing the machine and volume lists; that explicit confirmation
+authorizes both machine destruction and duplicate-volume deletion.
+
 ```bash
-flyctl machines list -a subnet-dashboard          # expect none
-flyctl volumes list -a subnet-dashboard           # data_volume in sjc, unattached
-./scripts/fly_volume_recover.sh                     # or re-run Fly Deploy workflow
-flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false
+if ! GIT_STATUS="$(git status --porcelain --untracked-files=all)"; then
+  echo "ABORT: unable to inspect checkout status"
+  exit 1
+fi
+if [ -n "$GIT_STATUS" ]; then
+  echo "ABORT: checkout must be clean at the intended HEAD before building"
+  exit 1
+fi
+if ! GIT_SHA="$(git rev-parse HEAD)"; then
+  echo "ABORT: unable to resolve checkout HEAD"
+  exit 1
+fi
+if ! git rev-parse --verify "${GIT_SHA}^{commit}" >/dev/null; then
+  echo "ABORT: checkout HEAD is not a valid commit"
+  exit 1
+fi
+if ! MACHINE_JSON="$(flyctl machines list -a subnet-dashboard --json)"; then
+  echo "ABORT: unable to inspect Fly machines; no recovery mutation attempted"
+  exit 1
+fi
+if ! MACHINE_COUNT="$(printf '%s' "$MACHINE_JSON" | python3 -c '
+import json, sys
+machines = json.load(sys.stdin)
+print(len(machines))
+')"; then
+  echo "ABORT: unable to parse Fly machine state; no recovery mutation attempted"
+  exit 1
+fi
+if [ "$MACHINE_COUNT" -ne 0 ]; then
+  echo "ABORT: expected zero Fly machines before volume recovery; no recovery mutation attempted"
+  exit 1
+fi
+if ! flyctl volumes list -a subnet-dashboard; then
+  echo "ABORT: unable to inspect Fly volumes; no recovery mutation attempted"
+  exit 1
+fi
+if ! ./scripts/fly_volume_recover.sh; then
+  echo "ABORT: volume recovery failed; deploy not attempted"
+  exit 1
+fi
+if ! flyctl deploy --app subnet-dashboard --regions sjc --remote-only --ha=false \
+  --build-arg "GIT_SHA=${GIT_SHA}"; then
+  echo "ABORT: Fly recovery deploy failed"
+  exit 1
+fi
 curl -fsS https://subnet-dashboard.fly.dev/health  # OK
-curl -fsS https://subnet-dashboard.fly.dev/version  # {"version":"<short sha>",…} — compare to main
+curl -fsS https://subnet-dashboard.fly.dev/version | EXPECTED_SHA="$GIT_SHA" python3 -c '
+import json, os, sys
+payload = json.load(sys.stdin)
+expected = os.environ["EXPECTED_SHA"]
+assert payload["version"] == expected, (payload, expected)
+print(f"version verified: {expected}")
+'
 ```
 
 Or: [Actions → Fly Deploy → Run workflow](https://github.com/cryptoreporthub/subnet-dashboard/actions/workflows/fly.yml) (after merging deploy-fix PR).
 
-CI (`main` push) runs Deploy Guard then deploys automatically when green.
+Deploys are manual (`workflow_dispatch`) or owner-gated via the `fly-deploy`
+label; a `main` push does not deploy automatically.
+
+### Image context and fresh volumes
+
+The Docker build context intentionally excludes local-only inputs: `.env` and
+`.env.*`, `*.db`/`*.db-*`, `*.session`, `config/registry.json`,
+`config/watchlist.json`, and the entire `data/` runtime tree. The image contains
+tracked application code and static `config/*.json` files only.
+
+No excluded file is a required image seed:
+
+- `data/` is the persistent Fly volume at `/app/data`; its JSON/SQLite state is
+  created lazily by the application and workers.
+- `config/registry.json` is an emergency local fallback; missing or empty
+  registry data makes `/api/registry` and `/api/subnet/{id}` fall back to the
+  live subnet feed.
+- `config/watchlist.json` is a legacy ignored path; the active watchlist is
+  `data/watchlist.json` and missing state normalizes to an empty watchlist.
+- Database files and Telegram `.session` files are runtime state or secrets,
+  supplied on the volume or through Fly secrets when those optional features are
+  enabled.
+
+The endpoint-contract test runs without these ignored files, providing the
+fresh-volume startup check. Do not re-include local state to make an image
+build pass; seed the Fly volume or configure the external feed/secret instead.
 
 ### Post-deploy verification
 
 | Endpoint | Expected |
 |----------|----------|
 | `GET /health` | `OK` |
-| `GET /version` | 200 JSON `{"version":"<short sha>","sentry_release":"…","python":"…"}` — compare `version` to `main` SHA (first 7 of `git rev-parse origin/main`) |
+| `GET /version` | 200 JSON `{"version":"<full git sha>","sentry_release":"…","python":"…"}` — compare `version` to the full expected SHA from `git rev-parse HEAD` |
 | `GET /api/subnet-integrations` | 200, four primary rows + `connected_count` |
 | `GET /api/data-freshness` | 200, `stale` + `effective_source` fields |
 | `GET /api/ops/readiness` | 200, `ready`, `issues`, resolver + feed probes |
@@ -163,7 +273,7 @@ Wait until `flyctl certs show dashboard.cryptoreporthub.com` reports **Ready**, 
 
 ```bash
 curl -fsS https://dashboard.cryptoreporthub.com/health
-curl -fsS https://dashboard.cryptoreporthub.com/version  # deploy receipt vs main sha
+curl -fsS https://dashboard.cryptoreporthub.com/version  # full-SHA deploy receipt vs expected SHA
 ```
 
 Human steps — the agent cannot access your registrar or Fly account without credentials.
