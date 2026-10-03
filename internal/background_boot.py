@@ -342,6 +342,23 @@ def _maybe_start_stake_alert() -> None:
     defer_boot("validator-stake-alert", _run, delay=max(BOOT_DEFER_SECONDS + 25, 95))
 
 
+def _maybe_start_gainers_alert() -> None:
+    """Daily top-5 gainers push (same list as /gainers, on a schedule)."""
+    from internal.message_intel.gainers_alert import gainers_alert_enabled
+
+    if not gainers_alert_enabled():
+        return
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+        return
+
+    def _run() -> None:
+        from internal.message_intel.gainers_alert import start_gainers_alert_watcher
+
+        start_gainers_alert_watcher()
+
+    defer_boot("gainers-alert", _run, delay=max(BOOT_DEFER_SECONDS + 30, 105))
+
+
 def _start_score_snapshot_scheduler() -> None:
     """Phase 2 — full-universe scores off the hot path (essential / worker)."""
 
@@ -550,6 +567,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _maybe_start_summary_bot()
     _maybe_start_trend_alert()
     _maybe_start_stake_alert()
+    _maybe_start_gainers_alert()
 
     # Pump-desk snapshots are an essential worker-owned artifact, not a
     # live-subnet/heavy feed. Keep combined web mode behavior unchanged while
@@ -639,6 +657,12 @@ def stop_background_workers() -> None:
         from internal.message_intel.stake_alert import stop_stake_alert_watcher
 
         stop_stake_alert_watcher()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.gainers_alert import stop_gainers_alert_watcher
+
+        stop_gainers_alert_watcher()
     except Exception:
         pass
     try:
