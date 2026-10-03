@@ -325,6 +325,23 @@ def _maybe_start_trend_alert() -> None:
     defer_boot("trend-takeover-alert", _run, delay=max(BOOT_DEFER_SECONDS + 20, 90))
 
 
+def _maybe_start_stake_alert() -> None:
+    """Validator stake threshold push (SS-TG follow-on; direct-chain diff)."""
+    from internal.message_intel.stake_alert import stake_alert_enabled
+
+    if not stake_alert_enabled():
+        return
+    if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+        return
+
+    def _run() -> None:
+        from internal.message_intel.stake_alert import start_stake_alert_watcher
+
+        start_stake_alert_watcher()
+
+    defer_boot("validator-stake-alert", _run, delay=max(BOOT_DEFER_SECONDS + 25, 95))
+
+
 def _start_score_snapshot_scheduler() -> None:
     """Phase 2 — full-universe scores off the hot path (essential / worker)."""
 
@@ -532,6 +549,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _maybe_start_message_intel()
     _maybe_start_summary_bot()
     _maybe_start_trend_alert()
+    _maybe_start_stake_alert()
 
     # Pump-desk snapshots are an essential worker-owned artifact, not a
     # live-subnet/heavy feed. Keep combined web mode behavior unchanged while
@@ -609,6 +627,18 @@ def stop_background_workers() -> None:
         from internal.message_intel.summary_bot import stop_summary_bot
 
         stop_summary_bot()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.trend_alert import stop_trend_alert_watcher
+
+        stop_trend_alert_watcher()
+    except Exception:
+        pass
+    try:
+        from internal.message_intel.stake_alert import stop_stake_alert_watcher
+
+        stop_stake_alert_watcher()
     except Exception:
         pass
     try:
