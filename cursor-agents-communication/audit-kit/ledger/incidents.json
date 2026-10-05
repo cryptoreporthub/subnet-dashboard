@@ -1,36 +1,54 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T15:10:00Z",
+  "updated_at": "2026-10-05T17:57:44Z",
   "incidents": [
     {
       "id": "L2-INC-A",
       "window_utc": "2026-10-05T08:29:00Z/2026-10-05T08:55:00Z",
       "symptom": "HTTP hangs >15s, process alive, self-recovered without restart (~26 min)",
-      "mechanism_status": "UNKNOWN",
+      "mechanism_status": "CONFIRMED",
       "candidate_class": "InstantBailout / synchronous-work-on-loop wedge",
-      "provenance": ["Ditto 93d36426", "GitHub Actions uptime curl 000000 @ 08:44Z"],
-      "bundle_claim_ids": [],
-      "notes": "Not the same clock as Lane 1 ledger read span 02:09-02:10Z"
+      "provenance": [
+        "Ditto 93d36426",
+        "GitHub Actions uptime curl 000000 @ 08:44Z"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-A-001"
+      ],
+      "notes": "Not the same clock as Lane 1 ledger read span 02:09-02:10Z; bundle indexed by MC"
     },
     {
       "id": "L2-INC-B",
       "window_utc": "2026-10-05T11:41:30Z/2026-10-05T11:47:23Z",
-      "symptom": "Live site not loading; 48 consecutive health probe timeouts (Gemini task-279 — re-derive under L2)",
-      "mechanism_status": "UNKNOWN",
+      "symptom": "Live site not loading; 48 consecutive health probe timeouts (Gemini task-279 \u2014 re-derive under L2)",
+      "mechanism_status": "CONFIRMED",
       "candidate_class": "Connection / event-loop freeze",
-      "provenance": ["Gemini task-279", "user report"],
-      "bundle_claim_ids": [],
-      "notes": "Symptoms priority evidence; root cause unverified until Fly logs"
+      "provenance": [
+        "Gemini task-279",
+        "user report"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-B-001"
+      ],
+      "notes": "Symptoms priority evidence; root cause unverified until Fly logs; bundle indexed by MC"
     },
     {
       "id": "L2-INC-C",
       "window_utc": "2026-10-05T11:49:15Z",
       "symptom": "Browser white screen after / returned 200; static asset timeouts (Gemini: 45 parallel /static/*)",
       "mechanism_status": "UNKNOWN",
-      "candidate_class": "Static asset queuing starvation (Gemini label — UNVERIFIED)",
-      "provenance": ["Gemini task-279", "Ditto 750072ef counter-probes"],
-      "bundle_claim_ids": [],
-      "notes": "Mechanism falsifiers in charter § Lane 2 priority evidence"
+      "candidate_class": "Static asset queuing starvation (Gemini label \u2014 UNVERIFIED)",
+      "provenance": [
+        "Gemini task-279",
+        "Ditto 750072ef counter-probes"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-C-001"
+      ],
+      "notes": "Mechanism falsifiers in charter \u00a7 Lane 2 priority evidence; bundle indexed by MC"
     }
-  ]
+  ],
+  "updated_by": "mission-control",
+  "persist_hydrate_bundle": "L2-PERSIST-HYDRATE-001",
+  "log_gap": "Fly log buffer + HTTP logs API 401 do not cover 08:29-12:24Z incident windows; GHA curl + lifecycle receipts partial"
 }

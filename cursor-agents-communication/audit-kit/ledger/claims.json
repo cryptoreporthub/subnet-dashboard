@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T17:56:55Z",
+  "updated_at": "2026-10-05T17:57:44Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -319,6 +319,62 @@
         "mission-control"
       ],
       "notes": ""
+    },
+    {
+      "claim_id": "L2-INC-A-001",
+      "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 HTTP hang, self-recovered without machine restart",
+      "lane": 2,
+      "class": "L2-INC-A",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-A-2026-10-05.json",
+      "verified_by": [
+        "lane2"
+      ],
+      "notes": "fly-log-buffer-limitation documented in bundle"
+    },
+    {
+      "claim_id": "L2-INC-B-001",
+      "title": "Connection freeze 11:41:30\u201311:47:23Z UTC \u2014 machine health-check recycle",
+      "lane": 2,
+      "class": "L2-INC-B",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-B-2026-10-05.json",
+      "verified_by": [
+        "lane2"
+      ],
+      "notes": "fly-log-buffer-limitation documented in bundle"
+    },
+    {
+      "claim_id": "L2-INC-C-001",
+      "title": "Static-asset wedge 11:49:15Z UTC \u2014 post-recovery browser load failure (mechanism unverified)",
+      "lane": 2,
+      "class": "L2-INC-C",
+      "disposition": "UNKNOWN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-C-2026-10-05.json",
+      "verified_by": [
+        "lane2"
+      ],
+      "notes": "fly-log-buffer-limitation documented in bundle"
+    },
+    {
+      "claim_id": "L2-PERSIST-HYDRATE-001",
+      "title": "Persist/hydrate paths can block ASGI loop during Incidents A\u2013C (audit correlation, not remediation)",
+      "lane": 2,
+      "class": "C4",
+      "disposition": "UNKNOWN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-WEDGE-2026-10-05.json",
+      "verified_by": [
+        "lane2"
+      ],
+      "notes": "fly-log-buffer-limitation documented in bundle"
     }
   ]
 }
