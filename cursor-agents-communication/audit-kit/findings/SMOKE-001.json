@@ -1,0 +1,20 @@
+{
+  "claim_id": "SMOKE-001",
+  "title": "StaticFiles mounted at /static (server.py:510-512)",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C5",
+  "disposition": "CONFIRMED",
+  "refutes_if": "git show pin:server.py lacks StaticFiles mount at lines 510-512 or _static_dir is not joined from BASE_DIR/static",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py | nl -ba | sed -n '510,512p'",
+  "evidence": [
+    {
+      "path": "server.py",
+      "lines": "510-512",
+      "quote": "_static_dir = os.path.join(BASE_DIR, \"static\")\nif os.path.isdir(_static_dir):\n    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["mission-control"]
+}

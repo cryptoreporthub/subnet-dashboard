@@ -1,0 +1,20 @@
+{
+  "claim_id": "SMOKE-003",
+  "title": "Live /version SHA equals charter pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "L2-SMOKE",
+  "disposition": "CONFIRMED",
+  "refutes_if": "GET https://subnet-dashboard.fly.dev/version returns version field != ce3d820013d45577333ac8aada8c0d9e97c54129 at audit time",
+  "replay_class": "http-live",
+  "fetch_method": "curl -sS -m 10 https://subnet-dashboard.fly.dev/version",
+  "evidence": [
+    {
+      "path": "https://subnet-dashboard.fly.dev/version",
+      "lines": "n/a",
+      "quote": "{\"version\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"sentry_release\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"python\": \"3.12.15\"}"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["mission-control"]
+}

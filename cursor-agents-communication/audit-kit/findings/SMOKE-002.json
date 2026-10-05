@@ -1,0 +1,20 @@
+{
+  "claim_id": "SMOKE-002",
+  "title": "write_soul_map wrapped in except Exception: pass (resolver_scheduler.py:735-737)",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C8",
+  "disposition": "CONFIRMED",
+  "refutes_if": "git show pin:internal/council/resolver_scheduler.py shows write_soul_map persist call at :735 without bare except Exception: pass swallow at :736-737",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '732,740p'",
+  "evidence": [
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "735-737",
+      "quote": "            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["mission-control"]
+}
