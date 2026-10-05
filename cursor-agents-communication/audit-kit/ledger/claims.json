@@ -1,8 +1,283 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T17:55:00Z",
+  "updated_at": "2026-10-05T17:56:55Z",
   "updated_by": "mission-control",
+  "population": {
+    "total": 1413,
+    "read": 1374,
+    "parse_fail": 39
+  },
+  "stop_rule": {
+    "samples_clean": 2,
+    "status": "PASSED"
+  },
   "claims": [
+    {
+      "claim_id": "C1-LEARNING-MIN-WEIGHT-001",
+      "title": "_LEARNING_MIN_WEIGHT diverges: resolver.py=0.3 vs weights.py/judges/weights.py=0.1",
+      "lane": 1,
+      "class": "C1",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C1-LEARNING-MIN-WEIGHT-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C1-MAX-SNAPSHOTS-001",
+      "title": "MAX_SNAPSHOTS diverges: internal/pump_tracker/core.py=60 vs datastore/pump_tracker.py=600",
+      "lane": 1,
+      "class": "C1",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C1-MAX-SNAPSHOTS-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C10-PREVIEW-GRADED-HARDCODE-001",
+      "title": "Preview tribunal_hero hardcodes graded=443 contrary to live trust_banner semantics",
+      "lane": 1,
+      "class": "C10",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C10-PREVIEW-GRADED-HARDCODE-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C12-STATIC-PATH-COUNT-001",
+      "title": "47 unique /static/* paths referenced in templates at pin",
+      "lane": 1,
+      "class": "C12",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C12-STATIC-PATH-COUNT-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C13-CHECKPOINT-T1_5-001",
+      "title": "Resolver B1b checkpoint t1_5 recorded but excluded from t_abs stage-sum invariant bucket",
+      "lane": 1,
+      "class": "C13",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C13-CHECKPOINT-T1_5-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C2-HOMEPAGE-CACHE-001",
+      "title": "HOMEPAGE_SHELL_CACHE_SECONDS default collision: server.py _CACHE_PATHS=60 vs module constant=45",
+      "lane": 1,
+      "class": "C2",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C2-HOMEPAGE-CACHE-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C2-WATCHLIST-PATH-001",
+      "title": "WATCHLIST_PATH default collision: freshness.py=config/watchlist.json vs watchlist/store.py=data/watchlist.json",
+      "lane": 1,
+      "class": "C2",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C2-WATCHLIST-PATH-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C2-WORKER-PEER-TIMEOUT-001",
+      "title": "WORKER_PEER_TIMEOUT_SECONDS default collision: worker_proxy=4 vs worker_peer=12",
+      "lane": 1,
+      "class": "C2",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C2-WORKER-PEER-TIMEOUT-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C3-DATASTORE-PUMP-DEAD-001",
+      "title": "datastore/pump_tracker.py is unreferenced in live import graph at pin",
+      "lane": 1,
+      "class": "C3",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C3-DATASTORE-PUMP-DEAD-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C4-FLOCK-SPINLOCK-001",
+      "title": "fcntl.flock spinlocks with 5.0s default timeout on persist paths",
+      "lane": 1,
+      "class": "C4",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C4-FLOCK-SPINLOCK-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C4-REVIVED-LATCH-001",
+      "title": "loop_stall_guard revived/resolver_revived latches set once and never reset on recovery",
+      "lane": 1,
+      "class": "C4",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C4-REVIVED-LATCH-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C5-SQLITE-INVENTORY-001",
+      "title": "sqlite3.connect inventory: 10 production call sites + 1 test at pin",
+      "lane": 1,
+      "class": "C5",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C5-SQLITE-INVENTORY-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C6-WORKER-HEAVY-ESSENTIAL-001",
+      "title": "WORKER_HEAVY=essential (fly.toml default) skips live_subnets and heavy schedulers",
+      "lane": 1,
+      "class": "C6",
+      "disposition": "BY-DESIGN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C6-WORKER-HEAVY-ESSENTIAL-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C7-READINESS-GRADED-FALLBACK-001",
+      "title": "/api/ops/readiness learning.graded fallback chain includes nonexistent stats.resolved key",
+      "lane": 1,
+      "class": "C7",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C7-READINESS-GRADED-FALLBACK-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C8-BARE-EXCEPT-PASS-001",
+      "title": "AST scan: 299 bare except:pass handlers across .py files at pin",
+      "lane": 1,
+      "class": "C8",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C8-BARE-EXCEPT-PASS-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "C8-RESOLVER-PERSIST-SWALLOW-001",
+      "title": "resolver_scheduler write_soul_map failures silently swallowed at two persist sites",
+      "lane": 1,
+      "class": "C8",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C8-RESOLVER-PERSIST-SWALLOW-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": "conflicts_with: ['SMOKE-002']"
+    },
+    {
+      "claim_id": "C9-TOP-SCORING-UNIVERSE-001",
+      "title": "TOP_SCORING_UNIVERSE default collision: server.py=20 vs council modules=40",
+      "lane": 1,
+      "class": "C9",
+      "disposition": "CONFIRMED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/C9-TOP-SCORING-UNIVERSE-001.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "STOP-RULE-SAMPLE-1",
+      "title": "Stratified sample 1 (30 files): zero new contradiction classes outside C1-C13",
+      "lane": 1,
+      "class": "C13",
+      "disposition": "REFUTED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-1.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
+    {
+      "claim_id": "STOP-RULE-SAMPLE-2",
+      "title": "Stratified sample 2 (30 files): zero new contradiction classes outside C1-C13",
+      "lane": 1,
+      "class": "C13",
+      "disposition": "REFUTED",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-2.json",
+      "verified_by": [
+        "lane1"
+      ],
+      "notes": ""
+    },
     {
       "claim_id": "SMOKE-001",
       "title": "StaticFiles mounted at /static (server.py:510-512)",
@@ -12,20 +287,24 @@
       "tier": "B",
       "review_status": "pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-001.json",
-      "verified_by": ["mission-control"],
-      "notes": "SMOKE gate PASS 2026-10-05; awaiting Replit spot-check"
+      "verified_by": [
+        "mission-control"
+      ],
+      "notes": ""
     },
     {
       "claim_id": "SMOKE-002",
-      "title": "write_soul_map still wrapped in except Exception: pass (resolver_scheduler.py:736)",
+      "title": "write_soul_map wrapped in except Exception: pass (resolver_scheduler.py:735-737)",
       "lane": 1,
       "class": "C8",
       "disposition": "CONFIRMED",
       "tier": "B",
       "review_status": "pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-002.json",
-      "verified_by": ["mission-control"],
-      "notes": "SMOKE gate PASS 2026-10-05; C8 silent-failure candidate"
+      "verified_by": [
+        "mission-control"
+      ],
+      "notes": ""
     },
     {
       "claim_id": "SMOKE-003",
@@ -36,8 +315,10 @@
       "tier": "B",
       "review_status": "pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
-      "verified_by": ["mission-control"],
-      "notes": "SMOKE gate PASS 2026-10-05; replay_class http-live"
+      "verified_by": [
+        "mission-control"
+      ],
+      "notes": ""
     }
   ]
 }
