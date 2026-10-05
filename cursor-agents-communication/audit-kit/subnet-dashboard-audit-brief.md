@@ -5,7 +5,11 @@
 **Scope:** Two lanes running in parallel.
 
 - **Lane 1:** Deep static code audit (read-only, exhaustive against C1–C13 contradiction classes with stop rule).
-- **Lane 2:** Live runtime investigation (2026-10-05 ~26-minute service degradation window 08:29Z–08:55Z UTC and Fly logs under strict governance).
+- **Lane 2:** Live runtime investigation (2026-10-05 **production** event-loop wedge **08:29Z–08:55Z UTC**, ~26 minutes; Fly logs under strict governance).
+
+**Do not conflate with Lane 1 audit-run timestamps:** a separate **Lane 1 ledger read span** on the same calendar day was **02:09:49–02:10:13 UTC** (clean `READ` frames only; emits after **02:10:14** are error tail with no audit weight). That span is provenance for static anchors (e.g. `server.py:632` / `:3251` pending independent re-read), **not** the production incident window.
+
+**Retired label:** “~50-second freeze” was informal shorthand (Ditto Definition A, memory `40bb3345`) and contradicts the measured **08:29Z–08:55Z** window (Gemini/Ditto receipt `93d36426`, ~25–26 minutes, self-recovered InstantBailout wedge). It is **not** a second incident unless separately receipted.
 
 **Bootstrap:** Read `cursor-agents-communication/audit-kit/README.md` and the kit files before the population ledger or map fold-in.
 
@@ -62,11 +66,17 @@ Per class: detector, candidate list, and disposition (`CONFIRMED / REFUTED / BY-
 - No agent summary counts as evidence. Product intent comes only from the user’s declared list; otherwise UNKNOWN.
 - Confirmed defects are audit output only. **Implementation** (including SQLite WAL/locking and multi-process volume behavior) is a separate authorized phase.
 
+### 6. Lane 1 provenance note (do not paraphrase)
+
+> Provenance note: the `ce3d820013d45577333ac8aada8c0d9e97c54129` ledger produced clean `READ` frames from **2026-10-05 02:09:49–02:10:13 UTC** (source of the `:632` / `:3251` anchors). Emits after **02:10:14 UTC** are error output and carry no audit weight in either direction.
+
+This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 incident clock. Lane 2 correlates **2026-10-05 08:29Z–08:55Z UTC** (Ditto `93d36426`; GitHub Actions uptime failure at **08:44Z** falls inside this window per `2d479104`).
+
 ---
 
 ## Lane 2 — Live Runtime Investigation (Governance Envelope)
 
-**Work:** Investigate the **2026-10-05 ~26-minute service degradation** (08:29Z–08:55Z UTC) and examine Fly logs against the live service.
+**Work:** Investigate the **2026-10-05 production event-loop wedge** (**08:29Z–08:55Z UTC**, ~26 minutes; self-recovered without restart per Ditto `93d36426`) and examine Fly logs against the live service. Correlate against known InstantBailout / synchronous-work-on-loop suspects — not as a novel mystery.
 
 ### Authority envelope (strict boundaries)
 
