@@ -14,7 +14,7 @@
 | **slice** | architecture-map-L1L2-blind-parallel |
 | **evidence PR** | #1324 |
 | **branch** | `cursor/audit-evidence-2026-10-05-smoke` |
-| **parent_sha** | `<PR head SHA at handoff — MC fills after push>` |
+| **parent_sha** | `9bdbd003dc7097245082bcc25afd779fc18010a7` |
 | **output path** | `cursor-agents-communication/audit-kit/findings/{claim_id}.ditto.json` |
 
 **Overlap rule:** Same logical `claim_id` as Cursor Lane 1/2; distinct filename `*.ditto.json`. MC keys contradictions on `claim_id` + `path:lines`.
