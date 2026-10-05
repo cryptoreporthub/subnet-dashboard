@@ -1,0 +1,40 @@
+{
+  "claim_id": "L2-PERSIST-HYDRATE-001",
+  "title": "Persist/hydrate paths can block ASGI loop during Incidents A–C (audit correlation, not remediation)",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "C4",
+  "disposition": "UNKNOWN",
+  "refutes_if": "Fly logs inside 08:29–08:55Z or 11:41–11:47Z show persist_summary_rmw_ms <1000 and no concurrent /health stalls; OR L2.3 timed persist probe during wedge shows off-thread execution with bounded timeout. Note: incident-window persist timings NOT_OBSERVABLE (buffer/API-401); Replit-origin 26–61s cycles (Ditto b13cc876) remain unverified for these specific windows.",
+  "replay_class": "fly-logs",
+  "fetch_method": "flyctl machine exec -a subnet-dashboard 7841024b3712e8 env; flyctl machine exec -a subnet-dashboard 7841024b3712e8 wc -c /app/data/soul_map.json; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j; flyctl graphql machine(machineId:7841024b3712e8) events",
+  "evidence": [
+    {
+      "path": "fly-machine-exec://7841024b3712e8/env",
+      "lines": "n/a",
+      "quote": "WORKER_HEAVY=essential INLINE_WORKER=1 ENABLE_INLINE_WORKER=1 HYDRATE_SUBNETS_TIMEOUT_SECONDS=4 LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS=90 RESOLVER_CYCLE_TIMEOUT_SECONDS=360 SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS=480 (L2.3 read-only)"
+    },
+    {
+      "path": "/app/data/soul_map.json",
+      "lines": "n/a",
+      "quote": "854356 bytes on volume at audit time (L2.3 wc -c) — refutes 24MB bloat theory; blocking I/O contention remains candidate"
+    },
+    {
+      "path": "fly-logs://subnet-dashboard/7841024b3712e8",
+      "lines": "n/a",
+      "quote": "2026-10-05T17:34:16Z live_subnets sync timed out after 90s (worker still running in background) — post-incident buffer sample only"
+    },
+    {
+      "path": "fly-machine-lifecycle://7841024b3712e8",
+      "lines": "n/a",
+      "quote": "Recurring exit/restart cadence Oct 5: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B), 12:01Z (post-C), 12:24Z (Replit persist probe window) — health-check recycle pattern under wedge load"
+    },
+    {
+      "path": "fly-log-buffer-limitation",
+      "lines": "n/a",
+      "quote": "PARTIAL RECEIPT ONLY: cannot correlate persist_summary_rmw_ms or resolver write_soul_map duration inside 08:29–08:55Z or 11:41–11:47Z — flyctl logs buffer earliest ~17:31Z; HTTP logs API 401 Unauthorized. Pin-anchored code paths (soul_map_io.py fcntl 5s, resolver_scheduler write_soul_map) are Lane 1 candidates; runtime proof for incident windows requires historical log access or authorized L2.3 timed probe during wedge."
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane2"]
+}

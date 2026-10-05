@@ -1,0 +1,44 @@
+{
+  "claim_id": "L2-INC-C-001",
+  "title": "Static-asset wedge 11:49:15Z UTC — post-recovery browser load failure (mechanism unverified)",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "L2-INC-C",
+  "disposition": "UNKNOWN",
+  "refutes_if": "At 11:49:15Z (or bounded replay immediately post 11:45:51Z machine start), parallel GET of /static/css/base.css and /static/css/tribunal-hero-layout.css returns 200 with full pin-sized bodies in <5s while / returns 200 — would refute Gemini CSS-timeout starvation. Audit-time L2.1 probes (17:56Z) already show 6 parallel static GETs all 200 with non-zero bodies; queuing-starvation mechanism REFUTED at audit time but incident-time behavior NOT_OBSERVABLE (no log replay).",
+  "replay_class": "http-live",
+  "fetch_method": "curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/base.css; curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/ui.css; parallel 6-asset curl burst (see evidence); flyctl graphql machine(machineId:7841024b3712e8) events",
+  "evidence": [
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/base.css",
+      "lines": "n/a",
+      "quote": "audit-time L2.1: http_code=200 time=1.51s size=9469 (pin blob 9469 B)"
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/ui.css",
+      "lines": "n/a",
+      "quote": "audit-time L2.1: http_code=200 time=0.51s size=503871 (pin blob 503871 B; contradicts Ditto 750072ef zero-byte report earlier same day)"
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/* (6-asset parallel burst)",
+      "lines": "n/a",
+      "quote": "parallel_wall_s=6.221; favicon.svg 607B, smoke-tokens.css 6430B, base.css 9469B, ui.css 503871B, tribunal-hero-layout.css 1609B, cockpit_hydrate.js 235293B — all HTTP 200"
+    },
+    {
+      "path": "fly-machine-lifecycle://7841024b3712e8",
+      "lines": "n/a",
+      "quote": "Machine restart 11:45:48Z, start 11:45:51Z — Incident C at 11:49:15Z is ~3m24s post-recycle (Gemini-origin: / returned 200 before static failures)"
+    },
+    {
+      "path": "fly-log-buffer-limitation",
+      "lines": "n/a",
+      "quote": "PARTIAL RECEIPT ONLY: no fly-log lines for 11:49:15Z static requests; buffer/API-401 same as Incidents A/B. Incident-time static failure NOT_OBSERVABLE via L2.2; Gemini task-279 asset list remains Ditto-origin until browser Network tab receipt."
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane2"],
+  "window_utc": {
+    "start": "2026-10-05T11:49:15Z",
+    "end": "2026-10-05T11:49:15Z"
+  }
+}

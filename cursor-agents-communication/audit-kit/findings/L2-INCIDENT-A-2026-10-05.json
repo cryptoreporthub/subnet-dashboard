@@ -1,0 +1,34 @@
+{
+  "claim_id": "L2-INC-A-001",
+  "title": "Event-loop wedge 08:29–08:55Z UTC — HTTP hang, self-recovered without machine restart",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "L2-INC-A",
+  "disposition": "CONFIRMED",
+  "refutes_if": "Fly logs (UTC-filtered 08:29–08:55Z) show uninterrupted GET /health 200 with body OK and sub-1s latency throughout the window; OR machine 7841024b3712e8 exit/restart occurs inside 08:29–08:55Z. Note: full fly-log replay was NOT_OBSERVABLE at audit time (buffer/API-401) — this falsifier requires historical log access beyond L2.2 buffer.",
+  "replay_class": "fly-logs",
+  "fetch_method": "gh run view 37283988892 --repo cryptoreporthub/subnet-dashboard --log; flyctl graphql machine(machineId:7841024b3712e8) events; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j (incident window 08:29–08:55Z — buffer/API-401 gap documented in evidence)",
+  "evidence": [
+    {
+      "path": "github-actions://uptime_monitor/37283988892",
+      "lines": "n/a",
+      "quote": "2026-10-05T08:43:36Z curl: (28) Operation timed out after 20002 milliseconds with 0 bytes received; health_http=000000 body=; 2026-10-05T08:43:56Z live_http=000000; 2026-10-05T08:44:16Z home_http=000000; ALL_OK=0"
+    },
+    {
+      "path": "fly-machine-lifecycle://7841024b3712e8",
+      "lines": "n/a",
+      "quote": "No exit/restart between 2026-10-04T22:31:36Z start and 2026-10-05T09:43:31Z exit — spans entire Incident A window (08:29–08:55Z); self-recovery without recycle"
+    },
+    {
+      "path": "fly-log-buffer-limitation",
+      "lines": "n/a",
+      "quote": "PARTIAL RECEIPT ONLY: flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j earliest timestamp 2026-10-05T17:31:42Z — does not cover 08:29–08:55Z. GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs?instance=7841024b3712e8 returned HTTP 401 Unauthorized. Incident-window app log lines NOT_OBSERVABLE via L2.2; disposition rests on GHA curl timeout + lifecycle no-restart correlation, not full fly-log replay."
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane2"],
+  "window_utc": {
+    "start": "2026-10-05T08:29:00Z",
+    "end": "2026-10-05T08:55:00Z"
+  }
+}
