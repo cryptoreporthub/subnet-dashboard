@@ -9,7 +9,9 @@ folder before starting the population ledger or map fold-in.
 |------|---------|
 | [`subnet-dashboard-audit-brief.md`](subnet-dashboard-audit-brief.md) | **Charter** — paste into the new Project's first message |
 | [`evidence-bundle-schema.md`](evidence-bundle-schema.md) | JSON bundle format for Lane 1 / Lane 2 findings |
+| [`REVIEW-WORKFLOW.md`](REVIEW-WORKFLOW.md) | Replit PR review loop; Gemini vs Replit roles |
 | [`findings/`](findings/) | Output directory for Evidence Bundles (MC-validated) |
+| [`ledger/`](ledger/) | MC merge desk — `claims.json`, contradictions, population, incidents |
 | [`f02-runtime-audit-scope.md`](f02-runtime-audit-scope.md) | F02 scope objective, twelve questions, evidence bar, §6 post-scope receipts |
 | [`f-items-prior-evidence-map-2026-10-03.md`](f-items-prior-evidence-map-2026-10-03.md) | REV 2.1 F-item map — **fold-in target** for v2.7.1 settled core |
 | [`f02-replit-fixlist-review-2026-10-02.md`](f02-replit-fixlist-review-2026-10-02.md) | Replit fix-list receipt (F1–F3 citations verified at pin) |
