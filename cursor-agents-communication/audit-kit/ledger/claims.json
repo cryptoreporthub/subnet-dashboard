@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T17:57:44Z",
+  "updated_at": "2026-10-05T20:25:07Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -19,12 +19,13 @@
       "class": "C1",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C1-LEARNING-MIN-WEIGHT-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "C1-MAX-SNAPSHOTS-001",
@@ -89,12 +90,13 @@
       "class": "C2",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-HOMEPAGE-CACHE-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "C2-WATCHLIST-PATH-001",
@@ -201,12 +203,13 @@
       "class": "C7",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify",
       "bundle": "cursor-agents-communication/audit-kit/findings/C7-READINESS-GRADED-FALLBACK-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY addressed: verbatim resolver.py stats quote",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "C8-BARE-EXCEPT-PASS-001",
@@ -285,12 +288,13 @@
       "class": "C5",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-001.json",
       "verified_by": [
         "mission-control"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "SMOKE-002",
@@ -299,12 +303,13 @@
       "class": "C8",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-002.json",
       "verified_by": [
         "mission-control"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "SMOKE-003",
@@ -313,40 +318,43 @@
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
       "verified_by": [
         "mission-control"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY addressed: added captured_at_utc + L2-SMOKE in schema",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "L2-INC-A-001",
       "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 HTTP hang, self-recovered without machine restart",
       "lane": 2,
       "class": "L2-INC-A",
-      "disposition": "CONFIRMED",
+      "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-A-2026-10-05.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "fly-log-buffer-limitation documented in bundle"
+      "notes": "Replit MODIFY addressed: disposition UNKNOWN; incidents mechanism_status UNKNOWN",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "L2-INC-B-001",
       "title": "Connection freeze 11:41:30\u201311:47:23Z UTC \u2014 machine health-check recycle",
       "lane": 2,
       "class": "L2-INC-B",
-      "disposition": "CONFIRMED",
+      "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-B-2026-10-05.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "fly-log-buffer-limitation documented in bundle"
+      "notes": "Replit MODIFY addressed: disposition UNKNOWN; incidents mechanism_status UNKNOWN",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "L2-INC-C-001",
@@ -355,12 +363,13 @@
       "class": "L2-INC-C",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-C-2026-10-05.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "fly-log-buffer-limitation documented in bundle"
+      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "L2-PERSIST-HYDRATE-001",
@@ -376,5 +385,13 @@
       ],
       "notes": "fly-log-buffer-limitation documented in bundle"
     }
-  ]
+  ],
+  "replit_review": {
+    "comment_url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
+    "head_checked": "37ef8d2c84f80a8a56ffa21908a3c0f94f7465e7",
+    "scope": "priority sample (9 claims + ledger consistency); 17 claims still pending",
+    "pass": 6,
+    "modify": 4,
+    "block": 0
+  }
 }

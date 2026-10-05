@@ -1,10 +1,10 @@
 {
   "claim_id": "L2-INC-B-001",
-  "title": "Connection freeze 11:41:30–11:47:23Z UTC — machine health-check recycle",
+  "title": "Incident B 11:41:30–11:47:23Z — machine exit/restart at 11:45:48Z (mechanism unverified)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-INC-B",
-  "disposition": "CONFIRMED",
+  "disposition": "UNKNOWN",
   "refutes_if": "Fly logs (UTC-filtered 11:41:30–11:47:23Z) show GET /health 200 with p99 <1s throughout; OR no machine exit/restart on 7841024b3712e8 between 11:41:30Z and 11:47:23Z. Note: full fly-log replay was NOT_OBSERVABLE at audit time (buffer/API-401) — Gemini '48 consecutive probe timeouts' count unverified; partial receipt is lifecycle exit 11:45:48Z + absent GHA uptime run in window.",
   "replay_class": "fly-logs",
   "fetch_method": "flyctl graphql machine(machineId:7841024b3712e8) events; gh api repos/cryptoreporthub/subnet-dashboard/actions/workflows/uptime_monitor.yml/runs?created=2026-10-05; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j (incident window 11:41–11:47Z — buffer/API-401 gap documented in evidence)",

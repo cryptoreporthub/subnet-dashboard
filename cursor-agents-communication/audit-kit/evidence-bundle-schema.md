@@ -14,7 +14,7 @@ Prose in the candidate matrix is not sufficient on its own.
 | `title` | yes | One-line claim |
 | `pin` | yes | Full 40-char SHA (`ce3d820013d45577333ac8aada8c0d9e97c54129`) |
 | `lane` | yes | `1` (static) or `2` (runtime) |
-| `class` | yes | `C1`–`C13`, or `L2-INC-A` / `L2-INC-B` / `L2-INC-C` for incident windows |
+| `class` | yes | `C1`–`C13`, `L2-SMOKE` (live pin gate), or `L2-INC-A` / `L2-INC-B` / `L2-INC-C` for incident windows |
 | `disposition` | yes | `CONFIRMED` / `REFUTED` / `BY-DESIGN` / `UNKNOWN` |
 | `refutes_if` | yes | Concrete observation that would disprove the claim — not `N/A` |
 | `fetch_method` | Lane 1 yes | **Git-clone replayable only** — `git show <pin>:path`, `git cat-file`, AST scan with exit code. No API-only methods (Ditto must translate GitHub API reads into equivalent `git show` for Replit) |

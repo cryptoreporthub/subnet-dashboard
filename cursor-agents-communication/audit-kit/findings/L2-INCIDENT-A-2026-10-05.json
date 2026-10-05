@@ -1,10 +1,10 @@
 {
   "claim_id": "L2-INC-A-001",
-  "title": "Event-loop wedge 08:29–08:55Z UTC — HTTP hang, self-recovered without machine restart",
+  "title": "Incident A 08:29–08:55Z — GHA probe timeout, no machine restart (mechanism unverified)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-INC-A",
-  "disposition": "CONFIRMED",
+  "disposition": "UNKNOWN",
   "refutes_if": "Fly logs (UTC-filtered 08:29–08:55Z) show uninterrupted GET /health 200 with body OK and sub-1s latency throughout the window; OR machine 7841024b3712e8 exit/restart occurs inside 08:29–08:55Z. Note: full fly-log replay was NOT_OBSERVABLE at audit time (buffer/API-401) — this falsifier requires historical log access beyond L2.2 buffer.",
   "replay_class": "fly-logs",
   "fetch_method": "gh run view 37283988892 --repo cryptoreporthub/subnet-dashboard --log; flyctl graphql machine(machineId:7841024b3712e8) events; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j (incident window 08:29–08:55Z — buffer/API-401 gap documented in evidence)",

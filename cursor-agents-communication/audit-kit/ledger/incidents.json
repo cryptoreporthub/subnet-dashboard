@@ -1,13 +1,14 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T17:57:44Z",
+  "updated_at": "2026-10-05T20:25:00Z",
+  "replit_review": "2026-10-05 PR #1324 comment 6002280219 — A/B mechanism downgraded to UNKNOWN per MODIFY",
   "incidents": [
     {
       "id": "L2-INC-A",
       "window_utc": "2026-10-05T08:29:00Z/2026-10-05T08:55:00Z",
       "symptom": "HTTP hangs >15s, process alive, self-recovered without restart (~26 min)",
-      "mechanism_status": "CONFIRMED",
-      "candidate_class": "InstantBailout / synchronous-work-on-loop wedge",
+      "mechanism_status": "UNKNOWN",
+      "candidate_class": "InstantBailout / synchronous-work-on-loop wedge (unverified — partial GHA timeout receipt only)",
       "provenance": [
         "Ditto 93d36426",
         "GitHub Actions uptime curl 000000 @ 08:44Z"
@@ -21,8 +22,8 @@
       "id": "L2-INC-B",
       "window_utc": "2026-10-05T11:41:30Z/2026-10-05T11:47:23Z",
       "symptom": "Live site not loading; 48 consecutive health probe timeouts (Gemini task-279 \u2014 re-derive under L2)",
-      "mechanism_status": "CONFIRMED",
-      "candidate_class": "Connection / event-loop freeze",
+      "mechanism_status": "UNKNOWN",
+      "candidate_class": "Connection / event-loop freeze (unverified — lifecycle exit/restart timing only)",
       "provenance": [
         "Gemini task-279",
         "user report"

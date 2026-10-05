@@ -17,7 +17,7 @@
     {
       "path": "internal/council/resolver.py",
       "lines": "1084-1099",
-      "quote": "stats: Dict[str, Any] = {\n        \"correct\": correct,\n        \"wrong\": wrong,\n        ...\n        \"shadow_graded\": len(shadow_gradable),\n    }"
+      "quote": "stats: Dict[str, Any] = {\n        \"correct\": correct,\n        \"wrong\": wrong,\n        \"expired\": expired,\n        \"expired_genuine\": genuine_expired,\n        \"ungradeable\": ungradeable,\n        \"price_data_unavailable\": price_data_unavailable,\n        \"historical_hydration_ungradeable\": historical_hydration_ungradeable,\n        \"duplicate\": duplicates,\n        \"pending\": council_pending,\n        \"council_pending\": council_pending,\n        \"pump_pending\": pump_pending,\n        \"total_pending\": council_pending + pump_pending,\n        \"total\": total,\n        \"shadow_graded\": len(shadow_gradable),\n    }"
     },
     {
       "path": "internal/learning/trust_stats.py",

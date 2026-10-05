@@ -7,14 +7,22 @@
   "disposition": "CONFIRMED",
   "refutes_if": "GET https://subnet-dashboard.fly.dev/version returns version field != ce3d820013d45577333ac8aada8c0d9e97c54129 at audit time",
   "replay_class": "http-live",
-  "fetch_method": "curl -sS -m 10 https://subnet-dashboard.fly.dev/version",
+  "fetch_method": "curl -sS -m 10 -w '\\nhttp_code=%{http_code}\\n' https://subnet-dashboard.fly.dev/version",
+  "captured_at_utc": "2026-10-05T17:51:30Z",
   "evidence": [
     {
       "path": "https://subnet-dashboard.fly.dev/version",
       "lines": "n/a",
-      "quote": "{\"version\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"sentry_release\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"python\": \"3.12.15\"}"
+      "quote": "{\"version\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"sentry_release\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"python\": \"3.12.15\"}",
+      "captured_at_utc": "2026-10-05T17:51:30Z",
+      "http_code": 200
     }
   ],
+  "independent_rerun": {
+    "verified_by": "replit",
+    "captured_at_utc": "2026-10-05T20:14:53Z",
+    "note": "Replit spot-check PR #1324; same pin match"
+  },
   "tier": "B",
   "verified_by": ["mission-control"]
 }
