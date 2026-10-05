@@ -157,6 +157,12 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | Hourly | **Yes** — empty universe `:86`; confidence/directional `:139` | `hourly_pick.py` |
 | Daily | **No** — candidate action always `"long"` | `daily_pick.py:284` |
 
+#### Config collision — cockpit picks registry cap (correction embedded)
+
+| Env var | Default | Anchor | Notes |
+|---|---|---|---|
+| `COCKPIT_PICKS_REGISTRY_CAP` | **24** | `internal/cockpit/picks_snapshot.py:16` (`_REGISTRY_HOUR_CAP`) | Hour-cap for cockpit picks registry SSE snapshot. **Not** `COCKPIT_PICKS_REGISTRY_HOUR_CAP` (wrong name — see [`ARCHITECTURE-MAP-V1-SPEC.md`](ARCHITECTURE-MAP-V1-SPEC.md) embedded corrections). |
+
 ---
 
 ## Master table — all 26 claim_ids
@@ -175,7 +181,7 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | C4-FLOCK-SPINLOCK-001 | L1+L2 | persist-rmw | `soul_map_io.py:48-69`; score_snapshots; daily_pick_engine | *.lock files | A | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | issue #1113 | volume-rmw | yes |
 | C4-REVIVED-LATCH-001 | L2 | stall-guard | `loop_stall_guard.py:144` revived latch never reset | — | A | CONFIRMED | pending | f-items-map | ce3d8200 | B | — | Ditto 67d91e97 | inline-worker | unknown |
 | C5-SQLITE-INVENTORY-001 | L1 | state-ownership | 10 prod `sqlite3.connect` sites | SQLite dbs | — | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | — | volume-rmw | no |
-| C6-WORKER-HEAVY-ESSENTIAL-001 | L1 | boot-arming | `fly.toml:41` WORKER_HEAVY=essential skips live_subnets | — | — | BY-DESIGN | pending | live-matrix | ce3d8200 | B | — | — | inline-worker | no |
+| C6-WORKER-HEAVY-ESSENTIAL-001 | L1 | boot-arming | `fly.toml:41` WORKER_HEAVY=essential skips live_subnets | — | — | BY-DESIGN | replit_pass | live-matrix | ce3d8200 | B | — | — | inline-worker | no |
 | C7-READINESS-GRADED-FALLBACK-001 | L2 | ops-readiness | `/api/ops/readiness` graded fallback chain | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
 | C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 bare `except: pass` | — | A | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | web-asgi | swallows |
 | C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | pending | live-matrix | ce3d8200 | B | SMOKE-002 | — | inline-worker | swallows |
@@ -184,11 +190,11 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes | — | — | REFUTED | pending | bundle | ce3d8200 | B | — | — | — | no |
 | SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | web-asgi | unknown |
 | SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | inline-worker | swallows |
-| SMOKE-003 | L2 | deploy-pin | live `/version` SHA equals pin | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | smoke-gate | external-probe | no |
-| L2-INC-A-001 | L2 | incident | event-loop wedge 08:29–08:55Z | — | A | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Ditto 93d36426 | web-asgi | unknown |
+| SMOKE-003 | L2 | deploy-pin | live `/version` SHA equals pin | — | — | CONFIRMED | replit_modify_pending | bundle | ce3d8200 | B | — | smoke-gate | external-probe | no |
+| L2-INC-A-001 | L2 | incident | event-loop wedge 08:29–08:55Z; recovery NOT_OBSERVABLE | — | A | UNKNOWN | replit_modify_pending | bundle | ce3d8200 | B | — | Ditto 93d36426 | web-asgi | unknown |
 | L2-INC-B-001 | L2 | incident | connection freeze 11:41:30–11:47:23Z | — | B | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 | web-asgi | unknown |
 | L2-INC-C-001 | L2 | incident | static wedge 11:49:15Z | static/ | C | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 | client-hydrate | unknown |
-| L2-PERSIST-HYDRATE-001 | L2 | persist-hydrate-wedge | persist/hydrate may block ASGI during A–C | soul_map, predictions, hydrate paths | A,B,C | UNKNOWN | pending | live-matrix | ce3d8200 | B | — | audit brief § action item | boot-thread + inline-worker | yes |
+| L2-PERSIST-HYDRATE-001 | L2 | persist-hydrate-wedge | persist/hydrate may block ASGI during A–C | soul_map, predictions, hydrate paths | A,B,C | UNKNOWN | replit_modify_pending | live-matrix | ce3d8200 | B | — | audit brief § action item | boot-thread + inline-worker | yes |
 
 **Review_status source of truth:** Replit PR comments on #1324. MC mirrors into `claims.json` after comment.
 

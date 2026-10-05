@@ -27,7 +27,12 @@
     {
       "path": "fly-machine-lifecycle://7841024b3712e8",
       "lines": "n/a",
-      "quote": "Recurring exit/restart cadence Oct 5: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B), 12:01Z (post-C), 12:24Z (Replit persist probe window) — health-check recycle pattern under wedge load"
+      "quote": "(a) Event-time receipt — exit/restart timestamps only: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B window), 12:01Z (post-C), 12:24Z (Replit persist probe window)"
+    },
+    {
+      "path": "fly-machine-lifecycle://7841024b3712e8/causation-hypothesis",
+      "lines": "n/a",
+      "quote": "(b) Causation — health-check recycle pattern under wedge load is hypothesis only, not established; incident-window app logs NOT_OBSERVABLE (buffer/API-401)"
     },
     {
       "path": "fly-log-buffer-limitation",

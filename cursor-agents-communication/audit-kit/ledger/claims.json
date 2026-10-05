@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T21:11:58Z",
+  "updated_at": "2026-10-05T23:00:00Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -189,7 +189,7 @@
       "class": "C6",
       "disposition": "BY-DESIGN",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C6-WORKER-HEAVY-ESSENTIAL-001.json",
       "verified_by": [
         "lane1"
@@ -319,7 +319,7 @@
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_pass",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
       "verified_by": [
         "mission-control"
@@ -330,13 +330,13 @@
     },
     {
       "claim_id": "L2-INC-A-001",
-      "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 HTTP hang, self-recovered without machine restart",
+      "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 HTTP hang; no machine restart observed; service recovery NOT_OBSERVABLE",
       "lane": 2,
       "class": "L2-INC-A",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "replit_pass",
-      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-A-2026-10-05.json",
+      "review_status": "replit_modify_pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-A-001.json",
       "verified_by": [
         "lane2"
       ],
@@ -353,7 +353,7 @@
       "disposition": "UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
-      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-B-2026-10-05.json",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-B-001.json",
       "verified_by": [
         "lane2"
       ],
@@ -369,7 +369,7 @@
       "disposition": "UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
-      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-C-2026-10-05.json",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-C-001.json",
       "verified_by": [
         "lane2"
       ],
@@ -383,8 +383,8 @@
       "class": "C4",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "pending",
-      "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-WEDGE-2026-10-05.json",
+      "review_status": "replit_modify_pending",
+      "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-001.json",
       "verified_by": [
         "lane2"
       ],
@@ -408,5 +408,72 @@
       "L2-INC-B-001"
     ],
     "modify_pending": []
+  },
+  "replit_batch2": {
+    "start_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004488860",
+    "head_checked": "9bdbd003dc7097245082bcc25afd779fc18010a7",
+    "scopes": {
+      "A": {
+        "verdict": "replit_block",
+        "status": "fixes_applied_pending_respot",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004837174",
+        "fix": "Renamed L2 bundles to canonical findings/{claim_id}.json; documented POPULATION-DRAFT-FINAL.json as draft artifact"
+      },
+      "B": {
+        "verdict": "replit_pass",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004837644"
+      },
+      "C": {
+        "verdict": "replit_modify",
+        "status": "fixes_applied_pending_respot",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004838171",
+        "fix": "Added COCKPIT_PICKS_REGISTRY_CAP correction (env default 24, picks_snapshot.py:16) to candidate-matrix.md"
+      },
+      "D": {
+        "SMOKE-001": {
+          "verdict": "replit_pass",
+          "review_status": "replit_pass",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004838574"
+        },
+        "SMOKE-002": {
+          "verdict": "replit_pass",
+          "review_status": "replit_pass",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004838954"
+        },
+        "SMOKE-003": {
+          "verdict": "replit_modify",
+          "review_status": "replit_modify_pending",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004839360",
+          "fix": "Added live_status NOT_OBSERVABLE + re-spot curl exit 28 note; disposition CONFIRMED unchanged"
+        },
+        "C6-WORKER-HEAVY-ESSENTIAL-001": {
+          "verdict": "replit_pass",
+          "review_status": "replit_pass",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004839770"
+        },
+        "L2-INC-A-001": {
+          "verdict": "replit_modify",
+          "review_status": "replit_modify_pending",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004840392",
+          "fix": "Removed self-recovered wording; service recovery NOT_OBSERVABLE in ledger + bundle"
+        },
+        "L2-INC-B-001": {
+          "verdict": "replit_pass",
+          "review_status": "replit_pass",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004840832"
+        },
+        "L2-INC-C-001": {
+          "verdict": "replit_pass",
+          "review_status": "replit_pass",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841228"
+        },
+        "L2-PERSIST-HYDRATE-001": {
+          "verdict": "replit_modify",
+          "review_status": "replit_modify_pending",
+          "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841631",
+          "fix": "Split lifecycle evidence: event-time timestamps vs causation hypothesis"
+        }
+      }
+    }
   }
 }

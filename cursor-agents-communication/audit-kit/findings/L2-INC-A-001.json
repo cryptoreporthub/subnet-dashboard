@@ -1,6 +1,6 @@
 {
   "claim_id": "L2-INC-A-001",
-  "title": "Incident A 08:29–08:55Z — GHA probe timeout, no machine restart (mechanism unverified)",
+  "title": "Incident A 08:29–08:55Z — GHA probe timeout (mechanism unverified; service recovery NOT_OBSERVABLE)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-INC-A",
