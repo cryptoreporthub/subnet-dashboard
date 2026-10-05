@@ -1,0 +1,35 @@
+{
+  "claim_id": "C9-TOP-SCORING-UNIVERSE-001",
+  "title": "TOP_SCORING_UNIVERSE default collision: server.py=20 vs council modules=40",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C9",
+  "disposition": "CONFIRMED",
+  "refutes_if": "All TOP_SCORING_UNIVERSE env defaults match across server.py and council scoring modules",
+  "fetch_method": "git grep -n TOP_SCORING_UNIVERSE ce3d820013d45577333ac8aada8c0d9e97c54129 -- '*.py' | grep default",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "server.py",
+      "lines": "628",
+      "quote": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))"
+    },
+    {
+      "path": "internal/council/daily_pick_engine.py",
+      "lines": "210",
+      "quote": "top = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "lines": "52",
+      "quote": "return int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))"
+    },
+    {
+      "path": "internal/council/pick_selection_audit.py",
+      "lines": "58",
+      "quote": "top = _env_int(\"TOP_SCORING_UNIVERSE\", 40)"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

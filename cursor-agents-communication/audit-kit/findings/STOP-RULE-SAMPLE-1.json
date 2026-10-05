@@ -1,0 +1,26 @@
+{
+  "claim_id": "STOP-RULE-SAMPLE-1",
+  "title": "Stratified sample 1 (30 files): zero new contradiction classes outside C1-C13",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C13",
+  "disposition": "REFUTED",
+  "refutes_if": "Any file in stop-rule-sample-1.tsv exhibits a defect outside the C1-C13 taxonomy",
+  "fetch_method": "cat cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv; per-file git show ce3d820013d45577333ac8aada8c0d9e97c54129:<path>",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv",
+      "lines": "1-31",
+      "quote": "30 files stratified by extension; seed=sha256(pin); 29 READ + 1 PARSE-FAIL (hero_t45s.png); anomaly_classes column empty"
+    },
+    {
+      "path": "internal/learning/predictions_store.py",
+      "lines": "S1-11",
+      "quote": "Sample file contains fcntl.flock RMW — already C4 class; no new class"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Stop rule 1/2 complete; need second consecutive zero-new-class sample before audit termination"
+}

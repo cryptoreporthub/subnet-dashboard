@@ -1,0 +1,31 @@
+{
+  "claim_id": "C7-READINESS-GRADED-FALLBACK-001",
+  "title": "/api/ops/readiness learning.graded fallback chain includes nonexistent stats.resolved key",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C7",
+  "disposition": "CONFIRMED",
+  "refutes_if": "_compute_stats returns a resolved key, or readiness _learning_summary never falls through past trust_banner.graded",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/ops/readiness.py | nl -ba | sed -n '78,84p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver.py | nl -ba | sed -n '1084,1099p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/ops/readiness.py",
+      "lines": "78-84",
+      "quote": "graded = int(\n            trust.get(\"graded\")\n            or resolver_stats.get(\"graded\")\n            or stats.get(\"graded\")\n            or stats.get(\"resolved\")\n            or 0\n        )"
+    },
+    {
+      "path": "internal/council/resolver.py",
+      "lines": "1084-1099",
+      "quote": "stats: Dict[str, Any] = {\n        \"correct\": correct,\n        \"wrong\": wrong,\n        ...\n        \"shadow_graded\": len(shadow_gradable),\n    }"
+    },
+    {
+      "path": "internal/learning/trust_stats.py",
+      "lines": "28",
+      "quote": "graded = correct + wrong"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Label is graded; fallback stats.resolved is never populated by _compute_stats — ops may show 0 when trust_banner absent despite correct+wrong in stats"
+}

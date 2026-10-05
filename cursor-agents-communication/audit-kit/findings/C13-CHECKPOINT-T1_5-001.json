@@ -1,0 +1,35 @@
+{
+  "claim_id": "C13-CHECKPOINT-T1_5-001",
+  "title": "Resolver B1b checkpoint t1_5 recorded but excluded from t_abs stage-sum invariant bucket",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C13",
+  "disposition": "CONFIRMED",
+  "refutes_if": "t_abs dict at resolver_scheduler.py:327 includes t1_5 in preflight/closing invariant calculation",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '327,340p;358,366p;982,986p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "327-329",
+      "quote": "t_abs = {name: checkpoints.get(name) for name in (\n            \"t0\", \"t1\", \"t2\", \"t3\", \"t4\", \"t5\", \"t6\", \"t7\"\n        )}"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "360",
+      "quote": "\"t1_5\": _ms_from_start(checkpoints.get(\"t1_5\")),"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "984",
+      "quote": "timing.mark_checkpoint(\"t1_5\")"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "333-334",
+      "quote": "preflight = _delta_ms(t_abs[\"t0\"], t_abs[\"t1\"])\n        batch_bookkeeping = _delta_ms(t_abs[\"t4\"], t_abs[\"t5\"])"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}
