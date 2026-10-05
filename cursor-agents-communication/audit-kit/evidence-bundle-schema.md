@@ -64,17 +64,25 @@ Prose in the candidate matrix is not sufficient on its own.
 
 ## `fetch_method` rule (Replit replay)
 
-Every Lane 1 / Ditto-code bundle must use commands runnable after:
+Add optional `replay_class` on every bundle:
 
-```bash
-git fetch origin && git checkout <pin>
-```
+| `replay_class` | When | `fetch_method` form | Replit reruns |
+|---|---|---|---|
+| `git-clone` | Lane 1 static, Ditto blind static | `git show <pin>:path \| nl -ba \| sed -n 'A,Bp'` | Same git command |
+| `http-live` | Lane 2 L2.1 GET (e.g. SMOKE-003 `/version`) | Verbatim HTTP call + expected vs observed | Same curl/GET at audit time |
+| `fly-logs` | Lane 2 L2.2 | `fly logs --app subnet-dashboard` + UTC filter | Same fly command |
 
-**Allowed:** `git show ce3d8200:server.py | nl -ba | sed -n '510,512p'`, `git cat-file -p ce3d8200:path`
+**Lane 1 / Ditto static:** publish `git show` form only (API reads internally → translate).
 
-**Not allowed alone:** "GitHub contents API", "Ditto read at pin" — translate to `git show` equivalent in `fetch_method`.
+**Lane 2 live:** cannot be clone-replayable — set `replay_class: "http-live"` and publish the
+actual endpoint call. Replit knows to rerun differently.
 
-Independent rerun is proven **after** publication (Replit on PR). Producers do not self-assert replayability beyond using this format.
+**`refutes_if`:** never `N/A`. If a criterion is genuinely non-falsifiable at audit time
+(e.g. one-shot live endpoint), state that explicitly in `refutes_if` so MC sees the boundary.
+
+**Tier B floor:** neither producer promotes over the other on seniority; MC/Joshua adjudicates.
+
+Independent rerun is proven **after** publication (Replit on PR).
 
 ## Legacy bundles
 

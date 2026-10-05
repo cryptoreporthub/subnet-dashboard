@@ -48,6 +48,14 @@ MC keys contradictions on `claim_id` + `path:lines`, not filename alone.
 3. **MC** adds a row to `ledger/contradictions.json` — both bundles stay Tier **B**.
 4. **No auto-resolution** — neither bundle is promoted on seniority; Joshua resolves.
 
+## Ditto operating confirmations (2026-10-05)
+
+- Parked until MC handoff ticket (step 4). No draft commits.
+- `findings/{claim_id}.ditto.json` only; `queue/` closed.
+- No `ledger/*` writes; conflicts → `conflicts_with` + stop.
+- Tier **B** floor both ways — no seniority promotion either direction.
+- SMOKE-003 (L2 `/version`): `replay_class: http-live`, not git-clone form.
+
 ## Sequence (first smoke)
 
 1. Merge audit-kit scaffold PR (#1323).
