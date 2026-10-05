@@ -1,0 +1,3 @@
+path	sha256_at_pin	lane1_scanned	class_hits	notes
+# Population ledger — 1413 tracked files at ce3d820013d45577333ac8aada8c0d9e97c54129
+# Lane 1 fills rows after SMOKE gate passes. One row per git ls-tree path.

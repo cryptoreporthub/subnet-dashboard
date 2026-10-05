@@ -1,0 +1,43 @@
+{
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "updated_at": "2026-10-05T15:10:00Z",
+  "updated_by": "mission-control",
+  "claims": [
+    {
+      "claim_id": "SMOKE-001",
+      "title": "StaticFiles mounted at /static (server.py:510-512)",
+      "lane": 1,
+      "class": "C5",
+      "disposition": "UNKNOWN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": null,
+      "verified_by": [],
+      "notes": "Run SMOKE gate before full census; bundle pending Lane 1"
+    },
+    {
+      "claim_id": "SMOKE-002",
+      "title": "write_soul_map still wrapped in except Exception: pass (resolver_scheduler.py:736)",
+      "lane": 1,
+      "class": "C8",
+      "disposition": "UNKNOWN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": null,
+      "verified_by": [],
+      "notes": "SMOKE gate; bundle pending Lane 1"
+    },
+    {
+      "claim_id": "SMOKE-003",
+      "title": "Live /version SHA equals charter pin",
+      "lane": 2,
+      "class": "L2-SMOKE",
+      "disposition": "UNKNOWN",
+      "tier": "B",
+      "review_status": "pending",
+      "bundle": null,
+      "verified_by": [],
+      "notes": "One L2.1 GET; bundle pending Lane 2"
+    }
+  ]
+}
