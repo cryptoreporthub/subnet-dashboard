@@ -28,4 +28,4 @@ Repo-backed **status board** for the `ce3d8200` audit. Bundles live in
 3. **Pin lock** — every row must match charter pin `ce3d820013d45577333ac8aada8c0d9e97c54129`.
 4. **Do not reuse** old `queue/done/` claim IDs without re-pin and re-bundle.
 
-See [`../REVIEW-WORKFLOW.md`](../REVIEW-WORKFLOW.md) for the Replit PR review loop and Gemini's separate role.
+See [`../REVIEW-WORKFLOW.md`](../REVIEW-WORKFLOW.md) and [`../DITTO-HANDOFF.md`](../DITTO-HANDOFF.md).

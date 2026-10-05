@@ -17,7 +17,7 @@ ticket** with all required fields. No ticket = no commit.
 | **evidence PR** | #NNNN |
 | **branch** | audit/evidence-YYYY-MM-DD-<slice> |
 | **parent_sha** | <current PR head SHA — parent for create_or_update_file> |
-| **output path** | cursor-agents-communication/audit-kit/findings/{claim_id}.json |
+| **output path** | cursor-agents-communication/audit-kit/findings/{claim_id}.ditto.json |
 
 **Overlap rule:** Blind parallel uses the **same logical `claim_id`** as Cursor
 Lane 1 (e.g. `SMOKE-001`) but a **distinct filename**:
