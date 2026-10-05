@@ -1,0 +1,32 @@
+{
+  "claim_id": "POPULATION-DRAFT-FINAL",
+  "title": "population-draft.tsv FINAL — ready for MC merge into ledger/population.tsv",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C13",
+  "disposition": "CONFIRMED",
+  "refutes_if": "git ls-tree -r pin file count != 1413 rows in population-draft.tsv (excluding header)",
+  "fetch_method": "wc -l cursor-agents-communication/audit-kit/findings/population-draft.tsv; git ls-tree -r --name-only ce3d820013d45577333ac8aada8c0d9e97c54129 | wc -l",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/population-draft.tsv",
+      "lines": "1-1414",
+      "quote": "1413 data rows + header; 1374 READ, 39 PARSE-FAIL, 76,399,618 total bytes"
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-1.json",
+      "lines": "n/a",
+      "quote": "Stop rule sample 1: zero new classes"
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-2.json",
+      "lines": "n/a",
+      "quote": "Stop rule sample 2: zero new classes — gate cleared for FINAL signal"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "status": "FINAL",
+  "mc_action": "Merge population-draft.tsv into ledger/population.tsv; index new claim_ids in claims.json"
+}
