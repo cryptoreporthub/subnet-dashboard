@@ -1,0 +1,50 @@
+{
+  "claim_id": "SMOKE-002.Tracer",
+  "title": "Tracer bundle — write_soul_map except Exception: pass, resolver_scheduler.py:735-737, blind-parallel line verification",
+  "directive": "1057e644",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "pin_blob_sha": {
+    "internal/council/resolver_scheduler.py": "6312c960db0d51837f3170fdfe5729300ffbf3a8"
+  },
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '735,737p'",
+  "evidence": [
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "735-737",
+      "quote": "            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass",
+      "expected_by": "SMOKE-002.json @ 0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+      "verified": true,
+      "note": "byte-exact match at pin; no renumbering applied"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "734-737",
+      "quote": "try:\n            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass",
+      "expected_by": "C8-RESOLVER-PERSIST-SWALLOW-001.json @ 0cabfb74 (734-737 cite)",
+      "verified": true,
+      "note": "matches verbatim; C8's second site 1175-1182 spot-checked at pin and also matches"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "1175-1182",
+      "quote": "try:\n            write_soul_map(_mutator, self.soul_map_path)\n            if timing is not None:\n                timing.record_persist_subtimer(\n                    \"summary_rmw\", (time.perf_counter() - t_rmw) * 1000\n                )\n        except Exception:\n            pass",
+      "expected_by": "C8-RESOLVER-PERSIST-SWALLOW-001.json @ 0cabfb74 (1175-1182 cite)",
+      "verified": true,
+      "note": "second except-pass persist swallow site; byte-exact match at pin"
+    }
+  ],
+  "drift_check": {
+    "scope": "internal/council/resolver_scheduler.py",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "+2 line shift since historical pin; SMOKE-002 range itself has no drift at the audit pin",
+    "note": "At c9449d64 the write_soul_map/except-pass pattern sits at 733-735; at ce3d8200 it sits at 735-737. SMOKE-002 cites ce3d8200 where 735-737 is verified correct. No renumbering applied."
+  },
+  "refutes_if": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py shows write_soul_map at :735 without the except Exception: pass swallow at :736-737",
+  "verified": true,
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}

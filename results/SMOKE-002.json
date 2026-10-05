@@ -1,0 +1,56 @@
+{
+  "claim_id": "SMOKE-002",
+  "title": "write_soul_map wrapped in except Exception: pass (resolver_scheduler.py:735-737)",
+  "directive": "1057e644",
+  "role": "ditto-blind-parallel-verification-result",
+  "source_claim": {
+    "path": "cursor-agents-communication/audit-kit/findings/SMOKE-002.json",
+    "read_at_commit": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+    "class": "C8",
+    "expected_lines": "735-737",
+    "expected_quote": "            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass"
+  },
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "pin_blob_sha": {
+    "internal/council/resolver_scheduler.py": "6312c960db0d51837f3170fdfe5729300ffbf3a8"
+  },
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "fetch_method": "git-clone",
+  "replay_command": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '735,737p'",
+  "verbatim_at_pin": [
+    {"line": 735, "text": "            write_soul_map(_mutator, self.soul_map_path)"},
+    {"line": 736, "text": "        except Exception:"},
+    {"line": 737, "text": "            pass"}
+  ],
+  "context_lines_5_each_side": [
+    {"line": 730, "text": "            \"lifecycle_error\": self._lifecycle_error,"},
+    {"line": 731, "text": "        }"},
+    {"line": 732, "text": "        def _mutator(data: Dict[str, Any]) -> None:"},
+    {"line": 733, "text": "            data.setdefault(\"prediction_resolver_scheduler\", {}).update(state)"},
+    {"line": 734, "text": "        try:"},
+    {"line": 735, "text": "            write_soul_map(_mutator, self.soul_map_path)"},
+    {"line": 736, "text": "        except Exception:"},
+    {"line": 737, "text": "            pass"},
+    {"line": 738, "text": ""},
+    {"line": 739, "text": "    def _abandon_inflight_cycle("},
+    {"line": 740, "text": "        self,"},
+    {"line": 741, "text": "        *,"},
+    {"line": 742, "text": "        submitted_gen: Optional[int] = None,"}
+  ],
+  "comparison": {
+    "method": "byte-exact comparison of SMOKE-002.json expected_quote against verbatim lines 735-737 at pin",
+    "match": true,
+    "conflicts_with": null
+  },
+  "drift_check": {
+    "scope": "internal/council/resolver_scheduler.py (context note; directive-required drift scope server.py:628-633 = none)",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "file shifted +2 lines since historical pin",
+    "note": "At c9449d64 the same write_soul_map/_mutator/except-pass pattern sits at lines 733-735; at audit pin ce3d8200 it sits at 735-737. The SMOKE-002 claim cites ce3d8200, where lines 735-737 are verified correct. No renumbering applied; historical cite recorded for provenance."
+  },
+  "verified": true,
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}

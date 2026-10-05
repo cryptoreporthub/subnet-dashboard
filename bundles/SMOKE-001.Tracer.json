@@ -1,0 +1,50 @@
+{
+  "claim_id": "SMOKE-001.Tracer",
+  "title": "Tracer bundle — StaticFiles mount at /static, server.py:510-512, blind-parallel line verification",
+  "directive": "1057e644",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "pin_blob_sha": {
+    "server.py": "3acdfc83b90e03bb3ccf87081faf47f39ad1bd27"
+  },
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py | nl -ba | sed -n '510,512p'",
+  "evidence": [
+    {
+      "path": "server.py",
+      "lines": "510-512",
+      "quote": "_static_dir = os.path.join(BASE_DIR, \"static\")\nif os.path.isdir(_static_dir):\n    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")",
+      "expected_by": "SMOKE-001.json @ 0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+      "verified": true,
+      "note": "byte-exact match at pin; no renumbering applied"
+    },
+    {
+      "path": "server.py",
+      "lines": "512",
+      "quote": "    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")",
+      "expected_by": "C12-STATIC-PATH-COUNT-001.json @ 0cabfb74 (server.py:510-512 cite)",
+      "verified": true,
+      "note": "C12 quote is the line-512 subset; matches verbatim"
+    },
+    {
+      "path": "server.py",
+      "lines": "628",
+      "quote": "TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))",
+      "expected_by": "C9-TOP-SCORING-UNIVERSE-001.json @ 0cabfb74 (server.py:628 cite)",
+      "verified": true,
+      "note": "adjacent range check per directive; also covered by drift_check below"
+    }
+  ],
+  "drift_check": {
+    "scope": "server.py:628-633",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "none",
+    "note": "server.py 628-633 byte-identical at c9449d64 and ce3d8200 (TOP_SCORING_UNIVERSE \"20\" at :628, PICK_HANDLER_TIMEOUT 8s at :629, PICK_READ_TIMEOUT 0.5s at :632, _PICK_READ_EXECUTOR ThreadPoolExecutor at :633). No drift relative to the historical pin."
+  },
+  "refutes_if": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py lacks the StaticFiles mount at lines 510-512, or line 628 TOP_SCORING_UNIVERSE default differs from \"20\"",
+  "verified": true,
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}

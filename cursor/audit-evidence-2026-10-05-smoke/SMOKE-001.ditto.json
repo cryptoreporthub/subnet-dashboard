@@ -1,0 +1,55 @@
+{
+  "claim_id": "SMOKE-001",
+  "title": "Ditto blind-parallel evidence — StaticFiles mounted at /static (server.py:510-512)",
+  "directive": "1057e644",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "class": "C5",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py | nl -ba | sed -n '510,512p'",
+  "pin_blob_sha": {
+    "server.py": "3acdfc83b90e03bb3ccf87081faf47f39ad1bd27"
+  },
+  "evidence": [
+    {
+      "path": "server.py",
+      "lines": "510-512",
+      "quote": "_static_dir = os.path.join(BASE_DIR, \"static\")\nif os.path.isdir(_static_dir):\n    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"
+    }
+  ],
+  "verbatim_at_pin": [
+    {"line": 510, "text": "_static_dir = os.path.join(BASE_DIR, \"static\")"},
+    {"line": 511, "text": "if os.path.isdir(_static_dir):"},
+    {"line": 512, "text": "    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"}
+  ],
+  "cross_checked_cites": [
+    {
+      "cite": "C12-STATIC-PATH-COUNT-001.json server.py:510-512",
+      "verified": true
+    },
+    {
+      "cite": "C9-TOP-SCORING-UNIVERSE-001.json server.py:628",
+      "verified": true
+    }
+  ],
+  "drift_check": {
+    "scope": "server.py:628-633",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "none",
+    "note": "server.py 628-633 byte-identical at c9449d64 and ce3d8200; C9's :628 cite (TOP_SCORING_UNIVERSE default \"20\") matches verbatim."
+  },
+  "refutes_if": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py lacks a StaticFiles mount at lines 510-512, or _static_dir is not joined from BASE_DIR/static",
+  "claims": [
+    {
+      "claim_id": "SMOKE-001",
+      "expected_lines": "510-512",
+      "verified": true,
+      "conflicts_with": null,
+      "comparison": "byte-exact match vs SMOKE-001.json expected_quote at 0cabfb74; no renumbering applied"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}
