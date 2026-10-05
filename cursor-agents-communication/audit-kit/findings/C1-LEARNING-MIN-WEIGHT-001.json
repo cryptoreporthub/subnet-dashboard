@@ -1,0 +1,40 @@
+{
+  "claim_id": "C1-LEARNING-MIN-WEIGHT-001",
+  "title": "_LEARNING_MIN_WEIGHT diverges: resolver.py=0.3 vs weights.py/judges/weights.py=0.1",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C1",
+  "disposition": "CONFIRMED",
+  "refutes_if": "All modules defining _LEARNING_MIN_WEIGHT use the same numeric value, or only one definition is reachable in the import graph",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver.py | nl -ba | sed -n '109p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/weights.py | nl -ba | sed -n '30p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/judges/weights.py | nl -ba | sed -n '24p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/council/resolver.py",
+      "lines": "109",
+      "quote": "_LEARNING_MIN_WEIGHT = 0.3"
+    },
+    {
+      "path": "internal/council/weights.py",
+      "lines": "30",
+      "quote": "_LEARNING_MIN_WEIGHT = 0.1"
+    },
+    {
+      "path": "internal/judges/weights.py",
+      "lines": "24",
+      "quote": "_LEARNING_MIN_WEIGHT = 0.1"
+    },
+    {
+      "path": "tests/test_phase_j_weights.py",
+      "lines": "39",
+      "quote": "assert resolver._LEARNING_MIN_WEIGHT == 0.3"
+    },
+    {
+      "path": "tests/test_judge_weights.py",
+      "lines": "9",
+      "quote": "from internal.judges.weights import _LEARNING_MIN_WEIGHT  # uses 0.1 module"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

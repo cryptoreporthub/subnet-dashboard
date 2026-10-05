@@ -1,0 +1,35 @@
+{
+  "claim_id": "C1-MAX-SNAPSHOTS-001",
+  "title": "MAX_SNAPSHOTS diverges: internal/pump_tracker/core.py=60 vs datastore/pump_tracker.py=600",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C1",
+  "disposition": "CONFIRMED",
+  "refutes_if": "Both modules define MAX_SNAPSHOTS with the same integer value, or datastore/pump_tracker.py is imported by live import graph",
+  "fetch_method": "git grep MAX_SNAPSHOTS ce3d820013d45577333ac8aada8c0d9e97c54129 -- '*.py'; git grep datastore.pump_tracker ce3d820013d45577333ac8aada8c0d9e97c54129 -- '*.py'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/pump_tracker/core.py",
+      "lines": "21",
+      "quote": "MAX_SNAPSHOTS = 60"
+    },
+    {
+      "path": "datastore/pump_tracker.py",
+      "lines": "44",
+      "quote": "MAX_SNAPSHOTS = 600   # per-subnet rolling price history kept in memory"
+    },
+    {
+      "path": "internal/pump_tracker/__init__.py",
+      "lines": "3",
+      "quote": "from internal.pump_tracker.core import (  # noqa: F401"
+    },
+    {
+      "path": "import_graph",
+      "lines": "n/a",
+      "quote": "git grep datastore.pump_tracker at pin returns zero importers; live path is internal.pump_tracker.core (MAX_SNAPSHOTS=60)"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

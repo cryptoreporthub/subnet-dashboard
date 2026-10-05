@@ -1,0 +1,21 @@
+{
+  "claim_id": "C8-BARE-EXCEPT-PASS-001",
+  "title": "AST scan: 299 bare except:pass handlers across .py files at pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C8",
+  "disposition": "CONFIRMED",
+  "refutes_if": "AST scan of all .py files at pin yields zero bare except:pass nodes",
+  "fetch_method": "python3 AST walk over git show pin:<path> for each .py; count ExceptHandler with single Pass body",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "aggregate",
+      "lines": "n/a",
+      "quote": "299 bare except:pass sites; sample: datastore/learning_engine.py:88, internal/background_boot.py:612,618"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Hazard classification per-site not complete this turn; inventory only"
+}

@@ -1,0 +1,35 @@
+{
+  "claim_id": "C4-FLOCK-SPINLOCK-001",
+  "title": "fcntl.flock spinlocks with 5.0s default timeout on persist paths",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C4",
+  "disposition": "CONFIRMED",
+  "refutes_if": "soul_map_io.py _locked_soul_map_file lacks timeout_seconds=5.0 or uses blocking LOCK_EX without spin",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/store/soul_map_io.py | nl -ba | sed -n '48,69p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/store/soul_map_io.py",
+      "lines": "48",
+      "quote": "def _locked_soul_map_file(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:"
+    },
+    {
+      "path": "internal/store/soul_map_io.py",
+      "lines": "57",
+      "quote": "fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "lines": "121",
+      "quote": "def _locked_score_snapshot(snap_path: str, timeout_seconds: float = 5.0) -> Iterator[None]:"
+    },
+    {
+      "path": "internal/council/daily_pick_engine.py",
+      "lines": "71",
+      "quote": "def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

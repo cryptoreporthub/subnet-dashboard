@@ -1,0 +1,30 @@
+{
+  "claim_id": "C2-WORKER-PEER-TIMEOUT-001",
+  "title": "WORKER_PEER_TIMEOUT_SECONDS default collision: worker_proxy=4 vs worker_peer=12",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C2",
+  "disposition": "CONFIRMED",
+  "refutes_if": "worker_proxy.py and worker_peer.py use the same default when env unset",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/worker_proxy.py | nl -ba | sed -n '760p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/worker_peer.py | nl -ba | sed -n '29p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:fly.toml | nl -ba | sed -n '122p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/worker_proxy.py",
+      "lines": "760",
+      "quote": "timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"4\"))"
+    },
+    {
+      "path": "internal/worker_peer.py",
+      "lines": "29",
+      "quote": "timeout = float(os.environ.get(\"WORKER_PEER_TIMEOUT_SECONDS\", \"12\"))"
+    },
+    {
+      "path": "fly.toml",
+      "lines": "122",
+      "quote": "WORKER_PEER_TIMEOUT_SECONDS = \"4\""
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}
