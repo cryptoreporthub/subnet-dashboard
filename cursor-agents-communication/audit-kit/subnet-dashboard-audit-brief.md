@@ -23,6 +23,65 @@ I authorize:
 
 ---
 
+## Project model — Mission Control + two lane agents
+
+Adapted from Architecture Epistemics (PR #1294 campaign); **not** a full 3-seat
+Grok fleet. Follow-up to audit-kit handoff [PR #1322](https://github.com/cryptoreporthub/subnet-dashboard/pull/1322).
+
+| Role | Cursor Project seat | Does | Does not |
+|---|---|---|---|
+| **Mission Control** | Project coordinator (you talk here) | Routes tickets to Lane 1 / Lane 2; strip-validates Evidence Bundles; merges into candidate matrix; Ditto writes (`source=cursor`); holds Tier **B→A** until Joshua spot-check | Fetch product code; run Lane 2 probes; product fixes |
+| **Lane 1** | Background worker | Tracer: pin bytes, population ledger, C1–C13, bundles → `audit-kit/findings/` | Live probes; merge-desk prose; implementation |
+| **Lane 2** | Background worker | ConfigTruth: L2.1–L2.3 receipts only; Incidents A/B/C timelines; bundles → `audit-kit/findings/` | Code census; repo edits; deploy |
+
+**Gemini:** blind parallel C1–C13 (capture–recapture) — **not a seat**.  
+**Ditto:** coverify on request — **not a seat**, never the merge desk.
+
+**Routing rules (MC only):**
+
+1. Workers return **Evidence Bundle JSON files only** — no seat-to-seat prose DMs.
+2. MC rejects bundles missing required fields (see `evidence-bundle-schema.md`).
+3. Conflicting bundles stay Tier **B** until Joshua resolves; both kept on disk.
+4. Chronology before causality: establish incident timestamps (Lane 2) before mechanism claims.
+5. Never skip a scoped item because a plausible upstream fix exists elsewhere.
+
+**Kickoff line for the new Project:**
+
+> You are Mission Control. Spawn Lane 1 and Lane 2 workers per this brief. Seats
+> return bundles to `cursor-agents-communication/audit-kit/findings/` only.
+
+---
+
+## Epistemics guardrails (mandatory)
+
+### SMOKE gate — before full census
+
+Do **not** open hard claims or the full 1413-file ledger until SMOKE passes at
+`ce3d820013d45577333ac8aada8c0d9e97c54129`:
+
+| ID | Check | PASS = |
+|---|---|---|
+| SMOKE-001 | `server.py:510-512` | Literal `StaticFiles` mount at `/static` |
+| SMOKE-002 | `resolver_scheduler.py:736` | `write_soul_map` still wrapped in `except Exception: pass` (or disposition updated with receipt) |
+| SMOKE-003 | `/version` vs pin | Live `/version` SHA equals charter pin (Lane 2.1, one GET) |
+
+FAIL any SMOKE → stop; fix charter/pin mismatch before census.
+
+### Evidence Bundles on disk
+
+- Schema: [`evidence-bundle-schema.md`](evidence-bundle-schema.md)
+- Output: [`findings/`](findings/)
+- Every **CONFIRMED** finding → JSON bundle + candidate-matrix row
+- **Tier B** default; **Tier A** only after Joshua spot-check of gating citations
+- Old `queue/done/*.json` at pin `c9449d64…` — historical; re-verify at `ce3d8200` before Tier A (see C-016 drift caution)
+
+### Implementation phase (after audit)
+
+Adversarial single-PR review: **PASS / MODIFY / BLOCK** per fix PR. Separate
+authorization from this read-only audit (Rule 8).
+
+---
+
 ## Lane 1 — Deep Static Code Audit (Full Scope)
 
 **Work:** Complete, exhaustive sweep of every tracked file against 13 finite contradiction classes to eradicate internal code conflicts. Read-only against pinned commit `ce3d820013d45577333ac8aada8c0d9e97c54129`.
@@ -165,9 +224,8 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 1. **Population ledger:** All 1413 tracked files at `ce3d820013d45577333ac8aada8c0d9e97c54129`.
 2. **Candidate matrix per class (C1–C13):** Dispositions and falsifiers.
 3. **Lane 2 incident report:** Per-window root-cause analysis for Incidents A (**08:29Z–08:55Z**), B (**11:41:30Z–11:47:23Z**), and C (**11:49:15Z** asset wedge), supported by Fly logs and read-only probes. Label Gemini-origin claims until independently re-verified.
-4. **CI regression guards:** Proposed automated tests or lint rules for every confirmed defect (proposal only; no implementation in this project unless separately authorized).
-
----
+4. **Evidence Bundles:** JSON files in [`findings/`](findings/) per [`evidence-bundle-schema.md`](evidence-bundle-schema.md) — one per CONFIRMED finding.
+5. **CI regression guards:** Proposed automated tests or lint rules for every confirmed defect (proposal only; no implementation in this project unless separately authorized).
 
 ## Appendix: Unverified candidates to re-derive (do not trust without receipts)
 
@@ -179,4 +237,4 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 - **C12:** Static asset burst load — **47** template-referenced `/static/*` paths at pin; parallel browser fetches vs single-process connection/file-descriptor limits (Incident B/C).
 - **C4/C5/C12 cross-cut (action item):** Persist pipeline + background hydrators vs ASGI loop when upstream returns `status=timeout` — see § Cursor action item.
 
-Confirm receipt and begin Lane 1 ledger and Lane 2 log inspection.
+Confirm receipt, run SMOKE gate, then begin Lane 1 ledger and Lane 2 log inspection.
