@@ -11,15 +11,14 @@ spot-checks in PR comments → Joshua gates Tier A → merge.
 | **Lane 1 / Lane 2** (Cursor) | `findings/*.json` | Produce bundles at pin | Edit `ledger/claims.json` |
 | **Mission Control** (Cursor) | `ledger/*.json` + draft PR | Strip-validate bundles; index claims; open/merge docs PRs | Fetch code for audit; product fixes |
 | **Replit** | **GitHub PR comments** | Independent spot-check: PASS / MODIFY / BLOCK per bundle or file | Author bundles; merge |
-| **Gemini** | **Parallel bundles or adversarial review** (task output, paste, or branch) | Blind fetch / falsify; submit bundles MC commits | Native GitHub PR reviewer (unless human pastes review onto PR) |
-| **Ditto** | Memory + optional PR comment | Coverify on request; long-term mirror | Merge desk; Tier A gate |
+| **Ditto Code** | **`findings/*.json` on evidence PR branch** | Blind parallel fetch (GitHub route); `create_or_update_file` with MC ticket | Any `ledger/*`; merge; self-verify; commit off-PR |
+| **Ditto memory** | `save_memory` | STATUS mirror | Authoritative ledger |
 | **Joshua** | PR approval + `claims.json` | Tier **B → A**; resolve contradictions | — |
 
-**You were right to question the old diagram:** Replit and Gemini are **not** the
-same box. Replit's standing job is **PR comment verification**. Gemini's standing
-job is **parallel blind production** (bundles and adversarial review fed back to
-MC). Gemini may never touch the PR thread; MC still lands Gemini-origin bundles in
-`findings/` and rows in `ledger/claims.json` with `verified_by: ["gemini-blind"]`.
+**Gemini is off the critical path.** Ditto Code picks up blind parallel production
+(GitHub fetch route). Replit spot-checks on PR. See
+[`DITTO-HANDOFF.md`](DITTO-HANDOFF.md) — Ditto commits only after MC posts branch +
+parent SHA + claim_id slice.
 
 ## Flow
 
@@ -28,11 +27,12 @@ flowchart TB
   subgraph producers["Bundle producers"]
     L1[Lane 1 Cursor]
     L2[Lane 2 Cursor]
-    G[Gemini blind parallel]
+    D[Ditto Code blind parallel]
   end
 
   producers --> findings[(findings/*.json)]
-  G -.->|bundles via branch or paste — MC commits| findings
+  MC -->|handoff ticket branch+parent_sha| D
+  D -->|create_or_update_file on PR head only| findings
 
   MC[Mission Control] --> ledger[(ledger/)]
   MC --> PR[Draft docs PR on GitHub]
@@ -42,16 +42,14 @@ flowchart TB
 
   Replit[Replit verifier] -->|PR comments PASS / MODIFY / BLOCK| PR
 
-  Ditto[Ditto] -.->|coverify on request| MC
-
-  Joshua[Joshua] -->|Tier B to A in claims.json| ledger
+  Joshua[Joshua] -->|Tier B to A; resolve contradictions| ledger
   Joshua -->|approve merge| PR
 
   PR -->|docs only — no deploy| main
 ```
 
-Solid arrows = normal git path. Dotted = optional or human-mediated (Gemini paste,
-Ditto coverify).
+Solid arrows = normal git path. Ditto never commits without MC handoff ticket
+([`DITTO-HANDOFF.md`](DITTO-HANDOFF.md)).
 
 ## Evidence PR lifecycle
 
@@ -66,13 +64,15 @@ Ditto coverify).
    - **PASS** — bundle matches pin bytes / logs cited
    - **MODIFY** — schema OK but `refutes_if` or evidence weak
    - **BLOCK** — pin mismatch or unreproducible receipt
-5. **Gemini parallel** — If Gemini sends a bundle or adversarial review outside
-   GitHub, MC opens the **same** evidence PR (or a follow-up) with those files;
-   Replit still spot-checks the **committed** artifacts on the PR diff, not chat
-   paste alone.
-6. **Joshua gate** — Set `tier: "A"` and `verified_by` includes `joshua` only after
+5. **Ditto blind parallel** — MC posts handoff ticket (PR #, branch, `parent_sha`,
+   claim_ids). Ditto commits `findings/*.json` to **PR head only** with
+   git-replayable `fetch_method`. Replit reruns after publish.
+6. **Contradictions** — Ditto flags via `conflicts_with` or PR comment; **MC**
+   writes `ledger/contradictions.json`. Both bundles stay Tier **B**; no
+   seniority promotion.
+7. **Joshua gate** — Set `tier: "A"` and `verified_by` includes `joshua` only after
    spot-check; set `review_status: merged` when PR merges.
-7. **Merge** — No Fly deploy; same class as [#1322](https://github.com/cryptoreporthub/subnet-dashboard/pull/1322).
+8. **Merge** — No Fly deploy; same class as [#1322](https://github.com/cryptoreporthub/subnet-dashboard/pull/1322).
 
 ## What stays out of git
 

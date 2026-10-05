@@ -9,7 +9,8 @@ folder before starting the population ledger or map fold-in.
 |------|---------|
 | [`subnet-dashboard-audit-brief.md`](subnet-dashboard-audit-brief.md) | **Charter** — paste into the new Project's first message |
 | [`evidence-bundle-schema.md`](evidence-bundle-schema.md) | JSON bundle format for Lane 1 / Lane 2 findings |
-| [`REVIEW-WORKFLOW.md`](REVIEW-WORKFLOW.md) | Replit PR review loop; Gemini vs Replit roles |
+| [`REVIEW-WORKFLOW.md`](REVIEW-WORKFLOW.md) | Replit PR review loop; Ditto Code blind parallel |
+| [`DITTO-HANDOFF.md`](DITTO-HANDOFF.md) | **MC → Ditto ticket** (branch, parent_sha, claim_id) before any commit |
 | [`findings/`](findings/) | Output directory for Evidence Bundles (MC-validated) |
 | [`ledger/`](ledger/) | MC merge desk — `claims.json`, contradictions, population, incidents |
 | [`f02-runtime-audit-scope.md`](f02-runtime-audit-scope.md) | F02 scope objective, twelve questions, evidence bar, §6 post-scope receipts |
