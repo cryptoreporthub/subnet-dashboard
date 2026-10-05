@@ -5,7 +5,10 @@
 **Scope:** Two lanes running in parallel.
 
 - **Lane 1:** Deep static code audit (read-only, exhaustive against C1–C13 contradiction classes with stop rule).
-- **Lane 2:** Live runtime investigation (2026-10-05 **production** event-loop wedge **08:29Z–08:55Z UTC**, ~26 minutes; Fly logs under strict governance).
+- **Lane 2:** Live runtime investigation — **three distinct 2026-10-05 UTC production windows** (Fly logs under strict governance):
+  - **Incident A:** event-loop wedge **08:29Z–08:55Z** (~26 minutes; Ditto `93d36426`)
+  - **Incident B:** connection-timeout wedge **11:41:30Z–11:47:23Z** (~6 minutes; Gemini task-279 / user report)
+  - **Incident C:** static-asset wedge **11:49:15Z** (post-recovery browser load failure; Gemini task-279 / user report)
 
 **Do not conflate with Lane 1 audit-run timestamps:** a separate **Lane 1 ledger read span** on the same calendar day was **02:09:49–02:10:13 UTC** (clean `READ` frames only; emits after **02:10:14** are error tail with no audit weight). That span is provenance for static anchors (e.g. `server.py:632` / `:3251` pending independent re-read), **not** the production incident window.
 
@@ -70,19 +73,55 @@ Per class: detector, candidate list, and disposition (`CONFIRMED / REFUTED / BY-
 
 > Provenance note: the `ce3d820013d45577333ac8aada8c0d9e97c54129` ledger produced clean `READ` frames from **2026-10-05 02:09:49–02:10:13 UTC** (source of the `:632` / `:3251` anchors). Emits after **02:10:14 UTC** are error output and carry no audit weight in either direction.
 
-This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 incident clock. Lane 2 correlates **2026-10-05 08:29Z–08:55Z UTC** (Ditto `93d36426`; GitHub Actions uptime failure at **08:44Z** falls inside this window per `2d479104`).
+This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 incident clock. Lane 2 correlates the three windows in § Lane 2 priority evidence below.
 
 ---
 
 ## Lane 2 — Live Runtime Investigation (Governance Envelope)
 
-**Work:** Investigate the **2026-10-05 production event-loop wedge** (**08:29Z–08:55Z UTC**, ~26 minutes; self-recovered without restart per Ditto `93d36426`) and examine Fly logs against the live service. Correlate against known InstantBailout / synchronous-work-on-loop suspects — not as a novel mystery.
+**Work:** Investigate all **2026-10-05 production degradation windows** under the L2 envelope. Correlate Fly logs and read-only probes across incidents — do not treat them as one undifferentiated outage.
+
+### Lane 2 priority evidence (Gemini-origin — user-authorized for audit)
+
+**Status:** symptoms and timestamps are **priority Lane 2 evidence**; root-cause mechanism is **UNVERIFIED** until independently receipted. Ditto memory `750072ef` notes pushback: CSS timeout → blank page is not standard browser behavior; `ui.css` empty-body vs 503 KB mismatch needs reconciliation; “45 blocking reads starve Uvicorn” remains a **candidate**, not a confirmed mechanism.
+
+#### Incident A — morning event-loop wedge (Ditto `93d36426`)
+
+- **Window:** **08:29Z–08:55Z UTC** (~26 minutes)
+- **Symptom:** HTTP hangs (>15s), process alive, self-recovered without restart — InstantBailout / synchronous-work-on-loop class (not novel)
+- **Correlated:** GitHub Actions uptime curl `000000` at **08:44Z** (`2d479104`) inside this window
+
+#### Incident B — mid-day connection freeze (Gemini task-279 / user report)
+
+- **Window:** **11:41:30Z–11:47:23Z UTC** (~6 minutes)
+- **Symptom:** live site not loading; **48 consecutive health probes timed out** (per Gemini/user report — re-derive under L2.1/L2.2)
+
+#### Incident C — static-asset wedge (Gemini task-279 / user report)
+
+- **Window:** **11:49:15Z UTC** (after `/` returned 200)
+- **Symptom:** browser still failed to load — **static asset queuing starvation** (Gemini label; mechanism UNVERIFIED)
+- **Gemini raw reproduction (Ditto `750072ef`, task-279):** homepage requests **45** simultaneous CSS/JS assets; sample:
+  - `/static/favicon.svg` → 200 (607 B)
+  - `/static/css/smoke-tokens.css` → 200 (6.4 KB)
+  - `/static/css/base.css` → **FAILED** (connection timed out >5s)
+  - `/static/css/ui.css` → 200 (**503 KB** per Gemini; pin blob **503,871 bytes** at `ce3d8200`)
+  - `/static/css/tribunal-hero-layout.css` → **FAILED** (connection timed out >5s)
+- **Pin-verified architecture (Cursor, same-turn at `ce3d8200`):**
+  - `server.py:510-512` — `app.mount("/static", StaticFiles(directory=_static_dir), name="static")`
+  - **47** unique `/static/…` paths referenced across `templates/` at pin (Gemini’s **45** is consistent within counting tolerance)
+  - `static/css/base.css` = **9,469 bytes**; `static/css/tribunal-hero-layout.css` = **1,609 bytes**
+
+**Lane 1 ↔ Lane 2 correlation (mandatory):**
+
+1. **C5 & C12:** How is Starlette/FastAPI `StaticFiles` mounted and served? Can synchronous static I/O contend with API/background work on the single Fly web process? File-descriptor and connection lifecycle under burst parallel `/static/*` loads.
+2. **Lane 2 logs:** Fly logs for **11:41:30Z–11:47:23Z** — what synchronous task/lock held the process before/during the static asset storm at **11:49:15Z**?
+3. **Mechanism falsifiers:** If static files serve in <1s while `/health` times out, queuing-starvation is refuted; if `ui.css` returns 200 with zero-byte body (Ditto live probe in `750072ef`), investigate streaming/truncation separately from timeout theory.
 
 ### Authority envelope (strict boundaries)
 
 | # | Action class | Granted? | Boundary |
 |---|---|---|---|
-| L2.1 | Read-only endpoint pulls (`GET` to `/health`, `/api/*`) | **YES** | No mutation; no query params that trigger writes; no retry storms. |
+| L2.1 | Read-only HTTP GET (`/health`, `/`, `/static/*`, `/api/*`) | **YES** | No mutation; no query params that trigger writes; no retry storms. |
 | L2.2 | Log reads (`fly logs`, log tail on machine) | **YES** | Read-only stream; no log clearing or rotation. |
 | L2.3 | Non-mutating `fly machine exec` | **YES** | Hard-bounded inspection only (`ps`, `env`, `cat` logs/config, `netstat`, `ss`). Must not write, install, kill, or restart anything. Record raw output and proof of non-mutation. |
 | L2.4 | Restart / redeploy machine | **NO** | Strictly forbidden. Requires separate explicit authorization. |
@@ -104,7 +143,7 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 
 1. **Population ledger:** All 1413 tracked files at `ce3d820013d45577333ac8aada8c0d9e97c54129`.
 2. **Candidate matrix per class (C1–C13):** Dispositions and falsifiers.
-3. **Lane 2 incident report:** Root cause of the 2026-10-05 08:29Z–08:55Z UTC degradation supported by Fly logs and process inspection.
+3. **Lane 2 incident report:** Per-window root-cause analysis for Incidents A (**08:29Z–08:55Z**), B (**11:41:30Z–11:47:23Z**), and C (**11:49:15Z** asset wedge), supported by Fly logs and read-only probes. Label Gemini-origin claims until independently re-verified.
 4. **CI regression guards:** Proposed automated tests or lint rules for every confirmed defect (proposal only; no implementation in this project unless separately authorized).
 
 ---
@@ -114,7 +153,8 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 - **C1:** `MAX_SNAPSHOTS` 600 vs 60; `_LEARNING_MIN_WEIGHT` 0.3 vs 0.1 (check liveness in import graph).
 - **C2:** `WATCHLIST_PATH` config/ vs data/; `WORKER_PEER_TIMEOUT_SECONDS` 4 vs 12; `HOMEPAGE_SHELL_CACHE_SECONDS` 60 vs 45.
 - **C4:** `internal/loop_stall_guard.py` `revived` and `resolver_revived` un-reset flags; 5.0s `flock` spinlocks in `score_snapshots.py`, `daily_pick_engine.py`, `price_fetcher.py`, `predictions_store.py`, `soul_map_io.py`.
-- **C5:** All `sqlite3.connect` sites at `ce3d820013d45577333ac8aada8c0d9e97c54129` — classify managed vs unmanaged; read `PRAGMA journal_mode` on disk under L2.3 where needed.
+- **C5:** All `sqlite3.connect` sites at `ce3d820013d45577333ac8aada8c0d9e97c54129` — classify managed vs unmanaged; read `PRAGMA journal_mode` on disk under L2.3 where needed. **Also:** `server.py:510-512` `StaticFiles` mount — static asset I/O vs API/background contention (Incident C).
 - **C8:** `resolver_scheduler.py:736` and `:1181` `write_soul_map` wrapped in `except Exception: pass` (trace downstream status).
+- **C12:** Static asset burst load — **47** template-referenced `/static/*` paths at pin; parallel browser fetches vs single-process connection/file-descriptor limits (Incident B/C).
 
 Confirm receipt and begin Lane 1 ledger and Lane 2 log inspection.
