@@ -8,6 +8,8 @@ folder before starting the population ledger or map fold-in.
 | File | Purpose |
 |------|---------|
 | [`subnet-dashboard-audit-brief.md`](subnet-dashboard-audit-brief.md) | **Charter** — paste into the new Project's first message |
+| [`evidence-bundle-schema.md`](evidence-bundle-schema.md) | JSON bundle format for Lane 1 / Lane 2 findings |
+| [`findings/`](findings/) | Output directory for Evidence Bundles (MC-validated) |
 | [`f02-runtime-audit-scope.md`](f02-runtime-audit-scope.md) | F02 scope objective, twelve questions, evidence bar, §6 post-scope receipts |
 | [`f-items-prior-evidence-map-2026-10-03.md`](f-items-prior-evidence-map-2026-10-03.md) | REV 2.1 F-item map — **fold-in target** for v2.7.1 settled core |
 | [`f02-replit-fixlist-review-2026-10-02.md`](f02-replit-fixlist-review-2026-10-02.md) | Replit fix-list receipt (F1–F3 citations verified at pin) |
@@ -31,6 +33,16 @@ merge, 2026-10-01). Tracked file count at pin: **1413** (`git ls-tree -r`).
 5. **Implementation boundary** — confirmed defects are audit output only.
    SQLite connection lifecycle, WAL/locking, and multi-process volume behavior
    are revisited at **implementation time**, not during the read-only audit.
+
+## Project model (new Cursor Project)
+
+- **Mission Control** — Project coordinator; routes work, validates bundles, no code fetch.
+- **Lane 1 agent** — static audit worker (Tracer seat).
+- **Lane 2 agent** — runtime investigation worker (ConfigTruth seat; L2 envelope only).
+
+See charter § **Project model — Mission Control + two lane agents** and § **Epistemics guardrails**.
+
+Follow-up to [PR #1322](https://github.com/cryptoreporthub/subnet-dashboard/pull/1322); Epistemics guardrails PR merges after review.
 
 ## Ditto
 
