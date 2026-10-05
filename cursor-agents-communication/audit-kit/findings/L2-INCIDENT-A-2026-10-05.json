@@ -17,7 +17,7 @@
     {
       "path": "fly-machine-lifecycle://7841024b3712e8",
       "lines": "n/a",
-      "quote": "No exit/restart between 2026-10-04T22:31:36Z start and 2026-10-05T09:43:31Z exit — spans entire Incident A window (08:29–08:55Z); self-recovery without recycle"
+      "quote": "No exit/restart between 2026-10-04T22:31:36Z start and 2026-10-05T09:43:31Z exit — spans entire Incident A window (08:29–08:55Z); no machine recycle during window (service recovery NOT_OBSERVABLE — incident-window app logs unavailable)"
     },
     {
       "path": "fly-log-buffer-limitation",

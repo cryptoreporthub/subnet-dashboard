@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T20:25:07Z",
+  "updated_at": "2026-10-05T21:07:09Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -203,13 +203,14 @@
       "class": "C7",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C7-READINESS-GRADED-FALLBACK-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY addressed: verbatim resolver.py stats quote",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
+      "notes": "Replit re-spot-check PASS (2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
     {
       "claim_id": "C8-BARE-EXCEPT-PASS-001",
@@ -318,13 +319,14 @@
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
       "verified_by": [
         "mission-control"
       ],
-      "notes": "Replit MODIFY addressed: added captured_at_utc + L2-SMOKE in schema",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
+      "notes": "Replit re-spot-check PASS (2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
     {
       "claim_id": "L2-INC-A-001",
@@ -338,8 +340,9 @@
       "verified_by": [
         "lane2"
       ],
-      "notes": "Replit MODIFY addressed: disposition UNKNOWN; incidents mechanism_status UNKNOWN",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
+      "notes": "Replit re-spot MODIFY: removed self-recovery overstatement from lifecycle quote",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
     {
       "claim_id": "L2-INC-B-001",
@@ -348,13 +351,14 @@
       "class": "L2-INC-B",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "replit_modify",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INCIDENT-B-2026-10-05.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "Replit MODIFY addressed: disposition UNKNOWN; incidents mechanism_status UNKNOWN",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
+      "notes": "Replit re-spot-check PASS (2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
     {
       "claim_id": "L2-INC-C-001",
@@ -393,5 +397,15 @@
     "pass": 6,
     "modify": 4,
     "block": 0
+  },
+  "replit_respot": {
+    "comment_url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925",
+    "head": "c211d93c",
+    "pass": [
+      "SMOKE-003",
+      "C7-READINESS-GRADED-FALLBACK-001",
+      "L2-INC-B-001"
+    ],
+    "modify_pending": []
   }
 }
