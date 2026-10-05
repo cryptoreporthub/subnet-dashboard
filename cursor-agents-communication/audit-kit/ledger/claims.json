@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T23:00:00Z",
+  "updated_at": "2026-10-05T23:45:00Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -34,12 +34,13 @@
       "class": "C1",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C1-MAX-SNAPSHOTS-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005548359"
     },
     {
       "claim_id": "C10-PREVIEW-GRADED-HARDCODE-001",
@@ -48,26 +49,28 @@
       "class": "C10",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C10-PREVIEW-GRADED-HARDCODE-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549019"
     },
     {
       "claim_id": "C12-STATIC-PATH-COUNT-001",
-      "title": "47 unique /static/* paths referenced in templates at pin",
+      "title": "47 raw / 46 query-stripped unique /static/* paths in templates at pin",
       "lane": 1,
       "class": "C12",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/C12-STATIC-PATH-COUNT-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY: bundle conflated raw (47) vs stripped (46) counts; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549737"
     },
     {
       "claim_id": "C13-CHECKPOINT-T1_5-001",
@@ -76,12 +79,13 @@
       "class": "C13",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C13-CHECKPOINT-T1_5-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005552070"
     },
     {
       "claim_id": "C2-HOMEPAGE-CACHE-001",
@@ -105,12 +109,13 @@
       "class": "C2",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-WATCHLIST-PATH-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005553082"
     },
     {
       "claim_id": "C2-WORKER-PEER-TIMEOUT-001",
@@ -119,12 +124,13 @@
       "class": "C2",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-WORKER-PEER-TIMEOUT-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005566018"
     },
     {
       "claim_id": "C3-DATASTORE-PUMP-DEAD-001",
@@ -133,26 +139,28 @@
       "class": "C3",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C3-DATASTORE-PUMP-DEAD-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005566703"
     },
     {
       "claim_id": "C4-FLOCK-SPINLOCK-001",
-      "title": "fcntl.flock spinlocks with 5.0s default timeout on persist paths",
+      "title": "fcntl.flock bounded polling/retry with 5.0s default timeout on persist paths",
       "lane": 1,
       "class": "C4",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/C4-FLOCK-SPINLOCK-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY: 'spinlock' mislabeled bounded flock polling/retry; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412"
     },
     {
       "claim_id": "C4-REVIVED-LATCH-001",
@@ -161,12 +169,13 @@
       "class": "C4",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C4-REVIVED-LATCH-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005568185"
     },
     {
       "claim_id": "C5-SQLITE-INVENTORY-001",
@@ -175,12 +184,13 @@
       "class": "C5",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C5-SQLITE-INVENTORY-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005568809"
     },
     {
       "claim_id": "C6-WORKER-HEAVY-ESSENTIAL-001",
@@ -214,17 +224,18 @@
     },
     {
       "claim_id": "C8-BARE-EXCEPT-PASS-001",
-      "title": "AST scan: 299 bare except:pass handlers across .py files at pin",
+      "title": "AST scan: 299 typed except+pass handlers (bare except count=0) at pin",
       "lane": 1,
       "class": "C8",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/C8-BARE-EXCEPT-PASS-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY: mislabeled bare except:pass; fix applied pending re-spot (299 typed, bare=0)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005576883"
     },
     {
       "claim_id": "C8-RESOLVER-PERSIST-SWALLOW-001",
@@ -233,12 +244,13 @@
       "class": "C8",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C8-RESOLVER-PERSIST-SWALLOW-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "conflicts_with: ['SMOKE-002']"
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05); conflicts_with: ['SMOKE-002']",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005577580"
     },
     {
       "claim_id": "C9-TOP-SCORING-UNIVERSE-001",
@@ -247,12 +259,13 @@
       "class": "C9",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C9-TOP-SCORING-UNIVERSE-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578365"
     },
     {
       "claim_id": "STOP-RULE-SAMPLE-1",
@@ -261,12 +274,13 @@
       "class": "C13",
       "disposition": "REFUTED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-1.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY: annotated C4/C10 hits in tsv; evidence for 27/29 readable no-new-class; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578969"
     },
     {
       "claim_id": "STOP-RULE-SAMPLE-2",
@@ -275,12 +289,13 @@
       "class": "C13",
       "disposition": "REFUTED",
       "tier": "B",
-      "review_status": "pending",
+      "review_status": "replit_modify_pending",
       "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-2.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": ""
+      "notes": "Replit MODIFY: C8→C8-typed with line anchors; C10 line anchors added; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469"
     },
     {
       "claim_id": "SMOKE-001",
@@ -475,5 +490,47 @@
         }
       }
     }
+  },
+  "replit_batch3": {
+    "head_checked": "d8f20e1c",
+    "pass": [
+      "C1-MAX-SNAPSHOTS-001",
+      "C10-PREVIEW-GRADED-HARDCODE-001",
+      "C13-CHECKPOINT-T1_5-001",
+      "C2-WATCHLIST-PATH-001",
+      "C2-WORKER-PEER-TIMEOUT-001",
+      "C3-DATASTORE-PUMP-DEAD-001",
+      "C4-REVIVED-LATCH-001",
+      "C5-SQLITE-INVENTORY-001",
+      "C8-RESOLVER-PERSIST-SWALLOW-001",
+      "C9-TOP-SCORING-UNIVERSE-001"
+    ],
+    "modify_pending": [
+      {
+        "claim_id": "C12-STATIC-PATH-COUNT-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549737",
+        "fix": "Distinguished 47 raw template tokens vs 46 query-stripped paths; noted watchlist_alerts.js?v={{ duplicate form"
+      },
+      {
+        "claim_id": "C4-FLOCK-SPINLOCK-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412",
+        "fix": "Renamed spinlock to bounded flock polling/retry; added predictions_store.py:35-54 to persist-path inventory"
+      },
+      {
+        "claim_id": "C8-BARE-EXCEPT-PASS-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005576883",
+        "fix": "Renamed to typed except+pass inventory (299 typed, bare=0)"
+      },
+      {
+        "claim_id": "STOP-RULE-SAMPLE-1",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578969",
+        "fix": "Annotated C4:35-54 and C10:891 in tsv; evidence for 27/29 readable no-new-class"
+      },
+      {
+        "claim_id": "STOP-RULE-SAMPLE-2",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
+        "fix": "C8→C8-typed with line anchors; C10 line anchors added in tsv"
+      }
+    ]
   }
 }

@@ -135,7 +135,7 @@ flowchart LR
 | `resolver._save_json` | inline-worker | **writes** predictions under `locked_predictions_file` | holds-lock | A |
 | `write_soul_map` (scheduler) | inline-worker | **writes** soul_map; **swallows** at `:735-737` | swallows / unknown | A |
 | `load_weights_for_ui` | web-asgi | proxy read; **`_proxy_degraded`** not 1.0 | no | — |
-| StaticFiles `/static/*` | web-asgi | **reads** disk (47 template paths) | unknown (burst I/O) | C |
+| StaticFiles `/static/*` | web-asgi | **reads** disk (47 raw / 46 stripped template paths) | unknown (burst I/O) | C |
 
 #### Client hydrate endpoints (`static/js/cockpit_hydrate.js` at pin)
 
@@ -170,24 +170,24 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | claim_id | layer | runtime_subsystem | code_anchor | data/asset | incident | disposition | review_status | map_provenance | verified_at_sha | evidence_tier | contradicted_by | campaign_ticket | execution_context | blocks_loop |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C1-LEARNING-MIN-WEIGHT-001 | L1 | config-duplicate | `resolver.py` vs `weights.py` `_LEARNING_MIN_WEIGHT` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | inline-worker | no |
-| C1-MAX-SNAPSHOTS-001 | L1 | config-duplicate | `pump_tracker/core.py:60` vs `datastore/pump_tracker.py:600` | pump snapshots | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | inline-worker | no |
-| C10-PREVIEW-GRADED-HARDCODE-001 | L2 | ui-trust-label | preview tribunal_hero graded=443 | — | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | web-asgi | no |
-| C12-STATIC-PATH-COUNT-001 | L1+L2 | static-burst | `templates/` 47 `/static/*` refs; mount `server.py:510-512` | static/ | C | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | Gemini task-279 | web-asgi | unknown |
-| C13-CHECKPOINT-T1_5-001 | L2 | resolver-telemetry | resolver checkpoint t1_5 excluded from stage-sum | soul_map telemetry | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | inline-worker | no |
+| C1-MAX-SNAPSHOTS-001 | L1 | config-duplicate | `pump_tracker/core.py:60` vs `datastore/pump_tracker.py:600` | pump snapshots | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | inline-worker | no |
+| C10-PREVIEW-GRADED-HARDCODE-001 | L2 | ui-trust-label | preview tribunal_hero graded=443 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
+| C12-STATIC-PATH-COUNT-001 | L1+L2 | static-burst | `templates/` 47 raw / 46 stripped `/static/*` refs; mount `server.py:510-512` | static/ | C | CONFIRMED | replit_modify_pending | live-matrix | ce3d8200 | B | — | Gemini task-279 | web-asgi | unknown |
+| C13-CHECKPOINT-T1_5-001 | L2 | resolver-telemetry | resolver checkpoint t1_5 excluded from stage-sum | soul_map telemetry | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | inline-worker | no |
 | C2-HOMEPAGE-CACHE-001 | L1 | config-divergence | `server.py` `_CACHE_PATHS=60` vs module 45 | homepage shell cache | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
-| C2-WATCHLIST-PATH-001 | L1 | config-divergence | `freshness.py:24` config/ vs `store.py:11` data/ | watchlist.json | — | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | — | volume-rmw | no |
-| C2-WORKER-PEER-TIMEOUT-001 | L1 | config-divergence | worker_proxy=4 vs worker_peer=12 | — | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | worker-proxy | no |
-| C3-DATASTORE-PUMP-DEAD-001 | L1 | dead-code | `datastore/pump_tracker.py` unreferenced | — | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | — | no |
-| C4-FLOCK-SPINLOCK-001 | L1+L2 | persist-rmw | `soul_map_io.py:48-69`; score_snapshots; daily_pick_engine | *.lock files | A | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | issue #1113 | volume-rmw | yes |
-| C4-REVIVED-LATCH-001 | L2 | stall-guard | `loop_stall_guard.py:144` revived latch never reset | — | A | CONFIRMED | pending | f-items-map | ce3d8200 | B | — | Ditto 67d91e97 | inline-worker | unknown |
-| C5-SQLITE-INVENTORY-001 | L1 | state-ownership | 10 prod `sqlite3.connect` sites | SQLite dbs | — | CONFIRMED | pending | live-matrix | ce3d8200 | B | — | — | volume-rmw | no |
+| C2-WATCHLIST-PATH-001 | L1 | config-divergence | `freshness.py:24` config/ vs `store.py:11` data/ | watchlist.json | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | — | volume-rmw | no |
+| C2-WORKER-PEER-TIMEOUT-001 | L1 | config-divergence | worker_proxy=4 vs worker_peer=12 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | worker-proxy | no |
+| C3-DATASTORE-PUMP-DEAD-001 | L1 | dead-code | `datastore/pump_tracker.py` unreferenced | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | no |
+| C4-FLOCK-SPINLOCK-001 | L1+L2 | persist-rmw | bounded flock polling/retry: `soul_map_io.py:48-69`; score_snapshots; daily_pick_engine; `predictions_store.py:35-54` | *.lock files | A | CONFIRMED | replit_modify_pending | live-matrix | ce3d8200 | B | — | issue #1113 | volume-rmw | yes |
+| C4-REVIVED-LATCH-001 | L2 | stall-guard | `loop_stall_guard.py:144` revived latch never reset | — | A | CONFIRMED | replit_pass | f-items-map | ce3d8200 | B | — | Ditto 67d91e97 | inline-worker | unknown |
+| C5-SQLITE-INVENTORY-001 | L1 | state-ownership | 10 prod `sqlite3.connect` sites | SQLite dbs | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | — | volume-rmw | no |
 | C6-WORKER-HEAVY-ESSENTIAL-001 | L1 | boot-arming | `fly.toml:41` WORKER_HEAVY=essential skips live_subnets | — | — | BY-DESIGN | replit_pass | live-matrix | ce3d8200 | B | — | — | inline-worker | no |
 | C7-READINESS-GRADED-FALLBACK-001 | L2 | ops-readiness | `/api/ops/readiness` graded fallback chain | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
-| C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 bare `except: pass` | — | A | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | web-asgi | swallows |
-| C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | pending | live-matrix | ce3d8200 | B | SMOKE-002 | — | inline-worker | swallows |
-| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | pending | bundle | ce3d8200 | B | — | — | web-asgi | no |
-| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes | — | — | REFUTED | pending | bundle | ce3d8200 | B | — | — | — | no |
-| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes | — | — | REFUTED | pending | bundle | ce3d8200 | B | — | — | — | no |
+| C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 typed `except+pass` (bare=0) | — | A | CONFIRMED | replit_modify_pending | bundle | ce3d8200 | B | — | — | web-asgi | swallows |
+| C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | SMOKE-002 | — | inline-worker | swallows |
+| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
+| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | REFUTED | replit_modify_pending | bundle | ce3d8200 | B | — | — | — | no |
+| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (C8-typed/C10 anchored) | — | — | REFUTED | replit_modify_pending | bundle | ce3d8200 | B | — | — | — | no |
 | SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | web-asgi | unknown |
 | SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | inline-worker | swallows |
 | SMOKE-003 | L2 | deploy-pin | live `/version` SHA equals pin | — | — | CONFIRMED | replit_modify_pending | bundle | ce3d8200 | B | — | smoke-gate | external-probe | no |

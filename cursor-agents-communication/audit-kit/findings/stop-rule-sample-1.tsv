@@ -9,9 +9,9 @@ S1-07	data/pump_desk/snapshots/2026-08-07T161344Z.json	7222dd5c3d82c20e99466aa4c
 S1-08	data/pump_desk/snapshots/2026-08-07T203544Z.json	ee44b5b7ccb5178beec523936670f5c175722330	READ	
 S1-09	docs/deploy-vehicles/2026-09-11-summary-live-universe.md	459cd80f99e1fb813060d3591d8cd781bb306e16	READ	
 S1-10	docs/phase-p-prod-snapshot.md	b4ea61e62200695c1d9346fb74c56d31b1acdc08	READ	
-S1-11	internal/learning/predictions_store.py	181c09b7744dd43ae42a6b0a755d403eb3f69805	READ	
+S1-11	internal/learning/predictions_store.py	181c09b7744dd43ae42a6b0a755d403eb3f69805	READ	C4:35-54
 S1-12	internal/letter/generator.py	bbdb85cfda91b3dfd3121467a64c56681fb59d30	READ	
-S1-13	internal/preview/tribunal_hero.py	e541ba93864c5a5e34a45805fd3c16d2fa17b20d	READ	
+S1-13	internal/preview/tribunal_hero.py	e541ba93864c5a5e34a45805fd3c16d2fa17b20d	READ	C10:891
 S1-14	internal/run_mode.py	e3ceb6a780b72ec6c2c321e0455e21ed4fed46a3	READ	
 S1-15	internal/signal_hub/__init__.py	2ec48d5a2931ce25dfe856ff065b9187abbe1b8e	READ	
 S1-16	scripts/post-merge.sh	150d1b98567c023b580224dd9367bcc2ea5ed555	READ	

@@ -12,7 +12,7 @@
     {
       "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-2.tsv",
       "lines": "1-31",
-      "quote": "30 files stratified by extension; seed=sha256(pin+':stop-rule-sample-2'); excludes sample-1 paths; 29 READ + 1 PARSE-FAIL"
+      "quote": "30 files stratified by extension; seed=sha256(pin+':stop-rule-sample-2'); excludes sample-1 paths; 29 READ + 1 PARSE-FAIL. Five known-class hits with line anchors in anomaly_classes column."
     },
     {
       "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv",
@@ -22,7 +22,7 @@
     {
       "path": "known_class_hits",
       "lines": "n/a",
-      "quote": "5 files hit existing C8/C10 only: internal/bots/specialists.py, internal/pump/desk_payload.py, internal/trace/store.py, tests/test_pick_scheduler.py, tests/test_summers_telegram_desk.py"
+      "quote": "5 files hit existing C8-typed/C10 only (see tsv anomaly_classes): specialists.py C8-typed:433 C10:118; desk_payload.py C8-typed:68,151,164; trace/store.py C8-typed:39,51 C10:72; test_pick_scheduler.py C8-typed:26; test_summers_telegram_desk.py C10:76,338,339"
     }
   ],
   "tier": "B",
