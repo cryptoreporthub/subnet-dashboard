@@ -117,6 +117,27 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 2. **Lane 2 logs:** Fly logs for **11:41:30Z–11:47:23Z** — what synchronous task/lock held the process before/during the static asset storm at **11:49:15Z**?
 3. **Mechanism falsifiers:** If static files serve in <1s while `/health` times out, queuing-starvation is refuted; if `ui.css` returns 200 with zero-byte body (Ditto live probe in `750072ef`), investigate streaming/truncation separately from timeout theory.
 
+### Cursor action item — persist pipeline & background hydrators (mandatory audit scope)
+
+**Goal:** Determine whether the **persist pipeline** and **background hydrators** can **block the ASGI event loop** when upstream subnet/universe feeds return `status=timeout` — and map every path where timeout handling still runs synchronous work on the web process.
+
+**This is audit scope only** (Lane 1 C4/C5/C12 + Lane 2 correlation). **Not a code fix in PR #1322.** Implementation and deploy are a **separate authorized phase** after confirmed defects.
+
+**Pin-anchored starting points at `ce3d820013d45577333ac8aada8c0d9e97c54129` (re-verify same-turn):**
+
+| Area | Receipt | Audit question |
+|---|---|---|
+| Persist RMW | `internal/store/soul_map_io.py:47-69` (`fcntl` spin up to 5s); `resolver_scheduler.py:735,1176` (`write_soul_map`); `:392-393` (`persist_summary_rmw_ms` telemetry) | Does persist hold the loop or thread pool while subnet upstream is degraded? |
+| Resolver cycle | `internal/council/resolver_scheduler.py` persist wrapped in `except Exception: pass` at `:736` / `:1181` (C8 appendix) | Silent persist failure vs continued blocking work when feeds time out |
+| Subnet timeout surface | `server.py:1842-1848` (`/api/subnets` handler timeout → `status="timeout"`); `:2588-2926` hydrate paths (`HYDRATE_SUBNETS_TIMEOUT_SECONDS` default 4s) | Does `status=timeout` short-circuit async paths or fall through to sync rebuild? |
+| Background hydrators | `server.py:310-361` boot threads (`homepage-warm-boot`, `registry-name-sync`, `council-weight-rebalance`, `background_boot.start_background_workers`); `:363-368` capped `AIO_WORKER_POOL_SIZE` default 4 | Do boot/hydrate threads contend with request-path work on the same process? |
+| Inline worker proxy | `server.py:973-975`, `:1476-1478` (`fetch_worker_json_sync` on request-adjacent paths) | Sync worker RPC while web ASGI loop is wedged? |
+| Universe refresh | `internal/subnet_universe.py` (`ensure_background_refresh`, probe budget) | Serial probe + timeout → permanent `degraded` while sync work continues? |
+
+**Required disposition:** For each path: `CONFIRMED` loop-blocker / `REFUTED` (offloaded to thread with bounded timeout) / `BY-DESIGN` / `UNKNOWN`, with falsifier and Lane 2 log correlation for Incidents A–C.
+
+**Deliverable add-on:** One subsection in the Lane 2 incident report titled *Persist/hydrate vs ASGI wedge* linking timeout status emissions to any synchronous work still running on the web process during **11:41–11:47Z** and **08:29–08:55Z**.
+
 ### Authority envelope (strict boundaries)
 
 | # | Action class | Granted? | Boundary |
@@ -156,5 +177,6 @@ This note closes Lane 1’s governance artifact only. It is **not** the Lane 2 i
 - **C5:** All `sqlite3.connect` sites at `ce3d820013d45577333ac8aada8c0d9e97c54129` — classify managed vs unmanaged; read `PRAGMA journal_mode` on disk under L2.3 where needed. **Also:** `server.py:510-512` `StaticFiles` mount — static asset I/O vs API/background contention (Incident C).
 - **C8:** `resolver_scheduler.py:736` and `:1181` `write_soul_map` wrapped in `except Exception: pass` (trace downstream status).
 - **C12:** Static asset burst load — **47** template-referenced `/static/*` paths at pin; parallel browser fetches vs single-process connection/file-descriptor limits (Incident B/C).
+- **C4/C5/C12 cross-cut (action item):** Persist pipeline + background hydrators vs ASGI loop when upstream returns `status=timeout` — see § Cursor action item.
 
 Confirm receipt and begin Lane 1 ledger and Lane 2 log inspection.
