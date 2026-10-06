@@ -8,9 +8,9 @@
 | Field | Value |
 |-------|-------|
 | `main` | `b5253e65` |
-| `active_slice` | **P3b** |
+| `active_slice` | **P3c** |
 | `state` | `WAITING_GROK` |
-| `updated` | `2026-10-06T22:12Z` |
+| `updated` | `2026-10-06T22:25Z` |
 | `plan` | `/cursor/stores/self/docs/post-audit-p1-p4-plan.md` |
 
 ## Serial queue
@@ -21,18 +21,44 @@
 | 2 | P4a resolver lock | Grok | `cursor/p4a-resolver-lock-timeout` | **DONE** — [PR #1327](https://github.com/cryptoreporthub/subnet-dashboard/pull/1327) Ready @ `f4ae56b5` |
 | 3 | P2 F02 Gate C | MC | `cursor/p2-f02-gate-c-receipts-60a6` | **DONE** — [PR #1328](https://github.com/cryptoreporthub/subnet-dashboard/pull/1328) Ready @ `a862121d` |
 | 4 | P3a council/signals | Grok | `cursor/p3a-council-signals` | **DONE** — [PR #1330](https://github.com/cryptoreporthub/subnet-dashboard/pull/1330) Ready @ `7adfafd8` |
-| 5 | **P3b** chat streaming | Grok | `cursor/p3b-simivision-chat-stream` | **ACTIVE** `WAITING_GROK` |
-| 6 | P3c message-intel | Grok | `cursor/p3c-message-intel-live` | queued |
+| 5 | P3b chat streaming | Grok | `cursor/p3b-simivision-chat-stream` | **DONE** — [PR #1331](https://github.com/cryptoreporthub/subnet-dashboard/pull/1331) Ready @ `fff5979e` |
+| 6 | **P3c** message-intel | Grok | `cursor/p3c-message-intel-live` | **ACTIVE** `WAITING_GROK` |
 | 7 | P4b guard calibrate | Grok | `cursor/p4b-stall-guard-calibrate` | conditional |
 
 ---
 
-## P3b handoff (ACTIVE)
+## P3c handoff (ACTIVE)
+
+**Owner:** Grok  
+**handoff vendorId:** `grok-p3c-message-intel-handoff-2026-10-06`  
+**report vendorId:** `grok-p3c-message-intel-report-2026-10-06`  
+**base:** `main` @ `b5253e65` (rebase on P3b `#1331` if merged first)  
+**branch:** `cursor/p3c-message-intel-live`  
+**audit anchor:** [PR #1324](https://github.com/cryptoreporthub/subnet-dashboard/pull/1324) pin `ce3d820013d45577333ac8aada8c0d9e97c54129`
+
+**PROBLEM:** Message-intel (`GET /api/message-intel`, `/api/message-intel/status`) is the most-polled surface on the homepage hydrate path. G0/rev3 and P3a MC review flagged `test_prod_stability` message-intel health-block flakes — SQLite write-lock contention during listener ingest can still wedge the event loop if any hot path escapes `run_in_threadpool`. Listener/outcome status must stay honest-empty without creds and non-empty when creds present; no fake live markers.
+
+**TASK — live message-intel reliability (§17.F6):**
+1. **Read-path occupancy** — `GET /api/message-intel` (+ list/authors/topics variants) must not block `/health` under mocked slow SQLite or ingest burst; verify all list/stats paths use threadpool or bounded cache (`internal/message_intel/routes.py`, `engine.py`, `store.py`).
+2. **Listener status** — `listener_status()` honest for missing creds, disabled, invalid session, idle-with-session (`tests/test_message_intel_f6.py`); no secrets in API payloads.
+3. **Outcome loop** — `outcome_loop_status()` reports `running`/`live` honestly within boot budget; no false stall alerts in first 5 min post-boot (`tests/test_message_intel_outcomes.py`).
+4. **Status contract** — `/api/message-intel/status` returns `bot_contract` degraded markers when store/listener unhealthy; homepage `#section-message-intel` SSR visible without opening `<details>`.
+5. **Homepage hydrate** — message-intel panel fetch must fail-open (partial/degraded label) like P3b chat warm path; no permanent UI wedge on slow status probe.
+
+**FILES (likely):** `internal/message_intel/{routes,engine,store,listener_service,outcome_loop}.py`, `static/js/*message*`, `tests/test_message_intel_f6.py`, `tests/test_message_intel_harden.py`, `tests/test_prod_stability.py`
+
+**AC:** targeted pytest green; `test_endpoint_contract.py` → **148 passed**; draft PR + Ditto report (`grok-p3c-message-intel-report-2026-10-06`); no deploy; no `fly.toml` / `RESOLVER_*` env bumps; do not start P4b.
+
+**Reference:** P3a/P3b occupancy fixes; `gameplan-beyond-16.md` §F6; `post-audit-sprint-plan.md` §B3 outcomes.
+
+---
+
+## P3b handoff (DONE)
 
 **Owner:** Grok  
 **handoff vendorId:** `grok-p3b-chat-stream-handoff-2026-10-06`  
 **report vendorId:** `grok-p3b-chat-stream-report-2026-10-06`  
-**base:** `main` @ `b5253e65` (rebase on P3a `#1330` if merged first)  
+**base:** `main` @ `b5253e65`  
 **branch:** `cursor/p3b-simivision-chat-stream`  
 **audit anchor:** [PR #1324](https://github.com/cryptoreporthub/subnet-dashboard/pull/1324) pin `ce3d820013d45577333ac8aada8c0d9e97c54129`
 
@@ -50,6 +76,14 @@
 **AC:** targeted pytest green; `test_endpoint_contract.py` → **148 passed**; draft PR + Ditto report (`grok-p3b-chat-stream-report-2026-10-06`); no deploy; no `fly.toml` / env bumps.
 
 **Reference:** P3a occupancy fixes (`#1330`); `g0-1058-composer-p1-handoff.md` §occupancy (do not add scoring/feeds on read paths).
+
+## P3b report (DONE)
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1331
+- **head:** `fff5979e`
+- **tests:** `test_simivision_chat_stream.py` + `test_chat_stability.py` → **24 passed**; `test_endpoint_contract.py` → **148 passed** (env: `PYTHONPATH=.`).
+- **code review:** investigation pool `shutdown(wait=False, cancel_futures=True)` bounds TaoStats strand past budget; `asyncio.wait_for` on chat sync path (`SIMIVISION_CHAT_TIMEOUT_SECONDS`); SSE always terminates with `event:done` (empty reply + timeout partial); `sanitize_reply` on all outbound paths; `chat_stream.js` textContent-only + fail-open warm probe (8s) + 50s send deadline + JSON fallback on stream error; no `fly.toml` / `RESOLVER_*` changes in diff.
+- **MC verdict:** **PASS** — Ready for review (MC undrafted)
 
 ---
 
