@@ -416,7 +416,7 @@ written to Ditto memory for outside review.
 ## Appendix — topology diagram (historical scope, REV 2.2)
 
 **Pin stamp:** `ce3d820013d45577333ac8aada8c0d9e97c54129`  
-**Purpose:** Provenance graph only — maps pre-iteration F02/issues/Ditto memories to current audit `claim_id`s where traceable. **Not** the live runtime map (see [`ledger/candidate-matrix.md`](ledger/candidate-matrix.md)).
+**Purpose:** Provenance graph only — maps pre-iteration F02/issues/Ditto memories to current audit `claim_id`s where traceable. **Not** the live runtime map (see [`ledger/candidate-matrix.md`](ledger/candidate-matrix.md)). Question-axis closure: [`ledger/open-questions-closure.md`](ledger/open-questions-closure.md).
 
 ```mermaid
 flowchart TB

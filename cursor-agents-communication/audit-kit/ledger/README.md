@@ -11,6 +11,7 @@ Repo-backed **status board** for the `ce3d8200` audit. Bundles live in
 | [`contradictions.json`](contradictions.json) | MC only | Paired conflicting `claim_id`s until Joshua resolves |
 | [`population.tsv`](population.tsv) | Lane 1 | 1413-file census at pin (header only until Lane 1 completes) |
 | [`incidents.json`](incidents.json) | Lane 2 + MC | Incident windows A/B/C with bundle cross-links |
+| [`open-questions-closure.md`](open-questions-closure.md) | MC | F02 O1–O18 → `claim_id` / evidence row / NOT_OBSERVABLE boundary |
 
 ## Status vocabulary
 
