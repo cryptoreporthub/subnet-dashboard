@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T03:38:00Z",
-  "updated_by": "mission-control-ws1+ws2+phase2",
+  "updated_at": "2026-10-06T12:10:00Z",
+  "updated_by": "grok-rev3-fold",
   "population": {
     "total": 1413,
     "read": 1374,
@@ -366,7 +366,7 @@
         "lane2",
         "ws2-static-forensics"
       ],
-      "notes": "WS1: incident-window recovery NOT_OBSERVABLE; current live CONFIRMED 2026-10-06T03:28:49Z. WS2: GHA timeout + no recycle closed; InstantBailout refutes thread-pool-only; root mechanism needs Fly logs",
+      "notes": "WS1: incident-window recovery NOT_OBSERVABLE; current live CONFIRMED 2026-10-06T03:28:49Z. WS2: GHA timeout + no recycle closed; InstantBailout refutes thread-pool-only; root mechanism needs Fly logs. Grok rev3: four-method ladder all NOT_OBSERVABLE (buffer/--start/drain/logs API); mechanism_status BOUNDED_UNKNOWN unchanged",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002999117"
@@ -385,7 +385,7 @@
         "lane2",
         "ws2-static-forensics"
       ],
-      "notes": "WS2: machine recycle closed; Gemini 48-probe count UNVERIFIED; root stall needs Fly logs",
+      "notes": "WS2: machine recycle closed; Gemini 48-probe count UNVERIFIED; root stall needs Fly logs. Grok rev3: incident-window logs NOT_OBSERVABLE (same four methods); recycle 11:45:48Z from prior GraphQL receipt only",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
@@ -403,7 +403,7 @@
         "lane2",
         "ws2-static-forensics"
       ],
-      "notes": "WS2: partial InstantBailout allowlist explains selective static failure pattern; incident receipt needs Fly logs",
+      "notes": "WS2: partial InstantBailout allowlist explains selective static failure pattern; incident receipt needs Fly logs. Grok rev3: 11:49:15Z static behavior NOT_OBSERVABLE; audit-time burst REFUTED queuing-starvation unchanged",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
@@ -709,5 +709,30 @@
       {"claim_id": "L2-INC-B-001", "boundary": "incident-window app logs + stall precursor; 11:45:48Z recycle from prior GraphQL receipt only", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"},
       {"claim_id": "L2-INC-C-001", "boundary": "incident-time 11:49:15Z static failures; Gemini 45-asset UNVERIFIED", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z; non-allowlisted CSS 200 @ probe"}
     ]
+  },
+  "unknowns_closure_grok_rev3": {
+    "workstream": "Grok Fly triage rev3 (PR #1324)",
+    "probe_batch_utc": "2026-10-06T12:00:00Z",
+    "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+    "ditto_memory_id": "e7639072-c408-48cd-8d00-854591ddf623",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md",
+    "checklist_verdict": "PARTIAL",
+    "checklist_detail": {
+      "auth_reconciliation": "PASS",
+      "502_root_cause": "PARTIAL — crash/OOM REFUTED; routing/proxy LEADING not CONFIRMED",
+      "incident_forensics": "PARTIAL — A/B/C NOT_OBSERVABLE with per-method errors (valid)",
+      "carried_over_D_netuids": "FAIL — two dropped netuids UNKNOWN without prod read",
+      "endpoint_sampler": "PASS — STALE/degraded 11:48:40–11:54:31Z",
+      "resolver_drift": "PARTIAL — 82.6m NOT CONFIRMED; max gap 59.95m",
+      "signal_cross_check": "PARTIAL — NOT_OBSERVABLE (council busy/empty)",
+      "what_could_not_prove": "PASS"
+    },
+    "incident_forensics": [
+      {"claim_id": "L2-INC-A-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"},
+      {"claim_id": "L2-INC-B-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"},
+      {"claim_id": "L2-INC-C-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"}
+    ],
+    "grok_overall": "FAIL (honest — incident windows unobservable; D netuids missing)",
+    "mechanism_status_unchanged": ["L2-INC-A-001", "L2-INC-B-001", "L2-INC-C-001"]
   }
 }

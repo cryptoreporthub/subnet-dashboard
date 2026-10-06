@@ -66,7 +66,21 @@
     }
   },
   "tier": "B",
-  "verified_by": ["lane2", "ws1", "ws2-static-forensics", "phase2-multi-method"],
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics", "phase2-multi-method", "grok-rev3"],
+  "grok_rev3": {
+    "ditto_memory_id": "e7639072-c408-48cd-8d00-854591ddf623",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md",
+    "probe_utc": "2026-10-06T12:00:00Z",
+    "mechanism_verdict": "NOT_OBSERVABLE",
+    "methods": [
+      {"method": "flyctl logs --no-tail", "result": "0 overlap — buffer earliest 2026-10-06T04:38:56Z (prior) / 11:33:11Z (current)"},
+      {"method": "flyctl logs --start/--end", "result": "unsupported — flyctl v0.4.99 unknown flag --start"},
+      {"method": "LogShipper/drain", "result": "none — single org/app; git grep @pin 0 hits"},
+      {"method": "Fly logs API w/ flyctl token", "result": "skipped — token extraction blocked by policy"}
+    ],
+    "key_log_lines": "0 lines in window; prior GraphQL receipt exit+restart 11:45:48Z CONFIRMED retained (not re-derived from buffer)",
+    "mechanism_status_unchanged": "BOUNDED_UNKNOWN"
+  },
   "window_utc": {
     "start": "2026-10-05T11:41:30Z",
     "end": "2026-10-05T11:47:23Z"
