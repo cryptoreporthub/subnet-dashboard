@@ -126,11 +126,15 @@
 - 2026-10-06 — **Phase 3 execution (Tracks 1–3, Joshua grant):** **Track 1** Sentry INC-A/B/C all **NOT_OBSERVABLE** — `mcp_auth` timed out; manual Discover queries documented with `sentry_release=ce3d8200…`. **Track 2** Finding D **CONFIRMED** — netuids **130** (SN130) + **132** (SN132) via read-only `fly ssh console` on `data/subnet_universe.json` validity_map negatives; Grok D item FAIL→PASS. **Track 3** inventory re-confirmed no drain @ pin; **proposal ready** (Fly Log Shipper → Axiom); deploy/secrets **PENDING**. **No INC mechanism upgrade.** Receipts: `phase3-track1-sentry-inc-windows.md`, `phase3-finding-d-netuids-2026-10-06.md`, `phase3-track2-gate-c-scope.md`, `phase3-track3-log-drain-proposal.md`; `claims.json` `phase3_post_a`. Docs/evidence only; no deploy.
 - 2026-10-06 — **Phase 3 continuation (Tracks 1–3 close):** **Track 1 CLOSED** — Sentry free tier expired, no paid plan; do not retry Sentry MCP. INC-A/B/C Oct-5 app logs remain **NOT_OBSERVABLE**; alternative evidence ladder documented (GHA 37283988892 partial → Fly buffer ceiling → Gate C live-only → Track 3 forward-only). **Track 2 verified** — Finding D netuids 130/132 cross-linked in `claims.json` `phase3_post_a.finding_d` + receipt. **Track 3 IMPLEMENTATION_READY** — Fly Log Shipper → Axiom with exact `fly secrets set` commands, `fly.toml` internal_port 8686, preflight checklist; deploy/secrets **PENDING** (not executed). Pin `ce3d820013d45577333ac8aada8c0d9e97c54129`. Docs/evidence only; no deploy.
 
-## 2026-10-06 ~08:20 PT — Track 3 Path B (box→Axiom bridge)
+## 2026-10-06 ~08:20 PT — Track 3 Path B (box→Axiom bridge) — **from Mission Control (Grok Bot)**
 
-- Path A `subnet-dashboard-logshipper`: BLOCKED (Fly token unauthorized for apps.create / tokens.create readonly; Joshua Fly GitHub login broken)
-- Path B deployed: `/workspace/track3-logshipper/box-axiom-bridge.py` streaming `subnet-dashboard` → Axiom `subnet-dashboard-prod`
-- PID 217949 alive; total_ingested≥121; ingest HTTP 200; prod /health 200
-- No `subnet-dashboard` fly.toml changes; secrets not in git
-- Migration path remains `retry-phase-b.sh` when org-capable Fly token exists
-- Ditto: source=cursor vendorId=track3-path-b-2026-10-06
+**Author:** Mission Control (Grok Bot) — Joshua passed Track 3 task+gates (`drive-axiom`); executed on MC box without further human Fly UI help after GitHub login failed.
+
+- **Path A (official Fly Log Shipper) BLOCKED:** `flyctl apps create subnet-dashboard-logshipper --org personal` → `unauthorized`; `flyctl tokens create readonly personal` → `createLimitedAccessToken Not authorized`. Box Fly identity `d8538a66-…@tokens.fly.io` can manage existing `subnet-dashboard` but cannot create apps or mint org readonly NATS tokens. Joshua Fly dashboard GitHub connect also broken same morning — no stronger token available.
+- **Path B DEPLOYED (workaround):** box-hosted bridge streams `flyctl logs -a subnet-dashboard --json` → batch POST Axiom dataset `subnet-dashboard-prod`. Artifacts on MC box (not in `subnet-dashboard` product tree): `/workspace/track3-logshipper/box-axiom-bridge.py`, `start-bridge.sh`, `stop-bridge.sh`, `bridge.pid`, `bridge.log`, prepared Path A `fly.toml` + `retry-phase-b.sh`, receipt `RECEIPT-phase3-track3-2026-10-06.md`.
+- **Runtime proof (~08:19–08:20 PT):** PID **217949** alive; startup heartbeat + live/backlog **total_ingested≥121** with repeated `ingest ok status=200`; prod `GET /health` **200**; Axiom datasets list **200** (includes `subnet-dashboard-prod`); APL query **403** (ingest-only token) — UI filter `shipper == "box-axiom-bridge"` for human glance.
+- **Hard fences:** no `subnet-dashboard` `fly.toml` / VM / processes / mounts changes; no secrets in git/chat; `AXIOM_INGEST_TOKEN` only as box env.
+- **Ops:** MC routine **Track 3 bridge keep-alive** (weekdays hourly 8:20–18:20 PT) restarts bridge if dead; one-shot **Fly login check reminder** at 16:26 PT.
+- **Residual / migrate later:** Path B requires MC box uptime (not HA, not NATS-native). When org-capable Fly token exists: stop Path B → run `retry-phase-b.sh` for official `subnet-dashboard-logshipper` in `sjc`.
+- **Ditto:** `source=cursor` vendorId=`track3-path-b-2026-10-06` (save id ≈`311bbd73`).
+- **This log push:** authored by Mission Control (Grok Bot) for Cursor-shared `cursor-agents-communication/` channel.
