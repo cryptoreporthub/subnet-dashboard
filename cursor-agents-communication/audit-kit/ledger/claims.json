@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T01:00:00Z",
+  "updated_at": "2026-10-06T01:15:00Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -299,10 +299,11 @@
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY at dbcb1351 (trace/store.py C8-typed: only :51); fix applied, ready for re-spot",
+      "notes": "Replit MODIFY at 0aca2e8b (#6007223540): only 2 C8-typed hits (specialists.py:433, trace/store.py:51); removed false labels on desk_payload.py and test_pick_scheduler.py; replit_modify_pending until PASS",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451",
-      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006741295"
+      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006741295",
+      "replit_respot2": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6007223540"
     },
     {
       "claim_id": "SMOKE-001",
@@ -618,6 +619,16 @@
         "fix": "Correct trace/store.py C8-typed to :51 only; remove :39 (return False) and :72 (logger.warning)"
       }
     ],
+    "respot2": {
+      "head": "0aca2e8b",
+      "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6007223540",
+      "modify_pending": [
+        {
+          "claim_id": "STOP-RULE-SAMPLE-2",
+          "fix": "Remove false C8-typed labels on desk_payload.py:68,151,164 (return True/None) and test_pick_scheduler.py:26 (return None); only specialists.py:433 and trace/store.py:51 qualify"
+        }
+      ]
+    },
     "prior_comments": {
       "C12-STATIC-PATH-COUNT-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006443191",
       "C4-FLOCK-SPINLOCK-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196",
