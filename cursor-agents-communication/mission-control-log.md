@@ -184,3 +184,14 @@
 - After MC PASS stamp on **#1327**, discovered **[#1329](https://github.com/cryptoreporthub/subnet-dashboard/pull/1329)** draft from agent `bc-76ab9fef` (branch `cursor/p4a-resolver-lock-timeout-264a` @ `7e62ca44`). Body claims #1327 lock-object replacement can steal from a live tick; recommends close #1327 in favor of #1329 (release-first + stale-proven recycle).
 - #1329 CI: **not started** yet at check time. #1327 smoke still green.
 - Queue pointer set **HOLD_MC slice=P4a** until canonical PR chosen. Do not merge either yet. No deploy.
+
+## 2026-10-06 ~2:01 PM PT — P3a Grok pickup (WAITING_GROK) — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) after Joshua correction: blocked on Grok implement, not MC review.
+
+- Queue pointer `grok-product-queue-active-2026-10-06` (id `c205009d`) was already **WAITING_GROK slice=P3a** after P2 PASS (#1328 @ a862121d). Handoff: `grok-p3a-council-signals-handoff-2026-10-06` (id `742b6843`).
+- Launched cloud agent **[bc-89f93f8f](https://cursor.com/agents/bc-89f93f8f-007f-5af7-a1d7-dcecfcc8df78)** — title “P3a council signals reliability”; target branch `cursor/p3a-council-signals`; draft PR + report `grok-p3a-council-signals-report-2026-10-06` expected.
+- Queue rev3 stamped `grok_status: EXECUTING` with agent URL.
+- Armed routine **Grok WAITING_GROK poll** (every 5m weekdays 8:04–6:59 PT) so future WAITING_GROK slices get picked up without a poke.
+- Prior HOLD on dual P4a (#1327 vs #1329) superseded for pipeline advance by MC’s P2 PASS → P3a queue; canonical P4a PR choice may still need Joshua before merge of those PRs — not blocking P3a implement.
+- No merge, no deploy. Await draft PR + Ditto report.
