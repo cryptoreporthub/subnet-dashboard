@@ -16,7 +16,7 @@ Single merged charter for the **live architecture map** (Layers 1–4) and the *
 
 | Diagram | File | Scope | When |
 |---|---|---|---|
-| **Live map** | [`ledger/candidate-matrix.md`](ledger/candidate-matrix.md) | Runtime topology + request/data flow at pin | **L1+L2 now**; L3 table+hazard later; L4 timeline+annotations later |
+| **Live map** | [`ledger/candidate-matrix.md`](ledger/candidate-matrix.md) | Runtime topology + request/data flow + hazards + timeline at pin | **L1–L4** (L3 hazard + L4 timeline/env delivered 2026-10-06 WS3) |
 | **Historical map** | [`f-items-prior-evidence-map-2026-10-03.md`](f-items-prior-evidence-map-2026-10-03.md) appendix | F02/issues/Ditto mem → claim_id provenance | Full **REV 2 re-read** for Replit Batch B |
 
 **SimiVision stack box:** include in L3 hazard layer (council → picks → resolver → grading → cockpit hydrate). L1+L2 name the stack boundary only; do not draw full L3 hazard edges until Batch 2 closes.
@@ -29,8 +29,8 @@ Single merged charter for the **live architecture map** (Layers 1–4) and the *
 |---|---|---|
 | **L1 — Topology** | **Yes** | Fly single machine, one Uvicorn process, volume, env, boot threads, external feeds, data-asset inventory |
 | **L2 — Request / data flow** | **Yes** | HTTP + hydrate fan-out, persist paths, lock domains, load_shed/rate_limit, worker volume proxy, incident windows A/B/C tags |
-| **L3 — Hazard / contention** | **Later** | Master table + hazard diagram (flock convoy, thread-pool wedge, static burst vs API) |
-| **L4 — Timeline** | **Later** | Incident A/B/C annotations on nodes; boot-hydrate vs `/health` 200 sequence |
+| **L3 — Hazard / contention** | **Yes (2026-10-06)** | Master table (20 rows) + hazard diagram + SimiVision stack detail (5 nodes); flock convoy, thread-pool wedge, static burst vs API |
+| **L4 — Timeline + env truth** | **Yes (2026-10-06)** | Boot/health sequence (10 rows) + env/config truth (14 rows); Incident A/B/C annotations; F02 q12 prod-env NOT_OBSERVABLE boundary |
 
 ---
 
