@@ -472,6 +472,7 @@ flowchart TB
 
 **REV 2.2 notes (same pin):**
 
+- **Open-questions closure (WS5):** F02 O1–O18 disposition table → [`ledger/open-questions-closure.md`](ledger/open-questions-closure.md) (**4 closed, 11 bounded, 3 open** at pin).
 - Predictions persist: `resolver._save_json` uses **`locked_predictions_file`** (`resolver.py:215-216`) — predictions flock domain, not "unlocked resolver."
 - Hourly pick **HAS HOLD** (`hourly_pick.py:86`, `:139`); daily always `"long"` (`daily_pick.py:284`).
 - Only **C-015** and **C-016** exist under `queue/done/`; **C-017 is absent** — label **ticket missing**, do not invent bundle.
