@@ -12,7 +12,7 @@ prev_slice: P1
 prev_verdict: PASS
 base: main @ 245ff24e
 branch: cursor/p4a-resolver-lock-timeout
-head: 4931165a
+head: 7495dbce
 report_vendorId: grok-p4a-resolver-lock-report-2026-10-06
 handoff_vendorId: grok-p4a-resolver-lock-handoff-2026-10-06
 ```
