@@ -171,32 +171,32 @@ Open-question cross-refs: [`ledger/open-questions-closure.md`](open-questions-cl
 
 | claim_id | layer | runtime_subsystem | code_anchor | data/asset | incident | disposition | review_status | map_provenance | verified_at_sha | evidence_tier | contradicted_by | campaign_ticket | open_questions | execution_context | blocks_loop |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| C1-LEARNING-MIN-WEIGHT-001 | L1 | config-duplicate | `resolver.py` vs `weights.py` `_LEARNING_MIN_WEIGHT` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | inline-worker | no |
-| C1-MAX-SNAPSHOTS-001 | L1 | config-duplicate | `pump_tracker/core.py:60` vs `datastore/pump_tracker.py:600` | pump snapshots | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | inline-worker | no |
-| C10-PREVIEW-GRADED-HARDCODE-001 | L2 | ui-trust-label | preview tribunal_hero graded=443 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | web-asgi | no |
-| C12-STATIC-PATH-COUNT-001 | L1+L2 | static-burst | `templates/` 47 raw / 46 stripped `/static/*` refs; mount `server.py:510-512` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | Gemini task-279 | — | web-asgi | unknown |
-| C13-CHECKPOINT-T1_5-001 | L2 | resolver-telemetry | resolver checkpoint t1_5 excluded from stage-sum | soul_map telemetry | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O2 | inline-worker | no |
-| C2-HOMEPAGE-CACHE-001 | L1 | config-divergence | `server.py` `_CACHE_PATHS=60` vs module 45 | homepage shell cache | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | web-asgi | no |
-| C2-WATCHLIST-PATH-001 | L1 | config-divergence | `freshness.py:24` config/ vs `store.py:11` data/ | watchlist.json | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | — | — | volume-rmw | no |
-| C2-WORKER-PEER-TIMEOUT-001 | L1 | config-divergence | worker_proxy=4 vs worker_peer=12 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | worker-proxy | no |
-| C3-DATASTORE-PUMP-DEAD-001 | L1 | dead-code | `datastore/pump_tracker.py` unreferenced | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | — | no |
-| C4-FLOCK-SPINLOCK-001 | L1+L2+L3 | persist-rmw | bounded flock polling/retry (5s): soul_map_io, score_snapshots, daily_pick_engine, predictions_store, price_fetcher; counterexample: `pick_score_cache.py:104` blocking LOCK_EX | *.lock files | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | issue #1113 | O1, O12 | volume-rmw | yes |
-| C4-REVIVED-LATCH-001 | L2 | stall-guard | `loop_stall_guard.py:144` revived latch never reset | — | A | CONFIRMED | replit_pass | f-items-map | ce3d8200 | B | — | Ditto 67d91e97 | O12 | inline-worker | unknown |
-| C5-SQLITE-INVENTORY-001 | L1 | state-ownership | 10 prod `sqlite3.connect` sites | SQLite dbs | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | — | O11 | volume-rmw | no |
-| C6-WORKER-HEAVY-ESSENTIAL-001 | L1 | boot-arming | `fly.toml:41` WORKER_HEAVY=essential skips live_subnets | — | — | BY-DESIGN | replit_pass | live-matrix | ce3d8200 | B | — | — | — | inline-worker | no |
-| C7-READINESS-GRADED-FALLBACK-001 | L2 | ops-readiness | `/api/ops/readiness` graded fallback chain | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O17, O18 | web-asgi | no |
-| C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 typed `except+pass` (bare=0) | — | A | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O14 | web-asgi | swallows |
-| C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | SMOKE-002 | — | — | inline-worker | swallows |
-| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O8 (partial; **bounded** WS5b) | web-asgi | no |
-| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | — | no |
-| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (2 C8-typed hits: specialists:433, trace/store:51) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | — | no |
-| SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | — | web-asgi | unknown |
-| SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | — | inline-worker | swallows |
-| SMOKE-003 | L2+L4 | deploy-pin | historical + live `/version` receipts match pin (live CONFIRMED 2026-10-06T03:28:50Z) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | smoke-gate | — | external-probe | no |
-| L2-INC-A-001 | L2+L4 | incident | GHA 000000 08:44Z; no recycle; InstantBailout refutes thread-pool-only; WS1 current live CONFIRMED | — | A | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Ditto 93d36426 + WS1+WS2 | — | web-asgi | unknown |
-| L2-INC-B-001 | L2 | incident | recycle 11:45:48Z CONFIRMED; Gemini 48-probe UNVERIFIED | — | B | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | — | web-asgi | unknown |
-| L2-INC-C-001 | L2 | incident | queuing-starvation REFUTED audit-time; partial bailout allowlist 4 files | static/ | C | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | — | client-hydrate | unknown |
-| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | direct web ASGI block REFUTED; flock≤5s + VM I/O PLAUSIBLE | soul_map, predictions, hydrate paths | A,B,C | BOUNDED_UNKNOWN | replit_pass | live-matrix | ce3d8200 | B | — | audit brief § action item + WS2 | O2 (ctx), O5 (**bounded** WS5b) | boot-thread + inline-worker | yes |
+| C1-LEARNING-MIN-WEIGHT-001 | L1 | config-duplicate | `resolver.py` vs `weights.py` `_LEARNING_MIN_WEIGHT` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | inline-worker | no |
+| C1-MAX-SNAPSHOTS-001 | L1 | config-duplicate | `pump_tracker/core.py:60` vs `datastore/pump_tracker.py:600` | pump snapshots | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | inline-worker | no |
+| C10-PREVIEW-GRADED-HARDCODE-001 | L2 | ui-trust-label | preview tribunal_hero graded=443 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | web-asgi | no |
+| C12-STATIC-PATH-COUNT-001 | L1+L2 | static-burst | `templates/` 47 raw / 46 stripped `/static/*` refs; mount `server.py:510-512` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | — | Gemini task-279 | — | web-asgi | unknown |
+| C13-CHECKPOINT-T1_5-001 | L2 | resolver-telemetry | resolver checkpoint t1_5 excluded from stage-sum | soul_map telemetry | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | O2 | inline-worker | no |
+| C2-HOMEPAGE-CACHE-001 | L1 | config-divergence | `server.py` `_CACHE_PATHS=60` vs module 45 | homepage shell cache | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | web-asgi | no |
+| C2-WATCHLIST-PATH-001 | L1 | config-divergence | `freshness.py:24` config/ vs `store.py:11` data/ | watchlist.json | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | — | — | — | volume-rmw | no |
+| C2-WORKER-PEER-TIMEOUT-001 | L1 | config-divergence | worker_proxy=4 vs worker_peer=12 | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | worker-proxy | no |
+| C3-DATASTORE-PUMP-DEAD-001 | L1 | dead-code | `datastore/pump_tracker.py` unreferenced | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | — | no |
+| C4-FLOCK-SPINLOCK-001 | L1+L2+L3 | persist-rmw | bounded flock polling/retry (5s): soul_map_io, score_snapshots, daily_pick_engine, predictions_store, price_fetcher; counterexample: `pick_score_cache.py:104` blocking LOCK_EX | *.lock files | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | — | issue #1113 | O1, O12 | volume-rmw | yes |
+| C4-REVIVED-LATCH-001 | L2 | stall-guard | `loop_stall_guard.py:144` revived latch never reset | — | A | CONFIRMED | replit_pass | f-items-map | ce3d8200 | A | — | Ditto 67d91e97 | O12 | inline-worker | unknown |
+| C5-SQLITE-INVENTORY-001 | L1 | state-ownership | 10 prod `sqlite3.connect` sites | SQLite dbs | — | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | — | — | O11 | volume-rmw | no |
+| C6-WORKER-HEAVY-ESSENTIAL-001 | L1 | boot-arming | `fly.toml:41` WORKER_HEAVY=essential skips live_subnets | — | — | BY-DESIGN | replit_pass | live-matrix | ce3d8200 | A | — | — | — | inline-worker | no |
+| C7-READINESS-GRADED-FALLBACK-001 | L2 | ops-readiness | `/api/ops/readiness` graded fallback chain | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | O17, O18 | web-asgi | no |
+| C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 typed `except+pass` (bare=0) | — | A | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | O14 | web-asgi | swallows |
+| C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | SMOKE-002 | — | — | inline-worker | swallows |
+| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | O8 (partial; **bounded** WS5b) | web-asgi | no |
+| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | — | no |
+| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (2 C8-typed hits: specialists:433, trace/store:51) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | — | — | — | no |
+| SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | — | smoke-gate | — | web-asgi | unknown |
+| SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | A | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | — | inline-worker | swallows |
+| SMOKE-003 | L2+L4 | deploy-pin | historical + live `/version` receipts match pin (live CONFIRMED 2026-10-06T03:28:50Z) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | A | — | smoke-gate | — | external-probe | no |
+| L2-INC-A-001 | L2+L4 | incident | GHA 000000 08:44Z; no recycle; InstantBailout refutes thread-pool-only; WS1 current live CONFIRMED | — | A | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | A | — | Ditto 93d36426 + WS1+WS2 | — | web-asgi | unknown |
+| L2-INC-B-001 | L2 | incident | recycle 11:45:48Z CONFIRMED; Gemini 48-probe UNVERIFIED | — | B | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | A | — | Gemini task-279 + WS2 | — | web-asgi | unknown |
+| L2-INC-C-001 | L2 | incident | queuing-starvation REFUTED audit-time; partial bailout allowlist 4 files | static/ | C | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | A | — | Gemini task-279 + WS2 | — | client-hydrate | unknown |
+| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | direct web ASGI block REFUTED; flock≤5s + VM I/O PLAUSIBLE | soul_map, predictions, hydrate paths | A,B,C | BOUNDED_UNKNOWN | replit_pass | live-matrix | ce3d8200 | A | — | audit brief § action item + WS2 | O2 (ctx), O5 (**bounded** WS5b) | boot-thread + inline-worker | yes |
 
 **Review_status source of truth:** Replit PR comments on #1324. MC mirrors into `claims.json` after comment.
 
@@ -355,4 +355,4 @@ Termination-relevant and collision vars: **`fly.toml [env]`** vs **code default*
 
 ---
 
-*Mission Control unknowns-closure WS3+WS5 — L3 hazard (20 rows + 5 stack nodes) + L4 timeline (10 rows) + env truth (14 rows) + O1–O18 closure. Pin `ce3d820013d45577333ac8aada8c0d9e97c54129`; Replit gate 26/26 `replit_pass`.*
+*Mission Control unknowns-closure WS3+WS5 — L3 hazard (20 rows + 5 stack nodes) + L4 timeline (10 rows) + env truth (14 rows) + O1–O18 closure. Pin `ce3d820013d45577333ac8aada8c0d9e97c54129`; Replit gate 26/26 `replit_pass`; Joshua Tier A accepted 2026-10-06 (26 claims → evidence_tier A).*

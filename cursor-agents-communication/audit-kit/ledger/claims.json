@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T12:10:00Z",
-  "updated_by": "grok-rev3-fold",
+  "updated_at": "2026-10-06T12:22:22Z",
+  "updated_by": "mission-control",
   "population": {
     "total": 1413,
     "read": 1374,
@@ -18,11 +18,12 @@
       "lane": 1,
       "class": "C1",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C1-LEARNING-MIN-WEIGHT-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
@@ -33,11 +34,12 @@
       "lane": 1,
       "class": "C1",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C1-MAX-SNAPSHOTS-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005548359"
@@ -48,11 +50,12 @@
       "lane": 1,
       "class": "C10",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C10-PREVIEW-GRADED-HARDCODE-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549019"
@@ -63,11 +66,12 @@
       "lane": 1,
       "class": "C12",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C12-STATIC-PATH-COUNT-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit re-spot PASS at 01e158b4",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549737",
@@ -79,11 +83,12 @@
       "lane": 1,
       "class": "C13",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C13-CHECKPOINT-T1_5-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005552070"
@@ -94,11 +99,12 @@
       "lane": 1,
       "class": "C2",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-HOMEPAGE-CACHE-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
@@ -109,11 +115,12 @@
       "lane": 1,
       "class": "C2",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-WATCHLIST-PATH-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005553082"
@@ -124,11 +131,12 @@
       "lane": 1,
       "class": "C2",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C2-WORKER-PEER-TIMEOUT-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005566018"
@@ -139,11 +147,12 @@
       "lane": 1,
       "class": "C3",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C3-DATASTORE-PUMP-DEAD-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005566703"
@@ -154,11 +163,12 @@
       "lane": 1,
       "class": "C4",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C4-FLOCK-SPINLOCK-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit final re-spot PASS at dbcb1351; five bounded helpers + pick_score_cache counterexample",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412",
@@ -171,11 +181,12 @@
       "lane": 1,
       "class": "C4",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C4-REVIVED-LATCH-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005568185"
@@ -186,11 +197,12 @@
       "lane": 1,
       "class": "C5",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C5-SQLITE-INVENTORY-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005568809"
@@ -201,11 +213,12 @@
       "lane": 1,
       "class": "C6",
       "disposition": "BY-DESIGN",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C6-WORKER-HEAVY-ESSENTIAL-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": ""
     },
@@ -215,11 +228,12 @@
       "lane": 1,
       "class": "C7",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C7-READINESS-GRADED-FALLBACK-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit re-spot-check PASS (2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
@@ -231,11 +245,12 @@
       "lane": 1,
       "class": "C8",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C8-BARE-EXCEPT-PASS-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit re-spot PASS at 01e158b4 (299 typed, bare=0)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005576883",
@@ -247,11 +262,12 @@
       "lane": 1,
       "class": "C8",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C8-RESOLVER-PERSIST-SWALLOW-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05); conflicts_with: ['SMOKE-002']",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005577580"
@@ -262,11 +278,12 @@
       "lane": 1,
       "class": "C9",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C9-TOP-SCORING-UNIVERSE-001.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (batch 3 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578365"
@@ -277,11 +294,12 @@
       "lane": 1,
       "class": "C13",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-1.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
       "notes": "Replit re-spot PASS at 01e158b4",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578969",
@@ -293,13 +311,14 @@
       "lane": 1,
       "class": "C13",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-2.json",
       "verified_by": [
-        "lane1"
+        "lane1",
+        "joshua"
       ],
-      "notes": "Replit MODIFY #6007796808: disposition REFUTED→CONFIRMED (stop rule passed; 2 known C8 hits, no new class); refutes_if aligned to evidence-bundle-schema",
+      "notes": "Replit MODIFY #6007796808: disposition REFUTED\u2192CONFIRMED (stop rule passed; 2 known C8 hits, no new class); refutes_if aligned to evidence-bundle-schema",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006741295",
@@ -311,11 +330,12 @@
       "lane": 1,
       "class": "C5",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-001.json",
       "verified_by": [
-        "mission-control"
+        "mission-control",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
@@ -326,11 +346,12 @@
       "lane": 1,
       "class": "C8",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-002.json",
       "verified_by": [
-        "mission-control"
+        "mission-control",
+        "joshua"
       ],
       "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
@@ -341,13 +362,14 @@
       "lane": 2,
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
       "verified_by": [
-        "mission-control"
+        "mission-control",
+        "joshua"
       ],
-      "notes": "WS1 closure: live_status CONFIRMED 2026-10-06T03:28:50Z (HTTP 200, pin match, 0.136s). Outage window bounded ~2026-10-05T22:46Z–2026-10-06T03:28:49Z (curl exit 28). Receipt: audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "notes": "WS1 closure: live_status CONFIRMED 2026-10-06T03:28:50Z (HTTP 200, pin match, 0.136s). Outage window bounded ~2026-10-05T22:46Z\u20132026-10-06T03:28:49Z (curl exit 28). Receipt: audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742132"
@@ -359,12 +381,13 @@
       "class": "L2-INC-A",
       "disposition": "UNKNOWN",
       "mechanism_status": "BOUNDED_UNKNOWN",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-A-001.json",
       "verified_by": [
         "lane2",
-        "ws2-static-forensics"
+        "ws2-static-forensics",
+        "joshua"
       ],
       "notes": "WS1: incident-window recovery NOT_OBSERVABLE; current live CONFIRMED 2026-10-06T03:28:49Z. WS2: GHA timeout + no recycle closed; InstantBailout refutes thread-pool-only; root mechanism needs Fly logs. Grok rev3: four-method ladder all NOT_OBSERVABLE (buffer/--start/drain/logs API); mechanism_status BOUNDED_UNKNOWN unchanged",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
@@ -378,12 +401,13 @@
       "class": "L2-INC-B",
       "disposition": "UNKNOWN",
       "mechanism_status": "BOUNDED_UNKNOWN",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-B-001.json",
       "verified_by": [
         "lane2",
-        "ws2-static-forensics"
+        "ws2-static-forensics",
+        "joshua"
       ],
       "notes": "WS2: machine recycle closed; Gemini 48-probe count UNVERIFIED; root stall needs Fly logs. Grok rev3: incident-window logs NOT_OBSERVABLE (same four methods); recycle 11:45:48Z from prior GraphQL receipt only",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
@@ -396,12 +420,13 @@
       "class": "L2-INC-C",
       "disposition": "UNKNOWN",
       "mechanism_status": "BOUNDED_UNKNOWN",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-C-001.json",
       "verified_by": [
         "lane2",
-        "ws2-static-forensics"
+        "ws2-static-forensics",
+        "joshua"
       ],
       "notes": "WS2: partial InstantBailout allowlist explains selective static failure pattern; incident receipt needs Fly logs. Grok rev3: 11:49:15Z static behavior NOT_OBSERVABLE; audit-time burst REFUTED queuing-starvation unchanged",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
@@ -413,14 +438,15 @@
       "class": "C4",
       "disposition": "UNKNOWN",
       "mechanism_status": "BOUNDED_UNKNOWN",
-      "tier": "B",
+      "tier": "A",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-001.json",
       "verified_by": [
         "lane2",
-        "ws2-static-forensics"
+        "ws2-static-forensics",
+        "joshua"
       ],
-      "notes": "WS2 static path table: resolver persist on inline worker REFUTED web loop block; soul_map flock ≤5s PLAUSIBLE; incident-window timings NOT_OBSERVABLE",
+      "notes": "WS2 static path table: resolver persist on inline worker REFUTED web loop block; soul_map flock \u22645s PLAUSIBLE; incident-window timings NOT_OBSERVABLE",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841631",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742869"
@@ -599,7 +625,7 @@
       {
         "claim_id": "STOP-RULE-SAMPLE-2",
         "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
-        "fix": "C8→C8-typed with line anchors; C10 line anchors added in tsv"
+        "fix": "C8\u2192C8-typed with line anchors; C10 line anchors added in tsv"
       }
     ]
   },
@@ -656,22 +682,82 @@
     "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
     "receipt": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
     "probes": [
-      {"endpoint": "/health", "http_code": 200, "time_s": 0.179, "curl_exit": 0},
-      {"endpoint": "/version", "http_code": 200, "time_s": 0.136, "curl_exit": 0, "pin_match": true},
-      {"endpoint": "/api/ops/readiness", "http_code": 200, "time_s": 1.199, "curl_exit": 0, "ready": true},
-      {"endpoint": "/api/soul-map", "http_code": 200, "time_s": 0.384, "curl_exit": 0, "bytes": 453990},
-      {"endpoint": "/api/subnets", "http_code": 200, "time_s": 0.197, "curl_exit": 0, "bytes": 55820},
-      {"endpoint": "/api/daily-pick", "http_code": 200, "time_s": 0.636, "curl_exit": 0, "bytes": 9788}
+      {
+        "endpoint": "/health",
+        "http_code": 200,
+        "time_s": 0.179,
+        "curl_exit": 0
+      },
+      {
+        "endpoint": "/version",
+        "http_code": 200,
+        "time_s": 0.136,
+        "curl_exit": 0,
+        "pin_match": true
+      },
+      {
+        "endpoint": "/api/ops/readiness",
+        "http_code": 200,
+        "time_s": 1.199,
+        "curl_exit": 0,
+        "ready": true
+      },
+      {
+        "endpoint": "/api/soul-map",
+        "http_code": 200,
+        "time_s": 0.384,
+        "curl_exit": 0,
+        "bytes": 453990
+      },
+      {
+        "endpoint": "/api/subnets",
+        "http_code": 200,
+        "time_s": 0.197,
+        "curl_exit": 0,
+        "bytes": 55820
+      },
+      {
+        "endpoint": "/api/daily-pick",
+        "http_code": 200,
+        "time_s": 0.636,
+        "curl_exit": 0,
+        "bytes": 9788
+      }
     ],
     "closed": [
-      {"claim_id": "SMOKE-003", "was": "live_status NOT_OBSERVABLE", "now": "live_status CONFIRMED", "receipt_utc": "2026-10-06T03:28:50Z"},
-      {"topic": "prod curl exit 28 Oct 6", "was": "NOT_OBSERVABLE ~00:01Z", "now": "outage bounded ~22:46Z–03:28:49Z; service recovered before WS1 batch"}
+      {
+        "claim_id": "SMOKE-003",
+        "was": "live_status NOT_OBSERVABLE",
+        "now": "live_status CONFIRMED",
+        "receipt_utc": "2026-10-06T03:28:50Z"
+      },
+      {
+        "topic": "prod curl exit 28 Oct 6",
+        "was": "NOT_OBSERVABLE ~00:01Z",
+        "now": "outage bounded ~22:46Z\u201303:28:49Z; service recovered before WS1 batch"
+      }
     ],
     "still_not_observable_bounded": [
-      {"claim_id": "L2-INC-A-001", "boundary": "incident-window (08:29–08:55Z) service recovery; fly-log buffer/API-401", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
-      {"claim_id": "L2-INC-B-001", "boundary": "incident-window (11:41–11:47Z) app logs", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
-      {"claim_id": "L2-INC-C-001", "boundary": "incident-time (11:49:15Z) static wedge", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
-      {"claim_id": "L2-PERSIST-HYDRATE-001", "boundary": "incident-window persist timings; causation unverified", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"}
+      {
+        "claim_id": "L2-INC-A-001",
+        "boundary": "incident-window (08:29\u201308:55Z) service recovery; fly-log buffer/API-401",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"
+      },
+      {
+        "claim_id": "L2-INC-B-001",
+        "boundary": "incident-window (11:41\u201311:47Z) app logs",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"
+      },
+      {
+        "claim_id": "L2-INC-C-001",
+        "boundary": "incident-time (11:49:15Z) static wedge",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"
+      },
+      {
+        "claim_id": "L2-PERSIST-HYDRATE-001",
+        "boundary": "incident-window persist timings; causation unverified",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"
+      }
     ]
   },
   "unknowns_closure_ws4": {
@@ -697,17 +783,40 @@
     "probe_batch_utc": "2026-10-06T03:36:37Z",
     "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
     "receipt": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt",
-    "methods": ["flyctl-status", "flyctl-logs-buffer", "fly-logs-api-401", "machines-events-api", "gha-37283988892", "git-show-pin-static"],
+    "methods": [
+      "flyctl-status",
+      "flyctl-logs-buffer",
+      "fly-logs-api-401",
+      "machines-events-api",
+      "gha-37283988892",
+      "git-show-pin-static"
+    ],
     "extended_static": [
       "InstantBailout full bypass table + 4-path static allowlist",
       "fly.toml AIO_WORKER_POOL_SIZE=24 MAX_IN_FLIGHT_REQUESTS=48",
       "GHA /api/ops/live 0-byte cross-check narrows Incident A"
     ],
-    "mechanism_status_unchanged": ["L2-INC-A-001", "L2-INC-B-001", "L2-INC-C-001"],
+    "mechanism_status_unchanged": [
+      "L2-INC-A-001",
+      "L2-INC-B-001",
+      "L2-INC-C-001"
+    ],
     "still_not_observable_bounded": [
-      {"claim_id": "L2-INC-A-001", "boundary": "incident-window app logs + recovery timing; fly-log buffer earliest 2026-10-06T03:27:01Z; API 401", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"},
-      {"claim_id": "L2-INC-B-001", "boundary": "incident-window app logs + stall precursor; 11:45:48Z recycle from prior GraphQL receipt only", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"},
-      {"claim_id": "L2-INC-C-001", "boundary": "incident-time 11:49:15Z static failures; Gemini 45-asset UNVERIFIED", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z; non-allowlisted CSS 200 @ probe"}
+      {
+        "claim_id": "L2-INC-A-001",
+        "boundary": "incident-window app logs + recovery timing; fly-log buffer earliest 2026-10-06T03:27:01Z; API 401",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"
+      },
+      {
+        "claim_id": "L2-INC-B-001",
+        "boundary": "incident-window app logs + stall precursor; 11:45:48Z recycle from prior GraphQL receipt only",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"
+      },
+      {
+        "claim_id": "L2-INC-C-001",
+        "boundary": "incident-time 11:49:15Z static failures; Gemini 45-asset UNVERIFIED",
+        "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z; non-allowlisted CSS 200 @ probe"
+      }
     ]
   },
   "unknowns_closure_grok_rev3": {
@@ -719,20 +828,74 @@
     "checklist_verdict": "PARTIAL",
     "checklist_detail": {
       "auth_reconciliation": "PASS",
-      "502_root_cause": "PARTIAL — crash/OOM REFUTED; routing/proxy LEADING not CONFIRMED",
-      "incident_forensics": "PARTIAL — A/B/C NOT_OBSERVABLE with per-method errors (valid)",
-      "carried_over_D_netuids": "FAIL — two dropped netuids UNKNOWN without prod read",
-      "endpoint_sampler": "PASS — STALE/degraded 11:48:40–11:54:31Z",
-      "resolver_drift": "PARTIAL — 82.6m NOT CONFIRMED; max gap 59.95m",
-      "signal_cross_check": "PARTIAL — NOT_OBSERVABLE (council busy/empty)",
+      "502_root_cause": "PARTIAL \u2014 crash/OOM REFUTED; routing/proxy LEADING not CONFIRMED",
+      "incident_forensics": "PARTIAL \u2014 A/B/C NOT_OBSERVABLE with per-method errors (valid)",
+      "carried_over_D_netuids": "FAIL \u2014 two dropped netuids UNKNOWN without prod read",
+      "endpoint_sampler": "PASS \u2014 STALE/degraded 11:48:40\u201311:54:31Z",
+      "resolver_drift": "PARTIAL \u2014 82.6m NOT CONFIRMED; max gap 59.95m",
+      "signal_cross_check": "PARTIAL \u2014 NOT_OBSERVABLE (council busy/empty)",
       "what_could_not_prove": "PASS"
     },
     "incident_forensics": [
-      {"claim_id": "L2-INC-A-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"},
-      {"claim_id": "L2-INC-B-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"},
-      {"claim_id": "L2-INC-C-001", "mechanism_verdict": "NOT_OBSERVABLE", "mechanism_status": "BOUNDED_UNKNOWN"}
+      {
+        "claim_id": "L2-INC-A-001",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "mechanism_status": "BOUNDED_UNKNOWN"
+      },
+      {
+        "claim_id": "L2-INC-B-001",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "mechanism_status": "BOUNDED_UNKNOWN"
+      },
+      {
+        "claim_id": "L2-INC-C-001",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "mechanism_status": "BOUNDED_UNKNOWN"
+      }
     ],
-    "grok_overall": "FAIL (honest — incident windows unobservable; D netuids missing)",
-    "mechanism_status_unchanged": ["L2-INC-A-001", "L2-INC-B-001", "L2-INC-C-001"]
+    "grok_overall": "FAIL (honest \u2014 incident windows unobservable; D netuids missing)",
+    "mechanism_status_unchanged": [
+      "L2-INC-A-001",
+      "L2-INC-B-001",
+      "L2-INC-C-001"
+    ]
+  },
+  "tier_a_promotion": {
+    "accepted_by": "joshua",
+    "accepted_at": "2026-10-06",
+    "pr": 1324,
+    "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+    "claim_count": 26,
+    "note": "Tier A audit closure; INC mechanism windows remain NOT_OBSERVABLE/BOUNDED_UNKNOWN \u2014 no disposition upgrade"
+  },
+  "phase3_post_a": {
+    "opened_at": "2026-10-06T12:30:00Z",
+    "trigger": "Joshua Tier A accepted 2026-10-06",
+    "tracks": [
+      {
+        "track": 1,
+        "id": "sentry-inc-windows",
+        "title": "Sentry INC-A/B/C window search",
+        "status": "PENDING",
+        "blocker": "Sentry MCP needsAuth (auth timed out in MC session)",
+        "receipt": "cursor-agents-communication/audit-kit/evidence/phase3-track1-sentry-inc-windows.md"
+      },
+      {
+        "track": 2,
+        "id": "gate-c-scope",
+        "title": "Gate C read-only prod reads (Finding D netuids + optional F02 q12)",
+        "status": "AWAITING_GATE_C",
+        "blocker": "Explicit Gate C grant required before prod SSH/console",
+        "receipt": "cursor-agents-communication/audit-kit/evidence/phase3-track2-gate-c-scope.md"
+      },
+      {
+        "track": 3,
+        "id": "log-drain-proposal",
+        "title": "Forward-looking Fly log drain / shipper",
+        "status": "AWAITING_JOSHUA_APPROVAL",
+        "blocker": "Infra change requires Joshua approval (Fly secrets / sidecar / external shipper)",
+        "receipt": "cursor-agents-communication/audit-kit/evidence/phase3-track3-log-drain-proposal.md"
+      }
+    ]
   }
 }
