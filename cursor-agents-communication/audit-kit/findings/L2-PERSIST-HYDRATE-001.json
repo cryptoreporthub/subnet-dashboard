@@ -53,7 +53,12 @@
     {
       "path": "/app/data/soul_map.json",
       "lines": "n/a",
-      "quote": "854356 bytes on volume at audit time (L2.3 wc -c) — refutes 24MB bloat theory; blocking I/O contention remains unverified candidate"
+      "quote": "854356 bytes on volume at MC L2.3 audit (~2026-10-05T22:55Z wc -c) — refutes 24MB bloat theory; blocking I/O contention remains unverified candidate. WS4 (2026-10-06): blind L2.3 read 851941 B (−2415 B, ~4h34m later, same pin) resolved as normal_write_activity — live mutable blob; indent2 estimate from API 854523 B at 03:37Z. See audit-kit/evidence/soul-map-drift-investigation-2026-10-06.md"
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/soul-map-drift-investigation-2026-10-06.md",
+      "lines": "n/a",
+      "quote": "WS4 verdict: normal_write_activity; conflicts_with resolved. Volume wc -c (indent=2) ~852KB band; API compact ~454KB (ratio 1.87x). Pin unchanged."
     },
     {
       "path": "fly-log-buffer-limitation",
@@ -85,5 +90,19 @@
     ]
   },
   "tier": "B",
-  "verified_by": ["lane2", "ws1", "ws2-static-forensics"]
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics", "ws4-soul-map-drift"],
+  "soul_map_size_observability": "LIVE_MUTABLE",
+  "soul_map_size_snapshots": [
+    {"source": "mc_l2.3", "utc": "2026-10-05T22:55:00Z", "bytes": 854356, "method": "wc -c volume"},
+    {"source": "ditto_blind_l2.3", "utc": "2026-10-06T03:29:00Z", "bytes": 851941, "method": "wc -c volume"},
+    {"source": "ws1_api", "utc": "2026-10-06T03:28:49Z", "bytes": 453990, "method": "GET /api/soul-map compact"},
+    {"source": "ws4_api", "utc": "2026-10-06T03:37:10Z", "bytes": 455994, "method": "GET /api/soul-map compact", "sha256": "f5651afbbc76bbfde4d239fae4496eeab61a2c079372a0520427fd95109b3392"},
+    {"source": "ws4_indent2_estimate", "utc": "2026-10-06T03:37:10Z", "bytes": 854523, "method": "json.dumps(data, indent=2) from live API"}
+  ],
+  "conflicts_with_resolution": {
+    "flag": "ditto_blind_vs_mc_volume_bytes",
+    "verdict": "normal_write_activity",
+    "resolved_utc": "2026-10-06T03:37:10Z",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/soul-map-drift-investigation-2026-10-06.md"
+  }
 }

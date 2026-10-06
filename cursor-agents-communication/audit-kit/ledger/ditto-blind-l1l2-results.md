@@ -18,7 +18,7 @@
 | L2-INC-A-001 | 2 | L2-INC-A | **PASS** | UNKNOWN | — |
 | L2-INC-B-001 | 2 | L2-INC-B | **PASS** | UNKNOWN | — |
 | L2-INC-C-001 | 2 | L2-INC-C | **PASS** (audit-time) / **UNVERIFIED** (incident-time 11:49:15Z) | UNKNOWN | — |
-| L2-PERSIST-HYDRATE-001 | 2 | L2-persist-hydrate | **UNVERIFIED** (hypothesis) / **PASS** (code + env partial) | UNKNOWN | `soul_map.json` byte count |
+| L2-PERSIST-HYDRATE-001 | 2 | L2-persist-hydrate | **UNVERIFIED** (hypothesis) / **PASS** (code + env partial) | UNKNOWN | ~~`soul_map.json` byte count~~ **resolved** (WS4) |
 
 **Summary:** 7/7 anchor claims independently re-derived. Lane 1: 3/3 PASS (byte-exact). Lane 2: 3/3 partial-receipt PASS on correlation evidence; 1 UNVERIFIED on causation hypothesis; 1 `conflicts_with` on live soul_map size drift.
 
@@ -125,7 +125,9 @@
 | soul_map.json size | `wc -c` → **851941 bytes** (2026-10-06T03:29Z) |
 | Incident-window persist timings | Fly log buffer earliest `2026-10-06T03:16Z` — **NOT_OBSERVABLE** for 08:29–08:55Z or 11:41–11:47Z |
 
-**conflicts_with MC:** MC bundle cites `854356 bytes` at audit time; blind L2.3 read `851941 bytes` (−2415 B live drift on volume).
+**conflicts_with MC (original):** MC bundle cites `854356 bytes` at audit time (~2026-10-05T22:55Z); blind L2.3 read `851941 bytes` (−2415 B) at 2026-10-06T03:29Z.
+
+**WS4 resolution (2026-10-06):** `conflicts_with` **resolved** as `normal_write_activity`. Volume `wc -c` measures indent=2 on-disk serialization; deploy pin unchanged; ~0.28% drift over 4h34m within expected resolver/trail/feedback writer churn. Live API at 03:37Z: 455,994 B compact (sha256 `f5651afb…`); indent2 estimate 854,523 B — bracketing both prior volume reads. Receipt: [`evidence/soul-map-drift-investigation-2026-10-06.md`](../evidence/soul-map-drift-investigation-2026-10-06.md).
 
 **Causation hypothesis** (persist/hydrate blocks ASGI during Incidents A–C): UNVERIFIED — lifecycle timestamps are correlation only.
 

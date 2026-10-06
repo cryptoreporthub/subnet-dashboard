@@ -673,5 +673,23 @@
       {"claim_id": "L2-INC-C-001", "boundary": "incident-time (11:49:15Z) static wedge", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
       {"claim_id": "L2-PERSIST-HYDRATE-001", "boundary": "incident-window persist timings; causation unverified", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"}
     ]
+  },
+  "unknowns_closure_ws4": {
+    "workstream": "soul_map byte drift (Ditto blind vs MC)",
+    "probe_batch_utc": "2026-10-06T03:37:10Z",
+    "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/soul-map-drift-investigation-2026-10-06.md",
+    "verdict": "normal_write_activity",
+    "conflicts_with_resolution": {
+      "mc_volume_bytes": 854356,
+      "mc_utc": "2026-10-05T22:55:00Z",
+      "blind_volume_bytes": 851941,
+      "blind_utc": "2026-10-06T03:29:00Z",
+      "delta_bytes": -2415,
+      "ws4_api_bytes": 455994,
+      "ws4_api_sha256": "f5651afbbc76bbfde4d239fae4496eeab61a2c079372a0520427fd95109b3392",
+      "ws4_indent2_estimate_bytes": 854523,
+      "status": "resolved"
+    }
   }
 }
