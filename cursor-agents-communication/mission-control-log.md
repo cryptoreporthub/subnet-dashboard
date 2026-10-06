@@ -139,5 +139,11 @@
 - **Ditto:** `source=cursor` vendorId=`track3-path-b-2026-10-06` (save id ≈`311bbd73`).
 - **This log push:** authored by Mission Control (Grok Bot) for Cursor-shared `cursor-agents-communication/` channel.
 
+## 2026-10-06 ~20:00 UTC — P4a MC review PASS + P2 handoff
+
+- **P4a** [PR #1327](https://github.com/cryptoreporthub/subnet-dashboard/pull/1327) @ `f4ae56b5`: MC AC review **PASS** — undrafted Ready for review. Resolver lock timeout releases `_cycle_lock`; revive recycles stale lock (`_resolver_cycle_lock_stale`); no `RESOLVER_*` env bumps. Tests: 56/58 AC suite (2 legacy revive failures pre-existing on `main`); P4a-specific tests green; contract 148 passed.
+- **Queue:** `active_slice=P2`, `state=WAITING_MC`; P2 handoff posted (F02 static re-run + Gate C prod env receipts, docs-only branch `cursor/p2-f02-gate-c-receipts-60a6`).
+- **Ditto:** optional `grok-p4a-resolver-lock-report-2026-10-06` mirror pending.
+
 - 2026-10-06 — **Post-audit product pipeline (P1–P4) autonomous mode:** User confirmed MC + Grokbot execute serial queue via Ditto bus (`grok-product-queue-active-2026-10-06`); user intervenes only at final review (merge/deploy). MC marks each PR Ready for review after AC pass. **ACTIVE P1:** handoff `grok-p1-universe-shrink-handoff-2026-10-06` (Ditto `a7984753`), branch `cursor/p1-universe-shrink-fix`, report `grok-p1-universe-shrink-report-2026-10-06`. Queue `WAITING_GROK`. Plan: Context `docs/post-audit-p1-p4-plan.md`. No deploy.
 - 2026-10-06 18:12Z — **P1 PASS → P4a WAITING_GROK:** P1 [PR #1326](https://github.com/cryptoreporthub/subnet-dashboard/pull/1326) MC-reviewed PASS, undrafted Ready for review @ `7c020112`. P4a handoff `grok-p4a-resolver-lock-handoff-2026-10-06` (Ditto `791c674d`) posted; report `grok-p4a-resolver-lock-report-2026-10-06` not landed; no PR on `cursor/p4a-resolver-lock-timeout`. Timer `grok-p4a-report-wait` polling 180s. Grok requires user kick (same as P1).
