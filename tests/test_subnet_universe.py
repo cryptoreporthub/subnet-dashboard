@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
@@ -18,6 +19,7 @@ from internal.subnet_universe import (
     UniverseSnapshot,
     _build_rows,
     _reset_provider_for_tests,
+    _shrink_allowed,
     _validity_entry,
     get_lkg_or_emergency,
     get_provider,
@@ -511,3 +513,96 @@ def test_list_subnets_meta_tmc_backed_snapshot(monkeypatch):
     assert out["meta"]["source"] == "taomarketcap"
     assert "taomarketcap" in out["meta"]["sources"]
     assert out["meta"]["enrichment_status"] == "names_only"
+
+
+def _snapshot_with(netuids: list[int], validity_map: dict, *, refresh_incomplete: bool = False) -> UniverseSnapshot:
+    return UniverseSnapshot(
+        netuids=tuple(netuids),
+        rows=tuple({"netuid": n, "name": f"SN{n}"} for n in netuids),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="degraded" if refresh_incomplete else "ok",
+        degraded=refresh_incomplete,
+        validity_map=validity_map,
+        refresh_incomplete=refresh_incomplete,
+    )
+
+
+def test_shrink_allowed_incomplete_refresh_grace_eligible_ok():
+    """Incomplete refresh may shrink when every removed netuid is grace-eligible."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _snapshot_with(
+        [130, 132, 100],
+        {
+            "130": _validity_entry(validity="negative", negative_since=old),
+            "132": _validity_entry(validity="negative", negative_since=old),
+            "100": _validity_entry(validity="positive"),
+        },
+    )
+    built = _snapshot_with(
+        [100],
+        {"100": _validity_entry(validity="positive")},
+        refresh_incomplete=True,
+    )
+    assert _shrink_allowed(prior, built) is True
+
+
+def test_shrink_allowed_in_grace_blocked():
+    """Shrink is denied while any removed netuid is still within 48h grace."""
+    recent = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    validity = {
+        "130": _validity_entry(validity="negative", negative_since=old),
+        "132": _validity_entry(validity="negative", negative_since=recent),
+        "100": _validity_entry(validity="positive"),
+    }
+    prior = _snapshot_with([130, 132, 100], validity)
+    built_incomplete = _snapshot_with([100], {"100": validity["100"]}, refresh_incomplete=True)
+    built_complete = _snapshot_with([100], {"100": validity["100"]})
+    assert _shrink_allowed(prior, built_incomplete) is False
+    assert _shrink_allowed(prior, built_complete) is False
+
+
+def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
+    """Blocked-shrink warning names the removed netuids, sorted."""
+    prior = _prior_snapshot([1, 2, 3])
+    built = _snapshot_with([1], {"1": _validity_entry(validity="positive")}, refresh_incomplete=True)
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior)
+
+    class _StubBuilder:
+        def build(self, _prior):
+            return built
+
+    provider.set_builder(_StubBuilder())  # type: ignore[arg-type]
+    with caplog.at_level(logging.WARNING, logger="internal.subnet_universe"):
+        provider.refresh_once()
+    assert "unsafe shrink blocked (3 -> 1)" in caplog.text
+    assert "removed=[2, 3]" in caplog.text
+    assert provider.get_snapshot().netuids == prior.netuids
+
+
+def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(universe_tmp):
+    """Prod loop fix: degraded sources must not pin grace-eligible negatives forever."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _snapshot_with(
+        [130, 132, 100],
+        {
+            "130": _validity_entry(validity="negative", negative_since=old),
+            "132": _validity_entry(validity="negative", negative_since=old),
+            "100": _validity_entry(validity="positive"),
+        },
+    )
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior)
+    provider.set_builder(
+        SnapshotBuilder(
+            tmc_fetch=lambda: ({100}, {100: {"netuid": 100, "name": "SN100"}}, False),
+            probe_fetch=lambda netuids, deadline: ({100: True, 130: False, 132: False}, False),
+        )
+    )
+    result = provider.refresh_once()
+    assert 130 not in result.netuids
+    assert 132 not in result.netuids
+    assert 100 in result.netuids
+    assert result.refresh_incomplete is True
+    assert provider.get_snapshot().netuids == result.netuids
