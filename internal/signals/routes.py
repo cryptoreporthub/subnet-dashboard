@@ -25,6 +25,9 @@ SIGNALS_HANDLER_TIMEOUT = float(os.environ.get("SIGNALS_HANDLER_TIMEOUT_SECONDS"
 SIGNALS_FRESHNESS_SECONDS = int(
     os.environ.get("SIGNALS_FRESHNESS_SECONDS", "900")
 )
+SIGNALS_NAME_REFRESH_TIMEOUT = float(
+    os.environ.get("SIGNALS_NAME_REFRESH_TIMEOUT_SECONDS", "1")
+)
 _refresh_lock = threading.Lock()
 
 
@@ -231,7 +234,11 @@ async def api_signals(
     try:
         from internal.subnet_names import refresh_stored_names
 
-        signals = refresh_stored_names(signals)
+        signals = await _to_thread_timeout(
+            lambda: refresh_stored_names(signals),
+            SIGNALS_NAME_REFRESH_TIMEOUT,
+            label="signals-names",
+        )
     except Exception:
         pass
     if refresh and subnet_id is not None:
