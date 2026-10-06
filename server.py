@@ -1071,7 +1071,7 @@ def _shell_pump_and_picks(
         try:
             from internal.learning.dashboard_context import _pick_sections
 
-            picks = _pick_sections(subnets, _market_context_with_weights(subnets))
+            picks = _pick_sections(subnets, {})
             out["hour_picks"] = picks.get("hour_picks") or []
             out["day_picks"] = picks.get("day_picks") or []
         except Exception as exc:

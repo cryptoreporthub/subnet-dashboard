@@ -360,14 +360,26 @@ def _predictions_panel() -> List[Dict[str, Any]]:
 def _pick_sections(
     subnets: List[Dict[str, Any]], market_context: Dict[str, Any]
 ) -> Dict[str, Any]:
+    """Read-only pick sections — SSR must never score or write (P3a).
+
+    Hour picks come from the ``/api/top-picks`` cache (the hydrate JS poll
+    warms it). Running ``_ordered_hour_picks`` here scored the universe and
+    recorded predictions on the degraded homepage shell (G0 landmine).
+    """
     hour_picks: List[Dict[str, Any]] = []
     day_picks: List[Dict[str, Any]] = []
     daily_pick: Dict[str, Any] = {}
     try:
-        from internal.council.daily_pick_engine import _find_today, _load
-        from server import _ordered_hour_picks
+        from server import _TOP_PICKS_CACHE
 
-        hour_picks = _ordered_hour_picks(subnets, market_context, limit=3)
+        cached = _TOP_PICKS_CACHE.get("payload")
+        if isinstance(cached, dict) and isinstance(cached.get("hour_picks"), list):
+            hour_picks = list(cached["hour_picks"])[:3]
+    except Exception as exc:
+        logger.warning("hour picks cache read failed: %s", exc)
+    try:
+        from internal.council.daily_pick_engine import _find_today, _load
+
         existing = _find_today(_load())
         raw = existing if isinstance(existing, dict) else {}
         daily_pick = raw.get("pick") if isinstance(raw, dict) and raw.get("pick") else raw
