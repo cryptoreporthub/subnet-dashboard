@@ -1,0 +1,31 @@
+{
+  "claim_id": "C10-PREVIEW-GRADED-HARDCODE-001",
+  "title": "Preview tribunal_hero hardcodes graded=443 contrary to live trust_banner semantics",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C10",
+  "disposition": "CONFIRMED",
+  "refutes_if": "internal/preview/tribunal_hero.py preview fixtures use trust_banner.graded from build_trust_banner, not literal 443",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/preview/tribunal_hero.py | nl -ba | grep -n 'graded'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/preview/tribunal_hero.py",
+      "lines": "891",
+      "quote": "\"graded\": 443,"
+    },
+    {
+      "path": "internal/learning/trust_stats.py",
+      "lines": "28",
+      "quote": "graded = correct + wrong"
+    },
+    {
+      "path": "internal/preview/tribunal_hero.py",
+      "lines": "640",
+      "quote": "graded = int(tb.get(\"graded\") or 0)"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Preview-only path; live SSR uses tb.get at :640. Historical fixture claim at :891 is stale demo data."
+}

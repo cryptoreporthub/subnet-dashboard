@@ -412,3 +412,70 @@ Remaining opens are runtime-gated (learning/stats gate_reason, soul_map size,
 cycle_history skip reasons + pending reconciliation, five-cycle persist timing, pick
 identity, 168 composition) or owner-decision-gated (fix list). Full interaction record
 written to Ditto memory for outside review.
+
+## Appendix — topology diagram (historical scope, REV 2.2)
+
+**Pin stamp:** `ce3d820013d45577333ac8aada8c0d9e97c54129`  
+**Purpose:** Provenance graph only — maps pre-iteration F02/issues/Ditto memories to current audit `claim_id`s where traceable. **Not** the live runtime map (see [`ledger/candidate-matrix.md`](ledger/candidate-matrix.md)). Question-axis closure: [`ledger/open-questions-closure.md`](ledger/open-questions-closure.md).
+
+```mermaid
+flowchart TB
+  subgraph sources["Historical sources (REV 2 map body)"]
+    F02["F02 runtime boundaries<br/>this document §F02"]
+    I1113["Issue #1113<br/>cycle timeout / unjoined pool"]
+    D67["Ditto 67d91e97<br/>same-day ledger"]
+    D93["Ditto 93d36426<br/>Incident A window"]
+    D75["Ditto 750072ef<br/>static wedge counter-probes"]
+    G279["Gemini task-279<br/>Incidents B/C"]
+    PR1015["PR #1015 revive wiring"]
+    PR1208["PR #1208 boot revival"]
+  end
+
+  subgraph claims["Audit claim_ids (PR #1324 ledger)"]
+    C4F["C4-FLOCK-SPINLOCK-001"]
+    C4R["C4-REVIVED-LATCH-001"]
+    C8R["C8-RESOLVER-PERSIST-SWALLOW-001"]
+    SMOKE2["SMOKE-002"]
+    L2A["L2-INC-A-001"]
+    L2B["L2-INC-B-001"]
+    L2C["L2-INC-C-001"]
+    L2PH["L2-PERSIST-HYDRATE-001"]
+    C12["C12-STATIC-PATH-COUNT-001"]
+  end
+
+  subgraph unmapped["UNMAPPED / missing ticket"]
+    C015["C-015<br/>queue/done only"]
+    C016["C-016<br/>queue/done only"]
+    C017["C-017<br/>ticket missing — not in repo"]
+  end
+
+  F02 --> C4F
+  F02 --> C4R
+  I1113 --> C4F
+  D67 --> C4R
+  D67 --> C8R
+  PR1015 --> C4R
+  PR1208 --> C4R
+  D93 --> L2A
+  G279 --> L2B
+  G279 --> L2C
+  D75 --> L2C
+  F02 --> L2PH
+  I1113 --> L2PH
+  G279 --> C12
+  C8R --> SMOKE2
+
+  C015 -.->|"historical queue artifact<br/>no claim_id row"| unmapped
+  C016 -.->|"re-verify at ce3d8200<br/>drift caution"| unmapped
+  C017 -.->|"does not exist"| unmapped
+```
+
+**REV 2.2 notes (same pin):**
+
+- **Open-questions closure (WS5):** F02 O1–O18 disposition table → [`ledger/open-questions-closure.md`](ledger/open-questions-closure.md) (**4 closed, 11 bounded, 3 open** at pin).
+- Predictions persist: `resolver._save_json` uses **`locked_predictions_file`** (`resolver.py:215-216`) — predictions flock domain, not "unlocked resolver."
+- Hourly pick **HAS HOLD** (`hourly_pick.py:86`, `:139`); daily always `"long"` (`daily_pick.py:284`).
+- Only **C-015** and **C-016** exist under `queue/done/`; **C-017 is absent** — label **ticket missing**, do not invent bundle.
+- Live map corrections live in [`ARCHITECTURE-MAP-V1-SPEC.md`](ARCHITECTURE-MAP-V1-SPEC.md) DROP list.
+
+**Replit Batch B:** full re-cross-review of this appendix + body REV 2 corrections at pin via `git show ce3d8200:<path>`.

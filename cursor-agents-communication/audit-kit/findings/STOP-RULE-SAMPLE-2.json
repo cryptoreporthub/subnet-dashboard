@@ -1,0 +1,41 @@
+{
+  "claim_id": "STOP-RULE-SAMPLE-2",
+  "title": "Stratified sample 2 (30 files): zero new contradiction classes outside C1-C13",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C13",
+  "disposition": "CONFIRMED",
+  "refutes_if": "A file in the sample exhibits a defect outside C1-C13 contradiction classes",
+  "fetch_method": "cat cursor-agents-communication/audit-kit/findings/stop-rule-sample-2.tsv; per-file git show ce3d820013d45577333ac8aada8c0d9e97c54129:<path>",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-2.tsv",
+      "lines": "1-31",
+      "quote": "30 files stratified by extension; seed=sha256(pin+':stop-rule-sample-2'); excludes sample-1 paths; 29 READ + 1 PARSE-FAIL. Two known-class hits with C8-typed line anchors only (sole pass body per C8-BARE-EXCEPT-PASS-001 AST criterion)."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv",
+      "lines": "n/a",
+      "quote": "Sample 1 also zero new classes — STOP-RULE-SAMPLE-1.json"
+    },
+    {
+      "path": "known_class_hits",
+      "lines": "n/a",
+      "quote": "2 files hit existing C8-typed class only (see tsv anomaly_classes): specialists.py C8-typed:433 (except Exception: pass); trace/store.py C8-typed:51 (except Exception: pass). Removed false C8-typed labels on desk_payload.py:68,151,164 (return True/None bodies) and test_pick_scheduler.py:26 (return None body) — typed except with non-pass bodies do not match C8 AST criterion and are not annotated as known-class hits."
+    },
+    {
+      "path": "internal/pump/desk_payload.py",
+      "lines": "68,151,164",
+      "quote": "S2-12: typed except handlers return True or None — not C8-typed (sole pass body required); no new contradiction class identified"
+    },
+    {
+      "path": "tests/test_pick_scheduler.py",
+      "lines": "26",
+      "quote": "S2-24: typed except returns None — not C8-typed; no new contradiction class identified"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Two consecutive clean samples — stop rule satisfied pending Replit re-spot; no-new-class conclusion holds on 2 C8-typed hits only (not 4)"
+}

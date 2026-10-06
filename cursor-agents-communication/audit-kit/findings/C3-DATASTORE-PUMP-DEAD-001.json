@@ -1,0 +1,30 @@
+{
+  "claim_id": "C3-DATASTORE-PUMP-DEAD-001",
+  "title": "datastore/pump_tracker.py is unreferenced in live import graph at pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C3",
+  "disposition": "CONFIRMED",
+  "refutes_if": "git grep finds a live import of datastore.pump_tracker or from datastore import pump_tracker at pin",
+  "fetch_method": "git grep -l 'datastore.pump_tracker\\|from datastore import pump_tracker' ce3d820013d45577333ac8aada8c0d9e97c54129 -- '*.py'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/pump_tracker/__init__.py | nl -ba | sed -n '1,5p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "datastore/pump_tracker.py",
+      "lines": "44",
+      "quote": "MAX_SNAPSHOTS = 600   # per-subnet rolling price history kept in memory"
+    },
+    {
+      "path": "internal/pump_tracker/__init__.py",
+      "lines": "3",
+      "quote": "from internal.pump_tracker.core import (  # noqa: F401"
+    },
+    {
+      "path": "import_graph",
+      "lines": "n/a",
+      "quote": "git grep datastore.pump_tracker at pin: 0 importer hits; live pump path is internal.pump_tracker.core"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

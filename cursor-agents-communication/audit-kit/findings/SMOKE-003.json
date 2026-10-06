@@ -1,0 +1,45 @@
+{
+  "claim_id": "SMOKE-003",
+  "title": "Historical and live /version receipts match charter pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "L2-SMOKE",
+  "disposition": "CONFIRMED",
+  "live_status": "CONFIRMED",
+  "refutes_if": "GET https://subnet-dashboard.fly.dev/version returns version field != ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "replay_class": "http-live",
+  "fetch_method": "curl -sS -m 25 -w '\\nhttp_code=%{http_code}\\ntime_total=%{time_total}\\n' https://subnet-dashboard.fly.dev/version",
+  "captured_at_utc": "2026-10-06T03:28:50Z",
+  "evidence": [
+    {
+      "path": "https://subnet-dashboard.fly.dev/version",
+      "lines": "n/a",
+      "quote": "{\"version\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"sentry_release\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"python\": \"3.12.15\"}",
+      "captured_at_utc": "2026-10-05T17:51:30Z",
+      "http_code": 200
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/version",
+      "lines": "n/a",
+      "quote": "{\"version\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"sentry_release\": \"ce3d820013d45577333ac8aada8c0d9e97c54129\", \"python\": \"3.12.15\"}",
+      "captured_at_utc": "2026-10-06T03:28:50Z",
+      "http_code": 200,
+      "time_total_s": 0.136,
+      "curl_exit": 0
+    }
+  ],
+  "independent_rerun": {
+    "verified_by": "replit",
+    "captured_at_utc": "2026-10-05T20:14:53Z",
+    "note": "Replit spot-check PR #1324; same pin match at historical receipt time"
+  },
+  "live_status_note": "WS1 closure 2026-10-06T03:28:50Z: live /version CONFIRMED (HTTP 200, pin match, 0.136s). Prior outage window bounded: curl exit 28 at 2026-10-06T00:01Z and 2026-10-05T22:46Z; service recovered before WS1 probe batch. Historical receipt 2026-10-05T17:51:30Z retained.",
+  "outage_window_bounded": {
+    "start_utc": "2026-10-05T22:46:00Z",
+    "end_utc": "2026-10-06T03:28:49Z",
+    "symptom": "curl exit 28, HTTP 000, 0 bytes (15–25s timeout)",
+    "recovery_evidence": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt"
+  },
+  "tier": "B",
+  "verified_by": ["mission-control"]
+}

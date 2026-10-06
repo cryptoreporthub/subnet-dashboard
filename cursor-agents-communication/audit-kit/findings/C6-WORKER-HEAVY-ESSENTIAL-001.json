@@ -1,0 +1,30 @@
+{
+  "claim_id": "C6-WORKER-HEAVY-ESSENTIAL-001",
+  "title": "WORKER_HEAVY=essential (fly.toml default) skips live_subnets and heavy schedulers",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C6",
+  "disposition": "BY-DESIGN",
+  "refutes_if": "worker_heavy_feeds_enabled() returns True when WORKER_HEAVY=essential, or background_boot starts live_subnets under essential",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/run_mode.py | nl -ba | sed -n '71,74p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/background_boot.py | nl -ba | sed -n '552,556p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:fly.toml | nl -ba | sed -n '40p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "fly.toml",
+      "lines": "40",
+      "quote": "WORKER_HEAVY = \"essential\""
+    },
+    {
+      "path": "internal/run_mode.py",
+      "lines": "71-74",
+      "quote": "def worker_heavy_feeds_enabled() -> bool:\n    flag = os.environ.get(\"WORKER_HEAVY\", \"essential\").strip().lower()\n    return flag in (\"1\", \"true\", \"yes\", \"on\", \"full\")"
+    },
+    {
+      "path": "internal/background_boot.py",
+      "lines": "552-556",
+      "quote": "# WORKER_HEAVY=essential must not start live_subnets.\n    run_live_subnets = heavy\n    if not run_live_subnets and not heavy:\n        logger.info(\"background workers: essential mode (heavy feeds skipped)\")\n        return"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

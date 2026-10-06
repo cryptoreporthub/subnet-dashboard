@@ -1,0 +1,103 @@
+{
+  "claim_id": "L2-INC-C-001",
+  "title": "Static-asset wedge 11:49:15Z UTC — post-recovery browser load failure (mechanism bounded unknown)",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 2,
+  "class": "L2-INC-C",
+  "disposition": "UNKNOWN",
+  "mechanism_status": "BOUNDED_UNKNOWN",
+  "refutes_if": "At 11:49:15Z (or bounded replay immediately post 11:45:51Z machine start), parallel GET of /static/css/base.css and /static/css/tribunal-hero-layout.css returns 200 with full pin-sized bodies in <5s while / returns 200 — would refute Gemini CSS-timeout starvation. Audit-time L2.1 probes (17:56Z) already show 6 parallel static GETs all 200 with non-zero bodies; queuing-starvation mechanism REFUTED at audit time but incident-time behavior NOT_OBSERVABLE (no log replay).",
+  "replay_class": "http-live",
+  "fetch_method": "curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/base.css; git show ce3d8200:internal/instant_bailout.py | nl -ba | sed -n '48,53p'",
+  "evidence": [
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/base.css",
+      "lines": "n/a",
+      "quote": "audit-time L2.1: http_code=200 time=1.51s size=9469 (pin blob 9469 B)"
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/ui.css",
+      "lines": "n/a",
+      "quote": "audit-time L2.1: http_code=200 time=0.51s size=503871 (pin blob 503871 B; contradicts Ditto 750072ef zero-byte report earlier same day)"
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/* (6-asset parallel burst)",
+      "lines": "n/a",
+      "quote": "parallel_wall_s=6.221; favicon.svg 607B, smoke-tokens.css 6430B, base.css 9469B, ui.css 503871B, tribunal-hero-layout.css 1609B, cockpit_hydrate.js 235293B — all HTTP 200 — queuing-starvation REFUTED at audit time"
+    },
+    {
+      "path": "internal/instant_bailout.py",
+      "lines": "48-53",
+      "quote": "Bailout static allowlist covers only 4 paths (cockpit_hydrate.js, mindmap_graph.js, api_fetch.js, ui.css) — base.css and tribunal-hero-layout.css NOT allowlisted; if inner app wedged, / may 200 via bailout while non-allowlisted static times out — consistent with Gemini partial-failure pattern (static architecture, not incident proof)"
+    },
+    {
+      "path": "fly-machine-lifecycle://7841024b3712e8",
+      "lines": "n/a",
+      "quote": "Machine restart 11:45:48Z, start 11:45:51Z — Incident C at 11:49:15Z is ~3m24s post-recycle (Gemini-origin: / returned 200 before static failures)"
+    },
+    {
+      "path": "fly-log-buffer-limitation",
+      "lines": "n/a",
+      "quote": "PARTIAL RECEIPT ONLY: no fly-log lines for 11:49:15Z static requests; buffer/API-401 same as Incidents A/B. Incident-time static failure NOT_OBSERVABLE via L2.2; Gemini task-279 asset list remains Ditto-origin until browser Network tab receipt."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "lines": "n/a",
+      "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /health HTTP 200 0.179s; GET /api/soul-map HTTP 200 0.384s (454KB). Incident-time (11:49:15Z) static wedge behavior remains NOT_OBSERVABLE; audit-time static burst already REFUTED at 17:56Z per refutes_if."
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/base.css",
+      "lines": "n/a",
+      "quote": "Phase 2 live @ 2026-10-06T03:36:37Z: base.css HTTP 200 0.126s 9469B; tribunal-hero-layout.css HTTP 200 0.116s 1609B; ui.css HTTP 200 0.535s 503871B — non-allowlisted CSS serves normally at probe time; incident-time failure NOT_OBSERVABLE"
+    },
+    {
+      "path": "internal/instant_bailout.py",
+      "lines": "48-53,153-162",
+      "quote": "Phase 2 static: allowlist exactly 4 paths preloaded at boot; base.css/tribunal-hero-layout.css require inner StaticFiles — architecture-consistent with selective failure IF inner app wedged at incident time (not proof)"
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt",
+      "lines": "n/a",
+      "quote": "Phase 2: flyctl logs 0 hits at 11:49:15Z; logs API HTTP 401; MAX_IN_FLIGHT_REQUESTS=48 on live machine. Gemini 45-asset timeouts remain Ditto-origin UNVERIFIED"
+    }
+  ],
+  "incident_window_observability": "NOT_OBSERVABLE",
+  "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-time static failure irretrievable",
+  "static_forensics": {
+    "closed_at_pin": [
+      "Audit-time parallel static burst all HTTP 200 — persistent queuing-starvation REFUTED at audit time",
+      "InstantBailout partial static allowlist (4 files) — architecture supports selective static failure if inner app wedged",
+      "Post-recycle timing ~3m24s after 11:45:51Z start"
+    ],
+    "not_observable_without_fly_logs": [
+      "Whether base.css / tribunal-hero-layout.css actually timed out at 11:49:15Z",
+      "Inner-app wedge state at incident time",
+      "Connection count / FD exhaustion during 45-asset browser burst"
+    ],
+    "candidate_classes_narrowed": {
+      "REFUTED_AT_AUDIT_TIME": ["Static queuing starvation (6-asset parallel probe)"],
+      "ARCHITECTURE_CONSISTENT": ["Partial bailout → / 200 while non-allowlisted static fails"],
+      "NOT_OBSERVABLE": ["Incident-time Gemini 45-asset failure receipt"]
+    }
+  },
+  "tier": "B",
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics", "phase2-multi-method", "grok-rev3"],
+  "grok_rev3": {
+    "ditto_memory_id": "e7639072-c408-48cd-8d00-854591ddf623",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md",
+    "probe_utc": "2026-10-06T12:00:00Z",
+    "mechanism_verdict": "NOT_OBSERVABLE",
+    "methods": [
+      {"method": "flyctl logs --no-tail", "result": "0 overlap — buffer earliest 2026-10-06T04:38:56Z (prior) / 11:33:11Z (current)"},
+      {"method": "flyctl logs --start/--end", "result": "unsupported — flyctl v0.4.99 unknown flag --start"},
+      {"method": "LogShipper/drain", "result": "none — single org/app; git grep @pin 0 hits"},
+      {"method": "Fly logs API w/ flyctl token", "result": "skipped — token extraction blocked by policy"}
+    ],
+    "key_log_lines": "0 lines at 11:49:15Z; audit-time static burst all 200 REFUTED queuing-starvation; incident-time Gemini 45-asset UNVERIFIED",
+    "mechanism_status_unchanged": "BOUNDED_UNKNOWN"
+  },
+  "window_utc": {
+    "start": "2026-10-05T11:49:15Z",
+    "end": "2026-10-05T11:49:15Z"
+  }
+}

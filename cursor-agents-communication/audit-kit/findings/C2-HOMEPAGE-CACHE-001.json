@@ -1,0 +1,31 @@
+{
+  "claim_id": "C2-HOMEPAGE-CACHE-001",
+  "title": "HOMEPAGE_SHELL_CACHE_SECONDS default collision: server.py _CACHE_PATHS=60 vs module constant=45",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C2",
+  "disposition": "CONFIRMED",
+  "refutes_if": "Both server.py defaults match, or fly.toml does not set HOMEPAGE_SHELL_CACHE_SECONDS=60",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py | nl -ba | sed -n '516p;627p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:fly.toml | nl -ba | sed -n '66p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "server.py",
+      "lines": "516",
+      "quote": "\"/\": int(os.environ.get(\"HOMEPAGE_SHELL_CACHE_SECONDS\", \"60\")),"
+    },
+    {
+      "path": "server.py",
+      "lines": "627",
+      "quote": "HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get(\"HOMEPAGE_SHELL_CACHE_SECONDS\", \"45\"))"
+    },
+    {
+      "path": "fly.toml",
+      "lines": "66",
+      "quote": "HOMEPAGE_SHELL_CACHE_SECONDS = \"60\""
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Prod fly.toml sets 60, masking unset-env divergence; local/dev without env sees 60s Cache-Control vs 45s shell TTL logic"
+}

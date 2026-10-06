@@ -1,0 +1,25 @@
+{
+  "claim_id": "C2-WATCHLIST-PATH-001",
+  "title": "WATCHLIST_PATH default collision: freshness.py=config/watchlist.json vs watchlist/store.py=data/watchlist.json",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C2",
+  "disposition": "CONFIRMED",
+  "refutes_if": "Both modules default WATCHLIST_PATH to the same path",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/freshness.py | nl -ba | sed -n '24p'; git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/watchlist/store.py | nl -ba | sed -n '11p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/freshness.py",
+      "lines": "24",
+      "quote": "WATCHLIST_PATH = os.environ.get(\"WATCHLIST_PATH\", \"config/watchlist.json\")"
+    },
+    {
+      "path": "internal/watchlist/store.py",
+      "lines": "11",
+      "quote": "WATCHLIST_PATH = os.environ.get(\"WATCHLIST_PATH\", \"data/watchlist.json\")"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

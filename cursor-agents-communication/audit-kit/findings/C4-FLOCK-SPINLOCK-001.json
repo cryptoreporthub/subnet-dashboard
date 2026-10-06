@@ -1,0 +1,46 @@
+{
+  "claim_id": "C4-FLOCK-SPINLOCK-001",
+  "title": "Bounded flock polling/retry (5.0s default) on five persist-path helpers; blocking LOCK_EX counterexample at pick_score_cache.py:104",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C4",
+  "disposition": "CONFIRMED",
+  "refutes_if": "Any of the five scoped helpers (soul_map_io, score_snapshots, daily_pick_engine, predictions_store, price_fetcher) lacks timeout_seconds=5.0 default or uses blocking LOCK_EX without bounded retry polling; OR pick_score_cache.py:104 does not use blocking LOCK_EX on data/pick_score_cache.json",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/store/soul_map_io.py | nl -ba | sed -n '48,69p'; git grep -n 'fcntl.flock' ce3d820013d45577333ac8aada8c0d9e97c54129 -- internal/",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/store/soul_map_io.py",
+      "lines": "48-69",
+      "quote": "_locked_soul_map_file: LOCK_NB + sleep(0.01) retry loop until timeout_seconds (default 5.0)"
+    },
+    {
+      "path": "internal/council/score_snapshots.py",
+      "lines": "121",
+      "quote": "def _locked_score_snapshot(snap_path: str, timeout_seconds: float = 5.0) -> Iterator[None]:"
+    },
+    {
+      "path": "internal/council/daily_pick_engine.py",
+      "lines": "71",
+      "quote": "def _locked_daily_picks(path: str, timeout_seconds: float = 5.0) -> Iterator[None]:"
+    },
+    {
+      "path": "internal/learning/predictions_store.py",
+      "lines": "35-54",
+      "quote": "locked_predictions_file(timeout_seconds=5.0): LOCK_NB + sleep(0.05) retry loop; raises FileLockTimeout after deadline"
+    },
+    {
+      "path": "internal/indicators/price_fetcher.py",
+      "lines": "85-110",
+      "quote": "_locked_price_cache: LOCK_NB + sleep(0.01) retry loop until timeout_seconds (default 5.0)"
+    },
+    {
+      "path": "internal/council/pick_score_cache.py",
+      "lines": "40,104",
+      "quote": "COUNTEREXAMPLE (out of scope for bounded-claim): CACHE_PATH defaults to data/pick_score_cache.json; _with_file_lock uses blocking LOCK_EX (no LOCK_NB, no timeout) at line 104"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Claim scoped to five bounded helpers only; pick_score_cache blocking flock is documented counterexample, not counted in CONFIRMED inventory"
+}

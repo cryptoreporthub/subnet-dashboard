@@ -1,0 +1,21 @@
+{
+  "claim_id": "C5-SQLITE-INVENTORY-001",
+  "title": "sqlite3.connect inventory: 10 production call sites + 1 test at pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C5",
+  "disposition": "CONFIRMED",
+  "refutes_if": "git grep sqlite3.connect at pin returns a different count or set of paths",
+  "fetch_method": "git grep -n sqlite3.connect ce3d820013d45577333ac8aada8c0d9e97c54129 -- '*.py'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {"path": "fetchers/_sqlite.py", "lines": "28", "quote": "conn = sqlite3.connect(path, timeout=10, check_same_thread=False)"},
+    {"path": "internal/chain_client.py", "lines": "41,442,452,467,479", "quote": "conn = sqlite3.connect(VOLUME_DB_PATH)"},
+    {"path": "internal/investigation/service.py", "lines": "80,94,112", "quote": "conn = sqlite3.connect(CACHE_DB)"},
+    {"path": "message_intel/models.py", "lines": "32", "quote": "conn = sqlite3.connect(self.db_path)"},
+    {"path": "tests/test_message_intel_reset.py", "lines": "65", "quote": "with sqlite3.connect(path) as conn:"}
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "WAL/managed-vs-unmanaged classification deferred to L2.3 PRAGMA reads; none set journal_mode in connect call"
+}

@@ -1,0 +1,56 @@
+{
+  "claim_id": "SMOKE-001",
+  "title": "StaticFiles mounted at /static (server.py:510-512)",
+  "directive": "1057e644",
+  "role": "ditto-blind-parallel-verification-result",
+  "source_claim": {
+    "path": "cursor-agents-communication/audit-kit/findings/SMOKE-001.json",
+    "read_at_commit": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+    "class": "C5",
+    "expected_lines": "510-512",
+    "expected_quote": "_static_dir = os.path.join(BASE_DIR, \"static\")\nif os.path.isdir(_static_dir):\n    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"
+  },
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "pin_blob_sha": {
+    "server.py": "3acdfc83b90e03bb3ccf87081faf47f39ad1bd27"
+  },
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "fetch_method": "git-clone",
+  "replay_command": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:server.py | nl -ba | sed -n '510,512p'",
+  "verbatim_at_pin": [
+    {"line": 510, "text": "_static_dir = os.path.join(BASE_DIR, \"static\")"},
+    {"line": 511, "text": "if os.path.isdir(_static_dir):"},
+    {"line": 512, "text": "    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"}
+  ],
+  "context_lines_5_each_side": [
+    {"line": 505, "text": ""},
+    {"line": 506, "text": "templates.env.globals[\"publish_gate_label\"] = publish_gate_label"},
+    {"line": 507, "text": "templates.env.globals[\"static_v\"] = STATIC_V"},
+    {"line": 508, "text": "templates.env.globals[\"subnet_apy_percent\"] = subnet_apy_percent"},
+    {"line": 509, "text": ""},
+    {"line": 510, "text": "_static_dir = os.path.join(BASE_DIR, \"static\")"},
+    {"line": 511, "text": "if os.path.isdir(_static_dir):"},
+    {"line": 512, "text": "    app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"},
+    {"line": 513, "text": ""},
+    {"line": 514, "text": "# Paths that get a short public cache to keep the dashboard snappy on Fly.io."},
+    {"line": 515, "text": "_CACHE_PATHS = {"},
+    {"line": 516, "text": "    \"/\": int(os.environ.get(\"HOMEPAGE_SHELL_CACHE_SECONDS\", \"60\")),"},
+    {"line": 517, "text": "    \"/api/registry\": 30,"}
+  ],
+  "comparison": {
+    "method": "byte-exact comparison of SMOKE-001.json expected_quote against verbatim lines 510-512 at pin",
+    "match": true,
+    "conflicts_with": null
+  },
+  "drift_check": {
+    "scope": "server.py:628-633",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "none",
+    "note": "server.py lines 628-633 are byte-identical at historical pin c9449d64 and audit pin ce3d8200 (TOP_SCORING_UNIVERSE default \"20\" at :628 unchanged). C9-TOP-SCORING-UNIVERSE-001.json cites server.py:628 with this exact text; verified match at ce3d8200."
+  },
+  "verified": true,
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}

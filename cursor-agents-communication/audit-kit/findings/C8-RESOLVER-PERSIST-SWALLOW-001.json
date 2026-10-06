@@ -1,0 +1,27 @@
+{
+  "claim_id": "C8-RESOLVER-PERSIST-SWALLOW-001",
+  "title": "resolver_scheduler write_soul_map failures silently swallowed at two persist sites",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C8",
+  "disposition": "CONFIRMED",
+  "refutes_if": "except blocks at resolver_scheduler.py:736 and :1181 log, re-raise, or increment error telemetry",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '734,737p;1175,1182p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "734-737",
+      "quote": "try:\n            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "1175-1182",
+      "quote": "try:\n            write_soul_map(_mutator, self.soul_map_path)\n            if timing is not None:\n                timing.record_persist_subtimer(\n                    \"summary_rmw\", (time.perf_counter() - t_rmw) * 1000\n                )\n        except Exception:\n            pass"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "conflicts_with": ["SMOKE-002"],
+  "note": "Overlaps MC SMOKE-002 (:735-737 only). This bundle adds second site :1175-1182; MC adjudicates dedup."
+}

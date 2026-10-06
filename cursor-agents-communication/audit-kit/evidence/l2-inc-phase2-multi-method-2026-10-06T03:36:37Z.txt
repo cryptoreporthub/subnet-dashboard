@@ -1,0 +1,84 @@
+=== Mission Control Phase 2 — L2-INC-A/B/C multi-method push ===
+probe_batch_utc: 2026-10-06T03:36:37Z
+pin: ce3d820013d45577333ac8aada8c0d9e97c54129
+branch: cursor/audit-evidence-2026-10-05-smoke
+pr: #1324
+methods: live-flyctl | static-pin-forensics | external-gha
+
+--- 1. LIVE: Fly app status (read-only flyctl) ---
+flyctl status -a subnet-dashboard @ 2026-10-06T03:36Z
+  app: subnet-dashboard
+  machine: 7841024b3712e8 state=started region=sjc version=2274
+  image: deployment-01M3X0VF4BNDV9BPAT2HBVSH4W
+  OCI revision: ce3d820013d45577333ac8aada8c0d9e97c54129
+  checks: 1/1 passing (servicecheck-00-http-8080 OK)
+  last_updated: 2026-10-06T01:17:17Z
+
+--- 1. LIVE: prod health now ---
+GET /health → HTTP 200 time=0.115s size=2 body=OK
+GET /version → HTTP 200 time=0.111s pin_match=true
+GET /static/css/base.css → HTTP 200 time=0.126s size=9469
+GET /static/css/tribunal-hero-layout.css → HTTP 200 time=0.116s size=1609
+GET /static/css/ui.css → HTTP 200 time=0.535s size=503871
+
+--- 1. LIVE: flyctl logs buffer (incident windows) ---
+command: flyctl logs -a subnet-dashboard --no-tail
+line_count: 100
+earliest_timestamp: 2026-10-06T03:27:01Z
+latest_timestamp: 2026-10-06T03:36:47Z
+incident_window_A (2026-10-05T08:29–08:55Z): 0 hits → NOT_OBSERVABLE
+incident_window_B (2026-10-05T11:41–11:47Z): 0 hits → NOT_OBSERVABLE
+incident_window_C (2026-10-05T11:49:15Z): 0 hits → NOT_OBSERVABLE
+
+--- 1. LIVE: Fly logs REST API ---
+GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs?instance=7841024b3712e8
+Authorization: Bearer $FLY_API_TOKEN
+http_code=401 Unauthorized
+receipt: historical log replay NOT_OBSERVABLE via API (same as WS1/WS2)
+
+--- 1. LIVE: machine events API retention ---
+GET https://api.machines.dev/v1/apps/subnet-dashboard/machines/7841024b3712e8/events
+event_count: 20 (API cap)
+oldest_exited_at_in_batch: 2026-10-05T21:37:38.056Z
+note: 11:45:48Z recycle from prior GraphQL receipt (ditto-blind-l1l2) NOT re-derivable from current 20-event window; prior bundle receipt retained
+same_day_context: 2026-10-05T22:11:03.990Z exit oom_killed=true (outside incident windows; memory pressure same machine/day)
+
+--- 2. STATIC: InstantBailout bypass table @ pin ce3d8200 ---
+internal/instant_bailout.py
+  /health → async _send_response b"OK" (no inner app) lines 137-138
+  /api/health → async JSON ok lines 141-143
+  /version → async build_version_payload lines 146-150
+  /api/ops/live → async fetch_ops_live_report (8s thread timeout via health/routes.py:17,48-52)
+  / → homepage bailout or HARDCODED_EMERGENCY_HTML lines 164-194
+  static allowlist (4 paths, preloaded at boot):
+    /static/js/cockpit_hydrate.js
+    /static/js/mindmap_graph.js
+    /static/js/api_fetch.js
+    /static/css/ui.css
+  NOT allowlisted (Incident C candidates): base.css, tribunal-hero-layout.css, smoke-tokens.css, favicon.svg, og-share.png, …
+
+--- 2. STATIC: thread pool + in-flight caps @ pin ---
+fly.toml:113 AIO_WORKER_POOL_SIZE = "24" (live machine env confirms 24; server.py:364 default=4 if unset)
+fly.toml:63 MAX_IN_FLIGHT_REQUESTS = "48"
+server.py:363-368 lifespan sets asyncio default executor ThreadPoolExecutor(max_workers=pool_cap, thread_name_prefix="aio-web")
+internal/ops/readiness.py:151-152 /api/ops/live probe_worker=False to avoid ~36s block
+
+--- 2. STATIC: Incident A narrowing (GHA + bailout cross-check) ---
+GHA run 37283988892 @ 2026-10-05T08:43-08:44Z:
+  /health curl exit 28, 0 bytes, health_http=000000
+  /api/ops/live curl exit 28, 0 bytes, live_http=000000
+  / curl exit 28, 0 bytes, home_http=000000
+  ALL_OK=0
+interpretation: /health is pure InstantBailout async (no thread pool, no inner app). 0-byte timeout on /health refutes Starlette-thread-pool-only wedge. /api/ops/live also 0-byte despite 8s handler timeout wrapper → consistent with VM/TCP accept failure or whole-process freeze before response bytes, not slow handler return.
+
+--- 3. EXTERNAL: GHA uptime runs 2026-10-05 ---
+37253294888 created 01:55Z success
+37283988892 created 08:29:52Z failure (Incident A window)
+37347750010 created 17:20Z success
+37387282106 created 23:13Z success
+no uptime run during Incident B window 11:41–11:47Z → Gemini 48-probe count remains UNVERIFIED
+
+--- DISPOSITION SUMMARY ---
+mechanism_status: BOUNDED_UNKNOWN (unchanged — no incident-window log replay)
+moved: live prod CONFIRMED responsive; log buffer/API-401 receipts refreshed; static InstantBailout/thread-pool/allowlist forensics extended; GHA /api/ops/live 0-byte cross-check added
+still NOT_OBSERVABLE: incident-window app logs (A/B/C); Incident C asset failures at 11:49:15Z; root stall mechanism; service recovery timing in A window

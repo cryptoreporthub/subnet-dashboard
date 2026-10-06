@@ -1,0 +1,35 @@
+{
+  "claim_id": "C12-STATIC-PATH-COUNT-001",
+  "title": "47 raw / 46 query-stripped unique /static/* paths in templates at pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C12",
+  "disposition": "CONFIRMED",
+  "refutes_if": "At pin, raw unique /static/* template tokens outside 45-49, or query-stripped unique paths outside 44-48",
+  "fetch_method": "raw: git grep -oh '/static/[^\"'\"' )>]*' ce3d820013d45577333ac8aada8c0d9e97c54129 -- templates/ | sort -u | wc -l; stripped: same pipeline | sed 's/?.*//' | sort -u | wc -l",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "templates/",
+      "lines": "aggregate",
+      "quote": "47 raw unique /static/* template tokens; 46 query-stripped unique paths. Delta: watchlist_alerts.js appears twice — bare /static/js/watchlist_alerts.js (k3_hold.html) and cache-busted /static/js/watchlist_alerts.js?v={{ static_v }} (premium/scripts.html)"
+    },
+    {
+      "path": "templates/partials/premium/scripts.html",
+      "lines": "45",
+      "quote": "<script src=\"/static/js/watchlist_alerts.js?v={{ static_v }}\" defer></script>"
+    },
+    {
+      "path": "templates/preview/k3_hold.html",
+      "lines": "22",
+      "quote": "<script src=\"/static/js/watchlist_alerts.js\" defer></script>"
+    },
+    {
+      "path": "server.py",
+      "lines": "510-512",
+      "quote": "app.mount(\"/static\", StaticFiles(directory=_static_dir), name=\"static\")"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"]
+}

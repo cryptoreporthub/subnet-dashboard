@@ -1,36 +1,92 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T15:10:00Z",
+  "updated_at": "2026-10-06T12:10:00Z",
+  "updated_by": "grok-rev3-fold",
+  "replit_review": "2026-10-05 PR #1324 comment 6002280219 — A/B mechanism downgraded to UNKNOWN per MODIFY",
+  "grok_rev3_forensics": {
+    "ditto_memory_id": "e7639072-c408-48cd-8d00-854591ddf623",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md",
+    "probe_utc": "2026-10-06T12:00:00Z",
+    "auth": "flyctl d8538a66-fa57-596c-9844-301a9cc108d2@tokens.fly.io; app subnet-dashboard (nameless-cloud-1398 is machine name)",
+    "table": [
+      {
+        "claim_id": "L2-INC-A-001",
+        "window_utc": "2026-10-05T08:29:00Z/2026-10-05T08:55:00Z",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "key_log_lines": "0 lines — buffer earliest 2026-10-06T04:38:56Z (prior pull) / 11:33:11Z (current)",
+        "methods_errors": "(a) flyctl logs 0 overlap (b) --start unsupported v0.4.99 (c) no LogShipper/drain (d) logs API skipped — token extract blocked"
+      },
+      {
+        "claim_id": "L2-INC-B-001",
+        "window_utc": "2026-10-05T11:41:30Z/2026-10-05T11:47:23Z",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "key_log_lines": "0 lines in window",
+        "methods_errors": "same four methods as A"
+      },
+      {
+        "claim_id": "L2-INC-C-001",
+        "window_utc": "2026-10-05T11:44:00Z/2026-10-05T11:54:00Z",
+        "mechanism_verdict": "NOT_OBSERVABLE",
+        "key_log_lines": "0 lines at center 11:49:15Z",
+        "methods_errors": "same four methods as A"
+      }
+    ],
+    "mechanism_status_unchanged": ["L2-INC-A", "L2-INC-B", "L2-INC-C"],
+    "note": "Prior static receipts (GHA, GraphQL lifecycle, phase2) retained; no NOT_OBSERVABLE→CONFIRMED upgrade"
+  },
   "incidents": [
     {
       "id": "L2-INC-A",
       "window_utc": "2026-10-05T08:29:00Z/2026-10-05T08:55:00Z",
-      "symptom": "HTTP hangs >15s, process alive, self-recovered without restart (~26 min)",
-      "mechanism_status": "UNKNOWN",
-      "candidate_class": "InstantBailout / synchronous-work-on-loop wedge",
-      "provenance": ["Ditto 93d36426", "GitHub Actions uptime curl 000000 @ 08:44Z"],
-      "bundle_claim_ids": [],
-      "notes": "Not the same clock as Lane 1 ledger read span 02:09-02:10Z"
+      "symptom": "HTTP hangs >15s; GHA curl 000000 @ 08:44Z; no machine restart in window; service recovery NOT_OBSERVABLE",
+      "mechanism_status": "BOUNDED_UNKNOWN",
+      "candidate_class": "VM/TCP unresponsiveness or GIL/IO contention (InstantBailout /health bypass refutes thread-pool-only theory; resolver persist REFUTED on web ASGI loop)",
+      "provenance": [
+        "Ditto 93d36426",
+        "GitHub Actions uptime curl 000000 @ 08:44Z",
+        "ws2-static-forensics @ ce3d8200"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-A-001"
+      ],
+      "notes": "Not Lane 1 ledger read span 02:09-02:10Z. Closed at pin: GHA timeout + no recycle. Open: root stall mechanism without Fly logs."
     },
     {
       "id": "L2-INC-B",
       "window_utc": "2026-10-05T11:41:30Z/2026-10-05T11:47:23Z",
-      "symptom": "Live site not loading; 48 consecutive health probe timeouts (Gemini task-279 — re-derive under L2)",
-      "mechanism_status": "UNKNOWN",
-      "candidate_class": "Connection / event-loop freeze",
-      "provenance": ["Gemini task-279", "user report"],
-      "bundle_claim_ids": [],
-      "notes": "Symptoms priority evidence; root cause unverified until Fly logs"
+      "symptom": "Live site not loading; machine exit+restart 11:45:48Z CONFIRMED; Gemini 48-probe count UNVERIFIED",
+      "mechanism_status": "BOUNDED_UNKNOWN",
+      "candidate_class": "Forced recycle CONFIRMED (Fly health-check or inline-worker supervisor); stall precursor NOT_OBSERVABLE",
+      "provenance": [
+        "Gemini task-279",
+        "user report",
+        "fly-machine-lifecycle",
+        "ws2-static-forensics @ ce3d8200"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-B-001"
+      ],
+      "notes": "Recycle inside window closed; Gemini 48 timeouts unverified (no GHA uptime run 11:41-11:47Z)."
     },
     {
       "id": "L2-INC-C",
       "window_utc": "2026-10-05T11:49:15Z",
-      "symptom": "Browser white screen after / returned 200; static asset timeouts (Gemini: 45 parallel /static/*)",
-      "mechanism_status": "UNKNOWN",
-      "candidate_class": "Static asset queuing starvation (Gemini label — UNVERIFIED)",
-      "provenance": ["Gemini task-279", "Ditto 750072ef counter-probes"],
-      "bundle_claim_ids": [],
-      "notes": "Mechanism falsifiers in charter § Lane 2 priority evidence"
+      "symptom": "Browser white screen after / returned 200; Gemini 45-asset static timeouts NOT_OBSERVABLE at incident time",
+      "mechanism_status": "BOUNDED_UNKNOWN",
+      "candidate_class": "Partial InstantBailout static allowlist (4 files) — architecture-consistent with selective static failure IF inner app wedged; queuing-starvation REFUTED at audit-time probe",
+      "provenance": [
+        "Gemini task-279",
+        "Ditto 750072ef counter-probes",
+        "ws2-static-forensics @ ce3d8200"
+      ],
+      "bundle_claim_ids": [
+        "L2-INC-C-001"
+      ],
+      "notes": "Audit-time 6-asset parallel burst all HTTP 200. Incident-time asset failures need Fly logs or browser Network receipt."
     }
-  ]
+  ],
+  "persist_hydrate_bundle": "L2-PERSIST-HYDRATE-001",
+  "persist_hydrate_status": "BOUNDED_UNKNOWN",
+  "persist_hydrate_verdict": "Direct web ASGI loop block by resolver persist/hydrate REFUTED at pin (INLINE_WORKER split); cross-process flock ≤5s + VM I/O/GIL contention PLAUSIBLE UNVERIFIED",
+  "log_gap": "Grok rev3 (2026-10-06T12:00Z): flyctl logs buffer 100 lines earliest 2026-10-06T11:33:11Z (current) / 04:38:56Z (prior pull c2c0b4dd…); --start unsupported flyctl v0.4.99; no LogShipper/drain; logs API skipped (token extract blocked). Phase2: buffer earliest 2026-10-06T03:27:01Z + HTTP logs API 401. None cover 2026-10-05 08:29–11:54Z incident windows. Receipt: audit-kit/evidence/grok-fly-triage-rev3-2026-10-06.md; prior phase2: audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt"
 }

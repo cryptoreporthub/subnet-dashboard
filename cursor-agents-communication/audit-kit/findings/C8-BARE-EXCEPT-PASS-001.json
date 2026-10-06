@@ -1,0 +1,21 @@
+{
+  "claim_id": "C8-BARE-EXCEPT-PASS-001",
+  "title": "AST scan: 299 typed except+pass handlers (bare except count=0) at pin",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C8",
+  "disposition": "CONFIRMED",
+  "refutes_if": "AST scan at pin finds any bare except (no type) with single Pass body, or typed except+pass count outside 290-310",
+  "fetch_method": "python3 AST walk: ExceptHandler with len(body)==1 and isinstance(body[0], Pass); bare = type is None; typed = type is not None",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "aggregate",
+      "lines": "n/a",
+      "quote": "299 typed except+pass handlers (e.g. except Exception: pass); bare except:pass count=0. Sample: datastore/learning_engine.py:88, internal/background_boot.py:612,618"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Hazard classification per-site not complete this turn; inventory only"
+}

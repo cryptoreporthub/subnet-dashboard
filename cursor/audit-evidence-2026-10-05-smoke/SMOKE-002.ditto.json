@@ -1,0 +1,55 @@
+{
+  "claim_id": "SMOKE-002",
+  "title": "Ditto blind-parallel evidence — write_soul_map except Exception: pass (resolver_scheduler.py:735-737)",
+  "directive": "1057e644",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "parent_sha": "0cabfb74c2d4390bd9c69f6feaa576d23e200146",
+  "class": "C8",
+  "replay_class": "git-clone",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py | nl -ba | sed -n '735,737p'",
+  "pin_blob_sha": {
+    "internal/council/resolver_scheduler.py": "6312c960db0d51837f3170fdfe5729300ffbf3a8"
+  },
+  "evidence": [
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "735-737",
+      "quote": "            write_soul_map(_mutator, self.soul_map_path)\n        except Exception:\n            pass"
+    }
+  ],
+  "verbatim_at_pin": [
+    {"line": 735, "text": "            write_soul_map(_mutator, self.soul_map_path)"},
+    {"line": 736, "text": "        except Exception:"},
+    {"line": 737, "text": "            pass"}
+  ],
+  "cross_checked_cites": [
+    {
+      "cite": "C8-RESOLVER-PERSIST-SWALLOW-001.json resolver_scheduler.py:734-737",
+      "verified": true
+    },
+    {
+      "cite": "C8-RESOLVER-PERSIST-SWALLOW-001.json resolver_scheduler.py:1175-1182",
+      "verified": true
+    }
+  ],
+  "drift_check": {
+    "scope": "internal/council/resolver_scheduler.py",
+    "historical_pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "result": "+2 line shift since historical pin; SMOKE-002 range at the audit pin verified as-is",
+    "note": "At c9449d64 the pattern sits at 733-735; at ce3d8200 at 735-737. Claim cites ce3d8200 (the audit pin); no renumbering applied. Directive-required server.py:628-633 drift scope = none (see SMOKE-001 bundle)."
+  },
+  "refutes_if": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/council/resolver_scheduler.py shows write_soul_map persist call at :735 without bare except Exception: pass swallow at :736-737",
+  "claims": [
+    {
+      "claim_id": "SMOKE-002",
+      "expected_lines": "735-737",
+      "verified": true,
+      "conflicts_with": null,
+      "comparison": "byte-exact match vs SMOKE-002.json expected_quote at 0cabfb74; no renumbering applied"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["ditto-code"],
+  "verified_at": "2026-10-05",
+  "out_of_scope": ["SMOKE-003"]
+}

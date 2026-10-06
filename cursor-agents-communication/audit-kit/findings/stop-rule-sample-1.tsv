@@ -1,0 +1,31 @@
+sample_id	path	blob_sha	status	anomaly_classes
+S1-01	.github/workflows/fly-incident-restart.yml	7738192eb22b358f0c29cc7d1c17ea724f838baa	READ	
+S1-02	artifacts/g0-baseline/POST_P1_REPROBE.md	f40e52769af55c884e5b1d0815b404673af65b43	READ	
+S1-03	artifacts/g0-baseline/prod-2/hero_t45s.png	edce7b152daf4ebb1d40e7de2213237283b35f91	PARSE-FAIL	
+S1-04	artifacts/pump_desk_preview_scan.md	330d2d38be66a96a9a0d917a5a086554f3a9c843	READ	
+S1-05	cursor-agents-communication/phase-l-pr113-audit.md	e3ca5e6876945a0cd85e9fc7dc7107242003cc1f	READ	
+S1-06	data/pump_cycles.json	1567f4afb9a0f9488dee003299c78a845f32bea5	READ	
+S1-07	data/pump_desk/snapshots/2026-08-07T161344Z.json	7222dd5c3d82c20e99466aa4c900f0df70c79d54	READ	
+S1-08	data/pump_desk/snapshots/2026-08-07T203544Z.json	ee44b5b7ccb5178beec523936670f5c175722330	READ	
+S1-09	docs/deploy-vehicles/2026-09-11-summary-live-universe.md	459cd80f99e1fb813060d3591d8cd781bb306e16	READ	
+S1-10	docs/phase-p-prod-snapshot.md	b4ea61e62200695c1d9346fb74c56d31b1acdc08	READ	
+S1-11	internal/learning/predictions_store.py	181c09b7744dd43ae42a6b0a755d403eb3f69805	READ	C4:35-54
+S1-12	internal/letter/generator.py	bbdb85cfda91b3dfd3121467a64c56681fb59d30	READ	
+S1-13	internal/preview/tribunal_hero.py	e541ba93864c5a5e34a45805fd3c16d2fa17b20d	READ	C10:891
+S1-14	internal/run_mode.py	e3ceb6a780b72ec6c2c321e0455e21ed4fed46a3	READ	
+S1-15	internal/signal_hub/__init__.py	2ec48d5a2931ce25dfe856ff065b9187abbe1b8e	READ	
+S1-16	scripts/post-merge.sh	150d1b98567c023b580224dd9367bcc2ea5ed555	READ	
+S1-17	scripts/worker_probe.py	a07a442f577a2ba9ea631abea898dd047a55a9f1	READ	
+S1-18	static/js/weighing_room.js	5cd07a67956edf895e690c7c823cac8a0c548543	READ	
+S1-19	templates/partials/mindmap_graph.html	085803f0de21addf6b0be1512007247fbeb692c2	READ	
+S1-20	templates/partials/premium/subnet_report.html	8140e535c92bc2c5e70fa36e3437914ccf0a2f12	READ	
+S1-21	tests/test_conviction_index.py	03af547978d1f21e7e7c0afcc7048093d107c0e9	READ	
+S1-22	tests/test_council_basic.py	83dd59a49cd9aa61cfdfa4aebc9a770c03bf7a50	READ	
+S1-23	tests/test_enrichment_badge.py	79fd0c83f8d28a9b73800b45e0bd737cf9e18c43	READ	
+S1-24	tests/test_investigation.py	786f69c7b0b2a67eae1735ee6dda9d6ce931c48d	READ	
+S1-25	tests/test_judge_feedback_confidence.py	483cbcfe153a23afeba91df533bef9ed5d966c75	READ	
+S1-26	tests/test_letter.py	6fb401042f7fb86996e1cbc4985fc90d17108372	READ	
+S1-27	tests/test_phase3_mid_guards_orphan_revive.py	3f82b399b272efe9c2c8d04218cf53cae1adc9aa	READ	
+S1-28	tests/test_phase_b_pump_scenario.py	77734e3d35f40f64868718c6d40ebac35945ca1b	READ	
+S1-29	tests/test_phase_j_ledger_unify.py	fbe949916caabace53eeac4dd72d4da25ba064eb	READ	
+S1-30	tests/test_transport.py	80c491f358aa61cdc4e95ee6d5f8d0634fa0b3e9	READ	

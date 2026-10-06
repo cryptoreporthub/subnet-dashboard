@@ -1,0 +1,36 @@
+{
+  "claim_id": "C4-REVIVED-LATCH-001",
+  "title": "loop_stall_guard revived/resolver_revived latches set once and never reset on recovery",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C4",
+  "disposition": "CONFIRMED",
+  "refutes_if": "revived or resolver_revived is reset to False when snapshot/resolver age returns fresh",
+  "fetch_method": "git show ce3d820013d45577333ac8aada8c0d9e97c54129:internal/loop_stall_guard.py | nl -ba | sed -n '144,199p'",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "internal/loop_stall_guard.py",
+      "lines": "144-145",
+      "quote": "revived = False\n    resolver_revived = False"
+    },
+    {
+      "path": "internal/loop_stall_guard.py",
+      "lines": "175",
+      "quote": "resolver_revived = True"
+    },
+    {
+      "path": "internal/loop_stall_guard.py",
+      "lines": "183-185",
+      "quote": "if age <= MAX_SNAPSHOT_AGE_SECONDS:\n            consecutive_stale = 0\n            logger.info(\"loop stall guard: snapshot fresh (age=%ss)\", int(age))"
+    },
+    {
+      "path": "internal/loop_stall_guard.py",
+      "lines": "197-198",
+      "quote": "if consecutive_stale == 1 and not revived:\n            revived = True"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "consecutive_stale resets on fresh snapshot but revived/resolver_revived never reset — second stale episode skips revive attempts"
+}

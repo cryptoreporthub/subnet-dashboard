@@ -1,0 +1,31 @@
+{
+  "claim_id": "STOP-RULE-SAMPLE-1",
+  "title": "Stratified sample 1 (30 files): zero new contradiction classes outside C1-C13",
+  "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+  "lane": 1,
+  "class": "C13",
+  "disposition": "CONFIRMED",
+  "refutes_if": "A file in the sample exhibits a defect outside C1-C13 contradiction classes",
+  "fetch_method": "cat cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv; per-file git show ce3d820013d45577333ac8aada8c0d9e97c54129:<path>",
+  "replay_class": "git-clone",
+  "evidence": [
+    {
+      "path": "cursor-agents-communication/audit-kit/findings/stop-rule-sample-1.tsv",
+      "lines": "1-31",
+      "quote": "30 files stratified by extension; seed=sha256(pin); 29 READ + 1 PARSE-FAIL (hero_t45s.png). Known-class hits annotated: S1-11 C4:35-54, S1-13 C10:891. Remaining 27 readable files: no new class."
+    },
+    {
+      "path": "internal/learning/predictions_store.py",
+      "lines": "35-54",
+      "quote": "S1-11: fcntl.flock bounded polling/retry — already C4 class; no new class"
+    },
+    {
+      "path": "internal/preview/tribunal_hero.py",
+      "lines": "891",
+      "quote": "S1-13: preview graded=443 hardcode — already C10 class; no new class"
+    }
+  ],
+  "tier": "B",
+  "verified_by": ["lane1"],
+  "note": "Stop rule 1/2 complete; need second consecutive zero-new-class sample before audit termination"
+}
