@@ -155,3 +155,12 @@
 - **P2** [PR #1328](https://github.com/cryptoreporthub/subnet-dashboard/pull/1328) @ `a862121d`: MC AC review **PASS** — undrafted Ready for review. Docs-only: F02 static re-run receipt (58 grep matches, exit 0 @ pin `ce3d8200…`) + Gate C prod env receipt (L2.3 machine-exec env consolidated; PARTIAL PASS with NOT_OBSERVABLE fences for silent `LOOP_STALL_GUARD_*` knobs).
 - **Queue:** `active_slice=P3a`, `state=WAITING_GROK`; P3a handoff posted on `cursor/mc-grok-product-queue` (council/signals/daily-pick reliability, branch `cursor/p3a-council-signals`).
 - **Ditto:** queue pointer mirror pending (`grok-product-queue-active-2026-10-06`).
+
+## 2026-10-06 ~22:12 UTC — P3a MC review PASS + P3b handoff — **from Mission Control**
+
+**Author:** MC worker `bc-0fe5aefe` (P3a AC review).
+
+- **P3a** [PR #1330](https://github.com/cryptoreporthub/subnet-dashboard/pull/1330) @ `7adfafd8`: MC AC review **PASS** — Ready for review (Grok undrafted early; MC confirms). Read-path reliability: homepage `_pick_sections` read-only; signals plain GET honest-stale + bg refresh; SimiVision weighing non-blocking lock; pick scheduler `is_cancelled` L6-002 test. Tests: contract **148 passed**; P3a targeted **242 passed / 3 pre-existing fails** (`test_prod_stability`×2, `test_signals_outcome_hardening`×1). Env: `SIGNALS_FRESHNESS_SECONDS=99999999`.
+- **Queue:** `active_slice=P3b`, `state=WAITING_GROK`; P3b handoff posted (SimiVision chat streaming, branch `cursor/p3b-simivision-chat-stream`).
+- **Ditto:** `save_memory` mirror `grok-product-queue-active-2026-10-06` + P3a reviewed summary pending.
+- No merge, no deploy.
