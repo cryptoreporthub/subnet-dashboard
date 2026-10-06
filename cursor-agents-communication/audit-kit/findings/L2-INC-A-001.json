@@ -1,13 +1,14 @@
 {
   "claim_id": "L2-INC-A-001",
-  "title": "Incident A 08:29–08:55Z — GHA probe timeout (mechanism unverified; service recovery NOT_OBSERVABLE)",
+  "title": "Incident A 08:29–08:55Z — GHA probe timeout (mechanism bounded unknown; service recovery NOT_OBSERVABLE)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-INC-A",
   "disposition": "UNKNOWN",
+  "mechanism_status": "BOUNDED_UNKNOWN",
   "refutes_if": "Fly logs (UTC-filtered 08:29–08:55Z) show uninterrupted GET /health 200 with body OK and sub-1s latency throughout the window; OR machine 7841024b3712e8 exit/restart occurs inside 08:29–08:55Z. Note: full fly-log replay was NOT_OBSERVABLE at audit time (buffer/API-401) — this falsifier requires historical log access beyond L2.2 buffer.",
   "replay_class": "fly-logs",
-  "fetch_method": "gh run view 37283988892 --repo cryptoreporthub/subnet-dashboard --log; flyctl graphql machine(machineId:7841024b3712e8) events; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j (incident window 08:29–08:55Z — buffer/API-401 gap documented in evidence)",
+  "fetch_method": "gh run view 37283988892 --repo cryptoreporthub/subnet-dashboard --log; flyctl graphql machine(machineId:7841024b3712e8) events; git show ce3d8200:internal/instant_bailout.py | nl -ba | sed -n '137,138p'",
   "evidence": [
     {
       "path": "github-actions://uptime_monitor/37283988892",
@@ -20,9 +21,19 @@
       "quote": "No exit/restart between 2026-10-04T22:31:36Z start and 2026-10-05T09:43:31Z exit — spans entire Incident A window (08:29–08:55Z); no machine recycle during window (service recovery NOT_OBSERVABLE — incident-window app logs unavailable)"
     },
     {
+      "path": "internal/instant_bailout.py",
+      "lines": "137-138",
+      "quote": "GET /health served async without calling inner app (InstantBailout bypass) — 0-byte GHA timeout refutes Starlette-thread-pool-only wedge as sole explanation; implies VM/TCP accept or whole-process unresponsiveness"
+    },
+    {
+      "path": "fly.toml",
+      "lines": "36-41",
+      "quote": "INLINE_WORKER=1, BACKGROUND_ON_WEB=off, WORKER_HEAVY=essential — resolver persist runs on sibling worker process, not web ASGI loop (static forensics WS2)"
+    },
+    {
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
-      "quote": "PARTIAL RECEIPT ONLY: flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j earliest timestamp 2026-10-05T17:31:42Z — does not cover 08:29–08:55Z. GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs?instance=7841024b3712e8 returned HTTP 401 Unauthorized. Incident-window app log lines NOT_OBSERVABLE via L2.2; disposition rests on GHA curl timeout + lifecycle no-restart correlation, not full fly-log replay."
+      "quote": "PARTIAL RECEIPT ONLY: flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j earliest timestamp 2026-10-05T17:31:42Z — does not cover 08:29–08:55Z. GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs?instance=7841024b3712e8 returned HTTP 401 Unauthorized. Incident-window app log lines NOT_OBSERVABLE via L2.2; disposition rests on GHA curl timeout + lifecycle no-restart correlation + static architecture narrowing, not full fly-log replay."
     },
     {
       "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
@@ -32,8 +43,25 @@
   ],
   "incident_window_observability": "NOT_OBSERVABLE",
   "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-window logs irretrievable",
+  "static_forensics": {
+    "closed_at_pin": [
+      "GHA curl 000000 with 0 bytes @ 08:43-08:44Z inside window",
+      "No machine exit/restart during 08:29-08:55Z",
+      "InstantBailout /health is async bypass — thread-pool saturation alone insufficient to explain /health 0-byte timeout",
+      "Resolver persist on inline worker process (REFUTED as direct web ASGI loop block)"
+    ],
+    "not_observable_without_fly_logs": [
+      "Root stall mechanism (CPU, disk, flock, network)",
+      "Service recovery timing and whether process self-healed",
+      "persist_summary_rmw_ms during window"
+    ],
+    "candidate_classes_narrowed": {
+      "REFUTED": ["Starlette thread-pool-only /health wedge", "resolver write_soul_map on web ASGI loop"],
+      "PLAUSIBLE_UNVERIFIED": ["VM-level TCP accept failure", "cross-process soul_map flock ≤5s on concurrent web reads", "GIL/CPU contention from inline worker"]
+    }
+  },
   "tier": "B",
-  "verified_by": ["lane2"],
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics"],
   "window_utc": {
     "start": "2026-10-05T08:29:00Z",
     "end": "2026-10-05T08:55:00Z"

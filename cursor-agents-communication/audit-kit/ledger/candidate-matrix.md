@@ -191,10 +191,10 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | web-asgi | unknown |
 | SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | inline-worker | swallows |
 | SMOKE-003 | L2+L4 | deploy-pin | historical + live `/version` receipts match pin (live CONFIRMED 2026-10-06T03:28:50Z) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | smoke-gate | external-probe | no |
-| L2-INC-A-001 | L2+L4 | incident | event-loop wedge 08:29–08:55Z; incident-window recovery NOT_OBSERVABLE; current live bounded CONFIRMED 2026-10-06T03:28:49Z | — | A | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Ditto 93d36426 | web-asgi | unknown |
-| L2-INC-B-001 | L2 | incident | connection freeze 11:41:30–11:47:23Z | — | B | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 | web-asgi | unknown |
-| L2-INC-C-001 | L2 | incident | static wedge 11:49:15Z | static/ | C | UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 | client-hydrate | unknown |
-| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | unverified hypothesis: persist/hydrate MAY block ASGI during A–C | soul_map, predictions, hydrate paths | A,B,C | UNKNOWN | replit_pass | live-matrix | ce3d8200 | B | — | audit brief § action item | boot-thread + inline-worker | yes |
+| L2-INC-A-001 | L2+L4 | incident | GHA 000000 08:44Z; no recycle; InstantBailout refutes thread-pool-only; WS1 current live CONFIRMED | — | A | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Ditto 93d36426 + WS1+WS2 | web-asgi | unknown |
+| L2-INC-B-001 | L2 | incident | recycle 11:45:48Z CONFIRMED; Gemini 48-probe UNVERIFIED | — | B | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | web-asgi | unknown |
+| L2-INC-C-001 | L2 | incident | queuing-starvation REFUTED audit-time; partial bailout allowlist 4 files | static/ | C | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | client-hydrate | unknown |
+| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | direct web ASGI block REFUTED; flock≤5s + VM I/O PLAUSIBLE | soul_map, predictions, hydrate paths | A,B,C | BOUNDED_UNKNOWN | replit_pass | live-matrix | ce3d8200 | B | — | audit brief § action item + WS2 | boot-thread + inline-worker | yes |
 
 **Review_status source of truth:** Replit PR comments on #1324. MC mirrors into `claims.json` after comment.
 

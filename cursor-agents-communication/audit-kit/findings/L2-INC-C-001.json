@@ -1,13 +1,14 @@
 {
   "claim_id": "L2-INC-C-001",
-  "title": "Static-asset wedge 11:49:15Z UTC — post-recovery browser load failure (mechanism unverified)",
+  "title": "Static-asset wedge 11:49:15Z UTC — post-recovery browser load failure (mechanism bounded unknown)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-INC-C",
   "disposition": "UNKNOWN",
+  "mechanism_status": "BOUNDED_UNKNOWN",
   "refutes_if": "At 11:49:15Z (or bounded replay immediately post 11:45:51Z machine start), parallel GET of /static/css/base.css and /static/css/tribunal-hero-layout.css returns 200 with full pin-sized bodies in <5s while / returns 200 — would refute Gemini CSS-timeout starvation. Audit-time L2.1 probes (17:56Z) already show 6 parallel static GETs all 200 with non-zero bodies; queuing-starvation mechanism REFUTED at audit time but incident-time behavior NOT_OBSERVABLE (no log replay).",
   "replay_class": "http-live",
-  "fetch_method": "curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/base.css; curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/ui.css; parallel 6-asset curl burst (see evidence); flyctl graphql machine(machineId:7841024b3712e8) events",
+  "fetch_method": "curl -sS -m 25 https://subnet-dashboard.fly.dev/static/css/base.css; git show ce3d8200:internal/instant_bailout.py | nl -ba | sed -n '48,53p'",
   "evidence": [
     {
       "path": "https://subnet-dashboard.fly.dev/static/css/base.css",
@@ -22,7 +23,12 @@
     {
       "path": "https://subnet-dashboard.fly.dev/static/* (6-asset parallel burst)",
       "lines": "n/a",
-      "quote": "parallel_wall_s=6.221; favicon.svg 607B, smoke-tokens.css 6430B, base.css 9469B, ui.css 503871B, tribunal-hero-layout.css 1609B, cockpit_hydrate.js 235293B — all HTTP 200"
+      "quote": "parallel_wall_s=6.221; favicon.svg 607B, smoke-tokens.css 6430B, base.css 9469B, ui.css 503871B, tribunal-hero-layout.css 1609B, cockpit_hydrate.js 235293B — all HTTP 200 — queuing-starvation REFUTED at audit time"
+    },
+    {
+      "path": "internal/instant_bailout.py",
+      "lines": "48-53",
+      "quote": "Bailout static allowlist covers only 4 paths (cockpit_hydrate.js, mindmap_graph.js, api_fetch.js, ui.css) — base.css and tribunal-hero-layout.css NOT allowlisted; if inner app wedged, / may 200 via bailout while non-allowlisted static times out — consistent with Gemini partial-failure pattern (static architecture, not incident proof)"
     },
     {
       "path": "fly-machine-lifecycle://7841024b3712e8",
@@ -42,8 +48,25 @@
   ],
   "incident_window_observability": "NOT_OBSERVABLE",
   "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-time static failure irretrievable",
+  "static_forensics": {
+    "closed_at_pin": [
+      "Audit-time parallel static burst all HTTP 200 — persistent queuing-starvation REFUTED at audit time",
+      "InstantBailout partial static allowlist (4 files) — architecture supports selective static failure if inner app wedged",
+      "Post-recycle timing ~3m24s after 11:45:51Z start"
+    ],
+    "not_observable_without_fly_logs": [
+      "Whether base.css / tribunal-hero-layout.css actually timed out at 11:49:15Z",
+      "Inner-app wedge state at incident time",
+      "Connection count / FD exhaustion during 45-asset browser burst"
+    ],
+    "candidate_classes_narrowed": {
+      "REFUTED_AT_AUDIT_TIME": ["Static queuing starvation (6-asset parallel probe)"],
+      "ARCHITECTURE_CONSISTENT": ["Partial bailout → / 200 while non-allowlisted static fails"],
+      "NOT_OBSERVABLE": ["Incident-time Gemini 45-asset failure receipt"]
+    }
+  },
   "tier": "B",
-  "verified_by": ["lane2"],
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics"],
   "window_utc": {
     "start": "2026-10-05T11:49:15Z",
     "end": "2026-10-05T11:49:15Z"

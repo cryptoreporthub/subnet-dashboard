@@ -1,14 +1,50 @@
 {
   "claim_id": "L2-PERSIST-HYDRATE-001",
-  "title": "Unverified hypothesis: persist/hydrate MAY block ASGI loop during Incidents A–C (audit correlation, not established)",
+  "title": "Unverified hypothesis: persist/hydrate MAY block ASGI loop during Incidents A–C — direct web loop block REFUTED at pin; indirect contention PLAUSIBLE",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "C4",
   "disposition": "UNKNOWN",
+  "mechanism_status": "BOUNDED_UNKNOWN",
   "refutes_if": "Fly logs inside 08:29–08:55Z or 11:41–11:47Z show persist_summary_rmw_ms <1000 and no concurrent /health stalls; OR L2.3 timed persist probe during wedge shows off-thread execution with bounded timeout. Note: incident-window persist timings NOT_OBSERVABLE (buffer/API-401); Replit-origin 26–61s cycles (Ditto b13cc876) remain unverified for these specific windows.",
   "replay_class": "fly-logs",
-  "fetch_method": "flyctl machine exec -a subnet-dashboard 7841024b3712e8 env; flyctl machine exec -a subnet-dashboard 7841024b3712e8 wc -c /app/data/soul_map.json; flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j; flyctl graphql machine(machineId:7841024b3712e8) events",
+  "fetch_method": "git show ce3d8200:fly.toml | nl -ba | sed -n '36,41p'; git show ce3d8200:scripts/fly_web_entrypoint.sh | nl -ba | sed -n '32,34p'; git show ce3d8200:internal/council/resolver_scheduler.py | nl -ba | sed -n '828,915p'; git show ce3d8200:server.py | nl -ba | sed -n '668,676p'",
   "evidence": [
+    {
+      "path": "fly.toml",
+      "lines": "36-41",
+      "quote": "INLINE_WORKER=1, BACKGROUND_ON_WEB=off, WORKER_HEAVY=essential — web process does not boot background schedulers; resolver persist on sibling worker"
+    },
+    {
+      "path": "scripts/fly_web_entrypoint.sh",
+      "lines": "32-34",
+      "quote": "nice -n 10 env RUN_MODE=worker python -m internal.worker & — persist-heavy resolver in separate OS process sharing volume"
+    },
+    {
+      "path": "internal/council/resolver_scheduler.py",
+      "lines": "828-915",
+      "quote": "Resolver cycle in ThreadPoolExecutor(max_workers=1) on worker process; shutdown wait=False — not on web ASGI event loop"
+    },
+    {
+      "path": "internal/store/soul_map_io.py",
+      "lines": "47-69",
+      "quote": "fcntl flock spin up to 5.0s on soul_map.json.lock — cross-process: web read_soul_map can block ≤5s while worker holds lock during long persist_summary_rmw"
+    },
+    {
+      "path": "internal/background_boot.py",
+      "lines": "552-556",
+      "quote": "WORKER_HEAVY=essential skips live_subnets boot — live_subnets 90s sync NOT armed on prod worker at pin"
+    },
+    {
+      "path": "server.py",
+      "lines": "668-676",
+      "quote": "_to_thread_timeout runs hydrate work in bounded _DASHBOARD_EXECUTOR with asyncio.wait_for — REFUTED as unbounded ASGI loop block on async hydrate routes"
+    },
+    {
+      "path": "internal/worker_proxy.py",
+      "lines": "745-779",
+      "quote": "fetch_worker_json_sync uses _run_coro_sync → ThreadPoolExecutor when called from async context — REFUTED loop block for async callers; sync route callers can block ≤WORKER_PEER_TIMEOUT_SECONDS"
+    },
     {
       "path": "fly-machine-exec://7841024b3712e8/env",
       "lines": "n/a",
@@ -20,24 +56,9 @@
       "quote": "854356 bytes on volume at audit time (L2.3 wc -c) — refutes 24MB bloat theory; blocking I/O contention remains unverified candidate"
     },
     {
-      "path": "fly-logs://subnet-dashboard/7841024b3712e8",
-      "lines": "n/a",
-      "quote": "2026-10-05T17:34:16Z live_subnets sync timed out after 90s (worker still running in background) — post-incident buffer sample only"
-    },
-    {
-      "path": "fly-machine-lifecycle://7841024b3712e8",
-      "lines": "n/a",
-      "quote": "(a) Event-time receipt — exit/restart timestamps only: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B window), 12:01Z (post-C), 12:24Z (Replit persist probe window). Lifecycle timestamps are correlation evidence only; not causation proof."
-    },
-    {
-      "path": "fly-machine-lifecycle://7841024b3712e8/causation-hypothesis",
-      "lines": "n/a",
-      "quote": "(b) Causation — health-check recycle pattern under wedge load is hypothesis only, not established; incident-window app logs NOT_OBSERVABLE (buffer/API-401)"
-    },
-    {
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
-      "quote": "PARTIAL RECEIPT ONLY: cannot correlate persist_summary_rmw_ms or resolver write_soul_map duration inside 08:29–08:55Z or 11:41–11:47Z — flyctl logs buffer earliest ~17:31Z; HTTP logs API 401 Unauthorized. Pin-anchored code paths (soul_map_io.py fcntl 5s, resolver_scheduler write_soul_map) are Lane 1 candidates; runtime proof for incident windows requires historical log access or authorized L2.3 timed probe during wedge."
+      "quote": "Cannot correlate persist_summary_rmw_ms inside incident windows — flyctl logs buffer earliest ~17:31Z; HTTP logs API 401 Unauthorized. Pin-anchored code paths are Lane 1 candidates; runtime proof requires historical log access."
     },
     {
       "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
@@ -47,6 +68,22 @@
   ],
   "incident_window_observability": "NOT_OBSERVABLE",
   "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-window persist timings irretrievable",
+  "static_path_dispositions": [
+    {"path": "resolver write_soul_map", "pin": "resolver_scheduler.py:1176", "process": "inline-worker", "disposition": "REFUTED", "note": "Off web ASGI loop; worker ThreadPoolExecutor"},
+    {"path": "live_subnets sync", "pin": "background_boot.py:552-556", "process": "inline-worker", "disposition": "BY-DESIGN", "note": "Skipped when WORKER_HEAVY=essential"},
+    {"path": "hydrate _to_thread_timeout", "pin": "server.py:668-676", "process": "web", "disposition": "REFUTED", "note": "Bounded executor + wait_for"},
+    {"path": "soul_map cross-process flock", "pin": "soul_map_io.py:47-69", "process": "web+worker", "disposition": "PLAUSIBLE", "note": "Web reads block ≤5s waiting on worker persist lock"},
+    {"path": "boot hydrate daemon threads", "pin": "server.py:310-329", "process": "web", "disposition": "PLAUSIBLE", "note": "GIL/CPU contention indirect only"},
+    {"path": "fetch_worker_json_sync (sync routes)", "pin": "worker_proxy.py:756-779", "process": "web", "disposition": "PLAUSIBLE", "note": "Blocks calling thread ≤4-8s; not /health path"}
+  ],
+  "static_forensics": {
+    "hypothesis_verdict": "Direct persist/hydrate ASGI loop block REFUTED for prod pin config; indirect VM contention (flock, I/O, GIL) PLAUSIBLE UNVERIFIED",
+    "not_observable_without_fly_logs": [
+      "persist_summary_rmw_ms during Incidents A/B windows",
+      "Correlation between resolver cycle stage and /health stall",
+      "Whether cross-process flock waits occurred during incidents"
+    ]
+  },
   "tier": "B",
-  "verified_by": ["lane2"]
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics"]
 }

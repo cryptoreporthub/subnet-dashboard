@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T03:30:00Z",
-  "updated_by": "mission-control-ws1",
+  "updated_at": "2026-10-06T03:35:00Z",
+  "updated_by": "mission-control-ws1+ws2",
   "population": {
     "total": 1413,
     "read": 1374,
@@ -354,65 +354,73 @@
     },
     {
       "claim_id": "L2-INC-A-001",
-      "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 HTTP hang; no machine restart observed; service recovery NOT_OBSERVABLE",
+      "title": "Event-loop wedge 08:29\u201308:55Z UTC \u2014 GHA 000000; mechanism bounded unknown (InstantBailout refutes thread-pool-only)",
       "lane": 2,
       "class": "L2-INC-A",
       "disposition": "UNKNOWN",
+      "mechanism_status": "BOUNDED_UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-A-001.json",
       "verified_by": [
-        "lane2"
+        "lane2",
+        "ws2-static-forensics"
       ],
-      "notes": "WS1 bounded: incident-window recovery NOT_OBSERVABLE (fly-log buffer/API-401); current live CONFIRMED responsive 2026-10-06T03:28:49Z",
+      "notes": "WS1: incident-window recovery NOT_OBSERVABLE; current live CONFIRMED 2026-10-06T03:28:49Z. WS2: GHA timeout + no recycle closed; InstantBailout refutes thread-pool-only; root mechanism needs Fly logs",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002999117"
     },
     {
       "claim_id": "L2-INC-B-001",
-      "title": "Connection freeze 11:41:30\u201311:47:23Z UTC \u2014 machine health-check recycle",
+      "title": "Connection freeze 11:41:30\u201311:47:23Z UTC \u2014 recycle 11:45:48Z CONFIRMED; stall precursor bounded unknown",
       "lane": 2,
       "class": "L2-INC-B",
       "disposition": "UNKNOWN",
+      "mechanism_status": "BOUNDED_UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-B-001.json",
       "verified_by": [
-        "lane2"
+        "lane2",
+        "ws2-static-forensics"
       ],
-      "notes": "Replit re-spot-check PASS (2026-10-05)",
+      "notes": "WS2: machine recycle closed; Gemini 48-probe count UNVERIFIED; root stall needs Fly logs",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
     },
     {
       "claim_id": "L2-INC-C-001",
-      "title": "Static-asset wedge 11:49:15Z UTC \u2014 post-recovery browser load failure (mechanism unverified)",
+      "title": "Static-asset wedge 11:49:15Z UTC \u2014 queuing-starvation REFUTED at audit time; incident-time NOT_OBSERVABLE",
       "lane": 2,
       "class": "L2-INC-C",
       "disposition": "UNKNOWN",
+      "mechanism_status": "BOUNDED_UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-C-001.json",
       "verified_by": [
-        "lane2"
+        "lane2",
+        "ws2-static-forensics"
       ],
-      "notes": "Replit spot-check PASS (priority sample 2026-10-05)",
+      "notes": "WS2: partial InstantBailout allowlist explains selective static failure pattern; incident receipt needs Fly logs",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219"
     },
     {
       "claim_id": "L2-PERSIST-HYDRATE-001",
-      "title": "Unverified hypothesis: persist/hydrate MAY block ASGI loop during Incidents A\u2013C (audit correlation, not established)",
+      "title": "Persist/hydrate direct ASGI loop block REFUTED at pin; indirect flock/VM contention PLAUSIBLE (bounded unknown)",
       "lane": 2,
       "class": "C4",
       "disposition": "UNKNOWN",
+      "mechanism_status": "BOUNDED_UNKNOWN",
       "tier": "B",
       "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-001.json",
       "verified_by": [
-        "lane2"
+        "lane2",
+        "ws2-static-forensics"
       ],
-      "notes": "Replit final re-spot PASS (hypothesis unverified; lifecycle vs causation split)",
+      "notes": "WS2 static path table: resolver persist on inline worker REFUTED web loop block; soul_map flock ≤5s PLAUSIBLE; incident-window timings NOT_OBSERVABLE",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841631",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742869"
