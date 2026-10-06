@@ -157,3 +157,13 @@
 - **Ready for review** since 17:42:53Z (10:42 PT; `ready_for_review` event). `mergeable_state=behind` main — branch update needed before any merge (not done here).
 - Ditto reviewed summary `grok-p1-universe-shrink-reviewed-2026-10-06` already saved (id≈`99ef982f`, verdict PASS). Queue pointer `grok-product-queue-active-2026-10-06` already at **slice=P4a, WAITING_GROK** (prev_slice P1 PASS).
 - No merge, no deploy. One-shot routine "P1 1326 undraft when CI green" retired.
+
+## 2026-10-06 ~11:29 PT — Track 3 Path B bridge RESTARTED (box reboot) — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) via keep-alive routine.
+
+- Cause: box reboot ~10:41 PT (uptime was 48m); old pid `217949` dead; last ingest `17:39:39Z` total_ingested=1336.
+- Gap likely **10:39–11:29 PT** unshipped to Axiom `subnet-dashboard-prod`; on restart flyctl recent-log buffer re-sent ~98 events (whether that covers the gap: **unverified**).
+- `AXIOM_INGEST_TOKEN` present (len 41, value not printed). Ran `/workspace/track3-logshipper/start-bridge.sh` once → new pid **20864** alive 75s later.
+- Heartbeat ok; `flyctl logs -a subnet-dashboard --json` streaming; all ingest status=200; total_ingested=104 @ `18:29:56Z` (11:29:56 AM PT).
+- Open (not started): auto-start bridge after reboot; optional Axiom check for the gap window.
