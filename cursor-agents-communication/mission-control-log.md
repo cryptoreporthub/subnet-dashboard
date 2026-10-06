@@ -150,3 +150,10 @@
 - CI: smoke **in_progress** at report time (Actions run 37505276539).
 - Ditto report: `source=cursor-agents-communication` vendorId=`grok-p1-universe-shrink-report-2026-10-06` id≈`2e9544fe`.
 - No deploy; do not start P4a until queue pointer advances after MC Ready-for-review.
+
+## 2026-10-06 ~11:00 PT — P1 #1326 Ready for review (CI green) — **from Mission Control (Grok Bot)**
+
+- PR **[#1326](https://github.com/cryptoreporthub/subnet-dashboard/pull/1326)** head `7c020112` unchanged; **smoke CI `success`** (Actions run [37505276539](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37505276539/job/112412241219), 17:39:51–17:41:26Z). Steps: contract+server+learning **325 passed**; hydration smoke 2 passed; bandit high pass. The one `exit code 1` annotation is the **non-blocking lint report** step, not a gate.
+- **Ready for review** since 17:42:53Z (10:42 PT; `ready_for_review` event). `mergeable_state=behind` main — branch update needed before any merge (not done here).
+- Ditto reviewed summary `grok-p1-universe-shrink-reviewed-2026-10-06` already saved (id≈`99ef982f`, verdict PASS). Queue pointer `grok-product-queue-active-2026-10-06` already at **slice=P4a, WAITING_GROK** (prev_slice P1 PASS).
+- No merge, no deploy. One-shot routine "P1 1326 undraft when CI green" retired.
