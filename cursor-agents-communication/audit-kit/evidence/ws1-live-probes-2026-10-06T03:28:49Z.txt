@@ -1,0 +1,71 @@
+=== Mission Control WS1 Live Probes ===
+probe_batch_utc: 2026-10-06T03:28:49Z
+pin: ce3d820013d45577333ac8aada8c0d9e97c54129
+base: https://subnet-dashboard.fly.dev
+
+--- GET /health ---
+started_utc: 2026-10-06T03:28:49Z
+
+exit_code=0
+http_code=200
+time_total=0.179190
+size_download=2
+ended_utc: 2026-10-06T03:28:50Z
+body_preview:
+OK
+
+--- GET /version ---
+started_utc: 2026-10-06T03:28:50Z
+
+exit_code=0
+http_code=200
+time_total=0.135745
+size_download=138
+ended_utc: 2026-10-06T03:28:50Z
+body_preview:
+{"version": "ce3d820013d45577333ac8aada8c0d9e97c54129", "sentry_release": "ce3d820013d45577333ac8aada8c0d9e97c54129", "python": "3.12.15"}
+
+--- GET /api/ops/readiness ---
+started_utc: 2026-10-06T03:28:50Z
+
+exit_code=0
+http_code=200
+time_total=1.199479
+size_download=10387
+ended_utc: 2026-10-06T03:28:51Z
+body_preview:
+{"status":"ready","checked_at":"2026-10-06T03:28:51.400524Z","ready":true,"worker_mode":"split","worker_peer":{"expected":true,"alive":true,"heartbeat":{"pid":661,"ts":"2026-10-06T03:28:29.604275Z","run_mode":"worker"},"peer":"inline_worker","source":"file"},"thin_ui_likely":false,"issues":["daily_pick_hold_no_published_long"],"learning":{"graded":267,"pending":0,"accuracy":0.521,"trust_ready":true,"trust_label":"Last 267 graded: 52% directionally right"},"learning_loop_health":{"status":"ok","c
+
+--- GET /api/soul-map ---
+started_utc: 2026-10-06T03:28:51Z
+
+exit_code=0
+http_code=200
+time_total=0.383885
+size_download=453990
+ended_utc: 2026-10-06T03:28:51Z
+body_preview:
+{"status":"success","data":{"score_snapshot_scheduler":{"last_cycle":{"run_at":"2026-10-06T03:05:58.124656Z","ok":true,"count":40,"written_at":"2026-10-06T03:05:58.115217Z","path":"data/score_snapshots.json","error":null,"skipped":null,"phase":null,"progress":null}},"soul_map_state":{"rotation_tokens_snapshot":{"tokens":[{"symbol":"HYPERLIQUID","name":"Hyperliquid","price":90.0,"price_change_24h":1.65,"conviction":53,"source":"coingecko"},{"symbol":"VVV","name":"Vvv","price":27.7,"price_change_2
+
+--- GET /api/subnets ---
+started_utc: 2026-10-06T03:28:51Z
+
+exit_code=0
+http_code=200
+time_total=0.197311
+size_download=55820
+ended_utc: 2026-10-06T03:28:52Z
+body_preview:
+{"status":"success","meta":{"total":168,"limit":0,"offset":0,"source":"taomarketcap","sources":["taomarketcap","registry"],"universe_status":"degraded","handler_status":"ok","enrichment_status":"names_only","generated_at":"2026-10-06T03:28:51.939342Z","data_available":true},"subnets":[{"netuid":0,"name":"Root","emission":0.0,"volume":195056.91,"market_cap":11562418.27,"price":1.0,"price_change_24h":0.0,"price_change_7d":0.0,"price_change_30d":0.0,"status":"active","stake":0,"total_stake":0,"dele
+
+--- GET /api/daily-pick ---
+started_utc: 2026-10-06T03:28:52Z
+
+exit_code=0
+http_code=200
+time_total=0.635697
+size_download=9788
+ended_utc: 2026-10-06T03:28:52Z
+body_preview:
+{"status":"ok","date":"2026-10-06","timestamp_utc":"2026-10-06T02:46:26.733842Z","regime":"neutral","rotation_summary":{"timestamp":"2026-10-06T02:46:26.733861Z","patterns":[{"pattern":"yield_rotation","description":"High-yield subnets attracting rotation","netuids":[105,80,112,118,110,10],"count":6,"confidence":0.75},{"pattern":"emission_defense","description":"High-emission subnets used as defensive rotation","netuids":[49,38,114,41,93,15],"count":6,"confidence":0.75},{"pattern":"mean_reversio
+

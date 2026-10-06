@@ -23,8 +23,15 @@
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
       "quote": "PARTIAL RECEIPT ONLY: flyctl logs buffer does not retain 11:41–11:47Z window. GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs returned HTTP 401 Unauthorized. Incident-window app log lines NOT_OBSERVABLE via L2.2; disposition rests on machine lifecycle exit/restart timing, not full fly-log replay."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "lines": "n/a",
+      "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /health HTTP 200 0.179s; GET /api/ops/readiness HTTP 200 1.199s ready=true. Incident-window (11:41–11:47Z) app logs remain NOT_OBSERVABLE; current service responsive at probe time."
     }
   ],
+  "incident_window_observability": "NOT_OBSERVABLE",
+  "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-window logs irretrievable",
   "tier": "B",
   "verified_by": ["lane2"],
   "window_utc": {

@@ -38,8 +38,15 @@
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
       "quote": "PARTIAL RECEIPT ONLY: cannot correlate persist_summary_rmw_ms or resolver write_soul_map duration inside 08:29–08:55Z or 11:41–11:47Z — flyctl logs buffer earliest ~17:31Z; HTTP logs API 401 Unauthorized. Pin-anchored code paths (soul_map_io.py fcntl 5s, resolver_scheduler write_soul_map) are Lane 1 candidates; runtime proof for incident windows requires historical log access or authorized L2.3 timed probe during wedge."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "lines": "n/a",
+      "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /api/soul-map HTTP 200 0.384s (hydrate path responsive); GET /api/daily-pick HTTP 200 0.636s. Incident-window persist timings remain NOT_OBSERVABLE; causation hypothesis unverified."
     }
   ],
+  "incident_window_observability": "NOT_OBSERVABLE",
+  "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-window persist timings irretrievable",
   "tier": "B",
   "verified_by": ["lane2"]
 }

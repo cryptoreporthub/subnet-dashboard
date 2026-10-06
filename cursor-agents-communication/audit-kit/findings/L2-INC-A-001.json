@@ -23,8 +23,15 @@
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
       "quote": "PARTIAL RECEIPT ONLY: flyctl logs -a subnet-dashboard -m 7841024b3712e8 --no-tail -j earliest timestamp 2026-10-05T17:31:42Z — does not cover 08:29–08:55Z. GET https://api.fly.io/api/v1/apps/subnet-dashboard/logs?instance=7841024b3712e8 returned HTTP 401 Unauthorized. Incident-window app log lines NOT_OBSERVABLE via L2.2; disposition rests on GHA curl timeout + lifecycle no-restart correlation, not full fly-log replay."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "lines": "n/a",
+      "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /health HTTP 200 0.179s body OK; GET /version HTTP 200 0.136s pin match. Incident-window (08:29–08:55Z) service recovery remains NOT_OBSERVABLE — no historical log replay. Current service responsive at probe time; does not refute or confirm in-window recovery mechanism."
     }
   ],
+  "incident_window_observability": "NOT_OBSERVABLE",
+  "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-window logs irretrievable",
   "tier": "B",
   "verified_by": ["lane2"],
   "window_utc": {

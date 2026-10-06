@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T01:15:00Z",
-  "updated_by": "mission-control",
+  "updated_at": "2026-10-06T03:30:00Z",
+  "updated_by": "mission-control-ws1",
   "population": {
     "total": 1413,
     "read": 1374,
@@ -337,7 +337,7 @@
     },
     {
       "claim_id": "SMOKE-003",
-      "title": "Historical /version receipt at 2026-10-05T17:51:30Z matches charter pin (live NOT_OBSERVABLE)",
+      "title": "Historical and live /version receipts match charter pin",
       "lane": 2,
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
@@ -347,7 +347,7 @@
       "verified_by": [
         "mission-control"
       ],
-      "notes": "Replit final re-spot PASS (historical receipt only; live NOT_OBSERVABLE)",
+      "notes": "WS1 closure: live_status CONFIRMED 2026-10-06T03:28:50Z (HTTP 200, pin match, 0.136s). Outage window bounded ~2026-10-05T22:46Z–2026-10-06T03:28:49Z (curl exit 28). Receipt: audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742132"
@@ -364,7 +364,7 @@
       "verified_by": [
         "lane2"
       ],
-      "notes": "Replit re-spot PASS at 01e158b4",
+      "notes": "WS1 bounded: incident-window recovery NOT_OBSERVABLE (fly-log buffer/API-401); current live CONFIRMED responsive 2026-10-06T03:28:49Z",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
       "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002999117"
@@ -641,5 +641,29 @@
       "L2-INC-A-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
       "L2-PERSIST-HYDRATE-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022"
     }
+  },
+  "unknowns_closure_ws1": {
+    "workstream": "1 of 5",
+    "probe_batch_utc": "2026-10-06T03:28:49Z",
+    "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+    "probes": [
+      {"endpoint": "/health", "http_code": 200, "time_s": 0.179, "curl_exit": 0},
+      {"endpoint": "/version", "http_code": 200, "time_s": 0.136, "curl_exit": 0, "pin_match": true},
+      {"endpoint": "/api/ops/readiness", "http_code": 200, "time_s": 1.199, "curl_exit": 0, "ready": true},
+      {"endpoint": "/api/soul-map", "http_code": 200, "time_s": 0.384, "curl_exit": 0, "bytes": 453990},
+      {"endpoint": "/api/subnets", "http_code": 200, "time_s": 0.197, "curl_exit": 0, "bytes": 55820},
+      {"endpoint": "/api/daily-pick", "http_code": 200, "time_s": 0.636, "curl_exit": 0, "bytes": 9788}
+    ],
+    "closed": [
+      {"claim_id": "SMOKE-003", "was": "live_status NOT_OBSERVABLE", "now": "live_status CONFIRMED", "receipt_utc": "2026-10-06T03:28:50Z"},
+      {"topic": "prod curl exit 28 Oct 6", "was": "NOT_OBSERVABLE ~00:01Z", "now": "outage bounded ~22:46Z–03:28:49Z; service recovered before WS1 batch"}
+    ],
+    "still_not_observable_bounded": [
+      {"claim_id": "L2-INC-A-001", "boundary": "incident-window (08:29–08:55Z) service recovery; fly-log buffer/API-401", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
+      {"claim_id": "L2-INC-B-001", "boundary": "incident-window (11:41–11:47Z) app logs", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
+      {"claim_id": "L2-INC-C-001", "boundary": "incident-time (11:49:15Z) static wedge", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"},
+      {"claim_id": "L2-PERSIST-HYDRATE-001", "boundary": "incident-window persist timings; causation unverified", "current_live": "CONFIRMED responsive 2026-10-06T03:28:49Z"}
+    ]
   }
 }

@@ -33,8 +33,15 @@
       "path": "fly-log-buffer-limitation",
       "lines": "n/a",
       "quote": "PARTIAL RECEIPT ONLY: no fly-log lines for 11:49:15Z static requests; buffer/API-401 same as Incidents A/B. Incident-time static failure NOT_OBSERVABLE via L2.2; Gemini task-279 asset list remains Ditto-origin until browser Network tab receipt."
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
+      "lines": "n/a",
+      "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /health HTTP 200 0.179s; GET /api/soul-map HTTP 200 0.384s (454KB). Incident-time (11:49:15Z) static wedge behavior remains NOT_OBSERVABLE; audit-time static burst already REFUTED at 17:56Z per refutes_if."
     }
   ],
+  "incident_window_observability": "NOT_OBSERVABLE",
+  "current_live_bounded": "CONFIRMED responsive 2026-10-06T03:28:49Z (WS1 probes); incident-time static failure irretrievable",
   "tier": "B",
   "verified_by": ["lane2"],
   "window_utc": {
