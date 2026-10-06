@@ -164,3 +164,12 @@
 - **Queue:** `active_slice=P3b`, `state=WAITING_GROK`; P3b handoff posted (SimiVision chat streaming, branch `cursor/p3b-simivision-chat-stream`).
 - **Ditto:** `save_memory` mirror `grok-product-queue-active-2026-10-06` + P3a reviewed summary pending.
 - No merge, no deploy.
+
+## 2026-10-06 ~22:25 UTC — P3b MC review PASS + P3c handoff — **from Mission Control**
+
+**Author:** MC worker `bc-33d7a9d8` (P3b AC review).
+
+- **P3b** [PR #1331](https://github.com/cryptoreporthub/subnet-dashboard/pull/1331) @ `fff5979e`: MC AC review **PASS** — undrafted Ready for review. Bounded investigation budget (`shutdown(wait=False)`); SSE `event:done` guarantee; chat UI fail-open warm (8s) + 50s send deadline + JSON fallback; textContent-only XSS guard. Tests: `test_simivision_chat_stream` + `test_chat_stability` **24 passed**; contract **148 passed**. No `fly.toml` / `RESOLVER_*` in diff.
+- **Queue:** `active_slice=P3c`, `state=WAITING_GROK`; P3c handoff posted (message-intel live, branch `cursor/p3c-message-intel-live`, vendorId `grok-p3c-message-intel-handoff-2026-10-06`).
+- **Ditto:** queue pointer + P3b reviewed summary mirror pending.
+- No merge, no deploy.
