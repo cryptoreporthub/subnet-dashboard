@@ -186,8 +186,8 @@ Primary fan-out (non-exhaustive): `/api/subnets`, `/api/daily-pick`, `/api/daily
 | C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 typed `except+pass` (bare=0) | — | A | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | swallows |
 | C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | SMOKE-002 | — | inline-worker | swallows |
 | C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | web-asgi | no |
-| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | REFUTED | replit_pass | bundle | ce3d8200 | B | — | — | — | no |
-| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (2 C8-typed hits: specialists:433, trace/store:51) | — | — | REFUTED | replit_modify_pending | bundle | ce3d8200 | B | — | — | — | no |
+| STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | no |
+| STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (2 C8-typed hits: specialists:433, trace/store:51) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | no |
 | SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | web-asgi | unknown |
 | SMOKE-002 | L2 | persist-rmw | `resolver_scheduler.py:735-737` except pass on write_soul_map | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | C8-RESOLVER-PERSIST-SWALLOW-001 | smoke-gate | inline-worker | swallows |
 | SMOKE-003 | L2 | deploy-pin | historical `/version` receipt 2026-10-05T17:51:30Z matches pin; live NOT_OBSERVABLE | — | — | CONFIRMED | replit_modify_pending | bundle | ce3d8200 | B | — | smoke-gate | external-probe | no |

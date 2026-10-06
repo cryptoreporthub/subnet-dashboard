@@ -4,8 +4,8 @@
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 1,
   "class": "C13",
-  "disposition": "REFUTED",
-  "refutes_if": "Any file in stop-rule-sample-2.tsv exhibits a defect outside the C1-C13 taxonomy",
+  "disposition": "CONFIRMED",
+  "refutes_if": "A file in the sample exhibits a defect outside C1-C13 contradiction classes",
   "fetch_method": "cat cursor-agents-communication/audit-kit/findings/stop-rule-sample-2.tsv; per-file git show ce3d820013d45577333ac8aada8c0d9e97c54129:<path>",
   "replay_class": "git-clone",
   "evidence": [
