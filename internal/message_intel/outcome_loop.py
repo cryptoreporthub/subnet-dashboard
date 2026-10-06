@@ -13,7 +13,13 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 _PROCESS_BOOT_MONOTONIC = time.monotonic()
-_BOOT_BUDGET_SECONDS = float(os.environ.get("OUTCOME_LOOP_BOOT_BUDGET_SECONDS", "300"))
+
+
+def _boot_budget_seconds() -> float:
+    try:
+        return float(os.environ.get("OUTCOME_LOOP_BOOT_BUDGET_SECONDS", "300"))
+    except ValueError:
+        return 300.0
 
 _tracker: Any = None
 _watchdog_stop: Optional[Any] = None
@@ -244,7 +250,7 @@ def outcome_loop_status() -> dict:
     out: dict = {"running": running, "live": running}
     if not running:
         boot_age = _boot_age_seconds()
-        if boot_age < _BOOT_BUDGET_SECONDS:
+        if boot_age < _boot_budget_seconds():
             # Deferred boot start (MESSAGE_INTEL_OUTCOME_DEFER_SECONDS) has not
             # fired yet — label the window so monitors don't raise a false
             # stall alert in the first minutes post-boot.

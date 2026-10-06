@@ -170,17 +170,105 @@ def test_message_intel_authors_route_does_not_block_health():
     started = threading.Event()
     release = threading.Event()
 
-    def slow_list_authors(**kwargs):
+    def slow_build_author_rows(**kwargs):
         started.set()
         release.wait(timeout=2.0)
-        return {"status": "success", "authors": []}
+        return []
 
-    with patch("internal.message_intel.engine.list_authors", side_effect=slow_list_authors):
+    def slow_build_crowns(**kwargs):
+        release.wait(timeout=2.0)
+        return []
+
+    with patch(
+        "internal.message_intel.rollup.build_author_reliability_rows",
+        side_effect=slow_build_author_rows,
+    ), patch(
+        "internal.message_intel.rollup.build_reaction_crowns",
+        side_effect=slow_build_crowns,
+    ):
         with TestClient(app) as client:
             result = {}
 
             def _call():
                 result["resp"] = client.get("/api/message-intel/authors")
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+
+            t0 = time.monotonic()
+            health = client.get("/health")
+            elapsed = time.monotonic() - t0
+
+            release.set()
+            t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+
+
+def test_message_intel_status_route_does_not_block_health():
+    """GET /api/message-intel/status is the most-polled hydrate surface and
+    used to call live_stats() (SQLite) directly on the event loop — and
+    listener_status() hits SQLite twice more internally. Under mocked slow
+    SQLite (listener-ingest write-lock contention) /health must stay
+    responsive."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_live_stats(*args, **kwargs):
+        started.set()
+        release.wait(timeout=2.0)
+        return {"ok": True, "total_messages": 0}
+
+    with patch(
+        "internal.message_intel.store.live_stats", side_effect=slow_live_stats
+    ):
+        with TestClient(app) as client:
+            result = {}
+
+            def _call():
+                result["resp"] = client.get("/api/message-intel/status")
+
+            t = threading.Thread(target=_call, daemon=True)
+            t.start()
+            assert started.wait(timeout=2.0)
+
+            t0 = time.monotonic()
+            health = client.get("/health")
+            elapsed = time.monotonic() - t0
+
+            release.set()
+            t.join(timeout=3.0)
+
+    assert health.status_code == 200
+    assert elapsed < 1.0
+    assert result["resp"].status_code == 200
+
+
+def test_message_intel_ingest_route_does_not_block_health():
+    """POST /api/message-intel/ingest ran SQLite writes + NLP inline in the
+    async route; an ingest burst under listener write-lock contention wedged
+    the event loop. Must dispatch off-thread so /health stays responsive."""
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_ingest(payload, **kwargs):
+        started.set()
+        release.wait(timeout=2.0)
+        return {"status": "success", "message_id": 1, "deduped": False}
+
+    with patch(
+        "internal.message_intel.engine.ingest_message", side_effect=slow_ingest
+    ):
+        with TestClient(app) as client:
+            result = {}
+
+            def _call():
+                result["resp"] = client.post(
+                    "/api/message-intel/ingest", json={"content": "Subnet 7 bullish"}
+                )
 
             t = threading.Thread(target=_call, daemon=True)
             t.start()
