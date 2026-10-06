@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T03:35:00Z",
-  "updated_by": "mission-control-ws1+ws2",
+  "updated_at": "2026-10-06T03:38:00Z",
+  "updated_by": "mission-control-ws1+ws2+phase2",
   "population": {
     "total": 1413,
     "read": 1374,
@@ -691,5 +691,23 @@
       "ws4_indent2_estimate_bytes": 854523,
       "status": "resolved"
     }
+  },
+  "unknowns_closure_phase2": {
+    "workstream": "Mission Control phase 2",
+    "probe_batch_utc": "2026-10-06T03:36:37Z",
+    "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
+    "receipt": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt",
+    "methods": ["flyctl-status", "flyctl-logs-buffer", "fly-logs-api-401", "machines-events-api", "gha-37283988892", "git-show-pin-static"],
+    "extended_static": [
+      "InstantBailout full bypass table + 4-path static allowlist",
+      "fly.toml AIO_WORKER_POOL_SIZE=24 MAX_IN_FLIGHT_REQUESTS=48",
+      "GHA /api/ops/live 0-byte cross-check narrows Incident A"
+    ],
+    "mechanism_status_unchanged": ["L2-INC-A-001", "L2-INC-B-001", "L2-INC-C-001"],
+    "still_not_observable_bounded": [
+      {"claim_id": "L2-INC-A-001", "boundary": "incident-window app logs + recovery timing; fly-log buffer earliest 2026-10-06T03:27:01Z; API 401", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"},
+      {"claim_id": "L2-INC-B-001", "boundary": "incident-window app logs + stall precursor; 11:45:48Z recycle from prior GraphQL receipt only", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z"},
+      {"claim_id": "L2-INC-C-001", "boundary": "incident-time 11:49:15Z static failures; Gemini 45-asset UNVERIFIED", "current_live": "CONFIRMED responsive 2026-10-06T03:36:37Z; non-allowlisted CSS 200 @ probe"}
+    ]
   }
 }

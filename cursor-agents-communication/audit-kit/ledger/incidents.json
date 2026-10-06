@@ -1,7 +1,7 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T03:35:00Z",
-  "updated_by": "ws2-static-forensics",
+  "updated_at": "2026-10-06T03:38:00Z",
+  "updated_by": "phase2-multi-method",
   "replit_review": "2026-10-05 PR #1324 comment 6002280219 — A/B mechanism downgraded to UNKNOWN per MODIFY",
   "incidents": [
     {
@@ -57,5 +57,5 @@
   "persist_hydrate_bundle": "L2-PERSIST-HYDRATE-001",
   "persist_hydrate_status": "BOUNDED_UNKNOWN",
   "persist_hydrate_verdict": "Direct web ASGI loop block by resolver persist/hydrate REFUTED at pin (INLINE_WORKER split); cross-process flock ≤5s + VM I/O/GIL contention PLAUSIBLE UNVERIFIED",
-  "log_gap": "Fly log buffer + HTTP logs API 401 do not cover 08:29-12:24Z incident windows; GHA curl + lifecycle + static pin forensics partial"
+  "log_gap": "Fly log buffer (100 lines, earliest 2026-10-06T03:27:01Z) + HTTP logs API 401 do not cover 08:29-12:24Z incident windows; GHA curl + lifecycle (prior GraphQL receipt) + static pin forensics partial. Phase 2 receipt: audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt"
 }

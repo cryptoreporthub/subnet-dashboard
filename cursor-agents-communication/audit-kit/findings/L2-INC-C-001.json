@@ -44,6 +44,21 @@
       "path": "cursor-agents-communication/audit-kit/evidence/ws1-live-probes-2026-10-06T03:28:49Z.txt",
       "lines": "n/a",
       "quote": "WS1 bounding receipt 2026-10-06T03:28:49Z: GET /health HTTP 200 0.179s; GET /api/soul-map HTTP 200 0.384s (454KB). Incident-time (11:49:15Z) static wedge behavior remains NOT_OBSERVABLE; audit-time static burst already REFUTED at 17:56Z per refutes_if."
+    },
+    {
+      "path": "https://subnet-dashboard.fly.dev/static/css/base.css",
+      "lines": "n/a",
+      "quote": "Phase 2 live @ 2026-10-06T03:36:37Z: base.css HTTP 200 0.126s 9469B; tribunal-hero-layout.css HTTP 200 0.116s 1609B; ui.css HTTP 200 0.535s 503871B — non-allowlisted CSS serves normally at probe time; incident-time failure NOT_OBSERVABLE"
+    },
+    {
+      "path": "internal/instant_bailout.py",
+      "lines": "48-53,153-162",
+      "quote": "Phase 2 static: allowlist exactly 4 paths preloaded at boot; base.css/tribunal-hero-layout.css require inner StaticFiles — architecture-consistent with selective failure IF inner app wedged at incident time (not proof)"
+    },
+    {
+      "path": "cursor-agents-communication/audit-kit/evidence/l2-inc-phase2-multi-method-2026-10-06T03:36:37Z.txt",
+      "lines": "n/a",
+      "quote": "Phase 2: flyctl logs 0 hits at 11:49:15Z; logs API HTTP 401; MAX_IN_FLIGHT_REQUESTS=48 on live machine. Gemini 45-asset timeouts remain Ditto-origin UNVERIFIED"
     }
   ],
   "incident_window_observability": "NOT_OBSERVABLE",
@@ -66,7 +81,7 @@
     }
   },
   "tier": "B",
-  "verified_by": ["lane2", "ws1", "ws2-static-forensics"],
+  "verified_by": ["lane2", "ws1", "ws2-static-forensics", "phase2-multi-method"],
   "window_utc": {
     "start": "2026-10-05T11:49:15Z",
     "end": "2026-10-05T11:49:15Z"
