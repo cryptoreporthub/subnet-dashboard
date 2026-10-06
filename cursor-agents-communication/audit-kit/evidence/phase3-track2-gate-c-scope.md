@@ -29,6 +29,7 @@
 | Method executed | A — `fly ssh console` read-only python on `data/subnet_universe.json` |
 | **Verdict** | **CONFIRMED** — netuids **130** and **132** |
 | Receipt | [`phase3-finding-d-netuids-2026-10-06.md`](phase3-finding-d-netuids-2026-10-06.md) |
+| Ledger | `claims.json` → `phase3_post_a.finding_d` (netuids 130, 132) |
 
 **Execution checklist:**
 
@@ -55,7 +56,7 @@
 |---|---|
 | Trigger | Track 1 returned NOT_OBSERVABLE for all three INC windows |
 | Status | **NOT REQUIRED** — no additional prod read changes Sentry ceiling |
-| Verdict slot | CLOSED (honest NOT_OBSERVABLE documented in Track 1) |
+| Verdict slot | **CLOSED** — Track 1 closed Sentry unavailable (free tier expired); alternative ladder in Track 1 receipt |
 
 ---
 

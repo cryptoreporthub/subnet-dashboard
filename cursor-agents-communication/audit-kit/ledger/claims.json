@@ -870,16 +870,22 @@
   },
   "phase3_post_a": {
     "opened_at": "2026-10-06T12:30:00Z",
-    "executed_at": "2026-10-06T12:37:00Z",
+    "executed_at": "2026-10-06T14:00:00Z",
     "trigger": "Joshua Tier A accepted 2026-10-06; Tracks 1-3 granted 2026-10-06",
     "tracks": [
       {
         "track": 1,
         "id": "sentry-inc-windows",
         "title": "Sentry INC-A/B/C window search",
-        "status": "COMPLETE",
-        "verdict": "NOT_OBSERVABLE (all three windows) \u2014 Sentry MCP auth timed out",
-        "blocker": "Sentry MCP needsAuth \u2014 manual UI queries documented",
+        "status": "CLOSED",
+        "closure_reason": "Sentry free tier expired; no paid plan \u2014 do not retry Sentry MCP",
+        "verdict": "NOT_OBSERVABLE (all three Oct-5 app-log windows)",
+        "alternative_evidence_ladder": [
+          "GHA workflow logs (INC-A partial: run 37283988892)",
+          "Fly flyctl buffer (NOT_OBSERVABLE retention ceiling)",
+          "Gate C read-only prod state (live only, not retroactive logs)",
+          "Track 3 log drain (forward prevention only)"
+        ],
         "receipt": "cursor-agents-communication/audit-kit/evidence/phase3-track1-sentry-inc-windows.md"
       },
       {
@@ -895,9 +901,9 @@
         "track": 3,
         "id": "log-drain-proposal",
         "title": "Forward-looking Fly log drain / shipper",
-        "status": "PROPOSAL_READY",
-        "verdict": "No drain today; recommend Fly Log Shipper \u2192 Axiom",
-        "blocker": "Deploy/secrets approval PENDING",
+        "status": "IMPLEMENTATION_READY",
+        "verdict": "No drain today; Fly Log Shipper \u2192 Axiom with exact secrets + preflight checklist",
+        "blocker": "Deploy/secrets approval PENDING \u2014 Joshua preflight checklist in receipt",
         "receipt": "cursor-agents-communication/audit-kit/evidence/phase3-track3-log-drain-proposal.md"
       }
     ],

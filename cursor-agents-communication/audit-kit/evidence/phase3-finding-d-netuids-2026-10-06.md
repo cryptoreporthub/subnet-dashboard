@@ -63,4 +63,6 @@ Method B alone cannot name the two netuids; method A is authoritative.
 ## Ledger impact
 
 - Grok rev3 `carried_over_D_netuids`: **FAIL → PASS** (netuids named with prod read receipt)
+- `claims.json` → `phase3_post_a.finding_d` (netuids 130/132, negative_since, receipt cross-link)
+- `claims.json` → `phase3_post_a.tracks[1]` (track 2 COMPLETE, receipt → this file)
 - No change to L2-INC-A/B/C `mechanism_status` (incident forensics unchanged)
