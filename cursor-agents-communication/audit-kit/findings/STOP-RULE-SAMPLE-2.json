@@ -22,7 +22,7 @@
     {
       "path": "known_class_hits",
       "lines": "n/a",
-      "quote": "4 files hit existing C8-typed classes only (see tsv anomaly_classes): specialists.py C8-typed:433; desk_payload.py C8-typed:68,151,164; trace/store.py C8-typed:39,51,72; test_pick_scheduler.py C8-typed:26. Removed false C10 tags on specialists.py:118, trace/store.py:72, test_summers_telegram_desk.py (those lines are not the tribunal_hero graded=443 fixture)."
+      "quote": "4 files hit existing C8-typed classes only (see tsv anomaly_classes): specialists.py C8-typed:433; desk_payload.py C8-typed:68,151,164; trace/store.py C8-typed:51; test_pick_scheduler.py C8-typed:26. Removed false C10 tags on specialists.py:118, trace/store.py:72, test_summers_telegram_desk.py; trace/store.py:39 (return False) and :72 (logger.warning) do not match C8 AST criterion (sole pass body only)."
     }
   ],
   "tier": "B",

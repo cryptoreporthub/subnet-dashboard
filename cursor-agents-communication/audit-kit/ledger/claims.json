@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-06T00:30:00Z",
+  "updated_at": "2026-10-06T01:00:00Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -155,14 +155,15 @@
       "class": "C4",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C4-FLOCK-SPINLOCK-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: scope to five bounded helpers + pick_score_cache counterexample; fix applied pending re-spot",
+      "notes": "Replit final re-spot PASS at dbcb1351; five bounded helpers + pick_score_cache counterexample",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196"
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196",
+      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006740406"
     },
     {
       "claim_id": "C4-REVIVED-LATCH-001",
@@ -298,9 +299,10 @@
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: removed false C10 tags; C8-typed anchors only; fix applied pending re-spot",
+      "notes": "Replit MODIFY at dbcb1351 (trace/store.py C8-typed: only :51); fix applied, ready for re-spot",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451"
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451",
+      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006741295"
     },
     {
       "claim_id": "SMOKE-001",
@@ -339,14 +341,15 @@
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/SMOKE-003.json",
       "verified_by": [
         "mission-control"
       ],
-      "notes": "Replit MODIFY: title scoped to historical receipt; live_status NOT_OBSERVABLE; fix applied pending re-spot",
+      "notes": "Replit final re-spot PASS (historical receipt only; live NOT_OBSERVABLE)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345"
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
+      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742132"
     },
     {
       "claim_id": "L2-INC-A-001",
@@ -403,14 +406,15 @@
       "class": "C4",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-PERSIST-HYDRATE-001.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "Replit MODIFY: title qualified as unverified hypothesis; lifecycle vs causation split; fix applied pending re-spot",
+      "notes": "Replit final re-spot PASS (hypothesis unverified; lifecycle vs causation split)",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841631",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022"
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022",
+      "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742869"
     }
   ],
   "replit_review": {
@@ -589,5 +593,42 @@
         "fix": "C8→C8-typed with line anchors; C10 line anchors added in tsv"
       }
     ]
+  },
+  "replit_final_respot": {
+    "head": "dbcb1351",
+    "consolidated": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006743627",
+    "pass": [
+      {
+        "claim_id": "C4-FLOCK-SPINLOCK-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006740406"
+      },
+      {
+        "claim_id": "SMOKE-003",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742132"
+      },
+      {
+        "claim_id": "L2-PERSIST-HYDRATE-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006742869"
+      }
+    ],
+    "modify_pending": [
+      {
+        "claim_id": "STOP-RULE-SAMPLE-2",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006741295",
+        "fix": "Correct trace/store.py C8-typed to :51 only; remove :39 (return False) and :72 (logger.warning)"
+      }
+    ],
+    "prior_comments": {
+      "C12-STATIC-PATH-COUNT-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006443191",
+      "C4-FLOCK-SPINLOCK-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196",
+      "C8-BARE-EXCEPT-PASS-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445072",
+      "STOP-RULE-SAMPLE-1": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445950",
+      "STOP-RULE-SAMPLE-2": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451",
+      "scope_A": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006447203",
+      "scope_C": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006449715",
+      "SMOKE-003": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
+      "L2-INC-A-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
+      "L2-PERSIST-HYDRATE-001": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022"
+    }
   }
 }
