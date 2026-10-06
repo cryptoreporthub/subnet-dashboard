@@ -138,3 +138,15 @@
 - **Residual / migrate later:** Path B requires MC box uptime (not HA, not NATS-native). When org-capable Fly token exists: stop Path B → run `retry-phase-b.sh` for official `subnet-dashboard-logshipper` in `sjc`.
 - **Ditto:** `source=cursor` vendorId=`track3-path-b-2026-10-06` (save id ≈`311bbd73`).
 - **This log push:** authored by Mission Control (Grok Bot) for Cursor-shared `cursor-agents-communication/` channel.
+
+## 2026-10-06 ~10:40 PT — P1 universe shrink DRAFT PR — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) executing Grok product pipeline P1 handoff.
+
+- Queue was `WAITING_GROK` slice=P1; handoff `grok-p1-universe-shrink-handoff-2026-10-06` (`a7984753`).
+- Branch `cursor/p1-universe-shrink-fix` from main @ `245ff24e`; tip **`7c020112`**.
+- Draft PR **[#1326](https://github.com/cryptoreporthub/subnet-dashboard/pull/1326)** — `_shrink_allowed` grace path despite `refresh_incomplete`; warning logs `sorted(removed)`; +103/−4 on `internal/subnet_universe.py` + `tests/test_subnet_universe.py`.
+- Local AC: 4 new shrink tests PASS; contract **148 passed**; 3 pre-existing registry.json fails on base unchanged.
+- CI: smoke **in_progress** at report time (Actions run 37505276539).
+- Ditto report: `source=cursor-agents-communication` vendorId=`grok-p1-universe-shrink-report-2026-10-06` id≈`2e9544fe`.
+- No deploy; do not start P4a until queue pointer advances after MC Ready-for-review.
