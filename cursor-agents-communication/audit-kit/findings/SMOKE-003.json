@@ -1,12 +1,12 @@
 {
   "claim_id": "SMOKE-003",
-  "title": "Live /version SHA equals charter pin",
+  "title": "Historical /version receipt at 2026-10-05T17:51:30Z matches charter pin (live NOT_OBSERVABLE)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "L2-SMOKE",
   "disposition": "CONFIRMED",
   "live_status": "NOT_OBSERVABLE",
-  "refutes_if": "GET https://subnet-dashboard.fly.dev/version returns version field != ce3d820013d45577333ac8aada8c0d9e97c54129 at audit time",
+  "refutes_if": "GET https://subnet-dashboard.fly.dev/version at 2026-10-05T17:51:30Z returned version field != ce3d820013d45577333ac8aada8c0d9e97c54129",
   "replay_class": "http-live",
   "fetch_method": "curl -sS -m 10 -w '\\nhttp_code=%{http_code}\\n' https://subnet-dashboard.fly.dev/version",
   "captured_at_utc": "2026-10-05T17:51:30Z",
@@ -22,9 +22,9 @@
   "independent_rerun": {
     "verified_by": "replit",
     "captured_at_utc": "2026-10-05T20:14:53Z",
-    "note": "Replit spot-check PR #1324; same pin match"
+    "note": "Replit spot-check PR #1324; same pin match at historical receipt time"
   },
-  "live_status_note": "Replit re-spot 2026-10-05T22:46Z: curl exit 28 timeout — current /version NOT_OBSERVABLE; prior receipt 2026-10-05T17:51:30Z remains time-bounded only. disposition CONFIRMED unchanged for historical receipt.",
+  "live_status_note": "Replit re-spot 2026-10-05T22:46Z: curl exit 28 timeout — current /version NOT_OBSERVABLE; prior receipt 2026-10-05T17:51:30Z remains time-bounded only. Replit re-spot 2026-10-06T00:01Z: curl exit 28, HTTP 000, 0 bytes after 15s — live_status NOT_OBSERVABLE. disposition CONFIRMED unchanged for historical receipt only.",
   "tier": "B",
   "verified_by": ["mission-control"]
 }

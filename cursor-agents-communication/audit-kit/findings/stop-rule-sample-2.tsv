@@ -9,10 +9,10 @@ S2-07	cursor-agents-communication/model-guide.md	9a063cb9f9d24d794a5c55eee100f8c
 S2-08	data/pump_desk/latest_payload.json	52d4e4c64b5735b37eb04ba5f3c608f52ed3bb9c	READ	
 S2-09	data_seeds/predictions.json	9e404d9a2d90300c670a7275fd84ba3a892a6659	READ	
 S2-10	docs/design/tribunal-hero-v3-reference.png	cf8a705831c2dad937f3cecdb278b554c770f56a	PARSE-FAIL	
-S2-11	internal/bots/specialists.py	8b9c34e9a323888b450d412c2ae34ab75a6ca6c4	READ	C8-typed:433,C10:118
+S2-11	internal/bots/specialists.py	8b9c34e9a323888b450d412c2ae34ab75a6ca6c4	READ	C8-typed:433
 S2-12	internal/pump/desk_payload.py	4108851454e9fe8379a84fd4098fb0eff1872809	READ	C8-typed:68,151,164
 S2-13	internal/trace/routes.py	017f2821be5305cff6512fb37766eea4b204992e	READ	
-S2-14	internal/trace/store.py	d5e26605ad7bf3822e646352007e7e295a58245d	READ	C8-typed:39,51,C10:72
+S2-14	internal/trace/store.py	d5e26605ad7bf3822e646352007e7e295a58245d	READ	C8-typed:39,51,72
 S2-15	scripts/check_telegram_ready.sh	9f11f27110fa31283b8301a533ccc7b8e63490bb	READ	
 S2-16	static/js/chat_stream.js	a0b03bb5a100e57d81a47cde88770d94290481a9	READ	
 S2-17	templates/partials/premium/scripts.html	034af03aed462613f65e8c356b9bbc2a138e16b4	READ	
@@ -27,5 +27,5 @@ S2-25	tests/test_price_unit_guard.py	93e30bd80bb3dede9b243c7d8e98397269749ac6	RE
 S2-26	tests/test_proof_scout.py	249e0bca56ea87d4d40c6861aa9b14dd035766bd	READ	
 S2-27	tests/test_pump_refresh.py	df772bcb77023f03db85435727fb02132ccd0acc	READ	
 S2-28	tests/test_score_cache.py	66cf1a021de7f1af6d99173603746bf4443254b0	READ	
-S2-29	tests/test_summers_telegram_desk.py	a5fc3b350aa30e47d1895bff48d0032262e11cb5	READ	C10:76,338,339
+S2-29	tests/test_summers_telegram_desk.py	a5fc3b350aa30e47d1895bff48d0032262e11cb5	READ	
 S2-30	tests/test_weight_audit_and_stats_timeout.py	039805af05588563814c18cc4929c9fcad04357e	READ	

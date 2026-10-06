@@ -1,6 +1,6 @@
 {
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
-  "updated_at": "2026-10-05T23:45:00Z",
+  "updated_at": "2026-10-06T00:30:00Z",
   "updated_by": "mission-control",
   "population": {
     "total": 1413,
@@ -64,13 +64,14 @@
       "class": "C12",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C12-STATIC-PATH-COUNT-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: bundle conflated raw (47) vs stripped (46) counts; fix applied pending re-spot",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549737"
+      "notes": "Replit re-spot PASS at 01e158b4",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005549737",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006443191"
     },
     {
       "claim_id": "C13-CHECKPOINT-T1_5-001",
@@ -149,7 +150,7 @@
     },
     {
       "claim_id": "C4-FLOCK-SPINLOCK-001",
-      "title": "fcntl.flock bounded polling/retry with 5.0s default timeout on persist paths",
+      "title": "Bounded flock polling/retry (5.0s default) on five persist-path helpers; blocking LOCK_EX counterexample at pick_score_cache.py:104",
       "lane": 1,
       "class": "C4",
       "disposition": "CONFIRMED",
@@ -159,8 +160,9 @@
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: 'spinlock' mislabeled bounded flock polling/retry; fix applied pending re-spot",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412"
+      "notes": "Replit MODIFY: scope to five bounded helpers + pick_score_cache counterexample; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005567412",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196"
     },
     {
       "claim_id": "C4-REVIVED-LATCH-001",
@@ -229,13 +231,14 @@
       "class": "C8",
       "disposition": "CONFIRMED",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/C8-BARE-EXCEPT-PASS-001.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: mislabeled bare except:pass; fix applied pending re-spot (299 typed, bare=0)",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005576883"
+      "notes": "Replit re-spot PASS at 01e158b4 (299 typed, bare=0)",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005576883",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445072"
     },
     {
       "claim_id": "C8-RESOLVER-PERSIST-SWALLOW-001",
@@ -274,13 +277,14 @@
       "class": "C13",
       "disposition": "REFUTED",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/STOP-RULE-SAMPLE-1.json",
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: annotated C4/C10 hits in tsv; evidence for 27/29 readable no-new-class; fix applied pending re-spot",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578969"
+      "notes": "Replit re-spot PASS at 01e158b4",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005578969",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445950"
     },
     {
       "claim_id": "STOP-RULE-SAMPLE-2",
@@ -294,8 +298,9 @@
       "verified_by": [
         "lane1"
       ],
-      "notes": "Replit MODIFY: C8→C8-typed with line anchors; C10 line anchors added; fix applied pending re-spot",
-      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469"
+      "notes": "Replit MODIFY: removed false C10 tags; C8-typed anchors only; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6005579469",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451"
     },
     {
       "claim_id": "SMOKE-001",
@@ -329,7 +334,7 @@
     },
     {
       "claim_id": "SMOKE-003",
-      "title": "Live /version SHA equals charter pin",
+      "title": "Historical /version receipt at 2026-10-05T17:51:30Z matches charter pin (live NOT_OBSERVABLE)",
       "lane": 2,
       "class": "L2-SMOKE",
       "disposition": "CONFIRMED",
@@ -339,9 +344,9 @@
       "verified_by": [
         "mission-control"
       ],
-      "notes": "Replit re-spot-check PASS (2026-10-05)",
+      "notes": "Replit MODIFY: title scoped to historical receipt; live_status NOT_OBSERVABLE; fix applied pending re-spot",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925"
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345"
     },
     {
       "claim_id": "L2-INC-A-001",
@@ -350,14 +355,14 @@
       "class": "L2-INC-A",
       "disposition": "UNKNOWN",
       "tier": "B",
-      "review_status": "replit_modify_pending",
+      "review_status": "replit_pass",
       "bundle": "cursor-agents-communication/audit-kit/findings/L2-INC-A-001.json",
       "verified_by": [
         "lane2"
       ],
-      "notes": "Replit final spot-check PASS at 0dad5fc5 (comment 6002999117)",
+      "notes": "Replit re-spot PASS at 01e158b4",
       "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002280219",
-      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217",
       "replit_final": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002999117"
     },
     {
@@ -393,7 +398,7 @@
     },
     {
       "claim_id": "L2-PERSIST-HYDRATE-001",
-      "title": "Persist/hydrate paths can block ASGI loop during Incidents A\u2013C (audit correlation, not remediation)",
+      "title": "Unverified hypothesis: persist/hydrate MAY block ASGI loop during Incidents A\u2013C (audit correlation, not established)",
       "lane": 2,
       "class": "C4",
       "disposition": "UNKNOWN",
@@ -403,7 +408,9 @@
       "verified_by": [
         "lane2"
       ],
-      "notes": "fly-log-buffer-limitation documented in bundle"
+      "notes": "Replit MODIFY: title qualified as unverified hypothesis; lifecycle vs causation split; fix applied pending re-spot",
+      "replit_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004841631",
+      "replit_respot": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022"
     }
   ],
   "replit_review": {
@@ -415,23 +422,73 @@
     "block": 0
   },
   "replit_respot": {
-    "comment_url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925",
-    "head": "c211d93c",
+    "head": "01e158b4",
     "pass": [
-      "SMOKE-003",
-      "C7-READINESS-GRADED-FALLBACK-001",
-      "L2-INC-B-001"
+      {
+        "claim_id": "C12-STATIC-PATH-COUNT-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006443191"
+      },
+      {
+        "claim_id": "C8-BARE-EXCEPT-PASS-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445072"
+      },
+      {
+        "claim_id": "STOP-RULE-SAMPLE-1",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006445950"
+      },
+      {
+        "scope": "A",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006447203"
+      },
+      {
+        "scope": "C",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006449715"
+      },
+      {
+        "claim_id": "L2-INC-A-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006451217"
+      }
     ],
-    "modify_pending": []
+    "modify_pending": [
+      {
+        "claim_id": "C4-FLOCK-SPINLOCK-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006444196",
+        "fix": "Scope to five bounded helpers; document pick_score_cache.py:104 blocking LOCK_EX counterexample"
+      },
+      {
+        "claim_id": "STOP-RULE-SAMPLE-2",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006446451",
+        "fix": "Remove false C10 tags from specialists.py:118, trace/store.py:72, test_summers_telegram_desk.py"
+      },
+      {
+        "claim_id": "SMOKE-003",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006450345",
+        "fix": "Title scoped to historical receipt 2026-10-05T17:51:30Z; live_status NOT_OBSERVABLE (curl exit 28 at 2026-10-06T00:01Z)"
+      },
+      {
+        "claim_id": "L2-PERSIST-HYDRATE-001",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006452022",
+        "fix": "Title qualified as unverified hypothesis; lifecycle timestamps separate from causation"
+      }
+    ],
+    "prior_respot": {
+      "comment_url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6002923925",
+      "head": "c211d93c",
+      "pass": [
+        "SMOKE-003",
+        "C7-READINESS-GRADED-FALLBACK-001",
+        "L2-INC-B-001"
+      ]
+    }
   },
   "replit_batch2": {
     "start_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004488860",
     "head_checked": "9bdbd003dc7097245082bcc25afd779fc18010a7",
     "scopes": {
       "A": {
-        "verdict": "replit_block",
-        "status": "fixes_applied_pending_respot",
-        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004837174",
+        "verdict": "replit_pass",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006447203",
+        "prior_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004837174",
         "fix": "Renamed L2 bundles to canonical findings/{claim_id}.json; documented POPULATION-DRAFT-FINAL.json as draft artifact"
       },
       "B": {
@@ -439,9 +496,9 @@
         "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004837644"
       },
       "C": {
-        "verdict": "replit_modify",
-        "status": "fixes_applied_pending_respot",
-        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004838171",
+        "verdict": "replit_pass",
+        "comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6006449715",
+        "prior_comment": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1324#issuecomment-6004838171",
         "fix": "Added COCKPIT_PICKS_REGISTRY_CAP correction (env default 24, picks_snapshot.py:16) to candidate-matrix.md"
       },
       "D": {

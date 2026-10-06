@@ -1,6 +1,6 @@
 {
   "claim_id": "L2-PERSIST-HYDRATE-001",
-  "title": "Persist/hydrate paths can block ASGI loop during Incidents A–C (audit correlation, not remediation)",
+  "title": "Unverified hypothesis: persist/hydrate MAY block ASGI loop during Incidents A–C (audit correlation, not established)",
   "pin": "ce3d820013d45577333ac8aada8c0d9e97c54129",
   "lane": 2,
   "class": "C4",
@@ -17,7 +17,7 @@
     {
       "path": "/app/data/soul_map.json",
       "lines": "n/a",
-      "quote": "854356 bytes on volume at audit time (L2.3 wc -c) — refutes 24MB bloat theory; blocking I/O contention remains candidate"
+      "quote": "854356 bytes on volume at audit time (L2.3 wc -c) — refutes 24MB bloat theory; blocking I/O contention remains unverified candidate"
     },
     {
       "path": "fly-logs://subnet-dashboard/7841024b3712e8",
@@ -27,7 +27,7 @@
     {
       "path": "fly-machine-lifecycle://7841024b3712e8",
       "lines": "n/a",
-      "quote": "(a) Event-time receipt — exit/restart timestamps only: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B window), 12:01Z (post-C), 12:24Z (Replit persist probe window)"
+      "quote": "(a) Event-time receipt — exit/restart timestamps only: 09:43Z, 10:27Z, 11:16Z, 11:46Z (Incident B window), 12:01Z (post-C), 12:24Z (Replit persist probe window). Lifecycle timestamps are correlation evidence only; not causation proof."
     },
     {
       "path": "fly-machine-lifecycle://7841024b3712e8/causation-hypothesis",
