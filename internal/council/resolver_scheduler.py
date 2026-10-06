@@ -736,6 +736,28 @@ class PredictionResolverScheduler:
         except Exception:
             pass
 
+    def _force_release_cycle_lock(self, *, reason: str = "force") -> bool:
+        """Best-effort unlock so revive/next tick can proceed after abandon.
+
+        ponytail: ``threading.Lock`` has no owner introspection; if release
+        fails or the lock stays wedged, replace the object so recycle/revive
+        can acquire a fresh lock (orphan threads keep the old object).
+        """
+        released = False
+        try:
+            self._cycle_lock.release()
+            released = True
+        except RuntimeError:
+            pass
+        if self._cycle_lock.locked():
+            self._cycle_lock = threading.Lock()
+            released = True
+            logger.warning(
+                "resolver cycle_lock replaced after wedged release reason=%s",
+                reason,
+            )
+        return released
+
     def _abandon_inflight_cycle(
         self,
         *,
@@ -757,10 +779,7 @@ class PredictionResolverScheduler:
             abandoned=True,
             extra={"event": "abandon"},
         )
-        try:
-            self._cycle_lock.release()
-        except RuntimeError:
-            pass
+        self._force_release_cycle_lock(reason="cycle_abandon")
 
     def _get_abandoned_live(self) -> int:
         """Return the count of cycles abandoned by the timeout boundary."""
@@ -897,9 +916,13 @@ class PredictionResolverScheduler:
                 return result
         except BaseException:
             if not submitted:
-                self._cycle_lock.release()
+                self._force_release_cycle_lock(reason="submit_failed")
             raise
         finally:
+            with self._submit_lock:
+                inflight = self._inflight_future
+                if inflight is not None and inflight.done():
+                    self._inflight_future = None
             log_lifecycle(
                 "shutdown",
                 trigger="resolver_cycle",
@@ -1309,6 +1332,27 @@ def get_prediction_resolver_scheduler() -> Optional[PredictionResolverScheduler]
         return _scheduler
 
 
+def _max_cycle_timeout_budget_seconds() -> int:
+    """Upper bound on any single resolver cycle wait (first-tick or full)."""
+    return max(RESOLVER_CYCLE_TIMEOUT_SECONDS, RESOLVER_FIRST_TICK_TIMEOUT_SECONDS)
+
+
+def _resolver_cycle_lock_stale(
+    sched: "PredictionResolverScheduler",
+    age_before: Optional[float],
+    *,
+    force: bool,
+) -> bool:
+    """True when a held ``_cycle_lock`` is a wedge, not a live in-budget tick."""
+    inflight = sched._inflight_future
+    budget = _max_cycle_timeout_budget_seconds()
+    if inflight is not None and not inflight.done():
+        return age_before is not None and age_before > budget
+    if sched._abandoned_live > 0:
+        return True
+    return sched._cycle_lock.locked()
+
+
 def _resolver_tick_age_seconds() -> Optional[float]:
     """Age in seconds since the resolver last persisted a cycle (None if unknown)."""
     try:
@@ -1346,18 +1390,35 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
 
     recycled = False
     global _scheduler
+    stale_lock_recycled = False
     with _scheduler_lock:
         sched = _scheduler
         if sched is not None and not sched._cycle_lock.acquire(blocking=False):
-            return {
-                "revived": False,
-                "reason": "tick_in_progress",
-                "recycled": False,
-                "age_before": age_before,
-                "age_after": _resolver_tick_age_seconds(),
-            }
+            if _resolver_cycle_lock_stale(sched, age_before, force=force):
+                sched._force_release_cycle_lock(reason="revive_stale_lock")
+                with sched._submit_lock:
+                    inflight = sched._inflight_future
+                    if inflight is not None and inflight.done():
+                        sched._inflight_future = None
+                stale_lock_recycled = True
+                logger.warning(
+                    "resolver revive: recycled stale cycle_lock age_before=%s force=%s",
+                    age_before,
+                    force,
+                )
+            else:
+                return {
+                    "revived": False,
+                    "reason": "tick_in_progress",
+                    "recycled": False,
+                    "age_before": age_before,
+                    "age_after": _resolver_tick_age_seconds(),
+                }
         if sched is not None:
-            sched._cycle_lock.release()
+            try:
+                sched._cycle_lock.release()
+            except RuntimeError:
+                pass
         if sched is not None and sched._active:
             sched.stop()
             _scheduler = None
@@ -1384,7 +1445,8 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
     revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))
     return {
         "revived": revived,
-        "recycled": recycled,
+        "recycled": recycled or stale_lock_recycled,
+        "stale_lock_recycled": stale_lock_recycled,
         "age_before": age_before,
         "age_after": age_after,
         "start": start_out,
