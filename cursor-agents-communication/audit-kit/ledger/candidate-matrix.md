@@ -187,7 +187,7 @@ Open-question cross-refs: [`ledger/open-questions-closure.md`](open-questions-cl
 | C7-READINESS-GRADED-FALLBACK-001 | L2 | ops-readiness | `/api/ops/readiness` graded fallback chain | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O17, O18 | web-asgi | no |
 | C8-BARE-EXCEPT-PASS-001 | L1+L2 | silent-failure | AST 299 typed `except+pass` (bare=0) | — | A | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O14 | web-asgi | swallows |
 | C8-RESOLVER-PERSIST-SWALLOW-001 | L2 | persist-rmw | `resolver_scheduler.py:735-737` write_soul_map swallowed | soul_map.json | A | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | SMOKE-002 | — | — | inline-worker | swallows |
-| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O8 (partial) | web-asgi | no |
+| C9-TOP-SCORING-UNIVERSE-001 | L1 | config-divergence | `server.py=20` vs council `=40` | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | O8 (partial; **bounded** WS5b) | web-asgi | no |
 | STOP-RULE-SAMPLE-1 | L1 | coverage | stratified sample 1 — no new classes (C4/C10 annotated) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | — | no |
 | STOP-RULE-SAMPLE-2 | L1 | coverage | stratified sample 2 — no new classes (2 C8-typed hits: specialists:433, trace/store:51) | — | — | CONFIRMED | replit_pass | bundle | ce3d8200 | B | — | — | — | — | no |
 | SMOKE-001 | L1+L2 | static-serve | `server.py:510-512` StaticFiles `/static` | static/ | C | CONFIRMED | replit_pass | live-matrix | ce3d8200 | B | — | smoke-gate | — | web-asgi | unknown |
@@ -196,7 +196,7 @@ Open-question cross-refs: [`ledger/open-questions-closure.md`](open-questions-cl
 | L2-INC-A-001 | L2+L4 | incident | GHA 000000 08:44Z; no recycle; InstantBailout refutes thread-pool-only; WS1 current live CONFIRMED | — | A | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Ditto 93d36426 + WS1+WS2 | — | web-asgi | unknown |
 | L2-INC-B-001 | L2 | incident | recycle 11:45:48Z CONFIRMED; Gemini 48-probe UNVERIFIED | — | B | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | — | web-asgi | unknown |
 | L2-INC-C-001 | L2 | incident | queuing-starvation REFUTED audit-time; partial bailout allowlist 4 files | static/ | C | BOUNDED_UNKNOWN | replit_pass | bundle | ce3d8200 | B | — | Gemini task-279 + WS2 | — | client-hydrate | unknown |
-| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | direct web ASGI block REFUTED; flock≤5s + VM I/O PLAUSIBLE | soul_map, predictions, hydrate paths | A,B,C | BOUNDED_UNKNOWN | replit_pass | live-matrix | ce3d8200 | B | — | audit brief § action item + WS2 | O2 (ctx), O5 | boot-thread + inline-worker | yes |
+| L2-PERSIST-HYDRATE-001 | L2+L3 | persist-hydrate-wedge | direct web ASGI block REFUTED; flock≤5s + VM I/O PLAUSIBLE | soul_map, predictions, hydrate paths | A,B,C | BOUNDED_UNKNOWN | replit_pass | live-matrix | ce3d8200 | B | — | audit brief § action item + WS2 | O2 (ctx), O5 (**bounded** WS5b) | boot-thread + inline-worker | yes |
 
 **Review_status source of truth:** Replit PR comments on #1324. MC mirrors into `claims.json` after comment.
 
@@ -339,7 +339,7 @@ Termination-relevant and collision vars: **`fly.toml [env]`** vs **code default*
 | ENV-WORKER-PEER-TO | `WORKER_PEER_TIMEOUT_SECONDS` | *(unset)* | 4 proxy / 12 peer | worker_proxy vs peer | `C2-WORKER-PEER-TIMEOUT-001` | proxy false-negative | medium |
 | ENV-PROD-VALUES | *(all runtime overrides)* | declared subset above | many unset → code wins | F02 §2b q8–q11 | `BU-L4-F02-Q12-PROD-ENV` | **NOT_OBSERVABLE** | Gate C boundary |
 
-**Open-questions closure (WS5):** full O1–O18 table in [`open-questions-closure.md`](open-questions-closure.md) — **4 closed, 11 bounded, 3 open**. Hazard cross-refs: O1→HZ-THREAD-POOL-ABANDON / HZ-SCORE-SNAPSHOT-TIMEOUT; O8→HZ-SIMIVISION-CHAIN; O9 (id/netuid, **open**) unmapped to L3 row; O10→HZ-TAOSTATS-SYNC-SLEEP; O11→HZ-SQLITE-WAL-BYPASS; O13→HZ-WORKER-OVERLAP; O14→HZ-SILENT-FAILURE-SURFACE; F02 §2 twelve questions→BU-L3-F02-* / BU-L4-* rows above.
+**Open-questions closure (WS5+WS5b):** full O1–O18 table in [`open-questions-closure.md`](open-questions-closure.md) — **4 closed, 14 bounded, 0 open** (O5/O8/O9 bounded 2026-10-06T03:36Z multi-method pass). Hazard cross-refs: O1→HZ-THREAD-POOL-ABANDON / HZ-SCORE-SNAPSHOT-TIMEOUT; O5→L2-PERSIST-HYDRATE-001 (boot wedge, bounded); O8→HZ-SIMIVISION-CHAIN (four-layer cardinality, bounded); O9 (id/netuid, bounded — prod 168/168 match); O10→HZ-TAOSTATS-SYNC-SLEEP; O11→HZ-SQLITE-WAL-BYPASS; O13→HZ-WORKER-OVERLAP; O14→HZ-SILENT-FAILURE-SURFACE; F02 §2 twelve questions→BU-L3-F02-* / BU-L4-* rows above.
 
 ---
 

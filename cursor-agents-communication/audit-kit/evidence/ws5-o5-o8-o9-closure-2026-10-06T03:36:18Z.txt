@@ -1,0 +1,137 @@
+=== Mission Control WS5 — F02 O5/O8/O9 Multi-Method Closure ===
+probe_batch_utc: 2026-10-06T03:36:18Z
+pin: ce3d820013d45577333ac8aada8c0d9e97c54129
+pr: #1324
+branch: cursor/audit-evidence-2026-10-05-smoke
+base: https://subnet-dashboard.fly.dev
+methods: live (curl), static (git show @ pin), cross-check (Ditto rev 2 + open-questions-closure)
+
+================================================================================
+O5 — Cold-start "0 subnets" boot race
+================================================================================
+
+--- Method 1: LIVE (warm-state probe, read-only) ---
+GET /api/subnets → HTTP 200, time_total=0.198s
+  meta.total=168, array_len=168, universe_status=degraded, generated_at=2026-10-06T03:36:19Z
+GET /api/ops/readiness → HTTP 200
+  issues=["daily_pick_hold_no_published_long"]  (NO live_subnets_cache_empty)
+  subnet_feed.live_cache.count=75, stale=false, synced_at=2026-10-06T03:35:39Z
+Verdict: REFUTES persistent "0 subnets" at warm state. Cannot observe cold-start window.
+
+--- Method 2: STATIC (git show ce3d8200) ---
+server.py:645  _SUBNETS_CACHE = {"at": 0.0, "payload": None}  # starts empty
+server.py:1816-1848  /api/subnets handler:
+  - cache miss → _list_subnets_base_rows() OR _list_subnets_registry_fallback()
+  - timeout → registry fallback (get_lkg_or_emergency)
+server.py:1980-2007  _list_subnets_registry_fallback: instant LKG/emergency rows
+internal/background_boot.py:585  defer_boot("live-subnets-boot", delay=boot_delay)
+internal/live_subnets.py:293  "chain fetch returned 0 subnets" logged on empty sync
+fly.toml:62  BOOT_DEFER_SECONDS=90
+Verdict: MECHANISM CONFIRMED — empty _SUBNETS_CACHE during boot defer window is plausible;
+  registry/LKG fallback prevents permanent 0-subnet state on /api/subnets.
+
+--- Method 3: CROSS-CHECK ---
+Ditto rev 2 (17377f38): Gemini §0.3 empty _SUBNETS_CACHE during boot sleep — source-only, UNVERIFIED
+Ditto rev 2 live (2026-10-02): simultaneous probes showed non-zero subnets
+WS1 probe (2026-10-06T03:28:49Z): /api/subnets total=168 — consistent
+L2-PERSIST-HYDRATE-001: O5 boot wedge hypothesis linked, not incident-proven
+Verdict: Mechanism bounded; cold-start race NOT_OBSERVABLE without Gate C deploy capture.
+
+--- O5 FINAL VERDICT: BOUNDED ---
+  Closed aspect: warm-state prod serves 168 subnets; readiness does not flag empty cache.
+  Bounded aspect: first-request-before-TMC-fetch race remains UNVERIFIED (Gate C only).
+
+================================================================================
+O8 — Four universe cardinalities disagree (168 / 129 / 124 / 75)
+================================================================================
+
+--- Method 1: LIVE (simultaneous timestamped probe) ---
+GET /api/subnets @ 2026-10-06T03:36:19Z:
+  meta.total = 168
+  subnets.length = 168
+  meta.universe_status = "degraded"
+  meta.sources = ["taomarketcap", "registry"]
+GET /api/ops/readiness @ 2026-10-06T03:36:21Z:
+  subnet_feed.registry_count = 75
+  subnet_feed.live_cache.count = 75 (exists=true, stale=false)
+  subnet_feed.tmc_cache.count = 129
+  subnet_feed.likely_total = 129
+  subnet_feed.effective_source = "blockmachine"
+Verdict: Four distinct counts at same probe window — NOT a single bug, four probe layers.
+
+--- Method 2: STATIC (git show ce3d8200) ---
+internal/subnet_universe.py:88-104  _default_tmc_fetch uses _get_all_subnets_tao() pagination
+  (explicitly NOT get_all_subnets() which prefers clipped live_subnets cache ~75 rows)
+internal/subnets/feed.py:196-252  probe_feed_layers():
+  registry_count = len(_registry_rows())           → 75
+  live_cache = data/subnets cache file count       → 75
+  tmc_cache = SQLite subnets_cache all_subnets     → 129
+  likely_total = max(live, tmc, registry)          → 129
+server.py:1851-1878  _list_subnets_base_rows → subnet_universe.get_snapshot() → 168 TMC rows
+C9-TOP-SCORING-UNIVERSE-001: scoring cap 20/40 — NOT feed cardinality
+Verdict: Four cardinalities are BY-DESIGN different measurement layers, not drift bug.
+
+--- Method 3: CROSS-CHECK ---
+Ditto rev 2 EOQ-O8 (2026-10-02): 168 / 129 / 124 / 75 — same pattern, live_cache drifted 124→75
+WS1 probe (2026-10-06T03:28:49Z): meta.total=168 — consistent
+Replit PR #1324 (2026-10-04): 168 /api/subnets entries confirmed
+Verdict: Cardinality "disagreement" is explained and stable across probes; product decision
+  on single authoritative universe provider remains out of audit scope.
+
+--- O8 FINAL VERDICT: BOUNDED ---
+  Closed aspect: four counts map to named code paths; live reproduces Ditto rev 2 pattern.
+  Bounded aspect: no single "correct" universe count without product decision (Gate C optional re-probe).
+
+================================================================================
+O9 — id vs netuid key divergence beyond PR #1293
+================================================================================
+
+--- Method 1: LIVE (field census on /api/subnets + /api/daily-pick) ---
+/api/subnets (168 rows):
+  missing_id=0, missing_netuid=0, id_eq_netuid=168, id_ne_netuid=0
+  sample: {"netuid":0,"id":0,"name":"Root"} … all rows identical
+/api/daily-pick:
+  action=HOLD
+  candidate.subnet=49 (int field name "subnet", not "netuid")
+  candidate.netuid=null
+  rotation_summary.patterns[].netuids present (e.g. [105,80,112,118,110,10])
+Verdict: NO live id≠netuid divergence on subnet feed. Daily-pick uses nested subnet int, not top-level netuid.
+
+--- Method 2: STATIC (git show ce3d8200) ---
+internal/subnets/summary.py:15-24  netuid_of() — canonical helper (netuid, id, subnet_id)
+internal/subnet_universe.py:48-55  _netuid_of() — same triple-key pattern
+server.py:1868-1869  item.setdefault("id", s.get("netuid", 0)); item.setdefault("netuid", item.get("id"))
+static/js/cockpit_hydrate.js:55  subnetNetuid: sn.netuid != null ? sn.netuid : sn.id
+static/js/brain_letter.js:52,97  pick.netuid (no .id fallback on picks)
+internal/council/daily_pick_engine.py:182,389-414  uses sn.get("netuid") throughout
+Residual static-only sites (not netuid_of):
+  fetchers/taomarketcap.py:66,180,206,247  .get("id") with netuid fallback
+  internal/analytics/report.py:59  sn.get("netuid", sn.get("id"))
+  internal/council/pump_overlay.py:60  subnet_data.get("netuid") or subnet_data.get("id")
+  ~27 additional .get("id") sites (predictions, approvals, etc.) — non-subnet-key contexts
+Verdict: Canonical netuid_of pattern at pin; residual id-fallback sites enumerated; PR #1293 HOLD scope.
+
+--- Method 3: CROSS-CHECK ---
+Ditto rev 2 EOQ-O9: netuid_of anchor at internal/subnets/summary.py:15-24; PR #1293 HOLD
+PR #1293: static AST/route audit for endpoints not using netuid_of() — scope enumerated above
+Live census: 168/168 id==netuid refutes prod divergence hypothesis
+Verdict: Prod scope closed; static residual bounded under PR #1293.
+
+--- O9 FINAL VERDICT: BOUNDED ---
+  Closed aspect: live prod shows zero id≠netuid mismatches on /api/subnets (168/168).
+  Bounded aspect: ~30 static sites retain id-fallback pattern; PR #1293 tracks cleanup (no prod probe needed).
+
+================================================================================
+SUMMARY
+================================================================================
+| id | prior | final | live | static | cross-check |
+|----|-------|-------|------|--------|-------------|
+| O5 | open  | BOUNDED | warm 168 subnets; no empty-cache issue | empty cache + fallback + boot defer | Ditto mechanism; Gate C for cold window |
+| O8 | open  | BOUNDED | 168/75/129/75 same-window | four named probe layers | Ditto rev 2 pattern stable |
+| O9 | open  | BOUNDED | 168/168 id==netuid | netuid_of + residual sites | PR #1293 static scope |
+
+F02 open count: 3 → 0. Bounded count: 11 → 14. Closed count: 4 (unchanged).
+
+Receipt files:
+  ws5-o5-o8-o9-live-probes-2026-10-06T03:36:18Z.txt (curl raw)
+  ws5-o5-o8-o9-closure-2026-10-06T03:36:18Z.txt (this file)

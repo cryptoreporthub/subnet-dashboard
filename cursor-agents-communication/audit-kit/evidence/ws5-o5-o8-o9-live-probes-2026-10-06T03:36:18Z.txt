@@ -1,0 +1,83 @@
+=== Mission Control WS5 O5/O8/O9 Live Probes ===
+probe_batch_utc: 2026-10-06T03:36:18Z
+pin: ce3d820013d45577333ac8aada8c0d9e97c54129
+base: https://subnet-dashboard.fly.dev
+questions: O5 (cold-start 0 subnets), O8 (universe cardinalities), O9 (id vs netuid)
+
+--- GET /health ---
+started_utc: 2026-10-06T03:36:18Z
+
+exit_code=0
+http_code=200
+time_total=0.183609
+size_download=2
+ended_utc: 2026-10-06T03:36:19Z
+body_preview:
+OK
+
+--- GET /version ---
+started_utc: 2026-10-06T03:36:19Z
+
+exit_code=0
+http_code=200
+time_total=0.121411
+size_download=138
+ended_utc: 2026-10-06T03:36:19Z
+body_preview:
+{"version": "ce3d820013d45577333ac8aada8c0d9e97c54129", "sentry_release": "ce3d820013d45577333ac8aada8c0d9e97c54129", "python": "3.12.15"}
+
+--- GET /api/subnets ---
+started_utc: 2026-10-06T03:36:19Z
+
+exit_code=0
+http_code=200
+time_total=0.198303
+size_download=55820
+ended_utc: 2026-10-06T03:36:19Z
+body_preview:
+{"status":"success","meta":{"total":168,"limit":0,"offset":0,"source":"taomarketcap","sources":["taomarketcap","registry"],"universe_status":"degraded","handler_status":"ok","enrichment_status":"names_only","generated_at":"2026-10-06T03:36:19.434535Z","data_available":true},"subnets":[{"netuid":0,"name":"Root","emission":0.0,"volume":195056.91,"market_cap":11562418.27,"price":1.0,"price_change_24h":0.0,"price_change_7d":0.0,"price_change_30d":0.0,"status":"active","stake":0,"total_stake":0,"delegation_count":0,"owner_count":0,"registration_cost":0,"age_blocks":0,"symbol":"Τ","marketcap_rank":0,"id":0,"source":"taomarketcap","sources":["taomarketcap","registry"]},{"netuid":1,"name":"Apex","emission":0.0234,"volume":64.24,"market_cap":33734.13,"price":0.00663252,"price_change_24h":-0.2497,"
+
+--- GET /api/daily-pick ---
+started_utc: 2026-10-06T03:36:19Z
+
+exit_code=0
+http_code=200
+time_total=0.696062
+size_download=9788
+ended_utc: 2026-10-06T03:36:20Z
+body_preview:
+{"status":"ok","date":"2026-10-06","timestamp_utc":"2026-10-06T02:46:26.733842Z","regime":"neutral","rotation_summary":{"timestamp":"2026-10-06T02:46:26.733861Z","patterns":[{"pattern":"yield_rotation","description":"High-yield subnets attracting rotation","netuids":[105,80,112,118,110,10],"count":6,"confidence":0.75},{"pattern":"emission_defense","description":"High-emission subnets used as defensive rotation","netuids":[49,38,114,41,93,15],"count":6,"confidence":0.75},{"pattern":"mean_reversion_rotation","description":"Oversold high-yield subnets poised for mean reversion","netuids":[49,38,114,15],"count":4,"confidence":0.5},{"pattern":"momentum_rotation","description":"Subnets with strong 24h momentum and healthy volume","netuids":[105,80],"count":2,"confidence":0.25}],"volatility_clust
+
+--- GET /api/soul-map ---
+started_utc: 2026-10-06T03:36:20Z
+
+exit_code=0
+http_code=200
+time_total=0.383375
+size_download=455954
+ended_utc: 2026-10-06T03:36:20Z
+body_preview:
+{"status":"success","data":{"score_snapshot_scheduler":{"last_cycle":{"run_at":"2026-10-06T03:35:58.654075Z","ok":false,"count":null,"written_at":null,"path":null,"error":null,"skipped":null,"phase":"scoring","progress":null}},"soul_map_state":{"rotation_tokens_snapshot":{"tokens":[{"symbol":"HYPERLIQUID","name":"Hyperliquid","price":90.0,"price_change_24h":1.65,"conviction":53,"source":"coingecko"},{"symbol":"VVV","name":"Vvv","price":27.7,"price_change_24h":-1.16,"conviction":48,"source":"coingecko"},{"symbol":"NEAR","name":"Near","price":4.85,"price_change_24h":4.38,"conviction":58,"source":"coingecko"},{"symbol":"RENDER","name":"Render","price":1.97,"price_change_24h":-1.79,"conviction":47,"source":"coingecko"},{"symbol":"FETCH","name":"Fetch","price":0.240504,"price_change_24h":5.09,"
+
+--- GET /api/learning/stats ---
+started_utc: 2026-10-06T03:36:20Z
+
+exit_code=0
+http_code=200
+time_total=0.125484
+size_download=4404
+ended_utc: 2026-10-06T03:36:20Z
+body_preview:
+{"status":"success","data":{"expert_weights":{"quant":2.0,"hype":0.54,"dark_horse":1.0,"technical":1.104},"judge_weights":{"oracle":0.1485981308411215,"echo":0.5507132316773241,"pulse":0.30068863748155433},"judge_weight_deltas":{"oracle":-0.0135,"echo":0.0003,"pulse":0.001},"expert_weight_deltas":{"hype":-0.03},"expert_graded_counts":{"quant":0,"hype":200,"dark_horse":0,"technical":69},"judge_last5":{"oracle":[true,false,true,false,false],"echo":[true,false,true,false,false],"pulse":[true,false,true,false,false]},"council_last5":[true,false,true,false,false],"total_records":306,"accuracy":0.517,"correct":139,"wrong":130,"expired":0,"expired_genuine":0,"ungradeable":29,"price_data_unavailable":32,"cold_cache_ratio":0.1046,"cold_cache_alert":true,"expired_rate":0.0,"duplicate":26,"pending":0
+
+--- GET /api/ops/readiness ---
+started_utc: 2026-10-06T03:36:20Z
+
+exit_code=0
+http_code=200
+time_total=0.994294
+size_download=10297
+ended_utc: 2026-10-06T03:36:21Z
+body_preview:
+{"status":"ready","checked_at":"2026-10-06T03:36:21.730503Z","ready":true,"worker_mode":"split","worker_peer":{"expected":true,"alive":true,"heartbeat":{"pid":661,"ts":"2026-10-06T03:35:59.639979Z","run_mode":"worker"},"peer":"inline_worker","source":"file"},"thin_ui_likely":false,"issues":["daily_pick_hold_no_published_long"],"learning":{"graded":269,"pending":0,"accuracy":0.517,"trust_ready":true,"trust_label":"Last 269 graded: 52% directionally right"},"learning_loop_health":{"status":"ok","checked_at":"2026-10-06T03:36:21.718121Z","pending":0,"last_resolver_tick":"2026-10-06T03:31:52.843779+00:00","resolver":{"lifecycle":"new","warming":false,"status":"ok","last_success_at":"2026-10-06T03:31:52.843779+00:00","success_age_seconds":268.71,"age_seconds":268.840258,"refresh_minutes":15,"pe
+
