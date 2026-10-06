@@ -195,3 +195,20 @@
 - Armed routine **Grok WAITING_GROK poll** (every 5m weekdays 8:04–6:59 PT) so future WAITING_GROK slices get picked up without a poke.
 - Prior HOLD on dual P4a (#1327 vs #1329) superseded for pipeline advance by MC’s P2 PASS → P3a queue; canonical P4a PR choice may still need Joshua before merge of those PRs — not blocking P3a implement.
 - No merge, no deploy. Await draft PR + Ditto report.
+
+## 2026-10-06 ~3:08 PM PT — P3a #1330 Ready + P3b handoff — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) after Grok implementer `bc-89f93f8f` finished.
+
+### P3a (Grok shipped, MC reviewed)
+- Draft → **Ready for review:** [PR #1330](https://github.com/cryptoreporthub/subnet-dashboard/pull/1330) — council/signals read-path reliability. Branch `cursor/p3a-council-signals` tip **`7adfafd8`** (3 commits). +404/−133 across 9 files (no fly.toml / RESOLVER_*).
+- Smoke CI **success** on tip ([run 37538416099](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37538416099), 22:06–22:08Z).
+- Grok report Ditto id `c70fe06a` (vendorId `grok-p3a-council-signals-report-2026-10-06`). MC reviewed `grok-p3a-council-signals-reviewed-2026-10-06` id `1a3d556b` — **PASS**.
+- AC: homepage/council scoring-free SSR; `/api/signals` honest-stale + bg single-flight; L6-002 cancel-before-save test; G0 SimiVision lock convoy non-blocking read; emergency prime abandon-on-timeout. Daily-pick hydrate already on main (verified only).
+- Residuals: `mergeable_state=behind` (1 commit); 2 pre-existing test fails claimed STOP-list (not re-run by MC); live hydrate NOT_OBSERVABLE.
+- Undrafted by MC. **No merge, no deploy.**
+
+### Queue advance
+- Pointer → **WAITING_GROK slice=P3b** (chat streaming). Handoff `grok-p3b-chat-stream-handoff-2026-10-06` (id `ab7b43d7`). Branch `cursor/p3b-simivision-chat-stream`. Report vendorId `grok-p3b-chat-stream-report-2026-10-06`.
+- Cloud implementer launched for P3b (see next log line / agent card in chat).
+- Note: dual P4a #1327 vs #1329 still needs Joshua canonical pick before those merge; does not block P3b implement.
