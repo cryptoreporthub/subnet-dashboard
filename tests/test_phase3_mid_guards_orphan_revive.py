@@ -310,3 +310,44 @@ def test_phase3_timeout_label_reports_enforced_budget(monkeypatch):
     assert out["error"] == "cycle_timeout_0.07s"
     assert out["enforced_budget_s"] == 0.07
     release.set()
+
+
+def test_timeout_releases_lock_when_abandon_logging_raises(monkeypatch):
+    """P4a: a fallible abandon log must never leave _cycle_lock held.
+
+    Prod wedge: the timeout release used to sit after log_lifecycle, so a
+    logging failure left the lock held forever and revive dead-ended on
+    tick_in_progress (the stall guard never retries).
+    """
+    started = threading.Event()
+    release = threading.Event()
+
+    def _blocked_provider():
+        started.set()
+        release.wait(timeout=2)
+        return [{"netuid": 1}]
+
+    def _boom(*_a, **_k):
+        raise RuntimeError("mutation log disk stall")
+
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(resolver_scheduler, "log_lifecycle", _boom)
+
+    sched = resolver_scheduler.PredictionResolverScheduler(
+        refresh_minutes=1, subnet_provider=_blocked_provider
+    )
+    sched._active = True
+    sched._first_tick_pending = False
+
+    out = sched._run_refresh_cycle_with_timeout()
+    assert started.wait(timeout=1)
+    assert "cycle_timeout" in str(out.get("error"))
+    release.set()
+    time.sleep(0.1)
+    # Lock must be free after the timeout so revive can recycle the wedge.
+    assert sched._cycle_lock.acquire(blocking=False)
+    sched._cycle_lock.release()
+    assert sched._get_abandoned_live() == 1
+    # Persist ownership revoked so the stuck orphan skips soul_map RMW.
+    assert sched._persist_owner_gen is None

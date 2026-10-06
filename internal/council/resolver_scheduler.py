@@ -746,21 +746,29 @@ class PredictionResolverScheduler:
         abandoned_gen = (
             submitted_gen if submitted_gen is not None else self._cycle_generation
         )
-        self._cycle_generation += 1
-        # Phase 3: revoked persist ownership so abandoned orphans skip soul_map RMW.
-        self._persist_owner_gen = None
-        log_lifecycle(
-            "abandon",
-            trigger="resolver_cycle",
-            cycle_generation=abandoned_gen,
-            resolver_cycle_id=resolver_cycle_id,
-            abandoned=True,
-            extra={"event": "abandon"},
-        )
+        # Release FIRST and never let abandon raise: the release used to sit
+        # after fallible calls, so a logging failure left _cycle_lock held
+        # forever and revive dead-ended on tick_in_progress (the stall guard
+        # never retries). Generation/persist-ownership revoke must still run so
+        # the orphan skips work and soul_map RMW.
         try:
             self._cycle_lock.release()
         except RuntimeError:
             pass
+        self._cycle_generation += 1
+        # Phase 3: revoked persist ownership so abandoned orphans skip soul_map RMW.
+        self._persist_owner_gen = None
+        try:
+            log_lifecycle(
+                "abandon",
+                trigger="resolver_cycle",
+                cycle_generation=abandoned_gen,
+                resolver_cycle_id=resolver_cycle_id,
+                abandoned=True,
+                extra={"event": "abandon"},
+            )
+        except Exception:
+            logger.warning("resolver abandon lifecycle log failed", exc_info=True)
 
     def _get_abandoned_live(self) -> int:
         """Return the count of cycles abandoned by the timeout boundary."""
@@ -816,9 +824,9 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                self._cycle_lock.release()
                 reset_patchd_context(ctx_token)
                 _cycle_timing.reset(token)
-                self._cycle_lock.release()
 
         self._cycle_generation += 1
         gen = self._cycle_generation
@@ -854,10 +862,16 @@ class PredictionResolverScheduler:
                     result["resolver_cycle_id"] = cycle_id
                 return result
             finally:
+                # Release before resets: a reset failure must never skip the
+                # release. RuntimeError guard covers the abandon race where the
+                # timeout path already released.
+                if gen == self._cycle_generation:
+                    try:
+                        self._cycle_lock.release()
+                    except RuntimeError:
+                        pass
                 _cycle_timing.reset(token)
                 reset_patchd_context(ctx_token)
-                if gen == self._cycle_generation:
-                    self._cycle_lock.release()
 
         submitted = False
         try:
@@ -900,19 +914,22 @@ class PredictionResolverScheduler:
                 self._cycle_lock.release()
             raise
         finally:
-            log_lifecycle(
-                "shutdown",
-                trigger="resolver_cycle",
-                cycle_generation=gen,
-                resolver_cycle_id=cycle_id,
-                extra={
-                    "event": "shutdown",
-                    "wait": False,
-                    "cancel_futures": True,
-                    "cancel_futures_requested": True,
-                },
-            )
             pool.shutdown(wait=False, cancel_futures=True)
+            try:
+                log_lifecycle(
+                    "shutdown",
+                    trigger="resolver_cycle",
+                    cycle_generation=gen,
+                    resolver_cycle_id=cycle_id,
+                    extra={
+                        "event": "shutdown",
+                        "wait": False,
+                        "cancel_futures": True,
+                        "cancel_futures_requested": True,
+                    },
+                )
+            except Exception:
+                logger.warning("resolver shutdown lifecycle log failed", exc_info=True)
 
     def _apply_cycle_timing(
         self, result: Dict[str, Any], timing: _CycleTiming
@@ -1331,7 +1348,10 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
 
     Loop stall guard calls this on strike 1 for stale resolver ticks. Recycle
     whenever ``_active`` (stop + cancel JOB_ID + start), then run one synchronous
-    ``run_once`` so soul_map ``last_cycle.run_at`` actually moves.
+    ``run_once`` so soul_map ``last_cycle.run_at`` actually moves. A held
+    ``_cycle_lock`` still recycles once the tick is stale past ``stall_after_s``
+    (wedged holder the timeout failed to release); a fresh tick stays honest
+    with ``tick_in_progress``.
     """
     age_before = _resolver_tick_age_seconds()
     stall_after_s = max(60, RESOLVER_REFRESH_MINUTES * 2 * 60)
@@ -1345,18 +1365,27 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         }
 
     recycled = False
+    stale_lock_recycled = False
     global _scheduler
     with _scheduler_lock:
         sched = _scheduler
         if sched is not None and not sched._cycle_lock.acquire(blocking=False):
-            return {
-                "revived": False,
-                "reason": "tick_in_progress",
-                "recycled": False,
-                "age_before": age_before,
-                "age_after": _resolver_tick_age_seconds(),
-            }
-        if sched is not None:
+            # A live cycle holds the lock at most for its enforced budget
+            # (timeout releases it); past stall_after_s the holder is wedged
+            # (timeout release failed) and only a recycle recovers. Healthy
+            # cycles cannot hold the lock this long (refresh + budget <
+            # stall_after_s), and the non-force fresh gate above already
+            # filtered fresh ticks, so this recycle never kills a live tick.
+            if not (age_before is not None and age_before > stall_after_s):
+                return {
+                    "revived": False,
+                    "reason": "tick_in_progress",
+                    "recycled": False,
+                    "age_before": age_before,
+                    "age_after": _resolver_tick_age_seconds(),
+                }
+            stale_lock_recycled = True
+        elif sched is not None:
             sched._cycle_lock.release()
         if sched is not None and sched._active:
             sched.stop()
@@ -1382,7 +1411,7 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
 
     age_after = _resolver_tick_age_seconds()
     revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))
-    return {
+    out = {
         "revived": revived,
         "recycled": recycled,
         "age_before": age_before,
@@ -1390,6 +1419,9 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         "start": start_out,
         "tick": tick_out,
     }
+    if stale_lock_recycled:
+        out["reason"] = "stale_lock_recycled"
+    return out
 
 
 
