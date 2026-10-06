@@ -178,3 +178,9 @@
 - Grok report already in Ditto: `grok-p4a-resolver-lock-report-2026-10-06` id `0fe9f0ec` (source=cursor-agents-communication); claims resolver 56 pass / 2 pre-existing base fails + contract 148 — base-fail claim **not re-verified by MC**.
 - MC verdict: **PASS** (product AC + smoke). Residuals: report head SHA stale vs tip; PR not draft; branch behind/diverged from main (update before merge); 2 test fails claimed pre-existing unverified; queue docs on branch.
 - No merge, no deploy. Poll routine deleted. Next slice per plan: **P2 (MC docs)**.
+
+## 2026-10-06 ~12:55 PT — P4a DUAL PR HOLD (#1327 vs #1329) — **from Mission Control (Grok Bot)**
+
+- After MC PASS stamp on **#1327**, discovered **[#1329](https://github.com/cryptoreporthub/subnet-dashboard/pull/1329)** draft from agent `bc-76ab9fef` (branch `cursor/p4a-resolver-lock-timeout-264a` @ `7e62ca44`). Body claims #1327 lock-object replacement can steal from a live tick; recommends close #1327 in favor of #1329 (release-first + stale-proven recycle).
+- #1329 CI: **not started** yet at check time. #1327 smoke still green.
+- Queue pointer set **HOLD_MC slice=P4a** until canonical PR chosen. Do not merge either yet. No deploy.
