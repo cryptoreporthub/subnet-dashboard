@@ -167,3 +167,14 @@
 - `AXIOM_INGEST_TOKEN` present (len 41, value not printed). Ran `/workspace/track3-logshipper/start-bridge.sh` once → new pid **20864** alive 75s later.
 - Heartbeat ok; `flyctl logs -a subnet-dashboard --json` streaming; all ingest status=200; total_ingested=104 @ `18:29:56Z` (11:29:56 AM PT).
 - Open (not started): auto-start bridge after reboot; optional Axiom check for the gap window.
+
+## 2026-10-06 ~12:53 PT — P4a #1327 Ready (CI green) — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) MC review after Grok report.
+
+- PR **[#1327](https://github.com/cryptoreporthub/subnet-dashboard/pull/1327)** — resolver cycle_timeout lock release + revive hardening. Open, **not draft** (opened ready). `mergeable_state=behind` (diverged: ahead 3 / behind 3 vs main).
+- Fix commit **`4931165a`** (parent `245ff24e`): `internal/council/resolver_scheduler.py` +76/−14, `tests/test_resolver_revive.py` +155. Tip **`f4ae56b5`** = fix + 2 docs/queue commits.
+- Smoke CI **success** on tip (Actions run [37521365390](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37521365390/job/112467570396), 19:46–19:48Z).
+- Grok report already in Ditto: `grok-p4a-resolver-lock-report-2026-10-06` id `0fe9f0ec` (source=cursor-agents-communication); claims resolver 56 pass / 2 pre-existing base fails + contract 148 — base-fail claim **not re-verified by MC**.
+- MC verdict: **PASS** (product AC + smoke). Residuals: report head SHA stale vs tip; PR not draft; branch behind/diverged from main (update before merge); 2 test fails claimed pre-existing unverified; queue docs on branch.
+- No merge, no deploy. Poll routine deleted. Next slice per plan: **P2 (MC docs)**.
