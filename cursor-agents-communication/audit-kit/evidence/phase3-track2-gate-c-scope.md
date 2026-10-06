@@ -1,61 +1,66 @@
-# Phase 3 Track 2 — Gate C read-only scope proposal
+# Phase 3 Track 2 — Gate C read-only scope
 
 | Field | Value |
 |---|---|
-| Status | **AWAITING_GATE_C** |
+| Status | **COMPLETE** (Finding D); F02 q12 deferred; Sentry gap-fill N/A |
 | Pin | `ce3d820013d45577333ac8aada8c0d9e97c54129` |
 | PR | [#1324](https://github.com/cryptoreporthub/subnet-dashboard/pull/1324) |
-| Opened | 2026-10-06 (post–Tier A) |
+| Executed | 2026-10-06T12:36:00Z |
 
 **Gate C applies only to production touch.** No deploy, restart, config mutation, or secrets write.
 
-User “start follow-ups” ≠ automatic prod SSH. Explicit Gate C grant required before execution.
+---
+
+## Gate C grant record
+
+| Field | Value |
+|---|---|
+| Grant text | Joshua granted permission for Tracks 1, 2, and 3 (2026-10-06) |
+| Scope | Read-only prod SSH/console; no writes |
+| Executor | MC worker `bc-4066108a-c478-506e-b18e-417df9473c7a` |
 
 ---
 
-## Authorized scope (pending Joshua Gate C write)
-
-### 1. Finding D — two dropped netuids (Grok rev3 FAIL item)
+## 1. Finding D — two dropped netuids
 
 | Item | Detail |
 |---|---|
 | Problem | 168→166 LOCKED; two dropped netuids UNKNOWN without prod read |
-| Read-only method A | `fly ssh console -a subnet-dashboard -C "python3 -c '…'"` on `data/subnet_universe.json` `validity_map` negatives |
-| Read-only method B | Diff `/api/subnets` ids vs TaoMarketCap universe |
-| Deliverable | Netuid list + receipt in `phase3-finding-d-netuids-*.md` (future) |
-| Verdict slot | PENDING |
+| Method executed | A — `fly ssh console` read-only python on `data/subnet_universe.json` |
+| **Verdict** | **CONFIRMED** — netuids **130** and **132** |
+| Receipt | [`phase3-finding-d-netuids-2026-10-06.md`](phase3-finding-d-netuids-2026-10-06.md) |
 
-### 2. F02 q12 prod env (optional)
+**Execution checklist:**
 
-| Item | Detail |
-|---|---|
-| Problem | Effective runtime env overrides NOT_OBSERVABLE at pin |
-| Read-only method | SSH/console read of effective env (no writes) |
-| Deliverable | Row update in candidate-matrix L4 env table or bounded NOT_OBSERVABLE receipt |
-| Verdict slot | PENDING |
-
-### 3. Sentry gap-fill (conditional)
-
-| Item | Detail |
-|---|---|
-| Trigger | Only if Track 1 returns NOT_OBSERVABLE for all three INC windows |
-| Scope | Any additional prod read strictly necessary to name mechanism |
-| Verdict slot | DEFERRED |
+- [x] Record Gate C grant text + timestamp
+- [x] Run Finding D read-only probe; paste raw output + exit code
+- [x] Name netuids with receipt
+- [ ] Optional F02 q12 env read — **DEFERRED** (not required for Phase 3 close)
+- [x] No NOT_OBSERVABLE→CONFIRMED on INC-A/B/C (unchanged)
 
 ---
 
-## Explicitly out of scope
+## 2. F02 q12 prod env (optional)
 
-- `fly deploy`, machine restart/destroy, secrets set/unset
-- Volume create/destroy, org changes
-- Log drain install (Track 3 — separate approval)
+| Item | Detail |
+|---|---|
+| Status | **DEFERRED** — not blocking Phase 3 |
+| Verdict slot | PENDING (optional matrix row) |
 
 ---
 
-## Execution checklist (after Gate C grant)
+## 3. Sentry gap-fill (conditional)
 
-- [ ] Record Gate C grant text + timestamp in this file
-- [ ] Run Finding D read-only probe; paste raw output + exit code
-- [ ] Name netuids or document bounded unknown with receipt
-- [ ] Optional F02 q12 env read if still needed for matrix
-- [ ] Update `claims.json` only with evidence-backed fields (no NOT_OBSERVABLE→CONFIRMED without receipt)
+| Item | Detail |
+|---|---|
+| Trigger | Track 1 returned NOT_OBSERVABLE for all three INC windows |
+| Status | **NOT REQUIRED** — no additional prod read changes Sentry ceiling |
+| Verdict slot | CLOSED (honest NOT_OBSERVABLE documented in Track 1) |
+
+---
+
+## Explicitly out of scope (honored)
+
+- `fly deploy`, machine restart/destroy, secrets set/unset — **not run**
+- Volume create/destroy, org changes — **not run**
+- Log drain install (Track 3) — **proposal only**
