@@ -8,10 +8,11 @@
 | Field | Value |
 |-------|-------|
 | `main` | `b5253e65` |
-| `active_slice` | **P3c** |
-| `state` | `WAITING_GROK` |
-| `updated` | `2026-10-06T22:25Z` |
+| `active_slice` | **P4b** (conditional) |
+| `state` | `HOLD_CONDITIONAL` |
+| `updated` | `2026-10-06T23:35Z` |
 | `plan` | `/cursor/stores/self/docs/post-audit-p1-p4-plan.md` |
+| `note` | Mandatory pipeline (P1–P3c + P2 + P4a) all **Ready for review**. P4b handoff gated on P4a merge + Axiom Track 3 evidence (per plan). |
 
 ## Serial queue
 
@@ -22,12 +23,23 @@
 | 3 | P2 F02 Gate C | MC | `cursor/p2-f02-gate-c-receipts-60a6` | **DONE** — [PR #1328](https://github.com/cryptoreporthub/subnet-dashboard/pull/1328) Ready @ `a862121d` |
 | 4 | P3a council/signals | Grok | `cursor/p3a-council-signals` | **DONE** — [PR #1330](https://github.com/cryptoreporthub/subnet-dashboard/pull/1330) Ready @ `7adfafd8` |
 | 5 | P3b chat streaming | Grok | `cursor/p3b-simivision-chat-stream` | **DONE** — [PR #1331](https://github.com/cryptoreporthub/subnet-dashboard/pull/1331) Ready @ `fff5979e` |
-| 6 | **P3c** message-intel | Grok | `cursor/p3c-message-intel-live` | **ACTIVE** `WAITING_GROK` |
-| 7 | P4b guard calibrate | Grok | `cursor/p4b-stall-guard-calibrate` | conditional |
+| 6 | P3c message-intel | Grok | `cursor/p3c-message-intel-live` | **DONE** — [PR #1332](https://github.com/cryptoreporthub/subnet-dashboard/pull/1332) Ready @ `cd0b5a45` |
+| 7 | **P4b** guard calibrate | Grok | `cursor/p4b-stall-guard-calibrate` | **HOLD** — conditional on P4a merge + Axiom evidence |
 
 ---
 
-## P3c handoff (ACTIVE)
+## P3c report (DONE)
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1332
+- **head:** `cd0b5a45`
+- **tests:** `test_message_intel_f6.py` + `test_message_intel_outcomes.py` + `test_message_intel_harden.py` + `test_prod_stability.py` → **52 passed**; `test_endpoint_contract.py` → **148 passed**; `test_summers_telegram_desk.py` → **11 passed** (env: `SIGNALS_FRESHNESS_SECONDS=99999999`, `PYTHONPATH=.`).
+- **code review:** Task 1 — status/ingest/trending/social/degraded-fallback all `run_in_threadpool`; Task 2 — `_listener_unhealthy` truth table + no-secrets test; Task 3 — foreign-pid heartbeat honesty + `state:booting` within `OUTCOME_LOOP_BOOT_BUDGET_SECONDS`; Task 4 — `bot_contract` degraded on real listener faults only; Task 5 — `fetchStatusProbe()` 8s fail-open hydrate + SSR `<details>` regression guard. Bonus: heartbeat-loop race fix in `listener_service.py`. No `fly.toml` / `RESOLVER_*` in diff. CI smoke **success** ([run 37546237547](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37546237547)).
+- **residual:** `_SIMIVISION_LOCK` self-deadlock on warm `data/` — **pre-existing on `main`**, identical stack on base vs branch (P3a/council territory, not P3c regression).
+- **MC verdict:** **PASS** — Ready for review (Grok undrafted; MC confirms)
+
+---
+
+## P3c handoff (DONE)
 
 **Owner:** Grok  
 **handoff vendorId:** `grok-p3c-message-intel-handoff-2026-10-06`  

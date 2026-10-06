@@ -173,3 +173,13 @@
 - **Queue:** `active_slice=P3c`, `state=WAITING_GROK`; P3c handoff posted (message-intel live, branch `cursor/p3c-message-intel-live`, vendorId `grok-p3c-message-intel-handoff-2026-10-06`).
 - **Ditto:** queue pointer + P3b reviewed summary mirror pending.
 - No merge, no deploy.
+
+## 2026-10-06 ~23:35 UTC — P3c MC review PASS + pipeline HOLD_CONDITIONAL — **from Mission Control**
+
+**Author:** MC worker `bc-ea398cbc` (P3c AC review).
+
+- **P3c** [PR #1332](https://github.com/cryptoreporthub/subnet-dashboard/pull/1332) @ `cd0b5a45`: MC AC review **PASS** — Ready for review (Grok undrafted; MC confirms). Message-intel hot paths off event loop (`status`/`ingest`/rollup); listener degraded truth table; outcome-loop foreign-pid heartbeat + boot budget; fail-open 8s status probe in `message_intel_feed.js`; health-block guards for status + ingest routes. Tests: targeted **52 passed**; contract **148 passed**; summers desk **11 passed**. CI smoke **success** ([run 37546237547](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37546237547/job/112550815939)).
+- **Residual:** `_SIMIVISION_LOCK` hang on warm `data/` — pre-existing on `main`, not P3c regression (P3a/council STOP-list).
+- **Queue:** `active_slice=P4b (conditional)`, `state=HOLD_CONDITIONAL` — mandatory pipeline (P1–P3c + P2 + P4a) all Ready for review; P4b handoff withheld until P4a merge + Axiom Track 3 evidence per plan.
+- **Ditto:** queue pointer + P3c reviewed summary mirror pending.
+- No merge, no deploy.
