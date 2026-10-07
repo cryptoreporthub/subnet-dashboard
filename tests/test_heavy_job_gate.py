@@ -177,3 +177,46 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
     assert all("holder=None" not in m for m in reject_msgs)
     assert all("holder=unknown" not in m for m in reject_msgs)
     assert any("holder=holder" in m for m in reject_msgs)
+
+
+def test_reject_skip_path_does_not_hold_holder_lock():
+    """Reject must not hold _holder_lock across yield; skip path must stay non-blocking."""
+    reject_in_skip = threading.Event()
+    release_holder = threading.Event()
+    probe: dict[str, object] = {}
+
+    def holder() -> None:
+        with heavy_job_slot("holder"):
+            release_holder.wait(timeout=3)
+
+    def rejector() -> None:
+        with heavy_job_slot("waiter") as ok:
+            assert ok is False
+            reject_in_skip.set()
+            time.sleep(1.0)
+
+    def probe_gate() -> None:
+        reject_in_skip.wait(timeout=2)
+        started = time.perf_counter()
+        probe["holder"] = current_holder()
+        with heavy_job_slot("probe") as ok:
+            probe["second_ok"] = ok
+        probe["elapsed"] = time.perf_counter() - started
+
+    t_holder = threading.Thread(target=holder)
+    t_reject = threading.Thread(target=rejector)
+    t_probe = threading.Thread(target=probe_gate)
+    t_holder.start()
+    time.sleep(0.05)
+    t_reject.start()
+    time.sleep(0.05)
+    t_probe.start()
+    time.sleep(0.2)
+    release_holder.set()
+    t_holder.join(timeout=3)
+    t_reject.join(timeout=3)
+    t_probe.join(timeout=3)
+
+    assert probe["holder"] == "holder"
+    assert probe["second_ok"] is False
+    assert probe["elapsed"] < 0.2

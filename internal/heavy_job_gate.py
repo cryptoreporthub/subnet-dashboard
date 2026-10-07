@@ -21,33 +21,23 @@ def current_holder() -> Optional[str]:
         return _holder
 
 
-def _read_holder_for_reject() -> str:
-    """Read holder for reject after slot busy; spin until visible."""
-    for _ in range(200):
-        with _holder_lock:
-            holder = _holder
-        if holder is not None:
-            return holder
-        time.sleep(0.0005)
-    with _holder_lock:
-        holder = _holder
-    return holder if holder is not None else "unknown"
-
-
 @contextmanager
 def heavy_job_slot(name: str) -> Iterator[bool]:
     """Acquire exclusive heavy-job slot; yield False if another job is running."""
     global _holder, _holder_token
     my_token = 0
     with _holder_lock:
-        if _holder is not None:
-            holder = _holder
-            try:
-                logger.info("heavy_job_slot reject name=%s holder=%s", name, holder)
-            except Exception:
-                pass
-            yield False
-            return
+        busy_holder = _holder
+
+    if busy_holder is not None:
+        try:
+            logger.info("heavy_job_slot reject name=%s holder=%s", name, busy_holder)
+        except Exception:
+            pass
+        yield False
+        return
+
+    with _holder_lock:
         _holder_token += 1
         my_token = _holder_token
         _holder = name
@@ -56,11 +46,11 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
         with _holder_lock:
             if _holder_token == my_token:
                 _holder = None
-            holder = _holder
-        if holder is None:
-            holder = _read_holder_for_reject()
+            busy_holder = _holder
         try:
-            logger.info("heavy_job_slot reject name=%s holder=%s", name, holder)
+            logger.info(
+                "heavy_job_slot reject name=%s holder=%s", name, busy_holder
+            )
         except Exception:
             pass
         yield False
