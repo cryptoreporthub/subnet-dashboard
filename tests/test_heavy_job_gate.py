@@ -84,32 +84,18 @@ def test_heavy_job_slot_survives_release_log_exception(monkeypatch):
         assert ok is True
 
 
-def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
+def test_reject_never_logs_holder_none_on_slow_release(caplog):
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
-    releasing = threading.Event()
-    release_done = threading.Event()
-
-    class _SlowGateLock:
-        def __init__(self) -> None:
-            self._inner = threading.Lock()
-
-        def acquire(self, blocking: bool = True) -> bool:
-            return self._inner.acquire(blocking)
-
-        def release(self) -> None:
-            releasing.set()
-            time.sleep(0.1)
-            self._inner.release()
-            release_done.set()
-
-    monkeypatch.setattr(gate, "_lock", _SlowGateLock())
+    holder_ready = threading.Event()
+    release_holder = threading.Event()
 
     def holder() -> None:
         with heavy_job_slot("holder"):
-            pass
+            holder_ready.set()
+            release_holder.wait(timeout=2)
 
     def waiter() -> None:
-        releasing.wait(timeout=2)
+        holder_ready.wait(timeout=2)
         with heavy_job_slot("waiter") as ok:
             assert ok is False
 
@@ -117,9 +103,10 @@ def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
     t2 = threading.Thread(target=waiter)
     t1.start()
     t2.start()
+    time.sleep(0.05)
+    release_holder.set()
     t1.join(timeout=3)
     t2.join(timeout=3)
-    release_done.wait(timeout=2)
 
     reject_msgs = [
         r.message
@@ -132,40 +119,28 @@ def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
     assert all("holder=unknown" not in m for m in reject_msgs)
 
 
-def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog):
+def test_reject_never_unknown_while_slot_held_forced_timing(caplog):
     """Forced-timing repro: holder is never None/unknown while the slot is held."""
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
-    gap_entered = threading.Event()
-
-    class _GapLock:
-        def __init__(self) -> None:
-            self._inner = threading.Lock()
-
-        def acquire(self, blocking: bool = True) -> bool:
-            ok = self._inner.acquire(blocking)
-            if ok and blocking is False:
-                gap_entered.set()
-                time.sleep(0.05)
-            return ok
-
-        def release(self) -> None:
-            self._inner.release()
-
-    monkeypatch.setattr(gate, "_lock", _GapLock())
+    holder_ready = threading.Event()
+    release_holder = threading.Event()
 
     def waiter() -> None:
-        gap_entered.wait(timeout=2)
+        holder_ready.wait(timeout=2)
         with heavy_job_slot("waiter") as ok:
             assert ok is False
 
     def holder() -> None:
         with heavy_job_slot("holder"):
-            pass
+            holder_ready.set()
+            release_holder.wait(timeout=2)
 
     t1 = threading.Thread(target=holder)
     t2 = threading.Thread(target=waiter)
     t1.start()
     t2.start()
+    time.sleep(0.05)
+    release_holder.set()
     t2.join(timeout=3)
     t1.join(timeout=3)
     reject_msgs = [
@@ -180,7 +155,7 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
 
 
 def test_reject_skip_path_does_not_hold_holder_lock():
-    """Reject must not hold _holder_lock across yield; skip path must stay non-blocking."""
+    """Reject must not hold _state_lock across yield; skip path must stay non-blocking."""
     reject_in_skip = threading.Event()
     release_holder = threading.Event()
     probe: dict[str, object] = {}
@@ -220,3 +195,68 @@ def test_reject_skip_path_does_not_hold_holder_lock():
     assert probe["holder"] == "holder"
     assert probe["second_ok"] is False
     assert probe["elapsed"] < 0.2
+
+
+def test_racing_claim_winner_holder_never_none(monkeypatch):
+    """Two callers race at claim; winner must keep holder set for entire hold."""
+    from contextlib import contextmanager
+
+    barrier = threading.Barrier(2, timeout=3)
+    real_slot = gate.heavy_job_slot
+    results: list[bool] = []
+    holder_none_while_held: list[str] = []
+
+    @contextmanager
+    def _synced_slot(name: str):
+        barrier.wait(timeout=3)
+        with real_slot(name) as ok:
+            if ok:
+                for _ in range(20):
+                    if current_holder() is None:
+                        holder_none_while_held.append(name)
+                    time.sleep(0.001)
+            yield ok
+
+    monkeypatch.setattr(gate, "heavy_job_slot", _synced_slot)
+
+    def worker(tag: str) -> None:
+        with _synced_slot(tag) as ok:
+            results.append(ok)
+
+    t1 = threading.Thread(target=worker, args=("job_a",))
+    t2 = threading.Thread(target=worker, args=("job_b",))
+    t1.start()
+    t2.start()
+    t1.join(timeout=3)
+    t2.join(timeout=3)
+
+    assert results.count(True) == 1
+    assert results.count(False) == 1
+    assert holder_none_while_held == []
+
+
+def test_stress_no_held_with_none_holder():
+    """Short stress: zero windows where slot is held but holder is None."""
+    held_with_none = 0
+    count_lock = threading.Lock()
+
+    def worker(tag: int) -> None:
+        nonlocal held_with_none
+        with heavy_job_slot(f"job_{tag}") as ok:
+            if not ok:
+                return
+            if current_holder() is None:
+                with count_lock:
+                    held_with_none += 1
+
+    for batch in range(50):
+        threads = [
+            threading.Thread(target=worker, args=(batch * 20 + i,))
+            for i in range(20)
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=5)
+
+    assert held_with_none == 0

@@ -10,46 +10,39 @@ from typing import Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
-_lock = threading.Lock()
-_holder_lock = threading.Lock()
+_state_lock = threading.Lock()
+_held: bool = False
 _holder: Optional[str] = None
 _holder_token: int = 0
 
 
 def current_holder() -> Optional[str]:
-    with _holder_lock:
+    with _state_lock:
         return _holder
 
 
 @contextmanager
 def heavy_job_slot(name: str) -> Iterator[bool]:
     """Acquire exclusive heavy-job slot; yield False if another job is running."""
-    global _holder, _holder_token
+    global _held, _holder, _holder_token
     my_token = 0
-    with _holder_lock:
-        busy_holder = _holder
+    reject_holder: Optional[str] = None
+    acquired = False
 
-    if busy_holder is not None:
-        try:
-            logger.info("heavy_job_slot reject name=%s holder=%s", name, busy_holder)
-        except Exception:
-            pass
-        yield False
-        return
+    with _state_lock:
+        if _held:
+            reject_holder = _holder
+        else:
+            _held = True
+            _holder_token += 1
+            my_token = _holder_token
+            _holder = name
+            acquired = True
 
-    with _holder_lock:
-        _holder_token += 1
-        my_token = _holder_token
-        _holder = name
-
-    if not _lock.acquire(blocking=False):
-        with _holder_lock:
-            if _holder_token == my_token:
-                _holder = None
-            busy_holder = _holder
+    if not acquired:
         try:
             logger.info(
-                "heavy_job_slot reject name=%s holder=%s", name, busy_holder
+                "heavy_job_slot reject name=%s holder=%s", name, reject_holder
             )
         except Exception:
             pass
@@ -66,17 +59,15 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
     finally:
         held_ms = (time.perf_counter() - started) * 1000
         release_name = name
+        with _state_lock:
+            if _holder_token == my_token:
+                _held = False
+                _holder = None
         try:
-            _lock.release()
-        finally:
-            with _holder_lock:
-                if _holder_token == my_token:
-                    _holder = None
-            try:
-                logger.info(
-                    "heavy_job_slot release name=%s held_ms=%.1f",
-                    release_name,
-                    held_ms,
-                )
-            except Exception:
-                pass
+            logger.info(
+                "heavy_job_slot release name=%s held_ms=%.1f",
+                release_name,
+                held_ms,
+            )
+        except Exception:
+            pass
