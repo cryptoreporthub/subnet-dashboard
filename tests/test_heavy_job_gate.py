@@ -129,3 +129,51 @@ def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
     assert reject_msgs
     assert all("holder=None" not in m for m in reject_msgs)
     assert any("holder=holder" in m for m in reject_msgs)
+    assert all("holder=unknown" not in m for m in reject_msgs)
+
+
+def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog):
+    """Forced-timing repro: holder is never None/unknown while the slot is held."""
+    caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
+    gap_entered = threading.Event()
+
+    class _GapLock:
+        def __init__(self) -> None:
+            self._inner = threading.Lock()
+
+        def acquire(self, blocking: bool = True) -> bool:
+            ok = self._inner.acquire(blocking)
+            if ok and blocking is False:
+                gap_entered.set()
+                time.sleep(0.05)
+            return ok
+
+        def release(self) -> None:
+            self._inner.release()
+
+    monkeypatch.setattr(gate, "_lock", _GapLock())
+
+    def waiter() -> None:
+        gap_entered.wait(timeout=2)
+        with heavy_job_slot("waiter") as ok:
+            assert ok is False
+
+    def holder() -> None:
+        with heavy_job_slot("holder"):
+            pass
+
+    t1 = threading.Thread(target=holder)
+    t2 = threading.Thread(target=waiter)
+    t1.start()
+    t2.start()
+    t2.join(timeout=3)
+    t1.join(timeout=3)
+    reject_msgs = [
+        r.message
+        for r in caplog.records
+        if r.name == "internal.heavy_job_gate" and "reject" in r.message
+    ]
+    assert reject_msgs
+    assert all("holder=None" not in m for m in reject_msgs)
+    assert all("holder=unknown" not in m for m in reject_msgs)
+    assert any("holder=holder" in m for m in reject_msgs)

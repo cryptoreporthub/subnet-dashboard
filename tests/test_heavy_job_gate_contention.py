@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from typing import Any, Dict
 
 import pytest
@@ -28,6 +29,20 @@ def contention_paths(tmp_path, monkeypatch):
     monkeypatch.setattr(council_weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(resolver_scheduler, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "score_snapshots.json"))
+
+
+def _wait_two_rejects(caplog, timeout: float = 3.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        rejects = [
+            r
+            for r in caplog.records
+            if r.name == "internal.heavy_job_gate" and "reject" in r.message
+        ]
+        if len(rejects) >= 2:
+            return
+        time.sleep(0.001)
+    raise AssertionError("expected 2 heavy_job_slot rejects before winner release")
 
 
 def _gate_log_messages(caplog) -> list[str]:
@@ -126,24 +141,27 @@ def test_three_schedulers_wedge_while_resolver_holds_gate(
 
 def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, contention_paths):
     """All three schedulers tick together; exactly one acquires, two reject with named holder."""
+    from contextlib import contextmanager
+
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
     tick_started = threading.Event()
     allow_finish = threading.Event()
-    acquire_line = threading.Barrier(3, timeout=3)
+    holder_line = threading.Barrier(3, timeout=3)
+    real_slot = gate_mod.heavy_job_slot
 
-    class _SyncedGateLock:
-        def __init__(self) -> None:
-            self._inner = threading.Lock()
+    @contextmanager
+    def _synced_slot(name: str):
+        holder_line.wait(timeout=3)
+        slot = real_slot(name)
+        acquired = slot.__enter__()
+        if acquired:
+            _wait_two_rejects(caplog)
+        try:
+            yield acquired
+        finally:
+            slot.__exit__(None, None, None)
 
-        def acquire(self, blocking: bool = True) -> bool:
-            if blocking is False:
-                acquire_line.wait(timeout=3)
-            return self._inner.acquire(blocking)
-
-        def release(self) -> None:
-            self._inner.release()
-
-    monkeypatch.setattr(gate_mod, "_lock", _SyncedGateLock())
+    monkeypatch.setattr(gate_mod, "heavy_job_slot", _synced_slot)
 
     def _resolver_cycle(self) -> Dict[str, Any]:
         tick_started.set()
@@ -156,13 +174,10 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
             "pending": 0,
         }
 
-    def _snapshot_hold_gate() -> Dict[str, Any]:
-        with heavy_job_slot("score_snapshot") as acquired:
-            if not acquired:
-                return {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
-            tick_started.set()
-            allow_finish.wait(timeout=5)
-            return {"ok": True, "count": 0}
+    def _snapshot_write(**_kwargs) -> Dict[str, Any]:
+        tick_started.set()
+        allow_finish.wait(timeout=5)
+        return {"ok": True, "count": 0}
 
     def _pump_body(self) -> Dict[str, Any]:
         tick_started.set()
@@ -174,6 +189,7 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
         "_run_refresh_cycle_with_timeout",
         _resolver_cycle,
     )
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _snapshot_write)
     monkeypatch.setattr(PumpLadderScheduler, "_tick_body", _pump_body)
     monkeypatch.setattr(PumpLadderScheduler, "_schedule_next", lambda self, _r: None)
 
@@ -194,13 +210,17 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
 
     threads = [
         threading.Thread(target=_run, args=("resolver", resolver_sched._tick)),
-        threading.Thread(target=_run, args=("snapshot", _snapshot_hold_gate)),
+        threading.Thread(target=_run, args=("snapshot", lambda: snap_sched._tick(reschedule=False))),
         threading.Thread(target=_run, args=("pump", pump_sched._tick)),
     ]
     for t in threads:
         t.start()
     assert tick_started.wait(timeout=3), "no scheduler acquired heavy_job_slot"
-    holder = current_holder()
+
+    msgs = _gate_log_messages(caplog)
+    acquire_msgs = [m for m in msgs if "heavy_job_slot acquire name=" in m]
+    assert acquire_msgs, "expected winner acquire log"
+    holder = acquire_msgs[0].split("heavy_job_slot acquire name=")[1]
     assert holder in ("prediction_resolver", "score_snapshot", "pump_ladder")
 
     allow_finish.set()
@@ -212,7 +232,6 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
     assert len(busy) == 2
     assert len(results) == 3
 
-    msgs = _gate_log_messages(caplog)
     assert any(f"heavy_job_slot acquire name={holder}" in m for m in msgs)
     for loser in busy:
         gate_name = {
