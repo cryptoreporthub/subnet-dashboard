@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -166,4 +168,157 @@ def test_status_aware_boot_revive_arms_next_run_without_post(tmp_path, monkeypat
         assert armed._next_run_at is not None or armed._first_tick_scheduled_at is not None
     finally:
         rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_after_cycle_timeout_not_tick_in_progress(tmp_path, monkeypatch):
+    """Post-timeout abandon must release cycle_lock so revive can recycle."""
+    soul = tmp_path / "soul_map.json"
+    preds = tmp_path / "predictions.json"
+    soul.write_text("{}", encoding="utf-8")
+    preds.write_text(
+        json.dumps({"predictions": [], "resolved": [], "stats": {}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
+    monkeypatch.setattr(rs, "_default_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(
+        resolver,
+        "resolve_due_predictions",
+        lambda *_a, **_k: {
+            "resolved_now": [],
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        },
+    )
+    monkeypatch.setattr(
+        resolver,
+        "expire_stale_predictions",
+        lambda: {
+            "expired_now": [],
+            "stats": {"pending": 0},
+            "watchdog": {"warning": False, "pending_count": 0},
+        },
+    )
+
+    @contextmanager
+    def _free_slot(_name):
+        yield True
+
+    monkeypatch.setattr("internal.heavy_job_gate.heavy_job_slot", _free_slot)
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        return {
+            "ok": True,
+            "run_at": rs._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 0.05)
+    monkeypatch.setattr(rs.PredictionResolverScheduler, "_run_refresh_cycle", _blocked)
+
+    old_tick = _iso(datetime.now(timezone.utc) - timedelta(hours=4))
+    soul.write_text(
+        json.dumps(
+            {
+                "prediction_resolver_scheduler": {
+                    "last_cycle": {"run_at": old_tick, "ok": False, "pending": 0},
+                    "lifecycle": "running",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    sched._first_tick_pending = False
+    rs._scheduler = sched
+
+    try:
+        timed = sched._run_refresh_cycle_with_timeout()
+        assert started.wait(timeout=1)
+        assert "cycle_timeout" in str(timed.get("error"))
+        assert not sched._cycle_lock.locked()
+        release.set()
+
+        out = rs.revive_prediction_resolver_scheduler(force=True)
+        assert out.get("reason") != "tick_in_progress"
+        assert out.get("revived") is True
+    finally:
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_revive_honest_tick_in_progress_when_live_cycle_young(tmp_path, monkeypatch):
+    """Young in-flight cycle must still report tick_in_progress."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def _blocked(self):
+        started.set()
+        release.wait(timeout=2)
+        return {
+            "ok": True,
+            "run_at": rs._now_iso(),
+            "resolved_now": 0,
+            "expired_now": 0,
+            "pending": 0,
+        }
+
+    monkeypatch.setattr(rs, "RESOLVER_CYCLE_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs, "RESOLVER_FIRST_TICK_TIMEOUT_SECONDS", 30)
+    monkeypatch.setattr(rs.PredictionResolverScheduler, "_run_refresh_cycle", _blocked)
+
+    tick = _iso(datetime.now(timezone.utc) - timedelta(seconds=30))
+    soul.write_text(
+        json.dumps(
+            {"prediction_resolver_scheduler": {"last_cycle": {"run_at": tick, "ok": True}}}
+        ),
+        encoding="utf-8",
+    )
+
+    rs.stop_prediction_resolver_scheduler()
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._active = True
+    sched._first_tick_pending = False
+    rs._scheduler = sched
+
+    try:
+        threading.Thread(target=sched._run_refresh_cycle_with_timeout, daemon=True).start()
+        assert started.wait(timeout=1)
+        time.sleep(0.05)
+        out = rs.revive_prediction_resolver_scheduler()
+        assert out["revived"] is False
+        assert out.get("reason") == "tick_in_progress"
+        release.set()
+    finally:
+        rs.stop_prediction_resolver_scheduler()
+
+
+def test_force_release_cycle_lock_replaces_wedged_lock():
+    sched = rs.PredictionResolverScheduler(refresh_minutes=15)
+    sched._cycle_lock.acquire()
+    assert sched._cycle_lock.locked()
+    sched._force_release_cycle_lock(reason="test")
+    assert not sched._cycle_lock.locked()
+    assert sched._cycle_lock.acquire(blocking=False)
+    sched._cycle_lock.release()
 
