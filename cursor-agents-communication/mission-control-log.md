@@ -217,3 +217,14 @@
 - **Dup residual CONFIRMED:** ~2× from dual HA shippers (~1,050 unique of 2,097)
 - **Axiom evidence gate:** **PASS** (UI). P4b still **HOLD_CONDITIONAL** pending P4a #1327 merge + MC queue advance
 - **Optional:** scale `subnet-dashboard-logshipper` to 1 or add dedup
+
+## 2026-10-07 ~05:33 PT — Soak spot-check FAIL + logshipper scale-to-1 SUCCESS — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Deploy query pin:** `2026-10-07T11:22:08Z`
+- **Scale-to-1:** kept `784161da123e38`, destroyed `1854324a946e78`; receipt `scale-to-1-receipt-2026-10-07.md`
+- **Soak FAIL:** no resolver cycle completes; ticks skipped `heavy_job_busy`; stall-guard strikes through ~`12:12:44Z` (~50m post-deploy, strike→4/2, snapshot age↑); `cycle_timeout`/`abandon`=0
+- **Noise:** homepage `join_timeout`, TaoStats 404, fast-shell learning fail; app still HTTP 200
+- **Ditto:** `grok-soak-spotcheck-scale1-2026-10-07` (source=cursor)
+- **24h soak floor** unchanged; P4b still **HOLD** pending #1327
