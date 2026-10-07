@@ -428,3 +428,50 @@ PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
    - **Fix:** do the check and the claim in one `_holder_lock` section: read `_holder`; if it is None, bump the token and set `_holder=name`, and remember whether the caller is busy. Then leave the lock and log and `yield False` outside it. Add a forced-interleave regression test for two callers that both pass the check before either claims.
 
 - **Ditto:** `grok-pr1333-mc-ac-review4-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~12:48 PM PT: MC review 5 of PR #1333 at ad7b63a0, verdict **MODIFY** (tests only; gate code passes) (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. Head verified on GitHub: `ad7b63a0374bedce1c8e268f75985d1bddae706e` ("fix: atomic slot+holder state under single state_lock").
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged. **The gate code passes every check. The blocker is regression-test coverage (item 5).**
+- **Smoke CI at ad7b63a0:** run `37675967818`, check `smoke` `112979424210`, **completed / success** (head_sha verified).
+- **Method note:** `_lock` was removed, so my earlier repros that wrapped `g._lock` would be silent no-ops. All forced-timing repros were rebuilt to pause at `_state_lock` section exits for specific threads.
+
+### Items
+1. **Review-4 blocker: PASS.** T1 and T2 were both paused right after their first `_state_lock` section. State after both: `(_held=True, holder='prediction_resolver')`. T2 was rejected with `holder=prediction_resolver`; T1 kept its holder for the whole hold; a third caller was rejected with the named holder. Reverse order: the same with roles swapped. Both callers seeing the slot free is impossible because check and claim are now one section (:32-40).
+2. **Unforced stress: PASS.** 5 runs × 10s, 6 workers including duplicate names, switchinterval 1e-6, plus an observer reading `_held` and `_holder` together under `_state_lock`:
+   - ~11.0–11.3k acquires and ~32.9–33.8k self-checks per run, 0 held-but-None and 0 wrong holder.
+   - Observer: 18.3M–19.0M checks per run, 0 held with None.
+   - Rejects: 57,968 / 59,519 / 59,466 / 59,429 / 59,707, with 0 `holder=None` and 0 `holder=unknown`.
+   - Control on the `574d6080` gate with the same harness: 9 held-None self-checks and 13 `holder=None` rejects, so the harness does catch the old bug.
+3. **Review-3 skip path: PASS.** 1.0s skip body, holder still holding: `current_holder()` 0.0s and returns `prediction_resolver`; third caller rejected in 0.0s; holder's release 0.0s. Base `main` `cba07cf3`: the same (third caller 0.0001s). Re-entrant `current_holder()`, a nested slot attempt inside a reject body, and a nested attempt inside the acquired body all match `main` with no hang.
+4. **Earlier repros: PASS.**
+   - Bug 1: handler raising on acquire only, release only, or every call, and a patched `logger.info` raising, all give first and second acquire `ok=True` and final state `(False, None)`.
+   - Bug 2: every `_state_lock` exit slowed by 2ms plus a 50ms release log, with 4 rejectors spamming: 99 rejects, 0 None, 0 unknown.
+   - Holder wipe (holder A paused right after its release section; newcomer acquires; A resumes): same name and different name both keep B's holder before and after A resumes, and a probe is rejected with B's name.
+   - Acquire gap (holder paused right after its claim section): 200 rejects, all named, state during the gap `(True, 'holder')`.
+5. **Regression tests: FAIL.** Each test run in isolation against each historical gate:
+   - `survives_acquire_log_exception` and `survives_release_log_exception` fail against `66f77af6`. ✓
+   - `test_reject_skip_path_does_not_hold_holder_lock` fails against `5a908153`. ✓
+   - **`test_racing_claim_winner_holder_never_none` passes against `574d6080` 20/20 and `test_stress_no_held_with_none_holder` passes against `574d6080` 20/20.** Neither catches the review-4 bug.
+   - **`test_reject_never_logs_holder_none_on_slow_release` and `test_reject_never_unknown_while_slot_held_forced_timing` were rewritten without any forcing (their `_SlowGateLock` and `_GapLock` wrappers were deleted with `_lock`). They now pass against `66f77af6` and `d93ae45b`; in reviews 2-4 they failed there (:130, :177, :178).** The Bug 2 and acquire-gap regression coverage is gone.
+6. **Loops: PASS.** Contention file 20x: 20/20, 20/20. Race test alone 20x: 20/20, 20/20.
+7. **Full gate files:** 13 passed in 1.81s.
+8. **Diff and semantics: PASS.**
+   - `574d6080..ad7b63a0` (2 files, +110/−79): replaces `_lock` and `_holder_lock` with `_state_lock` plus a `_held` flag; check and claim are one section (:32-40); the reject logs `reject_holder` and yields outside the lock (:42-50); release clears `_held` and `_holder` under `_state_lock` when the token matches (:62-65), then logs outside the lock (:66-73). Tests: the two forced tests de-forced, a docstring tweak, two new tests.
+   - Full `main..ad7b63a0`: 3 files, +507/−7 (gate +57/−7, test_heavy_job_gate.py +213, contention +244). Scope grep (RESOLVER_, fly.toml, stall_guard, P4b, deploy) on the diff: 0 matches.
+   - `_state_lock` is held only for assignments and comparisons (:20-21, :32-40, :62-65), never across a yield, logging or caller code. `with _state_lock` waits, but only for those O(1) sections; the slot itself is never waited on.
+   - True/False and its timing match `main`.
+   - Exception-safe on every path: ValueError and KeyboardInterrupt in the reject body and in the acquired body, plus an early `gen.close()`, all end in `(_state_lock free, _held False, holder None)`.
+   - No unreachable branches. Nit: the token compare at :63 is always true given the `_held` invariant (a redundant guard), and `release_name` is a redundant alias.
+9. **Callers: PASS.** `resolver_scheduler.py`, `score_snapshots.py` and `pump/scheduler.py` are unchanged between `main` and head (`git diff --stat` empty) and still use `with heavy_job_slot(name) as acquired`. No code references the removed `_lock` or `_holder_lock`. Caller test files: 87 passed, 2 failed. The same 2 fail identically on `main` `cba07cf3`: `test_resolver_revive.py::test_revive_recycles_hung_scheduler_and_runs_once` and `::test_revive_honest_when_tick_fresh`. They predate this PR and are out of scope.
+10. **Smoke CI:** success at the exact head.
+
+### Finding (blocker, tests only)
+1. **tests/test_heavy_job_gate.py:** restore forced timing so each regression test fails against the gate it guards:
+   - **(a)** Re-force `test_reject_never_logs_holder_none_on_slow_release` and `test_reject_never_unknown_while_slot_held_forced_timing` by wrapping `gate._state_lock` (a context manager that pauses at a specific thread's Nth section exit). They must again fail against `66f77af6` and `d93ae45b`.
+   - **(b)** Make `test_racing_claim_winner_holder_never_none` deterministic: pause both callers after their first state section so both are past the check before either claims. It must fail against `574d6080`, where the forced repro gives holder=None while held.
+   - **(c)** `test_stress_no_held_with_none_holder` passed 20/20 against `574d6080`; strengthen it (switchinterval and duration) or drop it in favour of (b).
+
+- **Ditto:** `grok-pr1333-mc-ac-review5-2026-10-07` (source=cursor)
