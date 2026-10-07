@@ -10,6 +10,7 @@ import pytest
 
 from internal.council import resolver_scheduler, score_snapshots as snaps
 from internal.council import weights as council_weights
+import internal.heavy_job_gate as gate_mod
 from internal.heavy_job_gate import current_holder, heavy_job_slot
 from internal.pump.scheduler import PumpLadderScheduler
 
@@ -128,6 +129,21 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
     tick_started = threading.Event()
     allow_finish = threading.Event()
+    acquire_line = threading.Barrier(3, timeout=3)
+
+    class _SyncedGateLock:
+        def __init__(self) -> None:
+            self._inner = threading.Lock()
+
+        def acquire(self, blocking: bool = True) -> bool:
+            if blocking is False:
+                acquire_line.wait(timeout=3)
+            return self._inner.acquire(blocking)
+
+        def release(self) -> None:
+            self._inner.release()
+
+    monkeypatch.setattr(gate_mod, "_lock", _SyncedGateLock())
 
     def _resolver_cycle(self) -> Dict[str, Any]:
         tick_started.set()
@@ -140,10 +156,13 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
             "pending": 0,
         }
 
-    def _snapshot_write(**_kwargs) -> Dict[str, Any]:
-        tick_started.set()
-        allow_finish.wait(timeout=5)
-        return {"ok": True, "count": 0}
+    def _snapshot_hold_gate() -> Dict[str, Any]:
+        with heavy_job_slot("score_snapshot") as acquired:
+            if not acquired:
+                return {"ok": False, "run_at": _now_iso(), "skipped": "heavy_job_busy"}
+            tick_started.set()
+            allow_finish.wait(timeout=5)
+            return {"ok": True, "count": 0}
 
     def _pump_body(self) -> Dict[str, Any]:
         tick_started.set()
@@ -155,7 +174,6 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
         "_run_refresh_cycle_with_timeout",
         _resolver_cycle,
     )
-    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _snapshot_write)
     monkeypatch.setattr(PumpLadderScheduler, "_tick_body", _pump_body)
     monkeypatch.setattr(PumpLadderScheduler, "_schedule_next", lambda self, _r: None)
 
@@ -168,15 +186,15 @@ def test_three_schedulers_race_one_winner_two_rejects(monkeypatch, caplog, conte
     pump_sched._active = False
 
     results: Dict[str, Dict[str, Any]] = {}
-    barrier = threading.Barrier(3, timeout=3)
+    start_line = threading.Barrier(3, timeout=3)
 
     def _run(name: str, fn) -> None:
-        barrier.wait(timeout=3)
+        start_line.wait(timeout=3)
         results[name] = fn()
 
     threads = [
         threading.Thread(target=_run, args=("resolver", resolver_sched._tick)),
-        threading.Thread(target=_run, args=("snapshot", lambda: snap_sched._tick(reschedule=False))),
+        threading.Thread(target=_run, args=("snapshot", _snapshot_hold_gate)),
         threading.Thread(target=_run, args=("pump", pump_sched._tick)),
     ]
     for t in threads:

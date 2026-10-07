@@ -24,16 +24,34 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
     global _holder
     acquired = _lock.acquire(blocking=False)
     if not acquired:
-        logger.info("heavy_job_slot reject name=%s holder=%s", name, _holder)
+        holder = _holder or "unknown"
+        try:
+            logger.info("heavy_job_slot reject name=%s holder=%s", name, holder)
+        except Exception:
+            pass
         yield False
         return
     started = time.perf_counter()
     try:
         _holder = name
-        logger.info("heavy_job_slot acquire name=%s", name)
+        try:
+            logger.info("heavy_job_slot acquire name=%s", name)
+        except Exception:
+            pass
         yield True
     finally:
         held_ms = (time.perf_counter() - started) * 1000
-        logger.info("heavy_job_slot release name=%s held_ms=%.1f", name, held_ms)
-        _holder = None
-        _lock.release()
+        release_name = name
+        try:
+            _lock.release()
+            if _holder == release_name:
+                _holder = None
+        finally:
+            try:
+                logger.info(
+                    "heavy_job_slot release name=%s held_ms=%.1f",
+                    release_name,
+                    held_ms,
+                )
+            except Exception:
+                pass
