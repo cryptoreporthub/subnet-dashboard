@@ -199,3 +199,9 @@
 - **Track3 Path A DONE** — `subnet-dashboard-logshipper` deployed (2× sjc started, axiom sink OK); Path B bridge stopped; keep-alive paused; `subnet-dashboard` unmodified; health 200.
 - **ACCESS_TOKEN** via readonly `--from-existing`.
 - **Residual:** confirm Axiom UI `subnet-dashboard-prod`; possible dup events from 2 machines.
+
+## 2026-10-06 ~6:57 PM PT — Track3 VERIFY Path A PASS / Axiom APL NOT_OBSERVABLE — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Track3 VERIFY** — PathA **PASS** (2× started, axiom HC ok, PathB stopped, health 200) | Axiom APL **NOT_OBSERVABLE** (403) | dup **NOT_OBSERVABLE** | P4b **HOLD** pending P4a merge + forward Axiom UI/query evidence | report `grok-track3-verify-report-2026-10-07` (Ditto vendorId).
