@@ -261,3 +261,15 @@
 - Q5 soak FAIL 11:48–12:12Z = first strike run + 2 heavy_job skips + recycled resolver
 - Gaps: need holder + scoring_in_progress instrumentation
 - Fences: read-only OK
+
+## 2026-10-07 ~12:00 PM PT — Joshua GO: A→B heavy_job holder + integration repro → Project — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Joshua said GO.** MC handed slice **A→B** to Cursor Project **Subnet Dashboard Audit** coordinator `bc-01a10d2f-9ea8-7b5c-ba20-60339ed860a6` ([agents/bc-01a10d2f](https://cursor.com/agents/bc-01a10d2f-9ea8-7b5c-ba20-60339ed860a6)) via CloudAgent reply (`run-f9e3a455-360f-43d9-9a78-0b77f9c117bc`).
+- **A** = `heavy_job_gate.py` heavy_job_slot **holder instrumentation** (holder name / acquire ts / held duration; holder on `heavy_job_busy` rejection). **B** = integration repro test (resolver+snapshot+pump competing; asserts holder names). One or two serial draft PRs.
+- **Guardrails:** draft only (MC undrafts); Joshua merges/deploys; no `fly.toml`/deploy/`RESOLVER_*` changes; no P4b work (queue still **HOLD_CONDITIONAL**).
+- **Evidence attached to Project:** `grok-fly-logs-repro-2026-10-07` (Ditto `2f6ceae9`, MC log `d3a69a6`) summary + `fly-buffer.txt`.
+- **Standing posture:** coding jobs route through this Project (Grok/MC hands jobs by reply); Grok stays read-only prod/Axiom evidence; Ditto + MC log are the audit-trail mirror, not the primary code handoff channel.
+- **Ditto:** `grok-project-handoff-heavyjob-ab-2026-10-07` (source=cursor)
+- **Status:** **IN_PROGRESS** (Project), awaiting PR URL/SHA/CI report.
