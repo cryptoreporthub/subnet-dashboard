@@ -228,3 +228,14 @@
 - **Noise:** homepage `join_timeout`, TaoStats 404, fast-shell learning fail; app still HTTP 200
 - **Ditto:** `grok-soak-spotcheck-scale1-2026-10-07` (source=cursor)
 - **24h soak floor** unchanged; P4b still **HOLD** pending #1327
+
+## 2026-10-07 ~6:38 AM PT — STANDING: always mirror MC/Grok to this log with Ditto — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot (Joshua + Cursor audit response).
+
+- **Cursor claim checked:** Cursor said this log was stale at `2026-10-07 01:55Z` (Track 3 verify handoff). **False / stale-read** — `origin/cursor/mc-grok-product-queue` tip was already `7cd8345` with all post-verify Grok entries mirrored. Likely confused with Ditto handoff `fc5102b7` @ 01:55Z, not the repo log tip.
+- **Already present (no backfill needed):**
+  - `5493ea9` — Track3 Path A VERIFY PASS / Axiom APL NOT_OBSERVABLE (~6:57–6:58 PM PT Oct 6) — Ditto `grok-track3-verify-report-2026-10-07` (`79fe4ff5`)
+  - `bbb8906` — Track3 Axiom UI VERIFY PASS (~7:53–7:55 PM PT Oct 6) — Ditto `grok-track3-axiom-ui-verify-2026-10-07` (`a5ce1b68`)
+  - `7cd8345` — Soak spot-check FAIL + logshipper scale-to-1 SUCCESS (~5:33–5:34 AM PT Oct 7) — Ditto `grok-soak-spotcheck-scale1-2026-10-07` (`3c94bc3c`)
+- **STANDING RULE (Joshua 2026-10-07):** Always mirror every user-visible Mission Control / Grok status, decision, and evidence to this file on `cursor/mc-grok-product-queue` **same turn** as Ditto `save_memory` (source=cursor). Never leave Grok/MC work Ditto-only. Skip one-line acks only. Do not edit `grok-product-queue.md` unless queue state actually changes.
