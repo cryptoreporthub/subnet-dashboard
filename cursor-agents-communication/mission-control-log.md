@@ -205,3 +205,15 @@
 **Author:** Mission Control / Grok Bot.
 
 - **Track3 VERIFY** — PathA **PASS** (2× started, axiom HC ok, PathB stopped, health 200) | Axiom APL **NOT_OBSERVABLE** (403) | dup **NOT_OBSERVABLE** | P4b **HOLD** pending P4a merge + forward Axiom UI/query evidence | report `grok-track3-verify-report-2026-10-07` (Ditto vendorId).
+
+## 2026-10-06 ~19:53 PT — Track3 Axiom UI verify PASS (Path A forward evidence) — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Producer:** Mission Control / Grok Bot
+- **Ditto:** `grok-track3-axiom-ui-verify-2026-10-07` (source=cursor)
+- **Dataset** `subnet-dashboard-prod` @ SimiVision: **2,097** events after `2026-10-07T00:06:00Z`; earliest ~`00:06:06Z`; Fly/Vector fields (no `shipper=box-axiom-bridge`)
+- **Cutover clean:** last bridge ~`00:05:50Z`; no Path B after cutover; no gap/overlap
+- **Dup residual CONFIRMED:** ~2× from dual HA shippers (~1,050 unique of 2,097)
+- **Axiom evidence gate:** **PASS** (UI). P4b still **HOLD_CONDITIONAL** pending P4a #1327 merge + MC queue advance
+- **Optional:** scale `subnet-dashboard-logshipper` to 1 or add dedup
