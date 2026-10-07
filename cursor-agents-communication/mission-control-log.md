@@ -475,3 +475,93 @@ PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
    - **(c)** `test_stress_no_held_with_none_holder` passed 20/20 against `574d6080`; strengthen it (switchinterval and duration) or drop it in favour of (b).
 
 - **Ditto:** `grok-pr1333-mc-ac-review5-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~2:37 PM PT: MC review 6 of PR #1333 at b955ecc2, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `b955ecc27756584f54a11f4b6ed3845b3cc6ecdc` (parent `ad7b63a0`, "test: strengthen heavy_job_gate race tests with pause hooks"), verified via GitHub. Draft.
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Reconcile:** no partial review-6 artifacts. MC log tip was `6b76a4a7` with no review-6 entry, and the Ditto vendorId `grok-pr1333-mc-ac-review6-2026-10-07` was absent before this save.
+- **Smoke CI at b955ecc2:** run `37678897439`, check `smoke` `112989469294`, **completed / success** (head_sha matches; the only check-run).
+- **Files main..head:** `internal/heavy_job_gate.py` (+61/−8), `tests/test_heavy_job_gate.py` (+298), `tests/test_heavy_job_gate_contention.py` (+244). Scope grep (RESOLVER_, fly.toml, stall_guard, P4b, deploy) on the diff: 0 matches. Callers (`internal/council`, `internal/pump`) unchanged.
+
+### Diff ad7b63a0..b955ecc2
+- Gate: adds `Callable` import; `_pause_hook = None` (:17); `_pause(phase)` (:25-28); calls at `between_check_and_claim` (:39, **before** the check, outside the lock), `post_claim_acquired` (:60), `pre_release` (:71), `post_release` (:75), all outside `_state_lock`. **Not claimed in the PR summary:** release no longer checks `_holder_token == my_token` (:72-74), and `release_name` was removed. `my_token` (:35, :46) and `_holder_token` (:16, :45) are now written and never read (dead code). Behaviour is unchanged because only one holder can exist at a time.
+- Tests: 4 forced tests rewritten around `_pause_hook`; new helpers `_install_pause_hook` and `_held_without_holder` (:15-20, reading `gate._state_lock` and `gate._held`); stress test is now 30 synced pairs asserting `violations==0` and `double_wins==0`.
+
+### Hook (beyond-task production change)
+- Default None; nothing outside the tests sets it (grep: only `tests/test_heavy_job_gate.py`). No import side effects (module top level is only imports, assignments and defs). Never called while `_state_lock` is held.
+- Overhead, best of 9 × 200k uncontended, INFO logging off (ns per call):
+
+  | Gate | acquire+release | reject |
+  |---|---|---|
+  | main `cba07cf3` | 823 | 789 |
+  | `ad7b63a0` | 1404 | 925 |
+  | head, hook None | 1504 | 930 |
+  | head, no-op hook | 1619 | 970 |
+
+  That is about +100 ns (~7%) for the hook check: negligible.
+- **Exception-unsafe if a hook raises:** `post_claim_acquired` (:60, outside the try) or `pre_release` (:71, before the state clear) leaves `_held=True, holder='x'` and the next acquire returns False, so the gate is permanently wedged. `between_check_and_claim` and `post_release` raising are safe.
+
+### Mutation and historical-gate table (10 runs each; P = pass, F = fail)
+Columns: Bug2 = `test_reject_never_logs_holder_none_on_slow_release`; Gap = `test_reject_never_unknown_while_slot_held_forced_timing`; Race = `test_racing_claim_winner_holder_never_none`; Stress = `test_stress_no_held_with_none_holder`.
+
+| Gate | Bug2 | Gap | Race | Stress |
+|---|---|---|---|---|
+| head (control) | 10P | 10P | 10P | 10P |
+| a1: split check/claim, hook at its real position (before the check) | 10P | 10P | **10P (survives)** | **10P (survives)** |
+| a2: split check/claim, hook between check and claim | 10P | 10P | 10F (no loser) | 10F (30 double wins) |
+| b1: holder cleared before the `pre_release` hook | 10F | 10P | 10P | 10P |
+| b2: holder clear and slot free in 2 sections, both after the hook | **10P** | **10P** | **10P** | **10P** (survives all) |
+| b3: b1 plus reject reads holder without the lock | 10F | 10P | 10P | 10P |
+| b4: reject reads holder without the lock, good release | 10P | 10P | 10P | 10P (survives) |
+| c1: holder set after the `post_claim` hook | 10P | 10F | 10F | 10P |
+| c2: holder set in a separate section before the hook | **10P** | **10P** | **10P** | **10P** (survives all) |
+| 66f77af6 / d93ae45b / 574d6080 as-is | 10F | 10F | 10F | 10F |
+| 574d6080 + hooks | 10P | 10P | **10P** | 10F |
+| 66f77af6 + hooks, `pre_release` before holder clear | 10P | 10F | 10P | 10F |
+| 66f77af6 + hooks, `pre_release` between clear and unlock | 10F | 10F | 10P | 10F |
+| d93ae45b + hooks | 10P | 10F | 10P | 10F |
+| 574d6080 + hooks + shim | 10P | 10P | 10F | 10F (270) |
+| 66f77af6 (`pre_release` before clear) + hooks + shim | 10P | 10F | 10F | 10P |
+| 66f77af6 (`pre_release` between) + hooks + shim | 10F | 10F | 10F | 10P |
+| d93ae45b + hooks + shim | 10P | 10F | 10F | 10P |
+
+How to read the historical rows:
+- **As-is:** every failure is `AttributeError: no attribute '_pause_hook'` (`monkeypatch.setattr` raising), not a detected bug.
+- **+ hooks:** the 10F stress results are not detections. Workers crash with `AttributeError: no attribute '_state_lock'` in `_held_without_holder` (tests :20) and are counted as 30 "double wins"; 66f77af6 and d93ae45b have no double-win bug. The Race 10P on 574d6080 + hooks happens because the probe thread crashes silently.
+- **+ hooks + shim** (shim aliases `_state_lock` and exposes `_held` from `_lock.locked()`): the tests do detect the real 574d6080 bug (Race and Stress both 10F) and the 66f77af6 / d93ae45b acquire gap. The 66f77af6 Bug 2 is detected only if `pre_release` sits between the clear and the unlock. d93ae45b passes Bug2, as expected: it fixed Bug 2.
+- **Wrapper suite instead of hooks:** my wrapper suite (pause a specific thread at its Nth `_state_lock` section exit, no production hook) **catches a1** (T1 and T2 both acquire), **b2** (reject `holder=None`) and **c2** (200 `holder=None` rejects), and head stays clean.
+
+### Other checks (all PASS)
+- **Earlier repros at head:** review-4 blocker in both orders; Bug 1 with a handler raising on acquire, on release and on every call, plus a patched `logger.info` raising; Bug 2 slow release (99 rejects, 0 None); holder wipe with same and different names; acquire gap (200 named, 0 None). Skip-path timings at 1.0s: 0.0s for `current_holder()`, the third caller (rejected) and release, the same as main. Re-entrant calls do not hang. Exception paths (ValueError, KeyboardInterrupt, `gen.close`) leave everything clean.
+- **Stress at head:** 3 × 10s: 33,939 / 34,479 / 33,765 self-checks and 19.7M / 19.3M / 19.0M observer checks, with 0 held-with-None and 0 wrong holder; 59,784 / 60,612 / 59,104 rejects with 0 None and 0 unknown.
+- **Loops:** contention file 20x: 20/20, 20/20. Race test alone 20x: 20/20, 20/20. Both whole gate files (13 tests) 20x: 20/20.
+- **Full suite:** `pytest tests`, with `tests/test_phase2_regression_gate.py` ignored because its nested-pytest subprocess hung on network sockets on BOTH head and main.
+  - Head: 149 failed / 2722 passed / 3 skipped. Main: 151 failed / 2709 passed. 148 failures are common to both and environment-bound.
+  - Differences are run-to-run noise in `test_resolver_revive.py`, `test_prod_stability.py` and `test_resolver_state_contract.py`.
+  - In isolation 5x on each tree, `test_resolver_revive.py` fails identically: `test_revive_recycles_hung_scheduler_and_runs_once` and `test_revive_honest_when_tick_fresh`, 5/5 on both. The caller and adjacent files fail identically on both: `test_score_snapshot_tracker_is_liveness_compliant` and `test_message_intel_authors_route_does_not_block_health` (95 passed).
+
+### Findings (file:line)
+1. **tests/test_heavy_job_gate.py:98-284:** the hook-based tests catch a bug only when its window lines up exactly with a production hook point. Mutants a1, b2 and c2 survive all 4 tests 10/10.
+2. **internal/heavy_job_gate.py:39:** `_pause("between_check_and_claim")` runs **before** the atomic check-and-claim section, so the name is wrong and it cannot force the review-4 interleaving in the real code layout.
+3. **tests/test_heavy_job_gate.py:15-20:** detectors depend on private names (`gate._pause_hook`, `gate._state_lock`, `gate._held`), and worker or probe thread exceptions are swallowed. Against the real historical gates the tests fail only with AttributeError, and they give false results either way (Race passes on 574d6080 + hooks; Stress shows a fake "double win" on 66f77af6 / d93ae45b).
+4. **internal/heavy_job_gate.py:17, 25-28, 60, 71:** a test-only hook in the production module (beyond the task). If a hook raises at :60 or :71, the slot is permanently wedged.
+5. **internal/heavy_job_gate.py:16, 35, 45-46:** `_holder_token` and `my_token` are dead after the token check was removed from release (:72-74). This contradicts the "gate semantics unchanged except hook" claim; behaviour is equivalent.
+
+### Divergence from the Project's claims
+- "Gate semantics unchanged except `_pause_hook`": **false.** The release token check was removed, leaving dead token code.
+- "Hook phase `between_check_and_claim`": it actually runs before the check.
+- "Stress catches split-claim bug (a)": true only for a2 (hook placed between). False for a1 (the real hook position).
+- "Mutation table PASS on good / FAIL on mutant": a1, b2, c2 and b4 survive. Against real historical gates the failures are AttributeError, not detection.
+- 13/13 pytest, contention 20/20 and smoke CI success: **confirmed.**
+
+### Required fixes (sent to the Project coordinator)
+1. Remove `_pause_hook` and `_pause()` from `internal/heavy_job_gate.py`, and drop the dead `_holder_token` / `my_token`. In tests, force timing with a wrapper around `gate._state_lock` (a context manager that pauses a named thread at its Nth section exit).
+2. Each forced test must fail 10/10 against: a1 (split check/claim with no hook between), b2 (holder cleared and slot freed in separate sections), and c2 (holder set in a separate section after the winner is decided), plus `574d6080` for the racing and stress tests. The failure must be an assertion, not an AttributeError.
+3. Detectors must not swallow thread exceptions: collect exceptions from worker and probe threads and assert there are none. Prefer `current_holder()` plus an observable busy signal over private names, or fail loudly when the expected names are missing.
+4. If any hook is kept: name it for where it actually runs, and make it exception-safe (move `post_claim_acquired` inside the try; clear state in a finally even if `pre_release` raises).
+5. Re-run and report a mutation table with observed counts (at least 10 runs) at the new head.
+
+- **Ditto:** `grok-pr1333-mc-ac-review6-2026-10-07` (source=cursor)
