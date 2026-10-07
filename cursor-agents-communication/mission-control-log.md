@@ -352,3 +352,40 @@ PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
 4. **tests/test_heavy_job_gate_contention.py:159-165, :197:** the race test no longer drives `ScoreSnapshotScheduler._tick`; snapshot is an inline gate stub. The wedge test still drives the real snapshot `_tick`, so AC B is weaker in the race test.
 
 - **Ditto:** `grok-pr1333-mc-ac-rereview-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~12:28 PM PT: MC review 3 of PR #1333 at 5a908153, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. Head verified on GitHub: `5a908153d6dd0d58590e2f83749eb3419a01dfda` ("fix: claim-first holder guard + stable three-scheduler race test").
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Smoke CI at 5a908153:** run `37673776092`, check `smoke` `112971897681`, **completed / success**.
+
+### Items
+1. **Race test stability: PASS.** Contention file 20x: 20/20 and 20/20. Race test alone 20x: 20/20 and 20/20.
+2. **Holder wipe (finding 2): PASS.** Forced pause between `_lock.release()` and the holder clear. Same-name and different-name both behave the same: the newcomer is rejected with the old holder's name during the window; afterwards it acquires and `current_holder()` matches it 100/100 times; a probe is rejected with the correct holder. Unforced stress run (switchinterval 1e-6, 3s): 45,945 checks, 0 held-but-None, 0 wrong holder; 287,888 rejects, 0 None, 0 unknown.
+3. **Gap between acquire and holder set (finding 3): PASS.** Forced 50ms gap after `_lock.acquire`: 200 rejects, all logged the named holder, 0 None, 0 unknown. The holder is now claimed before acquiring.
+4. **Real `ScoreSnapshotScheduler._tick`: PASS.** The race test drives `snap_sched._tick(reschedule=False)`. The PR body explains the gate-entry sync wrapper and the slow `write_full_universe_snapshot` mock.
+5. **Bug 1 / Bug 2 still fixed: PASS.** Bug 1: second acquire `ok=True`, holder None afterwards. Bug 2: 800 rejects, all named, 0 None, 0 unknown. All 4 regression tests fail against the `66f77af6` gate run one at a time (test_heavy_job_gate.py:56, :76, :130, :177). The new forced-timing test also fails against the `d93ae45b` gate (:178).
+6. **Diff and locks: FAIL** (finding below).
+7. **Full gate files:** `PYTHONPATH=. pytest tests/test_heavy_job_gate.py tests/test_heavy_job_gate_contention.py -v`: 10 passed in 0.75s.
+
+### Diff d93ae45b..5a908153 (3 files, +135/−33)
+- `internal/heavy_job_gate.py`: adds `_holder_lock` and `_holder_token`; `current_holder()` now reads under `_holder_lock`; adds `_read_holder_for_reject()` (spins up to about 100ms, then "unknown"). The holder is now claimed under `_holder_lock` before `_lock.acquire`; if the slot is already claimed, the caller is rejected. On release, the holder is cleared under `_holder_lock` only when the token matches.
+- `tests/test_heavy_job_gate.py`: adds a no-`unknown` assert to the slow-release test and the new `test_reject_never_unknown_while_slot_held_forced_timing`.
+- `tests/test_heavy_job_gate_contention.py`: adds `_wait_two_rejects`; the race test wraps `heavy_job_slot` with a 3-way barrier and holds the winner until two rejects are logged; the real snapshot `_tick` is restored with a mocked `write_full_universe_snapshot`; the winner's name is read from the acquire log.
+- No fly.toml, deploy, `RESOLVER_*` or P4b changes. PR total vs base: 3 files.
+- Exceptions: no lock leaks after an exception in the reject body or the acquired body (both locks free, holder None).
+- No lock-order deadlock with `_lock`, because `_lock` is only ever acquired non-blocking.
+
+### Finding (blocker)
+1. **internal/heavy_job_gate.py:42-50: the reject path yields while holding `_holder_lock`.** The caller's whole skip body runs under `_holder_lock`. In production that is: resolver `_persist_cycle_summary`, liveness, and `_schedule_next` (resolver_scheduler.py:596-618); snapshot `_persist_cycle_summary`, `_record_liveness`, and `schedule_in_seconds` (score_snapshots.py:581-587); pump `record_ladder_scan_run` and `_schedule_next` (pump/scheduler.py:205-209).
+   - **The gate now blocks.** Repro: winner A holds the slot; rejected B's body takes 1.0s. A's release was blocked 0.95s, `current_holder()` blocked 0.90s, and C's `heavy_job_slot` call blocked 0.90s and then acquired instead of being rejected immediately. Base `main` `cba07cf3`: 0.0s, 0.0s. That changes the acquire True/False semantics (non-blocking → blocking).
+   - **Self-deadlock.** Calling `current_holder()` inside a reject body deadlocks (thread still alive after 2s). A nested `heavy_job_slot` inside a reject body also deadlocks. Base `main` returns `holder='a'` and `c_ok=False`. No production code calls these from a reject body today (rg: `current_holder` has no callers outside the gate and tests), so this deadlock is latent.
+   - **Fix:** under `_holder_lock`, read or claim and record whether the caller is busy; exit the lock; then log and `yield False` outside it. Add a regression test that `current_holder()` and a second slot attempt return within a timeout while another caller is inside a reject body.
+
+### Notes (not blockers)
+- `_lock.acquire` failure path (:55-67) and `_read_holder_for_reject` are effectively unreachable now that the holder is claimed first; they are only hit if something else takes `_lock` directly.
+- New narrow window: after the winner's `_lock.release()` and before its holder clear, a newcomer is rejected naming the previous holder (seen in the item 2 repro).
+
+- **Ditto:** `grok-pr1333-mc-ac-review3-2026-10-07` (source=cursor)
