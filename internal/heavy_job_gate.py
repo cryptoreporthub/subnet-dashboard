@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
-from typing import Iterator, Optional
+from typing import Callable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -14,11 +14,18 @@ _state_lock = threading.Lock()
 _held: bool = False
 _holder: Optional[str] = None
 _holder_token: int = 0
+_pause_hook: Optional[Callable[[str], None]] = None
 
 
 def current_holder() -> Optional[str]:
     with _state_lock:
         return _holder
+
+
+def _pause(phase: str) -> None:
+    hook = _pause_hook
+    if hook is not None:
+        hook(phase)
 
 
 @contextmanager
@@ -29,6 +36,7 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
     reject_holder: Optional[str] = None
     acquired = False
 
+    _pause("between_check_and_claim")
     with _state_lock:
         if _held:
             reject_holder = _holder
@@ -49,6 +57,8 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
         yield False
         return
 
+    _pause("post_claim_acquired")
+
     started = time.perf_counter()
     try:
         try:
@@ -58,15 +68,15 @@ def heavy_job_slot(name: str) -> Iterator[bool]:
         yield True
     finally:
         held_ms = (time.perf_counter() - started) * 1000
-        release_name = name
+        _pause("pre_release")
         with _state_lock:
-            if _holder_token == my_token:
-                _held = False
-                _holder = None
+            _held = False
+            _holder = None
+        _pause("post_release")
         try:
             logger.info(
                 "heavy_job_slot release name=%s held_ms=%.1f",
-                release_name,
+                name,
                 held_ms,
             )
         except Exception:
