@@ -183,3 +183,11 @@
 - **Queue:** `active_slice=P4b (conditional)`, `state=HOLD_CONDITIONAL` — mandatory pipeline (P1–P3c + P2 + P4a) all Ready for review; P4b handoff withheld until P4a merge + Axiom Track 3 evidence per plan.
 - **Ditto:** queue pointer + P3c reviewed summary mirror pending.
 - No merge, no deploy.
+
+## 2026-10-06 ~5:01 PM PT — Track3 Path A migration BLOCKED — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Track3 Path A** migration **BLOCKED** ~17:01 PT: created app `subnet-dashboard-logshipper` (pending) but `flyctl tokens create readonly personal` failed — `createLimitedAccessToken` Not authorized. Secrets/deploy skipped.
+- **Path B** bridge still up. `subnet-dashboard` untouched; health=200.
+- **Need:** Fly token with limited-access token mint permission.
