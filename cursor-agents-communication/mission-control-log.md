@@ -322,3 +322,33 @@ PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
 - None in diff. PR body notes Fly evidence files were unavailable to the worker (does not affect AC).
 
 - **Ditto:** `grok-pr1333-mc-ac-review-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~12:17 PM PT: MC re-review of PR #1333 at d93ae45b, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. Head verified via GitHub: `d93ae45baa2588819b89d8a261f8d3b073cf7c7d` ("fix: heavy_job_slot release ordering and logging safety"), 1 commit on top of `66f77af6`.
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Smoke CI at d93ae45b:** run `37672407659`, check `smoke` `112967232008`, **completed / success**.
+
+### Diff 66f77af6..d93ae45b (3 files, +131/−13)
+- `internal/heavy_job_gate.py` (+23/−5): logger calls wrapped in try/except; reject logs `_holder or "unknown"`; release now does `_lock.release()` first, then `if _holder == release_name: _holder = None`, then logs in an inner `finally`.
+- `tests/test_heavy_job_gate.py` (+82): 3 new regression tests (acquire-log raises, release-log raises, SlowGateLock reject never logs holder=None).
+- `tests/test_heavy_job_gate_contention.py` (+26/−8): the race test now monkeypatches `_lock` with `_SyncedGateLock` (barrier on acquire). The snapshot contender is now an inline `_snapshot_hold_gate` stub instead of `ScoreSnapshotScheduler._tick`.
+- Guardrails: no fly.toml, deploy, `RESOLVER_*`, or P4b changes. PR total vs base is 3 files, +336/−2. Acquire semantics are unchanged (still yields True/False). The only behaviour change is that logging exceptions are now swallowed.
+
+### Items
+1. **Bug 1 (lock leak on log exception): FIXED.** Repro at d93ae45b: no exception escapes, second acquire `ok=True`, holder after = None. Patched `logger.info` raising also gives second acquire `ok=True`. Control at 66f77af6: still leaks (`ok=False`, holder stuck).
+2. **Bug 2 (reject logs holder=None while held): FIXED for the original window.** SlowReleaseLock repro: 800 rejects, 0 `holder=None`, 0 `unknown`, all 800 `holder=holder_job`.
+3. **Regression tests: PASS.** All 3 new tests fail against the old gate when run in isolation (`RuntimeError` at test_heavy_job_gate.py:56 and :76; `assert False` at :130) and pass at d93ae45b. The 3 contention tests pass on the old gate too, as expected since they are not bug regressions. They exercise the real `heavy_job_slot`; the slow-release test swaps `_lock` for a wrapper.
+4. **Full gate files at d93ae45b:** `PYTHONPATH=. pytest tests/test_heavy_job_gate.py tests/test_heavy_job_gate_contention.py -v`: 9 passed in 0.64s (single run).
+5. **Contention file 20x: FAIL.** Two loops at d93ae45b: 9/20 and 12/20 pass. Isolated race test: 7/20. Every failure is `assert len(busy) == 2` (got 1) at tests/test_heavy_job_gate_contention.py:212.
+
+### Findings (file:line)
+1. **tests/test_heavy_job_gate_contention.py:202-212: race test is flaky.** The main thread calls `allow_finish.set()` (:206) as soon as the winner sets `tick_started`, so the winner can release before the third contender attempts its acquire; that contender then acquires instead of rejecting. Fix: wait until both losers have returned their rejects (e.g. a counter or Event) before `allow_finish.set()`.
+   - **Correction to my first review:** the same test at `66f77af6` now fails 8/20 with the identical command (12/20 pass), and the isolated race test there passes only 10/20. My first-review "20/20 at 66f77af6" is not reproducible. The flake predates d93ae45b.
+2. **internal/heavy_job_gate.py:46-48: new race between check and clear.** The holder clear now runs after `_lock.release()` and outside any lock, and `if _holder == release_name: _holder = None` is a non-atomic compare-then-assign. A new holder that acquires in that window can have its `_holder` wiped, so `current_holder()` returns None while the slot is held and rejects log `holder=unknown`. Deterministic repros at d93ae45b: same-name re-acquire, and different names via a slow `__eq__` interleave. Both give `holder_while_B_holds=None` and the reject line `heavy_job_slot reject name=score_snapshot holder=unknown`. Unforced stress run (switchinterval 1e-6, 3s): 0 held-but-None out of 69,192 checks; 12 of 69,123 rejects logged `unknown`, which may come from the separate acquire window (:25 to :36). The forced window is narrow but real. Fix: guard holder set/clear/read with a small state lock (or an ownership token) so compare-and-clear is atomic.
+3. **internal/heavy_job_gate.py:27:** `_holder or "unknown"` relabels a missing holder rather than preventing it. The window between acquire (:25) and setting the holder (:36) can still produce `holder=unknown`.
+4. **tests/test_heavy_job_gate_contention.py:159-165, :197:** the race test no longer drives `ScoreSnapshotScheduler._tick`; snapshot is an inline gate stub. The wedge test still drives the real snapshot `_tick`, so AC B is weaker in the race test.
+
+- **Ditto:** `grok-pr1333-mc-ac-rereview-2026-10-07` (source=cursor)
