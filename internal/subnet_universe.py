@@ -232,11 +232,14 @@ def is_universe_refresh_writer() -> bool:
 
 
 def _shrink_allowed(prior: UniverseSnapshot, built: UniverseSnapshot) -> bool:
-    """True when a smaller built snapshot may replace prior (grace removals only)."""
+    """True when a smaller built snapshot may replace prior (grace removals only).
+
+    A refresh_incomplete build may still shrink when every removed netuid is a
+    grace-eligible negative; blocking on refresh_incomplete alone would pin
+    confirmed-removed netuids forever whenever a source degrades.
+    """
     if not prior.netuids or len(built.netuids) >= len(prior.netuids):
         return True
-    if built.refresh_incomplete:
-        return False
     removed = set(prior.netuids) - set(built.netuids)
     if not removed:
         return True
@@ -685,9 +688,10 @@ class SubnetUniverseProvider:
                 )
             elif not _shrink_allowed(self._snapshot, built):
                 logger.warning(
-                    "subnet_universe unsafe shrink blocked (%d -> %d)",
+                    "subnet_universe unsafe shrink blocked (%d -> %d) removed=%s",
                     len(self._snapshot.netuids),
                     len(built.netuids),
+                    sorted(set(self._snapshot.netuids) - set(built.netuids)),
                 )
                 built = UniverseSnapshot(
                     netuids=self._snapshot.netuids,
