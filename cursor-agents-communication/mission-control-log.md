@@ -273,3 +273,52 @@
 - **Standing posture:** coding jobs route through this Project (Grok/MC hands jobs by reply); Grok stays read-only prod/Axiom evidence; Ditto + MC log are the audit-trail mirror, not the primary code handoff channel.
 - **Ditto:** `grok-project-handoff-heavyjob-ab-2026-10-07` (source=cursor)
 - **Status:** **IN_PROGRESS** (Project), awaiting PR URL/SHA/CI report.
+
+## 2026-10-07 ~12:06 PM PT — MC AC review PR #1333 heavy_job holder + contention — **MODIFY** — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333
+- **Head:** `66f77af674710ccb367573c5e81f2b7062732b69` on `cursor/heavy-job-gate-instrumentation-4e45` (base `main` `cba07cf39f1dddd0b89b955aaa72b6b500a6f630`)
+- **Files:** 2, +216/−0 — `internal/heavy_job_gate.py`, `tests/test_heavy_job_gate_contention.py` (no `fly.toml` / deploy / `RESOLVER_*` / P4b)
+- **Project:** Subnet Dashboard Audit thread `bc-3aaf1261` under coordinator `bc-01a10d2f`
+- **Verdict: MODIFY** — left **draft** (not undrafted; not merged)
+
+### AC checklist (ran at exact HEAD)
+
+| AC | Result | Evidence |
+|---|---|---|
+| A acquire/release/reject holder logs | PARTIAL | `heavy_job_gate.py:27` reject, `:33` acquire, `:37` release+held_ms; `time.perf_counter` monotonic `:30`/`:36`; `current_holder()` read-only `:17-18` |
+| A thread-safe holder / no misleading None | **FAIL** | `:38` clears `_holder=None` **before** `:39` `_lock.release()`; reject `:27` reads `_holder` unlocked → can log `holder=None` while lock still held (repro: SlowReleaseLock delay → 84× `holder=None` rejects) |
+| A logging can't raise/block in critical section | **FAIL** | acquire log `:33` while holding lock; release log `:37` in `finally` **before** clear/release — if `logger.info` raises on release, lock **leaks** and holder sticks (`LOCK_LEAK_ON_LOG_EXCEPTION=True`, second acquire `ok=False`, `holder=x`) |
+| A no return/exception semantic change | PASS | still yields True/False; vs base `cba07cf3` only +logging/+perf_counter |
+| B integration contention test | PASS | wedge + race tests exercise real schedulers' `_tick` + real `heavy_job_slot`; assert holder names in caplog; barrier/timeouts (no flake sleeps) |
+| Guardrails | PASS | only 2 files; no fly.toml/deploy/RESOLVER_*/P4b |
+
+### Local tests (box clone at `66f77af6`)
+
+```
+PYTHONPATH=. pytest tests/test_heavy_job_gate.py tests/test_heavy_job_gate_contention.py -v
+→ 6 passed in 4.70s
+
+PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
+→ pass=20 fail=0 /20
+```
+
+### Smoke CI at `66f77af6`
+
+- Run: https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37671603979
+- Check: `smoke` id `112964456116` — **completed / success**
+- Undraft: **no** (MODIFY)
+
+### Findings (file:line) — fix before undraft
+
+1. **`internal/heavy_job_gate.py:37-39`** — Log release / clear holder / unlock order: move `_holder=None` + `_lock.release()` ahead of (or into a nested `finally` before) any logging; log **after** unlock with snapped name/held_ms so a logging exception cannot leak the lock or leave a sticky holder.
+2. **`internal/heavy_job_gate.py:27` + `:32` + `:38-39`** — Reject reads `_holder` without sync; clear-before-unlock window allows `holder=None` on `heavy_job_busy` rejects. Set holder immediately on acquire; clear under the same ownership rules so a concurrent reject cannot observe None while the slot is still locked (e.g. snap holder for logs; keep `_holder` set until unlock completes, or use a meta lock so reject never publishes None for a still-held slot).
+3. **`internal/heavy_job_gate.py:33`** — Acquire `logger.info` runs while holding `_lock` (can block the critical section). Prefer snap-then-log after state update outside the hold, or ensure handlers cannot block.
+
+### Out of scope observed
+
+- None in diff. PR body notes Fly evidence files were unavailable to the worker (does not affect AC).
+
+- **Ditto:** `grok-pr1333-mc-ac-review-2026-10-07` (source=cursor)
