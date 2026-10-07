@@ -389,3 +389,42 @@ PYTHONPATH=. pytest tests/test_heavy_job_gate_contention.py -q  ×20
 - New narrow window: after the winner's `_lock.release()` and before its holder clear, a newcomer is rejected naming the previous holder (seen in the item 2 repro).
 
 - **Ditto:** `grok-pr1333-mc-ac-review3-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~12:37 PM PT: MC review 4 of PR #1333 at 574d6080, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. Head verified on GitHub: `574d60808139218d772e415c5432d79540db8c48` ("fix: release _holder_lock before reject yield").
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Smoke CI at 574d6080:** run `37674909676`, check `smoke` `112975796831`, **completed / success** (head_sha verified).
+
+### Items
+1. **Review-3 blocker: FIXED.** Holder A holds the slot; rejected B's skip body takes 1.0s; caller C probes while A still holds.
+   - Head: `current_holder()` 0.0s and returns `prediction_resolver`; C's attempt 0.0s and C is rejected (`C_ok=False`); A's release 0.0s.
+   - Base `main` `cba07cf3`: identical. `5a908153`: `current_holder()` 0.9s.
+   - Re-entrant `current_holder()` inside a reject body returns `'a'` (no hang). Nested slot attempt inside a reject body returns `c_ok=False` (no hang).
+2. **New test `test_reject_skip_path_does_not_hold_holder_lock`: PASS.** Exists (tests/test_heavy_job_gate.py:182-222), uses the real gate, passes at head, and fails against the `5a908153` gate (`assert True is False` at :221; the probe blocked and then acquired).
+3. **Prior repros:**
+   - Bug 1: PASS (second acquire `ok=True`, holder None afterwards).
+   - Bug 2: PASS (800 rejects, all named).
+   - Holder wipe, forced, same name and different name: PASS.
+   - Acquire gap, forced: PASS (200 rejects, all named).
+   - **Stress: FAIL.** Two runs: 9 and 6 held-slot `current_holder()==None` reads, and the same counts of `holder=None` rejects. Review 3 had 0. See the finding below.
+   - The first 4 regression tests still fail against `66f77af6` (:56, :76, :130, :177). The new test passes on `66f77af6`, which is expected because that gate has no holder lock.
+4. **Loops: PASS.** Contention file 20x: 20/20, 20/20. Race test alone 20x: 20/20, 20/20.
+5. **Full gate files:** 11 passed in 1.76s.
+6. **Diff and semantics: FAIL.**
+   - Diff `5a908153..574d6080` (2 files, +58/−25): removes `_read_holder_for_reject` (no remaining references); splits the claim-first block into a check (`with _holder_lock: busy_holder=_holder`, :29-30), a reject-outside-lock path (:32-38), and a separate claim block (:40-43); the `_lock.acquire` failure path now logs `busy_holder` (:45-57); tests add `test_reject_skip_path_does_not_hold_holder_lock`.
+   - No fly.toml, deploy, `RESOLVER_*` or P4b changes (PR total: 3 files).
+   - Non-blocking True/False timing matches base.
+   - No lock leak on an exception in either path (both locks free, holder None).
+   - No lock-order deadlock: `_lock` is only taken non-blocking and `_holder_lock` is never held across a yield.
+7. **Smoke CI:** success at the exact head.
+
+### Finding (blocker)
+1. **internal/heavy_job_gate.py:29-30 and :40-43: two callers can now both claim the slot.** The busy check and the claim are separate `_holder_lock` sections. Two callers can both read None and both claim, and the second claim overwrites the first. If the first claimant wins `_lock`, the loser's failure path (:45-49) sees its own token is the latest and sets `_holder=None`. The winner then holds the slot with no holder recorded for its whole hold, and every caller in that time goes through :45-57 and logs `holder=None`. That brings back the Bug 2 symptom by a new route, and the removed spin fallback means the :45-57 path is now reachable and is where the None comes from.
+   - **Forced repro** (controllable `_holder_lock` wrapper; T1=`prediction_resolver`, T2=`pump_ladder`): both checks see None. After both claims, `_holder='pump_ladder'`. T1 wins `_lock`. T2 fails and clears. Then `_lock.locked()=True`, `current_holder()=None`, and the logs show `reject name=pump_ladder holder=None` and `reject name=score_snapshot holder=None`.
+   - **Unforced stress** (switchinterval 1e-6, 3s): 9 held-but-None out of 69,900 checks and 9 `holder=None` rejects; a second run gave 6 out of 72,582.
+   - **Fix:** do the check and the claim in one `_holder_lock` section: read `_holder`; if it is None, bump the token and set `_holder=name`, and remember whether the caller is busy. Then leave the lock and log and `yield False` outside it. Add a forced-interleave regression test for two callers that both pass the check before either claims.
+
+- **Ditto:** `grok-pr1333-mc-ac-review4-2026-10-07` (source=cursor)
