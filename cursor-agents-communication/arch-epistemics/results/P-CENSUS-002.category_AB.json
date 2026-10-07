@@ -1,0 +1,296 @@
+{
+  "claim_id": "P-CENSUS-002",
+  "status": "HOLD",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "classified_at": "2026-09-20T03:07Z",
+  "classified_by": "mission-control",
+  "method": "Opened pin blobs; cites are exact file:line at pin. No pseudo-code. Verification only \u2014 no fixes.",
+  "definitions": {
+    "A_caller_stall": "with ThreadPoolExecutor where __exit__ enforces shutdown(wait=True). Caller blocks synchronously; no orphan from wait=False.",
+    "B_thread_abandonment": ".result(timeout=) or wait(timeout=) followed by shutdown(wait=False). Caller returns; orphan thread may live.",
+    "OTHER": "Does not fit A or B as defined \u2014 recorded honestly, not forced."
+  },
+  "sites": [
+    {
+      "id": "S01",
+      "loc": "server.py:381",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "server.py:381"
+      ],
+      "bytes": "aio_pool.shutdown(wait=False, cancel_futures=True)",
+      "note": "Lifespan teardown \u2014 no prior result(timeout=); abandons in-flight default-executor work at process exit."
+    },
+    {
+      "id": "S02",
+      "loc": "server.py:784",
+      "kind": "result(timeout=)",
+      "cat": "A",
+      "cites": [
+        "server.py:782",
+        "server.py:784"
+      ],
+      "bytes": "_EMERGENCY_HOME_HTML = fut.result(timeout=8.0) inside with ThreadPoolExecutor",
+      "note": "On TimeoutError, context __exit__ \u2192 shutdown(wait=True). Caller stalls; no wait=False orphan."
+    },
+    {
+      "id": "S03",
+      "loc": "server.py:804",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "server.py:801",
+        "server.py:804",
+        "server.py:810",
+        "server.py:817"
+      ],
+      "bytes": "fut.result(timeout=HOMEPAGE_BUILD_TIMEOUT) then pool.shutdown(wait=False) on timeout/exception",
+      "note": "Manual pool (not relying on with __exit__ on timeout path)."
+    },
+    {
+      "id": "S04",
+      "loc": "server.py:810",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "server.py:804",
+        "server.py:810"
+      ],
+      "bytes": "pool.shutdown(wait=False, cancel_futures=True)",
+      "note": "Pairs S03 timeout path."
+    },
+    {
+      "id": "S05",
+      "loc": "server.py:817",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "server.py:804",
+        "server.py:817"
+      ],
+      "bytes": "pool.shutdown(wait=False, cancel_futures=True)",
+      "note": "Pairs S03 exception path."
+    },
+    {
+      "id": "S06",
+      "loc": "server.py:939",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "server.py:934",
+        "server.py:939",
+        "server.py:945"
+      ],
+      "bytes": "fut.result(timeout=timeout_s); finally shutdown(wait=False)"
+    },
+    {
+      "id": "S07",
+      "loc": "server.py:945",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "server.py:939",
+        "server.py:945"
+      ],
+      "bytes": "pool.shutdown(wait=False, cancel_futures=True)"
+    },
+    {
+      "id": "S08",
+      "loc": "internal/bots/mission_control.py:505",
+      "kind": "wait(timeout=)",
+      "cat": "B",
+      "cites": [
+        "internal/bots/mission_control.py:505",
+        "internal/bots/mission_control.py:534"
+      ],
+      "bytes": "wait(..., timeout=SPECIALIST_TIMEOUT_SECONDS) then shutdown(wait=False)",
+      "note": "Not .result(timeout=); same abandon shape."
+    },
+    {
+      "id": "S09",
+      "loc": "internal/bots/mission_control.py:534",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "internal/bots/mission_control.py:505",
+        "internal/bots/mission_control.py:534"
+      ],
+      "bytes": "pool.shutdown(wait=False, cancel_futures=True)"
+    },
+    {
+      "id": "S10",
+      "loc": "internal/council/daily_pick.py:221",
+      "kind": "shutdown(wait=False)",
+      "cat": "OTHER",
+      "cites": [
+        "internal/council/daily_pick.py:218",
+        "internal/council/daily_pick.py:221"
+      ],
+      "bytes": "executor.map then finally shutdown(wait=False)",
+      "note": "map awaits all workers; not a result(timeout=)+abandon pair. Not forced into A or B."
+    },
+    {
+      "id": "S11",
+      "loc": "internal/council/pick_scheduler.py:321",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "internal/council/pick_scheduler.py:321",
+        "internal/council/pick_scheduler.py:328"
+      ]
+    },
+    {
+      "id": "S12",
+      "loc": "internal/council/pick_scheduler.py:328",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "internal/council/pick_scheduler.py:321",
+        "internal/council/pick_scheduler.py:328"
+      ]
+    },
+    {
+      "id": "S13",
+      "loc": "internal/council/resolver_scheduler.py:861",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "internal/council/resolver_scheduler.py:861",
+        "internal/council/resolver_scheduler.py:907"
+      ]
+    },
+    {
+      "id": "S14",
+      "loc": "internal/council/resolver_scheduler.py:907",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "internal/council/resolver_scheduler.py:861",
+        "internal/council/resolver_scheduler.py:907"
+      ]
+    },
+    {
+      "id": "S15",
+      "loc": "internal/pump/desk_snapshot_scheduler.py:128",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "internal/pump/desk_snapshot_scheduler.py:110",
+        "internal/pump/desk_snapshot_scheduler.py:122",
+        "internal/pump/desk_snapshot_scheduler.py:128",
+        "internal/pump/desk_snapshot_scheduler.py:135"
+      ],
+      "note": "See _cycle_lock note \u2014 lock held by worker until run finishes; symbol presence \u2260 proven starvation."
+    },
+    {
+      "id": "S16",
+      "loc": "internal/pump/desk_snapshot_scheduler.py:135",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "internal/pump/desk_snapshot_scheduler.py:128",
+        "internal/pump/desk_snapshot_scheduler.py:135"
+      ]
+    },
+    {
+      "id": "S17",
+      "loc": "internal/subnets/feed.py:159",
+      "kind": "result(timeout=)",
+      "cat": "B",
+      "cites": [
+        "internal/subnets/feed.py:159",
+        "internal/subnets/feed.py:169"
+      ]
+    },
+    {
+      "id": "S18",
+      "loc": "internal/subnets/feed.py:169",
+      "kind": "shutdown(wait=False)",
+      "cat": "B",
+      "cites": [
+        "internal/subnets/feed.py:159",
+        "internal/subnets/feed.py:169"
+      ]
+    },
+    {
+      "id": "S19",
+      "loc": "message_intel/telegram_listener.py:711",
+      "kind": "result(timeout=)",
+      "cat": "OTHER",
+      "cites": [
+        "message_intel/telegram_listener.py:710",
+        "message_intel/telegram_listener.py:711"
+      ],
+      "bytes": "fut.result(timeout=180) on asyncio Future from run_coroutine_threadsafe",
+      "note": "No ThreadPoolExecutor shutdown pair \u2014 not A/B as defined."
+    },
+    {
+      "id": "S20",
+      "loc": "internal/simivision/chat_service.py:137",
+      "kind": "result(timeout=)",
+      "cat": "A",
+      "cites": [
+        "internal/simivision/chat_service.py:135",
+        "internal/simivision/chat_service.py:137"
+      ],
+      "bytes": "with ThreadPoolExecutor + fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)"
+    },
+    {
+      "id": "S21",
+      "loc": "internal/council/score_snapshots.py:382",
+      "kind": "result(timeout=)",
+      "cat": "OTHER",
+      "cites": [
+        "internal/council/score_snapshots.py:322",
+        "internal/council/score_snapshots.py:382",
+        "internal/council/score_snapshots.py:384"
+      ],
+      "bytes": "fut.result(timeout=timeout) on module-scoped executor; on timeout sets caller_abandoned, returns",
+      "note": "No shutdown(wait=False) here \u2014 build may continue on persistent executor (single-flight). Not classic B."
+    },
+    {
+      "id": "S22",
+      "loc": "internal/learning/dashboard_context.py:122",
+      "kind": "result(timeout=)",
+      "cat": "A",
+      "cites": [
+        "internal/learning/dashboard_context.py:120",
+        "internal/learning/dashboard_context.py:122"
+      ],
+      "bytes": "with ThreadPoolExecutor + fut.result(timeout=2.0)"
+    },
+    {
+      "id": "S23",
+      "loc": "internal/worker_proxy.py:753",
+      "kind": "result() no timeout",
+      "cat": "A",
+      "cites": [
+        "internal/worker_proxy.py:752",
+        "internal/worker_proxy.py:753"
+      ],
+      "bytes": "with ThreadPoolExecutor: pool.submit(...).result()  # NO timeout=",
+      "note": "Cannot hit TimeoutError\u2192context stall narrative \u2014 there is no result(timeout=). Caller stalls until coro returns; __exit__ wait=True."
+    }
+  ],
+  "cycle_lock": {
+    "status": "NOT_PROVEN_STARVATION",
+    "symbol": "_cycle_lock",
+    "holder_acquire": "internal/pump/desk_snapshot_scheduler.py:110 acquire(blocking=False)",
+    "holder_release": "internal/pump/desk_snapshot_scheduler.py:122 finally inside worker",
+    "caller_timeout": "internal/pump/desk_snapshot_scheduler.py:128 SNAPSHOT_TIMEOUT_SECONDS",
+    "worker_upper_bound": "NOT_OBSERVABLE from this site alone \u2014 needs run_snapshot() internal deadlines",
+    "observed_mechanism": "On Category B timeout, caller returns while worker still holds lock until run_snapshot returns \u2192 later ticks skip (cycle_in_flight). That is skip-while-held, not proven infinite starve without a worker duration bound."
+  },
+  "counts": {
+    "B": 16,
+    "A": 4,
+    "OTHER": 3
+  },
+  "forbidden": [
+    "no fixes",
+    "no remediation tickets",
+    "no PRs for patches"
+  ],
+  "a2_repin": "HOLD"
+}

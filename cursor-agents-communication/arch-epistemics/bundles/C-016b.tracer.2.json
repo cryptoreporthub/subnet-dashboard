@@ -1,0 +1,102 @@
+{
+  "schema_version": "1",
+  "claim_id": "C-016b",
+  "bundle_id": "C-016b.tracer.2",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "scope_tag": "code-only",
+  "fetch_method": "raw",
+  "produced_by": "Tracer",
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 628
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 899
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 1028
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 3331
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 34
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 50
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 53
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/council/score_snapshots.py",
+      "line": 276
+    },
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "internal/subnets/scoring_cap.py",
+      "line": 95
+    }
+  ],
+  "path_map": {
+    "homepage_scoring": {
+      "TOP_SCORING_UNIVERSE_default": "20",
+      "cite": "server.py:628",
+      "wrapper": "server.py:899 default_limit=TOP_SCORING_UNIVERSE",
+      "capped_callers": [
+        "server.py:1028 min(24,TOP)",
+        "server.py:3331 min(24,TOP)"
+      ]
+    },
+    "snapshot_write": {
+      "call_site": "score_snapshots.py:276 \u2192 _snapshot_subnet_cap()",
+      "if_MAX_set": "SCORE_SNAPSHOT_MAX_SUBNETS wins",
+      "elif_worker_TOP_default": "40 at score_snapshots.py:50",
+      "else": "0 at :53"
+    },
+    "library_default_limit": {
+      "value": 40,
+      "cite": "scoring_cap.py:95",
+      "note": "Shadowed on server-mediated paths by :899; snapshot supplies limit=cap"
+    }
+  },
+  "falsifier": {
+    "probe": "raw-fetch server.py + score_snapshots.py + scoring_cap.py at pin; map every TOP_SCORING_UNIVERSE default string and each path's effective default",
+    "expected": "Homepage/scoring uses server.py:628 default \"20\" via _cap_subnets_for_scoring; snapshot worker branch uses :50 default \"40\"; library default_limit=40 at scoring_cap.py:95; call site :276",
+    "refutes_if": "Collapses both paths to one default OR cites fly.toml for code defaults OR wrong pin lines for worker \"40\" / default_limit=40 OR omits a cited consumer (R19) OR uncited narrative without bytes (R28) OR asserts live env (R25 Tier B)"
+  },
+  "notes": "PATH MAP (code-only, no fly): (1) Homepage/scoring \u2014 TOP default \"20\" at server.py:628; _cap_subnets_for_scoring:899 passes default_limit=TOP_SCORING_UNIVERSE; shell:1028 and hour-pick:3331 pass limit=min(24, TOP_SCORING_UNIVERSE). (2) Snapshot write \u2014 :276 cap=_snapshot_subnet_cap(); if SCORE_SNAPSHOT_MAX_SUBNETS set/nonempty that wins; elif worker TOP default \"40\" at :50; else :53 return 0; then _cap_subnets_for_scoring(..., limit=cap). (3) scoring_cap.py:95 default_limit=40 library kw-only \u2014 shadowed on server paths by :899; snapshot supplies limit=cap. NEGATIVE SPACE (R28): library 40 \u2260 homepage 20; worker snapshot 40 \u2260 homepage 20. Brief :55/:100 corrected to pin :50/:95.",
+  "mc_validation": {
+    "validated_at": "2026-09-20T01:44Z",
+    "pin_spotcheck": "PASS",
+    "status": "accepted_pending_joshua_spotcheck",
+    "line_corrections_confirmed": {
+      ":55\u2192:50": true,
+      ":100\u2192:95": true
+    },
+    "bytes_read_backfill_at": "2026-09-20T01:44Z",
+    "bytes_read_backfill_by": "mission-control"
+  },
+  "bytes_read": "server.py:628-628\n628:TOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))\n\nserver.py:892-899\n892:def _cap_subnets_for_scoring(\n893:    subnets: List[Dict[str, Any]],\n894:    limit: Optional[int] = None,\n895:) -> List[Dict[str, Any]]:\n896:    \"\"\"Limit council scoring \u2014 majors represented, mid-cap focus for the rest.\"\"\"\n897:    from internal.subnets.scoring_cap import cap_subnets_for_scoring\n898:\n899:    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)\n\nserver.py:1028-1028\n1028:    return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))\n\nserver.py:3331-3331\n3331:            subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))\n\ninternal/council/score_snapshots.py:34-34\n34:SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\", \"0\"))\n\ninternal/council/score_snapshots.py:38-53\n38:def _snapshot_subnet_cap() -> int:\n39:    \"\"\"Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE.\"\"\"\n40:    raw = os.environ.get(\"SCORE_SNAPSHOT_MAX_SUBNETS\")\n41:    if raw is not None and str(raw).strip() != \"\":\n42:        try:\n43:            return max(0, int(raw))\n44:        except ValueError:\n45:            return 0\n46:    try:\n47:        from internal.run_mode import is_worker_mode\n48:\n49:        if is_worker_mode():\n50:            return int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"40\"))\n51:    except Exception:\n52:        pass\n53:    return 0\n\ninternal/council/score_snapshots.py:276-280\n276:        cap = _snapshot_subnet_cap()\n277:        if cap > 0 and subnets and len(subnets) > cap:\n278:            from server import _cap_subnets_for_scoring\n279:\n280:            subnets = _cap_subnets_for_scoring(subnets, limit=cap)\n\ninternal/subnets/scoring_cap.py:91-98\n91:def cap_subnets_for_scoring(\n92:    subnets: List[Dict[str, Any]],\n93:    limit: Optional[int] = None,\n94:    *,\n95:    default_limit: int = 40,\n96:) -> List[Dict[str, Any]]:\n97:    \"\"\"Return up to ``limit`` subnets to score on hot paths / snapshot jobs.\"\"\"\n98:    cap = limit if limit is not None else default_limit"
+}

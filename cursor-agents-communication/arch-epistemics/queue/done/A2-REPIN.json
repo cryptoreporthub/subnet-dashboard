@@ -1,0 +1,10 @@
+{
+  "schema_version": "1",
+  "claim_id": "A2-REPIN",
+  "status": "pending_spotcheck",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971"
+  },
+  "completed_at": "2026-09-20T01:06Z",
+  "result": "results/A2-REPIN.json"
+}

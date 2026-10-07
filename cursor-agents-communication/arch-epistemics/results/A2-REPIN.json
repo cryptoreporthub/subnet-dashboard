@@ -1,0 +1,60 @@
+{
+  "claim_id": "A2-REPIN",
+  "status": "VERIFIED",
+  "evidence_class": "code-only",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "verified_at": "2026-09-20T15:54Z",
+  "verified_by": "Joshua spot-check (raw local blobs)",
+  "atoms": [
+    {
+      "id": 1,
+      "label": "Unbounded loop",
+      "cites": [
+        "internal/council/score_snapshots.py:189-218"
+      ]
+    },
+    {
+      "id": 2,
+      "label": "Caller timeout/abandon",
+      "cites": [
+        "internal/council/score_snapshots.py:381-390"
+      ]
+    },
+    {
+      "id": 3,
+      "label": "Single-flight lock",
+      "cites": [
+        "internal/council/score_snapshots.py:318-326",
+        "internal/council/score_snapshots.py:395-397"
+      ]
+    },
+    {
+      "id": 4,
+      "label": "Cosmetic stuck-clear",
+      "cites": [
+        "internal/council/score_snapshots.py:471-493"
+      ]
+    },
+    {
+      "id": 5,
+      "label": "Desk bounded <=60s",
+      "cites": [
+        "internal/pump/desk_snapshot.py:20-22",
+        "internal/pump/desk_snapshot.py:55-62"
+      ]
+    },
+    {
+      "id": 6,
+      "label": "Context manager stall",
+      "cites": [
+        "server.py:782-784",
+        "internal/simivision/chat_service.py:135-137",
+        "internal/learning/dashboard_context.py:120-122",
+        "internal/worker_proxy.py:752-753"
+      ]
+    }
+  ],
+  "hold_lifted": true,
+  "rule_8": true,
+  "note": "Timeout spine causally mapped caller timeout \u2192 orphan ghost write (code-only)."
+}

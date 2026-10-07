@@ -1,0 +1,44 @@
+{
+  "claim_id": "C-018",
+  "title": "Inversion paradox + asymmetric 20/40 scoring-cap split",
+  "status": "STAMPED",
+  "evidence_class": "code-only",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "stamped_at": "2026-09-20T07:34Z",
+  "stamped_by": "joshua-via-mission-control",
+  "findings": {
+    "dual_locus": {
+      "fresh_lt_2h": "truncates unranked via -1.0 fallback in score_snapshots.py",
+      "stale_gt_2h": "promotes unranked via _UNRANKED=10000 in scoring_cap.py",
+      "hydration": "full uncapped registry (~129-200 rows) loads first; cap applied downstream ~line 285"
+    },
+    "asymmetric_20_40": [
+      {
+        "cite": "server.py:628",
+        "value": 20,
+        "role": "homepage TOP_SCORING_UNIVERSE default"
+      },
+      {
+        "cite": "score_snapshots.py:50",
+        "value": 40,
+        "role": "worker-mode TOP_SCORING default"
+      },
+      {
+        "cite": "scoring_cap.py:95",
+        "value": 40,
+        "role": "cap_subnets_for_scoring default_limit"
+      },
+      {
+        "cite": "fly.toml",
+        "value": "40 worker / unset homepage",
+        "role": "deploy config asymmetry"
+      }
+    ]
+  },
+  "remediation_design_note": "Two Pools under One Cap (Pool A merit k-r, Pool B FIFO rotation r, union capped at k) \u2014 DESIGN ONLY; not authorized; zero code fixes.",
+  "forbidden": [
+    "no code fixes",
+    "no tests",
+    "no pushes"
+  ]
+}

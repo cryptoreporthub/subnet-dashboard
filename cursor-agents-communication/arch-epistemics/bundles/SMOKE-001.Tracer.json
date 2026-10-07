@@ -1,0 +1,37 @@
+{
+  "schema_version": "1",
+  "claim_id": "SMOKE-001",
+  "bundle_id": "SMOKE-001.tracer.1",
+  "pin": {
+    "repo_sha": "c9449d6490231373748f19f299ed19d423a1c971",
+    "deploy_sha": "NOT_OBSERVABLE",
+    "runtime_ref": "NOT_OBSERVABLE"
+  },
+  "verdict": "confirmed",
+  "evidence_class": "repo_blob",
+  "citations": [
+    {
+      "sha": "c9449d6490231373748f19f299ed19d423a1c971",
+      "path": "server.py",
+      "line": 628
+    }
+  ],
+  "bytes_read": "HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get(\"HOMEPAGE_BUILD_TIMEOUT\", \"12\"))\nHOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get(\"HOMEPAGE_SHELL_CACHE_SECONDS\", \"45\"))\nTOP_SCORING_UNIVERSE = int(os.environ.get(\"TOP_SCORING_UNIVERSE\", \"20\"))\nPICK_HANDLER_TIMEOUT = float(os.environ.get(\"PICK_HANDLER_TIMEOUT_SECONDS\", \"8\"))\n# Hydrate GET must not wait on the scoring pool. Sequential prod #1058 burned\n",
+  "fetch_method": "raw",
+  "falsifier": {
+    "probe": "fetch server.py at pin; extract lines 626-630",
+    "expected": "line 628 equals locked TOP_SCORING_UNIVERSE assignment",
+    "refutes_if": "404 OR empty OR text mismatch OR wrong repo_sha OR missing fetch_method OR bytes not from this turn's tool output"
+  },
+  "scope_tag": "code-only",
+  "produced_by": "Tracer",
+  "notes": "Line 628 matches locked assignment. MC re-fetched pin and confirmed byte match.",
+  "mc_validation": {
+    "validated_at": "2026-09-19T11:14Z",
+    "validated_by": "Mission Control",
+    "bytes_match_pin_626_630": true,
+    "locked_text_present": true,
+    "schema_ok": true,
+    "result": "PASS_pending_spotcheck"
+  }
+}

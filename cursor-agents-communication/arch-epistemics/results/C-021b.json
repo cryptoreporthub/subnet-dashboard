@@ -1,0 +1,117 @@
+{
+  "claim_id": "C-021b",
+  "status": "VERIFIED_CODE_ONLY_PENDING_JOSHUA",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "accepted_at": "2026-09-20T13:20Z",
+  "accepted_by": "mission-control",
+  "mc_spot_check": "PASS",
+  "summary": "YES \u2014 impact path always takes Williams %R unavailable for indicators from _compute_technical_indicators (degraded+non-degraded float overwrite). No alternate in-pin dict producer into impact.",
+  "tracer_bundle": "bundles/C-021b.tracer.1.json",
+  "rule_8": true,
+  "tracer": {
+    "claim_id": "C-021b",
+    "parent": "C-021",
+    "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+    "fetch_method": "raw",
+    "citations": [
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 544,
+        "bytes": "        \"williams_r\": {\"value\": -50.0, \"signal\": \"neutral\"},"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 557,
+        "bytes": "        \"williams_r\": neutral,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 598,
+        "bytes": "        \"williams_r\": williams_raw,"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 611,
+        "bytes": "        \"williams_r\": _score_williams(williams_raw),"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 904,
+        "bytes": "    wr = indicators.get(\"williams_r\", {})"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 905,
+        "bytes": "    if isinstance(wr, dict):"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 914,
+        "bytes": "        _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, \"Williams %R unavailable\")"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 631,
+        "bytes": "        indicators = _compute_technical_indicators(sn)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1262,
+        "bytes": "    signal_impact = _compute_signal_impact(sn, indicators, hot, sell)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1680,
+        "bytes": "    indicators = _compute_technical_indicators(sn)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1691,
+        "bytes": "    signal_impact = _compute_signal_impact("
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1785,
+        "bytes": "    indicators = _compute_technical_indicators(sn, allow_hydration=False)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 1801,
+        "bytes": "    signal_impact = _compute_signal_impact("
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 2085,
+        "bytes": "    indicators = _compute_technical_indicators(sn, allow_hydration=allow_hydration)"
+      },
+      {
+        "path": "internal/council/state_vector.py",
+        "line": 2090,
+        "bytes": "        signal_impact = _compute_signal_impact(sn, indicators, hot, sell)"
+      }
+    ],
+    "findings": [
+      "Non-degraded return: williams_r=williams_raw (dict) at :598 then williams_r=_score_williams(...) (float) at :611 \u2014 later key wins \u2192 float.",
+      "Degraded return: williams_r=dict at :544 then williams_r=neutral float at :557 \u2014 later key wins \u2192 float.",
+      "Impact builder: wr=indicators.get('williams_r', {}) ; isinstance(wr, dict) (:904-905); else adds Williams %R unavailable (:914).",
+      "In-file callers that feed impact from _compute_technical_indicators: :1245\u2192:1262, :1680\u2192:1691, :1785\u2192:1801, :2085\u2192:2090. (:631 is _compute_technical_score auto-fetch only \u2014 no impact call.)"
+    ],
+    "answer": {
+      "impact_always_unavailable_for_compute_technical_indicators_outputs": "YES",
+      "covers_degraded": true,
+      "covers_non_degraded": true,
+      "alternate_dict_williams_r_producers_for_impact_path": [],
+      "notes": "No in-pin alternate producer returns dict williams_r into _compute_signal_impact after _compute_technical_indicators. pump_tracker._ind_value can ACCEPT dict or float if fed other shapes (docstring) \u2014 that is a consumer, not an impact-path producer. Pre-overwrite dict binding inside the return literal is not observable after the function returns."
+    },
+    "bytes_read": {
+      "degraded_overwrite": "544|        \"williams_r\": {\"value\": -50.0, \"signal\": \"neutral\"},\n545|        \"keltner\": {\"upper\": 0.0, \"middle\": 0.0, \"lower\": 0.0, \"signal\": \"neutral\"},\n546|        \"macd\": {\"macd\": 0.0, \"signal\": 0.0, \"histogram\": 0.0},\n547|        \"ma_cross\": {\"signal\": \"neutral\"},\n548|        \"history_source\": hist.get(\"source\", \"unavailable\"),\n549|        \"history_length\": len(hist.get(\"closes\") or []),\n550|        \"degraded\": True,\n551|        \"rsi_crossover\": neutral,\n552|        \"macd_cross\": neutral,\n553|        \"stochastic_reversal\": neutral,\n554|        \"bollinger_squeeze\": neutral,\n555|        \"mfi_flow\": neutral,\n556|        \"cci_divergence\": neutral,\n557|        \"williams_r\": neutral,",
+      "fresh_overwrite": "598|        \"williams_r\": williams_raw,\n599|        \"keltner\": keltner_raw,\n600|        \"macd\": macd_raw,\n601|        \"ma_cross\": _compute_ma_cross(closes),\n602|        \"history_source\": hist.get(\"source\"),\n603|        \"history_length\": len(closes),\n604|        # Per-signal scores for weighted scoring\n605|        \"rsi_crossover\": _score_rsi(rsi_raw),\n606|        \"macd_cross\": _score_macd(macd_raw),\n607|        \"stochastic_reversal\": _score_stochastic(stoch_raw),\n608|        \"bollinger_squeeze\": _score_bollinger(boll_raw),\n609|        \"mfi_flow\": _score_mfi(mfi_raw),\n610|        \"cci_divergence\": _score_cci(cci_raw),\n611|        \"williams_r\": _score_williams(williams_raw),",
+      "impact_branch": "904|    wr = indicators.get(\"williams_r\", {})\n905|    if isinstance(wr, dict):\n906|        wr_val = float(wr.get(\"value\", -50))\n907|        if wr_val < -80:\n908|            _add(\"williams_r_reversal\", \"bullish\", abs(wr_val + 80) * 0.06, 10, 63, f\"Williams %R {wr_val:.1f} oversold\")\n909|        elif wr_val > -20:\n910|            _add(\"williams_r_reversal\", \"bearish\", (wr_val + 20) * 0.06, 10, 63, f\"Williams %R {wr_val:.1f} overbought\")\n911|        else:\n912|            _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, f\"Williams %R {wr_val:.1f} neutral\")\n913|    else:\n914|        _add(\"williams_r_reversal\", \"neutral\", 0.5, 10, 50, \"Williams %R unavailable\")"
+    },
+    "file_sha256": {
+      "state_vector.py": "7b4e011c1f310672ac2ca3156f92964df795564cba4d000eec25c10e51b8e1cc"
+    },
+    "falsifier": "Re-raw-fetch state_vector.py at pin. Refute if either return leaves williams_r as dict after the later binding, if impact path lacks isinstance(dict)/else unavailable, if an unread in-pin producer supplies dict williams_r into _compute_signal_impact without going through the overwrite, or if citation bytes differ from this turn raw tool output.",
+    "produced_by": "Tracer"
+  }
+}

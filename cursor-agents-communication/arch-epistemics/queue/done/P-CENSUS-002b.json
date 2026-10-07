@@ -1,0 +1,10 @@
+{
+  "ticket_id": "P-CENSUS-002b",
+  "status": "DONE",
+  "assignee": "Tracer",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "closed_at": "2026-09-20T04:35Z",
+  "result": "results/P-CENSUS-002b.json",
+  "bundle": "bundles/P-CENSUS-002b.tracer.1.json",
+  "summary": "desk BOUNDED (2*SNAPSHOT_STAGE_TIMEOUT_SECONDS); score UNBOUNDED (no internal wall timer)."
+}

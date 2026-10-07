@@ -1,0 +1,72 @@
+{
+  "claim_id": "P-CENSUS-002c",
+  "status": "VERIFIED_CODE_ONLY",
+  "pin": "c9449d6490231373748f19f299ed19d423a1c971",
+  "accepted_at": "2026-09-20T08:08Z",
+  "storage": "local-only; remote push Auto-review blocked",
+  "verdict": {
+    "T1_held_state": "none in-file across loop; _lock only brief; callee HTTP NOT_OBSERVABLE",
+    "T2_late_write": "YES after caller timeout; save :298/:110-116; default timeout 600s",
+    "T3_clear_stuck": "def:471 call:610; age>=900s phase scoring; does NOT clear _write_future; no second build (:319); :615 progress persist"
+  },
+  "mc_checks": [
+    {
+      "name": "timeout_default_600",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "stuck_default_900",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "atomic_write",
+      "ok": true,
+      "detail": "        json.dump(payload, handle, indent=2) |     os.replace(tmp, snap_path)"
+    },
+    {
+      "name": "timeout_handler",
+      "ok": true,
+      "detail": "    except FuturesTimeoutError:"
+    },
+    {
+      "name": "bg_continues",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "save_call",
+      "ok": true,
+      "detail": "        save_score_snapshot(payload)"
+    },
+    {
+      "name": "single_flight",
+      "ok": true,
+      "detail": "        if _write_future is not None and not _write_future.done():"
+    },
+    {
+      "name": "clear_def",
+      "ok": true,
+      "detail": "    def _clear_stuck_scoring(self) -> None:"
+    },
+    {
+      "name": "clear_no_write_future",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "call_610",
+      "ok": true,
+      "detail": "            self._clear_stuck_scoring()"
+    },
+    {
+      "name": "line615_persist",
+      "ok": true,
+      "detail": "                self._persist_cycle_summary("
+    }
+  ],
+  "all_ok": true,
+  "remote_push_at": "2026-09-20T08:59Z",
+  "remote_push_by": "joshua-GO"
+}

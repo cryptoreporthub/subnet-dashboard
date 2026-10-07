@@ -1,0 +1,28 @@
+{
+  "confirm_id": "CONFIRM-2026-09-20-C016-VERIFIED",
+  "at": "2026-09-20T01:06Z",
+  "items": [
+    {
+      "item": "F-1b row",
+      "path": "results/F-1b.json",
+      "status": "PRESENT",
+      "live_WORKER_HEAVY": "NOT_OBSERVABLE",
+      "tier": "B"
+    },
+    {
+      "item": "/version evidence",
+      "path": "evidence/E-PROD-VERSION-2026-09-20.json",
+      "status": "PRESENT",
+      "captured_at": "2026-09-20T00:44:36Z",
+      "url": "https://subnet-dashboard.fly.dev/version",
+      "match": true
+    },
+    {
+      "item": "live-config probe draft",
+      "path": "probes/PROBE-LIVE-CONFIG-DRAFT.md",
+      "status": "DRAFT_ONLY",
+      "executed": false,
+      "approver": "Joshua"
+    }
+  ]
+}
