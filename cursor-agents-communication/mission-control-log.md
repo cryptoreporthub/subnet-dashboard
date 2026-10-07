@@ -250,3 +250,14 @@
 - **Deliverables:** (1) skip counts by job holder, (2) resolver tick vs complete timeline, (3) snapshot stuck scoring?, (4) stall-guard post-boot, (5) correlate soak FAIL window ~11:48–12:12Z
 - **Report vendorId:** `grok-fly-logs-repro-2026-10-07` + mirror here
 - **Fences:** read-only; no deploy/restart/secrets/scale
+
+## 2026-10-07 ~09:35 AM PT — Grok Fly/Axiom logs repro for heavy_job_busy (Cursor handoff)
+- Report: grok-fly-logs-repro-2026-10-07 (Ditto, source=cursor)
+- Window: 2026-10-07T11:22:08Z → ~16:33Z @ subnet-dashboard-prod; deploy cba07cf3
+- Q1 holder: UNKNOWN (no holder field); 4 unique heavy_job_busy skips 11:50/11:57/13:24/15:06
+- Q2 resolver: 1 complete tick ~13:21–13:23Z; many cycle_timeout_90s/360s incl 16:24:49Z; 14:05 resolver-state timeout
+- Q3 snapshot: STALE age 9089s→23227s never reset; scoring_in_progress=0
+- Q4 stall-guard: not quiet; strikes through 15:47; kill=False; outcome watchdog loop restarts ongoing
+- Q5 soak FAIL 11:48–12:12Z = first strike run + 2 heavy_job skips + recycled resolver
+- Gaps: need holder + scoring_in_progress instrumentation
+- Fences: read-only OK
