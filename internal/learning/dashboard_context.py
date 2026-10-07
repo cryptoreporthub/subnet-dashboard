@@ -117,13 +117,26 @@ def fast_shell_dashboard_context() -> Dict[str, Any]:
                 "last_updated": engine_stats.get("last_updated"),
             }
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_load_learning_metrics)
+        # No ThreadPoolExecutor context manager: on timeout its __exit__ joins
+        # the still-running worker and the shell hangs (same bug class as
+        # server._resolve_index_context / emergency prime). Abandon instead.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        fut = pool.submit(_load_learning_metrics)
+        try:
             ctx["learning_metrics"] = fut.result(timeout=2.0)
+            _FAST_SHELL_CACHE["at"] = now
+            _FAST_SHELL_CACHE["data"] = ctx
+        except concurrent.futures.TimeoutError:
+            logger.warning("fast shell learning metrics timed out after 2.0s")
+            pool.shutdown(wait=False, cancel_futures=True)
+            ctx["learning_metrics_degraded"] = True
+        except Exception as exc:
+            logger.warning("fast shell learning metrics failed: %s", exc)
+            pool.shutdown(wait=False, cancel_futures=True)
+            ctx["learning_metrics_degraded"] = True
     except Exception as exc:
         logger.warning("fast shell learning metrics failed: %s", exc)
-    _FAST_SHELL_CACHE["at"] = now
-    _FAST_SHELL_CACHE["data"] = ctx
+        ctx["learning_metrics_degraded"] = True
     return ctx
 
 
@@ -163,6 +176,7 @@ def default_learning_dashboard_context() -> Dict[str, Any]:
         "impact_strength": 1.0,
         "council_weights": [],
         "weights_degraded": False,
+        "learning_metrics_degraded": False,
         "grading_headline_mode": "legacy",
         "predictions": [],
         "patterns": [],
