@@ -7,7 +7,6 @@ import time
 
 from fastapi.testclient import TestClient
 
-from internal.simivision.chat_service import sanitize_reply
 from server import app
 
 
@@ -42,19 +41,13 @@ def _hermetic_chat(monkeypatch, reply: str = "ok reply", llm_used: bool = True, 
     return chat
 
 
-def test_sanitize_reply_escapes_html():
-    assert sanitize_reply("<script>alert(1)</script>") == (
-        "&lt;script&gt;alert(1)&lt;/script&gt;"
-    )
-
-
 def test_chat_json_default_still_works():
     client = TestClient(app)
     resp = client.post("/api/simivision/chat", json={"message": "ping"})
     assert resp.status_code == 200
     body = resp.json()
     assert "reply" in body
-    assert "<" not in body["reply"] or "&lt;" in body["reply"] or body["reply"]
+    assert isinstance(body["reply"], str)
 
 
 def test_chat_stream_chunks_via_query():
@@ -125,8 +118,8 @@ def test_chat_stream_timeout_bounded_partial_done(monkeypatch):
     assert _sse_events(body)[-1][0] == "done"
 
 
-def test_chat_stream_sanitizes_llm_reply(monkeypatch):
-    """LLM output must be HTML-escaped before it reaches the SSE wire."""
+def test_chat_stream_passes_raw_llm_reply(monkeypatch):
+    """LLM output is not escaped server-side; client renders via textContent."""
     _hermetic_chat(monkeypatch, reply="<script>alert(1)</script>")
     client = TestClient(app)
     with client.stream(
@@ -135,8 +128,8 @@ def test_chat_stream_sanitizes_llm_reply(monkeypatch):
         json={"message": "hello"},
     ) as resp:
         body = "".join(resp.iter_text())
-    assert "<script>" not in body
-    assert "&lt;script&gt;" in body
+    assert "<script>alert(1)</script>" in body
+    assert "&lt;script&gt;" not in body
     assert _sse_events(body)[-1][0] == "done"
 
 
