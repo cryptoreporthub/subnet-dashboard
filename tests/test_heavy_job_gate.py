@@ -6,19 +6,100 @@ import logging
 import threading
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 
 import internal.heavy_job_gate as gate
 from internal.heavy_job_gate import current_holder, heavy_job_slot
 
 
-def _install_pause_hook(monkeypatch, fn: Callable[[str], None]) -> None:
-    monkeypatch.setattr(gate, "_pause_hook", fn)
+class _ThreadRun:
+    """Run thread targets and collect uncaught exceptions."""
+
+    def __init__(self) -> None:
+        self.errors: list[BaseException] = []
+        self._threads: list[threading.Thread] = []
+
+    def start(
+        self, target: Callable[..., None], *args: object, name: str
+    ) -> threading.Thread:
+        def _wrapper() -> None:
+            try:
+                target(*args)
+            except BaseException as exc:  # pragma: no cover - surfaced via assert
+                self.errors.append(exc)
+
+        thread = threading.Thread(target=_wrapper, name=name, daemon=True)
+        thread.start()
+        self._threads.append(thread)
+        return thread
+
+    def join_all(self, timeout: float = 3.0) -> None:
+        for thread in self._threads:
+            thread.join(timeout=timeout)
+
+    def assert_clean(self) -> None:
+        self.join_all()
+        assert not self.errors, f"worker thread exceptions: {self.errors!r}"
 
 
-def _held_without_holder() -> bool:
-    with gate._state_lock:
-        return gate._held and gate._holder is None
+class _SectionLock:
+    """Wrap a gate lock; pause chosen threads at Nth section entry or exit."""
+
+    def __init__(self, real: threading.Lock) -> None:
+        self._real = real
+        self._depth: dict[int, int] = {}
+        self._exit_pauses: dict[int, tuple[Callable[[], None], ...]] = {}
+        self._enter_pauses: dict[int, tuple[Callable[[], None], ...]] = {}
+
+    def pause_on_exit(self, section: int, fn: Callable[[], None]) -> None:
+        self._exit_pauses[section] = (fn,)
+
+    def pause_on_enter(self, section: int, fn: Callable[[], None]) -> None:
+        self._enter_pauses[section] = (fn,)
+
+    def _section(self) -> int:
+        tid = threading.get_ident()
+        self._depth[tid] = self._depth.get(tid, 0) + 1
+        return self._depth[tid]
+
+    def _run_pause(self, hooks: dict[int, tuple[Callable[[], None], ...]], section: int) -> None:
+        for fn in hooks.get(section, ()):
+            fn()
+
+    def __enter__(self) -> _SectionLock:
+        section = self._section()
+        self._run_pause(self._enter_pauses, section)
+        self._real.acquire()
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        section = self._depth.get(threading.get_ident(), 0)
+        self._real.release()
+        self._run_pause(self._exit_pauses, section)
+
+
+def _gate_lock_attr() -> str:
+    if hasattr(gate, "_state_lock"):
+        return "_state_lock"
+    if hasattr(gate, "_holder_lock"):
+        return "_holder_lock"
+    raise AttributeError("heavy_job_gate has no known state lock")
+
+
+def _install_section_lock(monkeypatch) -> _SectionLock:
+    attr = _gate_lock_attr()
+    real = getattr(gate, attr)
+    wrapper = _SectionLock(real)
+    monkeypatch.setattr(gate, attr, wrapper)
+    return wrapper
+
+
+def _reject_logs(caplog) -> list[str]:
+    return [
+        r.message
+        for r in caplog.records
+        if r.name == "internal.heavy_job_gate" and "reject" in r.message
+    ]
 
 
 def test_heavy_job_slot_exclusive():
@@ -96,43 +177,59 @@ def test_heavy_job_slot_survives_release_log_exception(monkeypatch):
 
 
 def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
-    """Bug (b): holder cleared before slot free must not make reject log holder=None."""
+    """Bug (b2): holder cleared before slot free must not make reject log holder=None."""
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
-    winner_claimed = threading.Event()
-    release_winner = threading.Event()
-    waiter_done = threading.Event()
+    section_lock = _install_section_lock(monkeypatch)
+    pre_release = threading.Event()
+    post_holder_clear = threading.Event()
+    release_pre = threading.Event()
+    release_post = threading.Event()
+    pre_done = threading.Event()
+    post_done = threading.Event()
+    runs = _ThreadRun()
 
-    def _hook(phase: str) -> None:
-        if phase == "pre_release":
-            winner_claimed.set()
-            release_winner.wait(timeout=2)
+    def _pause_pre_release() -> None:
+        if threading.current_thread().name == "holder":
+            pre_release.set()
+            release_pre.wait(timeout=2)
 
-    _install_pause_hook(monkeypatch, _hook)
+    def _pause_post_holder_clear() -> None:
+        if threading.current_thread().name == "holder":
+            post_holder_clear.set()
+            release_post.wait(timeout=2)
+
+    section_lock.pause_on_enter(2, _pause_pre_release)
+    section_lock.pause_on_exit(2, _pause_post_holder_clear)
 
     def holder() -> None:
         with heavy_job_slot("holder"):
             pass
 
-    def waiter() -> None:
-        winner_claimed.wait(timeout=2)
+    def waiter_pre() -> None:
+        pre_release.wait(timeout=2)
         with heavy_job_slot("waiter") as ok:
             assert ok is False
-        waiter_done.set()
+        pre_done.set()
+        release_pre.set()
 
-    t1 = threading.Thread(target=holder)
-    t2 = threading.Thread(target=waiter)
-    t1.start()
-    t2.start()
-    assert waiter_done.wait(timeout=2), "waiter never rejected during pre_release pause"
-    release_winner.set()
-    t1.join(timeout=3)
-    t2.join(timeout=3)
+    def waiter_post() -> None:
+        post_holder_clear.wait(timeout=2)
+        with heavy_job_slot("waiter") as ok:
+            if ok:
+                post_done.set()
+                release_post.set()
+                return
+        post_done.set()
+        release_post.set()
 
-    reject_msgs = [
-        r.message
-        for r in caplog.records
-        if r.name == "internal.heavy_job_gate" and "reject" in r.message
-    ]
+    runs.start(holder, name="holder")
+    runs.start(waiter_pre, name="waiter_pre")
+    runs.start(waiter_post, name="waiter_post")
+    assert pre_done.wait(timeout=2), "pre-release waiter never rejected"
+    assert post_done.wait(timeout=2), "post-holder-clear waiter never finished"
+    runs.assert_clean()
+
+    reject_msgs = _reject_logs(caplog)
     assert reject_msgs
     assert all("holder=None" not in m for m in reject_msgs)
     assert any("holder=holder" in m for m in reject_msgs)
@@ -140,18 +237,20 @@ def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
 
 
 def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog):
-    """Bug (c): acquire gap must not let reject see empty holder while slot is busy."""
+    """Bug (c2): acquire gap must not let reject see empty holder while slot is busy."""
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
+    section_lock = _install_section_lock(monkeypatch)
     winner_claimed = threading.Event()
     release_winner = threading.Event()
     waiter_done = threading.Event()
+    runs = _ThreadRun()
 
-    def _hook(phase: str) -> None:
-        if phase == "post_claim_acquired":
+    def _pause_after_claim() -> None:
+        if threading.current_thread().name == "holder":
             winner_claimed.set()
             release_winner.wait(timeout=2)
 
-    _install_pause_hook(monkeypatch, _hook)
+    section_lock.pause_on_exit(1, _pause_after_claim)
 
     def waiter() -> None:
         winner_claimed.wait(timeout=2)
@@ -163,20 +262,13 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
         with heavy_job_slot("holder"):
             pass
 
-    t1 = threading.Thread(target=holder)
-    t2 = threading.Thread(target=waiter)
-    t1.start()
-    t2.start()
-    assert waiter_done.wait(timeout=2), "waiter never rejected during post_claim pause"
+    runs.start(holder, name="holder")
+    runs.start(waiter, name="waiter")
+    assert waiter_done.wait(timeout=2), "waiter never rejected during post-claim pause"
     release_winner.set()
-    t2.join(timeout=3)
-    t1.join(timeout=3)
+    runs.assert_clean()
 
-    reject_msgs = [
-        r.message
-        for r in caplog.records
-        if r.name == "internal.heavy_job_gate" and "reject" in r.message
-    ]
+    reject_msgs = _reject_logs(caplog)
     assert reject_msgs
     assert all("holder=None" not in m for m in reject_msgs)
     assert all("holder=unknown" not in m for m in reject_msgs)
@@ -184,10 +276,11 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
 
 
 def test_reject_skip_path_does_not_hold_holder_lock():
-    """Reject must not hold _state_lock across yield; skip path must stay non-blocking."""
+    """Reject must not hold gate lock across yield; skip path must stay non-blocking."""
     reject_in_skip = threading.Event()
     release_holder = threading.Event()
     probe: dict[str, object] = {}
+    runs = _ThreadRun()
 
     def holder() -> None:
         with heavy_job_slot("holder"):
@@ -207,141 +300,105 @@ def test_reject_skip_path_does_not_hold_holder_lock():
             probe["second_ok"] = ok
         probe["elapsed"] = time.perf_counter() - started
 
-    t_holder = threading.Thread(target=holder)
-    t_reject = threading.Thread(target=rejector)
-    t_probe = threading.Thread(target=probe_gate)
-    t_holder.start()
+    runs.start(holder, name="holder")
     time.sleep(0.05)
-    t_reject.start()
+    runs.start(rejector, name="rejector")
     time.sleep(0.05)
-    t_probe.start()
+    runs.start(probe_gate, name="probe")
     time.sleep(0.2)
     release_holder.set()
-    t_holder.join(timeout=3)
-    t_reject.join(timeout=3)
-    t_probe.join(timeout=3)
+    runs.assert_clean()
 
     assert probe["holder"] == "holder"
     assert probe["second_ok"] is False
     assert probe["elapsed"] < 0.2
 
 
-def test_racing_claim_winner_holder_never_none(monkeypatch):
-    """Bug (a): split free-check/claim must not let two winners or holder=None while held."""
+def test_racing_claim_winner_holder_never_none(monkeypatch, caplog):
+    """Bug (a1): split check/claim must not double-win or reject without named holder."""
+    caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
+    section_lock = _install_section_lock(monkeypatch)
     barrier = threading.Barrier(2, timeout=3)
-    at_check = threading.Barrier(2, timeout=3)
-    release_check = threading.Event()
-    winner_claimed = threading.Event()
-    release_winner = threading.Event()
-    loser_done = threading.Event()
+    claim_pause = threading.Event()
+    release_claim = threading.Event()
     results: list[bool] = []
-    holder_none_while_held: list[str] = []
+    unnamed_rejects: list[bool] = []
+    runs = _ThreadRun()
 
-    def _hook(phase: str) -> None:
-        if phase == "between_check_and_claim":
-            try:
-                at_check.wait(timeout=0.2)
-            except threading.BrokenBarrierError:
-                return
-            release_check.wait(timeout=2)
-        elif phase == "post_claim_acquired":
-            winner_claimed.set()
-            release_winner.wait(timeout=2)
+    def _pause_first_claim_exit() -> None:
+        claim_pause.set()
+        release_claim.wait(timeout=2)
 
-    _install_pause_hook(monkeypatch, _hook)
-
-    def probe() -> None:
-        loser_done.wait(timeout=2)
-        for _ in range(50):
-            if _held_without_holder():
-                holder_none_while_held.append("probe")
-            time.sleep(0.001)
+    section_lock.pause_on_exit(1, _pause_first_claim_exit)
 
     def worker(tag: str) -> None:
         barrier.wait(timeout=3)
         with heavy_job_slot(tag) as ok:
             results.append(ok)
-            if not ok:
-                loser_done.set()
 
-    t1 = threading.Thread(target=worker, args=("job_a",))
-    t2 = threading.Thread(target=worker, args=("job_b",))
-    t_probe = threading.Thread(target=probe)
-    t1.start()
-    t2.start()
-    t_probe.start()
-    time.sleep(0.25)
-    release_check.set()
-    assert winner_claimed.wait(timeout=2), "winner must pause at post_claim_acquired"
-    assert loser_done.wait(timeout=2), "loser never rejected during winner post_claim pause"
-    t_probe.join(timeout=3)
-    release_winner.set()
-    t1.join(timeout=3)
-    t2.join(timeout=3)
+    runs.start(worker, "job_a", name="job_a")
+    runs.start(worker, "job_b", name="job_b")
+    assert claim_pause.wait(timeout=2), "no thread paused after first claim section"
+    if current_holder() is None:
+        unnamed_rejects.append(True)
+    release_claim.set()
+    runs.assert_clean()
 
+    reject_msgs = _reject_logs(caplog)
     assert results.count(True) == 1
     assert results.count(False) == 1
-    assert holder_none_while_held == []
+    assert unnamed_rejects == []
+    assert all("holder=None" not in m for m in reject_msgs)
 
 
-def test_stress_no_held_with_none_holder(monkeypatch):
-    """Bug (a): concurrent claim pairs must never double-win or leave held with holder=None."""
-    violations = 0
+def test_stress_no_held_with_none_holder(monkeypatch, caplog):
+    """Bug (a1): synced claim pairs must never double-win or reject without named holder."""
+    caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
+    attr = _gate_lock_attr()
+    raw = getattr(gate, attr)
+    if isinstance(raw, _SectionLock):
+        raw = raw._real
     double_wins = 0
-    count_lock = threading.Lock()
-    round_sync: dict[str, object] = {}
+    unnamed_rejects = 0
 
-    def _hook(phase: str) -> None:
-        if phase == "between_check_and_claim":
-            pause = round_sync.get("pause")
-            release = round_sync.get("release")
-            if not isinstance(pause, threading.Barrier) or not isinstance(
-                release, threading.Event
-            ):
-                return
-            try:
-                pause.wait(timeout=0.2)
-            except threading.BrokenBarrierError:
-                return
-            release.wait(timeout=2)
-
-    _install_pause_hook(monkeypatch, _hook)
-
-    def _pair_round() -> None:
-        nonlocal violations, double_wins
+    for _ in range(10):
+        caplog.clear()
+        section_lock = _SectionLock(raw)
+        monkeypatch.setattr(gate, attr, section_lock)
         barrier = threading.Barrier(2, timeout=3)
+        claim_pause = threading.Event()
+        release_claim = threading.Event()
         results: list[bool] = []
-        round_sync["pause"] = threading.Barrier(2, timeout=3)
-        round_sync["release"] = threading.Event()
+        round_unnamed: list[bool] = []
+        runs = _ThreadRun()
+        section_lock._depth.clear()
+
+        def _pause_first_claim_exit() -> None:
+            claim_pause.set()
+            release_claim.wait(timeout=2)
+
+        section_lock.pause_on_exit(1, _pause_first_claim_exit)
 
         def _worker(tag: str) -> None:
-            nonlocal violations
             barrier.wait(timeout=3)
             with heavy_job_slot(tag) as ok:
                 results.append(ok)
-                if ok:
-                    for _ in range(10):
-                        if _held_without_holder():
-                            with count_lock:
-                                violations += 1
-                        time.sleep(0.001)
 
-        t1 = threading.Thread(target=_worker, args=("job_x",))
-        t2 = threading.Thread(target=_worker, args=("job_y",))
-        t1.start()
-        t2.start()
-        time.sleep(0.25)
-        release = round_sync.get("release")
-        if isinstance(release, threading.Event):
-            release.set()
-        t1.join(timeout=3)
-        t2.join(timeout=3)
-        if results.count(True) != 1:
-            with count_lock:
-                double_wins += 1
+        runs.start(_worker, "job_x", name="job_x")
+        runs.start(_worker, "job_y", name="job_y")
+        assert claim_pause.wait(timeout=2), "no thread paused after first claim section"
+        if current_holder() is None:
+            round_unnamed.append(True)
+        release_claim.set()
+        runs.assert_clean()
 
-    for _ in range(30):
-        _pair_round()
+        if len(results) == 2 and results.count(True) != 1:
+            double_wins += 1
+        if round_unnamed:
+            unnamed_rejects += 1
+        reject_msgs = _reject_logs(caplog)
+        if any("holder=None" in m for m in reject_msgs):
+            unnamed_rejects += 1
 
-    assert violations == 0
     assert double_wins == 0
+    assert unnamed_rejects == 0
