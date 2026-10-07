@@ -191,3 +191,11 @@
 - **Track3 Path A** migration **BLOCKED** ~17:01 PT: created app `subnet-dashboard-logshipper` (pending) but `flyctl tokens create readonly personal` failed — `createLimitedAccessToken` Not authorized. Secrets/deploy skipped.
 - **Path B** bridge still up. `subnet-dashboard` untouched; health=200.
 - **Need:** Fly token with limited-access token mint permission.
+
+## 2026-10-06 ~5:06 PM PT — Track3 Path A DONE — **from Mission Control / Grok Bot**
+
+**Author:** Mission Control / Grok Bot.
+
+- **Track3 Path A DONE** — `subnet-dashboard-logshipper` deployed (2× sjc started, axiom sink OK); Path B bridge stopped; keep-alive paused; `subnet-dashboard` unmodified; health 200.
+- **ACCESS_TOKEN** via readonly `--from-existing`.
+- **Residual:** confirm Axiom UI `subnet-dashboard-prod`; possible dup events from 2 machines.
