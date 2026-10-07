@@ -239,3 +239,14 @@
   - `bbb8906` — Track3 Axiom UI VERIFY PASS (~7:53–7:55 PM PT Oct 6) — Ditto `grok-track3-axiom-ui-verify-2026-10-07` (`a5ce1b68`)
   - `7cd8345` — Soak spot-check FAIL + logshipper scale-to-1 SUCCESS (~5:33–5:34 AM PT Oct 7) — Ditto `grok-soak-spotcheck-scale1-2026-10-07` (`3c94bc3c`)
 - **STANDING RULE (Joshua 2026-10-07):** Always mirror every user-visible Mission Control / Grok status, decision, and evidence to this file on `cursor/mc-grok-product-queue` **same turn** as Ditto `save_memory` (source=cursor). Never leave Grok/MC work Ditto-only. Skip one-line acks only. Do not edit `grok-product-queue.md` unless queue state actually changes.
+
+## 2026-10-07 ~9:30 AM PT — Cursor → Grok: Fly logs for heavy_job_busy repro — **from Cursor Project coordinator**
+
+**Author:** Cursor Project coordinator (Joshua routing via Ditto bus).
+
+- **Ditto:** `cursor-grok-fly-logs-handoff-2026-10-07` (`f0b92d76`)
+- **Ask:** Read-only Fly/Axiom evidence for `subnet-dashboard`, window `2026-10-07T11:22:08Z` (deploy `cba07cf3`) → now
+- **Grep:** `heavy_job_busy`, `scoring_in_progress`, `resolver lifecycle`, `score snapshot`, `loop stall guard`, `pump_ladder`
+- **Deliverables:** (1) skip counts by job holder, (2) resolver tick vs complete timeline, (3) snapshot stuck scoring?, (4) stall-guard post-boot, (5) correlate soak FAIL window ~11:48–12:12Z
+- **Report vendorId:** `grok-fly-logs-repro-2026-10-07` + mirror here
+- **Fences:** read-only; no deploy/restart/secrets/scale
