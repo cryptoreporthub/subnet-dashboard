@@ -565,3 +565,52 @@ How to read the historical rows:
 5. Re-run and report a mutation table with observed counts (at least 10 runs) at the new head.
 
 - **Ditto:** `grok-pr1333-mc-ac-review6-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~4:45 PM PT: MC review 7 of PR #1333 at 7ae06256, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `7ae06256a64a8f3d3760b433402ae4b0a1626790` (parent `b955ecc2`, "test: replace production pause hooks with SectionLock forcing", committed 3:17 PM PT), verified via GitHub. Draft (`isDraft=true`), OPEN, not merged. Base main `cba07cf3` (unchanged).
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Reconcile (restart after an interrupted attempt):** MC log tip was `1c907ded` (review 6) with no review-7 entry; Ditto vendorId `grok-pr1333-mc-ac-review7-2026-10-07` absent before this save; PR still draft. The interrupted run's scratch (mutants and 10x results in `/tmp/gates7`, `/tmp/mut7_*.txt`, worktrees `/tmp/wt7_*` at 7ae06256) was reused after checking that the worktrees are at 7ae06256 and that `H.py` and the historical gates are byte-identical to git.
+- **Smoke CI at 7ae06256:** run `37695194128`, check `smoke` **completed / success** at 3:19 PM PT (head_sha matches; the only check-run).
+- **Files main..head:** `internal/heavy_job_gate.py` (+44/−7), `tests/test_heavy_job_gate.py` (+355), `tests/test_heavy_job_gate_contention.py` (+244). Scope grep (RESOLVER_, fly.toml, deploy, P4b) on the diff: 0 matches. `_pause` names occur only in tests. Callers (`resolver_scheduler.py:585`, `score_snapshots.py:568`, `pump/scheduler.py:202`) unchanged and use only `heavy_job_slot`.
+
+### Gate (PASS)
+- `ad7b63a0..head` on the gate removes only `_holder_token`, `my_token`, the token check and `release_name`. `b955ecc2..head` also removes `_pause_hook`, `_pause()` and all 4 call sites. So the gate is the atomic ad7b63a0 design minus dead code, with no production test hooks. Non-blocking True/False semantics are the same as main.
+- Overhead, best/median of 9 × 200k, uncontended, INFO logging off (ns per call): main 976/1009 acquire+release, 965/1141 reject; ad7b63a0 1518/1567, 1014/1099; head 1463/1533, 948/1055. Negligible for heavy jobs.
+- Review 1-5 repros at head (state-lock harness `pr1333-r5.py`, `pr1333-r5-lock.py`, `pr1333-r4-p1b.py`, `pr1333-toctou.py`): all clean (R4 blocker in both orders, Bug 1 ×4 variants, Bug 2 99 rejects 0 None, holder wipe same and different names, gap 200 named 0 None, skip path 0.0s, re-entrant and exception paths all release). Stress 3 × 10s: about 11k acquires, 33k self-checks, 16-18M observer checks and 57-59k rejects per run, with 0 None, 0 wrong and 0 unknown.
+- Loops at pristine head: contention file 20/20 twice; both gate files 20/20. Caller tests (resolver_scheduler, score_snapshots, score_snapshots_staleness, pump_ladder_scheduler, resolver_revive): head 85 passed and 2 failed, main 85 passed and 2 failed. The same 2 `test_resolver_revive.py` tests fail on both.
+
+### Mutation and historical-gate table (10 runs each; P = pass, F = fail; my own mutants)
+Columns: Bug2 = `test_reject_never_logs_holder_none_on_slow_release`; Gap = `test_reject_never_unknown_while_slot_held_forced_timing`; Race = `test_racing_claim_winner_holder_never_none`; Stress = `test_stress_no_held_with_none_holder`.
+
+| Gate | Bug2 | Gap | Race | Stress | What the failure actually is |
+|---|---|---|---|---|---|
+| head (control) | 10P | 10P | 10P | 10P | none |
+| a1 split check/claim | 10F | 10F | 10F | 10F | Race/Stress `assert 2 == 1`, `10 == 0` (real: overlap confirmed with a 50 ms winner body, max owners 2). Bug2/Gap "waiter never rejected" = section-index artefact |
+| a2 a1 + `sleep(1ms)` between | 10F | 10F | 10F | 10F | same as a1 |
+| a2-alt holder overwritten on recheck reject | 10F | 10F | 10F | 10F | same signatures |
+| b1 holder cleared before pause | 10F | 10P | 10P | 10P | Bug2 `holder=None` reject (real) |
+| b2 clear/free in 2 sections | 10F | 10P | 10P | 10P | Bug2 `holder=None` reject (real) |
+| b3 b1 + unlocked reject read | 10F | 10P | 9F/1P | 10F | `holder=None` (real) |
+| **b4 unlocked reject read, good release** | 10P | 10P | **10F** | **10F** | `holder=None` reject (real symptom), but caught only because of the timeout artefact below |
+| c1 holder set after claim, unlocked | 10P | 10F | 10F | 10F | `holder=None` / unnamed holder (real) |
+| c2 holder set in separate section | 10F | 10F | 10F | 10F | real |
+| **574d6080 as-is** | 10F | 10F | 10F | 10F | **Race/Stress fail on fake double wins**: 574 has a real `_lock` mutex; the captured log shows sequential acquire→release→acquire→release, and the instrumented re-run shows max owners 1 in 10/10. Bug2/Gap = section-index artefact via the `_holder_lock` fallback |
+| 66f77af6 as-is | 10F | 10F | 10F | 10F | all `AttributeError: heavy_job_gate has no known state lock` (tests :86). Its lock leak is caught by assertions elsewhere (log-exception tests and contention tests) |
+| d93ae45b as-is | 10F | 10F | 10F | 10F | all `AttributeError` (tests :86). Whole files: 9 passed, 4 AttributeError, so **its acquire gap and holder wipe are caught by no assertion** |
+| OK_precheck (correct double-checked locking) | 10F | 10F | 10F | 10F | **false positive on a correct gate** (no overlap, rejects name the holder) |
+| OK_extra (correct, extra locked read in acquire) | 10P | 10P | 10P | 10P | passes, but the Bug2 test then pauses the wrong section |
+
+### MODIFY items (tests/test_heavy_job_gate.py)
+1. **:328-332 / :376-380 + :342 / :390:** the first-section exit pause is not filtered by thread. The main thread's `current_holder()` probe goes through the wrapped `_state_lock` (gate :19) and pauses itself for the full 2 s timeout (measured 2.001 s, 10/10). So `release_claim` (:344 / :392) is only set after the workers' own 2 s timeouts, and the forced ordering turns into timeout ordering. The stress test takes 20 s and the racing test 2 s for this reason.
+2. **:336-337 / :384-385 with :348 / :395-396:** the winner body is empty, so the paused threads wake in sequence and "double win" counts two sequential wins. Fake on 574d6080 (above) and on the correct OK_precheck gate. A double win must mean overlapping ownership.
+3. **:342-343 / :390-391:** `current_holder() is None` right after a thread's first section is structural (it is legitimately None before a split design claims) and fails a correct gate.
+4. **:81-86:** `_gate_lock_attr` raises AttributeError on 66f77af6 and d93ae45b; d93ae45b's real bugs go undetected.
+5. **b4** is caught only by the artefact in item 1. Once items 1-2 are fixed, it needs a dedicated forced test. My `b4_probe` shows head logs `holder=prediction_resolver` while b4 and b3 log `holder=None`.
+
+- **Divergences from the Project's claims:** "race+stress fail on 574d6080": they fail, but on fake sequential double wins, not on its real bug (the `holder=None` reject, which shows up only when the winner holds). "Detectors use public current_holder() + caplog only": the probe self-pauses for 2 s. The mutation table did not cover a correct split gate, which fails all 4 tests. Everything else checked out: 13/13 tests, contention 20/20, gate cleanup, b2 caught by Bug2, c2 caught by Gap, head 10/10, CI success.
+- **Project reply:** prepared for Joshua to send to coordinator `bc-01a10d2f` (not sent by MC).
+- **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review7-2026-10-07` (source=cursor)
