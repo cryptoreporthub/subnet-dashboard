@@ -167,3 +167,65 @@
 - `AXIOM_INGEST_TOKEN` present (len 41, value not printed). Ran `/workspace/track3-logshipper/start-bridge.sh` once → new pid **20864** alive 75s later.
 - Heartbeat ok; `flyctl logs -a subnet-dashboard --json` streaming; all ingest status=200; total_ingested=104 @ `18:29:56Z` (11:29:56 AM PT).
 - Open (not started): auto-start bridge after reboot; optional Axiom check for the gap window.
+
+## 2026-10-06 ~12:53 PT — P4a #1327 Ready (CI green) — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) MC review after Grok report.
+
+- PR **[#1327](https://github.com/cryptoreporthub/subnet-dashboard/pull/1327)** — resolver cycle_timeout lock release + revive hardening. Open, **not draft** (opened ready). `mergeable_state=behind` (diverged: ahead 3 / behind 3 vs main).
+- Fix commit **`4931165a`** (parent `245ff24e`): `internal/council/resolver_scheduler.py` +76/−14, `tests/test_resolver_revive.py` +155. Tip **`f4ae56b5`** = fix + 2 docs/queue commits.
+- Smoke CI **success** on tip (Actions run [37521365390](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37521365390/job/112467570396), 19:46–19:48Z).
+- Grok report already in Ditto: `grok-p4a-resolver-lock-report-2026-10-06` id `0fe9f0ec` (source=cursor-agents-communication); claims resolver 56 pass / 2 pre-existing base fails + contract 148 — base-fail claim **not re-verified by MC**.
+- MC verdict: **PASS** (product AC + smoke). Residuals: report head SHA stale vs tip; PR not draft; branch behind/diverged from main (update before merge); 2 test fails claimed pre-existing unverified; queue docs on branch.
+- No merge, no deploy. Poll routine deleted. Next slice per plan: **P2 (MC docs)**.
+
+## 2026-10-06 ~12:55 PT — P4a DUAL PR HOLD (#1327 vs #1329) — **from Mission Control (Grok Bot)**
+
+- After MC PASS stamp on **#1327**, discovered **[#1329](https://github.com/cryptoreporthub/subnet-dashboard/pull/1329)** draft from agent `bc-76ab9fef` (branch `cursor/p4a-resolver-lock-timeout-264a` @ `7e62ca44`). Body claims #1327 lock-object replacement can steal from a live tick; recommends close #1327 in favor of #1329 (release-first + stale-proven recycle).
+- #1329 CI: **not started** yet at check time. #1327 smoke still green.
+- Queue pointer set **HOLD_MC slice=P4a** until canonical PR chosen. Do not merge either yet. No deploy.
+
+## 2026-10-06 ~2:01 PM PT — P3a Grok pickup (WAITING_GROK) — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) after Joshua correction: blocked on Grok implement, not MC review.
+
+- Queue pointer `grok-product-queue-active-2026-10-06` (id `c205009d`) was already **WAITING_GROK slice=P3a** after P2 PASS (#1328 @ a862121d). Handoff: `grok-p3a-council-signals-handoff-2026-10-06` (id `742b6843`).
+- Launched cloud agent **[bc-89f93f8f](https://cursor.com/agents/bc-89f93f8f-007f-5af7-a1d7-dcecfcc8df78)** — title “P3a council signals reliability”; target branch `cursor/p3a-council-signals`; draft PR + report `grok-p3a-council-signals-report-2026-10-06` expected.
+- Queue rev3 stamped `grok_status: EXECUTING` with agent URL.
+- Armed routine **Grok WAITING_GROK poll** (every 5m weekdays 8:04–6:59 PT) so future WAITING_GROK slices get picked up without a poke.
+- Prior HOLD on dual P4a (#1327 vs #1329) superseded for pipeline advance by MC’s P2 PASS → P3a queue; canonical P4a PR choice may still need Joshua before merge of those PRs — not blocking P3a implement.
+- No merge, no deploy. Await draft PR + Ditto report.
+
+## 2026-10-06 ~3:08 PM PT — P3a #1330 Ready + P3b handoff — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) after Grok implementer `bc-89f93f8f` finished.
+
+### P3a (Grok shipped, MC reviewed)
+- Draft → **Ready for review:** [PR #1330](https://github.com/cryptoreporthub/subnet-dashboard/pull/1330) — council/signals read-path reliability. Branch `cursor/p3a-council-signals` tip **`7adfafd8`** (3 commits). +404/−133 across 9 files (no fly.toml / RESOLVER_*).
+- Smoke CI **success** on tip ([run 37538416099](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37538416099), 22:06–22:08Z).
+- Grok report Ditto id `c70fe06a` (vendorId `grok-p3a-council-signals-report-2026-10-06`). MC reviewed `grok-p3a-council-signals-reviewed-2026-10-06` id `1a3d556b` — **PASS**.
+- AC: homepage/council scoring-free SSR; `/api/signals` honest-stale + bg single-flight; L6-002 cancel-before-save test; G0 SimiVision lock convoy non-blocking read; emergency prime abandon-on-timeout. Daily-pick hydrate already on main (verified only).
+- Residuals: `mergeable_state=behind` (1 commit); 2 pre-existing test fails claimed STOP-list (not re-run by MC); live hydrate NOT_OBSERVABLE.
+- Undrafted by MC. **No merge, no deploy.**
+
+### Queue advance
+- Pointer → **WAITING_GROK slice=P3b** (chat streaming). Handoff `grok-p3b-chat-stream-handoff-2026-10-06` (id `ab7b43d7`). Branch `cursor/p3b-simivision-chat-stream`. Report vendorId `grok-p3b-chat-stream-report-2026-10-06`.
+- Cloud implementer launched for P3b (see next log line / agent card in chat).
+- Note: dual P4a #1327 vs #1329 still needs Joshua canonical pick before those merge; does not block P3b implement.
+
+## 2026-10-06 ~4:28 PM PT — P3c #1332 MC AC PASS + Ready for review — **from Mission Control (Grok Bot)**
+
+**Author:** Mission Control (Grok Bot) finishing P3c closeout.
+
+### P3c (MC AC PASS)
+- **MC AC PASS** on [PR #1332](https://github.com/cryptoreporthub/subnet-dashboard/pull/1332) @ tip **`cd0b5a45`** (branch `cursor/p3c-message-intel-live`).
+- Smoke CI **PASS** — Actions run [37546237547](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/37546237547).
+- Tests: targeted **52 passed**; contract **148 passed**; summers **11 passed**.
+- Residuals: `_SIMIVISION_LOCK` self-deadlock is **pre-existing (data-state)**, not introduced by P3c.
+- **Ready for review** (undrafted by MC). No merge, no deploy.
+
+### Pipeline note
+- **P4b still HOLD** until Joshua/MC advances + **P4a merged**.
+- Did **not** edit `grok-product-queue.md` (Cursor/MC queue branch owns that).
+
+**Attribution:** Mission Control / Grok
