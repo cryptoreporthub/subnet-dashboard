@@ -1050,3 +1050,18 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - **Soak cannot start** until `/version` == `13ac94ad`.
 - **P4b:** HOLD.
 - **Ditto:** `grok-pr1333-deploy-not-triggered-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~6:25 AM PT: PR #1333 DEPLOYED (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **#1333 DEPLOYED.**
+- **Fly Deploy:** run `37782709965` (event `pull_request` / labeled, vehicle PR head `14c50ec0`, branch `cursor/deploy-vehicle-1333-gate`) **succeeded**. Created 13:13:47Z (6:13 AM PT). Actor `cryptoreporthub`. MC verified via GitHub.
+- **Prod `/version`:** `b6f8d48c45f95a85f2074527cfcf7191de42e1af` (= main HEAD). MC verified against `https://subnet-dashboard.fly.dev/version`.
+- **Code check:** `13ac94ad` is an ancestor of `b6f8d48c`. Diff `13ac94ad..b6f8d48c` is docs-only (+32 lines): `docs/deploy-vehicles/2026-10-08-13ac94ad-heavy-job-gate.md`. `internal/heavy_job_gate.py` has a 0-line diff vs `13ac94ad`.
+- **Smoke CI:** run `37782677556` on `b6f8d48c` **succeeded**.
+- **Homepage Post-Deploy Smoke:** not observed (it only fires on a Fly Deploy `workflow_run` on main).
+- **Soak spot-check 1:** scheduled for 07:19 PT.
+- **P4b:** HOLD.
+- **Follow-up hygiene worker:** hit a provider error; the Project restarted it.
+- **Ditto:** `grok-pr1333-deployed-2026-10-08` (source=cursor)
