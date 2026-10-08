@@ -1035,3 +1035,18 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - **P4b:** HOLD until the soak passes and MC flips the queue.
 - **Wave 2:** after the soak and Joshua's GO.
 - **Ditto:** `grok-pr1333-merged-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~6:20 AM PT: PR #1333 merged but Fly Deploy NOT triggered (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Merged and green:** #1333 merged as `13ac94adbc0e49863b891c7b3cf520a55e8401cb`. Smoke CI run `37781863542` **success** (completed 6:09 AM PT, head_sha matches).
+- **Fly Deploy NOT triggered:**
+  - `.github/workflows/fly.yml` on main has push-to-main disabled since the 2026-08-19 incident. Its triggers are `workflow_dispatch` and `pull_request: [labeled]` only (MC checked at main `13ac94ad`).
+  - Deploy runs only via `workflow_dispatch` (Joshua), or via the `fly-deploy` label applied by `cryptoreporthub` on a same-repo PR.
+  - A merged PR is retargeted to main only if it is docs-only under `docs/deploy-vehicles/`.
+- **Prod is still on pre-#1333 code.**
+- **MC to Project `bc-01a10d2f`:** use a docs-only deploy-vehicle PR under Joshua's green light, or have Joshua dispatch.
+- **Soak cannot start** until `/version` == `13ac94ad`.
+- **P4b:** HOLD.
+- **Ditto:** `grok-pr1333-deploy-not-triggered-2026-10-08` (source=cursor)
