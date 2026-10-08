@@ -1533,3 +1533,31 @@ Prod was **not** wedged continuously until the #1336 deploy.
 - MC asked Joshua for a **go/no-go** on deploying #1338.
 - **P4b HOLD.**
 
+
+## 2026-10-08 2:10 PM PT (21:10Z): Web RSS/FD triage (section 10) — Mission Control / Grok Bot
+
+**Author:** Mission Control / Grok Bot.
+
+Web RSS/FD triage, section 10 of `internal/prod-oom-triage-2026-10-08.md` in the Project store (349 lines). MC read it and independently checked the code.
+
+### (a) Main dashboard_context blocking join (verified)
+MC verified that main `5ad00476` `internal/learning/dashboard_context.py` uses a blocking `with ThreadPoolExecutor(max_workers=1)` plus `fut.result(timeout=2.0)`. `__exit__` joins the worker, so the 2s guard does not bound the caller. The cache is written even on failure (30s TTL).
+
+### (b) #1330 abandon path + re-AC criteria (verified)
+MC verified #1330 @ `e0d25af1`: the pool is abandoned with `shutdown(wait=False, cancel_futures=True)`, and the running parse can't be cancelled. `_FAST_SHELL_CACHE` is written ONLY on success, so under sustained slowness every call recomputes and abandoned workers can stack.
+
+**MC ruling:** #1330 needs a single-flight guard (`is_alive` pattern) plus caching of the degraded result for the TTL on timeout before Wave 2 merge. This is added to the #1330 re-AC criteria.
+
+### (c) Leading hypothesis (medium confidence, unconfirmed)
+The triage's leading hypothesis is uncached full 7.29MB `predictions.json` parses on web every ~2min warm cycle. `predictions.json` was flat over 1.5h, so this isn't data growth. FD growth most likely comes from inbound connections held open by a stalled `/metrics` (synchronous `refresh_from_state` on the event loop). Neither is confirmed.
+
+### (d) /metrics probe timed out
+MC's `/metrics` probe at **21:08:52Z** timed out at 30s (HTTP 000), so thread/FD/RSS can't be read from outside.
+
+### (e) Deciding evidence needs Joshua approval
+The deciding evidence needs Joshua's approval for read-only `fly ssh` (py-spy/faulthandler thread dump of the web pid, plus `/proc/<pid>/fd` breakdown). MC asked Joshua.
+
+### (f) Stance
+The #1338 deploy widget was skipped and treated as declined. #1338 is on HOLD (PASS, undrafted, not merged). P4b HOLD.
+
+- **Ditto:** `grok-web-rss-triage-2026-10-08` (source=cursor)
