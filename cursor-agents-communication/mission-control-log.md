@@ -1360,3 +1360,62 @@ Simulated sequential merge onto current main (#1330 then #1331 then #1332): all 
 3. Test gap: the new test exercises only the worker import. Mutants that remove the server.py call (M5), drop the idempotency guard (M6) or raise root to INFO (M7) still pass. MC probes cover these. An optional hardening patch is at `/workspace/pr1336-review/pr1336-optional-test-hardening.diff`. It catches M5, M6 and M7 and isn't required.
 4. Sentry LoggingIntegration(level=INFO) will now record breadcrumbs for these INFO lines (bounded, negligible).
 - **Ditto:** `grok-pr1336-ac-2026-10-08` (source=cursor), id `ce8a3e82-b896-4163-9ae6-988a36892d23`
+
+## 2026-10-08 1:42 PM PT (20:42Z): #1336 DEPLOYED + post-deploy verify + soak spot-check 2 = FAIL (Grok / Mission Control)
+
+Read-only. Nothing restarted, scaled, deployed, or changed (no secret or fly.toml changes). Raw evidence is in box `/workspace/soak2/`.
+
+### Artifact checks: PASS
+- `5ad00476` (vehicle #1337) has one parent, `0e1288e3`. Its diff is one added file: `docs/deploy-vehicles/2026-10-08-0e1288e3-info-logging.md` (+36/-0). Docs only.
+- `0e1288e3` (#1336 squash) has one parent, `802429c3`. Its diff is exactly 4 files: `internal/app_logging.py` +30, `internal/worker.py` +2, `server.py` +2, `tests/test_heavy_job_gate_logging.py` +33.
+  - That patch is byte-identical to the MC-PASSed head `6302006e` vs its merge-base `b6f8d48c`. That includes the `index` lines.
+  - All 4 blob SHAs match at `0e1288e3` and `6302006e`.
+- Fly Deploy run 37835804467:
+  - event `pull_request`, head_sha `78f8b273` (the vehicle PR head). Created 19:57:18Z, success.
+  - Guard: "merged docs-only vehicle PR #1337 → refs/heads/main". It checked out `5ad00476`.
+  - Release **v2283**, created 19:59:51Z, image `deployment-01M4EHHYV83FEV9DW9MR4K2J3Q`.
+  - v2281 (19:58:10Z) and v2282 (19:58:38Z) came from the workflow's standard `secrets unset WORKER_SPLIT_V2/WORKER_INTERNAL_URL` steps. Both used the old image, and each restarted the machine.
+- `/version` = `5ad0047676ac31f453b7735ce3610cfe62a88ad7`, re-checked at 20:18Z and 20:40Z.
+
+### Prod recovery timeline, with a correction
+- **Correction to the 12:47 PM PT entry:** the wedge did not persist until the deploy.
+  - Health failed at 19:41:13Z. At **19:46:39Z** the kernel OOM-killed web python pid 652 (`anon-rss:482436kB`), and the machine restarted itself.
+  - Health check passed at **19:47:57Z**, then flapped until 19:56:22Z.
+  - The deploy then restarted the machine 3 times: 19:58:12, 19:58:40, and 19:59:54Z (v2283).
+- First health pass after the deploy: `GET /health 200` at **20:00:11.63Z**, and the check reported passing at 20:00:11.95Z.
+- An SSH session by cryptoreporthub@gmail.com opened on prod at 20:00:29Z. Whose it was is not attributed.
+
+### Soak spot-check 2: window 20:00:06Z to 20:40Z (~40 min, 508 log lines via the Fly logs API plus a live tail)
+
+| Check | Count | Result |
+|---|---|---|
+| heavy_job_slot acquire | 2 | prediction_resolver 20:01:09; pump_ladder 20:05:10 |
+| heavy_job_slot release | 1 | prediction_resolver held_ms=5886.1. **No pump_ladder release in 35+ min** |
+| heavy_job_slot reject | 14 | prediction_resolver ×10, score_snapshot ×4. **All holder=pump_ladder** |
+| holder=None / unknown | 0 | – |
+| resolver tick_start | 11 | – |
+| resolver success | 1 | 20:01:15 first=True duration_ms=6434.8 (abandoned_live=0) |
+| resolver skip heavy_job_busy | 9 | 20:16 to 20:37. duration_ms 17–78 s even though the reject came at once |
+| stall guard | 2 | 20:28:37 STALE (age=38858s, strike=1/2); 20:30:14 in-place revive → revived=False. No strike 2 or CRITICAL as of 20:40 |
+| resolver event=start (re-start) | 1 | 20:35:58. After it, ticks marked first=True and first=False interleave (20:36:21 / 20:37:10). **Possibly 2 resolver schedulers after the revive. Unverified** |
+| score snapshot | 0 runs | 4 rejects (holder=pump_ladder); last cycle 19:18:47Z skipped heavy_job_busy |
+| duplicate INFO lines (same asctime + text) | 0 | Single handler confirmed |
+| urllib3 / requests / slowapi / connectionpool | 0 | – |
+| WARNING total | 146 | 76 are a boot burst of `price_reference ... no valid candles` (20:00–20:01) vs 3 bare lines pre-deploy. Steady state is the same app warnings as before, now formatted |
+| health check failed | 9 | Flapping since 20:24:54. Check **critical** at 20:40. /health 200 but took 13.6 s. /metrics timing out after 20:35 |
+
+### OOM status
+- No exit or OOM since the 20:00:06Z start. The Machines API events (`?limit=50`) show only launch and start at 19:59:54 and 20:00:06. No "Out of memory" lines.
+- RSS of the /metrics process was **377 MB (20:19:56) → 463 MB (20:35:28)**, about 5.5 MB/min. FDs went 65 → 107.
+- Pre-deploy, the OOM kill came at about 482 MB anon-rss, about 25 min after the previous restart (exit 19:21:19Z to kill 19:46:39Z).
+- The trend matches the pre-wedge pattern. Expect the wedge and OOM again at roughly 20:40–21:00Z. Not proven yet.
+
+### Verdicts
+- Named holders visible: **PASS**. All 14 rejects are holder=pump_ladder.
+- No holder=None: **PASS** (0).
+- Resolver cycles completing: **FAIL**. 1 success at 20:01, then 9/9 ticks skipped because pump_ladder holds the slot from 20:05:10 with no release.
+- Stall guard quiet: **FAIL**. Strike 1/2 at 20:28:37 and the revive failed. Whether strike 2 kills the worker is TOO EARLY to say.
+- OOM gone: **TOO EARLY**. No exit in 40 min, but RSS and FD growth plus health flapping match the pre-OOM pattern.
+- No duplicate handlers / no library noise: **PASS**.
+- **Soak 2 overall: FAIL. P4b HOLD.**
+- Lead for the root cause: `pump_ladder` acquires heavy_job_slot and never releases it. Pre-deploy logs show "pump ladder signal fetch timed out after 90s (worker still running)".
