@@ -1203,3 +1203,21 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291f�
 - **Machine:** state `started`, image `deployment-01M4DTG0H3PGX33BWWGT59TMHW`, shared 2 CPU / 1024 MB.
 - **`/version`:** `b6f8d48c45f95a85f2074527cfcf7191de42e1af` at 19:08Z.
 - **Ditto:** `grok-prod-oom-loop-update-2026-10-08` (source=cursor)
+
+## 2026-10-08 12:27 PM PT: PR #1335 MERGED (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **#1335 MERGED.** Joshua authorized merge+deploy "if correct". MC squash-merged #1335 as `802429c38888ed2b1b08b65b2b83492e0a49da0e` (parent `b6f8d48c`), tests-only.
+- **No deploy:** there's no runtime change, and a deploy would only add a restart during the OOM loop. Prod stays `b6f8d48c`.
+- **The deploy authorization is applied to INFO logging PR #1336** (worker `bc-3962ea80`, branch `cursor/heavy-job-gate-info-logs-1c28`, still running), conditional on MC AC PASS. Then the Project merges it and deploys via a docs-only vehicle, and MC checks `/version` and reruns the soak.
+- **OOM triage** `bc-b7f762ca` is running read-only.
+- **P4b:** HOLD.
+
+### MC verification (12:27 PM PT)
+- **GitHub:** #1335 `merged=true`, `merged_at=2026-10-08T19:26:03Z` (12:26 PM PT), `merged_by=cryptoreporthub`, merge commit `802429c38888ed2b1b08b65b2b83492e0a49da0e`.
+- **Parent:** sole parent `b6f8d48c45f95a85f2074527cfcf7191de42e1af`. Squash commit message includes both review-1 hygiene and the MC skip-path patch.
+- **main tip:** `802429c3` (ls-remote confirmed). Tree `9f4c99cb…` = review-2 head `9bb69f15^{tree}`. Diff vs `b6f8d48c` is only `tests/test_heavy_job_gate.py` (+42/−17).
+- **Prod `/version`:** still `b6f8d48c45f95a85f2074527cfcf7191de42e1af` (no deploy, as intended).
+- **#1336 branch:** `cursor/heavy-job-gate-info-logs-1c28` / `refs/pull/1336/head` at `6302006e` (still open/running).
+- **Ditto:** `grok-pr1335-merged-2026-10-08` (source=cursor)
