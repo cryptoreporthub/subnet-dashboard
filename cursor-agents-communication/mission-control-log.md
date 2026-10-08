@@ -1598,3 +1598,40 @@ Sockets at s3: web 4 ESTAB (all outbound), 1 LISTEN, 0 CLOSE_WAIT, 0 inbound 172
 MC re-read the raw files: s3 py-spy dump has 11 `list_messages` frames; s2 has 3 `netuid_sentiment_rollup` frames; the kernel OOM line above is verbatim from `flylogs-20261008T212235Z.txt`.
 
 - **Ditto:** `grok-prod-web-diag-2026-10-08` (source=cursor)
+
+## 2026-10-08 2:54 PM PT (21:54Z): #1338 deployed to prod via vehicle #1339 — Mission Control / Grok Bot
+
+**Author:** Mission Control / Grok Bot.
+
+### (a) Authorization + why MC ran the vehicle
+- Joshua, ~2:25 PM PT (Cursor Project thread): "Okay. Go is authorized" (merge + deploy #1338). MC posted GO after the read-only diag second sample.
+- The Cursor Project could not open the vehicle: Cursor CloudAgent usage-limit block ("Switch to grok-4.6 for included usage, or raise your on-demand limit"). MC opened/merged/labeled the vehicle itself with `gh` on the box (authenticated as cryptoreporthub, the fly.yml label actor).
+
+### (b) Vehicle
+- PR **#1339** https://github.com/cryptoreporthub/subnet-dashboard/pull/1339 — docs-only, 1 file: `docs/deploy-vehicles/2026-10-08-b528d461-heavy-slot-stall.md` (head `d304048e`, branched off main `b528d461`).
+- Same handling as #1337: required `smoke` passed, squash-merged at 21:33:32Z (2:33 PM PT) -> main **`c8ebc29b0855d49a594da27abce66bf76bbe6446`** (parent `b528d461` = #1338 squash), then `fly-deploy` label applied at 2:33:42 PM PT by cryptoreporthub.
+- Workflow retargeted to main HEAD ("Resolved: merged docs-only vehicle PR #1339 → refs/heads/main"), so the deployed SHA is the **vehicle merge SHA `c8ebc29b`**, not `b528d461` itself. It contains #1338.
+
+### (c) Fly Deploy run
+- Run **37847648527** (event pull_request, head_sha `d304048e`, deploy ref main `c8ebc29b`): **success**, 21:33:44Z–21:37:28Z (2:33–2:37 PM PT). Deploy Guard success; Deploy app success; topology web=1 worker=0; SENTRY_RELEASE on machine = `c8ebc29b`; live_subnets warm (49); sustained health 3/3; learning loop OK (worker_peer alive).
+- Fly releases: **v2286** (deploy image `deployment-01M4EQ2HW7HTXNA2J5E0X1X5RZ`, 21:36:03Z). v2284 (21:34:35Z) and v2285 (21:35:06Z) are the workflow's secrets-unset releases (same old image; extra restarts, known).
+- Homepage Post-Deploy Smoke does not fire for vehicle deploys (known gap).
+
+### (d) Post-deploy verification (MC)
+- `/version` = `c8ebc29b0855d49a594da27abce66bf76bbe6446` from 21:36:31Z (2:36 PM PT); first `/health` 200 on the new version 21:36:31Z. MC probe every ~10s 21:33:58Z–21:53Z: 0 non-200 `/health`.
+- Machines API events (7841024b3712e8): launch pending/created 21:36:07Z, start started 21:36:30Z. Machine version 2286, 1/1 checks passing. (Fly health check refused on :8080 at 21:36:30Z during boot only.)
+- Boot gate lines (flyctl logs):
+  - 21:36:34Z `Started server process [653]` (new web); inline worker pid 658
+  - 21:37:32Z `heavy_job_slot acquire name=prediction_resolver` / 21:37:38Z `release ... held_ms=5963.8`
+  - 21:41:33Z `heavy_job_slot acquire name=pump_ladder`
+  - **21:51:34Z `WARNING internal.pump.scheduler pump ladder tick body stalled >600s; releasing heavy_job_slot`** (tick_body_stalled path fired)
+  - 21:52:03Z `heavy_job_slot release name=pump_ladder held_ms=630237.0` (~29s after the warning: record + reschedule)
+  - 21:52:39Z `heavy_job_slot acquire name=prediction_resolver` (still holding at 21:53:44Z when MC stopped watching)
+- Read: the #1338 mitigation works in prod — pump_ladder no longer pins the slot, and the resolver gets it back. But the very first post-boot pump_ladder tick wedged for the full 600s again, so the underlying stall is not fixed (the abandoned body keeps running by design). No OOM seen through 21:53Z.
+
+### (e) Stance / next
+- Soak 3 should start from this boot (21:36:30Z): watch resolver cycle completion, score_snapshot age, tick_body_stalled cadence, and web RSS/OOM.
+- The message-intel single-flight/cache draft PR (diag finding (e)) is **not yet started** (Project blocked by the usage limit).
+- #1330 unmerged (Wave 2 re-AC). **P4b HOLD.**
+
+- **Ditto:** `grok-pr1338-deploy-2026-10-08` (source=cursor)
