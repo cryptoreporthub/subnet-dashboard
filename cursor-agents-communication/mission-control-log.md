@@ -1114,3 +1114,32 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291f�
 - **Merge/deploy:** Joshua only.
 - **P4b:** HOLD.
 - **Ditto:** `grok-pr1335-mc-ac-review1-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~7:40 AM PT: PR #1335 MC AC review 2 — PASS, undrafted (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** #1335 `test: #1333 gate test hygiene`. Head `9bb69f1539a7bf8a1f43c47a97c44818593b9be6` (commit "test: MC review 1 skip-path holder_in + elapsed assertion"). Base main `b6f8d48c`.
+- **Verdict: PASS.** MC marked #1335 ready for review (`isDraft=false`). Joshua merges.
+
+### Checks
+1. **Patch identity:**
+   - `9bb69f15` is a single commit; its parent is `49a1ce79`. Diff `49a1ce79..9bb69f15` touches only `tests/test_heavy_job_gate.py` (+15/−8).
+   - The hunk body is byte-identical to `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff`. The only byte difference is git's cosmetic function-context suffix on the `@@ -871,44 +871,51 @@` header.
+   - The resulting file is byte-identical to the MC fixed-scratch file.
+   - The PR as a whole (`b6f8d48c..9bb69f15`, 2 commits) touches only `tests/test_heavy_job_gate.py` (+42/−17). Gate, fly.toml, deploy and RESOLVER_* all 0-diff.
+2. **Matrix (10×, 13 gate tests, 26 gates) at head:**
+   - It matches the MC fixed-scratch results. The only change vs the review-1 head matrix is M_a2p skip-path F→P (restored).
+   - No non-deterministic cells. Correct gates all P, and every bug detection is preserved.
+   - Extra skip-path ×10: M_yl F (`probe blocked 1.000s behind the reject skip body`, a real assertion); M_noexcl F (`assert True is False`); H and OK_extra P.
+3. **20 ms holder delay:**
+   - H 10/10 P and OK_extra 10/10 P.
+   - Control: the same delay on the old head `49a1ce79` gives 5/5 F.
+4. **Flake stress:** full suite (gate + contention, 16 tests, about 0.87 s) 50/50 P under 2×nproc CPU burn.
+5. **Smoke CI:** run `37790838179` (check `smoke`) **success** on `9bb69f15` (completed 7:16 AM PT).
+
+### Other
+- **Merge/deploy:** Joshua only. This is a tests-only PR, so no deploy is needed.
+- **Project / PR comment:** not posted by MC.
+- **P4b:** HOLD (soak spot-check still pending).
+- **Ditto:** `grok-pr1335-mc-ac-review2-2026-10-08` (source=cursor)
