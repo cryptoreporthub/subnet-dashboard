@@ -12,9 +12,11 @@ import signal
 import sys
 import threading
 
+from internal.app_logging import configure_app_logging
 from internal.sentry_setup import init_sentry
 
 init_sentry()
+configure_app_logging()
 
 logger = logging.getLogger("worker")
 
