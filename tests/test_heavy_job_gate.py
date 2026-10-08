@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import logging
 import re
 import threading
@@ -183,12 +182,6 @@ def _gate_holder() -> Optional[str]:
     if not hasattr(gate, "_holder"):
         raise AttributeError("gate internals not recognised: missing _holder")
     return gate._holder
-
-
-def _release_wipe_is_conditional() -> bool:
-    """True when release clears holder only on a name match (wipe bug class)."""
-    src = inspect.getsource(gate.heavy_job_slot)
-    return "if _holder == name:" in src or "if _holder == release_name:" in src
 
 
 def _install_gate_harness(
@@ -687,9 +680,6 @@ def test_same_name_reacquire_keeps_holder_visible(monkeypatch):
                     if not ok:
                         return
                     if current_holder() != "resolver":
-                        return
-                    if not _release_wipe_is_conditional():
-                        second_checked.set()
                         return
                     assert current_holder() == "resolver", (
                         "holder wiped while same-name owner holds slot"
