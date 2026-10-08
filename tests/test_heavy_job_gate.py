@@ -9,6 +9,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
+import pytest
+
 import internal.heavy_job_gate as gate
 from internal.heavy_job_gate import current_holder, heavy_job_slot
 
@@ -307,44 +309,6 @@ def _arm_release_exit_pause(
         harness.slot.pause_after_release(pause_fn)
 
 
-def _arm_release_gap_pause(
-    harness: _GateHarness,
-    *,
-    holder_name: str,
-    body_done: threading.Event,
-    pause_fn: Callable[[], None],
-) -> None:
-    """Pause in the free-then-wipe gap (section enter or slot release)."""
-
-    fired = threading.Event()
-
-    def _maybe_pause() -> None:
-        if threading.current_thread().name != holder_name:
-            return
-        if not body_done.is_set() or fired.is_set():
-            return
-        fired.set()
-        pause_fn()
-
-    if harness.section is not None:
-        enters = {"n": 0}
-
-        def _on_gap_enter() -> None:
-            if threading.current_thread().name != holder_name:
-                return
-            if not body_done.is_set() or fired.is_set():
-                return
-            enters["n"] += 1
-            if enters["n"] < 2:
-                return
-            _maybe_pause()
-
-        for section in range(1, 6):
-            harness.section.pause_on_enter(section, _on_gap_enter)
-    elif harness.slot is not None:
-        harness.slot.pause_after_release(_maybe_pause)
-
-
 def _reject_logs(caplog) -> list[str]:
     return [
         r.message
@@ -634,73 +598,101 @@ def test_reject_never_logs_holder_none_on_slow_release(monkeypatch, caplog):
 
 
 def test_same_name_reacquire_keeps_holder_visible(monkeypatch):
-    """Bug: delayed holder wipe must not clear name while same-name owner holds."""
+    """Bug (wipe): release must not free the slot and then clear the holder, which
+    would wipe the name of a same-name job that re-acquired in between.
+
+    Every lock step `first` takes during release is a checkpoint. At each one,
+    `second` tries a same-name re-acquire:
+      * slot still held -> it must be rejected and current_holder() must be "resolver";
+      * slot already free -> it must succeed, and current_holder() must still be
+        "resolver" after `first` finishes releasing.
+    On the atomic gate release is one locked step, so only the first case is
+    reachable; the test asserts that it was reached instead of passing vacuously.
+    """
     harness = _install_gate_harness(
         monkeypatch, worker_names=frozenset({"first", "second"})
     )
-    gap_open = threading.Event()
-    second_checked = threading.Event()
-    first_done = threading.Event()
-    done = threading.Event()
+    if harness.section is None and harness.slot is None:
+        pytest.skip("gate internals not recognised; cannot place release checkpoints")
     body_done = threading.Event()
+    first_done = threading.Event()
+    at_checkpoint = threading.Semaphore(0)
+    resume_first = threading.Semaphore(0)
+    reacquired = threading.Event()
+    second_gone = threading.Event()
+    result: dict[str, object] = {"held_checks": 0, "gap": None, "stuck": False}
     runs = _ThreadRun()
 
-    def _pause_in_release_gap() -> None:
-        gap_open.set()
-        second_checked.wait(timeout=1)
-        # return allows delayed holder wipe to run before second asserts
+    def _checkpoint() -> None:
+        if threading.current_thread().name != "first":
+            return
+        if not body_done.is_set() or reacquired.is_set() or second_gone.is_set():
+            return
+        at_checkpoint.release()
+        if not resume_first.acquire(timeout=2):
+            result["stuck"] = True
 
-    _arm_release_gap_pause(
-        harness,
-        holder_name="first",
-        body_done=body_done,
-        pause_fn=_pause_in_release_gap,
-    )
+    if harness.section is not None:
+        for section in range(1, 8):
+            harness.section.pause_on_enter(section, _checkpoint)
+    if harness.slot is not None:
+        harness.slot.pause_before_release(_checkpoint)
+        harness.slot.pause_after_release(_checkpoint)
 
     def first() -> None:
-        with heavy_job_slot("resolver"):
+        with heavy_job_slot("resolver") as ok:
+            assert ok is True
             body_done.set()
         first_done.set()
 
     def second() -> None:
         try:
-            deadline = time.time() + 1
-            saw_gap = False
-            while time.time() < deadline:
-                if gap_open.is_set():
-                    saw_gap = True
-                    break
+            _second()
+        finally:
+            second_gone.set()
+
+    def _second() -> None:
+        assert body_done.wait(timeout=1), "first never entered its body"
+        while True:
+            if not at_checkpoint.acquire(timeout=0.01):
                 if first_done.is_set():
                     break
-                time.sleep(0.001)
-            if saw_gap:
-                if hasattr(gate, "_held") and getattr(gate, "_held", False):
-                    return
-                with heavy_job_slot("resolver") as ok:
+                continue
+            with heavy_job_slot("resolver") as ok:
+                try:
                     if not ok:
-                        return
-                    if current_holder() != "resolver":
-                        return
-                    assert current_holder() == "resolver", (
-                        "holder wiped while same-name owner holds slot"
-                    )
-                    second_checked.set()
-                    for _ in range(50):
-                        time.sleep(0.001)
-                    if current_holder() != "resolver":
-                        raise AssertionError(
-                            "holder wiped while same-name owner holds slot"
+                        holder = current_holder()
+                        assert holder == "resolver", (
+                            f"slot held during release but holder={holder!r}"
                         )
-            else:
-                with heavy_job_slot("resolver") as ok:
-                    assert ok is True
-        finally:
-            done.set()
+                        result["held_checks"] += 1
+                        continue
+                    # Slot is free while first still has release work: wipe window.
+                    result["gap"] = True
+                    assert current_holder() == "resolver"
+                    reacquired.set()
+                finally:
+                    resume_first.release()
+                assert first_done.wait(timeout=1), "first never finished release"
+                assert current_holder() == "resolver", (
+                    "holder wiped while same-name owner holds slot"
+                )
+            return
+        result["gap"] = False
+        with heavy_job_slot("resolver") as ok:
+            assert ok is True
+            assert current_holder() == "resolver"
 
     runs.start(first, name="first")
     runs.start(second, name="second")
     runs.assert_clean()
-    assert done.is_set(), "same-name re-acquire never finished"
+    assert not result["stuck"], "first timed out waiting at a release checkpoint"
+    assert first_done.is_set(), "first never released"
+    assert result["gap"] is not None, "second never finished"
+    assert result["held_checks"] >= 1, (
+        "no release checkpoint reached while slot held; interleaving not exercised"
+    )
+    assert current_holder() is None
 
 
 def test_reject_snapshots_holder_not_live_read(monkeypatch, caplog):
