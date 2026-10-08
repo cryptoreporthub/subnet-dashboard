@@ -10,9 +10,11 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.app_logging import configure_app_logging
 from internal.sentry_setup import init_sentry
 
 init_sentry()
+configure_app_logging()
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, RedirectResponse
