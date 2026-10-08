@@ -1172,3 +1172,34 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291fâ
 - **Follow-up needed to make soak verifiable (not done; needs Joshua/Project):** emit `internal.heavy_job_gate` and `internal.council.resolver_scheduler` at INFO in prod, e.g. a root `logging.basicConfig(level=INFO)` in worker/web startup or WARNING-level gate reject lines. Alternatively, provide a query-capable Axiom token or UI check. Separately, triage the ~34-min OOM loop on shared-cpu-2x:1024MB (inline worker + uvicorn on one VM).
 - **P4b: HOLD.** Soak spot-check 1 does not pass.
 - **Ditto:** `grok-pr1333-soak-spotcheck1-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~12:10 PM PT: prod OOM restart loop continuing (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **The prod OOM restart loop is continuing on `b6f8d48c`** (machine `7841024b3712e8`).
+- **Exit 137 kills since the 13:16Z launch:** 14:03 (oom), 14:37, 15:11 (oom), 15:44, 16:14 (oom), 16:40, 17:11, 17:42 (oom), 18:36 (oom), 18:47Z. That is **10 total**.
+- **Gaps:** the latest gap was **11 min**, the shortest so far. Earlier gaps were 26â€“54 min, typically ~30.
+- **`/version`:** still `b6f8d48c`.
+- **Action:** read-only check only; no action taken. Joshua skipped the triage widget, so nothing was sent to the Project.
+- **P4b:** HOLD. **#1335:** awaiting Joshua's merge.
+
+### MC verification (read-only; 12:08 PM PT / 19:08Z)
+- **Machines API:** `GET /v1/apps/subnet-dashboard/machines/7841024b3712e8/events?limit=50` with the box `FLY_API_TOKEN` returned HTTP 200 with 33 events, starting at the 13:16:53Z `launch`. The default call without `limit` returns only the last 20 events, which start at 15:45Z.
+- **Exit events (exit_code=137, requested_stop=false, all followed by a flyd restart):**
+  - 14:03:01Z oom=true
+  - 14:37:53Z oom=false
+  - 15:11:41Z oom=true
+  - 15:45:02Z oom=false (the kernel OOM-killed python at 15:44:56Z, per spot-check 1)
+  - 16:14:40Z oom=true
+  - 16:40:36Z oom=false
+  - 17:11:49Z oom=false
+  - 17:42:10Z oom=true
+  - 18:36:10Z oom=true
+  - 18:47:20Z oom=false
+- **Correction to the drafted status:** the draft tagged only 16:14, 17:42 and 18:36 as oom. flyd's `oom_killed=true` is also set on 14:03 and 15:11, so 5 of the 10 are flagged oom by flyd.
+- **Uptime per process:** 46, 35, 34, 33, 30, 26, 31, 30, 54, 11 min. "Accelerating" rests on the last gap only; the gap before it was 54 min.
+- **Since the last kill:** no exit between 18:47:23Z (start) and 19:08Z.
+- **Machine:** state `started`, image `deployment-01M4DTG0H3PGX33BWWGT59TMHW`, shared 2 CPU / 1024 MB.
+- **`/version`:** `b6f8d48c45f95a85f2074527cfcf7191de42e1af` at 19:08Z.
+- **Ditto:** `grok-prod-oom-loop-update-2026-10-08` (source=cursor)
