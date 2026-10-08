@@ -1561,3 +1561,40 @@ The deciding evidence needs Joshua's approval for read-only `fly ssh` (py-spy/fa
 The #1338 deploy widget was skipped and treated as declined. #1338 is on HOLD (PASS, undrafted, not merged). P4b HOLD.
 
 - **Ditto:** `grok-web-rss-triage-2026-10-08` (source=cursor)
+
+## 2026-10-08 2:28 PM PT (21:28Z): Read-only prod web diagnostics result — Mission Control / Grok Bot
+
+**Author:** Mission Control / Grok Bot.
+
+Joshua approved read-only `fly ssh` diagnostics at **2:21 PM PT**. Target: subnet-dashboard machine `7841024b3712e8`. No installs, signals, restarts, or config/secret/deploy changes. Raw output on the MC box: `/workspace/prod-diag-2026-10-08/` (summary `ANALYSIS.md`).
+
+### (a) OOM recurred before the first SSH session
+- Kernel at **21:21:29Z**: `Out of memory: Killed process 652 (python) total-vm:1618668kB, anon-rss:469408kB` (web pid 652, anon-rss ~469MB). flyd exit 21:21:36Z `oom_killed=true`; restart 21:21:38Z. First SSH session 21:21:42Z.
+- OOM cycle: 20:00 -> 20:41:48 -> 21:21:29Z, **~40 min apart**. Prior boot: health failing from 21:09:10Z, ~12 min stall before the kill.
+- New boot: web pid 652 (`run_web_with_guard.py`, "Started server process [652]" 21:22:25Z); worker pid 659.
+
+### (b) Samples (new boot)
+
+| sample | UTC | uptime | web RSS | web HWM | web threads | web FDs (reg/sock) | message_intel.db FDs (+wal) | worker RSS / thr / FDs | /metrics in-machine | MemAvailable |
+|---|---|---|---|---|---|---|---|---|---|---|
+| s1 | 21:22:15 | 38s | 143.8MB | 143.8MB | 2 | 20 (8/2) | 0 | 145.0MB / 17 / 25 | refused (not listening) | 523MB |
+| s2 | 21:22:59 | 82s | 255.1MB | 255.1MB | 15 | 33 (18/4) | 4 (+3) | 163.1MB / 28 / 29 | 200 in 7.83s; rss 278.2MB fds 37 | 360MB |
+| s3 | 21:28:21 | 404s | 330.6MB | 343.1MB | 21 | 60 (42/7) | 19 (+13) | 271.8MB / 22 / 31 | 200 in 12.80s; rss 356.1MB fds 69 | 199MB |
+
+Sockets at s3: web 4 ESTAB (all outbound), 1 LISTEN, 0 CLOSE_WAIT, 0 inbound 172.16.x held.
+
+### (c) py-spy (already present at /usr/local/bin/py-spy; nothing installed)
+- s2 (21:22Z): 3 threads in `netuid_sentiment_rollup` (message_intel/models.py:645, full-table SELECT+fetchall, uncached, called per netuid from `dpick_copy._social_row_for_block`); 2 threads ("emergency-prime", "bailout-emergency-prime") blocked in `with ThreadPoolExecutor` `__exit__` at server.py:785.
+- s3 (21:28Z): 11 "AnyIO worker thread"s ALL in message_intel/engine.py `list_messages` -> `rollup._proof_rows` x7, `_load_message_rows` x3, `build_trending_subnets` x1. Also learning-snapshot-prewarm in deepcopy (learning/routes.py) and homepage-warm-render in json.load (`_enrich_daily_pick_payload_lite`).
+
+### (d) Verdicts vs triage section 10
+- **(a) predictions.json parse / allocator:** OPEN (homepage-warm-render json.load seen in s3; not settled).
+- **(b) abandoned work / queues:** PARTLY SUPPORTED, via message-intel (threads stacking in uncached loads; `with TPE __exit__` joins seen).
+- **(c) stalled event loop holding inbound sockets:** NOT SUPPORTED early-cycle (0 inbound held, 0 CLOSE_WAIT at 404s uptime).
+- **(d) sqlite FDs:** OPEN / in-flight (message_intel.db FDs 0 -> 4 -> 19 (+13 wal) tracking concurrent loads).
+- **NEW (e): concurrent uncached message_intel full-table loads.** 11 threads in list_messages/_proof_rows/_load_message_rows/build_trending_subnets at 21:28Z; 3 in netuid_sentiment_rollup at 21:22Z. Strongest new lead for web RSS growth.
+
+### (e) MC spot-check
+MC re-read the raw files: s3 py-spy dump has 11 `list_messages` frames; s2 has 3 `netuid_sentiment_rollup` frames; the kernel OOM line above is verbatim from `flylogs-20261008T212235Z.txt`.
+
+- **Ditto:** `grok-prod-web-diag-2026-10-08` (source=cursor)
