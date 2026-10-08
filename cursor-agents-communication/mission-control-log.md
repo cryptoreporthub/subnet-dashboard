@@ -807,3 +807,73 @@ No X and no f anywhere; no flakiness at head.
 - **P4b:** still HOLD_CONDITIONAL; queue file not touched.
 - **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review10-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~8:19 PM PT: MC review 11 of PR #1333 at e52557b8, verdict **PASS** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `e52557b8c4e62408239ea2fbde52c742d698cb23` (parent `35fad3e8`, "test: remove wipe conditional source sniff (MC review 10)", committed 7:46 PM PT), verified via GitHub and `git ls-remote`. OPEN, not merged, mergeable_state clean. Base main `cba07cf3`.
+- **Verdict: PASS.** None of the five convergence-rule blockers apply. **Undrafted** by MC at 8:18 PM PT; re-fetched: `draft=false`, head still `e52557b8`, merged=false. **Not merged.** Merge and deploy are Joshua's.
+- **Reconcile:** MC log tip was `a809bee9` (review 10) with no review-11 entry; Ditto vendorId `grok-pr1333-mc-ac-review11-2026-10-07` absent before this save. The interrupted first attempt left a complete mutant matrix (7:50–7:56 PM PT) and the 20× loops (7:57 PM PT), both run against the e52557b8 test files (checked byte-for-byte). I reused them and re-ran the wipe matrix myself.
+- **Smoke CI at e52557b8:** run `37719568938` ("CI Smoke Test") **completed / success** at 7:49 PM PT (head_sha matches).
+- **Diff 35fad3e8..head:** only `tests/test_heavy_job_gate.py` (−10): it deletes `import inspect`, `_release_wipe_is_conditional()` and the early return in the wipe test, exactly as asked in review 10. The gate (byte-identical since `7ae06256`) and the contention file are unchanged. Files vs main: the same 3 files. No fly.toml, deploy, RESOLVER_* or P4b changes; caller hooks unchanged (pump/scheduler, council/score_snapshots, council/resolver_scheduler).
+
+### What passed
+- 16/16 in 2.12 s at pristine head. The forced-timing test takes 0.50 s, skip_path 1.05 s and blocks_second 0.20 s.
+- Contention file 20/20 twice; both gate files 20/20.
+- Review 1-5 repros clean on the current design:
+  - r5 suite: R4 forced/reverse, BUG1 ×4, BUG2 slow-release 99 rejects with 0 None/unknown, WIPE same/diff name holder kept, GAP 200/200 named.
+  - r5-lock: EXC, GENCLOSE and REENTRANT all leave the state clean.
+  - r4-p1b, r3-lock P1-P3 and toctou A/B/C (69k checks, 0 None) are clean.
+  - The sections that patch the removed `_lock`/`_holder_lock` attributes cannot run on this design (AttributeError, same as reviews 6-10). r5 covers those scenarios.
+- Stress 3 × 10s: 11.4k / 11.3k / 11.4k acquires and 19.3M / 19.4M / 18.7M observer checks, with 0 None, wrong or unknown (about 60k rejects per run, 0 None/unknown).
+- Callers (8 files: background_boot, liveness, stall_guard, phase3 orphan revive, pump ladder, resolver_revive, resolver_scheduler, score_snapshots): head 124 passed / 9 failed, main `cba07cf3` 124 / 9. The same 9 tests fail on both (pre-existing on main), including the `test_resolver_revive.py` failures. No new failure.
+
+### Matrix (my gates; 10 runs per cell; F = real assertion, T = fails only on a wait timeout, X = crash, f = fake failure on a gate lacking that bug)
+Columns: b_slow / b4 / c / wipe / b6 / race / stress.
+
+| Gate | Result |
+|---|---|
+| head | P P P P P P P |
+| a1, a2p | P P P P P F F (real: holder wiped/overwritten) |
+| a2-alt | P P P P P F F (real: `'job_a' == 'job_b'`) |
+| b1 | F P P P P P P |
+| b2 | F P P P P P P |
+| b3 | F F P P P P P |
+| b4 | P F P P P P P |
+| b5 | F P P P P P P |
+| b6 | P P P P F P P |
+| c1, c3 | P P T P P F F (c-test T at :859; race/stress real) |
+| c2 | P P P P P F F |
+| wipe (free, then clear-if-same-name) | P P P F P P P (real) |
+| **wipe2 (free, then unconditional clear)** | **P P P F P P P (real). FIXED** (review 10: uncaught) |
+| **wipe3 (conditional clear via `my_name`)** | **P P P F P P P (real). FIXED** |
+| 574d6080 | P P P P P F F |
+| 66f77af6 | F P F P P F F (all real) |
+| d93ae45b | P P F F P F F (all real) |
+| DCL / DCL+comment / DCL+marker / OK_extra / OK_condclear | all P |
+| correct gate, `_holder` renamed | c/race/stress fail (AttributeError fail-fast plus timeouts): known nit |
+| correct gate, all internals renamed | b_slow/c/race/stress T: known nit |
+
+- **Delta vs review 10:** only wipe2 and wipe3 changed, from P to F on the wipe test. No other cell changed; no regression.
+- **Independent wipe-test re-run (10× each):** head, b2, b3, 66f77af6, OK_condclear, DCL and OK_extra 10P; wipe, wipe2 and wipe3 10F, each on the real `holder wiped while same-name owner holds slot` assertion. This matches the Project's claim.
+- No X and no f anywhere; no flakiness at head.
+
+### Why the Project's "b2" fails the wipe test but MC's b2 passes it
+- **MC's b2** clears the holder first and frees the slot afterwards, in two separate lock steps. Between those steps the slot is still taken but the holder shows as None. The bug shows up as a reject logging `holder=None`, which the b_slow test catches. Nobody else can grab the slot in that window, so no other owner's holder gets wiped, and the wipe test correctly passes.
+- **The Project's "b2"** frees the slot first and then clears the holder unconditionally. A new owner can grab the slot in between, and the old releaser then wipes the new owner's name. That is the same code as MC's wipe2.
+- Its 10/10 wipe failures are a correct catch, not a false failure. The two mutants share a label but are different bugs.
+
+### Follow-up PR scope (non-blocking; tests only)
+1. **Wipe test silent early returns (:677-682):** `_held` true, `not ok`, or `current_holder() != "resolver"` returns with no assertion. Also, the assert at :683-685 can never fail because it repeats the check just above it. Assert that the scenario was reached, or explicitly skip.
+2. **b6 test (:785-786):** returns silently on gates without `_state_lock`. Use `pytest.skip` with a reason.
+3. **c test (:833/:841):** `release_winner` is never set, so `_pause_after_claim` is a fixed 0.5 s wait (c1/c3 show T there). Set the event, or drop it.
+4. **Private-name reads:** `_gate_holder` reads `gate._holder` (:180-184); `slot._tracker` write (:176). Correct gates with renamed internals fail or time out (`_holder` renamed: AttributeError plus timeouts; all renamed: T on b_slow/c/race/stress).
+5. **Small sleeps / slow failures:** skip_path sleeps (:891-895), blocks_second 0.2 s (:517); a1/a2p failures take about 4 s to surface.
+6. **New:** reconcile the mutant labels between the Project and MC (Project "b2" = MC wipe2) so future matrices compare like with like.
+
+### Other
+- **Project:** informed of PASS via Joshua/Coordinator; no code changes requested for this PR.
+- **P4b:** still HOLD_CONDITIONAL; queue file not touched.
+- **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review11-2026-10-07` (source=cursor)
