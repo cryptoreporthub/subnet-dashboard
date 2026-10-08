@@ -1635,3 +1635,36 @@ MC re-read the raw files: s3 py-spy dump has 11 `list_messages` frames; s2 has 3
 - #1330 unmerged (Wave 2 re-AC). **P4b HOLD.**
 
 - **Ditto:** `grok-pr1338-deploy-2026-10-08` (source=cursor)
+
+## 2026-10-08 4:25 PM PT (23:25Z): SOAK 3 INTERIM — FAIL — Mission Control / Grok Bot
+
+**Author:** Mission Control / Grok Bot.
+
+### (a) Prod state
+- `/version` = `c8ebc29b` (vehicle #1339 / #1338 deploy).
+- `/health` = 200 in 0.30s at 4:24:46 PM PT (23:24:46Z).
+
+### (b) Restarts since 2:36:30 PM PT boot
+Machines API (7841024b3712e8): two exits with `exit_code` 137 since the 21:36:30Z boot; flyd `oom` flag not set (flag has been inconsistent before):
+- exit 3:33:30 PM PT (22:33:30Z), started 3:33:32 PM PT
+- exit 4:02:11 PM PT (23:02:11Z), started 4:02:13 PM PT
+
+### (c) Slot / gate
+- #1338 stall release still working; pump_ladder still hangs every cycle:
+  - `tick body stalled >600s` at 23:18:00Z, then release `held_ms=699762.6` at 23:19:39Z
+  - `prediction_resolver` acquired at 23:21:05Z (release not yet seen in the log buffer)
+
+### (d) Verdicts so far
+- OOM/restarts: **FAIL**
+- Slot release: **PASS** (mitigation working)
+- Underlying pump hang: **FAIL** (persists)
+- Resolver/snapshot completion: not confirmed
+
+### (e) Routines / Project
+- Soak-3 routine 4:12 PM PT run and WAITING_GROK poll runs failed. Cause not visible to MC; MC checking manually.
+- Project `bc-01a10d2f` was in error state; the 2:33 PM PT message-intel fix request never ran (transcript unchanged). MC re-sent it at ~4:25 PM PT on composer-2.5 fast=false (Joshua pref 2:33 PM PT). No message-intel PR exists yet.
+
+### (f) Stance
+- **P4b HOLD.** #1330 untouched (Wave 2 still needs single-flight + degraded caching).
+
+- **Ditto:** `grok-soak3-interim-2026-10-08` (source=cursor)
