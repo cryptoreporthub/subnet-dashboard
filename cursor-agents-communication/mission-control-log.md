@@ -877,3 +877,56 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - **P4b:** still HOLD_CONDITIONAL; queue file not touched.
 - **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review11-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~9:58 PM PT: Replit spot-check MODIFY on PR #1333 at e52557b8 confirmed; review-11 PASS holds; options A/B put to Joshua (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Source:** PR #1333 issue comment `6052157470` (posted 9:21 PM PT, author cryptoreporthub, "Spot-check: MODIFY" from Replit) at head `e52557b8c4e62408239ea2fbde52c742d698cb23`.
+- **Claim:** `test_same_name_reacquire_keeps_holder_visible` (tests/test_heavy_job_gate.py:636-703) can pass without asserting its stated condition.
+- **Result: confirmed.** All of Replit's points hold.
+
+### Evidence (review-11 venv and `/tmp/wt9_*` harness; uncommitted probe recording the path taken)
+- **Head gate, 20 runs:** 20 pass, every one through the no-gap fallback (:694-697). The real assertion (:686-693) was reached 0/20, and the silent returns (:677-683) were taken 0/20.
+  - **Cause:** the gap pause (`_arm_release_gap_pause`, :310) fires only on a second lock step after the body. The atomic gate releases in one step, so the pause never fires.
+- **Correct gates, 20 runs each** (DCL, DCL+comment, DCL+marker, OK_extra, OK_condclear): 20/20 pass, every one through the no-gap fallback. The real assertion is never reached.
+- **wipe / wipe2 / wipe3, 20 runs each:** 0/20 pass. Every run reached the real assertion and failed on "holder wiped while same-name owner holds slot".
+
+### Replit's points
+- **(a) Correct.** `second_checked.wait(timeout=1)` (:651) ignores its result. On correct gates the pause never fires at all.
+- **(b) Correct.** The returns at :677-678 and :680-683 are silent, and the assert at :684-686 can never fail because it repeats the check above it. The no-gap fallback (:694-697), taken 100% of the time on correct gates, only checks a re-acquire after `first` fully exits.
+- **(c) Correct, with a nuance.** `done` is set in `finally` (:698-699), so :703 only proves the thread exited. `runs.assert_clean()` (:702) still surfaces errors raised in the worker threads, which is how the wipe mutants are caught.
+
+### Verdict impact
+- **Review-11 PASS holds under the convergence rule.** None of the blockers apply:
+  - (i) no regression;
+  - (ii) wipe/wipe2/wipe3 are caught by a real assertion;
+  - (iii) no false failure;
+  - (iv) not timeout-only;
+  - (v) not flaky.
+- **Remaining question:** whether an empty pass on correct gates is acceptable before merge.
+
+### Options put to Joshua
+- **(A)** Keep the PASS and fold this into the follow-up PR (upgrades follow-up item 1).
+- **(B)** Small tests-only MODIFY on #1333 before merge:
+  - Replace the test (:636-703) with a checkpoint version: at every lock step `first` takes during release, `second` tries a same-name re-acquire.
+    - If held, it must be rejected with `current_holder()=="resolver"`.
+    - If the slot was freed early, the holder must still be `resolver` after `first` finishes.
+  - No silent returns; assert that at least one held-and-named step was checked; `pytest.skip` when the gate's locks can't be found.
+  - Delete the now-unused `_arm_release_gap_pause`; add `import pytest`. +72/−76, one file.
+- **Verification of B on a scratch copy (10 runs per gate):**
+  - Head and the correct gates (DCL, DCL+comment, DCL+marker, OK_extra, OK_condclear, `_holder`-renamed) pass 10/10, each through a real held-and-named check (head 20/20 with path recording).
+  - wipe / wipe2 / wipe3 / d93ae45b fail 10F on the wipe assertion.
+  - b1 / b2 / b3 / 66f77af6 fail 10F on "slot held during release but holder=None", their actual bug.
+  - 574d6080 passes; its token-guarded clear has no wipe bug.
+  - a1 / a2 / a2-alt / b4 / b5 / b6 / c1-c3 pass this test as before; their own tests still catch them.
+  - Gate with all internals renamed: explicit skip 10/10.
+  - Patched file plus contention file 20/20; the patched file alone runs 13/13 in 2.03 s.
+- **MC recommends B.** If B is chosen, PR #1333 will be re-drafted (currently draft=false from review 11).
+- **Artifacts (box):** `/workspace/pr1333-replit/new_wipe_test.py`, `/workspace/pr1333-replit/pr1333-r11-replit-fix.diff`, `/workspace/pr1333-replit/test_heavy_job_gate_patched.py`.
+
+### Other
+- Nothing posted on GitHub; the PR's draft state is unchanged; no Project message yet. Awaiting Joshua's choice.
+- The probe file was deleted and the review checkout is clean at e52557b8.
+- **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-replit-spotcheck-2026-10-07` (source=cursor)
