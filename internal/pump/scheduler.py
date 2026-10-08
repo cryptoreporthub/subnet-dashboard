@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 PUMP_LADDER_REFRESH_MINUTES = int(os.environ.get("PUMP_LADDER_REFRESH_MINUTES", "20"))
 PUMP_LADDER_RETRY_MINUTES = int(os.environ.get("PUMP_LADDER_RETRY_MINUTES", "3"))
+PUMP_LADDER_BODY_STALL_SECONDS = float(os.environ.get("PUMP_LADDER_BODY_STALL_SECONDS", "600"))
 JOB_ID = "pump-ladder-scheduler"
 
 _scheduler: Optional["PumpLadderScheduler"] = None
@@ -207,7 +208,35 @@ class PumpLadderScheduler:
                 record_ladder_scan_run(result, sched=self)
                 self._schedule_next(result)
                 return result
-            return self._tick_body()
+            return self._run_body_bounded()
+
+    def _run_body_bounded(self) -> Dict[str, Any]:
+        # ponytail: the body runs on a worker so a wedged scan cannot pin heavy_job_slot.
+        # Ceiling: an abandoned body keeps running and can finish late; _scan_lock stops overlap.
+        outcome: Dict[str, Any] = {}
+        done = threading.Event()
+
+        def _body() -> None:
+            try:
+                outcome["result"] = self._tick_body()
+            except BaseException as exc:
+                outcome["exc"] = exc
+            finally:
+                done.set()
+
+        threading.Thread(target=_body, daemon=True, name="pump-ladder-body").start()
+        if done.wait(timeout=PUMP_LADDER_BODY_STALL_SECONDS):
+            if "exc" in outcome:
+                raise outcome["exc"]
+            return outcome["result"]
+        logger.warning(
+            "pump ladder tick body stalled >%.0fs; releasing heavy_job_slot",
+            PUMP_LADDER_BODY_STALL_SECONDS,
+        )
+        result = {"ok": False, "run_at": _now_iso(), "error": "tick_body_stalled"}
+        record_ladder_scan_run(result, sched=self)
+        self._schedule_next(result)
+        return result
 
     def _tick_body(self) -> Dict[str, Any]:
         result: Dict[str, Any] = {"ok": False, "run_at": _now_iso(), "error": None}
