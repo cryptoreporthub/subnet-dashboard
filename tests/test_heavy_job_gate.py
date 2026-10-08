@@ -871,44 +871,51 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
 
 def test_reject_skip_path_does_not_hold_holder_lock():
     """Reject must not hold gate lock across yield; skip path must stay non-blocking."""
+    holder_in = threading.Event()
     reject_in_skip = threading.Event()
-    probe_ready = threading.Event()
     probe_done = threading.Event()
     release_holder = threading.Event()
     probe: dict[str, object] = {}
     runs = _ThreadRun()
 
     def holder() -> None:
-        with heavy_job_slot("holder"):
+        with heavy_job_slot("holder") as ok:
+            assert ok is True
+            holder_in.set()
             release_holder.wait(timeout=3)
 
     def rejector() -> None:
+        assert holder_in.wait(timeout=2), "holder never acquired the slot"
         with heavy_job_slot("waiter") as ok:
             assert ok is False
             reject_in_skip.set()
-            probe_ready.wait(timeout=2)
-            probe_done.wait(timeout=2)
+            # Stay in the skip body until the probe is done. Bounded at 1s so a gate
+            # that holds its lock across the yield unblocks the probe and fails on
+            # the elapsed assertion below instead of on a wait timeout.
+            probe_done.wait(timeout=1)
 
     def probe_gate() -> None:
-        reject_in_skip.wait(timeout=2)
+        assert reject_in_skip.wait(timeout=2), "rejector never reached skip body"
         started = time.perf_counter()
         probe["holder"] = current_holder()
         with heavy_job_slot("probe") as ok:
             probe["second_ok"] = ok
         probe["elapsed"] = time.perf_counter() - started
-        probe_ready.set()
         probe_done.set()
 
     runs.start(holder, name="holder")
     runs.start(rejector, name="rejector")
     runs.start(probe_gate, name="probe")
-    assert probe_done.wait(timeout=2), "probe never finished during reject skip path"
+    probe_done.wait(timeout=3)
     release_holder.set()
     runs.assert_clean()
 
+    assert probe_done.is_set(), "probe never finished during reject skip path"
+    assert probe["elapsed"] < 0.2, (
+        f"probe blocked {probe['elapsed']:.3f}s behind the reject skip body"
+    )
     assert probe["holder"] == "holder"
     assert probe["second_ok"] is False
-    assert probe["elapsed"] < 0.2
 
 
 def test_racing_claim_winner_holder_never_none(monkeypatch, caplog):
