@@ -1257,3 +1257,66 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291f�
 - **#1336** (INFO logging): MC AC in progress at `6302006`.
 - **#1330 ThreadPoolExecutor claim:** Project worker reports DIVERGE (#1330 head `e0d25af1` uses explicit `shutdown(wait=False, cancel_futures=True)`; the blocking with-block is on main `802429c3` and #1330 removes it); MC's independent check is pending.
 - **P4b:** HOLD.
+
+## 2026-10-08 12:45 PM PT: MC decisions to Project — Gemini P3 verify + #1336/#1330–#1332 (Mission Control)
+
+**Author:** Mission Control (Grok). Independent read-only GitHub verify (PR heads, file:line at exact SHAs, compare). Project worker `bc-536b1619` also checking; this is MC's own verdict.
+
+### 1. ThreadPoolExecutor ~2s claim on #1330 — **DIVERGE** (at current head)
+
+- **PR #1330 head:** `e0d25af1b035e91bf161ee9dbd2eb6b794735c4d` (branch `cursor/p3a-council-signals`).
+- **Claim:** uses `with ThreadPoolExecutor(...)` + ~2s `future.result(timeout=...)`, so leaving the `with` joins the worker and the timeout does not bound wall time.
+- **Exact site of the ~2s timeout (verbatim at head):** `internal/learning/dashboard_context.py:120-136`:
+  ```
+  120	        # No ThreadPoolExecutor context manager: on timeout its __exit__ joins
+  121	        # the still-running worker and the shell hangs (same bug class as
+  122	        # server._resolve_index_context / emergency prime). Abandon instead.
+  123	        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+  124	        fut = pool.submit(_load_learning_metrics)
+  125	        try:
+  126	            ctx["learning_metrics"] = fut.result(timeout=2.0)
+  127	            _FAST_SHELL_CACHE["at"] = now
+  128	            _FAST_SHELL_CACHE["data"] = ctx
+  129	        except concurrent.futures.TimeoutError:
+  130	            logger.warning("fast shell learning metrics timed out after 2.0s")
+  131	            pool.shutdown(wait=False, cancel_futures=True)
+  132	            ctx["learning_metrics_degraded"] = True
+  ```
+- **Verdict: DIVERGE.** No `with ThreadPoolExecutor` at this site on current head. Timeout path calls `shutdown(wait=False, cancel_futures=True)`. Tip commit `e0d25af1` is exactly that abandon fix.
+- **Historical nuance (not the claim as stated against current head):** through `7adfafd8` (the SHA of MC's earlier AC PASS) the site was still:
+  ```
+  120	        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+  121	            fut = pool.submit(_load_learning_metrics)
+  122	            ctx["learning_metrics"] = fut.result(timeout=2.0)
+  ```
+  Minimal local repro: with-block + sleep(5) + timeout=2 → wall ~5.0s; abandon pattern → wall ~2.0s.
+- **Safety elsewhere on #1330 head:** `_prime_emergency_home_html` (`server.py:784-788`) already abandons (no with); `_resolve_index_context` (`server.py:805-831`) uses abandon on timeout. Still present (out of P3a scope / pre-existing): `internal/simivision/chat_service.py:135-137` `with ThreadPoolExecutor` + `fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)` (fixed on #1331, not #1330); `worker_proxy.py:752` with-TPE without result timeout; `chain_client.py:582` with-TPE + budget break then joins on exit.
+- **Tests:** `test_emergency_prime_timeout_does_not_join_hung_render` catches emergency-prime join. **No** test on #1330 asserts that a slow `_load_learning_metrics` returns within ~2s wall time (timeout-only / missing detection for that path). `cancel_futures` does not kill a running thread; the stuck worker still runs after abandon.
+
+### Same-pattern grep on #1331 / #1332 heads
+
+| PR | head | `dashboard_context` 2s with-TPE | `chat_service` investigation with-TPE |
+|---|---|---|---|
+| #1330 | `e0d25af1` | FIXED (abandon) | STILL PRESENT (`:135`) |
+| #1331 | `72235628` | STILL PRESENT (`:120-122`, inherits main) | FIXED (`shutdown(wait=False, cancel_futures=True)` in `finally`) |
+| #1332 | `cd0b5a45` | STILL PRESENT (`:120-122`) | STILL PRESENT (`:135`) |
+
+### 2. Branch drift vs main `802429c38888ed2b1b08b65b2b83492e0a49da0e`
+
+| PR | head | base (PR.base.sha) | behind main | ahead | stacked? | mergeable | mergeStateStatus |
+|---|---|---|---|---|---|---|---|
+| #1330 | `e0d25af1` | `18a6482c` | **18** | 4 | no (solo) | MERGEABLE | BEHIND |
+| #1331 | `72235628` | `b5253e65` | **17** | 2 | no (not on #1330) | MERGEABLE | BEHIND |
+| #1332 | `cd0b5a45` | `b5253e65` | **16** | 2 | no (not on #1330/#1331) | MERGEABLE | BEHIND |
+
+Simulated sequential merge onto current main (#1330 then #1331 then #1332): all three clean (no conflicts). Smoke SUCCESS on each head. Not draft.
+
+### 3. MC decisions sent to the Project (12:45 PM PT)
+
+- **(a) #1336 needs no rebase.** MC reviews `6302006eb2d3811881c1b87156cf62c47f4a248b` and also tests its merge result onto `802429c3`. The only main delta since #1336's base is tests-only #1335 (`tests/test_heavy_job_gate.py`); #1336 touches `internal/app_logging.py`, `internal/worker.py`, `server.py`, `tests/test_heavy_job_gate_logging.py` — no overlap. Merge of #1336 onto `802429c3` is CLEAN (+67/0, 4 files). A rebase would only mint a new SHA needing CI + AC again.
+- **(b) P3 merge order stays #1330 → #1331 → #1332.** Rebase each onto main only when Wave 2 is green-lit (soak PASS + Joshua GO), so SHAs do not go stale now.
+- **(c) ThreadPoolExecutor claim is DIVERGE → does NOT block #1330.** Prior MC PASS is **not** withdrawn for this claim. (Note: that PASS named `7adfafd8`; tip is now `e0d25af1` with the learning_metrics abandon fix already landed. Fresh AC of tip is separate bookkeeping, not a Gemini-claim block.)
+
+### Queue / other
+- **P4b:** HOLD. **#1336 AC:** in progress at `6302006`. **PROD DOWN** (wedged) remains as logged at 12:47 PM PT — restart needs Joshua.
+- **Ditto:** `grok-gemini-p3-verify-2026-10-08` (source=cursor).
