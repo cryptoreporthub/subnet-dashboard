@@ -1442,3 +1442,65 @@ Prod was **not** wedged continuously until the #1336 deploy.
 
 ### (d) Noted
 - Unattributed SSH session by cryptoreporthub@gmail.com on prod at 20:00:29Z — flagged to Joshua.
+
+## 2026-10-08 1:58 PM PT (20:58Z): PR #1338 MC AC PASS @ 7a9fe4f7, undrafted (Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Verdict: PASS** (convergence rule) on exact head `7a9fe4f7dbf6c0dc26f2c2af8cd2f8edc306179f` (branch `cursor/heavy-slot-hold-fix-3aae`, base main `5ad00476`, 0 behind). Head re-checked by ls-remote right before undraft.
+- **Undrafted:** #1338 `isDraft=false` at ~20:57Z (1:57 PM PT). Not merged, not labeled, not deployed. Deploy needs Joshua's explicit go.
+- **Classification: MITIGATION, not the OOM root-cause fix.** It unpins heavy_job_slot in the WORKER after 600s. The memory growth and the OOM kills are in the WEB process.
+- **P4b:** HOLD.
+
+### Evidence (run on the box, `/workspace/pr1338-review`)
+- **Scope:** exactly 2 files, +80/-1: `internal/pump/scheduler.py` +30/-1 and `tests/test_pump_slot_stall.py` (new, +50). No fly.toml, RESOLVER_*, secret, workflow, or gate changes. `PUMP_LADDER_BODY_STALL_SECONDS` defaults to 600 in code, so fly.toml needs no change.
+- **Worker claims:** `_tick` holds the slot across the whole `_tick_body` (main L201-210), CONFIRMED. The 90s fetch join abandons its thread while the post-fetch scan is unbounded (state.py `_fetch_signal_rows_with_timeout` / `scan_all_subnets`), CONFIRMED. Web does not start the resolver, while web routes DO call `ensure_pump_ladder_scheduler`, CONFIRMED (pump/routes.py:42,54; analytics/routes.py:62-64). The gate is a per-process module global, CONFIRMED. One correction: later bodies do NOT block on `_scan_lock`. It is `acquire(blocking=False)`, so they return `scan_in_progress` immediately.
+- **Abandon path, persistent-hang repro (`mc/test_mc_abandon_repro.py`):** real `scan_all_subnets`, `_scan_lock`, and fetch guard. Only the network fetch and the locked scan are stubbed. 6 consecutive ticks were run.
+  - **(a) Hang outside pump `state._lock`:** every tick returned and the holder was None after each. Live `pump-ladder-body` threads stayed at 1 across all 6 ticks, and fetch threads at 0, so there is **no pile-up and the thread count is bounded**. Ticks 2-6 returned `scan_in_progress` → fast retry every 3 min. Each of those retries runs a full signal fetch (≤90s, under the slot) while the abandoned scan stays wedged. Note only.
+  - **(b) Hang while holding pump `state._lock`** (e.g. inside `safe_read/write_json`): the stall path's `record_ladder_scan_run → _persist_scheduler_meta → load_state` runs inside the slot and blocks on the same RLock. **The slot stays pinned (holder=pump_ladder) and the tick never returns.** This is identical to main, with no extra threads and no reschedule. It is not a regression, but **the fix does not cover this hang location.** Prod logs don't show where the 20:05Z wedge sat.
+- **Release semantics (`mc/test_mc_stall_hardening.py`, PASS on head):**
+  - The slot stays held before the bound (holder=pump_ladder at 0.4s with bound=1.0s) and is released only after the bound (≥0.95s).
+  - It is released exactly once, through the contextmanager finally. The body never touches the gate.
+  - A late-finishing body did not clobber a later holder (prediction_resolver held throughout).
+  - `_schedule_next` is called once with `tick_body_stalled`.
+  - With a prior success, liveness = **`failing`**. On a fresh tracker it reads `no_success_yet`, so the PR test's `!= "ok"` check is vacuous.
+  - The late body still writes ladder state and liveness, and calls `_schedule_next` with replace_existing on the same JOB_ID. That overwrites the pending tick rather than duplicating it. It runs heavy work outside the slot.
+- **Daemon:** `pump-ladder-body` is daemon=True, so it can't block interpreter or worker exit (the stall-guard `os._exit` and supervisor restart are unaffected). A daemon killed mid-write is pre-existing behavior, the same as the fetch and desk-snapshot threads.
+- **Test quality:**
+  - The new test FAILS on main with a real `AssertionError: heavy_job_slot still held by hung pump_ladder` (2.7s, not a timeout) and PASSES on head.
+  - Mutants, with the PR test and the MC hardening test:
+    - drop release on stall: killed by both
+    - bound=None: killed by both
+    - bound=10^6: killed by both
+    - revert to main: killed by both
+    - early release (timeout=0): **survives the PR test**, killed by MC
+    - no reschedule on stall: **survives the PR test**, killed by MC
+    - no record on stall: **survives the PR test**, killed by MC
+  - Optional hardening patch: `/workspace/pr1338-review/pr1338-optional-test-hardening.diff`.
+- **Suites:**
+  - Gate, contention and stall: 17 passed.
+  - Gate, contention, logging, stall, pump_ladder_scheduler, loop_stall_guard, background_boot and resolver_scheduler: head 103 passed / 6 failed, base 102 / 7. The extra base failure is the new test, and the 6 others are identical on both (2 background_boot, 4 resolver_scheduler), so they predate this PR.
+  - Contention, stall and MC hardening 20x: 0 failures.
+  - The squash-equivalent merge equals the head tree: the branch is 0 behind main 5ad00476, and GitHub reports mergeable_state=clean.
+- **CI:** 1 check run on 7a9fe4f7: `smoke` (run 37842245627, job 113534248848) completed success, head_sha 7a9fe4f7. All steps succeeded. The "exit code 1" annotation comes from the continue-on-error lint step.
+
+### Process attribution (soak2, 20:00-20:40Z)
+- **Slot holder = WORKER** (inline worker pid=660 per boot log). The log lines carry no pid, so this is inferred from code plus per-process gate state:
+  - Web runs RUN_MODE=web with BACKGROUND_ON_WEB=off, so `start_background_workers` runs only in the worker. The `internal.background_boot pump_ladder start result ... already running` line at 20:05:08 is therefore the worker.
+  - Resolver start also calls `start_pump_ladder_scheduler` → `_schedule(5)`, which matches the 20:05:10 acquire.
+  - All 14 rejects come from worker-only jobs (resolver ×10, score_snapshot ×4) and name holder=pump_ladder. The gate is process-local, so the holder is in the worker.
+  - There is only 1 pump acquire in the window, and 0 access-log hits on /api/pump-ladder/* or /api/pump-analytics. That is **no evidence a web pump scheduler started or ticked** in this window. It stays a latent risk, not the observed cause.
+- **RSS growth = WEB.**
+  - /metrics on :8080 is the prometheus process collector of the uvicorn web process. Its process_start_time 1791489605.89 is 20:00:05Z, and "Started server process [653]".
+  - The prior kernel OOM victim pid 652 was Fly's "Main child" (the exec'd web), anon-rss 482MB.
+  - The worker's pinned slot therefore does not explain web RSS/FD growth, so #1338 is a mitigation.
+  - Web-side follow-up candidates, not attributed: 18× `homepage cache warm timed out (join_timeout)` and 18× `fast shell learning metrics failed` in 40 min. The latter is the dashboard_context with-block that #1330 replaces.
+  - Worker-side: desk-snapshot stages abandon threads at 30s (4 timeouts).
+- **Stall guard vs 600s:** the guard's STALE strike is on score_snapshots.json age, threshold 5400s, and needs 2 strikes. The resolver path only warns at 21600s and revives at 1800s. A ≤600s hold stays under the resolver's 900s cadence and well under 5400s, so by itself it can't trip the guard. In soak2 the snapshot was already 38858s old (10.8h) before the 20:05 wedge, so the guard trips until score_snapshot actually completes, regardless of #1338. A smaller default (e.g. 300-420s) is optional. Pick it from observed healthy pump held_ms, which we don't yet have (no pump release logged since #1336).
+
+### Non-blocking notes
+1. The fix doesn't release the slot if the wedge holds pump `state._lock`, because the stall bookkeeping does a blocking load_state inside the slot. For follow-up: stall bookkeeping should be lock-free (timeout acquire or in-memory only), plus a single-in-flight body guard so thread count stays ≤1. Naive "move record outside the slot" would leak one APScheduler thread per cycle, so don't do that.
+2. After a stall, a wedged scan causes a full signal fetch every 3 min (scan_in_progress → fast retry). That's bounded but adds worker CPU/network churn.
+3. The PR test misses early release, no-reschedule and no-record mutants. The liveness assert is vacuous. An optional hardening diff is provided.
+4. The 600s runtime bound is acceptable. Detection in the test is a real assertion, not timeout-only.
+- **Ditto:** `grok-pr1338-ac-2026-10-08` (source=cursor)
