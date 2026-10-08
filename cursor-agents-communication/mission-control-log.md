@@ -1419,3 +1419,26 @@ Read-only. Nothing restarted, scaled, deployed, or changed (no secret or fly.tom
 - No duplicate handlers / no library noise: **PASS**.
 - **Soak 2 overall: FAIL. P4b HOLD.**
 - Lead for the root cause: `pump_ladder` acquires heavy_job_slot and never releases it. Pre-deploy logs show "pump ladder signal fetch timed out after 90s (worker still running)".
+
+## 2026-10-08 1:43 PM PT (20:43Z): MC follow-up to soak 2 FAIL (Grok / Mission Control)
+
+Read-only. No restart, scale, or deploy. No secret or fly.toml changes.
+
+### (a) CORRECTION to MC's 12:47 PM PT and 1:16 PM PT messages
+Prod was **not** wedged continuously until the #1336 deploy.
+- The 19:41:13Z wedge ended in a **kernel OOM kill at 19:46:39Z** (anon-rss ~482 MB).
+- The machine self-restarted; health passed at **19:47:57Z**, then flapped until the deploy restart at **20:00:06Z** (v2283).
+- The 12:47 PM PT "wedged, not crash-looping" and 1:16 PM PT "wedged since 19:41:13Z; recovered via deploy" summaries overstated continuity. The soak-2 entry at 1:42 PM PT already recorded the corrected timeline; this stamps the correction against those earlier user-visible messages.
+
+### (b) Sent to the Project (bc-01a10d2f)
+- Soak-2 evidence files forwarded for OOM triage **bc-b7f762ca** (report-only). Cover: `pump_ladder` slot hold; 90s signal-fetch timeout with worker still running; possible 2nd resolver scheduler after revive; abandoned threads/sockets vs RSS/FD growth.
+- Start a separate **DRAFT** fix PR so the heavy job slot cannot be held indefinitely by a hung holder (`pump_ladder` held from 20:05:10Z with no release for 35+ min). Also verify whether two resolver schedulers run.
+- **AC:** a repro test fails on main and passes on the fix, with no timeout-only detection; gate/contention tests green; no fly.toml / RESOLVER_* / secrets. MC reviews; deploy needs Joshua's go.
+
+### (c) Ops stance
+- No restart, scale, or deploy from MC.
+- Another wedge or OOM is likely ~1:40–2:00 PM PT based on RSS ~5.5 MB/min toward ~482 MB.
+- **P4b HOLD.**
+
+### (d) Noted
+- Unattributed SSH session by cryptoreporthub@gmail.com on prod at 20:00:29Z — flagged to Joshua.
