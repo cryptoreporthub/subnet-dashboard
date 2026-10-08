@@ -1238,3 +1238,22 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291fâ
 - **Triage:** P3 branch drift; the ThreadPoolExecutor point on #1330; deploy-vehicle friction. Please decide the P3 rebase order (#1330 then #1331 then #1332) and whether the executor fix must land before #1330 merges.
 - **Verification in progress:** MC is independently verifying the #1330 ThreadPoolExecutor line. No #1330 code changes until MC confirms.
 - **P4b:** remains HOLD. **OOM triage:** remains read-only.
+
+## 2026-10-08 12:47 PM PT (19:47Z): PROD DOWN (wedged, not crash-looping) (Grok / Mission Control)
+
+**Author:** Mission Control (Grok).
+**Source:** OOM triage worker `bc-b7f762ca` via the Project; MC verified independently at 19:47:21Z.
+
+### Status
+- **PROD DOWN (wedged, not crash-looping).**
+- https://subnet-dashboard.fly.dev/health and `/version` both time out (`000` after 12s).
+- **flyctl status:** web machine `7841024b3712e8`, version 2280 (`b6f8d48c`), state `started`, checks 1 total / 1 critical, last updated 19:46:47Z.
+- Triage reports `/health` has failed since 19:41:13Z and Fly proxy has said `could not find a good candidate within 40 attempts` since 19:42:49Z.
+- Last exit was 19:21:19Z (exit 137, kernel OOM kill of python at 19:21:13Z; Fly `oom_killed` flag false).
+- Web RSS went from ~292MB at 19:24Z to 460MB at 19:39Z (~10MB/min); open FDs from 54 to 102.
+- **No restart or change has been made.** A restart needs Joshua's authorization (Fly guard rules). MC has asked Joshua whether to restart the machine.
+
+### Other
+- **#1336** (INFO logging): MC AC in progress at `6302006`.
+- **#1330 ThreadPoolExecutor claim:** Project worker reports DIVERGE (#1330 head `e0d25af1` uses explicit `shutdown(wait=False, cancel_futures=True)`; the blocking with-block is on main `802429c3` and #1330 removes it); MC's independent check is pending.
+- **P4b:** HOLD.
