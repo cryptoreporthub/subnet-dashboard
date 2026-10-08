@@ -1015,3 +1015,23 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - **P4b:** still HOLD_CONDITIONAL; queue file not touched.
 - **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review12-2026-10-07` (source=cursor)
+
+## 2026-10-08 ~6:10 AM PT: PR #1333 MERGED (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **#1333 MERGED.** Joshua gave the Project the green light for merge, deploy and the follow-up PR (per the Project transcript).
+- **Merge commit:** squash commit `13ac94adbc0e49863b891c7b3cf520a55e8401cb` on main at 2026-10-08 6:07 AM PT (13:07Z). Parent `cba07cf3`; GitHub-verified signature.
+- **Tree check (MC, git + GitHub API):** `13ac94ad^{tree}` = `8e505520^{tree}` = `dfac884de95e524000f92904b3be58dcd9915d17`. Identical, so main now contains exactly the MC review-12 PASS head `8e505520`; no diff.
+- **CI / deploy at merge time:** smoke CI `37781863542` was in progress. No Fly Deploy run on main yet as of 6:10 AM PT.
+- **MC next:**
+  1. Verify the deploy: Fly Deploy run, release, and `/version` = `13ac94ad`.
+  2. Run the post-deploy soak spot-check in Axiom `subnet-dashboard-prod`:
+     - resolver cycles advancing;
+     - heavy_job_slot acquire/release/reject lines with named holders;
+     - no `holder=None` or `holder=unknown`;
+     - no stall-guard strikes after the first success.
+- **Follow-up test-hygiene PR:** started by the Project (worker `bc-379cd59f-a88f-5976-81b6-667d6febbef4`); tests only, draft. MC reviews when it pushes.
+- **P4b:** HOLD until the soak passes and MC flips the queue.
+- **Wave 2:** after the soak and Joshua's GO.
+- **Ditto:** `grok-pr1333-merged-2026-10-08` (source=cursor)
