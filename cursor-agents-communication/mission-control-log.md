@@ -1504,3 +1504,32 @@ Prod was **not** wedged continuously until the #1336 deploy.
 3. The PR test misses early release, no-reschedule and no-record mutants. The liveness assert is vacuous. An optional hardening diff is provided.
 4. The 600s runtime bound is acceptable. Detection in the test is a real assertion, not timeout-only.
 - **Ditto:** `grok-pr1338-ac-2026-10-08` (source=cursor)
+
+## 2026-10-08 2:00 PM PT (21:00Z): Prod OOM recurred + #1338 PASS hold for Joshua go (Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+### (a) Prod OOM recurred (matches MC prediction)
+- Machines API event at **20:41:48Z**: `exit_code=137`, `oom_killed=true`, `restarting=true`.
+- Machine started again at **20:41:51Z**.
+- At **20:59:13Z**: `/health` 200 (1.57s), health check passing.
+- Matches MC's soak-2 prediction of another wedge/OOM ~1:40–2:00 PM PT.
+
+### (b) #1338 MC AC PASS @ 7a9fe4f7, undrafted (mitigation only)
+- Exact head `7a9fe4f7dbf6c0dc26f2c2af8cd2f8edc306179f`, undrafted ~1:57 PM PT (detail entry above).
+- **MITIGATION only:** frees the worker's `heavy_job_slot` after a 600s stall.
+- OOM/RSS growth is in the **WEB** process (`/metrics` :8080 web; 19:46Z OOM victim pid 652 = web, 482MB). Slot holder is the **worker** (pid 660).
+
+### (c) Deploy hold + triage redirect
+- MC told the Project: **do not merge or deploy #1338** until Joshua gives an explicit go (the 12:25 auth covered #1336 only).
+- OOM triage worker (report-only) should focus next on **web RSS/FD growth**.
+- Leads: 18× homepage cache warm timeouts and 18× fast shell learning metrics failures in 40 min (main's blocking `with ThreadPoolExecutor` in `dashboard_context.py`, which #1330 replaces).
+
+### (d) Triage report
+- `internal/prod-oom-triage-2026-10-08.md` in the Project store (272 lines, 1:53 PM PT).
+- Supports #1338; notes a thread dump would settle the blocking call.
+
+### (e) Ask + stance
+- MC asked Joshua for a **go/no-go** on deploying #1338.
+- **P4b HOLD.**
+
