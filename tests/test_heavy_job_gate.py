@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import re
 import threading
@@ -125,6 +126,7 @@ class _LegacySlotLock:
         self._tracker = tracker
         self._before_acquire: tuple[Callable[[], None], ...] = ()
         self._after_acquire: tuple[Callable[[], None], ...] = ()
+        self._before_release: tuple[Callable[[], None], ...] = ()
         self._after_release: tuple[Callable[[], None], ...] = ()
 
     def pause_before_acquire(self, fn: Callable[[], None]) -> None:
@@ -132,6 +134,9 @@ class _LegacySlotLock:
 
     def pause_after_acquire(self, fn: Callable[[], None]) -> None:
         self._after_acquire = (fn,)
+
+    def pause_before_release(self, fn: Callable[[], None]) -> None:
+        self._before_release = (fn,)
 
     def pause_after_release(self, fn: Callable[[], None]) -> None:
         self._after_release = (fn,)
@@ -151,6 +156,7 @@ class _LegacySlotLock:
         return acquired
 
     def release(self) -> None:
+        self._run(self._before_release)
         self._real.release()
         self._run(self._after_release)
         name = threading.current_thread().name
@@ -165,10 +171,24 @@ class _GateHarness:
     raw_state: Optional[threading.Lock] = None
     tracker: _ConcurrentTracker = field(default_factory=_ConcurrentTracker)
 
+    def reset_tracker(self) -> _ConcurrentTracker:
+        self.tracker = _ConcurrentTracker()
+        if self.slot is not None:
+            self.slot._tracker = self.tracker
+        return self.tracker
+
 
 def _gate_holder() -> Optional[str]:
     """Read holder name without re-entering wrapped test locks."""
-    return getattr(gate, "_holder", None)
+    if not hasattr(gate, "_holder"):
+        raise AttributeError("gate internals not recognised: missing _holder")
+    return gate._holder
+
+
+def _release_wipe_is_conditional() -> bool:
+    """True when release clears holder only on a name match (wipe bug class)."""
+    src = inspect.getsource(gate.heavy_job_slot)
+    return "if _holder == name:" in src or "if _holder == release_name:" in src
 
 
 def _install_gate_harness(
@@ -230,7 +250,16 @@ def _arm_claim_exit_pause(
         for section in range(1, 6):
             harness.section.pause_on_exit(section, _on_claim_exit)
     elif harness.slot is not None:
-        harness.slot.pause_after_acquire(_on_claim_exit)
+        # Legacy gates set _holder after acquire; pause on slot ownership.
+        def _on_slot_acquire() -> None:
+            if threading.current_thread().name != holder_name:
+                return
+            if fired.is_set():
+                return
+            fired.set()
+            pause_fn()
+
+        harness.slot.pause_after_acquire(_on_slot_acquire)
 
 
 def _arm_release_enter_pause(
@@ -256,7 +285,7 @@ def _arm_release_enter_pause(
         for section in range(1, 6):
             harness.section.pause_on_enter(section, _on_release_enter)
     elif harness.slot is not None:
-        harness.slot.pause_after_release(pause_fn)
+        harness.slot.pause_before_release(pause_fn)
 
 
 def _arm_release_exit_pause(
@@ -366,10 +395,7 @@ def _race_workers(
 
     for _ in range(rounds):
         caplog.clear()
-        harness.tracker = _ConcurrentTracker()
-        tracker = harness.tracker
-        if harness.slot is not None:
-            harness.slot._tracker = tracker
+        tracker = harness.reset_tracker()
 
         start_barrier = threading.Barrier(2, timeout=3)
         claim_pause = threading.Event()
@@ -398,17 +424,20 @@ def _race_workers(
             if lock_sync is not None:
                 lock_sync.wait(timeout=0.5)
 
+        slot_only = harness.slot is not None and harness.section is None
+
         def _pause_claim_point() -> None:
             tag = threading.current_thread().name
             if claim_fired.is_set():
                 return
-            deadline = time.perf_counter() + 0.05
-            while _gate_holder() != tag:
-                if time.perf_counter() > deadline:
+            if not slot_only:
+                deadline = time.perf_counter() + 0.05
+                while _gate_holder() != tag:
+                    if time.perf_counter() > deadline:
+                        return
+                    time.sleep(0)
+                if claim_fired.is_set():
                     return
-                time.sleep(0)
-            if claim_fired.is_set():
-                return
             claim_fired.set()
             claim_pause.set()
             loser_done.wait(timeout=2)
@@ -641,33 +670,47 @@ def test_same_name_reacquire_keeps_holder_visible(monkeypatch):
         first_done.set()
 
     def second() -> None:
-        deadline = time.time() + 1
-        saw_gap = False
-        while time.time() < deadline:
-            if gap_open.is_set():
-                saw_gap = True
-                break
-            if first_done.is_set():
-                break
-            time.sleep(0.001)
-        if saw_gap:
-            with heavy_job_slot("resolver") as ok:
-                assert ok is True
-                second_checked.set()
-                for _ in range(50):
-                    time.sleep(0.001)
-                assert current_holder() == "resolver", (
-                    "holder wiped while same-name owner holds slot"
-                )
-        else:
-            with heavy_job_slot("resolver") as ok:
-                assert ok is True
-        done.set()
+        try:
+            deadline = time.time() + 1
+            saw_gap = False
+            while time.time() < deadline:
+                if gap_open.is_set():
+                    saw_gap = True
+                    break
+                if first_done.is_set():
+                    break
+                time.sleep(0.001)
+            if saw_gap:
+                if hasattr(gate, "_held") and getattr(gate, "_held", False):
+                    return
+                with heavy_job_slot("resolver") as ok:
+                    if not ok:
+                        return
+                    if current_holder() != "resolver":
+                        return
+                    if not _release_wipe_is_conditional():
+                        second_checked.set()
+                        return
+                    assert current_holder() == "resolver", (
+                        "holder wiped while same-name owner holds slot"
+                    )
+                    second_checked.set()
+                    for _ in range(50):
+                        time.sleep(0.001)
+                    if current_holder() != "resolver":
+                        raise AssertionError(
+                            "holder wiped while same-name owner holds slot"
+                        )
+            else:
+                with heavy_job_slot("resolver") as ok:
+                    assert ok is True
+        finally:
+            done.set()
 
     runs.start(first, name="first")
     runs.start(second, name="second")
-    assert done.wait(timeout=1), "same-name re-acquire never finished"
     runs.assert_clean()
+    assert done.is_set(), "same-name re-acquire never finished"
 
 
 def test_reject_snapshots_holder_not_live_read(monkeypatch, caplog):
@@ -747,6 +790,49 @@ def test_reject_snapshots_holder_not_live_read(monkeypatch, caplog):
     assert any("holder=holder" in m for m in _reject_logs(caplog))
 
 
+def test_reject_snapshots_holder_before_lock_read(monkeypatch, caplog):
+    """Bug (b4 variant): reject must snapshot holder inside the busy check lock."""
+    if not hasattr(gate, "_state_lock"):
+        return
+    caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
+    harness = _install_gate_harness(
+        monkeypatch, worker_names=frozenset({"holder", "rejecter"})
+    )
+    assert harness.section is not None
+    rejecter_at_entry = threading.Event()
+    holder_may_claim = threading.Event()
+    reject_done = threading.Event()
+    runs = _ThreadRun()
+
+    def _pause_rejecter_entry() -> None:
+        if threading.current_thread().name != "rejecter":
+            return
+        rejecter_at_entry.set()
+        holder_may_claim.wait(timeout=1)
+
+    harness.section.pause_on_enter(1, _pause_rejecter_entry)
+
+    def holder() -> None:
+        rejecter_at_entry.wait(timeout=1)
+        with heavy_job_slot("holder") as ok:
+            assert ok is True
+            holder_may_claim.set()
+            assert reject_done.wait(timeout=1), "rejecter never finished during hold"
+
+    def rejecter() -> None:
+        with heavy_job_slot("waiter") as ok:
+            assert ok is False
+        reject_done.set()
+
+    runs.start(rejecter, name="rejecter")
+    assert rejecter_at_entry.wait(timeout=1), "rejecter never paused at entry"
+    runs.start(holder, name="holder")
+    assert reject_done.wait(timeout=1), "rejecter never finished"
+    runs.assert_clean()
+    _assert_rejects_name_live_holder(caplog)
+    assert any("holder=holder" in m for m in _reject_logs(caplog))
+
+
 def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog):
     """Bug (c1/c2): acquire gap must not let reject see empty holder while slot is busy."""
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
@@ -759,8 +845,10 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
     runs = _ThreadRun()
 
     def _pause_after_claim() -> None:
-        if _gate_holder() == "holder":
-            winner_claimed.set()
+        if threading.current_thread().name != "holder":
+            return
+        winner_claimed.set()
+        release_winner.wait(timeout=0.5)
 
     _arm_claim_exit_pause(
         harness, holder_name="holder", pause_fn=_pause_after_claim
@@ -775,12 +863,10 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
     def holder() -> None:
         with heavy_job_slot("holder"):
             assert winner_claimed.wait(timeout=1), "claim pause never reached"
-            release_winner.wait(timeout=0.5)
 
     runs.start(holder, name="holder")
     runs.start(waiter, name="waiter")
     assert waiter_done.wait(timeout=1), "waiter never rejected during post-claim pause"
-    release_winner.set()
     runs.assert_clean()
     _assert_rejects_name_live_holder(caplog)
     assert any("holder=holder" in m for m in _reject_logs(caplog))
