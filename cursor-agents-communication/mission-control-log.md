@@ -731,3 +731,79 @@ Columns: b_slow / b4 / c / wipe / race / stress.
 - **Divergences from the Project's matrix:** c1/c2 "F on c": observed T/P. 66f77af6 F/P/F/P/F/F and d93ae45b F/P/F/F/F/F: observed T/P/T/P/T/T and T/P/T/F(T-shaped)/T/T. b1-b4 "F on wipe": b1/b4 P, b2/b3 fake. Confirmed: gate identical, 15/15 in about 1.6 s, 574 real F with zero crashes, DCL all P, contention 20/20, CI success.
 - **Project reply:** prepared for Joshua to send (not sent by MC). **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review9-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~7:40 PM PT: MC review 10 of PR #1333 at 35fad3e8, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `35fad3e80142eab9831500ed474f19ea9846f740` (parent `a48dd54e`, "test: MC review 9 legacy gate pauses and wipe/b4 fixes", committed 7:19 PM PT), verified via GitHub. Draft, OPEN, not merged, mergeable_state clean. Base main `cba07cf3`.
+- **Verdict: MODIFY.** Blocked by convergence rule (i), a regression vs review 9, and rule (ii), an agreed-list bug (wipe2) now caught by no test. Left **draft**. Not undrafted, not merged.
+- **Reconcile:** MC log tip was `cb72dea0` (review 9) with no review-10 entry; Ditto vendorId `grok-pr1333-mc-ac-review10-2026-10-07` absent before this save.
+- **Smoke CI at 35fad3e8:** run `37717308184` ("CI Smoke Test") **completed / success** at 7:21 PM PT (head_sha matches).
+- **Diff a48dd54e..head:** only `tests/test_heavy_job_gate.py` (+126/−40). The gate (unchanged since `7ae06256`) and the contention file are byte-identical. Files vs main: the same 3 files. Scope grep (RESOLVER_, fly.toml, deploy, P4b) 0 matches; caller hooks in `internal/` unchanged (pump/scheduler, council/score_snapshots, council/resolver_scheduler).
+
+### What passed
+- 16/16 in 2.16 s at pristine head. The forced-timing test takes 0.50 s (a fixed wait, see follow-ups), skip_path 1.05 s, blocks_second 0.20 s, everything else ≤0.02 s.
+- Contention file 20/20 twice; both gate files 20/20. Review 1-5 repros clean.
+- Stress 3 × 10s: 11.2k / 11.4k / 11.3k acquires and 17.8M / 18.1M / 18.1M observer checks, with 0 None, wrong or unknown.
+- Callers + `test_resolver_revive.py`: head 85 passed / 2 failed, main 85 / 2, the same 2 revive tests.
+- Fixed since review 9:
+  - Legacy gates now fail on real assertions: 66f77af6 F P F P P F F; d93ae45b P P F F P F F (b_slow P is expected because Bug 2 is fixed there).
+  - The wipe test reports the real assertion; b2/b3 now pass it.
+  - b6 is caught by the new `test_reject_snapshots_holder_before_lock_read`.
+  - 574d6080 P P P P P F F, real failures, no crash.
+
+### Matrix (my gates; 10 runs per cell; F = real assertion, T = fails only on a wait timeout, X = crash, f = fake failure on a gate lacking that bug)
+Columns: b_slow / b4 / c / wipe / b6 / race / stress.
+
+| Gate | Result |
+|---|---|
+| head | P P P P P P P |
+| a1, a2p | P P P P P F F (real: holder wiped/overwritten) |
+| a2-alt | P P P P P F F (real: `'job_a' == 'job_b'`) |
+| b1 | F P P P P P P |
+| b2 | F P P P P P P |
+| b3 | F F P P P P P |
+| b4 | P F P P P P P |
+| b5 | F P P P P P P |
+| b6 | P P P P F P P |
+| c1, c3 | P P T P P F F (c-test T at :869; race/stress real) |
+| c2 | P P P P P F F |
+| wipe (free, then clear-if-same-name) | P P P F P P P (real) |
+| **wipe2 (free, then unconditional clear)** | **P P P P P P P: uncaught. REGRESSION** (review 9: caught on wipe) |
+| wipe3 (adversarial: conditional clear via `my_name`) | P P P P P P P: uncaught (non-blocking alone, same root cause) |
+| 574d6080 | P P P P P F F |
+| 66f77af6 | F P F P P F F (all real) |
+| d93ae45b | P P F F P F F (all real) |
+| DCL / DCL+comment / Project-style / OK_extra / OK_condclear (atomic conditional clear) | all P |
+| correct gate, `_holder` renamed | c/race/stress fail (AttributeError fail-fast plus timeouts): known nit |
+| correct gate, all internals renamed | b_slow/c/race/stress T: known nit |
+
+No X and no f anywhere; no flakiness at head.
+
+### MODIFY item (tests/test_heavy_job_gate.py)
+1. **The wipe test is gated on source sniffing again.**
+   - `_release_wipe_is_conditional()` (:188-191) greps `inspect.getsource(gate.heavy_job_slot)` for `"if _holder == name:"` / `"if _holder == release_name:"`.
+   - The test returns early, with no assertion, when that is False (:691-693).
+   - wipe2 (unconditional clear) and wipe3 (conditional clear using another variable name) therefore pass silently.
+   - **Probe:** with the sniff replaced by `return True`, wipe, wipe2 and wipe3 fail 10/10 on the real wipe assertion, while head, OK_condclear, OK_precheck, OK_extra, b2, b3 and 66f77af6 all pass 10/10. The sniff is unnecessary.
+   - **Fix:** delete `_release_wipe_is_conditional` (:188-191), its call and early return (:691-693), and `import inspect` (:5).
+   - **Acceptance:** wipe, wipe2 and wipe3 fail on the wipe assertion; the correct gates, b2/b3 and 66f77af6 pass the wipe test.
+
+### Follow-ups (non-blocking)
+- **Wipe test early returns (:684-690):** `_held` true, `not ok`, or `current_holder() != "resolver"` returns silently. Prefer an explicit skip, or assert that the scenario was reached at least once across iterations.
+- **c test (:843-851):** `release_winner` is never set, so `_pause_after_claim` is a fixed 0.5 s timed wait. c1/c3 are T there and c2 P, but all three are caught for real by race/stress. Set the event or drop the wait.
+- **b6 test (:793-796):** returns silently on gates without `_state_lock` (legacy gates).
+- **Private names:** `_gate_holder` reads `_holder` (:181-184); `slot._tracker` write (:177). Renamed-internals correct gates fail.
+- **Small items:** small sleeps; a1/a2 failures take about 4 s.
+
+### Divergences from the Project's claims
+- "All previously caught mutants still caught": **false**; wipe2 regressed (MC's own mutant, not in the Project's matrix).
+- 16/16 claimed in 2.11 s; observed 2.16 s.
+- Confirmed: gate unchanged, b4/pre_lock_read caught, wipe F, b2/b3 P on wipe, 574 P P P P F F, 66f F P F P F F, d93 P P F F F F (matches with the b6 column added), OK_precheck/OK_extra all P, contention 20/20, CI success.
+
+### Other
+- **Project reply:** prepared for Joshua to send (not sent by MC).
+- **P4b:** still HOLD_CONDITIONAL; queue file not touched.
+- **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review10-2026-10-07` (source=cursor)
