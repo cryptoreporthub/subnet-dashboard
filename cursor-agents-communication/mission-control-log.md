@@ -669,3 +669,65 @@ Columns: b_slow / b4 / c / race / stress.
 - Condition 1 (P4a merged and deployed): **met**. Condition 2 (Axiom Track 3 evidence): ingest is verified, but the latest soak spot-check was a **FAIL** (stall-guard, no cycle complete, `heavy_job_busy`). That argues for keeping P4b on HOLD until #1333 merges and the holder logs show what holds the heavy-job slot; calibrating the stall guard against a heavy_job_busy-polluted baseline would mis-tune it. Also observed: an Uptime Monitor schedule run failed at 4:53 PM PT, and the web machine was last updated at 5:36 PM PT (cause not investigated).
 - **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review8-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~7:30 PM PT: MC review 9 of PR #1333 at a48dd54e, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `a48dd54ef7237f96249f4aeed6760e5af946b501` (parent `46fb177e`, "test: MC review 8 heavy_job_gate behavioral forcing fixes", committed 6:47 PM PT), verified via GitHub. Draft, OPEN, not merged. Base main `cba07cf3`.
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Reconcile:** MC log tip was `9e5a2a88` (review 8) with no review-9 entry; Ditto vendorId `grok-pr1333-mc-ac-review9-2026-10-07` absent before this save.
+- **Smoke CI at a48dd54e:** run `37714643139`, check `smoke` **completed / success** at 6:49 PM PT (head_sha matches; the only check-run).
+- **Diff 46fb177e..head:** only `tests/test_heavy_job_gate.py` (+303/−56). The gate and the contention file are byte-identical. No source grep remains (no `read_text`/`__file__`). Scope grep (RESOLVER_, fly.toml, deploy, P4b) 0 matches; 0 hook names in `internal/`.
+
+### What passed
+- 15/15 in 1.64 s at pristine head; every forced test takes under 0.02 s, so there is no self-pause.
+- Contention file 20/20 twice; both gate files 20/20. Review 1-5 repros clean.
+- Stress 3 × 10s: about 10.8-11.3k acquires and 17-18M observer checks per run, with 0 None, wrong or unknown.
+- Callers + `test_resolver_revive.py`: head 85 passed / 2 failed, main 85 / 2, the same 2 revive tests.
+- Fixed since review 8: no source sniffing (the correct DCL passes with and without the literal); 574d6080 race/stress now fail 10/10 on a real assertion with no `BrokenBarrierError` (the winner's `holder wiped/overwritten ... None == 'job_a'` raised in its thread; the log also shows `reject name=job_b holder=None`); a2-alt is caught (`'job_a' == 'job_b'`).
+
+### Matrix (my gates; 10 runs per cell; F = real assertion, T = fails only on a wait timeout, X = crash, f = fake failure on a gate lacking that bug)
+Columns: b_slow / b4 / c / wipe / race / stress.
+
+| Gate | Result |
+|---|---|
+| head | P P P P P P |
+| a1, a2 (1 ms pause) | P P P P F F (real overlap: the holder disappears while the other owner holds; ~4 s each because of the waits) |
+| a2-alt (loser overwrites holder) | P P P P F F |
+| b1 | F P P P P P |
+| b2 | F P P **f** P P |
+| b3 | F F P **f** P P |
+| b4 | P F P P P P |
+| b5 (holder cleared under the lock, slot freed unlocked) | F P P P P P |
+| **b6 (reject holder read unlocked *before* the lock)** | **P P P P P P: uncaught.** Forced oracle: b6 logs `holder=None`, head logs a named holder |
+| c1 | P P **T** P F F |
+| c2 | P P **P** P F F |
+| c3 (holder set unlocked right after the claim section) | P P **T** P F F |
+| wipe (free, then clear-if-same-name) | P P P **F(T-shaped)** P P |
+| wipe2 (free, then unconditional clear) | P P P **F(T-shaped)** P P |
+| 574d6080 | P P P P F F (real, zero crashes) |
+| **66f77af6** | **T** P **T** P **T T** |
+| **d93ae45b** | **T** P **T** F(T-shaped) **T T**. The race log shows the real `holder=unknown`, but the test fails earlier on the "no worker paused" timeout |
+| correct DCL without the literal / with comment / Project style / OK_extra | all P |
+| correct gate, `_holder` renamed `_owner` | P P **T** P **T T** |
+| correct gate, all internals renamed | **T** P **T** P **T T** |
+
+"F(T-shaped)" means the real in-thread wipe assertion fires (checked: `holder wiped while same-name owner holds slot`, `None == 'resolver'`), but the test reports the timeout at :669 because the failing thread never sets `done`. "f" means b2/b3 fail the wipe test only because the second acquire is legitimately rejected while the slot is still held (`assert False is True` at :655).
+
+### MODIFY items (tests/test_heavy_job_gate.py)
+1. **Legacy gates now detect only by timeout (a regression from review 8, where these cells were real F).**
+   - :232-233 and :405-409: the legacy claim pause requires `_gate_holder() == tag` right after the slot acquire. 66f77af6/d93ae45b set the holder *after* the acquire (the acquire-gap bug itself), so the pause never fires. Result: b_slow, c, race and stress are T.
+   - :258-259 / :284-285: the legacy "pre-release" pause is mapped to `pause_after_release`, and the exit-pause arm then overwrites the single `_after_release` slot, so `pre_release` is never set.
+2. **Wipe test (:614-670).**
+   - Real wipes surface as the :669 timeout because the in-thread assertion stops `done.set()`. Join the threads and assert clean before the `done` assertion.
+   - b2/b3 (no wipe bug) fail at :655 because the second acquire is legitimately rejected while the slot is still held. Treat `ok is False` there as "scenario not reached", not a failure.
+3. **b6 (b4 class: reject holder read without the lock, before the check) is caught by no test.** Add a forced case: the rejecter pauses at its first section entry until the holder has claimed, then the reject log must name the holder.
+
+### Follow-ups (non-blocking)
+- **c test (:750-786):** `_pause_after_claim` only sets an event and never pauses, so c1/c3 are T and c2 P there. The class is still caught by race/stress (real assertion at :348). Restore a real post-claim pause or drop the test.
+- **Private names:** `_gate_holder()` (:169-171) reads private `_holder`, so a correct gate with it renamed fails c/race/stress on a 1 s timeout. Lock-name dependency is unavoidable, but fail fast with a clear "gate internals not recognised" message.
+- **Small items:** private `harness.slot._tracker` write (:372); small sleeps in the wipe/b4 loops; a1/a2 failures take ~4 s.
+- **Divergences from the Project's matrix:** c1/c2 "F on c": observed T/P. 66f77af6 F/P/F/P/F/F and d93ae45b F/P/F/F/F/F: observed T/P/T/P/T/T and T/P/T/F(T-shaped)/T/T. b1-b4 "F on wipe": b1/b4 P, b2/b3 fake. Confirmed: gate identical, 15/15 in about 1.6 s, 574 real F with zero crashes, DCL all P, contention 20/20, CI success.
+- **Project reply:** prepared for Joshua to send (not sent by MC). **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review9-2026-10-07` (source=cursor)
