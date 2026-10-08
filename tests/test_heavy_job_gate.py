@@ -7,9 +7,14 @@ import re
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Callable, Optional, TypedDict
 
 import pytest
+
+# Mutant label map (MC vs Project):
+# - MC b2: holder cleared BEFORE slot free (b_slow / holder=None reject)
+# - MC wipe2 / Project "b2": slot freed THEN holder cleared (wipe test)
+# - MC a1/a2: split check/claim into separate lock sections (race/stress)
 
 import internal.heavy_job_gate as gate
 from internal.heavy_job_gate import current_holder, heavy_job_slot
@@ -142,6 +147,9 @@ class _LegacySlotLock:
     def pause_after_release(self, fn: Callable[[], None]) -> None:
         self._after_release = (fn,)
 
+    def bind_tracker(self, tracker: _ConcurrentTracker) -> None:
+        self._tracker = tracker
+
     def _run(self, hooks: tuple[Callable[[], None], ...]) -> None:
         if threading.current_thread().name not in self._worker_names:
             return
@@ -175,7 +183,7 @@ class _GateHarness:
     def reset_tracker(self) -> _ConcurrentTracker:
         self.tracker = _ConcurrentTracker()
         if self.slot is not None:
-            self.slot._tracker = self.tracker
+            self.slot.bind_tracker(self.tracker)
         return self.tracker
 
 
@@ -472,18 +480,20 @@ def test_heavy_job_slot_released_after_exit():
 
 def test_heavy_job_slot_blocks_second_thread():
     started = threading.Event()
+    release_holder = threading.Event()
     results: list[bool] = []
 
     def holder() -> None:
         with heavy_job_slot("holder") as ok:
             results.append(ok)
             started.set()
-            time.sleep(0.2)
+            release_holder.wait(timeout=2)
 
     def waiter() -> None:
         started.wait(timeout=2)
         with heavy_job_slot("waiter") as ok:
             results.append(ok)
+        release_holder.set()
 
     t1 = threading.Thread(target=holder)
     t2 = threading.Thread(target=waiter)
@@ -620,7 +630,12 @@ def test_same_name_reacquire_keeps_holder_visible(monkeypatch):
     resume_first = threading.Semaphore(0)
     reacquired = threading.Event()
     second_gone = threading.Event()
-    result: dict[str, object] = {"held_checks": 0, "gap": None, "stuck": False}
+    class _WipeResult(TypedDict):
+        held_checks: int
+        gap: Optional[bool]
+        stuck: bool
+
+    result: _WipeResult = {"held_checks": 0, "gap": None, "stuck": False}
     runs = _ThreadRun()
 
     def _checkpoint() -> None:
@@ -775,7 +790,7 @@ def test_reject_snapshots_holder_not_live_read(monkeypatch, caplog):
 def test_reject_snapshots_holder_before_lock_read(monkeypatch, caplog):
     """Bug (b4 variant): reject must snapshot holder inside the busy check lock."""
     if not hasattr(gate, "_state_lock"):
-        return
+        pytest.skip("gate has no _state_lock; b4 pre-lock-read not applicable")
     caplog.set_level(logging.INFO, logger="internal.heavy_job_gate")
     harness = _install_gate_harness(
         monkeypatch, worker_names=frozenset({"holder", "rejecter"})
@@ -822,15 +837,16 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
         monkeypatch, worker_names=frozenset({"holder", "waiter"})
     )
     winner_claimed = threading.Event()
-    release_winner = threading.Event()
-    waiter_done = threading.Event()
+    waiter_rejected = threading.Event()
     runs = _ThreadRun()
 
     def _pause_after_claim() -> None:
         if threading.current_thread().name != "holder":
             return
         winner_claimed.set()
-        release_winner.wait(timeout=0.5)
+        assert waiter_rejected.wait(timeout=1), (
+            "waiter never rejected during post-claim pause"
+        )
 
     _arm_claim_exit_pause(
         harness, holder_name="holder", pause_fn=_pause_after_claim
@@ -840,7 +856,7 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
         winner_claimed.wait(timeout=1)
         with heavy_job_slot("waiter") as ok:
             assert ok is False
-        waiter_done.set()
+        waiter_rejected.set()
 
     def holder() -> None:
         with heavy_job_slot("holder"):
@@ -848,7 +864,6 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
 
     runs.start(holder, name="holder")
     runs.start(waiter, name="waiter")
-    assert waiter_done.wait(timeout=1), "waiter never rejected during post-claim pause"
     runs.assert_clean()
     _assert_rejects_name_live_holder(caplog)
     assert any("holder=holder" in m for m in _reject_logs(caplog))
@@ -856,41 +871,51 @@ def test_reject_never_unknown_while_slot_held_forced_timing(monkeypatch, caplog)
 
 def test_reject_skip_path_does_not_hold_holder_lock():
     """Reject must not hold gate lock across yield; skip path must stay non-blocking."""
+    holder_in = threading.Event()
     reject_in_skip = threading.Event()
+    probe_done = threading.Event()
     release_holder = threading.Event()
     probe: dict[str, object] = {}
     runs = _ThreadRun()
 
     def holder() -> None:
-        with heavy_job_slot("holder"):
+        with heavy_job_slot("holder") as ok:
+            assert ok is True
+            holder_in.set()
             release_holder.wait(timeout=3)
 
     def rejector() -> None:
+        assert holder_in.wait(timeout=2), "holder never acquired the slot"
         with heavy_job_slot("waiter") as ok:
             assert ok is False
             reject_in_skip.set()
-            time.sleep(1.0)
+            # Stay in the skip body until the probe is done. Bounded at 1s so a gate
+            # that holds its lock across the yield unblocks the probe and fails on
+            # the elapsed assertion below instead of on a wait timeout.
+            probe_done.wait(timeout=1)
 
     def probe_gate() -> None:
-        reject_in_skip.wait(timeout=2)
+        assert reject_in_skip.wait(timeout=2), "rejector never reached skip body"
         started = time.perf_counter()
         probe["holder"] = current_holder()
         with heavy_job_slot("probe") as ok:
             probe["second_ok"] = ok
         probe["elapsed"] = time.perf_counter() - started
+        probe_done.set()
 
     runs.start(holder, name="holder")
-    time.sleep(0.05)
     runs.start(rejector, name="rejector")
-    time.sleep(0.05)
     runs.start(probe_gate, name="probe")
-    time.sleep(0.2)
+    probe_done.wait(timeout=3)
     release_holder.set()
     runs.assert_clean()
 
+    assert probe_done.is_set(), "probe never finished during reject skip path"
+    assert probe["elapsed"] < 0.2, (
+        f"probe blocked {probe['elapsed']:.3f}s behind the reject skip body"
+    )
     assert probe["holder"] == "holder"
     assert probe["second_ok"] is False
-    assert probe["elapsed"] < 0.2
 
 
 def test_racing_claim_winner_holder_never_none(monkeypatch, caplog):
