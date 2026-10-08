@@ -614,3 +614,58 @@ Columns: Bug2 = `test_reject_never_logs_holder_none_on_slow_release`; Gap = `tes
 - **Project reply:** prepared for Joshua to send to coordinator `bc-01a10d2f` (not sent by MC).
 - **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-mc-ac-review7-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~6:20 PM PT: MC review 8 of PR #1333 at 46fb177e, verdict **MODIFY** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `46fb177eb2c41fb3481004cc4015d5a88809fd72` (parent `7ae06256`, "test: MC review 7 heavy_job_gate forcing fixes", committed 5:44 PM PT), verified via GitHub. Draft, OPEN, not merged. Base main `cba07cf3`.
+- **Verdict: MODIFY.** Left **draft**. Not undrafted, not merged.
+- **Reconcile:** MC log tip was `fb447b07` (review 7) with no review-8 entry; Ditto vendorId `grok-pr1333-mc-ac-review8-2026-10-07` absent before this save.
+- **Smoke CI at 46fb177e:** run `37709379224`, check `smoke` **completed / success** at 5:46 PM PT (head_sha matches; the only check-run).
+- **Diff 7ae06256..head:** only `tests/test_heavy_job_gate.py` (+327/−137). The gate is byte-identical (`git diff --quiet` on `internal/`). Main..head is 3 files; scope grep (RESOLVER_, fly.toml, deploy, P4b) 0 matches; 0 hook/pause names in `internal/`.
+
+### What passed
+- 14/14 in 1.69 s at pristine head. Racing and stress each take under 0.05 s, so there is **no main-thread self-pause** any more. The pauses are filtered to worker threads.
+- Contention file 20/20 twice; both gate files 20/20.
+- Review 1-5 repros clean; stress 3 × 10s: about 11.3k acquires and 19-20M observer checks per run, with 0 None, wrong or unknown.
+- Callers + `test_resolver_revive.py`: head 85 passed / 2 failed, main 85 / 2, the same 2 revive tests.
+
+### Matrix (my mutants and gates; 10 runs per cell; P = pass, F = real assertion, T = fails only on a wait timeout, X = thread crash)
+Columns: b_slow / b4 / c / race / stress.
+
+| Gate | Result | Note |
+|---|---|---|
+| head | P P P P P | |
+| a1 split check/claim | T P T F F | race/stress: real overlap ([True, True] while the winner holds) |
+| a2 (a1 + 1 ms between) | T P T F F | same |
+| a2-alt (loser overwrites holder on recheck reject) | T P T P P | **holder overwrite survives** every real assertion |
+| b1 / b2 | F P P P P | `holder=None` reject (real) |
+| b3 | F F P P P | real |
+| b4 | P F P P P | real; caught by the new b4 test only |
+| c1 | P P F F F | real |
+| c2 | F P F F F | real |
+| **holder wipe** (free, then clear-if-same-name; oracle: holder None while a same-name B holds) | P P P P P | **survives all 14 tests** |
+| **574d6080** | T P T **X X** | race/stress die with `BrokenBarrierError` (`assert_clean`, tests :290). The captured log does show the real `reject name=job_b holder=None`, but the named-holder assertion is never reached. b4 P is **correct**: 574 snapshots the holder under `_holder_lock` and logs the snapshot |
+| 66f77af6 | F T F F F | real `holder=None`; b4 cell "rejecter never finished" |
+| d93ae45b | F T F F F | real `holder=unknown` (acquire gap); **holder wipe not exercised**; b4 cell timeout |
+| my correct DCL (`OK_precheck`) | T P T P P | **false failures on a correct gate** |
+| the same DCL + a comment containing `if reject_holder is not None:` | P P P P P | proves `_split_claim_gate()` source-text sniffing |
+| DCL in the Project's style | P P P P P | |
+| OK_extra (correct) | P P P P P | |
+
+### MODIFY items (tests/test_heavy_job_gate.py)
+1. **:260-272:** on gates that have both `_holder_lock` and `_lock` (574d6080), the pause is registered at section exit 1 **and** after the slot acquire. The winner's second pause waits alone on the 2-party `claim_sync` barrier (:263), times out after 0.5 s and raises `BrokenBarrierError` inside `_LegacySlotLock.acquire`. Race/stress fail on a crash, not on the named-holder assertion: the review-7 acceptance item is not met.
+2. **:160-165 (used at :405, :517):** `_split_claim_gate()` chooses the pause section by grepping the gate source for a literal string. A correct DCL without that string fails b_slow and c 10/10 on timeouts; the identical gate plus a comment passes. Pause points must come from observed behaviour, not source text.
+3. **Holder wipe** (same-name re-acquire between free and clear) and the a2-alt holder overwrite are caught by no assertion; d93ae45b's wipe is never exercised. Add a same-name re-acquire test and assert `current_holder() == winner` inside the winner body after the loser rejects.
+4. **:465-470, :472-476:** on legacy slot-only gates the b4 test lets the holder leave before the rejecter starts. The rejecter then wins and the cell fails on the "rejecter never finished" timeout. It is not a b4 test there.
+- **Non-blocking nits:** `_LegacySlotLock.release` reads the private `tracker._active` (:148); the b4 test orders threads with `sleep(0.05)` (:484).
+- **Divergences from the Project's matrix:** a1 claimed P/P/P/F/F, observed T/P/T/F/F. 574 claimed F/P/F/F/F: the letters match, but b_slow/c are timeouts and race/stress are crashes, none of them a named-holder assertion. DCL claimed all P: true only for DCL text containing the sniffed string. 66f/d93 "all F": true, but the b4 cell is a timeout. Confirmed: gate identical, 14/14 in 1.69 s, no self-pause, contention 20/20, CI success, zero thread exceptions on head.
+- **Project reply:** prepared for Joshua to send (not sent by MC).
+
+### P4b gate (read-only)
+- P4a #1327 **MERGED** 2026-10-07 4:13 AM PT as `19fd4cb1` (ancestor of main `cba07cf3`). Fly Deploy run `37613085491` of `cba07cf3` succeeded 4:17-4:22 AM PT; current release v2277 (`deployment-01M4B1DJJD8GK5R6N42XXN28PT`) is that deploy, so **prod includes P4a**.
+- Queue file (unchanged by MC): P4b `HOLD — conditional on P4a merge + Axiom evidence`, state `HOLD_CONDITIONAL`. The file is stale (`updated 2026-10-06T23:35Z`, main `b5253e65`, P4a listed as "Ready", not merged).
+- Condition 1 (P4a merged and deployed): **met**. Condition 2 (Axiom Track 3 evidence): ingest is verified, but the latest soak spot-check was a **FAIL** (stall-guard, no cycle complete, `heavy_job_busy`). That argues for keeping P4b on HOLD until #1333 merges and the holder logs show what holds the heavy-job slot; calibrating the stall guard against a heavy_job_busy-polluted baseline would mis-tune it. Also observed: an Uptime Monitor schedule run failed at 4:53 PM PT, and the web machine was last updated at 5:36 PM PT (cause not investigated).
+- **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review8-2026-10-07` (source=cursor)
