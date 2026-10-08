@@ -1320,3 +1320,43 @@ Simulated sequential merge onto current main (#1330 then #1331 then #1332): all 
 ### Queue / other
 - **P4b:** HOLD. **#1336 AC:** in progress at `6302006`. **PROD DOWN** (wedged) remains as logged at 12:47 PM PT — restart needs Joshua.
 - **Ditto:** `grok-gemini-p3-verify-2026-10-08` (source=cursor).
+
+## 2026-10-08 12:54 PM PT (19:54Z): PR #1336 MC AC PASS @ 6302006e, undrafted (Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Verdict: PASS** on exact head `6302006eb2d3811881c1b87156cf62c47f4a248b` (branch `cursor/heavy-job-gate-info-logs-1c28`). Head re-checked by ls-remote before undraft.
+- **Undrafted:** #1336 `draft=false` at 19:54:32Z (12:54 PM PT). Not merged, not labeled, not deployed.
+- **Next:** under Joshua's 12:25 PM PT authorization, the Project merges #1336 and deploys via a docs-only `docs/deploy-vehicles/` PR labeled `fly-deploy`. MC then verifies `/version` and reruns the soak. The deploy restarts the machine, and prod is currently wedged (see the 12:47 entry), so the Project and Joshua should confirm the timing.
+- **P4b:** HOLD.
+
+### Evidence (run on the box, `/workspace/pr1336-review`)
+- **Scope:** the GitHub file list gives exactly 4 files, +67/-0: `internal/app_logging.py` (new), `internal/worker.py` +2, `server.py` +2, `tests/test_heavy_job_gate_logging.py` (new). No fly.toml/Dockerfile/Procfile/RESOLVER_*/secret/workflow changes, and no gate or resolver logic changes.
+- **Prod entrypoint:** fly.toml `web = sh ./scripts/fly_web_entrypoint.sh` starts the inline worker with `nice python -m internal.worker &` (it runs the resolver, pump and snapshot, which are the `heavy_job_slot` users), then `exec python scripts/run_web_with_guard.py`, which runs `uvicorn.run("asgi_entry:app")` and imports `server`. Both processes call `configure_app_logging()`.
+- **Probe (`probe.py`), worker path and uvicorn web path (Config + load, the same order as prod):**
+  - At head: root=30 (unchanged), gate and resolver effective level 20, exactly 1 root handler `app-info-stdout` on `<stdout>`. Acquire, reject (holder=mc_probe_a) and release each printed once on stdout. Resolver INFO printed.
+  - At base `b6f8d48c`: root=30, gate and resolver 30, no handlers, 0 lines.
+  - The local squash onto `802429c3` matches head.
+- **Real boot:** the prod entrypoint script at head with fly.toml [env] (ports 18080/18081, no Sentry DSN). `/health` returned 200, and the real resolver first tick printed `tick_start`, `heavy_job_slot acquire name=prediction_resolver`, `abandoned_live=0`, `release held_ms=82.9` and `event=success`, each once. The same boot at base printed 0 gate or resolver lines.
+- **Hygiene:**
+  - Configuring from both server and worker in one process, plus 2 extra calls, still leaves 1 handler and each line printed once.
+  - With a dummy SENTRY_DSN (LoggingIntegration active), lines still print once.
+  - uvicorn loggers have `propagate=False`, so there's no duplication. Other loggers' explicit levels are unchanged compared with base.
+- **Tests at head:**
+  - New test PASS. At base it FAILS (the assertion in the subprocess).
+  - Gate, contention and logging: 17 passed. Contention 20x: 0 failures.
+  - Adjacent suites (endpoint_contract, resolver_scheduler, pump_ladder_scheduler, phase3_mid_guards_orphan_revive, score_snapshots, resolver_revive): 235 passed, 2 failed. The same 2 `test_resolver_revive` tests fail at base with identical assertions, so they predate this PR.
+- **Merge result** (local squash of `6302006` onto `802429c3`): no conflict. Gate, contention, logging and adjacent suites: 252 passed, 2 failed (the same resolver_revive pair). Contention plus logging 20x: 0 failures.
+- **Full suite** (`--timeout=60`): head 150 failed / 2727 passed, base 155 failed / 2721 passed. No failures appear only at head. The 5 base-only failures were homepage render tests that pass on rerun at both. A hang in `test_fast_shell_context.py::test_resolve_index_context_falls_back_on_error` exists at both head and base.
+- **CI:** 1 check run on `6302006`: `smoke` (run 37831747179, job 113498569359) completed success, head_sha `6302006e`. Its "exit code 1" annotation comes from the continue-on-error Lint step. There are no legacy commit statuses.
+- **data/*.json churn:** reverted in all worktrees.
+
+### Non-blocking notes
+1. The root stdout handler moves all app WARNING+ lines from stderr (lastResort, unformatted) to stdout (formatted). It also makes WARNING+ from NullHandler libraries (urllib3, requests, charset_normalizer, slowapi) visible; those were dropped silently before. The volume is expected to be low, but it hasn't been measured in prod.
+2. INFO volume:
+   - Resolver: about 5 lines per successful tick (every 15 min) and 3 lines per heavy_job_busy skip (retried every 2 min).
+   - Pump (every 20 min) and snapshot (every 15 min): 2 lines per run.
+   - Worst case is about 100 lines/h, roughly 10 KB/h. That doesn't matter for the 1 GB OOM loop.
+3. Test gap: the new test exercises only the worker import. Mutants that remove the server.py call (M5), drop the idempotency guard (M6) or raise root to INFO (M7) still pass. MC probes cover these. An optional hardening patch is at `/workspace/pr1336-review/pr1336-optional-test-hardening.diff`. It catches M5, M6 and M7 and isn't required.
+4. Sentry LoggingIntegration(level=INFO) will now record breadcrumbs for these INFO lines (bounded, negligible).
+- **Ditto:** `grok-pr1336-ac-2026-10-08` (source=cursor), id `ce8a3e82-b896-4163-9ae6-988a36892d23`
