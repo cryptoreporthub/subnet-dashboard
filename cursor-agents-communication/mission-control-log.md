@@ -1143,3 +1143,32 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291f�
 - **Project / PR comment:** not posted by MC.
 - **P4b:** HOLD (soak spot-check still pending).
 - **Ditto:** `grok-pr1335-mc-ac-review2-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~9:07 AM PT: PR #1333 soak spot-check 1 — FAIL (machine health) / holder + cycle checks NOT OBSERVABLE (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot. Run manually because the 07:19 PT scheduled run failed. Strictly read-only: no deploy, restart, scale, fly.toml, RESOLVER_* or secret change.
+
+- **Verdict: FAIL.** The cause is machine health. Since the deploy, the single web machine has been SIGKILLed (exit 137) about every 34 min, 4 times so far. Checks 2–3 are **NOT OBSERVABLE** with the access available. A clean PASS isn't possible until the logging gap below is fixed.
+- **Access used:** `flyctl` (box `FLY_API_TOKEN`) for `status`, `machines list --json` and `logs`. The Machines API `GET /v1/apps/subnet-dashboard/machines/7841024b3712e8/events` was called read-only with the same token. Public `GET /version` too. Axiom APL query is still **403** (`token does not have access to resource: query with action: read`), because the box only has `AXIOM_INGEST_TOKEN`. Fly Prometheus returned 401 with this app token. No new credentials were minted.
+- **Log window covered:** the Fly buffer starts at 2026-10-08T15:22:35Z. The live tail ran 15:35:34Z → 16:05:34Z. Total coverage is **15:22:35Z–16:05:34Z (8:22–9:05 AM PT)**, 336 lines. Nothing from 13:14Z–15:22Z is readable (no Axiom read access, and the Fly buffer is only about 100 lines).
+
+### Checks
+1. **/version — PASS.** At 15:35:00Z and 16:05Z it returned `b6f8d48c45f95a85f2074527cfcf7191de42e1af`. Release v2280 completed 13:16:50Z on image `deployment-01M4DTG0H3PGX33BWWGT59TMHW`.
+2. **Resolver cycles — NOT OBSERVABLE.** `resolver lifecycle event=tick_start|success|skip` are `logger.info`. Prod has no logging config: no `basicConfig`, `dictConfig`, `addHandler` or `setLevel` anywhere in the repo at b6f8d48c. The root logger therefore stays at WARNING, and only WARNING+ reaches stdout through Python's lastResort handler (bare message). Only `event=timeout|failure` (warnings) would show, and there were none in the window. The one resolver signal seen was at 15:36:41Z: `resolver-state timed out after 15.0s` / `resolver state unavailable=True error=timeout fallback=process_memory ... stage_executor_wait_ms=20072.6`.
+3. **heavy_job_slot holder lines — NOT OBSERVABLE (instrumentation gap).** `heavy_job_slot acquire/release/reject` are all `logger.info`, so under the default root level they are never emitted. Verified locally by running the main `internal/heavy_job_gate.py` with an acquire plus a nested reject and no logging config. Nothing printed, while a `logger.warning` did print. There were 0 `heavy_job` lines in the window. holder=None/unknown can't be confirmed or ruled out.
+4. **Stall guard — no strikes in window.** There were 0 `loop stall guard` lines. `snapshot STALE ... strike=` is a WARNING and would be visible. Caveat: each process lives about 34 min, which may be too short to reach strike thresholds. heavy_job_busy rejects and their holders can't be observed (see 3).
+5. **Machine health — FAIL.** Machines API events since launch:
+   - 13:16:53Z (6:16 AM PT) `launch` (deploy). Started 13:17:04Z.
+   - **14:03:00Z (7:03 AM PT)** `exit_code=137 oom_killed=true`, restart.
+   - **14:37:53Z (7:37 AM PT)** `exit_code=137 oom_killed=false`, restart. Same signature as 15:44 below, where the kernel did log OOM.
+   - **15:11:41Z (8:11 AM PT)** `exit_code=137 oom_killed=true restart_count=1`, restart.
+   - **15:44:56Z (8:44 AM PT)** kernel: `Out of memory: Killed process 654 (python) total-vm:1603504kB, anon-rss:473452kB ... ` → `Main child exited with signal (with signal 'SIGKILL'...)` → `reboot: Restarting system` 15:45:02Z. flyd recorded `exit_code=137 oom_killed=false`. Restarted 15:45:04Z, and uvicorn was up at 15:46:07Z.
+   - Cadence is about every 34 min (~2000 s uptime). The next one would be about 16:19Z (9:19 AM PT), not observed.
+   - In-window degradation: 6× `Health check 'servicecheck-00-http-8080' ... has failed` (first at 15:33:20Z), 12× proxy `[PR04] could not find a good candidate within 40 attempts`, 4× `503 Service Unavailable` on `/api/subnet/44/pool`, `ops-live timed out after 8.0s` 15:40:38Z. `/version`, `/health` and `/api/ops/live` timed out (20 s) from the box at 15:38:52Z. Repeated `homepage cache warm timed out/failed (join_timeout) — ultra-minimal`, `pump desk snapshot stage timed out`, `live_subnets sync timed out after 90s`.
+   - Disclosure: MC sent 5 read-only GETs (`/api/predictions/resolver`, `/api/liveness`, `/api/ops/live`, `/api/ops/evidence`, `/api/ops/readiness`) at 15:36–15:38Z. All timed out and none were served. Health-check flapping had already started at 15:33:20Z, and the OOM cadence goes back to 14:03Z, so these did not cause it. MC stopped probing after that.
+
+### Attribution / notes
+- I can't tell whether the OOM loop is new with b6f8d48c. The Machines events API only returns events since the 13:16Z launch, and there's no metrics or Axiom read access for a pre-deploy baseline. On cba07cf3 (Oct 7) the machine was already unhealthy: stall-guard strikes, cycle timeouts, watchdog restarts. The #1333 diff only touches the in-process gate state and logging, which is an unlikely memory driver, but that is not proven.
+- **Follow-up needed to make soak verifiable (not done; needs Joshua/Project):** emit `internal.heavy_job_gate` and `internal.council.resolver_scheduler` at INFO in prod, e.g. a root `logging.basicConfig(level=INFO)` in worker/web startup or WARNING-level gate reject lines. Alternatively, provide a query-capable Axiom token or UI check. Separately, triage the ~34-min OOM loop on shared-cpu-2x:1024MB (inline worker + uvicorn on one VM).
+- **P4b: HOLD.** Soak spot-check 1 does not pass.
+- **Ditto:** `grok-pr1333-soak-spotcheck1-2026-10-08` (source=cursor)
