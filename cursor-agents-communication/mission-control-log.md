@@ -930,3 +930,88 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - The probe file was deleted and the review checkout is clean at e52557b8.
 - **P4b:** still HOLD_CONDITIONAL. **Merge/deploy:** Joshua only.
 - **Ditto:** `grok-pr1333-replit-spotcheck-2026-10-07` (source=cursor)
+
+## 2026-10-07 ~11:43 PM PT: MC review 12 of PR #1333 at 8e505520, verdict **PASS** (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **Repo:** cryptoreporthub/subnet-dashboard. **PR:** https://github.com/cryptoreporthub/subnet-dashboard/pull/1333. **pin_sha:** `8e5055209d92d122084ae1c8fb8747aaa71b80e0` (parent `e52557b8`, "test: Option B checkpoint wipe test (MC Replit spot-check)", committed 11:14 PM PT), verified via GitHub and `git ls-remote`. Base main `cba07cf3`.
+- **Context:** Joshua chose Option B after the Replit spot-check (issue comment `6052157470`). MC re-drafted the PR (draft=true) at ~11:18 PM PT, before this review, because the Project's re-draft had failed.
+- **Verdict: PASS.** None of the five convergence-rule blockers apply. **Undrafted** by MC at 11:41 PM PT; re-fetched: `draft=false`, head `8e505520`, merged=false, mergeable_state clean. **Not merged.** Merge and deploy are Joshua's.
+- **Reconcile:** MC log tip was `99f116c9` (Replit entry) with no review-12 entry.
+
+### Patch identity
+- `tests/test_heavy_job_gate.py` at 8e505520 is **byte-identical** (`cmp`) to MC's verified patch `/workspace/pr1333-replit/test_heavy_job_gate_patched.py`. No differences at all.
+- Diff e52557b8..head touches only that file (+75/−83 per git numstat).
+- The gate (byte-identical since `7ae06256`) and the contention file are unchanged. Files vs main: the same 3.
+- No fly.toml, deploy, RESOLVER_* or P4b changes; caller hooks in `internal/pump` and `internal/council` unchanged.
+
+### Smoke CI
+- Run `37736524200` ("CI Smoke Test") **completed / success** at 11:17 PM PT (head_sha matches). The check run `smoke` is also success.
+
+### Matrix (my gates; 10 runs per cell; all 13 tests in test_heavy_job_gate.py; F = real assertion, T = fails only on a wait timeout, X = crash, f = fake failure, S = explicit skip)
+- Columns: excl / released / blocks / acq-log / rel-log / skip_path / b_slow / b4 / c / wipe / b6 / race / stress.
+- The first six columns pass for every gate except 66f77af6: its acq-log and rel-log are F (real `RuntimeError`, Bug 1, no log guards).
+
+| Gate | b_slow / b4 / c / wipe / b6 / race / stress |
+|---|---|
+| head | P P P P P P P |
+| a1, a2, a2p | P P P P P F F (real) |
+| b1, b2 | F P P **F** P P P |
+| b3 | F F P **F** P P P |
+| b4 | P F P P P P P |
+| b5 | F P P P P P P |
+| b6 | P P P P F P P |
+| c1, c3 | P P T P P F F (c-test T at :851; race/stress real) |
+| c2 | P P P P P F F |
+| wipe, wipe2, wipe3 | P P P F P P P (real: "holder wiped while same-name owner holds slot") |
+| 574d6080 | P P P P P F F |
+| 66f77af6 | F P F **F** P F F (all real) |
+| d93ae45b | P P F F P F F (all real) |
+| DCL / DCL+comment / DCL+marker / OK_extra / OK_condclear | all 13 P |
+| correct gate, `_holder` renamed | c/race/stress fail (known nit); wipe P |
+| correct gate, all internals renamed | b_slow/c/race/stress T (known nit); wipe **S** (explicit skip) |
+
+- **Delta vs review 11:** only the wipe column changed. b1/b2/b3/66f went from P to F, each on a real "slot held during release but holder=None" (their actual bug). The all-renamed gate went from P to an explicit skip. No other cell moved; no regression.
+- No X and no f anywhere; no flakiness at head.
+- **Path probe** (scratch copy of the head test file, deleted afterwards): head 20/20 and DCL, DCL+comment, DCL+marker, OK_extra, OK_condclear and `_holder`-renamed 10/10 each.
+  - Every run reached exactly 1 held-and-named check (same-name re-acquire rejected, `current_holder()=="resolver"`), with gap=False.
+  - 574d6080: 3 held checks per run, passes.
+  - The real assertion now runs on every correct gate.
+
+### Replit's points, now resolved (new lines)
+- **(a)** The ignored wait is gone. The checkpoint (:626-633) records a timeout (`result["stuck"]`), and the test asserts on it (:689).
+- **(b)** The silent returns are gone.
+  - A held step asserts that the holder is `resolver` and counts the check (:663-669).
+  - A free slot asserts that the holder survives `first`'s release (:670-679).
+  - The fallback (:681-684) asserts the re-acquire and holder.
+  - The test fails unless at least one held-and-named check happened (:692-694).
+  - It skips explicitly when the gate's locks can't be found (:615-616).
+- **(c)** The `done` flag is gone. The final assertions are specific: no timeout, `first` finished, `second` reached a result, held_checks ≥ 1, and holder None at the end (:689-695).
+
+### Other checks
+- 16/16 in 2.23 s at pristine head; the new wipe test takes 0.01 s.
+- Contention file 20/20 twice; both gate files 20/20.
+- **Review 1-5 repros clean on the current design:**
+  - r5: R4 forced/reverse, BUG1 ×4, BUG2 99 rejects with 0 None/unknown, WIPE same/diff name kept, GAP 200/200 named.
+  - r5-lock: EXC, GENCLOSE and REENTRANT all leave the state clean.
+  - toctou A/B/C: 73k checks, 0 None. r4-p1b and r3-lock P1-P3 are also clean.
+  - The sections that patch the removed `_lock`/`_holder_lock` attributes cannot run on this design, as in earlier reviews.
+- **Stress 3 × 10s:** 11.2k / 11.2k / 11.3k acquires and 18.8M / 19.2M / 19.0M observer checks, with 0 None, wrong or unknown (about 59k rejects per run, 0 None/unknown).
+- **Callers (8 files incl. `test_resolver_revive.py`):** head 124 passed / 9 failed, main `cba07cf3` 124 / 9. The same 9 tests fail on both (pre-existing on main).
+- The review checkout is clean at 8e505520.
+
+### Follow-up PR scope (non-blocking; tests only)
+- Old item 1 (wipe test silent returns) is **resolved**. Old item 2 (b6 test) is **still open**: the patch only replaced the wipe test.
+1. **b6 test (:777-778):** returns silently on gates without `_state_lock`. Use `pytest.skip` with a reason.
+2. **c test (:825/:833):** `release_winner` is never set, so a fixed 0.5 s wait (c1/c3 show T there). Set the event, or drop it.
+3. **Private-name reads:** `_gate_holder` reads `gate._holder` (:182-186); `slot._tracker` write (:178). Correct gates with renamed internals fail or time out on c/race/stress, and on b_slow when all internals are renamed.
+4. **Small sleeps / slow failures:** blocks_second 0.2 s (:481), skip_path sleeps (:872-887); a1/a2p failures take about 4 s.
+5. **New nit:** the new wipe test types `result` as `dict[str, object]` and then does `+= 1`. Fine at runtime; a type checker would flag it.
+
+### Other
+- **Replit reply:** drafted for Joshua (not posted by MC).
+- **Project:** not messaged by MC.
+- **P4b:** still HOLD_CONDITIONAL; queue file not touched.
+- **Merge/deploy:** Joshua only.
+- **Ditto:** `grok-pr1333-mc-ac-review12-2026-10-07` (source=cursor)
