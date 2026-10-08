@@ -1065,3 +1065,52 @@ Columns: b_slow / b4 / c / wipe / b6 / race / stress.
 - **P4b:** HOLD.
 - **Follow-up hygiene worker:** hit a provider error; the Project restarted it.
 - **Ditto:** `grok-pr1333-deployed-2026-10-08` (source=cursor)
+
+## 2026-10-08 ~7:15 AM PT: PR #1335 MC AC review 1 — MODIFY (from Mission Control / Grok Bot)
+
+**Author:** Mission Control / Grok Bot.
+
+- **PR:** #1335 `test: #1333 gate test hygiene`, head `49a1ce79db89e960c72569aaa6b62ecf058f343c`, base main `b6f8d48c`. Draft. Only `tests/test_heavy_job_gate.py` (+32/−14); `internal/heavy_job_gate.py` 0-diff; no fly.toml / deploy / RESOLVER_* changes.
+- **Smoke CI:** run `37784252387` (check `smoke`) **success** on `49a1ce79` (completed 6:28 AM PT).
+- **Verdict: MODIFY.** Not undrafted. Blocker is one test: `test_reject_skip_path_does_not_hold_holder_lock`.
+
+### Claims check (PR body items 1–6)
+1. b6 `pytest.skip` without `_state_lock`: matches diff. G574/G66f/Gd93/OK_rename_all b6 P→S; no loss (none of them is a b6 bug; M_b6 still F).
+2. c test event-driven pause: matches. Risk (b) OK: the assert in the pause hook surfaces via `_ThreadRun.assert_clean` as a real F. c1/c3 c-test upgraded from main-thread "waiter never rejected" (timeout-shaped) to a real worker `assert True is False`.
+3. `bind_tracker()`: matches. Risk (c) OK: `blocks_second_thread` fails cleanly with `ok=True` (no hang).
+4. Skip-path event sync: **blocker** (below).
+5. Wipe `TypedDict`: matches.
+6. Mutant label comments: accurate (MC b2 = clear-before-free / b_slow; MC wipe2 = Project "b2").
+
+### Blocker: skip-path test (convergence rules i, iv, v)
+- **(iv)/(i) Target bug detected only by timeout.** The test's own target bug is "reject holds gate lock across yield" (MC mutant `M_yl`). On head it fails only via `probe never finished during reject skip path` (a 2 s `probe_done.wait` timeout). On base it failed on a real assertion. That is a regression to timeout-only detection.
+- **(v) Ordering race.** The base `sleep(0.05)` between holder and rejector was removed and nothing replaced it: no "holder acquired" event. If the rejector runs before the holder, `ok=True` and the test fails `assert True is False`.
+  - With a 20 ms holder start delay: head **10/10 FAIL**, base 10/10 pass.
+  - Natural rate: 0/50 full-suite and 0/2000 in-process under 3×nproc CPU burn. So the race is latent and depends on scheduling, but it is real.
+- **Side effect (non-blocking):** `M_a2p` skip-path P→F (probe never finished). `M_a2p` is still caught by race/stress.
+
+### Matrix (10×, 13 gate tests, 26 gates, head vs base `b6f8d48c`)
+- Head correct gates (H, OK_extra, OK_condclear, OK_precheck, OK_precheck_cmt, OK_dcl_marker): all P. Suite time on H: 1.05 s → <0.05 s for the skip test.
+- All bug detections preserved: a1/a2/a2p (race/stress), b1–b5 (b_slow/b4/wipe), b6, c1/c3, wipe/wipe2/wipe3, historical gates 66f77af6/d93ae45b/574d6080.
+- Changes vs base: b6 P→S on 4 non-b6 gates; M_a2p skip P→F; c1/c3 c-test T-shaped→real F. Everything else is identical.
+- Flake stress (correct gate, CPU burn): head 50/50 and fix 50/50 full suite (16 tests, about 0.8 s).
+
+### Required patch (MC-verified; `git apply --check` clean on `49a1ce79`)
+File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291f…`), +15/−8, skip-path test only:
+- Add a `holder_in` event: the holder asserts `ok is True` and sets it, and the rejector waits on it before attempting.
+- The rejector stays in the skip body with a bounded `probe_done.wait(timeout=1)` (drop `probe_ready`).
+- The probe asserts `reject_in_skip.wait`.
+- Main waits `probe_done` (3 s), releases the holder, calls `assert_clean`, then asserts: probe finished; `elapsed < 0.2` with the message `probe blocked …s behind the reject skip body`; holder; `second_ok`.
+- Verified results:
+  - Fix skip-path on all 26 gates ×10: correct gates and every non-target mutant P (including M_a2p, now restored).
+  - `M_yl` F on real assertion `probe blocked 1.000s behind the reject skip body`.
+  - `M_noexcl` F `assert True is False`.
+  - 20 ms holder-delay probe: 10/10 P.
+  - Full suite 50/50 under CPU burn.
+
+### Other
+- **Undraft:** NO (MODIFY). #1335 stays draft.
+- **Project / PR comment:** not posted by MC. The patch is for the Project to apply via CloudAgent reply on Joshua's go.
+- **Merge/deploy:** Joshua only.
+- **P4b:** HOLD.
+- **Ditto:** `grok-pr1335-mc-ac-review1-2026-10-08` (source=cursor)
