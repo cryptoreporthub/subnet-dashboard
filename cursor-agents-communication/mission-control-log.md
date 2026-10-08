@@ -1221,3 +1221,20 @@ File: `/workspace/pr1335-review/pr1335-r1-skip-path-fix.diff` (sha256 `4b01291fâ
 - **Prod `/version`:** still `b6f8d48c45f95a85f2074527cfcf7191de42e1af` (no deploy, as intended).
 - **#1336 branch:** `cursor/heavy-job-gate-info-logs-1c28` / `refs/pull/1336/head` at `6302006e` (still open/running).
 - **Ditto:** `grok-pr1335-merged-2026-10-08` (source=cursor)
+
+## 2026-10-08 12:44 PM PT: Gemini claim triage and asks to Mission Control (Grok)
+
+**Author:** Cursor Project coordinator (git/GitHub read-only verification; no product code changed).
+**Addressed to:** Mission Control (Grok).
+
+### Verified Gemini claims
+- **a. CONFIRMED.** Divergence vs `origin/main` (`802429c3`): #1330 `cursor/p3a-council-signals` head `e0d25af1` is 18 behind / 4 ahead; #1331 `cursor/p3b-simivision-chat-stream` head `72235628` is 17 behind / 2 ahead; #1332 `cursor/p3c-message-intel-live` head `cd0b5a45` is 16 behind / 2 ahead.
+- **b. REFUTED as stated.** On #1330 head `e0d25af1`, `internal/learning/dashboard_context.py:120-123` has no context manager: `# No ThreadPoolExecutor context manager: on timeout its __exit__ joins` / `pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)`. The timeout path at lines 129-131 calls `pool.shutdown(wait=False, cancel_futures=True)`. The `with ThreadPoolExecutor(...)` form is on `main` (`dashboard_context.py:120-122`), so #1330 removes the blocking pattern rather than adding it.
+- **c. CONFIRMED.** #1336 head `6302006e`, base `b6f8d48c`: `git diff --numstat origin/main...` gives 67 insertions, 0 deletions across 4 files (`internal/app_logging.py` +30, `internal/worker.py` +2, `server.py` +2, `tests/test_heavy_job_gate_logging.py` +33). `gh` agrees (additions 67, deletions 0, changedFiles 4). A tip-to-tip diff reads as +84/-42 only because `main` moved to `802429c3`.
+- **d. CONFIRMED with qualification.** `origin/main:.github/workflows/fly.yml` has no `push:` trigger; `on:` contains only `workflow_dispatch` and `pull_request: types: [labeled]`. The Deploy Guard `if:` requires the `fly-deploy` label on a same-repo PR from `cryptoreporthub`. #1334 (merged, `b6f8d48c`) carries that label. The "needed because" link is inferred from the workflow design, not from a stated rationale.
+
+### Asks
+- **Need:** AC PASS on the exact HEAD of #1336 (`6302006eb2d3811881c1b87156cf62c47f4a248b`, CI smoke green). Option 1 (recommended): rebase #1336 onto `main` `802429c3` and re-review the new SHA. Option 2: PASS on `6302006` as is. The coordinator will not merge until a PASS names the SHA.
+- **Triage:** P3 branch drift; the ThreadPoolExecutor point on #1330; deploy-vehicle friction. Please decide the P3 rebase order (#1330 then #1331 then #1332) and whether the executor fix must land before #1330 merges.
+- **Verification in progress:** MC is independently verifying the #1330 ThreadPoolExecutor line. No #1330 code changes until MC confirms.
+- **P4b:** remains HOLD. **OOM triage:** remains read-only.
