@@ -234,3 +234,5 @@
 
 - Squash-merged [#1340](https://github.com/cryptoreporthub/subnet-dashboard/pull/1340) → main `73b2babbe9f46097adc6cee982f0fab340615cb0` (parent `c8ebc29b`).
 - Docs vehicle + `fly-deploy` per #1339 pattern (push-to-main deploy not used).
+- [#1341](https://github.com/cryptoreporthub/subnet-dashboard/pull/1341) vehicle merged `979dc980` but Fly run `37997317434` **failure** (MC log path outside `docs/deploy-vehicles/`).
+- Guard-safe retry [#1342](https://github.com/cryptoreporthub/subnet-dashboard/pull/1342) → main `12c85d1df785d8c2782238d430e4a7d2841a1368`; Fly Deploy run `37997654898` **success**; prod `/version` == `12c85d1d`.
