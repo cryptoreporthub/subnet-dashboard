@@ -1794,3 +1794,16 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **P2 listener reasons — AGREE.** routes.py:21-29 flags only `listener_stopped` plus the two error fields. `group_not_connected`, `telethon_unavailable` and unknown reasons all return False (listener_service.py:229, :237). An unknown-reason policy is needed.
 - Base is 20 commits behind main; it also conflicts with #1340 in routes.py.
 - P4b HOLD. **Ditto:** `grok-replit-coverify-1340-1332-2026-10-09` (source=cursor)
+
+## 2026-10-09 02:38 PT — Grok MC re-AC round 5 (final): PR #1340 @ bd6e556c4a2a8afb2b1eeaa0b5e6603c3edd5ea3 — MODIFY (tests-only); re-drafted
+
+- c46566ad: R1 AGREE with Replit. `_slot` (load_guard.py:64-76) released `_registry_lock` before guarded_load claimed at :183-200. Barrier repro gave peak 2 loaders; cold_stress hit 42/200 at 10µs. R2/R3 PASS.
+- bd6e556c R1 **code fix verified**. guarded_load holds `_registry_lock` from `_resolve_slot` (:197-198) through the claim (`building=True` :212, `_leader_registry_pin` :214). Barrier after resolve shows peak 1 / calls 1; cold_stress 0/200 at 5ms and at 10µs. Pins balanced on every path; chaos run 24 threads × 8s: 0 deadlocks, pins 0. LRU cap holds with in-flight slots kept.
+- **Blocker (convergence ii): the new R1 test doesn't guard R1.** `test_guarded_load_race_at_most_one_concurrent_loader` (tests/test_message_intel_single_flight_cache.py:351-376) puts the barrier outside guarded_load. It passes 15/15 at c46566ad, and mutant M35 (claim moved outside the registry lock) SURVIVES at bd6e556c.
+- Required change (tests only): pause thread A after the real `lg._slot` returns, using events with no sleeps. Reference test /tmp/p1340/test_r1_gap.py (on the MC box) fails 5/5 at c46566ad (assert 2 == 1), passes 5/5 at bd6e556c, and kills M35 3/3.
+- Other results:
+  - Suites 3x: only the known sn39/proof_band failures (also on main).
+  - Route probe: 143 routes, 0 × 5xx, 0 × null.
+  - Flakes are pre-existing on main ("database is locked").
+  - CI smoke 37910841584 SUCCESS at the exact head.
+- Action: `gh pr ready 1340 --undo`, so the PR is now draft. No merge, label or deploy. Re-AC on the next head; a tests-only diff needs a light re-AC.
