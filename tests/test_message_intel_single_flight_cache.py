@@ -348,6 +348,83 @@ def test_summary_bot_trending_command_handles_load_timeout(monkeypatch):
     assert "unavailable" in reply.lower()
 
 
+def test_guarded_load_race_at_most_one_concurrent_loader(monkeypatch):
+    lg = _load_guard()
+    lg.clear_message_intel_load_cache()
+    monkeypatch.setattr(lg, "DEFAULT_TTL", 0.001)
+    active = {"n": 0}
+    peak = {"n": 0}
+    calls = {"n": 0}
+    gate = threading.Event()
+
+    def loader():
+        calls["n"] += 1
+        active["n"] += 1
+        peak["n"] = max(peak["n"], active["n"])
+        gate.wait(timeout=2)
+        active["n"] -= 1
+        return {"n": calls["n"]}
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futs = [pool.submit(lg.guarded_load, "race-key", loader) for _ in range(4)]
+        time.sleep(0.05)
+        gate.set()
+        for f in futs:
+            f.result(timeout=3)
+    assert peak["n"] == 1
+    assert calls["n"] == 1
+
+
+def test_lru_cap_pins_inflight_slot_single_loader_for_key(monkeypatch):
+    lg = _load_guard()
+    lg.clear_message_intel_load_cache()
+    monkeypatch.setattr(lg, "MAX_CACHE_SLOTS", 1)
+    calls = {"a": 0, "b": 0}
+    a_started = threading.Event()
+    a_release = threading.Event()
+
+    def load_a():
+        calls["a"] += 1
+        a_started.set()
+        a_release.wait(timeout=2)
+        return "A"
+
+    def load_b():
+        calls["b"] += 1
+        return "B"
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        fa = pool.submit(lg.guarded_load, "key-a", load_a)
+        assert a_started.wait(timeout=2)
+        pool.submit(lg.guarded_load, "key-b", load_b).result(timeout=2)
+        fc = pool.submit(lg.guarded_load, "key-a", load_a)
+        a_release.set()
+        fa.result(timeout=2)
+        fc.result(timeout=2)
+    assert calls["a"] == 1
+    assert calls["b"] == 1
+
+
+def test_cold_partial_timeout_not_cached_then_recovers():
+    lg = _load_guard()
+    lg.clear_message_intel_load_cache()
+    calls = {"n": 0}
+
+    def loader():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return {"meta": {"load_timeout": True, "ok": False}}
+        return {"meta": {"ok": True}}
+
+    first, meta1 = lg.guarded_load("partial-key", loader)
+    second, meta2 = lg.guarded_load("partial-key", loader)
+    assert calls["n"] == 2
+    assert meta1["cache"] == "partial_timeout_uncached"
+    assert first["meta"]["load_timeout"] is True
+    assert second["meta"]["ok"] is True
+    assert meta2["cache"] == "refresh"
+
+
 def test_netuid_sentiment_rollup_single_flight(monkeypatch, tmp_path):
     db = Database(str(tmp_path / "mi.db"))
     calls = {"n": 0}

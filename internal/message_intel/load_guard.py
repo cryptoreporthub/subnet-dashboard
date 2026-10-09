@@ -22,7 +22,7 @@ class LoadTimeout(TimeoutError):
 
 
 class _Slot:
-    __slots__ = ("state_lock", "build_done", "building", "at", "data", "cold")
+    __slots__ = ("state_lock", "build_done", "building", "at", "data", "cold", "pinned")
 
     def __init__(self) -> None:
         self.state_lock = threading.Lock()
@@ -31,19 +31,34 @@ class _Slot:
         self.at = 0.0
         self.data: Any = None
         self.cold = True
+        self.pinned = 0
 
 
 _slots: "OrderedDict[Hashable, _Slot]" = OrderedDict()
 _registry_lock = threading.Lock()
 
 
+def _slot_evictable(slot: _Slot) -> bool:
+    return not slot.building and slot.pinned <= 0
+
+
 def _evict_stale_slots() -> None:
     for key in list(_slots.keys()):
         slot = _slots[key]
-        if slot.building:
+        if not _slot_evictable(slot):
             continue
         if slot.cold:
             del _slots[key]
+
+
+def _evict_lru_for_space() -> bool:
+    """Evict oldest evictable slot; return False if none (allow over-cap)."""
+    for key in list(_slots.keys()):
+        slot = _slots[key]
+        if _slot_evictable(slot):
+            del _slots[key]
+            return True
+    return False
 
 
 def _slot(key: Hashable) -> _Slot:
@@ -54,10 +69,22 @@ def _slot(key: Hashable) -> _Slot:
             _slots.move_to_end(key)
             return entry
         while len(_slots) >= MAX_CACHE_SLOTS:
-            _slots.popitem(last=False)
+            if not _evict_lru_for_space():
+                break
         entry = _Slot()
         _slots[key] = entry
         return entry
+
+
+def _pin_slot(slot: _Slot) -> None:
+    with _registry_lock:
+        slot.pinned += 1
+
+
+def _unpin_slot(slot: _Slot) -> None:
+    with _registry_lock:
+        if slot.pinned > 0:
+            slot.pinned -= 1
 
 
 def clear_message_intel_load_cache() -> None:
@@ -71,6 +98,8 @@ def invalidate_key(key: Hashable, *, data: Any = None) -> None:
         if slot is None:
             return
         if data is not None and slot.data is not data:
+            return
+        if not _slot_evictable(slot):
             return
         del _slots[key]
 
@@ -155,6 +184,7 @@ def guarded_load(
     if _fresh(slot, ttl):
         return _isolate(slot.data), {"cache": "hit"}
 
+    pinned_leader = False
     with slot.state_lock:
         if _fresh(slot, ttl):
             return _isolate(slot.data), {"cache": "hit"}
@@ -165,6 +195,8 @@ def guarded_load(
         else:
             slot.building = True
             slot.build_done.clear()
+            _pin_slot(slot)
+            pinned_leader = True
             need_wait = False
 
     if need_wait:
@@ -182,16 +214,20 @@ def guarded_load(
                 isinstance(data, dict)
                 and bool((data.get("meta") or {}).get("load_timeout"))
             )
-            if partial_timeout and not slot.cold and slot.data is not None:
-                return _isolate(slot.data), {
-                    "cache": "stale_partial_timeout",
-                    "stale": True,
-                }
+            if partial_timeout:
+                if not slot.cold and slot.data is not None:
+                    return _isolate(slot.data), {
+                        "cache": "stale_partial_timeout",
+                        "stale": True,
+                    }
+                return _isolate(data), {"cache": "partial_timeout_uncached"}
             slot.data = data
             slot.at = time.time()
             slot.cold = False
         return _isolate(data), {"cache": "refresh"}
     finally:
+        if pinned_leader:
+            _unpin_slot(slot)
         with slot.state_lock:
             slot.building = False
         slot.build_done.set()
