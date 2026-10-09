@@ -14,6 +14,11 @@ from internal.message_intel.proof import stable_author_id
 logger = logging.getLogger(__name__)
 
 
+def _note_rollup_timeout(meta: Dict[str, Any]) -> None:
+    meta["load_timeout"] = True
+    meta["ok"] = False
+
+
 class MessageIntelUnavailable(Exception):
     """Raised when core message_intel package cannot be loaded."""
 
@@ -291,9 +296,11 @@ def list_messages(
 ) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.load_guard import (
+        LoadTimeout,
         db_cache_key,
         engine_list_messages_guard_key,
         guarded_load,
+        invalidate_key,
     )
 
     db = get_db()
@@ -306,28 +313,43 @@ def list_messages(
         topic,
         author_id,
     )
-    if key is None:
-        payload = _list_messages_impl(
-            limit,
-            offset,
-            min_conviction=min_conviction,
-            netuid=netuid,
-            topic=topic,
-            author_id=author_id,
-        )
-        cache_meta: Dict[str, Any] = {}
-    else:
-        payload, cache_meta = guarded_load(
-            key,
-            lambda: _list_messages_impl(
+    try:
+        if key is None:
+            payload = _list_messages_impl(
                 limit,
                 offset,
                 min_conviction=min_conviction,
                 netuid=netuid,
                 topic=topic,
                 author_id=author_id,
-            ),
-        )
+            )
+            cache_meta: Dict[str, Any] = {}
+        else:
+            payload, cache_meta = guarded_load(
+                key,
+                lambda: _list_messages_impl(
+                    limit,
+                    offset,
+                    min_conviction=min_conviction,
+                    netuid=netuid,
+                    topic=topic,
+                    author_id=author_id,
+                ),
+            )
+    except LoadTimeout as exc:
+        logger.warning("message-intel list_messages load timeout: %s", exc)
+        meta = {"ok": False, "load_timeout": True, "listener": listener_status()}
+        return {
+            "status": "success",
+            "count": 0,
+            "messages": [],
+            "meta": meta,
+            "sources": source_status(),
+            "empty": True,
+            "filtered_empty": False,
+        }
+    if key is not None and (payload.get("meta") or {}).get("load_timeout"):
+        invalidate_key(key)
     meta = dict(payload.get("meta") or {})
     out: Dict[str, Any] = {**payload, "meta": meta}
     if "messages" in payload:
@@ -348,6 +370,7 @@ def _list_messages_impl(
     topic: Optional[str] = None,
     author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from internal.message_intel.load_guard import LoadTimeout
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
         build_24h_summary,
@@ -374,7 +397,13 @@ def _list_messages_impl(
     # empty whenever their latest message is just outside that window.
     fetch_limit = min(5000, max(limit + offset, 5000 if (author_id or topic) else limit)) if filters_active else limit
     fetch_offset = 0 if filters_active else offset
-    raw = db.list_messages(limit=fetch_limit, offset=fetch_offset)
+    meta = live_stats(db)
+    meta["listener"] = listener_status()
+    try:
+        raw = db.list_messages(limit=fetch_limit, offset=fetch_offset)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        raw = []
     messages = [_enrich_message_row(m, names) for m in raw]
     if filters_active:
         messages = [
@@ -389,8 +418,6 @@ def _list_messages_impl(
             )
         ]
         messages = messages[offset : offset + limit]
-    meta = live_stats(db)
-    meta["listener"] = listener_status()
     try:
         trending = build_trending_subnets(registry_names=names, limit=8, db=db)
         trending_window = "1h"
@@ -402,6 +429,10 @@ def _list_messages_impl(
             trending_window = "24h" if trending else "1h"
         meta["trending"] = trending
         meta["trending_window"] = trending_window
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["trending"] = []
+        meta["trending_window"] = "1h"
     except Exception as exc:
         logger.warning("message-intel trending rollup failed: %s", exc)
         meta["trending"] = []
@@ -410,6 +441,9 @@ def _list_messages_impl(
         meta["yesterday_leader"] = build_yesterday_leader(
             registry_names=names, db=db
         )
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["yesterday_leader"] = None
     except Exception as exc:
         logger.warning("message-intel yesterday leader failed: %s", exc)
         meta["yesterday_leader"] = None
@@ -417,16 +451,30 @@ def _list_messages_impl(
         meta["high_conviction_strip"] = build_high_conviction_strip(
             limit=5, min_conviction=70.0, db=db, registry_names=names
         )
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["high_conviction_strip"] = []
     except Exception as exc:
         logger.warning("message-intel high conviction strip failed: %s", exc)
         meta["high_conviction_strip"] = []
     try:
         meta["telegram_proof"] = build_telegram_proof_band(db=db)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["telegram_proof"] = {"graded": 0, "hits": 0, "hit_rate": None, "ready": False}
     except Exception as exc:
         logger.warning("message-intel telegram proof failed: %s", exc)
         meta["telegram_proof"] = {"graded": 0, "hits": 0, "hit_rate": None, "ready": False}
     try:
         meta["summary_24h"] = build_24h_summary(registry_names=names, db=db)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["summary_24h"] = {
+            "ready": False,
+            "message_count": 0,
+            "window_hours": 24,
+            "empty_reason": "Summary unavailable.",
+        }
     except Exception as exc:
         logger.warning("message-intel 24h summary failed: %s", exc)
         meta["summary_24h"] = {
@@ -437,6 +485,15 @@ def _list_messages_impl(
         }
     try:
         meta["yesterday_summary"] = build_yesterday_chat_summary(registry_names=names, db=db)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["yesterday_summary"] = {
+            "ready": False,
+            "message_count": 0,
+            "window": "yesterday",
+            "empty_reason": "Yesterday recap unavailable.",
+            "narrative": "Yesterday recap unavailable.",
+        }
     except Exception as exc:
         logger.warning("message-intel yesterday summary failed: %s", exc)
         meta["yesterday_summary"] = {
@@ -449,12 +506,18 @@ def _list_messages_impl(
     try:
         # Side feature — per-emoji weekly leaders; not call grading.
         meta["reaction_crowns"] = build_reaction_crowns(days=7, db=db)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["reaction_crowns"] = []
     except Exception as exc:
         logger.warning("message-intel reaction crowns failed: %s", exc)
         meta["reaction_crowns"] = []
     try:
         # Side feature — single most-engaged comment this week.
         meta["week_top_comment"] = build_week_top_comment(days=7, db=db)
+    except LoadTimeout:
+        _note_rollup_timeout(meta)
+        meta["week_top_comment"] = None
     except Exception as exc:
         logger.warning("message-intel week top comment failed: %s", exc)
         meta["week_top_comment"] = None

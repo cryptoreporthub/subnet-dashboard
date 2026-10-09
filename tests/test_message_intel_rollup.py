@@ -616,6 +616,7 @@ def test_today_narrative_names_the_argument_not_the_speakers(monkeypatch):
 
 def test_week_top_comment_unit(monkeypatch):
     """Most engaged message wins; why names the dominant signal."""
+    from contextlib import contextmanager
     from datetime import datetime, timezone
 
     from internal.message_intel import rollup
@@ -644,6 +645,11 @@ def test_week_top_comment_unit(monkeypatch):
 
         def _connect(self):
             return FakeConn(self._rows)
+
+        @contextmanager
+        def _connection(self):
+            with self._connect() as conn:
+                yield conn
 
     rows = [
         {

@@ -65,6 +65,11 @@ def clear_message_intel_load_cache() -> None:
         _slots.clear()
 
 
+def invalidate_key(key: Hashable) -> None:
+    with _registry_lock:
+        _slots.pop(key, None)
+
+
 def db_cache_key(db: Any) -> str:
     return str(getattr(db, "db_path", id(db)))
 

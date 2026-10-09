@@ -532,15 +532,20 @@ def build_subnetsummers_text(*, db=None) -> str:
         build_trending_subnets,
     )
 
+    from internal.message_intel.load_guard import LoadTimeout
+
     names = _registry_subnet_names()
     summary = build_24h_summary(registry_names=names, db=db)
-    trending = build_trending_subnets(
-        registry_names=names,
-        limit=5,
-        rank_hours=24,
-        window_hours=24,
-        db=db,
-    )
+    try:
+        trending = build_trending_subnets(
+            registry_names=names,
+            limit=5,
+            rank_hours=24,
+            window_hours=24,
+            db=db,
+        )
+    except LoadTimeout:
+        trending = []
     chatter = build_high_conviction_strip(
         limit=5,
         min_conviction=60.0,
@@ -699,9 +704,15 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
         return _format_summary_reply(db=db)
     if cmd == "/trending":
         window = "1h" if arg.strip() == "1h" else "24h"
+        from internal.message_intel.load_guard import LoadTimeout
         from internal.message_intel.rollup import build_trending_subnets
 
-        items = build_trending_subnets(limit=5, rank_hours=1 if window == "1h" else 24, window_hours=24)
+        try:
+            items = build_trending_subnets(
+                limit=5, rank_hours=1 if window == "1h" else 24, window_hours=24
+            )
+        except LoadTimeout:
+            return _format_error("Trending data is temporarily unavailable.")
         return _format_trending(items, window)
     if cmd == "/track":
         subnet = _subnet_from_arg(arg)
@@ -729,9 +740,13 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
         return _format_error("Telegram watchlist sync is linked. Your /track and /alerts settings now use My Desk.")
     if cmd == "/rank":
         subnet = _subnet_from_arg(arg)
+        from internal.message_intel.load_guard import LoadTimeout
         from internal.message_intel.rollup import build_trending_subnets
 
-        items = build_trending_subnets(limit=50, rank_hours=1, window_hours=24)
+        try:
+            items = build_trending_subnets(limit=50, rank_hours=1, window_hours=24)
+        except LoadTimeout:
+            return _format_error("Rank data is temporarily unavailable.")
         row = next((r for r in items if subnet is not None and int(r.get("netuid") or 0) == subnet), {})
         return _format_rank(row)
     if cmd == "/who":

@@ -9,7 +9,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
+from fastapi.testclient import TestClient
 from message_intel.models import Database
+from server import app
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "message_intel.db"))
+    from internal.message_intel import store
+
+    store.reset_db_cache()
+    with TestClient(app) as test_client:
+        yield test_client
 
 
 def _load_guard():
@@ -162,15 +174,24 @@ def test_large_offset_bypasses_list_messages_cache(monkeypatch, tmp_path):
     assert calls["n"] == 2
 
 
-def test_database_connection_closed_on_uncached_rows_path(tmp_path):
+def test_database_connection_closed_after_load_message_rows(monkeypatch, tmp_path):
     db = Database(str(tmp_path / "mi.db"))
-    with db._connection() as conn:
-        conn.execute(
-            "INSERT INTO messages (source, content) VALUES ('telegram', 'hi')"
-        )
-    _rows_loader()(db)
-    with pytest.raises(sqlite3.ProgrammingError):
-        conn.execute("SELECT 1")
+    recorded: list = []
+    real_connect = db._connect
+
+    def tracking_connect():
+        conn = real_connect()
+        recorded.append(conn)
+        return conn
+
+    monkeypatch.setattr(db, "_connect", tracking_connect)
+    from internal.message_intel.rollup import _load_message_rows
+
+    _load_message_rows(db)
+    assert recorded
+    for conn in recorded:
+        with pytest.raises(sqlite3.ProgrammingError):
+            conn.execute("SELECT 1")
 
 
 def test_engine_list_messages_copy_isolation(monkeypatch, tmp_path):
@@ -230,6 +251,53 @@ def test_engine_list_messages_fresh_listener_on_cache_hit(monkeypatch, tmp_path)
     second = engine.list_messages(limit=5, offset=0)
     assert first["meta"]["listener"]["live"] is False
     assert second["meta"]["listener"]["live"] is True
+
+
+def test_api_message_intel_stale_meta_sets_degraded(client, monkeypatch):
+    from internal.message_intel import engine
+
+    monkeypatch.setattr(
+        engine,
+        "list_messages",
+        lambda **kwargs: {
+            "status": "success",
+            "count": 0,
+            "messages": [],
+            "meta": {
+                "ok": True,
+                "stale": True,
+                "listener": {"live": False},
+                "last_message_at": None,
+            },
+            "sources": {},
+            "empty": True,
+        },
+    )
+    response = client.get("/api/message-intel")
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("degraded") is True
+
+
+def test_authors_load_timeout_returns_degraded(client, monkeypatch):
+    from internal.message_intel.load_guard import LoadTimeout
+
+    def _boom(*_a, **_k):
+        raise LoadTimeout("cold")
+
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_author_reliability_rows",
+        _boom,
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_reaction_crowns",
+        lambda **k: [],
+    )
+    response = client.get("/api/message-intel/authors")
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("degraded") is True
+    assert body.get("authors") == []
 
 
 def test_netuid_sentiment_rollup_single_flight(monkeypatch, tmp_path):

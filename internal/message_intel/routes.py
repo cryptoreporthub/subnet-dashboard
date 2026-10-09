@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 message_intel_router = APIRouter(tags=["message-intel"])
 
 
+def _rollup_timeout_payload(**fields: Any) -> Dict[str, Any]:
+    """Honest-empty 200 when a guarded SQLite rollup times out (cold single-flight)."""
+    return {"status": "success", "degraded": True, "empty": True, **fields}
+
+
 def _upgrade_response(feature: str, tier: str, route: str = "") -> Dict[str, Any]:
     return {
         "status": "upgrade_required",
@@ -214,14 +219,25 @@ async def api_message_intel_authors(
     # build_weekly_authors() does synchronous JSON parsing over stored
     # messages — a live py-spy dump caught this route blocking the
     # MainThread/event loop directly (it was never dispatched off-thread).
+    from internal.message_intel.load_guard import LoadTimeout
     from internal.message_intel.rollup import build_author_reliability_rows, build_reaction_crowns
 
-    authors, reaction_crowns = await run_in_threadpool(
-        lambda: (
-            build_author_reliability_rows(days=days, limit=limit),
-            build_reaction_crowns(days=days),
+    try:
+        authors, reaction_crowns = await run_in_threadpool(
+            lambda: (
+                build_author_reliability_rows(days=days, limit=limit),
+                build_reaction_crowns(days=days),
+            )
         )
-    )
+    except LoadTimeout as exc:
+        logger.warning("message-intel authors load timeout: %s", exc)
+        return _rollup_timeout_payload(
+            days=days,
+            count=0,
+            authors=[],
+            reaction_crowns=[],
+            entitlement=entitlement_payload(ent),
+        )
     return {
         "status": "success",
         "days": days,
@@ -279,10 +295,21 @@ async def api_message_intel_callers(
     limit: int = Query(default=25, ge=1, le=50),
 ):
     """Resolved, qualifying Telegram-call accuracy only; never engagement."""
+    from internal.message_intel.load_guard import LoadTimeout
     from internal.message_intel.rollup import build_telegram_caller_leaderboard
     if days not in (1, 7, 30, 90):
         return {"status": "error", "error": "days must be one of 1, 7, 30, or 90", "callers": []}
-    result = await run_in_threadpool(build_telegram_caller_leaderboard, days=days, limit=limit)
+    try:
+        result = await run_in_threadpool(build_telegram_caller_leaderboard, days=days, limit=limit)
+    except LoadTimeout as exc:
+        logger.warning("message-intel callers load timeout: %s", exc)
+        return _rollup_timeout_payload(
+            days=days,
+            minimum_sample=0,
+            count=0,
+            callers=[],
+            disclaimer="",
+        )
     return {"status": "success", **result}
 
 
@@ -295,12 +322,33 @@ async def api_message_intel_caller_receipts(
     offset: int = Query(default=0, ge=0),
 ):
     """Public proof receipts for one stable Telegram author identity."""
+    from internal.message_intel.load_guard import LoadTimeout
     from internal.message_intel.rollup import list_telegram_caller_receipts
     if days not in (1, 7, 30, 90):
         return {"status": "error", "error": "days must be one of 1, 7, 30, or 90", "receipts": []}
-    result = await run_in_threadpool(
-        list_telegram_caller_receipts, author_id=author_id, days=days, limit=limit, offset=offset
-    )
+    try:
+        result = await run_in_threadpool(
+            list_telegram_caller_receipts,
+            author_id=author_id,
+            days=days,
+            limit=limit,
+            offset=offset,
+        )
+    except LoadTimeout as exc:
+        logger.warning("message-intel caller receipts load timeout: %s", exc)
+        return _rollup_timeout_payload(
+            author_id=author_id,
+            days=days,
+            count=0,
+            total=0,
+            receipts=[],
+            offset=offset,
+            limit=limit,
+            activity=[],
+            activity_total=0,
+            activity_empty=True,
+            legacy_reliability=None,
+        )
     return {"status": "success", **result}
 
 
