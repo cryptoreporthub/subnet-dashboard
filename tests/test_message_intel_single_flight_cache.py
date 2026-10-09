@@ -349,41 +349,49 @@ def test_summary_bot_trending_command_handles_load_timeout(monkeypatch):
 
 
 def test_guarded_load_race_at_most_one_concurrent_loader(monkeypatch):
-    """R1: barrier after ``_slot()`` publication, before atomic claim in ``guarded_load``."""
+    """R1: gap after ``_slot()`` returns, before leader claim in ``guarded_load``."""
     lg = _load_guard()
     lg.clear_message_intel_load_cache()
     monkeypatch.setattr(lg, "DEFAULT_TTL", 0.001)
-    publication_barrier = threading.Barrier(2, timeout=3)
-    loader_gate = threading.Event()
+
+    real_slot = lg._slot
+    slot_hook_hits = {"n": 0}
+    publication_gap = threading.Event()
+    gap_release = threading.Event()
+    loader_release = threading.Event()
     active = {"n": 0}
     peak = {"n": 0}
     calls = {"n": 0}
-    real_guarded_load = lg.guarded_load
 
     def loader():
         calls["n"] += 1
         active["n"] += 1
         peak["n"] = max(peak["n"], active["n"])
-        loader_gate.wait(timeout=2)
+        loader_release.wait(timeout=2)
         active["n"] -= 1
         return {"n": calls["n"]}
 
-    def guarded_load_with_publication_gap(key, load_fn, **kwargs):
-        lg._slot(key)
-        publication_barrier.wait()
-        return real_guarded_load(key, load_fn, **kwargs)
+    def slot_with_publication_gap(key):
+        slot = real_slot(key)
+        slot_hook_hits["n"] += 1
+        if slot_hook_hits["n"] == 1:
+            publication_gap.set()
+            gap_release.wait(timeout=2)
+        return slot
 
-    monkeypatch.setattr(lg, "guarded_load", guarded_load_with_publication_gap)
+    monkeypatch.setattr(lg, "_slot", slot_with_publication_gap)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futs = [
-            pool.submit(lg.guarded_load, "race-key", loader)
-            for _ in range(2)
-        ]
-        time.sleep(0.05)
-        loader_gate.set()
-        for f in futs:
-            f.result(timeout=5)
+        leader = pool.submit(lg.guarded_load, "race-key", loader)
+        if publication_gap.wait(timeout=2):
+            follower = pool.submit(lg.guarded_load, "race-key", loader)
+            gap_release.set()
+        else:
+            follower = pool.submit(lg.guarded_load, "race-key", loader)
+        loader_release.set()
+        leader.result(timeout=5)
+        follower.result(timeout=5)
+
     assert peak["n"] == 1
     assert calls["n"] == 1
 
