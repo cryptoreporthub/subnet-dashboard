@@ -1748,3 +1748,27 @@ B. **Flaky suite at head:** `test_message_intel_rollup.py::test_trending_falls_b
 - 10+2 new tests on main: behavioural = single_flight, hung_leader, close; ImportError/ModuleNotFound = cold_timeout, ttl, lru, authors_timeout; AttributeError = large_offset, copy_isolation, fresh_listener, netuid; stale_meta fails identically on main and head (wrong key).
 - Conflict with #1332 persists in internal/message_intel/routes.py; clean vs #1330/#1331. Scope fences OK (9 files, no fly.toml/secrets/RESOLVER_*/deploy).
 - P4b HOLD. **Ditto:** `grok-pr1340-reac3-2026-10-08` (source=cursor)
+
+---
+
+## 2026-10-08 ~8:55 PM PT — MC AC round 4 #1340 @ 2c2b417a — **PASS** → undrafted (Ready for review)
+
+Head `2c2b417a` (unchanged through review). CI Smoke run 37875257820 **success** at the exact head (7:35–7:37 PM PT). `gh pr ready 1340` done; isDraft=false, not merged. No label or deploy. Merge and deploy are Joshua's call.
+
+### Round-3 blockers — FIXED
+- (A) The stale→degraded test now asserts `freshness.status == "degraded"` (test :243-266). It passes at head and fails on main for a behavioural reason (`'missing' == 'degraded'`).
+- (B) An autouse fixture in tests/conftest.py:41-55 clears the load cache. rollup+f6+endpoint_contract(+new file) at head: 6/6 clean with the new file and 6/6 without it, plus 15/15 clean under parallel load. Main: 15/15. Only the 2 known failures.
+
+### Verified
+- Message-intel suites + endpoint_contract: head 267 pass / 2 fail, main 251 pass / 2 fail (same 2 known). First 675 tests of the full suite: identical pass/fail pattern on head and main (15 pre-existing F). Both runs then hang at the same pre-existing test; the full run was not completed.
+- Forced-LoadTimeout probe, 143 GET routes: 0 × 5xx, 0 × null, identical to normal mode.
+- Mutation set (29): 21 caught. Survivors: engine meta setdefault (harmless), /callers timeout catch, `get_last_good`→None (the test stubs it), invalidate identity check (dead code: no callers), partial keep-last-good, the stale flags on the cold and partial paths, and /callers minimum_sample.
+- The new logic is correct by probe. A partial timeout with last-good serves last-good with `stale=True` and doesn't overwrite it. `invalidate_key(data=...)` keeps a newer entry. Stale serving has no age cap, but it is honestly flagged: stale → freshness degraded, and captured_at comes from last_message_at. On a cold start, a degraded result can become last-good, but it carries ok=False / load_timeout, so the route reports it as degraded. `get_last_good` after a cold LoadTimeout is effectively a no-op (the slot is still cold).
+- The /callers timeout payload now uses MIN_LEADERBOARD_SAMPLE and the disclaimer.
+- Scope fences OK: 10 files, no fly.toml/secrets/RESOLVER_*/deploy.
+
+### Non-blocking follow-ups (not blockers)
+- Add tests for partial keep-last-good, the stale flags, /callers timeout, and the payload. Remove or test the unused `invalidate_key`. Consider a max stale age.
+- `test_trending_and_authors_after_ingest` failed 3× during mutation runs only. Unreproduced at head in 67 clean runs (isolation 25/25, suites 42/42).
+- Conflict with #1332 in internal/message_intel/routes.py (`degraded=` line) must be resolved by whichever merges second. Clean vs #1330/#1331.
+- P4b HOLD. **Ditto:** `grok-pr1340-reac4-2026-10-08` (source=cursor)
