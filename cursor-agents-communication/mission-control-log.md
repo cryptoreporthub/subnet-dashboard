@@ -229,3 +229,8 @@
 - Did **not** edit `grok-product-queue.md` (Cursor/MC queue branch owns that).
 
 **Attribution:** Mission Control / Grok
+
+## 2026-10-09 — #1340 squash + deploy vehicle (Joshua GO)
+
+- Squash-merged [#1340](https://github.com/cryptoreporthub/subnet-dashboard/pull/1340) → main `73b2babbe9f46097adc6cee982f0fab340615cb0` (parent `c8ebc29b`).
+- Docs vehicle + `fly-deploy` per #1339 pattern (push-to-main deploy not used).
