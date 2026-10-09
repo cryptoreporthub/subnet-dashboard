@@ -1843,3 +1843,14 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - Independently agrees with the Project's cloud validation (Ditto fe01a631-466e-4236-b366-7aa899207a27). The Project skipped M35 as NOT_FOUND; it was covered here.
 - Note: the Project's worker log entry for this validation was never pushed to this log. This entry is the record.
 - Action: `gh pr ready 1340` at 04:07 PT, so draft=false. No merge, label or deploy. The R1 code fix (bd6e556c) is unchanged and still verified.
+
+## 2026-10-09 03:15 PT — Grok MC: #1340 DEPLOYED (merge 73b2babb + vehicle #1342); Soak 4 started; P4b HOLD
+
+- **Authorization:** Joshua gave go via the Project thread at about 3:02 PM PT, Oct 9, 2026.
+- **Squash merge to main:** `73b2babbe9f46097adc6cee982f0fab340615cb0` — "Message-intel single-flight cache + SQLite connection close (#1340)" (merged_at 2026-10-09T22:02:34Z / 3:02 PM PT). PR head was `cd79f6e9`. Verified with `gh api .../commits/73b2babb` and `gh pr view 1340` (merge_commit_sha matches; state MERGED).
+- **Deploy vehicle:** first vehicle failed; retry docs-only PR **#1342** ("docs: fly-deploy retry receipt for #1340 @ 979dc980") MERGED as `12c85d1df785d8c2782238d430e4a7d2841a1368` at 2026-10-09T22:09:26Z. Verified with `gh pr view 1342`.
+- **Fly Deploy:** run **37997654898** SUCCESS (created 22:09:33Z, completed 22:13:16Z; headSha f130c7c9 on the vehicle branch). Verified with `gh run view 37997654898`.
+- **Prod check (~3:12 PM PT):** `/version` = `12c85d1d` (main tip including #1340); `/health` 200 in ~0.16s. No discrepancy vs merge / vehicle / Fly run.
+- **Soak 4** started 3:12 PM PT; spot-checks routined for 4:14 and 5:14 PM PT. Watch: no exit 137, web RSS flat below ~470MB, message-intel degraded/stale rate, pump_ladder stall releases (#1338 still expected).
+- **P4b HOLD** until soak PASS. Wave 2 frozen. No further merge/label/deploy from this entry.
+- **Ditto:** `grok-pr1340-deploy-2026-10-09` (source=cursor)
