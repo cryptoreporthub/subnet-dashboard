@@ -1696,3 +1696,32 @@ Pinned head `b0f371a8` (base main `c8ebc29b`). CI Smoke run 37865756195 **succes
 ### Stance
 - #1340 DRAFT, MODIFY sent back via report. P4b HOLD. #1330 untouched.
 - **Ditto:** `grok-pr1340-ac-2026-10-08` (source=cursor)
+
+---
+
+## 2026-10-08 ~6:35 PM PT — MC re-AC #1340 @ 796d0620 — **MODIFY** (stays draft)
+
+Head `796d0620` (unchanged through review); base main `c8ebc29b`. CI Smoke run 37867342462 **success** at 796d0620 (5:57–6:00 PM PT); 37867331993 was ef84cde2 (cancelled). Not undrafted/merged/labeled/deployed. Folds in the Project coordinator AC (pr-1340-adversarial-ac-2026-10-09.md) as one verdict.
+
+### R1–R7 verified by probe
+- R1 PASS: 20k distinct keys → 128 slots, 0.25 MB; offset>200 → key None (uncached) for engine + db list.
+- R2 PASS: dict payloads deepcopied (top, meta, nested listener, message rows isolated); list rows shallow-copied (rows hold scalars/JSON strings only).
+- R3 PARTIAL: LoadTimeout raised on cold wait; nothing cached. **But 3 routes return HTTP 500 on LoadTimeout** (probe: guarded_load forced to raise; 43 GET routes + 4 param routes): `/api/message-intel/authors` (routes.py:207-226), `/api/message-intel/callers` (:275-286), `/api/message-intel/callers/{author_id}/receipts` (:289-305). summary_bot.py:537/704/734 also unhandled. /api/message-intel, /list, tracker.py:60-64, context.py, share_pages all degrade OK.
+- R4 PASS: stale waiter returns in 0.000s; cold waiter LoadTimeout at 15.0s.
+- R5 PARTIAL: mutants caught: no-single-flight, no-close, never-fresh (now caught), ttl-infinite, no-finally-clear, waiter-recompute, no-LRU, no-offset-skip, no-isolate, no-listener-overlay, cold-returns-None, stale-waits-full. **Survive:** uncached `_load_message_rows` back on `_connect` (test :165-173 asserts on its own conn), route stale→degraded off.
+- R6 PASS (minor: routes.py stale→degraded not listed in body). R7 PASS (fresh listener_status overlay engine.py; stale→degraded routes.py:103-109).
+
+### Main failure modes of the 10 new tests (c8ebc29b)
+behavioural: single_flight_one_underlying_load (8==1), hung_leader_immediate_stale ([]==[{id:1}]). ImportError load_guard: cold_timeout, ttl_refresh, lru_eviction. AttributeError: large_offset (_list_messages_uncached), connection_closed (_connection), copy_isolation + fresh_listener (_list_messages_impl), netuid (_netuid_sentiment_rollup_uncached).
+Per AC4 behaviour: one-load ✓ public; no-stacking/immediate-stale ✓ public; LRU and copy isolation = new contracts main can't violate (accepted); **connection close ✗** (no behavioural main-fail and no real assertion on rows path) → blocks.
+
+### Blocking
+1. LoadTimeout → 500 on /authors, /callers, /callers/{id}/receipts (regression: these never errored on main).
+2. Regression: tests/test_message_intel_rollup.py::test_week_top_comment_unit FAILS at head, passes on main — rollup.py:917 now `_connection()`; FakeDb (test :641-646) only has `_connect`. Head suite 260 pass / 3 fail vs main 251 / 2.
+3. Connection-close test (test :165-173) not a real assertion on the uncached rows path.
+
+### Notes
+- Textual CONFLICT with #1332 in internal/message_intel/routes.py (degraded= line); resolve to `degraded=not bool(stats.get("ok", True)) or stale_meta, listener=listener`. Clean vs #1330/#1331.
+- rollup suite exit hang (homepage cache warm thread) is pre-existing on main and b0f371a8 — not PR-caused.
+- Non-blocking: outer list_messages can cache section defaults after inner LoadTimeout for 30s.
+- P4b HOLD. **Ditto:** `grok-pr1340-reac-2026-10-08` (source=cursor)
