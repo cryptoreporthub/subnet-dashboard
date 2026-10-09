@@ -1725,3 +1725,26 @@ Per AC4 behaviour: one-load ✓ public; no-stacking/immediate-stale ✓ public; 
 - rollup suite exit hang (homepage cache warm thread) is pre-existing on main and b0f371a8 — not PR-caused.
 - Non-blocking: outer list_messages can cache section defaults after inner LoadTimeout for 30s.
 - P4b HOLD. **Ditto:** `grok-pr1340-reac-2026-10-08` (source=cursor)
+
+---
+
+## 2026-10-08 ~7:20 PM PT — MC AC round 3 #1340 @ a069bb80 — **MODIFY** (stays draft)
+
+Head `a069bb80` (unchanged through review). CI Smoke run 37871261698 **success** at a069bb80 (6:44–6:47 PM PT). Not undrafted/merged/labeled/deployed.
+
+### Round-2 blockers — all FIXED
+1. Forced-LoadTimeout probe over all 139 parameterless GET routes + 4 param routes: identical to normal mode, **0 × 5xx, 0 × null** (only /api/cockpit/stream hangs in both modes, pre-existing streaming). summary_bot /trending, /rank, build_subnetsummers_text catch LoadTimeout (mutant on /trending catch → not specifically tested; non-blocking).
+2. test_week_top_comment_unit passes (FakeDb `_connection` added).
+3. New close test (test :177-194) fails on main behaviourally (`DID NOT RAISE ProgrammingError`) and kills the `_connect` mutant.
+
+### New blockers (convergence ii/iii/v)
+A. **Deterministic test failure at head:** `test_api_message_intel_stale_meta_sets_degraded` (test :256-279) asserts top-level `degraded`, but `_message_contract`/`bot_contract` puts it in `freshness.status`. Route behaviour is correct (probe: stale → `freshness.status=="degraded"`, non-stale → "missing"). Fix: assert `body["freshness"]["status"] == "degraded"` (fails on main behaviourally). Head suite 262 pass / 3 fail vs main 251 / 2.
+B. **Flaky suite at head:** `test_message_intel_rollup.py::test_trending_falls_back_to_24h_when_1h_empty` failed 2/6 runs at head, 0/6 on main; `test_trending_and_authors_after_ingest` and `test_yesterday_summary_in_meta` also failed intermittently during mutation runs. Cause: module-global load_guard cache not cleared between tests outside the new file. Fix: autouse fixture in tests/conftest.py calling `clear_message_intel_load_cache()`.
+
+### Non-blocking
+- `invalidate_key` (load_guard.py:68-70) pops by key, without checking slot identity. Probe: a foreign invalidate while another leader is building gives 2 concurrent leaders; a late invalidate drops a valid entry and causes an extra load. The trigger window in engine.py is narrow. The outer last-good is NOT preserved: the degraded payload overwrites last-good, then the key is popped, so the next callers hit a cold wait (≤15s) and get an empty degraded response. There's no heavy-load herd, because the inner loads stay single-flight. Follow-up: a `cacheable` predicate (don't store degraded results; serve stale last-good) plus identity-checked invalidation.
+- Surviving mutants: route stale→degraded (because of A), receipts LoadTimeout catch, `_note_rollup_timeout` no-op, engine meta setdefault (equivalent).
+- `_rollup_timeout_payload` keys match normal shapes; /callers degraded uses disclaimer "" and minimum_sample 0; top-level `degraded` vs freshness contract.
+- 10+2 new tests on main: behavioural = single_flight, hung_leader, close; ImportError/ModuleNotFound = cold_timeout, ttl, lru, authors_timeout; AttributeError = large_offset, copy_isolation, fresh_listener, netuid; stale_meta fails identically on main and head (wrong key).
+- Conflict with #1332 persists in internal/message_intel/routes.py; clean vs #1330/#1331. Scope fences OK (9 files, no fly.toml/secrets/RESOLVER_*/deploy).
+- P4b HOLD. **Ditto:** `grok-pr1340-reac3-2026-10-08` (source=cursor)
