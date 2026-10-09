@@ -82,10 +82,7 @@ def test_hung_leader_waiters_get_immediate_stale(monkeypatch, tmp_path):
         time.sleep(1.0)
         return [{"id": 2}]
 
-    monkeypatch.setattr(
-        "internal.message_intel.rollup._load_message_rows_uncached",
-        _slow,
-    )
+    _patch_rows_loader(monkeypatch, _slow)
     monkeypatch.setattr(_load_guard(), "DEFAULT_TTL", 0.001)
     time.sleep(0.02)
 
