@@ -299,8 +299,8 @@ def list_messages(
         LoadTimeout,
         db_cache_key,
         engine_list_messages_guard_key,
+        get_last_good,
         guarded_load,
-        invalidate_key,
     )
 
     db = get_db()
@@ -338,18 +338,20 @@ def list_messages(
             )
     except LoadTimeout as exc:
         logger.warning("message-intel list_messages load timeout: %s", exc)
-        meta = {"ok": False, "load_timeout": True, "listener": listener_status()}
-        return {
-            "status": "success",
-            "count": 0,
-            "messages": [],
-            "meta": meta,
-            "sources": source_status(),
-            "empty": True,
-            "filtered_empty": False,
-        }
-    if key is not None and (payload.get("meta") or {}).get("load_timeout"):
-        invalidate_key(key)
+        stale_payload = get_last_good(key) if key is not None else None
+        if stale_payload is None:
+            meta = {"ok": False, "load_timeout": True, "listener": listener_status()}
+            return {
+                "status": "success",
+                "count": 0,
+                "messages": [],
+                "meta": meta,
+                "sources": source_status(),
+                "empty": True,
+                "filtered_empty": False,
+            }
+        payload = stale_payload
+        cache_meta = {"stale": True, "cache": "stale_cold_timeout"}
     meta = dict(payload.get("meta") or {})
     out: Dict[str, Any] = {**payload, "meta": meta}
     if "messages" in payload:

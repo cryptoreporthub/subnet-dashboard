@@ -48,19 +48,6 @@ def _rows_loader():
     return rollup._load_message_rows
 
 
-@pytest.fixture(autouse=True)
-def _clear_intel_load_cache():
-    try:
-        _load_guard().clear_message_intel_load_cache()
-    except ImportError:
-        pass
-    yield
-    try:
-        _load_guard().clear_message_intel_load_cache()
-    except ImportError:
-        pass
-
-
 def test_load_message_rows_single_flight_one_underlying_load(monkeypatch, tmp_path):
     calls = {"n": 0}
     db = Database(str(tmp_path / "mi.db"))
@@ -276,7 +263,7 @@ def test_api_message_intel_stale_meta_sets_degraded(client, monkeypatch):
     response = client.get("/api/message-intel")
     assert response.status_code == 200
     body = response.json()
-    assert body.get("degraded") is True
+    assert body["freshness"]["status"] == "degraded"
 
 
 def test_authors_load_timeout_returns_degraded(client, monkeypatch):
@@ -298,6 +285,67 @@ def test_authors_load_timeout_returns_degraded(client, monkeypatch):
     body = response.json()
     assert body.get("degraded") is True
     assert body.get("authors") == []
+
+
+def test_note_rollup_timeout_sets_meta_flags():
+    from internal.message_intel import engine
+
+    meta: dict = {"ok": True}
+    engine._note_rollup_timeout(meta)
+    assert meta["load_timeout"] is True
+    assert meta["ok"] is False
+
+
+def test_engine_list_messages_load_timeout_serves_last_good(monkeypatch, tmp_path):
+    monkeypatch.setenv("MESSAGE_INTEL_DB", str(tmp_path / "mi.db"))
+    from internal.message_intel import engine, store
+    from internal.message_intel.load_guard import LoadTimeout
+
+    store.reset_db_cache()
+    good = {
+        "status": "success",
+        "count": 1,
+        "messages": [{"id": 1}],
+        "meta": {"ok": True, "total_messages": 1},
+        "sources": {},
+        "empty": False,
+        "filtered_empty": False,
+    }
+
+    def _raise_timeout(*_a, **_k):
+        raise LoadTimeout("cold")
+
+    monkeypatch.setattr("internal.message_intel.load_guard.guarded_load", _raise_timeout)
+    monkeypatch.setattr("internal.message_intel.load_guard.get_last_good", lambda _key: good)
+    out = engine.list_messages(limit=5, offset=0)
+    assert out["count"] == 1
+
+
+def test_caller_receipts_load_timeout_returns_degraded(client, monkeypatch):
+    from internal.message_intel.load_guard import LoadTimeout
+
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.list_telegram_caller_receipts",
+        lambda **_k: (_ for _ in ()).throw(LoadTimeout("cold")),
+    )
+    response = client.get("/api/message-intel/callers/u1/receipts")
+    assert response.status_code == 200
+    body = response.json()
+    assert body.get("degraded") is True
+    assert body.get("receipts") == []
+
+
+def test_summary_bot_trending_command_handles_load_timeout(monkeypatch):
+    from internal.message_intel import summary_bot
+    from internal.message_intel.load_guard import LoadTimeout
+
+    monkeypatch.setattr(
+        "internal.message_intel.rollup.build_trending_subnets",
+        lambda **_k: (_ for _ in ()).throw(LoadTimeout("cold")),
+    )
+    reply = summary_bot.handle_command("/trending")
+    assert reply is not None
+    assert "unavailable" in reply.lower()
 
 
 def test_netuid_sentiment_rollup_single_flight(monkeypatch, tmp_path):

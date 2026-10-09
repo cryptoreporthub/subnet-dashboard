@@ -65,9 +65,22 @@ def clear_message_intel_load_cache() -> None:
         _slots.clear()
 
 
-def invalidate_key(key: Hashable) -> None:
+def invalidate_key(key: Hashable, *, data: Any = None) -> None:
     with _registry_lock:
-        _slots.pop(key, None)
+        slot = _slots.get(key)
+        if slot is None:
+            return
+        if data is not None and slot.data is not data:
+            return
+        del _slots[key]
+
+
+def get_last_good(key: Hashable) -> Any | None:
+    with _registry_lock:
+        slot = _slots.get(key)
+        if slot is None or slot.cold or slot.data is None:
+            return None
+        return _isolate(slot.data)
 
 
 def db_cache_key(db: Any) -> str:
@@ -165,6 +178,15 @@ def guarded_load(
     try:
         data = loader()
         with slot.state_lock:
+            partial_timeout = (
+                isinstance(data, dict)
+                and bool((data.get("meta") or {}).get("load_timeout"))
+            )
+            if partial_timeout and not slot.cold and slot.data is not None:
+                return _isolate(slot.data), {
+                    "cache": "stale_partial_timeout",
+                    "stale": True,
+                }
             slot.data = data
             slot.at = time.time()
             slot.cold = False

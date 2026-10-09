@@ -303,12 +303,17 @@ async def api_message_intel_callers(
         result = await run_in_threadpool(build_telegram_caller_leaderboard, days=days, limit=limit)
     except LoadTimeout as exc:
         logger.warning("message-intel callers load timeout: %s", exc)
+        from internal.message_intel.rollup import MIN_LEADERBOARD_SAMPLE
+
         return _rollup_timeout_payload(
             days=days,
-            minimum_sample=0,
+            minimum_sample=MIN_LEADERBOARD_SAMPLE,
             count=0,
             callers=[],
-            disclaimer="",
+            disclaimer=(
+                "Prediction accuracy is measured from resolved qualifying calls only, "
+                "not engagement. Not financial advice."
+            ),
         )
     return {"status": "success", **result}
 
