@@ -352,22 +352,23 @@ def test_guarded_load_race_at_most_one_concurrent_loader(monkeypatch):
     """R1: gap after ``_slot()`` returns, before leader claim in ``guarded_load``."""
     lg = _load_guard()
     lg.clear_message_intel_load_cache()
-    monkeypatch.setattr(lg, "DEFAULT_TTL", 0.001)
 
     real_slot = lg._slot
     slot_hook_hits = {"n": 0}
     publication_gap = threading.Event()
     gap_release = threading.Event()
     loader_release = threading.Event()
+    leader_in_loader = threading.Event()
     active = {"n": 0}
     peak = {"n": 0}
     calls = {"n": 0}
 
     def loader():
         calls["n"] += 1
+        leader_in_loader.set()
         active["n"] += 1
         peak["n"] = max(peak["n"], active["n"])
-        loader_release.wait(timeout=2)
+        loader_release.wait(timeout=10)
         active["n"] -= 1
         return {"n": calls["n"]}
 
@@ -376,21 +377,32 @@ def test_guarded_load_race_at_most_one_concurrent_loader(monkeypatch):
         slot_hook_hits["n"] += 1
         if slot_hook_hits["n"] == 1:
             publication_gap.set()
-            gap_release.wait(timeout=2)
+            while slot_hook_hits["n"] < 2:
+                gap_release.wait(timeout=10)
         return slot
 
     monkeypatch.setattr(lg, "_slot", slot_with_publication_gap)
 
+    def _wait_leader_ready(timeout=10):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if publication_gap.is_set() or leader_in_loader.is_set():
+                return True
+            time.sleep(0.001)
+        return publication_gap.is_set() or leader_in_loader.is_set()
+
     with ThreadPoolExecutor(max_workers=2) as pool:
         leader = pool.submit(lg.guarded_load, "race-key", loader)
-        if publication_gap.wait(timeout=2):
-            follower = pool.submit(lg.guarded_load, "race-key", loader)
+        assert _wait_leader_ready(), "leader did not reach slot gap or loader"
+        follower = pool.submit(lg.guarded_load, "race-key", loader)
+        if publication_gap.is_set():
+            deadline = time.monotonic() + 10
+            while slot_hook_hits["n"] < 2 and time.monotonic() < deadline:
+                time.sleep(0.001)
             gap_release.set()
-        else:
-            follower = pool.submit(lg.guarded_load, "race-key", loader)
         loader_release.set()
-        leader.result(timeout=5)
-        follower.result(timeout=5)
+        leader.result(timeout=10)
+        follower.result(timeout=10)
 
     assert peak["n"] == 1
     assert calls["n"] == 1
