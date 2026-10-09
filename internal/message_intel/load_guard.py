@@ -61,19 +61,29 @@ def _evict_lru_for_space() -> bool:
     return False
 
 
+def _resolve_slot(key: Hashable) -> _Slot:
+    """Lookup/create slot; caller must hold ``_registry_lock``."""
+    _evict_stale_slots()
+    entry = _slots.get(key)
+    if entry is not None:
+        _slots.move_to_end(key)
+        return entry
+    while len(_slots) >= MAX_CACHE_SLOTS:
+        if not _evict_lru_for_space():
+            break
+    entry = _Slot()
+    _slots[key] = entry
+    return entry
+
+
 def _slot(key: Hashable) -> _Slot:
     with _registry_lock:
-        _evict_stale_slots()
-        entry = _slots.get(key)
-        if entry is not None:
-            _slots.move_to_end(key)
-            return entry
-        while len(_slots) >= MAX_CACHE_SLOTS:
-            if not _evict_lru_for_space():
-                break
-        entry = _Slot()
-        _slots[key] = entry
-        return entry
+        return _resolve_slot(key)
+
+
+def _leader_registry_pin(slot: _Slot) -> None:
+    """Pin leader load; caller must hold ``_registry_lock``."""
+    slot.pinned += 1
 
 
 def _pin_slot(slot: _Slot) -> None:
@@ -180,24 +190,30 @@ def guarded_load(
         ttl = DEFAULT_TTL
     if wait_timeout is None:
         wait_timeout = DEFAULT_WAIT
-    slot = _slot(key)
-    if _fresh(slot, ttl):
-        return _isolate(slot.data), {"cache": "hit"}
 
     pinned_leader = False
-    with slot.state_lock:
+    need_wait = False
+    slot: _Slot
+    with _registry_lock:
+        slot = _resolve_slot(key)
         if _fresh(slot, ttl):
             return _isolate(slot.data), {"cache": "hit"}
-        if slot.building:
-            if not slot.cold and slot.data is not None:
-                return _isolate(slot.data), {"cache": "stale_immediate", "stale": True}
-            need_wait = True
-        else:
-            slot.building = True
-            slot.build_done.clear()
-            _pin_slot(slot)
-            pinned_leader = True
-            need_wait = False
+        with slot.state_lock:
+            if _fresh(slot, ttl):
+                return _isolate(slot.data), {"cache": "hit"}
+            if slot.building:
+                if not slot.cold and slot.data is not None:
+                    return _isolate(slot.data), {
+                        "cache": "stale_immediate",
+                        "stale": True,
+                    }
+                need_wait = True
+            else:
+                slot.building = True
+                slot.build_done.clear()
+                _leader_registry_pin(slot)
+                pinned_leader = True
+                need_wait = False
 
     if need_wait:
         slot.build_done.wait(timeout=wait_timeout)

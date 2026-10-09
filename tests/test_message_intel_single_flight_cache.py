@@ -349,28 +349,41 @@ def test_summary_bot_trending_command_handles_load_timeout(monkeypatch):
 
 
 def test_guarded_load_race_at_most_one_concurrent_loader(monkeypatch):
+    """R1: barrier after ``_slot()`` publication, before atomic claim in ``guarded_load``."""
     lg = _load_guard()
     lg.clear_message_intel_load_cache()
     monkeypatch.setattr(lg, "DEFAULT_TTL", 0.001)
+    publication_barrier = threading.Barrier(2, timeout=3)
+    loader_gate = threading.Event()
     active = {"n": 0}
     peak = {"n": 0}
     calls = {"n": 0}
-    gate = threading.Event()
+    real_guarded_load = lg.guarded_load
 
     def loader():
         calls["n"] += 1
         active["n"] += 1
         peak["n"] = max(peak["n"], active["n"])
-        gate.wait(timeout=2)
+        loader_gate.wait(timeout=2)
         active["n"] -= 1
         return {"n": calls["n"]}
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
-        futs = [pool.submit(lg.guarded_load, "race-key", loader) for _ in range(4)]
+    def guarded_load_with_publication_gap(key, load_fn, **kwargs):
+        lg._slot(key)
+        publication_barrier.wait()
+        return real_guarded_load(key, load_fn, **kwargs)
+
+    monkeypatch.setattr(lg, "guarded_load", guarded_load_with_publication_gap)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futs = [
+            pool.submit(lg.guarded_load, "race-key", loader)
+            for _ in range(2)
+        ]
         time.sleep(0.05)
-        gate.set()
+        loader_gate.set()
         for f in futs:
-            f.result(timeout=3)
+            f.result(timeout=5)
     assert peak["n"] == 1
     assert calls["n"] == 1
 
