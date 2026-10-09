@@ -1807,3 +1807,22 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
   - Flakes are pre-existing on main ("database is locked").
   - CI smoke 37910841584 SUCCESS at the exact head.
 - Action: `gh pr ready 1340 --undo`, so the PR is now draft. No merge, label or deploy. Re-AC on the next head; a tests-only diff needs a light re-AC.
+
+## 2026-10-09 03:31 PT — Grok MC light re-AC round 6: PR #1340 @ bb7bd7407533aa8f238fd5f46d7935201ff7ecd8 — MODIFY (tests-only); stays draft
+
+- Diff vs bd6e556c touches tests only: 1 file, tests/test_message_intel_single_flight_cache.py (+26/-18). No product code.
+- The rewritten `test_guarded_load_race_at_most_one_concurrent_loader` now hooks `lg._slot`:
+  - fails at c46566ad 10/10 for a behavioural reason (assert 2 == 1 on peak or calls);
+  - kills M35 5/5;
+  - **but is flaky at the head: 1 failure in the first 10 runs, 39/40 overall** (:396 `calls == 1`, assert 2 == 1).
+- Root cause: at the head the hook never fires, so `publication_gap.wait(timeout=2)` (:386) burns 2s, racing the leader's `loader_release.wait(timeout=2)` (:370). If the leader's loader times out first, `DEFAULT_TTL=0.001` (:355) means the follower finds expired data and runs a 2nd load. This is a false failure on correct code, decided by timeouts (convergence iii/iv/v).
+- Deterministic proof: raising the gap wait to 2.2s makes the head fail 3/3 at :396.
+- Required change (tests only), patch script /tmp/p1340/fix_r1test.py on the MC box:
+  1. Drop the TTL monkeypatch.
+  2. Have the loader set a `leader_in_loader` event, with a 10s release timeout.
+  3. Wait for `publication_gap` OR `leader_in_loader` instead of the 2s timeout.
+  4. In the gap path, release once the follower hits `_slot` (hook hits ≥ 2).
+  Validated: head 30/30 pass, c46566ad 10/10 fail (assert 2 == 1), M35 5/5 killed.
+- Focused suites + endpoint_contract at head: 251 passed / 2 failed (only the known sn39/proof_band).
+- CI: CI Smoke Test 37917194813 success, headSha bb7bd740 (created 03:22 PT).
+- Draft state: draft (unchanged since the round-5 re-draft). No merge, label or deploy. The R1 code fix (bd6e556c) is still verified.
