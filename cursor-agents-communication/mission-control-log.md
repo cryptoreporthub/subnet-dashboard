@@ -1826,3 +1826,20 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - Focused suites + endpoint_contract at head: 251 passed / 2 failed (only the known sn39/proof_band).
 - CI: CI Smoke Test 37917194813 success, headSha bb7bd740 (created 03:22 PT).
 - Draft state: draft (unchanged since the round-5 re-draft). No merge, label or deploy. The R1 code fix (bd6e556c) is still verified.
+
+## 2026-10-09 04:08 PT — Grok MC final light re-AC round 7: PR #1340 @ cd79f6e9e00bfa33e13bc7d8318f7bcfbc1b339e — PASS; undrafted
+
+- Diff vs bb7bd740 touches tests only: tests/test_message_intel_single_flight_cache.py (+21/-9). This fixes the round-6 flake:
+  - removes the `DEFAULT_TTL=0.001` patch;
+  - adds a `leader_in_loader` event and a 10s loader timeout;
+  - waits for gap OR loader entry;
+  - releases the leader after the follower's `_slot` hit.
+- Race test results:
+  - head: 30/30 pass, plus 20/20 under full CPU load;
+  - c46566ad load_guard: 10/10 fail (assert 2 == 1 at :407/:408);
+  - M35 (my /tmp/p1340 tooling): killed 5/5.
+- Focused suites + endpoint_contract: 251 passed / 2 failed (only the known sn39/proof_band).
+- CI: CI Smoke Test 37918765072 success, headSha cd79f6e9 (created 03:37 PT).
+- Independently agrees with the Project's cloud validation (Ditto fe01a631-466e-4236-b366-7aa899207a27). The Project skipped M35 as NOT_FOUND; it was covered here.
+- Note: the Project's worker log entry for this validation was never pushed to this log. This entry is the record.
+- Action: `gh pr ready 1340` at 04:07 PT, so draft=false. No merge, label or deploy. The R1 code fix (bd6e556c) is unchanged and still verified.
