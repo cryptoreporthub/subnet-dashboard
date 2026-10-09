@@ -1668,3 +1668,31 @@ Machines API (7841024b3712e8): two exits with `exit_code` 137 since the 21:36:30
 - **P4b HOLD.** #1330 untouched (Wave 2 still needs single-flight + degraded caching).
 
 - **Ditto:** `grok-soak3-interim-2026-10-08` (source=cursor)
+
+---
+
+## 2026-10-08 ~5:50 PM PT — MC AC review #1340 (message-intel single-flight cache) — **MODIFY** (stays draft)
+
+Pinned head `b0f371a8` (base main `c8ebc29b`). CI Smoke run 37865756195 **success** at head (5:37–5:40 PM PT). Not undrafted, not merged/labeled/deployed.
+
+### Passes
+- Cache keys include all params (list_messages: db, limit, offset, min_conviction, netuid, topic, author_id; proof_rows: days, author_id; trending: limit/window/rank/names; sentiment: limit) — no cross-param wrong data.
+- Exception path clears `building` in `finally` (load_guard.py:99-102); no wedge. No lock held across loader → no self/nested deadlock; no interaction with `_learning_snapshot_lock`.
+- `_connection()` (models.py:40-50) commit/rollback/close matches prior `with conn` semantics for writers. AC6 clean (5 files, no fly.toml/secrets/RESOLVER_*/deploy).
+- Suites: head 256 pass / 2 fail; main 251 pass / 2 fail — the 2 rollup failures are identical (Templar≠Teutonic, Cortex≠Base Alpha).
+- Textual merge clean vs #1330/#1331/#1332.
+
+### Blocking (convergence: memory risk / wrong data / AC4)
+1. **Unbounded cache** load_guard.py:28-38 — one slot per key, never evicted; offset (ge=0, no max), author_id, topic, min_conviction are request-controlled. Probe: 20k offsets → 20k slots, 37.5 MB retained after TTL. Can worsen the OOM.
+2. **Shared mutable cached object** engine.py:316-320 + routes.py `payload["entitlement"]=…`/`payload.update(...)` mutate the cached dict → leaks into later /api/message-intel and /list responses; stale path writes meta from worker threads. Probe confirmed `a is b`.
+3. **Cold timeout returns None / []** load_guard.py:90 → engine.list_messages returns None (/list returns null; signal_hub tracker `.get` crashes); guarded_list_load returns [] and outer list_messages caches a payload built on [] as fresh for 30s.
+4. **Waiters block full 90s even with last-good** load_guard.py:13,84-89 → a hung load still stacks request threads (AC4 "doesn't stack threads").
+5. **Tests** fail on main only by ImportError; TTL mutation (never-fresh) survives; `_load_message_rows_uncached` reverted to `_connect` survives (test :112-120 asserts nothing); test :83 never calls list_messages.
+
+### Also required
+6. AC5 disclosure: Database.list_messages guarded (models.py:316), new env knobs MESSAGE_INTEL_LOAD_CACHE_SECONDS/WAIT_SECONDS, all writers moved to `_connection`.
+7. P3c/#1332 semantic: `meta.listener` served from 30s cache; #1332 derives `degraded` from it → overlay fresh listener_status() after cache read.
+
+### Stance
+- #1340 DRAFT, MODIFY sent back via report. P4b HOLD. #1330 untouched.
+- **Ditto:** `grok-pr1340-ac-2026-10-08` (source=cursor)
