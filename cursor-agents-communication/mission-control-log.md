@@ -1772,3 +1772,25 @@ Head `2c2b417a` (unchanged through review). CI Smoke run 37875257820 **success**
 - `test_trending_and_authors_after_ingest` failed 3× during mutation runs only. Unreproduced at head in 67 clean runs (isolation 25/25, suites 42/42).
 - Conflict with #1332 in internal/message_intel/routes.py (`degraded=` line) must be resolved by whichever merges second. Clean vs #1330/#1331.
 - P4b HOLD. **Ditto:** `grok-pr1340-reac4-2026-10-08` (source=cursor)
+
+---
+
+## 2026-10-09 ~1:55 AM PT — MC co-verify of Replit MODIFY reviews (#1340 @ 2c2b417a, #1332 @ cd0b5a45)
+
+Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:19:54Z (#1332), i.e. 1:19 AM PT. Repros run at the exact heads, coordinated with events/barriers rather than sleeps. Nothing pushed, merged or deployed.
+
+### #1340 — **PASS stands** (stays Ready, draft=false; NOT re-drafted)
+- **P1 cold-slot orphan — AGREE, non-blocking.** load_guard.py:40-46 deletes cold, non-building slots; `_slot()` (:49-60) publishes a cold slot and releases `_registry_lock` before `guarded_load` claims it (:158-168). Event repro (A paused after `_slot` returns, B runs on the same key): **2 concurrent loaders**. Reachability: only applies to cold slots (first load of a key, boot after OOM, or after an error/eviction). Cold-boot burst of 24 threads × 6 keys over 200 trials: **0/200 at the default 5 ms switch interval**; 32/200 with max 3 concurrent per key at a forced 10 µs switch. The duplicate count is bounded by concurrent callers, the same as main (main has no dedup at all), so this is not a regression and doesn't make memory worse than main.
+- **P1 LRU evicts in-flight slot — AGREE, non-blocking.** load_guard.py:56-57 `popitem(last=False)` ignores `building`. Repro at cap=1: **2 concurrent A loaders, registry size 1**. At cap=128, it took **128 distinct new keys touched during one in-flight build** to evict it (the slot is moved to most-recently-used when claimed). Prod polling uses a handful of keys, so this needs a crawler sweeping offset ≤200 / author_id / topic combinations faster than one load completes. It is bounded by key churn and no worse than main.
+- **P2 cold partial timeout cached as fresh — AGREE, non-blocking** (MC flagged it in round 4). load_guard.py:185-192: the keep-last-good branch requires a warm slot, so a cold partial result falls through, gets stored, and its timestamp updates. Repro: second call `cache=hit`, loader_calls=1, meta `{ok:false, load_timeout:true}`. The response is honestly marked degraded, but recovery is hidden for up to 30 s.
+- **Convergence:** no regression vs main, no wrong data, no flaky or false gate. Duplicates are bounded at or below main's per-caller loads, so nothing rises to the level of rescinding. **Recommended before merge (cheap), Joshua's call:**
+  (R1) pin or claim slots atomically: under `_registry_lock` in `_slot`, add a refcount or `pinned` flag released in `guarded_load`'s finally; `_evict_stale_slots` skips pinned or building slots.
+  (R2) LRU evicts the oldest non-building, non-pinned slot; if every slot is active, allow a temporary overflow rather than detaching work.
+  (R3) on a cold partial `load_timeout`, return the data without storing it (slot stays cold).
+  Tests that must fail at 2c2b417a: event-hooked `_slot` orphan test (assert peak concurrent loaders == 1); cap=1 in-flight eviction test (assert 1 concurrent loader for A); cold-partial-then-recover test (assert loader_calls == 2 and healthy meta on the second call).
+
+### #1332 — record only (Wave 2 backlog, state unchanged)
+- **P2 heartbeat foreign/live — AGREE.** outcome_loop.py:85-90: missing pid → True; foreign pid with ts +1 day → True (no `age >= 0` check); pid 0 → True. Own pid → False. Invalid pid "abc" → False (int() raises, caught). Mitigating factor: the writer always stamps the pid (outcome_loop.py:43, also on main), so a missing pid only happens with malformed files.
+- **P2 listener reasons — AGREE.** routes.py:21-29 flags only `listener_stopped` plus the two error fields. `group_not_connected`, `telethon_unavailable` and unknown reasons all return False (listener_service.py:229, :237). An unknown-reason policy is needed.
+- Base is 20 commits behind main; it also conflicts with #1340 in routes.py.
+- P4b HOLD. **Ditto:** `grok-replit-coverify-1340-1332-2026-10-09` (source=cursor)
