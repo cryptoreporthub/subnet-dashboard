@@ -9,17 +9,44 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from internal.message_intel import load_guard
-from internal.message_intel.load_guard import LoadTimeout
-from internal.message_intel.rollup import _load_message_rows_uncached
 from message_intel.models import Database
+
+
+def _load_guard():
+    from internal.message_intel import load_guard as lg
+
+    return lg
+
+
+def _patch_rows_loader(monkeypatch, fn):
+    try:
+        monkeypatch.setattr(
+            "internal.message_intel.rollup._load_message_rows_uncached",
+            fn,
+        )
+    except Exception:
+        monkeypatch.setattr("internal.message_intel.rollup._load_message_rows", fn)
+
+
+def _rows_loader():
+    from internal.message_intel import rollup
+
+    if hasattr(rollup, "_load_message_rows_uncached"):
+        return rollup._load_message_rows_uncached
+    return rollup._load_message_rows
 
 
 @pytest.fixture(autouse=True)
 def _clear_intel_load_cache():
-    load_guard.clear_message_intel_load_cache()
+    try:
+        _load_guard().clear_message_intel_load_cache()
+    except ImportError:
+        pass
     yield
-    load_guard.clear_message_intel_load_cache()
+    try:
+        _load_guard().clear_message_intel_load_cache()
+    except ImportError:
+        pass
 
 
 def test_load_message_rows_single_flight_one_underlying_load(monkeypatch, tmp_path):
@@ -31,10 +58,7 @@ def test_load_message_rows_single_flight_one_underlying_load(monkeypatch, tmp_pa
         time.sleep(0.12)
         return [{"id": 1}]
 
-    monkeypatch.setattr(
-        "internal.message_intel.rollup._load_message_rows_uncached",
-        _slow,
-    )
+    _patch_rows_loader(monkeypatch, _slow)
     from internal.message_intel.rollup import _load_message_rows
 
     with ThreadPoolExecutor(max_workers=8) as pool:
@@ -50,10 +74,7 @@ def test_hung_leader_waiters_get_immediate_stale(monkeypatch, tmp_path):
     calls = {"n": 0}
     from internal.message_intel.rollup import _load_message_rows
 
-    monkeypatch.setattr(
-        "internal.message_intel.rollup._load_message_rows_uncached",
-        lambda db=None: [{"id": 1}],
-    )
+    _patch_rows_loader(monkeypatch, lambda db=None: [{"id": 1}])
     assert _load_message_rows(db) == [{"id": 1}]
 
     def _slow(db=None):
@@ -65,7 +86,7 @@ def test_hung_leader_waiters_get_immediate_stale(monkeypatch, tmp_path):
         "internal.message_intel.rollup._load_message_rows_uncached",
         _slow,
     )
-    monkeypatch.setattr(load_guard, "DEFAULT_TTL", 0.001)
+    monkeypatch.setattr(_load_guard(), "DEFAULT_TTL", 0.001)
     time.sleep(0.02)
 
     leader = threading.Thread(target=_load_message_rows, args=(db,))
@@ -89,15 +110,14 @@ def test_first_time_cold_timeout_raises_loadtimeout(monkeypatch, tmp_path):
         time.sleep(0.3)
         return [{"id": 99}]
 
-    monkeypatch.setattr(
-        "internal.message_intel.rollup._load_message_rows_uncached",
-        _slow,
-    )
-    monkeypatch.setattr(load_guard, "DEFAULT_WAIT", 0.05)
+    _patch_rows_loader(monkeypatch, _slow)
+    monkeypatch.setattr(_load_guard(), "DEFAULT_WAIT", 0.05)
 
     leader = threading.Thread(target=_load_message_rows, args=(db,))
     leader.start()
     time.sleep(0.02)
+    from internal.message_intel.load_guard import LoadTimeout
+
     with pytest.raises(LoadTimeout):
         _load_message_rows(db)
     leader.join(timeout=2)
@@ -112,11 +132,8 @@ def test_ttl_refresh_invokes_loader_again(monkeypatch, tmp_path):
         calls["n"] += 1
         return [{"id": calls["n"]}]
 
-    monkeypatch.setattr(
-        "internal.message_intel.rollup._load_message_rows_uncached",
-        _load,
-    )
-    monkeypatch.setattr(load_guard, "DEFAULT_TTL", 0.02)
+    _patch_rows_loader(monkeypatch, _load)
+    monkeypatch.setattr(_load_guard(), "DEFAULT_TTL", 0.02)
     assert _load_message_rows(db) == [{"id": 1}]
     time.sleep(0.03)
     assert _load_message_rows(db) == [{"id": 2}]
@@ -124,12 +141,13 @@ def test_ttl_refresh_invokes_loader_again(monkeypatch, tmp_path):
 
 
 def test_lru_eviction_caps_slot_count(monkeypatch):
-    monkeypatch.setattr(load_guard, "MAX_CACHE_SLOTS", 2)
-    monkeypatch.setattr(load_guard, "DEFAULT_TTL", 60.0)
+    lg = _load_guard()
+    monkeypatch.setattr(lg, "MAX_CACHE_SLOTS", 2)
+    monkeypatch.setattr(lg, "DEFAULT_TTL", 60.0)
     for idx in range(3):
-        load_guard.guarded_load(("evict-test", idx), lambda n=idx: {"n": n})
-    with load_guard._registry_lock:
-        assert len(load_guard._slots) <= 2
+        lg.guarded_load(("evict-test", idx), lambda n=idx: {"n": n})
+    with lg._registry_lock:
+        assert len(lg._slots) <= 2
 
 
 def test_large_offset_bypasses_list_messages_cache(monkeypatch, tmp_path):
@@ -141,8 +159,9 @@ def test_large_offset_bypasses_list_messages_cache(monkeypatch, tmp_path):
         return []
 
     monkeypatch.setattr(db, "_list_messages_uncached", _uncached)
-    db.list_messages(limit=10, offset=load_guard.MAX_CACHE_OFFSET + 1)
-    db.list_messages(limit=10, offset=load_guard.MAX_CACHE_OFFSET + 1)
+    lg = _load_guard()
+    db.list_messages(limit=10, offset=lg.MAX_CACHE_OFFSET + 1)
+    db.list_messages(limit=10, offset=lg.MAX_CACHE_OFFSET + 1)
     assert calls["n"] == 2
 
 
@@ -152,7 +171,7 @@ def test_database_connection_closed_on_uncached_rows_path(tmp_path):
         conn.execute(
             "INSERT INTO messages (source, content) VALUES ('telegram', 'hi')"
         )
-    _load_message_rows_uncached(db)
+    _rows_loader()(db)
     with pytest.raises(sqlite3.ProgrammingError):
         conn.execute("SELECT 1")
 
