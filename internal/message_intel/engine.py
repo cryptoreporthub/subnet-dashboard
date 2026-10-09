@@ -289,6 +289,46 @@ def list_messages(
     topic: Optional[str] = None,
     author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    from internal.message_intel.load_guard import db_cache_key, guarded_load
+
+    db = get_db()
+    key = (
+        "engine.list_messages",
+        db_cache_key(db),
+        limit,
+        offset,
+        min_conviction,
+        netuid,
+        topic,
+        author_id,
+    )
+    payload, cache_meta = guarded_load(
+        key,
+        lambda: _list_messages_impl(
+            limit,
+            offset,
+            min_conviction=min_conviction,
+            netuid=netuid,
+            topic=topic,
+            author_id=author_id,
+        ),
+    )
+    if cache_meta.get("stale"):
+        meta = payload.setdefault("meta", {})
+        meta["stale"] = True
+        meta["cache_source"] = cache_meta.get("cache")
+    return payload
+
+
+def _list_messages_impl(
+    limit: int = 50,
+    offset: int = 0,
+    *,
+    min_conviction: Optional[float] = None,
+    netuid: Optional[int] = None,
+    topic: Optional[str] = None,
+    author_id: Optional[str] = None,
+) -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.rollup import (
         build_24h_summary,

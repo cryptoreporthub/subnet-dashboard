@@ -199,9 +199,9 @@ def _reaction_influence_boost(rx: Dict[str, int]) -> float:
     )
 
 
-def _load_message_rows(db=None) -> List[Dict[str, Any]]:
+def _load_message_rows_uncached(db=None) -> List[Dict[str, Any]]:
     database = db or get_db()
-    with database._connect() as conn:
+    with database._connection() as conn:
         rows = conn.execute(
             """SELECT m.id, m.author_id, m.author_name, m.author_username, m.group_name,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
@@ -225,6 +225,16 @@ def _load_message_rows(db=None) -> List[Dict[str, Any]]:
                ORDER BY m.id DESC"""
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def _load_message_rows(db=None) -> List[Dict[str, Any]]:
+    from internal.message_intel.load_guard import db_cache_key, guarded_list_load
+
+    database = db or get_db()
+    return guarded_list_load(
+        ("message_rows", db_cache_key(database)),
+        lambda: _load_message_rows_uncached(db),
+    )
 
 
 def _coerce_float(value: Any, default: float = 0.0) -> float:
@@ -274,6 +284,37 @@ def _author_rolling_quality(stats: Dict[str, Any]) -> float:
 
 
 def build_trending_subnets(
+    *,
+    registry_names: Optional[Dict[int, str]] = None,
+    limit: int = 8,
+    window_hours: int = 6,
+    rank_hours: int = 1,
+    db=None,
+) -> List[Dict[str, Any]]:
+    from internal.message_intel.load_guard import db_cache_key, guarded_list_load
+
+    database = db or get_db()
+    names_key = frozenset(registry_names.items()) if registry_names else frozenset()
+    return guarded_list_load(
+        (
+            "trending_subnets",
+            db_cache_key(database),
+            limit,
+            window_hours,
+            rank_hours,
+            names_key,
+        ),
+        lambda: _build_trending_subnets_uncached(
+            registry_names=registry_names,
+            limit=limit,
+            window_hours=window_hours,
+            rank_hours=rank_hours,
+            db=db,
+        ),
+    )
+
+
+def _build_trending_subnets_uncached(
     *,
     registry_names: Optional[Dict[int, str]] = None,
     limit: int = 8,
@@ -970,11 +1011,13 @@ def build_topics(*, limit: int = 12, db=None) -> List[Dict[str, Any]]:
     return topics[:limit]
 
 
-def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def _proof_rows_uncached(
+    db=None, *, days: Optional[int] = None, author_id: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """Load bounded public-proof fields only; classification happens in Python."""
     database = db or get_db()
     cutoff = datetime.now(timezone.utc) - timedelta(days=days) if days else None
-    with database._connect() as conn:
+    with database._connection() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, m.external_message_id,
@@ -1008,6 +1051,16 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
             continue
         out.append(row)
     return out
+
+
+def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    from internal.message_intel.load_guard import db_cache_key, guarded_list_load
+
+    database = db or get_db()
+    return guarded_list_load(
+        ("proof_rows", db_cache_key(database), days, author_id),
+        lambda: _proof_rows_uncached(db, days=days, author_id=author_id),
+    )
 
 
 def _conviction_rows(db=None) -> List[Dict[str, Any]]:
