@@ -1854,3 +1854,14 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **Soak 4** started 3:12 PM PT; spot-checks routined for 4:14 and 5:14 PM PT. Watch: no exit 137, web RSS flat below ~470MB, message-intel degraded/stale rate, pump_ladder stall releases (#1338 still expected).
 - **P4b HOLD** until soak PASS. Wave 2 frozen. No further merge/label/deploy from this entry.
 - **Ditto:** `grok-pr1340-deploy-2026-10-09` (source=cursor)
+
+## 2026-10-09 4:15 PM PT — Soak 4 interim spot-check (#1340 / vehicle #1342) — PASS
+
+- **Window:** since 3:12 PM PT (2026-10-09T22:12:00Z) through ~4:18 PM PT. Deploy: Fly run 37997654898 SUCCESS; prod `/version` still `12c85d1df785d8c2782238d430e4a7d2841a1368`; `/health` 200 body OK.
+- **Exit 137 / restarts:** none. Machine `7841024b3712e8` sjc started, release v2289, checks 1/1 passing; events API only launch/start at 22:12:02–22:12:19Z (no later stop/restart/exit). Fly log buffer (~23:01–23:17Z): 0 matches for oom|exit 137|Killed|Out of memory|restart|exited.
+- **Web RSS:** flat under ~470MB. `run_web_with_guard.py` PID 652 VmRSS=436436 kB (~426.2 MB) at 23:17Z and 23:18Z (identical); VmHWM=442404 kB (~432.0 MB); `/metrics` `process_resident_memory_bytes≈4.47e8`. Machine-wide AnonPages≈755 MB / MemAvailable≈45 MB noted (tight VM headroom, outside web-RSS gate).
+- **message-intel:** 0 `load timeout` / degraded / stale in Fly buffer. Only Telegram 403 trend_alert noise (pre-existing chase).
+- **pump_ladder / resolver:** `heavy_job_slot release name=pump_ladder held_ms=249253.3` at 23:04:47Z (normal ~4.2 min hold, not stall). Resolver `tick_start`→`success duration_ms=38573.5` at 23:13–23:14Z.
+- **Axiom:** dataset `subnet-dashboard-prod` listable; APL/query **403** (ingest token only). Axiom lines UNKNOWN this run; Fly events + live RSS substitute for interim gates.
+- **Verdict:** interim **PASS**. P4b stays HOLD. Final soak at 5:14 PM PT. No mutations.
+- **Ditto:** `grok-soak4-interim-2026-10-09-1615` (source=cursor)
