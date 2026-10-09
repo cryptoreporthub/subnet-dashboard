@@ -1,0 +1,262 @@
+"""Single-flight + short TTL cache for heavy message_intel SQLite loads."""
+
+from __future__ import annotations
+
+import copy
+import os
+import threading
+import time
+from collections import OrderedDict
+from typing import Any, Callable, Dict, Hashable, List, Optional, Tuple, TypeVar
+
+T = TypeVar("T")
+
+DEFAULT_TTL = float(os.environ.get("MESSAGE_INTEL_LOAD_CACHE_SECONDS", "30"))
+DEFAULT_WAIT = float(os.environ.get("MESSAGE_INTEL_LOAD_WAIT_SECONDS", "15"))
+MAX_CACHE_SLOTS = int(os.environ.get("MESSAGE_INTEL_LOAD_MAX_SLOTS", "128"))
+MAX_CACHE_OFFSET = int(os.environ.get("MESSAGE_INTEL_MAX_CACHE_OFFSET", "200"))
+
+
+class LoadTimeout(TimeoutError):
+    """Cold cache: an in-flight load did not finish before the wait budget."""
+
+
+class _Slot:
+    __slots__ = ("state_lock", "build_done", "building", "at", "data", "cold", "pinned")
+
+    def __init__(self) -> None:
+        self.state_lock = threading.Lock()
+        self.build_done = threading.Event()
+        self.building = False
+        self.at = 0.0
+        self.data: Any = None
+        self.cold = True
+        self.pinned = 0
+
+
+_slots: "OrderedDict[Hashable, _Slot]" = OrderedDict()
+_registry_lock = threading.Lock()
+
+
+def _slot_evictable(slot: _Slot) -> bool:
+    return not slot.building and slot.pinned <= 0
+
+
+def _evict_stale_slots() -> None:
+    for key in list(_slots.keys()):
+        slot = _slots[key]
+        if not _slot_evictable(slot):
+            continue
+        if slot.cold:
+            del _slots[key]
+
+
+def _evict_lru_for_space() -> bool:
+    """Evict oldest evictable slot; return False if none (allow over-cap)."""
+    for key in list(_slots.keys()):
+        slot = _slots[key]
+        if _slot_evictable(slot):
+            del _slots[key]
+            return True
+    return False
+
+
+def _resolve_slot(key: Hashable) -> _Slot:
+    """Lookup/create slot; caller must hold ``_registry_lock``."""
+    _evict_stale_slots()
+    entry = _slots.get(key)
+    if entry is not None:
+        _slots.move_to_end(key)
+        return entry
+    while len(_slots) >= MAX_CACHE_SLOTS:
+        if not _evict_lru_for_space():
+            break
+    entry = _Slot()
+    _slots[key] = entry
+    return entry
+
+
+def _slot(key: Hashable) -> _Slot:
+    with _registry_lock:
+        return _resolve_slot(key)
+
+
+def _leader_registry_pin(slot: _Slot) -> None:
+    """Pin leader load; caller must hold ``_registry_lock``."""
+    slot.pinned += 1
+
+
+def _pin_slot(slot: _Slot) -> None:
+    with _registry_lock:
+        slot.pinned += 1
+
+
+def _unpin_slot(slot: _Slot) -> None:
+    with _registry_lock:
+        if slot.pinned > 0:
+            slot.pinned -= 1
+
+
+def clear_message_intel_load_cache() -> None:
+    with _registry_lock:
+        _slots.clear()
+
+
+def invalidate_key(key: Hashable, *, data: Any = None) -> None:
+    with _registry_lock:
+        slot = _slots.get(key)
+        if slot is None:
+            return
+        if data is not None and slot.data is not data:
+            return
+        if not _slot_evictable(slot):
+            return
+        del _slots[key]
+
+
+def get_last_good(key: Hashable) -> Any | None:
+    with _registry_lock:
+        slot = _slots.get(key)
+        if slot is None or slot.cold or slot.data is None:
+            return None
+        return _isolate(slot.data)
+
+
+def db_cache_key(db: Any) -> str:
+    return str(getattr(db, "db_path", id(db)))
+
+
+def list_messages_guard_key(
+    db_path: str,
+    limit: int,
+    offset: int,
+    *,
+    kind: str,
+) -> Optional[Hashable]:
+    """Do not cache unbounded pagination keys (large offset)."""
+    if int(offset) > MAX_CACHE_OFFSET:
+        return None
+    return (kind, db_path, int(limit), int(offset))
+
+
+def engine_list_messages_guard_key(
+    db_path: str,
+    limit: int,
+    offset: int,
+    min_conviction: Any,
+    netuid: Any,
+    topic: Any,
+    author_id: Any,
+) -> Optional[Hashable]:
+    if int(offset) > MAX_CACHE_OFFSET:
+        return None
+    return (
+        "engine.list_messages",
+        db_path,
+        int(limit),
+        int(offset),
+        min_conviction,
+        netuid,
+        topic,
+        author_id,
+    )
+
+
+def _fresh(slot: _Slot, ttl: float) -> bool:
+    return (
+        not slot.cold
+        and slot.data is not None
+        and (time.time() - float(slot.at)) < ttl
+    )
+
+
+def _isolate(value: Any) -> Any:
+    if isinstance(value, list):
+        return [copy.copy(row) if isinstance(row, dict) else row for row in value]
+    if isinstance(value, dict):
+        return copy.deepcopy(value)
+    return value
+
+
+def guarded_load(
+    key: Hashable,
+    loader: Callable[[], T],
+    *,
+    ttl: float | None = None,
+    wait_timeout: float | None = None,
+) -> Tuple[T, Dict[str, Any]]:
+    """Run loader at most once per TTL; concurrent callers wait or get stale."""
+    if ttl is None:
+        ttl = DEFAULT_TTL
+    if wait_timeout is None:
+        wait_timeout = DEFAULT_WAIT
+
+    pinned_leader = False
+    need_wait = False
+    slot: _Slot
+    with _registry_lock:
+        slot = _resolve_slot(key)
+        if _fresh(slot, ttl):
+            return _isolate(slot.data), {"cache": "hit"}
+        with slot.state_lock:
+            if _fresh(slot, ttl):
+                return _isolate(slot.data), {"cache": "hit"}
+            if slot.building:
+                if not slot.cold and slot.data is not None:
+                    return _isolate(slot.data), {
+                        "cache": "stale_immediate",
+                        "stale": True,
+                    }
+                need_wait = True
+            else:
+                slot.building = True
+                slot.build_done.clear()
+                _leader_registry_pin(slot)
+                pinned_leader = True
+                need_wait = False
+
+    if need_wait:
+        slot.build_done.wait(timeout=wait_timeout)
+        if _fresh(slot, ttl):
+            return _isolate(slot.data), {"cache": "hit"}
+        if not slot.cold and slot.data is not None:
+            return _isolate(slot.data), {"cache": "stale_timeout", "stale": True}
+        raise LoadTimeout(f"message_intel load still in flight for key={key!r}")
+
+    try:
+        data = loader()
+        with slot.state_lock:
+            partial_timeout = (
+                isinstance(data, dict)
+                and bool((data.get("meta") or {}).get("load_timeout"))
+            )
+            if partial_timeout:
+                if not slot.cold and slot.data is not None:
+                    return _isolate(slot.data), {
+                        "cache": "stale_partial_timeout",
+                        "stale": True,
+                    }
+                return _isolate(data), {"cache": "partial_timeout_uncached"}
+            slot.data = data
+            slot.at = time.time()
+            slot.cold = False
+        return _isolate(data), {"cache": "refresh"}
+    finally:
+        if pinned_leader:
+            _unpin_slot(slot)
+        with slot.state_lock:
+            slot.building = False
+        slot.build_done.set()
+
+
+def guarded_list_load(
+    key: Hashable,
+    loader: Callable[[], List[Any]],
+    *,
+    ttl: float | None = None,
+    wait_timeout: float | None = None,
+) -> List[Any]:
+    data, _meta = guarded_load(key, loader, ttl=ttl, wait_timeout=wait_timeout)
+    if data is None:
+        return []
+    return data if isinstance(data, list) else list(data)

@@ -9,8 +9,9 @@ import json
 import os
 import re
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 
 DB_PATH = os.environ.get("MESSAGE_INTEL_DB", "data/message_intel.db")
@@ -35,8 +36,20 @@ class Database:
         conn.execute("PRAGMA foreign_keys=ON")
         return conn
 
+    @contextmanager
+    def _connection(self) -> Iterator[sqlite3.Connection]:
+        conn = self._connect()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
     def _init_schema(self) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.executescript("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,7 +153,7 @@ class Database:
 
     def _migrate_schema(self) -> None:
         """Add columns introduced after initial schema (idempotent)."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             cols = {
                 r[1] for r in conn.execute("PRAGMA table_info(price_snapshots)").fetchall()
             }
@@ -208,7 +221,7 @@ class Database:
         if reply_to is not None:
             reply_to = str(reply_to)
 
-        with self._connect() as conn:
+        with self._connection() as conn:
             if external_id and group_id:
                 row = conn.execute(
                     """SELECT id FROM messages
@@ -285,7 +298,7 @@ class Database:
             return int(message_id), False
 
     def get_message(self, message_id: int) -> Optional[Dict[str, Any]]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 "SELECT * FROM messages WHERE id = ?", (message_id,)
             ).fetchone()
@@ -301,7 +314,24 @@ class Database:
             return result
 
     def list_messages(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
+        from internal.message_intel.load_guard import (
+            db_cache_key,
+            guarded_list_load,
+            list_messages_guard_key,
+        )
+
+        key = list_messages_guard_key(
+            db_cache_key(self), limit, offset, kind="db.list_messages"
+        )
+        if key is None:
+            return self._list_messages_uncached(limit, offset)
+        return guarded_list_load(
+            key,
+            lambda: self._list_messages_uncached(limit, offset),
+        )
+
+    def _list_messages_uncached(self, limit: int, offset: int) -> List[Dict[str, Any]]:
+        with self._connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM messages ORDER BY id DESC LIMIT ? OFFSET ?",
                 (limit, offset),
@@ -321,7 +351,7 @@ class Database:
     # ── Analysis ──────────────────────────────────────────────────────
 
     def save_analysis(self, message_id: int, analysis: Dict[str, Any]) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """INSERT INTO message_analysis (message_id, sentiment, sentiment_confidence,
                    hype_score, substance_score, influence_score, entities_json)
@@ -340,7 +370,7 @@ class Database:
     # ── Verdicts ──────────────────────────────────────────────────────
 
     def save_verdict(self, message_id: int, verdict: Dict[str, Any]) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """INSERT INTO message_verdicts (message_id, verdict, conviction, reasoning,
                    predicted_direction, predicted_magnitude, predicted_timeframe, predicted_confidence)
@@ -360,7 +390,7 @@ class Database:
     # ── Price ─────────────────────────────────────────────────────────
 
     def save_price_snapshot(self, message_id: int, price: float, netuid: Optional[int] = None) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """INSERT INTO price_snapshots (message_id, tao_usd_price, netuid, snapshot_timestamp)
                    VALUES (?, ?, ?, ?)""",
@@ -368,7 +398,7 @@ class Database:
             )
 
     def save_price_outcome(self, message_id: int, outcome: Dict[str, Any]) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             existing = conn.execute(
                 """SELECT id, price_1h_recorded_at, price_4h_recorded_at,
                           price_24h_recorded_at
@@ -477,7 +507,7 @@ class Database:
     # ── Author Reliability ────────────────────────────────────────────
 
     def upsert_author_reliability(self, author: Dict[str, Any]) -> None:
-        with self._connect() as conn:
+        with self._connection() as conn:
             conn.execute(
                 """INSERT INTO author_reliability (author_id, author_name, total_messages,
                    correct_predictions, accuracy_score)
@@ -498,7 +528,7 @@ class Database:
 
     def get_author_reliability(self, author_id: str) -> Optional[Dict[str, Any]]:
         """Return author_reliability row as dict, or None if missing."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 """SELECT author_id, author_name, total_messages, correct_predictions, accuracy_score
                    FROM author_reliability WHERE author_id = ?""",
@@ -508,7 +538,7 @@ class Database:
 
     def list_author_reliability(self, limit: int = 5, min_messages: int = 3) -> List[Dict[str, Any]]:
         """Top authors by accuracy for mindmap summary (Phase C)."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 """SELECT author_id, author_name, total_messages, correct_predictions, accuracy_score
                    FROM author_reliability
@@ -527,7 +557,7 @@ class Database:
         # ponytail: SELECT-then-INSERT race acceptable — sole writer is
         # PriceTracker.check_outcomes sequential loop (single bg thread). Ceiling:
         # concurrent writers would need BEGIN IMMEDIATE; upgrade if a second writer appears.
-        with self._connect() as conn:
+        with self._connection() as conn:
             row = conn.execute(
                 "SELECT total_messages, correct_predictions FROM author_reliability WHERE author_id = ?",
                 (aid,),
@@ -561,7 +591,7 @@ class Database:
     # ── Pattern Correlations ──────────────────────────────────────────
 
     def save_pattern(self, pattern: Dict[str, Any]) -> int:
-        with self._connect() as conn:
+        with self._connection() as conn:
             cur = conn.execute(
                 """INSERT INTO pattern_correlations (pattern_description, match_count, success_rate, confidence)
                    VALUES (?, ?, ?, ?)""",
@@ -575,7 +605,7 @@ class Database:
             return cur.lastrowid
 
     def list_patterns(self, limit: int = 20) -> List[Dict[str, Any]]:
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 "SELECT * FROM pattern_correlations ORDER BY confidence DESC LIMIT ?",
                 (limit,),
@@ -584,7 +614,7 @@ class Database:
 
     def list_high_conviction_messages(self, min_conviction: float = 0.6) -> List[Dict[str, Any]]:
         """Return messages whose verdict conviction >= threshold."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 """SELECT m.*, v.conviction, v.verdict, v.predicted_direction
                    FROM messages m
@@ -602,7 +632,7 @@ class Database:
         revisited until a 24-hour price observation is recorded.  The outcome
         ID lets the tracker avoid scoring author reliability again on updates.
         """
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 """SELECT m.*, ps.tao_usd_price, ps.netuid, ps.snapshot_timestamp,
                            v.verdict, v.predicted_direction, v.conviction,
@@ -621,7 +651,7 @@ class Database:
 
     def list_price_outcomes(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Return recorded price outcomes (most recent first)."""
-        with self._connect() as conn:
+        with self._connection() as conn:
             rows = conn.execute(
                 """SELECT po.*, ps.netuid
                    FROM price_outcomes po
@@ -633,10 +663,19 @@ class Database:
 
     def netuid_sentiment_rollup(self, *, limit: int = 40) -> List[Dict[str, Any]]:
         """Per-netuid mention + sentiment rollup from message_intel store."""
+        from internal.message_intel.load_guard import db_cache_key, guarded_list_load
+
+        return guarded_list_load(
+            ("db.netuid_sentiment_rollup", db_cache_key(self), limit),
+            lambda: self._netuid_sentiment_rollup_uncached(limit=limit),
+        )
+
+    def _netuid_sentiment_rollup_uncached(self, *, limit: int = 40) -> List[Dict[str, Any]]:
+        """Per-netuid mention + sentiment rollup from message_intel store."""
         sentiment_val = {"bullish": 1.0, "bearish": -1.0, "neutral": 0.0}
         buckets: Dict[int, Dict[str, Any]] = {}
         try:
-            with self._connect() as conn:
+            with self._connection() as conn:
                 rows = conn.execute(
                     """SELECT m.id, a.sentiment, a.entities_json, ps.netuid AS snap_netuid
                        FROM messages m

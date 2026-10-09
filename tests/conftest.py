@@ -36,3 +36,20 @@ def _isolate_message_intel_db(tmp_path, monkeypatch):
         reset_db_cache()
     except Exception:
         pass
+
+
+@pytest.fixture(autouse=True)
+def _clear_message_intel_load_cache():
+    try:
+        from internal.message_intel.load_guard import clear_message_intel_load_cache
+
+        clear_message_intel_load_cache()
+    except ImportError:
+        pass
+    yield
+    try:
+        from internal.message_intel.load_guard import clear_message_intel_load_cache
+
+        clear_message_intel_load_cache()
+    except ImportError:
+        pass
