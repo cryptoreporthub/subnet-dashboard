@@ -314,10 +314,19 @@ class Database:
             return result
 
     def list_messages(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
-        from internal.message_intel.load_guard import db_cache_key, guarded_list_load
+        from internal.message_intel.load_guard import (
+            db_cache_key,
+            guarded_list_load,
+            list_messages_guard_key,
+        )
 
+        key = list_messages_guard_key(
+            db_cache_key(self), limit, offset, kind="db.list_messages"
+        )
+        if key is None:
+            return self._list_messages_uncached(limit, offset)
         return guarded_list_load(
-            ("db.list_messages", db_cache_key(self), limit, offset),
+            key,
             lambda: self._list_messages_uncached(limit, offset),
         )
 

@@ -289,11 +289,15 @@ def list_messages(
     topic: Optional[str] = None,
     author_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    from internal.message_intel.load_guard import db_cache_key, guarded_load
+    from internal.message_intel.listener_service import listener_status
+    from internal.message_intel.load_guard import (
+        db_cache_key,
+        engine_list_messages_guard_key,
+        guarded_load,
+    )
 
     db = get_db()
-    key = (
-        "engine.list_messages",
+    key = engine_list_messages_guard_key(
         db_cache_key(db),
         limit,
         offset,
@@ -302,22 +306,37 @@ def list_messages(
         topic,
         author_id,
     )
-    payload, cache_meta = guarded_load(
-        key,
-        lambda: _list_messages_impl(
+    if key is None:
+        payload = _list_messages_impl(
             limit,
             offset,
             min_conviction=min_conviction,
             netuid=netuid,
             topic=topic,
             author_id=author_id,
-        ),
-    )
+        )
+        cache_meta: Dict[str, Any] = {}
+    else:
+        payload, cache_meta = guarded_load(
+            key,
+            lambda: _list_messages_impl(
+                limit,
+                offset,
+                min_conviction=min_conviction,
+                netuid=netuid,
+                topic=topic,
+                author_id=author_id,
+            ),
+        )
+    meta = dict(payload.get("meta") or {})
+    out: Dict[str, Any] = {**payload, "meta": meta}
+    if "messages" in payload:
+        out["messages"] = list(payload.get("messages") or [])
+    meta["listener"] = listener_status()
     if cache_meta.get("stale"):
-        meta = payload.setdefault("meta", {})
         meta["stale"] = True
         meta["cache_source"] = cache_meta.get("cache")
-    return payload
+    return out
 
 
 def _list_messages_impl(

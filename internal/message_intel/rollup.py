@@ -563,7 +563,7 @@ def _author_reliability_rows(db=None) -> Dict[str, Dict[str, Any]]:
     """Read the persisted per-author strike-rate ledger."""
     database = db or get_db()
     try:
-        with database._connect() as conn:
+        with database._connection() as conn:
             rows = conn.execute(
                 """SELECT author_id, author_name, total_messages,
                           correct_predictions, accuracy_score
@@ -914,7 +914,7 @@ def build_week_top_comment(*, days: int = 7, db=None) -> Optional[Dict[str, Any]
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
     database = db or get_db()
     try:
-        with database._connect() as conn:
+        with database._connection() as conn:
             rows = conn.execute(
                 """SELECT m.id, m.author_id, m.author_name, m.author_username, m.content,
                           m.timestamp, m.created_at, m.source,
@@ -1066,7 +1066,7 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
 def _conviction_rows(db=None) -> List[Dict[str, Any]]:
     """Load only the fields needed to audit current calls and past receipts."""
     database = db or get_db()
-    with database._connect() as conn:
+    with database._connection() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, a.entities_json,
@@ -1738,7 +1738,7 @@ def list_telegram_caller_activity(
     """Messages that drove influence (especially reactions) — not proof-contract hits."""
     database = db or get_db()
     cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    with database._connect() as conn:
+    with database._connection() as conn:
         rows = conn.execute(
             """SELECT m.id, m.source, m.author_id, m.author_name, m.author_username,
                       m.content, m.timestamp, m.created_at, m.external_message_id,

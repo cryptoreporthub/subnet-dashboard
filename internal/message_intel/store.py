@@ -29,7 +29,7 @@ def last_telegram_external_id(db: Optional[Database] = None) -> Optional[int]:
     """Highest Telegram message_id we have ingested (for gap-aware backfill)."""
     database = db or get_db()
     try:
-        with database._connect() as conn:
+        with database._connection() as conn:
             row = conn.execute(
                 """SELECT external_message_id FROM messages
                    WHERE source = 'telegram' AND external_message_id IS NOT NULL
@@ -46,7 +46,7 @@ def last_telegram_group_id(db: Optional[Database] = None) -> Optional[int]:
     """Most recent Telegram group_id in the store — entity fallback when username lookup fails."""
     database = db or get_db()
     try:
-        with database._connect() as conn:
+        with database._connection() as conn:
             row = conn.execute(
                 """SELECT group_id FROM messages
                    WHERE source = 'telegram' AND group_id IS NOT NULL AND group_id != ''
@@ -63,7 +63,7 @@ def live_stats(db: Optional[Database] = None) -> Dict[str, Any]:
     """Aggregate counts from the SQLite store for summaries and health."""
     database = db or get_db()
     try:
-        with database._connect() as conn:
+        with database._connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
             by_source = conn.execute(
                 "SELECT source, COUNT(*) AS n FROM messages GROUP BY source ORDER BY n DESC"

@@ -100,11 +100,12 @@ async def api_message_intel(
         listener = (payload.get("meta") or {}).get("listener") or {}
         stats = payload.get("meta") or {}
         live = bool(listener.get("live"))
+        stale_meta = bool(stats.get("stale"))
         payload.update(
             _message_contract(
                 live=live,
                 captured_at=stats.get("last_message_at"),
-                degraded=not bool(stats.get("ok", True)),
+                degraded=not bool(stats.get("ok", True)) or stale_meta,
             )
         )
         return payload
