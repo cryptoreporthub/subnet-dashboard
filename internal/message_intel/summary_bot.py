@@ -145,6 +145,7 @@ def build_help_text() -> str:
         "📊 /summary &lt;sn&gt; — deep-dive on one subnet (e.g. /summary 62)",
         "🔥 /trending — ChatterPower trending, last 24h",
         "🔥 /trending 1h — fast-moving 1-hour window",
+        "📈 /gainers — top 5 subnet price gainers, last 24h",
         "🥇 /rank &lt;sn&gt; — a subnet's trending position",
         "📌 /track &lt;sn&gt; — pin a subnet to your watchlist",
         "🔔 /alerts on|off — toggle your watchlist alerts",
@@ -158,6 +159,39 @@ def build_help_text() -> str:
     return "\n".join(lines)
 
 
+
+
+def _format_gainers_reply(db=None) -> str:
+    """Top 5 subnets by 24h price change — honest-empty when price data is down."""
+    from fetchers.merged_data import get_merged_subnet_data
+
+    try:
+        rows = get_merged_subnet_data() or []
+    except Exception as exc:
+        logger.warning("gainers fetch failed: %s", exc)
+        rows = []
+    gainers = sorted(
+        (
+            r
+            for r in rows
+            if isinstance(r.get("price_change_24h"), (int, float)) and r["price_change_24h"] > 0
+        ),
+        key=lambda r: r["price_change_24h"],
+        reverse=True,
+    )[:5]
+    if not gainers:
+        return _format_error("No 24h price-change data available right now — try again shortly.")
+    lines = ["📈 <b>Top 5 gainers — last 24h</b>", ""]
+    for i, r in enumerate(gainers, 1):
+        price = _local_float(r.get("price"))
+        price_bit = f" · {price}τ" if price else ""
+        lines.append(
+            f"{i}. {_subnet_label(r.get('netuid'), r.get('name'))} · "
+            f"{r['price_change_24h']:+.2f}%{price_bit}"
+        )
+    lines.append("")
+    lines.append(f'<a href="{_desk_url()}">Open the Subnet Summers desk</a>')
+    return "\n".join(lines)
 
 
 def _format_trending(items: list[Dict[str, Any]], window: str) -> str:
@@ -702,6 +736,8 @@ def handle_command(text: str, *, message: Optional[Dict[str, Any]] = None, db=No
         if subnet is not None:
             return _format_subnet_summary_reply(subnet, db=db)
         return _format_summary_reply(db=db)
+    if cmd == "/gainers":
+        return _format_gainers_reply(db=db)
     if cmd == "/trending":
         window = "1h" if arg.strip() == "1h" else "24h"
         from internal.message_intel.load_guard import LoadTimeout

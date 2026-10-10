@@ -13,6 +13,25 @@ def test_parse_command_text_normalizes_bot_suffix():
     assert summary_bot._parse_command_text("/trending 1h") == ("/trending", "1h")
 
 
+def test_gainers_command_ranks_top5(monkeypatch):
+    rows = [
+        {"netuid": i, "name": f"Sub{i}", "price": 1 + i / 10, "price_change_24h": chg}
+        for i, chg in enumerate([1.0, 12.5, -3.0, 7.25, 0.5, 40.0, 2.0])
+    ]
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_data", lambda: rows)
+    out = summary_bot.handle_command("/gainers")
+    assert "Top 5 gainers" in out
+    # sorted desc, non-positive entries dropped, capped at 5
+    assert "40.00%" in out and "12.50%" in out and "7.25%" in out
+    assert "-3.00%" not in out and "0.50%" not in out
+
+
+def test_gainers_command_honest_empty(monkeypatch):
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_data", lambda: [])
+    out = summary_bot.handle_command("/gainers")
+    assert "No 24h price-change data" in out
+
+
 def test_summary_command_safe_when_disabled(monkeypatch):
     monkeypatch.delenv("TELEGRAM_SUMMARY_BOT", raising=False)
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
