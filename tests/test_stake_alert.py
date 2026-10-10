@@ -145,6 +145,21 @@ class _FakeClient:
         return 123
 
 
+class _NullKeysPagedClient:
+    """RPC returns JSON null for keys page (not an empty list)."""
+
+    def _call(self, method, params):
+        if method == "state_getKeysPaged":
+            return None
+        return None
+
+    def is_healthy(self):
+        return True
+
+    def get_current_block(self):
+        return 123
+
+
 class _FailingPagedClient(_FakeClient):
     def __init__(self, keys_with_values, fail_at_page: int = 0):
         super().__init__(keys_with_values)
@@ -198,6 +213,12 @@ def test_scan_hotkey_stakes_aborts_on_first_page_rpc_failure():
         sa.scan_hotkey_stakes(client, pub)
 
 
+def test_scan_hotkey_stakes_aborts_on_null_keys_page():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    with pytest.raises(sa.StakeScanIncomplete):
+        sa.scan_hotkey_stakes(_NullKeysPagedClient(), pub)
+
+
 def test_scan_hotkey_stakes_aborts_on_later_page_rpc_failure():
     pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
     ck = bytes(range(32))
@@ -240,6 +261,19 @@ def test_check_stake_alerts_incomplete_scan_preserves_baseline(tmp_path, monkeyp
     )
     client = _FailingPagedClient({}, fail_at_page=0)
     assert sa.check_stake_alerts(client=client) is None
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["baseline"] == baseline
+
+
+def test_check_stake_alerts_null_keys_page_preserves_baseline(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    baseline = {"alpha:ab:0": 100 * sa._RAO}
+    state_file.write_text(
+        json.dumps({"initialized": True, "baseline": baseline, "hotkey": sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY).hex()}),
+        encoding="utf-8",
+    )
+    assert sa.check_stake_alerts(client=_NullKeysPagedClient()) is None
     saved = json.loads(state_file.read_text(encoding="utf-8"))
     assert saved["baseline"] == baseline
 

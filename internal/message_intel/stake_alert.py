@@ -196,11 +196,12 @@ def _chain_rpc(client: Any, method: str, params: list) -> Any:
     call = getattr(client, "_call", None)
     if call is not None:
         try:
-            return call(method, params)
+            result = call(method, params)
         except Exception as exc:
             raise StakeScanIncomplete(f"{method} failed: {exc}") from exc
-    result = client._call_quiet(method, params)
-    if method == "state_getKeysPaged" and result is None:
+    else:
+        result = client._call_quiet(method, params)
+    if method == "state_getKeysPaged" and (result is None or not isinstance(result, list)):
         raise StakeScanIncomplete(f"{method} failed")
     return result
 
