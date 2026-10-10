@@ -29,6 +29,8 @@ def _listener_service_isolation():
     listener_service._clear_forced_backfill_cache()
     listener_service._test_reached_after_recovery = None
     listener_service._test_pause_after_recovery = None
+    listener_service._test_reached_before_strike_increment = None
+    listener_service._test_pause_before_strike_increment = None
     listener_service._test_reached_before_restart = None
     listener_service._test_pause_before_restart = None
     reset_db_cache()
@@ -804,4 +806,79 @@ def test_watchdog_two_strike_restart_fenced_same_invocation(monkeypatch):
     assert new._running
     listener_service._listener = None
     listener_service._test_pause_before_restart = None
+
+
+def test_watchdog_strike_increment_fenced_before_lifecycle_race(monkeypatch):
+    """Stale recovery must not poison strikes after concurrent owner swap."""
+    from internal.message_intel import listener_service
+
+    instances = []
+
+    class _Stub:
+        def __init__(self, tag: int):
+            self.tag = tag
+            self._running = True
+            self._thread = _alive_thread()
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            instances.append(self)
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+        def stop(self):
+            self._running = False
+            if self._thread is not None:
+                self._thread.join()
+
+    old = _Stub(1)
+    new = _Stub(2)
+    listener_service._listener = old
+    listener_service._listener_generation = 30
+    _stale_watchdog_env(monkeypatch, listener_service, strikes="2")
+
+    reached = threading.Event()
+    release = threading.Event()
+    done = threading.Event()
+    listener_service._test_reached_before_strike_increment = reached
+    listener_service._test_pause_before_strike_increment = release
+
+    def _watchdog():
+        listener_service._maybe_restart_listener_if_feed_stale()
+        done.set()
+
+    t = threading.Thread(target=_watchdog)
+    t.start()
+    assert reached.wait(timeout=3)
+    listener_service._bump_listener_generation()
+    listener_service._listener = new
+    release.set()
+    assert done.wait(timeout=3)
+    t.join(timeout=3)
+
+    assert listener_service._listener is new
+    assert listener_service._feed_stale_watchdog_strikes == 0
+    assert new._running
+
+    restarts: list[int] = []
+
+    def _counting_restart(expected_owner=None):
+        restarts.append(id(expected_owner) if expected_owner is not None else 0)
+        return False
+
+    monkeypatch.setattr(listener_service, "restart_message_intel_listeners", _counting_restart)
+
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert listener_service._feed_stale_watchdog_strikes == 1
+    assert restarts == []
+
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert listener_service._feed_stale_watchdog_strikes == 0
+    assert len(restarts) == 1
+    assert restarts[0] == id(listener_service._listener)
+
+    listener_service._listener = None
+    listener_service._test_pause_before_strike_increment = None
 

@@ -38,6 +38,8 @@ _watchdog_strike_generation: int = -1
 _watchdog_strike_listener_id: int = 0
 _test_reached_after_recovery: Optional[Any] = None
 _test_pause_after_recovery: Optional[Any] = None
+_test_reached_before_strike_increment: Optional[Any] = None
+_test_pause_before_strike_increment: Optional[Any] = None
 _test_reached_before_restart: Optional[Any] = None
 _test_pause_before_restart: Optional[Any] = None
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
@@ -224,7 +226,8 @@ def _clear_forced_backfill_cache() -> None:
     _forced_backfill_outcome_at = 0.0
 
 
-def _bump_listener_generation() -> int:
+def _bump_listener_generation_unlocked() -> int:
+    """Bump generation and reset watchdog strikes; caller must hold _lifecycle_lock."""
     global _listener_generation, _feed_stale_watchdog_strikes
     global _watchdog_strike_generation, _watchdog_strike_listener_id
     _listener_generation += 1
@@ -235,15 +238,70 @@ def _bump_listener_generation() -> int:
     return _listener_generation
 
 
+def _bump_listener_generation() -> int:
+    with _lifecycle_lock:
+        return _bump_listener_generation_unlocked()
+
+
+def _recovery_fenced_under_lock(recovery: BackfillRecovery) -> bool:
+    return (
+        recovery.listener is not None
+        and _listener is recovery.listener
+        and _listener_generation == recovery.generation
+    )
+
+
+def _try_increment_watchdog_strike_locked(recovery: BackfillRecovery) -> Optional[int]:
+    """Atomically validate recovery fence and increment strikes (lifecycle mutex)."""
+    global _feed_stale_watchdog_strikes, _watchdog_strike_generation, _watchdog_strike_listener_id
+    with _lifecycle_lock:
+        if not _recovery_fenced_under_lock(recovery):
+            return None
+        gen = _listener_generation
+        owner_id = id(_listener) if _listener is not None else 0
+        if gen != _watchdog_strike_generation or owner_id != _watchdog_strike_listener_id:
+            _feed_stale_watchdog_strikes = 0
+            _watchdog_strike_generation = gen
+            _watchdog_strike_listener_id = owner_id
+        _feed_stale_watchdog_strikes += 1
+        return _feed_stale_watchdog_strikes
+
+
+def _try_clear_watchdog_strikes_locked(recovery: BackfillRecovery) -> bool:
+    global _feed_stale_watchdog_strikes, _watchdog_strike_generation, _watchdog_strike_listener_id
+    with _lifecycle_lock:
+        if not _recovery_fenced_under_lock(recovery):
+            return False
+        _feed_stale_watchdog_strikes = 0
+        _watchdog_strike_generation = _listener_generation
+        _watchdog_strike_listener_id = id(_listener) if _listener is not None else 0
+        return True
+
+
+def _try_authorize_watchdog_restart_locked(recovery: BackfillRecovery, need: int) -> bool:
+    """If fenced and strikes meet threshold, zero strikes; caller restarts outside lock."""
+    global _feed_stale_watchdog_strikes, _watchdog_strike_generation, _watchdog_strike_listener_id
+    with _lifecycle_lock:
+        if not _recovery_fenced_under_lock(recovery):
+            return False
+        if _feed_stale_watchdog_strikes < need:
+            return False
+        _feed_stale_watchdog_strikes = 0
+        _watchdog_strike_generation = _listener_generation
+        _watchdog_strike_listener_id = id(_listener) if _listener is not None else 0
+        return True
+
+
 def _sync_watchdog_strikes_to_listener_owner() -> None:
     """Strike count applies only to the current listener generation/identity."""
     global _feed_stale_watchdog_strikes, _watchdog_strike_generation, _watchdog_strike_listener_id
-    gen = _listener_generation
-    owner_id = id(_listener) if _listener is not None else 0
-    if gen != _watchdog_strike_generation or owner_id != _watchdog_strike_listener_id:
-        _feed_stale_watchdog_strikes = 0
-        _watchdog_strike_generation = gen
-        _watchdog_strike_listener_id = owner_id
+    with _lifecycle_lock:
+        gen = _listener_generation
+        owner_id = id(_listener) if _listener is not None else 0
+        if gen != _watchdog_strike_generation or owner_id != _watchdog_strike_listener_id:
+            _feed_stale_watchdog_strikes = 0
+            _watchdog_strike_generation = gen
+            _watchdog_strike_listener_id = owner_id
 
 
 def _listener_join_timeout_seconds() -> float:
@@ -285,11 +343,8 @@ def _attempt_listener_backfill_unlocked(*, force: bool = False) -> BackfillOutco
 
 
 def _recovery_fenced(recovery: BackfillRecovery) -> bool:
-    return (
-        recovery.listener is not None
-        and _listener is recovery.listener
-        and _listener_generation == recovery.generation
-    )
+    with _lifecycle_lock:
+        return _recovery_fenced_under_lock(recovery)
 
 
 def _attempt_listener_backfill_with_recovery(*, force: bool = False) -> BackfillRecovery:
@@ -388,15 +443,13 @@ def _maybe_backfill_on_listener_start() -> None:
 
 def _apply_feed_stale_recovery(recovery: BackfillRecovery, age: float) -> None:
     """Consume one forced recovery under owner/gen fence (strike + optional restart)."""
-    global _feed_stale_watchdog_strikes
-
     if recovery.outcome in ("not_ready", "skipped_throttle"):
         return
     if recovery.outcome == "ok":
         if _recovery_fenced(recovery):
             fresh = _feed_stale_fields()
             if not fresh.get("feed_stale"):
-                _feed_stale_watchdog_strikes = 0
+                _try_clear_watchdog_strikes_locked(recovery)
         return
     if recovery.outcome != "failed":
         return
@@ -411,19 +464,25 @@ def _apply_feed_stale_recovery(recovery: BackfillRecovery, age: float) -> None:
     if not _recovery_fenced(recovery):
         return
 
-    _sync_watchdog_strikes_to_listener_owner()
-    if not _recovery_fenced(recovery):
+    reached_strike = _test_reached_before_strike_increment
+    if reached_strike is not None:
+        reached_strike.set()
+    pause_strike = _test_pause_before_strike_increment
+    if pause_strike is not None:
+        pause_strike.wait(timeout=5)
+
+    strikes = _try_increment_watchdog_strike_locked(recovery)
+    if strikes is None:
         return
-    _feed_stale_watchdog_strikes += 1
     need = _feed_stale_watchdog_strikes_required()
     logger.warning(
         "listener feed_stale recovery strike=%s/%s age=%.0fs outcome=%s",
-        _feed_stale_watchdog_strikes,
+        strikes,
         need,
         float(age),
         recovery.outcome,
     )
-    if _feed_stale_watchdog_strikes < need:
+    if strikes < need:
         return
 
     reached_restart = _test_reached_before_restart
@@ -433,14 +492,13 @@ def _apply_feed_stale_recovery(recovery: BackfillRecovery, age: float) -> None:
     if pause_restart is not None:
         pause_restart.wait(timeout=5)
 
-    if not _recovery_fenced(recovery):
+    if not _try_authorize_watchdog_restart_locked(recovery, need):
         return
 
     logger.warning(
         "message-intel listener feed_stale watchdog: restarting listener (age=%.0fs)",
         float(age),
     )
-    _feed_stale_watchdog_strikes = 0
     try:
         restart_message_intel_listeners(expected_owner=recovery.listener)
     except Exception as exc:
@@ -795,7 +853,7 @@ def _start_message_intel_listeners_locked() -> bool:
     )
     started = _listener.start()
     if started:
-        _bump_listener_generation()
+        _bump_listener_generation_unlocked()
         _touch_listener_heartbeat()
         _start_heartbeat_loop()
         _pending_start_backfill = True
