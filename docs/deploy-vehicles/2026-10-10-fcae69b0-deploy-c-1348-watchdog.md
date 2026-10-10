@@ -14,3 +14,5 @@ On **`fly-deploy` label applied post-merge** to this PR (actor `cryptoreporthub`
 Post-deploy gate: `GET /version` must equal **`fcae69b09053c9107afb0e2e8573fe4074e33cd7`** (or `fcae69b0` prefix).
 
 **Trigger steps:** merge this vehicle PR → apply exact label `fly-deploy` on the merged PR (push-to-main deploy disabled per `fly.yml`).
+
+**Guard retry (2026-10-10):** [#1349](https://github.com/cryptoreporthub/subnet-dashboard/pull/1349) failed Fly Deploy Guard run `38050592193` because `mission-control-log.md` was in the same PR; this retry PR touches **only** this file under `docs/deploy-vehicles/`.
