@@ -16,13 +16,17 @@ def _resolve_db_path(db_path: Optional[str] = None) -> str:
     return db_path or os.environ.get("MESSAGE_INTEL_DB", DB_PATH)
 
 
-@lru_cache(maxsize=1)
+@lru_cache(maxsize=8)
+def _get_db_cached(resolved_path: str) -> Database:
+    return Database(db_path=resolved_path)
+
+
 def get_db(db_path: Optional[str] = None) -> Database:
-    return Database(db_path=_resolve_db_path(db_path))
+    return _get_db_cached(_resolve_db_path(db_path))
 
 
 def reset_db_cache() -> None:
-    get_db.cache_clear()
+    _get_db_cached.cache_clear()
 
 
 def last_telegram_external_id(db: Optional[Database] = None) -> Optional[int]:

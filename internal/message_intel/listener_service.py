@@ -27,6 +27,8 @@ _forced_backfill_outcome: Optional[BackfillOutcome] = None
 _forced_backfill_outcome_at: float = 0.0
 _pending_start_backfill: bool = False
 _feed_stale_watchdog_strikes: int = 0
+_watchdog_strike_generation: int = -1
+_watchdog_strike_listener_id: int = 0
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
 
 
@@ -211,10 +213,25 @@ def _clear_forced_backfill_cache() -> None:
 
 
 def _bump_listener_generation() -> int:
-    global _listener_generation
+    global _listener_generation, _feed_stale_watchdog_strikes
+    global _watchdog_strike_generation, _watchdog_strike_listener_id
     _listener_generation += 1
     _clear_forced_backfill_cache()
+    _feed_stale_watchdog_strikes = 0
+    _watchdog_strike_generation = _listener_generation
+    _watchdog_strike_listener_id = id(_listener) if _listener is not None else 0
     return _listener_generation
+
+
+def _sync_watchdog_strikes_to_listener_owner() -> None:
+    """Strike count applies only to the current listener generation/identity."""
+    global _feed_stale_watchdog_strikes, _watchdog_strike_generation, _watchdog_strike_listener_id
+    gen = _listener_generation
+    owner_id = id(_listener) if _listener is not None else 0
+    if gen != _watchdog_strike_generation or owner_id != _watchdog_strike_listener_id:
+        _feed_stale_watchdog_strikes = 0
+        _watchdog_strike_generation = gen
+        _watchdog_strike_listener_id = owner_id
 
 
 def _listener_join_timeout_seconds() -> float:
@@ -282,6 +299,8 @@ def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
                 _forced_backfill_listener_id = id(start_listener) if start_listener else 0
                 _forced_backfill_outcome = outcome
                 _forced_backfill_outcome_at = time.time()
+                return outcome
+            return "not_ready"
         return outcome
 
 
@@ -345,6 +364,7 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     if _listener is None or not _listener_running_local():
         _feed_stale_watchdog_strikes = 0
         return
+    _sync_watchdog_strikes_to_listener_owner()
     stats = _feed_stale_fields()
     if not stats.get("feed_stale"):
         _feed_stale_watchdog_strikes = 0

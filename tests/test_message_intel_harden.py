@@ -17,10 +17,15 @@ def _listener_service_isolation():
     from internal.message_intel import listener_service
     from internal.message_intel.store import reset_db_cache
 
+    reset_db_cache()
     yield
     listener_service._stop_heartbeat_loop()
     listener_service._pending_start_backfill = False
+    listener_service._feed_stale_watchdog_strikes = 0
+    listener_service._watchdog_strike_generation = -1
+    listener_service._watchdog_strike_listener_id = 0
     listener_service._listener = None
+    listener_service._clear_forced_backfill_cache()
     reset_db_cache()
 
 
@@ -609,9 +614,64 @@ def test_forced_backfill_cache_not_published_after_restart_midflight(monkeypatch
 
     release_backfill.set()
     t_backfill.join(timeout=3)
-    assert outcome_holder == ["ok"]
+    assert outcome_holder == ["not_ready"]
 
     listener_service._attempt_listener_backfill(force=True)
     assert calls == [1, 2]
+    listener_service._listener = None
+
+
+def test_watchdog_ignores_stale_failed_outcome_after_restart_midflight(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "1")
+    listener_service._clear_forced_backfill_cache()
+    listener_service._last_backfill_attempt = 0.0
+    calls: list[int] = []
+    in_backfill = threading.Event()
+    release_backfill = threading.Event()
+
+    def _make_listener(tag: int):
+        fake = _backfill_ready_listener()
+
+        def trigger_backfill(limit=None):
+            calls.append(tag)
+            if tag == 100:
+                in_backfill.set()
+                release_backfill.wait(timeout=3)
+                return False
+            return True
+
+        fake.trigger_backfill = trigger_backfill
+        fake.stop = lambda: setattr(fake, "_running", False)
+        return fake
+
+    listener_service._listener = _make_listener(100)
+    listener_service._listener_generation = 100
+    listener_service._sync_watchdog_strikes_to_listener_owner()
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+
+    def _stale_backfill():
+        listener_service._attempt_listener_backfill(force=True)
+
+    t_backfill = threading.Thread(target=_stale_backfill)
+    t_backfill.start()
+    assert in_backfill.wait(timeout=3)
+
+    listener_service._bump_listener_generation()
+    listener_service._listener = _make_listener(101)
+
+    release_backfill.set()
+    t_backfill.join(timeout=3)
+
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert listener_service._feed_stale_watchdog_strikes == 0
+    assert 101 in calls
     listener_service._listener = None
 
