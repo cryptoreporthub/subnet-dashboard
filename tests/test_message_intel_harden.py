@@ -514,3 +514,104 @@ def test_forced_backfill_cache_invalidated_on_listener_generation(monkeypatch):
     assert calls == [1, 2]
     listener_service._listener = None
 
+
+def test_concurrent_restart_at_most_one_live_owner(monkeypatch):
+    instances = []
+
+    class _StubTelegramListener:
+        def __init__(self, **kwargs):
+            self._running = False
+            self._thread = None
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            instances.append(self)
+
+        def start(self):
+            self._running = True
+            self._thread = _alive_thread()
+            return True
+
+        def stop(self):
+            self._running = False
+            if self._thread is not None:
+                self._thread.join()
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+    monkeypatch.setattr(
+        "message_intel.telegram_listener.TelegramListener",
+        _StubTelegramListener,
+    )
+    listener_service = _watchdog_lifecycle_env(monkeypatch)
+    assert listener_service.start_message_intel_listeners() is True
+
+    results: list[bool] = []
+
+    def _restart():
+        results.append(listener_service.restart_message_intel_listeners())
+
+    threads = [threading.Thread(target=_restart) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=10)
+    live = [inst for inst in instances if inst._running]
+    assert len(live) <= 1
+    assert listener_service._listener in instances
+    listener_service.stop_message_intel_listeners()
+
+
+def test_forced_backfill_cache_not_published_after_restart_midflight(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
+    listener_service._clear_forced_backfill_cache()
+    listener_service._last_backfill_attempt = 0.0
+    calls: list[int] = []
+    in_backfill = threading.Event()
+    release_backfill = threading.Event()
+
+    def _make_listener(tag: int):
+        fake = _backfill_ready_listener()
+
+        def trigger_backfill(limit=None):
+            calls.append(tag)
+            in_backfill.set()
+            release_backfill.wait(timeout=3)
+            return True
+
+        fake.trigger_backfill = trigger_backfill
+        return fake
+
+    listener_service._listener = _make_listener(1)
+    listener_service._listener_generation = 1
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+
+    outcome_holder: list[str] = []
+
+    def _backfill():
+        outcome_holder.append(listener_service._attempt_listener_backfill(force=True))
+
+    t_backfill = threading.Thread(target=_backfill)
+    t_backfill.start()
+    assert in_backfill.wait(timeout=3)
+
+    listener_service._bump_listener_generation()
+    listener_service._listener = _make_listener(2)
+
+    release_backfill.set()
+    t_backfill.join(timeout=3)
+    assert outcome_holder == ["ok"]
+
+    listener_service._attempt_listener_backfill(force=True)
+    assert calls == [1, 2]
+    listener_service._listener = None
+

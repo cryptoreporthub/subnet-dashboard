@@ -18,9 +18,11 @@ _heartbeat_stop: Optional[Any] = None
 _last_backfill_attempt: float = 0.0
 _last_backfill_outcome: Optional[BackfillOutcome] = None
 _last_backfill_outcome_at: float = 0.0
+_lifecycle_lock = threading.Lock()
 _backfill_lock = threading.Lock()
 _listener_generation: int = 0
 _forced_backfill_generation: int = -1
+_forced_backfill_listener_id: int = 0
 _forced_backfill_outcome: Optional[BackfillOutcome] = None
 _forced_backfill_outcome_at: float = 0.0
 _pending_start_backfill: bool = False
@@ -200,8 +202,10 @@ def _listener_backfill_ready() -> bool:
 
 
 def _clear_forced_backfill_cache() -> None:
-    global _forced_backfill_generation, _forced_backfill_outcome, _forced_backfill_outcome_at
+    global _forced_backfill_generation, _forced_backfill_listener_id
+    global _forced_backfill_outcome, _forced_backfill_outcome_at
     _forced_backfill_generation = -1
+    _forced_backfill_listener_id = 0
     _forced_backfill_outcome = None
     _forced_backfill_outcome_at = 0.0
 
@@ -253,24 +257,31 @@ def _attempt_listener_backfill_unlocked(*, force: bool = False) -> BackfillOutco
 
 def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
     """Single-flight for all backfill attempts; force only bypasses throttle interval."""
-    global _forced_backfill_generation, _forced_backfill_outcome, _forced_backfill_outcome_at
+    global _forced_backfill_generation, _forced_backfill_listener_id
+    global _forced_backfill_outcome, _forced_backfill_outcome_at
     import time
 
     with _backfill_lock:
         if force:
             now = time.time()
             gen = _listener_generation
+            owner_id = id(_listener) if _listener is not None else 0
             if (
                 _forced_backfill_generation == gen
+                and _forced_backfill_listener_id == owner_id
                 and _forced_backfill_outcome in ("ok", "failed")
                 and now - _forced_backfill_outcome_at < 45.0
             ):
                 return _forced_backfill_outcome
+        start_gen = _listener_generation
+        start_listener = _listener
         outcome = _attempt_listener_backfill_unlocked(force=force)
         if force and outcome in ("ok", "failed"):
-            _forced_backfill_generation = _listener_generation
-            _forced_backfill_outcome = outcome
-            _forced_backfill_outcome_at = time.time()
+            if _listener_generation == start_gen and _listener is start_listener:
+                _forced_backfill_generation = start_gen
+                _forced_backfill_listener_id = id(start_listener) if start_listener else 0
+                _forced_backfill_outcome = outcome
+                _forced_backfill_outcome_at = time.time()
         return outcome
 
 
@@ -563,20 +574,14 @@ def _stop_heartbeat_loop() -> None:
         _heartbeat_stop = None
 
 
-def _retire_listener(join_timeout: Optional[float] = None) -> bool:
-    """Stop listener, join its thread, and clear handles. Fail closed if join times out."""
-    global _listener
-    _stop_heartbeat_loop()
-    old = _listener
-    if old is None:
-        _clear_listener_heartbeat()
-        return True
+def _stop_and_join_listener(listener: Any, join_timeout: Optional[float] = None) -> bool:
+    """Stop one listener worker and join its thread (never hold lifecycle lock here)."""
     timeout = join_timeout if join_timeout is not None else _listener_join_timeout_seconds()
     try:
-        old.stop()
+        listener.stop()
     except Exception as exc:
         logger.warning("Telegram listener stop failed: %s", exc)
-    thread = getattr(old, "_thread", None)
+    thread = getattr(listener, "_thread", None)
     if thread is not None and thread.is_alive():
         thread.join(timeout=timeout)
         if thread.is_alive():
@@ -586,8 +591,28 @@ def _retire_listener(join_timeout: Optional[float] = None) -> bool:
                 timeout,
             )
             return False
-    _listener = None
-    _clear_listener_heartbeat()
+    return True
+
+
+def _retire_listener(join_timeout: Optional[float] = None) -> bool:
+    """Stop listener, join its thread, and clear handles. Fail closed if join times out."""
+    global _listener
+    with _lifecycle_lock:
+        old = _listener
+        if old is None:
+            _stop_heartbeat_loop()
+            _clear_listener_heartbeat()
+            return True
+        _stop_heartbeat_loop()
+
+    if not _stop_and_join_listener(old, join_timeout):
+        return False
+
+    with _lifecycle_lock:
+        if _listener is not old:
+            return True
+        _listener = None
+        _clear_listener_heartbeat()
     return True
 
 
@@ -595,19 +620,21 @@ def restart_message_intel_listeners() -> bool:
     """Full stop/join/replace cycle for feed_stale watchdog and ops."""
     if not _retire_listener():
         return False
-    return start_message_intel_listeners()
+    with _lifecycle_lock:
+        return _start_message_intel_listeners_locked()
 
 
 def _reset_listener_if_dead() -> None:
     """Clear handle only after the worker thread has actually exited."""
     global _listener
-    if _listener is None:
-        return
-    if _listener_thread_alive(_listener):
-        return
-    logger.warning("Telegram listener thread stopped — clearing stale handle")
-    _listener = None
-    _stop_heartbeat_loop()
+    with _lifecycle_lock:
+        if _listener is None:
+            return
+        if _listener_thread_alive(_listener):
+            return
+        logger.warning("Telegram listener thread stopped — clearing stale handle")
+        _listener = None
+        _stop_heartbeat_loop()
 
 
 def _listener_watchdog_interval_seconds() -> float:
@@ -645,24 +672,16 @@ def _start_listener_watchdog() -> None:
     threading.Thread(target=_loop, daemon=True, name="mi-listener-watchdog").start()
 
 
-def start_message_intel_listeners() -> bool:
-    """Start configured social listeners (Telegram when creds present)."""
+def _start_message_intel_listeners_locked() -> bool:
+    """Create/start listener; caller must hold _lifecycle_lock (no blocking join)."""
     global _listener, _pending_start_backfill
     if not _listener_enabled():
         logger.info("Message-intel listeners disabled (MESSAGE_INTEL_LISTENER=off)")
         return False
+    if _listener is not None and _listener_running_local():
+        return True
     if _listener is not None:
-        if _listener_thread_alive(_listener):
-            if _listener_running_local():
-                return True
-            if not _retire_listener():
-                logger.warning(
-                    "message-intel listener start skipped: prior worker thread still shutting down"
-                )
-                return False
-        else:
-            _listener = None
-            _stop_heartbeat_loop()
+        return False
 
     if not _has_telegram_creds():
         logger.info("Telegram listener skipped — TELEGRAM_API_ID/HASH not set")
@@ -699,7 +718,41 @@ def start_message_intel_listeners() -> bool:
     return started
 
 
+def start_message_intel_listeners() -> bool:
+    """Start configured social listeners (Telegram when creds present)."""
+    global _listener
+    old_to_join: Any = None
+    with _lifecycle_lock:
+        if not _listener_enabled():
+            logger.info("Message-intel listeners disabled (MESSAGE_INTEL_LISTENER=off)")
+            return False
+        if _listener is not None:
+            if _listener_thread_alive(_listener):
+                if _listener_running_local():
+                    return True
+                old_to_join = _listener
+                _stop_heartbeat_loop()
+            else:
+                _listener = None
+                _stop_heartbeat_loop()
+
+    if old_to_join is not None:
+        if not _stop_and_join_listener(old_to_join):
+            logger.warning(
+                "message-intel listener start skipped: prior worker thread still shutting down"
+            )
+            return False
+        with _lifecycle_lock:
+            if _listener is old_to_join:
+                _listener = None
+                _clear_listener_heartbeat()
+
+    with _lifecycle_lock:
+        return _start_message_intel_listeners_locked()
+
+
 def stop_message_intel_listeners() -> None:
     global _pending_start_backfill
-    _pending_start_backfill = False
+    with _lifecycle_lock:
+        _pending_start_backfill = False
     _retire_listener()
