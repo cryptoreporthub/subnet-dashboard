@@ -187,6 +187,24 @@ def _decode_value(raw: Optional[str]) -> int:
     return int.from_bytes(b, "little") // 2**64
 
 
+class StakeScanIncomplete(Exception):
+    """Any RPC read failed mid-scan; baseline must not be updated."""
+
+
+def _chain_rpc(client: Any, method: str, params: list) -> Any:
+    """RPC helper: failures abort the stake scan (never confuse with empty data)."""
+    call = getattr(client, "_call", None)
+    if call is not None:
+        try:
+            return call(method, params)
+        except Exception as exc:
+            raise StakeScanIncomplete(f"{method} failed: {exc}") from exc
+    result = client._call_quiet(method, params)
+    if method == "state_getKeysPaged" and result is None:
+        raise StakeScanIncomplete(f"{method} failed")
+    return result
+
+
 def moving_price(client: Any, netuid: int) -> Optional[float]:
     """TAO-per-alpha price (SubtensorModule::SubnetMovingPrice, I96F32)."""
     key = "0x" + (
@@ -214,13 +232,13 @@ def scan_hotkey_stakes(client: Any, hotkey_pub: bytes) -> Dict[str, int]:
         prefix_hex = f"0x{prefix.hex()}"
         start: Optional[str] = None
         while True:
-            keys = client._call_quiet("state_getKeysPaged", [prefix_hex, 200, start, None])
+            keys = _chain_rpc(client, "state_getKeysPaged", [prefix_hex, 200, start, None])
             if not keys:
                 break
             for k in keys:
                 body = bytes.fromhex(k[2:])
                 ck, netuid = _decode_alpha_key(body, len(prefix))
-                rao = _decode_value(client._call_quiet("state_getStorageAt", [k, None]))
+                rao = _decode_value(_chain_rpc(client, "state_getStorageAt", [k, None]))
                 if rao:
                     out[f"{map_name}:{ck}:{netuid}"] = rao
             if len(keys) < 200:
@@ -239,18 +257,20 @@ def compute_alerts(
 
     Increases accumulate until the threshold trips (4×25τ fires an 80τ alert);
     decreases reset the baseline so re-stakes don't double-count. Values are
-    shares in rao units; deltas convert to τ via the per-netuid moving price
-    (a missing price is treated as 1:1 — exact for root, close elsewhere;
-    ponytail: upgrade path is pool-reserve conversion if drift ever matters).
+    shares in rao units; deltas convert to τ via the per-netuid moving price.
+    When ``price_lookup`` is set, missing/zero/invalid prices skip alerting for
+    that netuid and preserve its baseline until pricing is available.
 
     Returns (alerts, new_baseline) — alerts carry tau-valued ``delta_rao``.
     """
-    def _price(key: str) -> float:
+    def _tao_per_alpha(key: str) -> Optional[float]:
         if price_lookup is None:
             return 1.0
         netuid = int(key.split(":", 2)[2])
         price = price_lookup(netuid)
-        return price if price is not None else 1.0
+        if price is None or price <= 0:
+            return None
+        return price
 
     alerts: List[Dict[str, Any]] = []
     new_baseline: Dict[str, int] = {}
@@ -258,7 +278,11 @@ def compute_alerts(
         prev = baseline.get(key, 0)
         delta_raw = cur - prev
         if delta_raw > 0:
-            delta_rao = int(delta_raw * _price(key))
+            price = _tao_per_alpha(key)
+            if price is None:
+                new_baseline[key] = prev
+                continue
+            delta_rao = int(delta_raw * price)
             if delta_rao >= threshold_rao:
                 alerts.append({"key": key, "delta_rao": delta_rao, "total_rao": cur})
                 new_baseline[key] = cur
@@ -354,7 +378,11 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         logger.error("stake alert: bad STAKE_ALERT_HOTKEY: %s", exc)
         return None
 
-    current = scan_hotkey_stakes(client, hotkey_pub)
+    try:
+        current = scan_hotkey_stakes(client, hotkey_pub)
+    except StakeScanIncomplete as exc:
+        logger.warning("stake alert scan incomplete: %s", exc)
+        return None
 
     prices: Dict[int, Optional[float]] = {}
 
@@ -368,16 +396,25 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         return prices[netuid]
 
     state = _read_state()
+    hotkey_hex = hotkey_pub.hex()
+    if state.get("hotkey") != hotkey_hex:
+        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        logger.info(
+            "stake alert baseline recorded for hotkey (%d entries)",
+            len(current),
+        )
+        return {"baseline": True, "entries": len(current)}
+
     baseline = state.get("baseline") or {}
     if not state.get("initialized"):
-        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_pub.hex()})
+        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
         logger.info("stake alert baseline recorded (%d entries)", len(current))
         return {"baseline": True, "entries": len(current)}
 
     alerts, new_baseline = compute_alerts(current, baseline, threshold_rao, price_lookup)
     if not alerts:
         if new_baseline != baseline:
-            _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_pub.hex()})
+            _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
         return None
 
     block = client.get_current_block()
@@ -395,7 +432,7 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
     if not sent:
         return {"alerts": len(alerts), "sent": False, "target": target}
 
-    _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_pub.hex()})
+    _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
     return {"alerts": len(alerts), "sent": True, "target": target}
 
 

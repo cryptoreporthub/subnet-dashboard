@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from internal.message_intel import stake_alert as sa
@@ -125,6 +127,9 @@ class _FakeClient:
     def __init__(self, keys_with_values):
         self.kv = keys_with_values
 
+    def _call(self, method, params):
+        return self._call_quiet(method, params)
+
     def _call_quiet(self, method, params):
         if method == "state_getKeysPaged":
             prefix = params[0]
@@ -138,6 +143,31 @@ class _FakeClient:
 
     def get_current_block(self):
         return 123
+
+
+class _FailingPagedClient(_FakeClient):
+    def __init__(self, keys_with_values, fail_at_page: int = 0):
+        super().__init__(keys_with_values)
+        self.fail_at_page = fail_at_page
+        self._page_calls = 0
+
+    def _call(self, method, params):
+        if method == "state_getKeysPaged":
+            if self._page_calls == self.fail_at_page:
+                raise RuntimeError("RPC down")
+            self._page_calls += 1
+        return super()._call(method, params)
+
+
+class _FailingStorageClient(_FakeClient):
+    def __init__(self, keys_with_values, fail_key: str):
+        super().__init__(keys_with_values)
+        self.fail_key = fail_key
+
+    def _call(self, method, params):
+        if method == "state_getStorageAt" and params[0] == self.fail_key:
+            raise RuntimeError("storage read failed")
+        return super()._call(method, params)
 
 
 def test_scan_hotkey_stakes_reads_both_maps():
@@ -159,3 +189,176 @@ def test_scan_hotkey_stakes_reads_both_maps():
         f"Alpha:{ck.hex()}:3": 5 * sa._RAO,
         f"AlphaV2:{ck.hex()}:3": 5 * sa._RAO,
     }
+
+
+def test_scan_hotkey_stakes_aborts_on_first_page_rpc_failure():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    client = _FailingPagedClient({}, fail_at_page=0)
+    with pytest.raises(sa.StakeScanIncomplete):
+        sa.scan_hotkey_stakes(client, pub)
+
+
+def test_scan_hotkey_stakes_aborts_on_later_page_rpc_failure():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    keys = {}
+    for i in range(201):
+        full = (
+            sa.alpha_storage_prefix("Alpha", pub)
+            + sa._blake2_concat(ck)
+            + i.to_bytes(2, "little")
+        )
+        keys["0x" + full.hex()] = u64f64
+    client = _FailingPagedClient(keys, fail_at_page=1)
+    with pytest.raises(sa.StakeScanIncomplete):
+        sa.scan_hotkey_stakes(client, pub)
+
+
+def test_scan_hotkey_stakes_aborts_on_storage_value_failure():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", pub)
+        + sa._blake2_concat(ck)
+        + (3).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+    client = _FailingStorageClient({key: u64f64}, fail_key=key)
+    with pytest.raises(sa.StakeScanIncomplete):
+        sa.scan_hotkey_stakes(client, pub)
+
+
+def test_check_stake_alerts_incomplete_scan_preserves_baseline(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    baseline = {"alpha:ab:0": 100 * sa._RAO}
+    state_file.write_text(
+        json.dumps({"initialized": True, "baseline": baseline, "hotkey": sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY).hex()}),
+        encoding="utf-8",
+    )
+    client = _FailingPagedClient({}, fail_at_page=0)
+    assert sa.check_stake_alerts(client=client) is None
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["baseline"] == baseline
+
+
+def test_check_stake_alerts_recovery_after_rpc_blip_no_false_alert(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((100 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", pub)
+        + sa._blake2_concat(ck)
+        + (0).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+    stake_key = f"Alpha:{ck.hex()}:0"
+    state_file.write_text(
+        json.dumps({"initialized": True, "baseline": {stake_key: 100 * sa._RAO}, "hotkey": pub.hex()}),
+        encoding="utf-8",
+    )
+    failing = _FailingPagedClient({key: u64f64}, fail_at_page=0)
+    assert sa.check_stake_alerts(client=failing) is None
+    ok = _FakeClient({key: u64f64})
+    monkeypatch.setattr(sa, "alert_chat_id", lambda: None)
+    result = sa.check_stake_alerts(client=ok)
+    assert result is None
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["baseline"][stake_key] == 100 * sa._RAO
+
+
+def test_compute_alerts_skips_missing_price_preserves_baseline():
+    threshold = 80 * sa._RAO
+    share_delta = 100 * sa._RAO  # would be 100τ at bogus 1:1
+    key = "alpha:ab:0"
+    base = {key: 0}
+    alerts, new_base = sa.compute_alerts(
+        {key: share_delta},
+        base,
+        threshold,
+        price_lookup=lambda _netuid: None,
+    )
+    assert alerts == []
+    assert new_base[key] == 0
+
+
+def test_compute_alerts_price_boundary_below_threshold():
+    threshold = 80 * sa._RAO
+    key = "alpha:ab:7"
+    # 0.1 τ/α × 790α = 79τ (below line)
+    alerts, base = sa.compute_alerts(
+        {key: 790 * sa._RAO},
+        {key: 0},
+        threshold,
+        price_lookup=lambda _netuid: 0.1,
+    )
+    assert alerts == []
+    assert base[key] == 0
+
+
+def test_compute_alerts_price_boundary_at_threshold():
+    threshold = 80 * sa._RAO
+    key = "alpha:ab:7"
+    alerts, base = sa.compute_alerts(
+        {key: 800 * sa._RAO},
+        {key: 0},
+        threshold,
+        price_lookup=lambda _netuid: 0.1,
+    )
+    assert len(alerts) == 1
+    assert alerts[0]["delta_rao"] == 80 * sa._RAO
+    assert base[key] == 800 * sa._RAO
+
+
+def test_compute_alerts_retries_after_price_becomes_available():
+    threshold = 80 * sa._RAO
+    key = "alpha:ab:7"
+    base = {key: 0}
+    prices = {7: None}
+
+    def lookup(netuid):
+        return prices[netuid]
+
+    alerts, base = sa.compute_alerts({key: 800 * sa._RAO}, base, threshold, price_lookup=lookup)
+    assert alerts == [] and base[key] == 0
+    prices[7] = 0.1
+    alerts, base = sa.compute_alerts({key: 800 * sa._RAO}, base, threshold, price_lookup=lookup)
+    assert len(alerts) == 1
+
+
+def test_check_stake_alerts_hotkey_change_reinits_without_alert(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    old_pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    new_hotkey = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    new_pub = sa.ss58_to_pubkey(new_hotkey)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((200 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", new_pub)
+        + sa._blake2_concat(ck)
+        + (1).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+    stake_key = f"Alpha:{ck.hex()}:1"
+    state_file.write_text(
+        json.dumps(
+            {
+                "initialized": True,
+                "baseline": {stake_key: 50 * sa._RAO},
+                "hotkey": old_pub.hex(),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("STAKE_ALERT_HOTKEY", new_hotkey)
+    client = _FakeClient({key: u64f64})
+    result = sa.check_stake_alerts(client=client)
+    assert result == {"baseline": True, "entries": 1}
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved["hotkey"] == new_pub.hex()
+    assert saved["baseline"][stake_key] == 200 * sa._RAO
