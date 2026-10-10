@@ -236,3 +236,8 @@
 - Docs vehicle + `fly-deploy` per #1339 pattern (push-to-main deploy not used).
 - [#1341](https://github.com/cryptoreporthub/subnet-dashboard/pull/1341) vehicle merged `979dc980` but Fly run `37997317434` **failure** (MC log path outside `docs/deploy-vehicles/`).
 - Guard-safe retry [#1342](https://github.com/cryptoreporthub/subnet-dashboard/pull/1342) → main `12c85d1df785d8c2782238d430e4a7d2841a1368`; Fly Deploy run `37997654898` **success**; prod `/version` == `12c85d1d`.
+
+## 2026-10-10 — #1348 Telegram feed_stale watchdog merge
+
+- Replit **PASS** @ `8712ad97` (comment [#6097206273](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348#issuecomment-6097206273)); squash-merged [#1348](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348) → main **`fcae69b09053c9107afb0e2e8573fe4074e33cd7`**; main CI smoke [38049956328](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38049956328) **success**. Fly Deploy Guard: **not triggered** (push-to-main deploy disabled; needs docs vehicle + `fly-deploy` label). Prod `/health` unreachable/503 from agent env at merge time; soak 5 still on prior prod (`9535c3c2`) until deploy completes.
+- **Deploy C** docs vehicle opening (target `fcae69b0`; post-merge `fly-deploy` on vehicle PR per #1347 pattern).
