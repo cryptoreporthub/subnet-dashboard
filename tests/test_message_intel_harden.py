@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -188,8 +189,8 @@ def test_listener_start_backfill_when_gap_old(monkeypatch):
 
     monkeypatch.setenv("TELEGRAM_GAP_BACKFILL_SECONDS", "60")
     listener_service._last_backfill_attempt = 0.0
-    listener_service._last_backfill_outcome = None
-    listener_service._last_backfill_outcome_at = 0.0
+    listener_service._listener_generation = 2
+    listener_service._clear_forced_backfill_cache()
     listener_service._pending_start_backfill = True
 
     fake = _backfill_ready_listener()
@@ -230,6 +231,8 @@ def _watchdog_lifecycle_env(monkeypatch):
     listener_service._pending_start_backfill = False
     listener_service._listener = None
     listener_service._heartbeat_stop = None
+    listener_service._listener_generation = 0
+    listener_service._clear_forced_backfill_cache()
     return listener_service
 
 
@@ -311,5 +314,159 @@ def test_feed_stale_watchdog_no_strike_on_quiet_group_empty_scan(monkeypatch):
         listener_service._maybe_restart_listener_if_feed_stale()
     assert listener_service._feed_stale_watchdog_strikes == 0
     assert quiet._running
+    listener_service._listener = None
+
+
+def test_feed_stale_watchdog_strikes_when_backfill_raises(monkeypatch):
+    listener_service = _watchdog_lifecycle_env(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "2")
+
+    class _FailListener:
+        _running = True
+        group_connected = True
+        _monitor_entity = object()
+        _loop = object()
+        _client = object()
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+        def stop(self):
+            self._running = False
+
+    fail = _FailListener()
+    listener_service._listener = fail
+    listener_service._listener_generation = 1
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert listener_service._feed_stale_watchdog_strikes == 1
+    listener_service._listener = None
+
+
+def test_restart_aborts_when_retired_thread_still_alive(monkeypatch):
+    instances = []
+
+    class _StubTelegramListener:
+        def __init__(self, **kwargs):
+            self._running = False
+            self._thread = None
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            self.stop_calls = 0
+            instances.append(self)
+
+        def start(self):
+            self._running = True
+            return True
+
+        def stop(self):
+            self.stop_calls += 1
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+    monkeypatch.setattr(
+        "message_intel.telegram_listener.TelegramListener",
+        _StubTelegramListener,
+    )
+    listener_service = _watchdog_lifecycle_env(monkeypatch)
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER_JOIN_SECONDS", "0.01")
+    assert listener_service.start_message_intel_listeners() is True
+    hold = threading.Event()
+    zombie = threading.Thread(target=hold.wait, daemon=True)
+    zombie.start()
+    instances[0]._thread = zombie
+
+    assert listener_service.restart_message_intel_listeners() is False
+    assert len(instances) == 1
+    assert listener_service._listener is instances[0]
+    hold.set()
+    zombie.join(timeout=2)
+    listener_service.stop_message_intel_listeners()
+
+
+def test_forced_backfill_singleflight_two_threads(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
+    listener_service._listener_generation = 1
+    listener_service._clear_forced_backfill_cache()
+    listener_service._last_backfill_attempt = 0.0
+    calls = []
+
+    fake = _backfill_ready_listener()
+    gate = threading.Event()
+
+    def trigger_backfill(limit=None):
+        calls.append(1)
+        gate.wait(timeout=2)
+        return True
+
+    fake.trigger_backfill = trigger_backfill
+    listener_service._listener = fake
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+
+    outcomes: list[str] = []
+
+    def _run():
+        outcomes.append(listener_service._attempt_listener_backfill(force=True))
+
+    t1 = threading.Thread(target=_run)
+    t2 = threading.Thread(target=_run)
+    t1.start()
+    t2.start()
+    gate.set()
+    t1.join(timeout=3)
+    t2.join(timeout=3)
+    assert len(calls) == 1
+    assert outcomes == ["ok", "ok"]
+    listener_service._listener = None
+
+
+def test_forced_backfill_cache_invalidated_on_listener_generation(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
+    listener_service._listener_generation = 1
+    listener_service._clear_forced_backfill_cache()
+    listener_service._last_backfill_attempt = 0.0
+    calls: list[int] = []
+
+    def _make(gen: int):
+        fake = _backfill_ready_listener()
+        fake.generation = gen
+
+        def trigger_backfill(limit=None):
+            calls.append(gen)
+            return True
+
+        fake.trigger_backfill = trigger_backfill
+        return fake
+
+    listener_service._listener = _make(1)
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+    assert listener_service._attempt_listener_backfill(force=True) == "ok"
+    assert calls == [1]
+
+    listener_service._bump_listener_generation()
+    listener_service._listener = _make(2)
+    assert listener_service._attempt_listener_backfill(force=True) == "ok"
+    assert calls == [1, 2]
     listener_service._listener = None
 

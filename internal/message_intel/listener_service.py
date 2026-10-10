@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 from datetime import datetime, timezone
 from typing import Any, Dict, Literal, Optional
 
@@ -17,6 +18,11 @@ _heartbeat_stop: Optional[Any] = None
 _last_backfill_attempt: float = 0.0
 _last_backfill_outcome: Optional[BackfillOutcome] = None
 _last_backfill_outcome_at: float = 0.0
+_backfill_lock = threading.Lock()
+_listener_generation: int = 0
+_forced_backfill_generation: int = -1
+_forced_backfill_outcome: Optional[BackfillOutcome] = None
+_forced_backfill_outcome_at: float = 0.0
 _pending_start_backfill: bool = False
 _feed_stale_watchdog_strikes: int = 0
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
@@ -182,16 +188,33 @@ def _listener_backfill_ready() -> bool:
     return True
 
 
-def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
+def _clear_forced_backfill_cache() -> None:
+    global _forced_backfill_generation, _forced_backfill_outcome, _forced_backfill_outcome_at
+    _forced_backfill_generation = -1
+    _forced_backfill_outcome = None
+    _forced_backfill_outcome_at = 0.0
+
+
+def _bump_listener_generation() -> int:
+    global _listener_generation
+    _listener_generation += 1
+    _clear_forced_backfill_cache()
+    return _listener_generation
+
+
+def _listener_join_timeout_seconds() -> float:
+    try:
+        return float(os.environ.get("MESSAGE_INTEL_LISTENER_JOIN_SECONDS", "30"))
+    except ValueError:
+        return 30.0
+
+
+def _attempt_listener_backfill_unlocked(*, force: bool = False) -> BackfillOutcome:
     """Run trigger_backfill when ready; throttle only applies to non-forced attempts."""
     global _last_backfill_attempt, _last_backfill_outcome, _last_backfill_outcome_at
     import time
 
     now = time.time()
-    # Coalesce duplicate forced attempts in the same heartbeat/watchdog tick (~45s).
-    if force and _last_backfill_outcome in ("ok", "failed"):
-        if now - _last_backfill_outcome_at < 45.0:
-            return _last_backfill_outcome
     if not force and now - _last_backfill_attempt < _backfill_interval_seconds():
         return "skipped_throttle"
     if not _listener_backfill_ready():
@@ -215,6 +238,29 @@ def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
         force,
     )
     return outcome
+
+
+def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
+    """Forced backfill: single-flight lock + coalesce ok/failed per listener generation."""
+    global _forced_backfill_generation, _forced_backfill_outcome, _forced_backfill_outcome_at
+    import time
+
+    if not force:
+        return _attempt_listener_backfill_unlocked(force=False)
+    with _backfill_lock:
+        now = time.time()
+        gen = _listener_generation
+        if (
+            _forced_backfill_generation == gen
+            and _forced_backfill_outcome in ("ok", "failed")
+            and now - _forced_backfill_outcome_at < 45.0
+        ):
+            return _forced_backfill_outcome
+        outcome = _attempt_listener_backfill_unlocked(force=True)
+        _forced_backfill_generation = gen
+        _forced_backfill_outcome = outcome
+        _forced_backfill_outcome_at = time.time()
+        return outcome
 
 
 def _maybe_backfill_if_quiet() -> None:
@@ -506,33 +552,38 @@ def _stop_heartbeat_loop() -> None:
         _heartbeat_stop = None
 
 
-def _retire_listener(join_timeout: float = 30.0) -> None:
-    """Stop listener, join its thread, and clear handles (zombie-safe restart)."""
+def _retire_listener(join_timeout: Optional[float] = None) -> bool:
+    """Stop listener, join its thread, and clear handles. Fail closed if join times out."""
     global _listener
     _stop_heartbeat_loop()
     old = _listener
-    _listener = None
     if old is None:
         _clear_listener_heartbeat()
-        return
+        return True
+    timeout = join_timeout if join_timeout is not None else _listener_join_timeout_seconds()
     try:
         old.stop()
     except Exception as exc:
         logger.warning("Telegram listener stop failed: %s", exc)
     thread = getattr(old, "_thread", None)
     if thread is not None and thread.is_alive():
-        thread.join(timeout=join_timeout)
+        thread.join(timeout=timeout)
         if thread.is_alive():
-            logger.warning(
-                "Telegram listener thread still alive after stop (%.0fs join timeout)",
-                join_timeout,
+            logger.error(
+                "message-intel listener retire failed: thread still alive after %.0fs; "
+                "restart aborted to avoid dual Telegram sessions (retry on next watchdog tick)",
+                timeout,
             )
+            return False
+    _listener = None
     _clear_listener_heartbeat()
+    return True
 
 
 def restart_message_intel_listeners() -> bool:
     """Full stop/join/replace cycle for feed_stale watchdog and ops."""
-    _retire_listener()
+    if not _retire_listener():
+        return False
     return start_message_intel_listeners()
 
 
@@ -623,6 +674,7 @@ def start_message_intel_listeners() -> bool:
     )
     started = _listener.start()
     if started:
+        _bump_listener_generation()
         _touch_listener_heartbeat()
         _start_heartbeat_loop()
         _pending_start_backfill = True

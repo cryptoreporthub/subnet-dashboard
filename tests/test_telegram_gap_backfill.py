@@ -234,3 +234,45 @@ def test_backfill_recent_uses_min_id(monkeypatch):
 
     asyncio.run(_run())
     assert seen == [{"limit": 50}]
+
+
+def test_backfill_recent_propagates_iter_failure(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from message_intel.telegram_listener import TelegramListener
+
+    class _FailClient:
+        async def iter_messages(self, entity, limit=100, **kw):
+            raise RuntimeError("iter_messages down")
+            yield  # pragma: no cover
+
+    listener = TelegramListener(forward_to_ingest=False)
+    listener.on_message = lambda _n: None
+    listener._client = _FailClient()
+
+    with pytest.raises(RuntimeError, match="iter_messages down"):
+        asyncio.run(listener._backfill_recent(object(), 10, min_id=1))
+
+
+def test_backfill_gap_propagates_topic_failure(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from message_intel.telegram_listener import TelegramListener
+
+    listener = TelegramListener(forward_to_ingest=False)
+
+    async def _recent(*args, **kwargs):
+        raise RuntimeError("topic stream failed")
+
+    async def _targets(_e):
+        return [None]
+
+    monkeypatch.setattr(listener, "_backfill_recent", _recent)
+    monkeypatch.setattr(listener, "_forum_backfill_targets", _targets)
+
+    with pytest.raises(RuntimeError, match="topic stream failed"):
+        asyncio.run(listener._backfill_gap(object(), 50, 1))

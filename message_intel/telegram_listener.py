@@ -405,6 +405,8 @@ class TelegramListener:
         return targets
 
     async def _backfill_gap(self, entity: Any, limit: int, min_id: Optional[int]) -> None:
+        # ponytail policy: one failed/partial topic stream invalidates the whole backfill
+        # (watchdog must not treat a half-finished forum scan as successful recovery).
         targets = await self._forum_backfill_targets(entity)
         per_target = max(50, limit // max(1, len(targets)))
         for reply_to in targets:
@@ -486,6 +488,7 @@ class TelegramListener:
             )
         except Exception as exc:
             logger.warning("Telegram backfill failed: %s", exc)
+            raise
 
     def _message_timestamp(self, msg: Any) -> str:
         dt = getattr(msg, "date", None)
