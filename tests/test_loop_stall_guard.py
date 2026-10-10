@@ -56,6 +56,13 @@ def _seed_degraded_status(tracker, status: str) -> None:
     assert tracker.snapshot()["status"] == status, tracker.snapshot()
 
 
+def test_p4b_calibrated_default_thresholds():
+    """Prod soak4 evidence: see docs/ops/loop-stall-guard-calibration-2026-10-10.md."""
+    assert loop_stall_guard.CONSECUTIVE_CHECKS >= 3
+    assert loop_stall_guard.RESOLVER_REVIVE_AFTER_SECONDS >= 2400
+    assert loop_stall_guard.KILL_ENABLED is True  # unchanged; do not unmute via defaults
+
+
 def test_probe_failures_are_warning_level_and_fail_closed(monkeypatch, caplog):
     caplog.set_level(logging.WARNING, logger="internal.loop_stall_guard")
 
