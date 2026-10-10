@@ -1879,3 +1879,12 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **Soak 4:** **FINAL FAIL** on `12c85d1d` — **closed**; no more Soak 4 work. Packet updated in Project store.
 - **Train model:** **two deploys, one long soak** — Deploy A = #1344 Telegram only (spot-check after secrets; **not** Soak 5). Deploy B = **P4b + P3c (#1332)** on one `main` line → **single** vehicle. **Soak 5** starts only after Deploy B (one anchor SHA, ≥24h floor).
 - Runbook + notes updated in Project store `docs/autonomous-runbook-2026-10-09.md`.
+
+## 2026-10-09 5:47 PM PT — Joshua handoff checkpoint (pipeline bc-1ee1afb7): train complete, Soak 5 started
+
+- **Deploy A:** #1344 squash `49324a90` (Replit PASS `7ef9c4f8`); vehicle **#1345** + `fly-deploy`; Fly [38009715707](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38009715707) **SUCCESS**; prod `/version` `3832f1fe`; secrets `TELEGRAM_GAINERS_ALERT` + `TELEGRAM_STAKE_ALERT` **on**; `stake_alert` log active (RPC 429 incomplete scan, no crash).
+- **P4b:** #1346 merged `9afa6c98` (no solo deploy).
+- **P3c:** #1332 merged `b00a7f1a` (rebase on main w/ #1344 routes).
+- **Deploy B:** vehicle **#1347** + `fly-deploy`; Fly [38010310106](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38010310106) **SUCCESS**; prod `/version` **`9535c3c2a494293f9a11167ee581574f338d2097`**; machine `7841024b3712e8` checks 1/1; boot ~`2026-10-10T00:46:46Z`.
+- **Soak 5 started** — Project store `internal/soak-5-start-2026-10-10-9535c3c2.md`; T+24h final due `2026-10-11T00:46:46Z`.
+- **Ditto:** `soak5-handoff-2026-10-10` (source=cursor).
