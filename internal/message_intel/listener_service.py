@@ -247,15 +247,13 @@ def _maybe_restart_listener_if_feed_stale() -> None:
         return
 
     backfill_ok = _maybe_backfill_if_stale(force=True)
-    if not backfill_ok:
-        _feed_stale_watchdog_strikes += 1
-    else:
+    if backfill_ok:
         fresh = _feed_stale_fields()
         if not fresh.get("feed_stale"):
             _feed_stale_watchdog_strikes = 0
-            return
-        _feed_stale_watchdog_strikes += 1
+        return
 
+    _feed_stale_watchdog_strikes += 1
     need = _feed_stale_watchdog_strikes_required()
     logger.warning(
         "listener feed_stale recovery strike=%s/%s age=%.0fs backfill_ok=%s",
@@ -273,7 +271,7 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     )
     _feed_stale_watchdog_strikes = 0
     try:
-        _reset_listener_if_dead()
+        stop_message_intel_listeners()
         start_message_intel_listeners()
     except Exception as exc:
         logger.warning("message-intel listener feed_stale watchdog: restart failed: %s", exc)
