@@ -461,13 +461,15 @@ def test_home_hero_and_pick_sections_do_not_call_engine(monkeypatch):
     from internal.learning.dashboard_context import _pick_sections
 
     def _boom(*_a, **_k):
-        raise AssertionError("homepage SSR must not call get_or_create_today_pick")
+        raise AssertionError("homepage SSR must not score or write")
 
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _boom,
     )
     monkeypatch.setattr(srv, "get_or_create_today_pick", _boom)
+    monkeypatch.setattr(srv, "_ordered_hour_picks", _boom)
+    monkeypatch.setattr(srv, "_record_pick_in_learning_loop", _boom)
     monkeypatch.setattr(
         "internal.council.daily_pick_engine._find_today",
         lambda _rows: {
@@ -475,9 +477,38 @@ def test_home_hero_and_pick_sections_do_not_call_engine(monkeypatch):
             "pick": {"subnet": {"netuid": 4, "name": "Delta"}, "score": 0.1, "confidence": 0.2},
         },
     )
+    monkeypatch.setitem(srv._TOP_PICKS_CACHE, "payload", {"hour_picks": [{"netuid": 2}]})
 
     hero = srv._home_hero_context([{"netuid": 4}])
     assert hero["daily_pick_stage"].get("action") == "HOLD"
-    with patch("server._ordered_hour_picks", return_value=[]):
-        picks = _pick_sections([], {})
+    picks = _pick_sections([], {})
     assert picks["day_picks"][0]["netuid"] == 4
+    assert [p["netuid"] for p in picks["hour_picks"]] == [2]
+
+
+def test_simivision_weighing_read_is_non_blocking_under_builder_lock():
+    """G0 convoy: the hero spotlight read must not queue behind the builder.
+
+    The background builder holds _SIMIVISION_LOCK for its whole scoring pass;
+    a blocking reader wedged every hydrate hero request behind it.
+    """
+    import server as srv
+
+    release = threading.Event()
+
+    def _builder():
+        with srv._SIMIVISION_LOCK:
+            assert release.wait(timeout=10)
+
+    builder = threading.Thread(target=_builder, name="simivision-test-builder", daemon=True)
+    builder.start()
+    time.sleep(0.05)
+
+    t0 = time.monotonic()
+    rows = srv._simivision_weighing_rows_cached()
+    elapsed = time.monotonic() - t0
+
+    release.set()
+    builder.join(timeout=5)
+    assert rows == []
+    assert elapsed < 0.5, f"weighing read blocked {elapsed:.1f}s behind builder lock"

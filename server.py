@@ -626,6 +626,7 @@ async def add_cors_headers(request: Request, call_next):
 
 
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
+EMERGENCY_PRIME_TIMEOUT = float(os.environ.get("EMERGENCY_HOME_PRIME_TIMEOUT", "8"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
@@ -782,9 +783,11 @@ def _prime_emergency_home_html() -> str:
             ctx = _minimal_index_context(_HomepageStubRequest())
             return templates.get_template("index.html").render(ctx)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            fut = pool.submit(_build)
-            _EMERGENCY_HOME_HTML = fut.result(timeout=8.0)
+        # No ThreadPoolExecutor context manager: on timeout its __exit__ joins
+        # the still-running worker and the prime hangs with it (same bug class
+        # as _resolve_index_context / #761). Abandon the worker instead.
+        pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        _EMERGENCY_HOME_HTML = pool.submit(_build).result(timeout=EMERGENCY_PRIME_TIMEOUT)
     except Exception as exc:
         logger.warning("emergency home prime failed: %s — ultra-minimal fallback", exc)
         try:
@@ -1073,7 +1076,7 @@ def _shell_pump_and_picks(
         try:
             from internal.learning.dashboard_context import _pick_sections
 
-            picks = _pick_sections(subnets, _market_context_with_weights(subnets))
+            picks = _pick_sections(subnets, {})
             out["hour_picks"] = picks.get("hour_picks") or []
             out["day_picks"] = picks.get("day_picks") or []
         except Exception as exc:
@@ -1172,9 +1175,16 @@ def _simivision_weighing_rows_cached(max_age_s: float = 120.0) -> List[Dict[str,
     import time
 
     try:
-        with _SIMIVISION_LOCK:
+        # Non-blocking read: the background builder holds this lock for its
+        # whole scoring pass, so a blocking acquire wedged every hydrate hero
+        # read behind the build (G0 convoy). Held lock = rows not ready.
+        if not _SIMIVISION_LOCK.acquire(blocking=False):
+            return []
+        try:
             cached = _SIMIVISION_CACHE.get("payload")
             at = float(_SIMIVISION_CACHE.get("at") or 0)
+        finally:
+            _SIMIVISION_LOCK.release()
         if not isinstance(cached, dict) or (time.time() - at) > max_age_s:
             return []
         data = cached.get("data") if isinstance(cached.get("data"), dict) else cached
