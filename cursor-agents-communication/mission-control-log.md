@@ -1855,6 +1855,7 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **P4b HOLD** until soak PASS. Wave 2 frozen. No further merge/label/deploy from this entry.
 - **Ditto:** `grok-pr1340-deploy-2026-10-09` (source=cursor)
 
+<<<<<<< HEAD
 ## 2026-10-09 4:15 PM PT — Soak 4 interim spot-check (#1340 / vehicle #1342) — PASS
 
 - **Window:** since 3:12 PM PT (2026-10-09T22:12:00Z) through ~4:18 PM PT. Deploy: Fly run 37997654898 SUCCESS; prod `/version` still `12c85d1df785d8c2782238d430e4a7d2841a1368`; `/health` 200 body OK.
@@ -1865,3 +1866,12 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **Axiom:** dataset `subnet-dashboard-prod` listable; APL/query **403** (ingest token only). Axiom lines UNKNOWN this run; Fly events + live RSS substitute for interim gates.
 - **Verdict:** interim **PASS**. P4b stays HOLD. Final soak at 5:14 PM PT. No mutations.
 - **Ditto:** `grok-soak4-interim-2026-10-09-1615` (source=cursor)
+=======
+## 2026-10-09 5:30 PM PT — Serial pipeline owner (bc-1ee1afb7): Soak 4 final + #1344 gate
+
+- **Phase 0 Soak 4 final:** PARTIAL on `12c85d1d` — ~2h post-boot stable (no OOM/restart); health wedge + Fly check **0/1 critical** at nominal window end (~5:18 PM PT). Artifact: Project store `internal/soak-4-final-2026-10-09-12c85d1d.md`. Does not block #1344 per runbook.
+- **Phase 1 #1344:** head `7ef9c4f87946230c213b081f03ad1b5bb80510e8`; GitHub `smoke` success; **awaiting Replit re-spot PASS** after null-keys-page fix (last agent comment 00:17 UTC). Subscribed `sub_d2187414-409d-47f9-9d72-c3980f40a6fd`.
+- **Prod spot (00:28 UTC):** machine `7841024b3712e8` started; external `/health` timeout; proxy LB errors; `live_subnets sync timed out after 90s` in logs.
+- **No merge / deploy / Telegram secrets** this turn.
+- **Ditto:** `35d3339b-0387-4425-bd3f-575292b4e918` (source=cursor).
+>>>>>>> 2ff943c5 (docs(mc): soak 4 final + #1344 Replit gate status)
