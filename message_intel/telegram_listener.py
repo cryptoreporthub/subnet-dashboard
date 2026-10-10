@@ -372,39 +372,42 @@ class TelegramListener:
         raise ValueError(f"no Telegram entity for {self.group!r} — {detail}")
 
     async def _forum_backfill_targets(self, entity: Any) -> list[Optional[int]]:
-        """Forum supergroups need per-topic reply_to — main iter_messages misses topic threads."""
+        """Forum supergroups need per-topic reply_to — main iter_messages misses topic threads.
+
+        ponytail policy: for forum entities, topic discovery/pagination failure fails the
+        whole gap backfill (no silent partial scan on general stream only).
+        """
         targets: list[Optional[int]] = [None]
         if not getattr(entity, "forum", False):
             return targets
-        try:
-            from telethon.tl.functions.messages import GetForumTopicsRequest
+        from telethon.tl.functions.messages import GetForumTopicsRequest
 
-            offset_topic = 0
-            while True:
-                result = await self._client(
-                    GetForumTopicsRequest(
-                        peer=entity,
-                        q=None,
-                        offset_date=None,
-                        offset_id=0,
-                        offset_topic=offset_topic,
-                        limit=50,
-                    )
+        offset_topic = 0
+        while True:
+            result = await self._client(
+                GetForumTopicsRequest(
+                    peer=entity,
+                    q=None,
+                    offset_date=None,
+                    offset_id=0,
+                    offset_topic=offset_topic,
+                    limit=50,
                 )
-                topics = getattr(result, "topics", None) or []
-                for topic in topics:
-                    tid = getattr(topic, "id", None)
-                    if tid is not None:
-                        targets.append(int(tid))
-                if len(topics) < 50:
-                    break
-                offset_topic = int(topics[-1].id)
-            logger.info("forum backfill targets=%s topics=%s", len(targets), targets[1:])
-        except Exception as exc:
-            logger.warning("forum topics lookup failed (general stream only): %s", exc)
+            )
+            topics = getattr(result, "topics", None) or []
+            for topic in topics:
+                tid = getattr(topic, "id", None)
+                if tid is not None:
+                    targets.append(int(tid))
+            if len(topics) < 50:
+                break
+            offset_topic = int(topics[-1].id)
+        logger.info("forum backfill targets=%s topics=%s", len(targets), targets[1:])
         return targets
 
     async def _backfill_gap(self, entity: Any, limit: int, min_id: Optional[int]) -> None:
+        # ponytail policy: one failed/partial topic stream invalidates the whole backfill
+        # (watchdog must not treat a half-finished forum scan as successful recovery).
         targets = await self._forum_backfill_targets(entity)
         per_target = max(50, limit // max(1, len(targets)))
         for reply_to in targets:
@@ -486,6 +489,7 @@ class TelegramListener:
             )
         except Exception as exc:
             logger.warning("Telegram backfill failed: %s", exc)
+            raise
 
     def _message_timestamp(self, msg: Any) -> str:
         dt = getattr(msg, "date", None)
