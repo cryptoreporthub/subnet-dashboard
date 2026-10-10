@@ -105,22 +105,42 @@ def test_live_stats_includes_last_message_age(client):
     assert stats.get("last_message_age_seconds") is not None
 
 
+def _backfill_ready_listener(**overrides):
+    base = {
+        "_running": True,
+        "group_connected": True,
+        "_monitor_entity": object(),
+        "_loop": object(),
+        "_client": object(),
+    }
+    base.update(overrides)
+
+    class _Fake:
+        pass
+
+    fake = _Fake()
+    for key, val in base.items():
+        setattr(fake, key, val)
+    return fake
+
+
 def test_listener_backfill_when_feed_stale(monkeypatch):
     from internal.message_intel import listener_service
 
     monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
     monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
     listener_service._last_backfill_attempt = 0.0
+    listener_service._last_backfill_outcome = None
+    listener_service._last_backfill_outcome_at = 0.0
 
-    class _Fake:
-        _running = True
-        called = False
+    fake = _backfill_ready_listener()
+    fake.called = False
 
-        def trigger_backfill(self, limit=None):
-            self.called = True
-            return True
+    def trigger_backfill(self, limit=None):
+        self.called = True
+        return True
 
-    fake = _Fake()
+    fake.trigger_backfill = lambda limit=None: trigger_backfill(fake, limit)
     listener_service._listener = fake
     monkeypatch.setattr(
         listener_service,
@@ -132,21 +152,49 @@ def test_listener_backfill_when_feed_stale(monkeypatch):
     listener_service._listener = None
 
 
+def test_listener_start_backfill_deferred_until_ready(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_GAP_BACKFILL_SECONDS", "60")
+    listener_service._last_backfill_attempt = 0.0
+    listener_service._last_backfill_outcome = None
+    listener_service._last_backfill_outcome_at = 0.0
+    listener_service._pending_start_backfill = True
+
+    fake = _backfill_ready_listener(group_connected=False, _monitor_entity=None)
+    fake.called = False
+    fake.trigger_backfill = lambda limit=None: setattr(fake, "called", True) or True
+    listener_service._listener = fake
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": False, "last_message_age_seconds": 120.0},
+    )
+    listener_service._maybe_backfill_on_listener_start()
+    assert not fake.called
+    assert listener_service._last_backfill_attempt == 0.0
+    assert listener_service._pending_start_backfill
+
+    fake.group_connected = True
+    fake._monitor_entity = object()
+    listener_service._maybe_backfill_on_listener_start()
+    assert fake.called
+    assert not listener_service._pending_start_backfill
+    listener_service._listener = None
+
+
 def test_listener_start_backfill_when_gap_old(monkeypatch):
     from internal.message_intel import listener_service
 
     monkeypatch.setenv("TELEGRAM_GAP_BACKFILL_SECONDS", "60")
     listener_service._last_backfill_attempt = 0.0
+    listener_service._last_backfill_outcome = None
+    listener_service._last_backfill_outcome_at = 0.0
+    listener_service._pending_start_backfill = True
 
-    class _Fake:
-        _running = True
-        called = False
-
-        def trigger_backfill(self, limit=None):
-            self.called = True
-            return True
-
-    fake = _Fake()
+    fake = _backfill_ready_listener()
+    fake.called = False
+    fake.trigger_backfill = lambda limit=None: setattr(fake, "called", True) or True
     listener_service._listener = fake
     monkeypatch.setattr(
         listener_service,
@@ -158,113 +206,110 @@ def test_listener_start_backfill_when_gap_old(monkeypatch):
     listener_service._listener = None
 
 
-def test_feed_stale_watchdog_restarts_after_strikes(monkeypatch):
+def _watchdog_lifecycle_env(monkeypatch):
     from internal.message_intel import listener_service
 
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    monkeypatch.setenv("TELEGRAM_API_ID", "12345")
+    monkeypatch.setenv("TELEGRAM_API_HASH", "deadbeef")
     monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
     monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "2")
+    monkeypatch.setenv("TELEGRAM_BACKFILL_INTERVAL_SECONDS", "0")
+    monkeypatch.setattr(
+        "internal.message_intel.session.telegram_session_arg",
+        lambda: "fake-session",
+    )
+    monkeypatch.setattr(
+        "internal.message_intel.session.has_telegram_session",
+        lambda: True,
+    )
     listener_service._feed_stale_watchdog_strikes = 0
     listener_service._last_backfill_attempt = 0.0
+    listener_service._last_backfill_outcome = None
+    listener_service._last_backfill_outcome_at = 0.0
+    listener_service._pending_start_backfill = False
+    listener_service._listener = None
+    listener_service._heartbeat_stop = None
+    return listener_service
 
-    class _Fake:
-        _running = True
+
+def test_feed_stale_watchdog_restart_real_lifecycle(monkeypatch):
+    instances = []
+
+    class _StubTelegramListener:
+        def __init__(self, **kwargs):
+            self._running = False
+            self._thread = None
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            self.stop_calls = 0
+            instances.append(self)
+
+        def start(self):
+            self._running = True
+            return True
+
+        def stop(self):
+            self.stop_calls += 1
+            self._running = False
 
         def trigger_backfill(self, limit=None):
             return False
 
-        def stop(self):
-            self._running = False
-
-    fake = _Fake()
-    listener_service._listener = fake
-    restarts = []
-
+    monkeypatch.setattr(
+        "message_intel.telegram_listener.TelegramListener",
+        _StubTelegramListener,
+    )
+    listener_service = _watchdog_lifecycle_env(monkeypatch)
     monkeypatch.setattr(
         listener_service,
         "_feed_stale_fields",
         lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
     )
-    monkeypatch.setattr(
-        listener_service,
-        "start_message_intel_listeners",
-        lambda: restarts.append(1) or True,
-    )
+
+    assert listener_service.start_message_intel_listeners() is True
+    first = instances[0]
+    assert first._running
 
     listener_service._maybe_restart_listener_if_feed_stale()
-    assert not restarts
+    assert first.stop_calls == 0
     listener_service._maybe_restart_listener_if_feed_stale()
-    assert len(restarts) == 1
-    listener_service._listener = None
-    listener_service._feed_stale_watchdog_strikes = 0
+    assert first.stop_calls >= 1
+    assert len(instances) >= 2
+    assert instances[-1] is not first
+    assert listener_service._listener is instances[-1]
+    listener_service.stop_message_intel_listeners()
 
 
-def test_feed_stale_watchdog_no_strike_on_successful_backfill(monkeypatch):
-    from internal.message_intel import listener_service
+def test_feed_stale_watchdog_no_strike_on_quiet_group_empty_scan(monkeypatch):
+    listener_service = _watchdog_lifecycle_env(monkeypatch)
 
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "2")
-    listener_service._feed_stale_watchdog_strikes = 0
-    listener_service._last_backfill_attempt = 0.0
-
-    class _Fake:
+    class _QuietListener:
         _running = True
+        group_connected = True
+        _monitor_entity = object()
+        _loop = object()
+        _client = object()
 
         def trigger_backfill(self, limit=None):
             return True
 
-    listener_service._listener = _Fake()
-    restarts = []
+        def stop(self):
+            self._running = False
+
+    quiet = _QuietListener()
+    listener_service._listener = quiet
     monkeypatch.setattr(
         listener_service,
         "_feed_stale_fields",
         lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
-    )
-    monkeypatch.setattr(
-        listener_service,
-        "start_message_intel_listeners",
-        lambda: restarts.append(1) or True,
     )
 
     for _ in range(4):
         listener_service._maybe_restart_listener_if_feed_stale()
     assert listener_service._feed_stale_watchdog_strikes == 0
-    assert not restarts
+    assert quiet._running
     listener_service._listener = None
-
-
-def test_feed_stale_watchdog_stops_running_listener_before_restart(monkeypatch):
-    from internal.message_intel import listener_service
-
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
-    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "1")
-    listener_service._feed_stale_watchdog_strikes = 0
-    listener_service._last_backfill_attempt = 0.0
-
-    class _Fake:
-        _running = True
-        stopped = False
-
-        def trigger_backfill(self, limit=None):
-            return False
-
-        def stop(self):
-            self.stopped = True
-            self._running = False
-
-    fake = _Fake()
-    listener_service._listener = fake
-    monkeypatch.setattr(
-        listener_service,
-        "_feed_stale_fields",
-        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
-    )
-    monkeypatch.setattr(listener_service, "start_message_intel_listeners", lambda: True)
-
-    listener_service._maybe_restart_listener_if_feed_stale()
-    assert fake.stopped
-    assert listener_service._listener is None
-    listener_service._feed_stale_watchdog_strikes = 0
 

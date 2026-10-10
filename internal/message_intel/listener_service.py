@@ -6,13 +6,18 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
+
+BackfillOutcome = Literal["skipped_throttle", "not_ready", "failed", "ok"]
 
 logger = logging.getLogger(__name__)
 
 _listener: Any = None
 _heartbeat_stop: Optional[Any] = None
 _last_backfill_attempt: float = 0.0
+_last_backfill_outcome: Optional[BackfillOutcome] = None
+_last_backfill_outcome_at: float = 0.0
+_pending_start_backfill: bool = False
 _feed_stale_watchdog_strikes: int = 0
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
 
@@ -164,11 +169,56 @@ def _gap_backfill_seconds() -> float:
         return 1800.0
 
 
-def _maybe_backfill_if_quiet() -> None:
-    """Backfill when listener is up but the group has gone quiet (gap < stale threshold)."""
-    global _last_backfill_attempt
+def _listener_backfill_ready() -> bool:
+    """Telethon client + resolved group entity required before gap backfill."""
+    if _listener is None or not _listener_running_local():
+        return False
+    if not bool(getattr(_listener, "group_connected", False)):
+        return False
+    if getattr(_listener, "_monitor_entity", None) is None:
+        return False
+    if not getattr(_listener, "_loop", None) or not getattr(_listener, "_client", None):
+        return False
+    return True
+
+
+def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
+    """Run trigger_backfill when ready; throttle only applies to non-forced attempts."""
+    global _last_backfill_attempt, _last_backfill_outcome, _last_backfill_outcome_at
     import time
 
+    now = time.time()
+    # Coalesce duplicate forced attempts in the same heartbeat/watchdog tick (~45s).
+    if force and _last_backfill_outcome in ("ok", "failed"):
+        if now - _last_backfill_outcome_at < 45.0:
+            return _last_backfill_outcome
+    if not force and now - _last_backfill_attempt < _backfill_interval_seconds():
+        return "skipped_throttle"
+    if not _listener_backfill_ready():
+        return "not_ready"
+
+    stats = _feed_stale_fields()
+    age = stats.get("last_message_age_seconds")
+    threshold = _feed_stale_threshold_seconds()
+    if age is not None and float(age) <= threshold and not force:
+        return "skipped_throttle"
+
+    _last_backfill_attempt = now
+    ok = bool(_listener.trigger_backfill())
+    outcome: BackfillOutcome = "ok" if ok else "failed"
+    _last_backfill_outcome = outcome
+    _last_backfill_outcome_at = now
+    logger.info(
+        "telegram backfill age=%s outcome=%s force=%s",
+        age if age is not None else "none",
+        outcome,
+        force,
+    )
+    return outcome
+
+
+def _maybe_backfill_if_quiet() -> None:
+    """Backfill when listener is up but the group has gone quiet (gap < stale threshold)."""
     if _listener is None or not _listener_running_local():
         return
     stats = _feed_stale_fields()
@@ -180,55 +230,44 @@ def _maybe_backfill_if_quiet() -> None:
     stale = _feed_stale_threshold_seconds()
     if age_f < gap or age_f >= stale:
         return
-    now = time.time()
-    if now - _last_backfill_attempt < _backfill_interval_seconds():
-        return
-    _last_backfill_attempt = now
-    ok = bool(_listener.trigger_backfill())
-    logger.info("telegram quiet-gap backfill age=%.0fs ok=%s", age_f, ok)
+    outcome = _attempt_listener_backfill(force=False)
+    if outcome in ("ok", "failed"):
+        logger.info("telegram quiet-gap backfill age=%.0fs outcome=%s", age_f, outcome)
 
 
 def _maybe_backfill_if_stale(*, force: bool = False) -> bool:
     """ponytail: periodic backfill when feed quiet — live handler misses disconnect gaps."""
-    global _last_backfill_attempt
-    import time
-
-    now = time.time()
-    if not force and now - _last_backfill_attempt < _backfill_interval_seconds():
-        return False
-    if _listener is None or not _listener_running_local():
-        return False
-    stats = _feed_stale_fields()
-    age = stats.get("last_message_age_seconds")
-    threshold = _feed_stale_threshold_seconds()
-    if age is not None and float(age) <= threshold:
-        return False
-    _last_backfill_attempt = now
-    ok = bool(_listener.trigger_backfill())
-    logger.info(
-        "telegram stale-feed backfill age=%s ok=%s",
-        age if age is not None else "none",
-        ok,
-    )
-    return ok
+    outcome = _attempt_listener_backfill(force=force)
+    return outcome == "ok"
 
 
 def _maybe_backfill_on_listener_start() -> None:
-    """Gap-fill soon after listener start (deploy / watchdog restart), not after 30m throttle."""
-    global _last_backfill_attempt
-    import time
+    """Gap-fill after listener start once entity/loop are ready (deferred from start())."""
+    global _pending_start_backfill
 
+    if not _pending_start_backfill:
+        return
     if _listener is None or not _listener_running_local():
+        return
+    if not _listener_backfill_ready():
         return
     stats = _feed_stale_fields()
     age = stats.get("last_message_age_seconds")
     if age is None:
         return
     if float(age) < _gap_backfill_seconds():
+        _pending_start_backfill = False
         return
-    _last_backfill_attempt = time.time()
-    ok = bool(_listener.trigger_backfill())
-    logger.info("telegram listener-start backfill age=%.0fs ok=%s", float(age), ok)
+    outcome = _attempt_listener_backfill(force=True)
+    if outcome == "not_ready":
+        return
+    _pending_start_backfill = False
+    if outcome in ("ok", "failed"):
+        logger.info(
+            "telegram listener-start backfill age=%.0fs outcome=%s",
+            float(age),
+            outcome,
+        )
 
 
 def _maybe_restart_listener_if_feed_stale() -> None:
@@ -246,8 +285,10 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     if age is None or float(age) < _feed_stale_restart_grace_seconds():
         return
 
-    backfill_ok = _maybe_backfill_if_stale(force=True)
-    if backfill_ok:
+    outcome = _attempt_listener_backfill(force=True)
+    if outcome in ("not_ready", "skipped_throttle"):
+        return
+    if outcome == "ok":
         fresh = _feed_stale_fields()
         if not fresh.get("feed_stale"):
             _feed_stale_watchdog_strikes = 0
@@ -256,11 +297,11 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     _feed_stale_watchdog_strikes += 1
     need = _feed_stale_watchdog_strikes_required()
     logger.warning(
-        "listener feed_stale recovery strike=%s/%s age=%.0fs backfill_ok=%s",
+        "listener feed_stale recovery strike=%s/%s age=%.0fs outcome=%s",
         _feed_stale_watchdog_strikes,
         need,
         float(age),
-        backfill_ok,
+        outcome,
     )
     if _feed_stale_watchdog_strikes < need:
         return
@@ -271,8 +312,7 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     )
     _feed_stale_watchdog_strikes = 0
     try:
-        stop_message_intel_listeners()
-        start_message_intel_listeners()
+        restart_message_intel_listeners()
     except Exception as exc:
         logger.warning("message-intel listener feed_stale watchdog: restart failed: %s", exc)
 
@@ -448,6 +488,7 @@ def _start_heartbeat_loop() -> None:
                 break
             try:
                 _touch_listener_heartbeat()
+                _maybe_backfill_on_listener_start()
                 _maybe_backfill_if_quiet()
                 _maybe_backfill_if_stale()
             except Exception as exc:
@@ -463,6 +504,36 @@ def _stop_heartbeat_loop() -> None:
     if _heartbeat_stop is not None:
         _heartbeat_stop.set()
         _heartbeat_stop = None
+
+
+def _retire_listener(join_timeout: float = 30.0) -> None:
+    """Stop listener, join its thread, and clear handles (zombie-safe restart)."""
+    global _listener
+    _stop_heartbeat_loop()
+    old = _listener
+    _listener = None
+    if old is None:
+        _clear_listener_heartbeat()
+        return
+    try:
+        old.stop()
+    except Exception as exc:
+        logger.warning("Telegram listener stop failed: %s", exc)
+    thread = getattr(old, "_thread", None)
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=join_timeout)
+        if thread.is_alive():
+            logger.warning(
+                "Telegram listener thread still alive after stop (%.0fs join timeout)",
+                join_timeout,
+            )
+    _clear_listener_heartbeat()
+
+
+def restart_message_intel_listeners() -> bool:
+    """Full stop/join/replace cycle for feed_stale watchdog and ops."""
+    _retire_listener()
+    return start_message_intel_listeners()
 
 
 def _reset_listener_if_dead() -> None:
@@ -518,7 +589,7 @@ def _start_listener_watchdog() -> None:
 
 def start_message_intel_listeners() -> bool:
     """Start configured social listeners (Telegram when creds present)."""
-    global _listener
+    global _listener, _pending_start_backfill
     if not _listener_enabled():
         logger.info("Message-intel listeners disabled (MESSAGE_INTEL_LISTENER=off)")
         return False
@@ -554,7 +625,7 @@ def start_message_intel_listeners() -> bool:
     if started:
         _touch_listener_heartbeat()
         _start_heartbeat_loop()
-        _maybe_backfill_on_listener_start()
+        _pending_start_backfill = True
         logger.info("Telegram message-intel listener started")
     else:
         _listener = None
@@ -562,12 +633,6 @@ def start_message_intel_listeners() -> bool:
 
 
 def stop_message_intel_listeners() -> None:
-    global _listener
-    _stop_heartbeat_loop()
-    if _listener is not None:
-        try:
-            _listener.stop()
-        except Exception as exc:
-            logger.warning("Telegram listener stop failed: %s", exc)
-        _listener = None
-    _clear_listener_heartbeat()
+    global _pending_start_backfill
+    _pending_start_backfill = False
+    _retire_listener()
