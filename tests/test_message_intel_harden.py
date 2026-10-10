@@ -12,6 +12,18 @@ from fastapi.testclient import TestClient
 from server import app
 
 
+@pytest.fixture(autouse=True)
+def _listener_service_isolation():
+    from internal.message_intel import listener_service
+    from internal.message_intel.store import reset_db_cache
+
+    yield
+    listener_service._stop_heartbeat_loop()
+    listener_service._pending_start_backfill = False
+    listener_service._listener = None
+    reset_db_cache()
+
+
 @pytest.fixture
 def intel_env(tmp_path, monkeypatch):
     db_path = str(tmp_path / "message_intel.db")
@@ -106,9 +118,24 @@ def test_live_stats_includes_last_message_age(client):
     assert stats.get("last_message_age_seconds") is not None
 
 
+def _alive_thread():
+    class _Thr:
+        def __init__(self):
+            self._alive = True
+
+        def is_alive(self):
+            return self._alive
+
+        def join(self, timeout=None):
+            self._alive = False
+
+    return _Thr()
+
+
 def _backfill_ready_listener(**overrides):
     base = {
         "_running": True,
+        "_thread": _alive_thread(),
         "group_connected": True,
         "_monitor_entity": object(),
         "_loop": object(),
@@ -252,11 +279,14 @@ def test_feed_stale_watchdog_restart_real_lifecycle(monkeypatch):
 
         def start(self):
             self._running = True
+            self._thread = _alive_thread()
             return True
 
         def stop(self):
             self.stop_calls += 1
             self._running = False
+            if self._thread is not None:
+                self._thread.join()
 
         def trigger_backfill(self, limit=None):
             return False
@@ -291,6 +321,7 @@ def test_feed_stale_watchdog_no_strike_on_quiet_group_empty_scan(monkeypatch):
 
     class _QuietListener:
         _running = True
+        _thread = _alive_thread()
         group_connected = True
         _monitor_entity = object()
         _loop = object()
@@ -323,6 +354,7 @@ def test_feed_stale_watchdog_strikes_when_backfill_raises(monkeypatch):
 
     class _FailListener:
         _running = True
+        _thread = _alive_thread()
         group_connected = True
         _monitor_entity = object()
         _loop = object()
@@ -363,10 +395,12 @@ def test_restart_aborts_when_retired_thread_still_alive(monkeypatch):
 
         def start(self):
             self._running = True
+            self._thread = _alive_thread()
             return True
 
         def stop(self):
             self.stop_calls += 1
+            self._running = False
 
         def trigger_backfill(self, limit=None):
             return False
@@ -377,18 +411,28 @@ def test_restart_aborts_when_retired_thread_still_alive(monkeypatch):
     )
     listener_service = _watchdog_lifecycle_env(monkeypatch)
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER_JOIN_SECONDS", "0.01")
-    assert listener_service.start_message_intel_listeners() is True
     hold = threading.Event()
-    zombie = threading.Thread(target=hold.wait, daemon=True)
-    zombie.start()
-    instances[0]._thread = zombie
+    zombie = None
+    try:
+        assert listener_service.start_message_intel_listeners() is True
+        zombie = threading.Thread(target=hold.wait, daemon=True)
+        zombie.start()
+        instances[0]._thread = zombie
 
-    assert listener_service.restart_message_intel_listeners() is False
-    assert len(instances) == 1
-    assert listener_service._listener is instances[0]
-    hold.set()
-    zombie.join(timeout=2)
-    listener_service.stop_message_intel_listeners()
+        assert listener_service.restart_message_intel_listeners() is False
+        assert len(instances) == 1
+        assert listener_service._listener is instances[0]
+        assert listener_service.start_message_intel_listeners() is False
+        assert len(instances) == 1
+    finally:
+        hold.set()
+        if zombie is not None:
+            zombie.join(timeout=2)
+        listener_service._stop_heartbeat_loop()
+        instances[0]._thread = None
+        instances[0]._running = False
+        listener_service._listener = None
+        listener_service._pending_start_backfill = False
 
 
 def test_forced_backfill_singleflight_two_threads(monkeypatch):

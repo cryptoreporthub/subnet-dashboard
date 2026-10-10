@@ -256,6 +256,58 @@ def test_backfill_recent_propagates_iter_failure(monkeypatch):
         asyncio.run(listener._backfill_recent(object(), 10, min_id=1))
 
 
+def test_forum_backfill_targets_propagates_first_page_failure(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from message_intel.telegram_listener import TelegramListener
+
+    class _Entity:
+        forum = True
+
+    class _FailClient:
+        async def __call__(self, request):
+            raise RuntimeError("forum discovery page 1 failed")
+
+    listener = TelegramListener(forward_to_ingest=False)
+    listener._client = _FailClient()
+
+    with pytest.raises(RuntimeError, match="forum discovery page 1 failed"):
+        asyncio.run(listener._forum_backfill_targets(_Entity()))
+
+
+def test_forum_backfill_targets_propagates_later_page_failure(monkeypatch):
+    import asyncio
+
+    import pytest
+
+    from message_intel.telegram_listener import TelegramListener
+
+    class _Entity:
+        forum = True
+
+    class _Topic:
+        def __init__(self, tid: int):
+            self.id = tid
+
+    class _PageClient:
+        def __init__(self):
+            self.calls = 0
+
+        async def __call__(self, request):
+            self.calls += 1
+            if self.calls == 1:
+                return type("R", (), {"topics": [_Topic(1)] * 50})()
+            raise RuntimeError("forum discovery page 2 failed")
+
+    listener = TelegramListener(forward_to_ingest=False)
+    listener._client = _PageClient()
+
+    with pytest.raises(RuntimeError, match="forum discovery page 2 failed"):
+        asyncio.run(listener._forum_backfill_targets(_Entity()))
+
+
 def test_backfill_gap_propagates_topic_failure(monkeypatch):
     import asyncio
 

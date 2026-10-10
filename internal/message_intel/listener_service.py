@@ -116,11 +116,22 @@ def _listener_alive_cross_process(*, max_age_seconds: int = 120) -> bool:
     return age is not None and age <= max_age_seconds
 
 
-def _listener_running_local() -> bool:
-    if _listener is None or not getattr(_listener, "_running", False):
+def _listener_thread_alive(listener: Any = None) -> bool:
+    """Thread liveness — do not treat _running=False (post-stop) as terminated."""
+    target = listener if listener is not None else _listener
+    if target is None:
         return False
-    thread = getattr(_listener, "_thread", None)
-    return thread is None or thread.is_alive()
+    thread = getattr(target, "_thread", None)
+    if thread is None:
+        return False
+    return thread.is_alive()
+
+
+def _listener_running_local() -> bool:
+    """Listener actively ingesting (running flag + worker thread alive)."""
+    if _listener is None or not _listener_thread_alive(_listener):
+        return False
+    return bool(getattr(_listener, "_running", False))
 
 
 def _feed_stale_threshold_seconds() -> float:
@@ -241,25 +252,25 @@ def _attempt_listener_backfill_unlocked(*, force: bool = False) -> BackfillOutco
 
 
 def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
-    """Forced backfill: single-flight lock + coalesce ok/failed per listener generation."""
+    """Single-flight for all backfill attempts; force only bypasses throttle interval."""
     global _forced_backfill_generation, _forced_backfill_outcome, _forced_backfill_outcome_at
     import time
 
-    if not force:
-        return _attempt_listener_backfill_unlocked(force=False)
     with _backfill_lock:
-        now = time.time()
-        gen = _listener_generation
-        if (
-            _forced_backfill_generation == gen
-            and _forced_backfill_outcome in ("ok", "failed")
-            and now - _forced_backfill_outcome_at < 45.0
-        ):
-            return _forced_backfill_outcome
-        outcome = _attempt_listener_backfill_unlocked(force=True)
-        _forced_backfill_generation = gen
-        _forced_backfill_outcome = outcome
-        _forced_backfill_outcome_at = time.time()
+        if force:
+            now = time.time()
+            gen = _listener_generation
+            if (
+                _forced_backfill_generation == gen
+                and _forced_backfill_outcome in ("ok", "failed")
+                and now - _forced_backfill_outcome_at < 45.0
+            ):
+                return _forced_backfill_outcome
+        outcome = _attempt_listener_backfill_unlocked(force=force)
+        if force and outcome in ("ok", "failed"):
+            _forced_backfill_generation = _listener_generation
+            _forced_backfill_outcome = outcome
+            _forced_backfill_outcome_at = time.time()
         return outcome
 
 
@@ -588,17 +599,13 @@ def restart_message_intel_listeners() -> bool:
 
 
 def _reset_listener_if_dead() -> None:
-    """Clear stale listener handle when the background thread exited."""
+    """Clear handle only after the worker thread has actually exited."""
     global _listener
     if _listener is None:
         return
-    if _listener_running_local():
+    if _listener_thread_alive(_listener):
         return
     logger.warning("Telegram listener thread stopped — clearing stale handle")
-    try:
-        _listener.stop()
-    except Exception as exc:
-        logger.debug("listener stop during reset failed: %s", exc)
     _listener = None
     _stop_heartbeat_loop()
 
@@ -645,9 +652,17 @@ def start_message_intel_listeners() -> bool:
         logger.info("Message-intel listeners disabled (MESSAGE_INTEL_LISTENER=off)")
         return False
     if _listener is not None:
-        if _listener_running_local():
-            return True
-        _reset_listener_if_dead()
+        if _listener_thread_alive(_listener):
+            if _listener_running_local():
+                return True
+            if not _retire_listener():
+                logger.warning(
+                    "message-intel listener start skipped: prior worker thread still shutting down"
+                )
+                return False
+        else:
+            _listener = None
+            _stop_heartbeat_loop()
 
     if not _has_telegram_creds():
         logger.info("Telegram listener skipped — TELEGRAM_API_ID/HASH not set")
