@@ -204,6 +204,30 @@ def test_maybe_investigation_skipped_for_generic_pick(monkeypatch):
     assert called["n"] == 0
 
 
+def test_investigation_timeout_returns_promptly(monkeypatch):
+    """SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS must actually bound the chat
+    thread — a hung investigation may not stall the caller past its budget
+    (regression: executor context-manager joined the worker on exit)."""
+    import time
+
+    import internal.simivision.chat_service as chat
+
+    monkeypatch.setattr(chat, "_INVESTIGATION_TIMEOUT_SEC", 0.2)
+
+    def _hung_build(*_a, **_k):
+        time.sleep(3.0)
+        return {"report": "late"}
+
+    monkeypatch.setattr(chat, "build_investigation_context", _hung_build)
+    start = time.monotonic()
+    out = chat._maybe_investigation_context(
+        "Trace transfers from 5HCFWvRqzSHWRPecN7q8J6c7aKQnrCZTMHstPv39xL1wgDHh"
+    )
+    elapsed = time.monotonic() - start
+    assert out is None
+    assert elapsed < 2.0, f"investigation timeout did not bound the wait ({elapsed:.1f}s)"
+
+
 def test_handle_chat_returns_status_local_fallback(monkeypatch):
     import internal.simivision.chat_service as chat
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import html
 import json
 import logging
 import os
@@ -35,11 +34,6 @@ _CHAT_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_CHAT_TIMEOUT_SECONDS", "35"
 _INVESTIGATION_TIMEOUT_SEC = float(os.environ.get("SIMIVISION_INVESTIGATION_TIMEOUT_SECONDS", "8"))
 _CHAT_CONTEXT_TTL = float(os.environ.get("SIMIVISION_CHAT_CONTEXT_SECONDS", "30"))
 _CHAT_CONTEXT_CACHE: Dict[str, Any] = {"at": 0.0, "ctx": None}
-
-
-def sanitize_reply(text: str) -> str:
-    """XSS-safe reply text (escape HTML specials)."""
-    return html.escape(str(text or ""), quote=False)
 
 
 def _safe_load_json(directory: str, filename: str, default: Any = None) -> Any:
@@ -132,9 +126,15 @@ def _maybe_investigation_context(message: str) -> Optional[Dict[str, Any]]:
     if wm:
         wallet = wm.group(1)
     try:
-        with ThreadPoolExecutor(max_workers=1) as pool:
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
             fut = pool.submit(build_investigation_context, message, netuid=netuid, wallet=wallet)
             return fut.result(timeout=_INVESTIGATION_TIMEOUT_SEC)
+        finally:
+            # ponytail: wait=False so a hung investigation can't stall the chat
+            # thread past its budget; the orphaned strand dies on its own HTTP
+            # timeouts. Upgrade path: asyncio.wait_for in the async caller.
+            pool.shutdown(wait=False, cancel_futures=True)
     except FuturesTimeoutError:
         logger.warning("investigation context timed out after %.0fs", _INVESTIGATION_TIMEOUT_SEC)
         return None
@@ -441,7 +441,7 @@ def _run_chat_sync(message: str) -> Dict[str, Any]:
     else:
         status = "local-fallback"
     out: Dict[str, Any] = {
-        "reply": sanitize_reply(reply),
+        "reply": str(reply or ""),
         "model": model,
         "status": status,
     }
@@ -451,7 +451,7 @@ def _run_chat_sync(message: str) -> Dict[str, Any]:
 
 
 async def handle_simivision_chat(message: str) -> Dict[str, Any]:
-    """Run SimiVision chat and return ``{reply, model}`` (XSS-escaped reply)."""
+    """Run SimiVision chat and return ``{reply, model}``."""
     try:
         return await asyncio.wait_for(
             asyncio.to_thread(_run_chat_sync, message),
@@ -480,23 +480,36 @@ async def handle_simivision_chat(message: str) -> Dict[str, Any]:
 
 
 async def iter_simivision_chat_chunks(message: str) -> AsyncIterator[str]:
-    """Yield XSS-safe reply chunks for streaming clients."""
-    # Mobile proxies drop connections that send no bytes for ~25s; ping first.
-    yield ": ok\n\n"
-    yield f"event: meta\ndata: {json.dumps({'status': 'thinking'})}\n\n"
-    result = await handle_simivision_chat(message)
-    reply = result.get("reply") or ""
-    model = result.get("model") or ""
-    status = result.get("status") or ("ok" if model and model != "local-fallback" else "local-fallback")
-    meta_payload: Dict[str, Any] = {"model": model, "status": status}
-    sources = result.get("sources")
-    if isinstance(sources, list) and sources:
-        meta_payload["sources"] = sources
-    yield f"event: meta\ndata: {json.dumps(meta_payload)}\n\n"
-    if not reply:
+    """Yield reply chunks for streaming clients (client renders via textContent)."""
+    done_sent = False
+    closing = False
+    try:
+        # Mobile proxies drop connections that send no bytes for ~25s; ping first.
+        yield ": ok\n\n"
+        yield f"event: meta\ndata: {json.dumps({'status': 'thinking'}, default=str)}\n\n"
+        result = await handle_simivision_chat(message)
+        reply = result.get("reply") or ""
+        model = result.get("model") or ""
+        status = result.get("status") or (
+            "ok" if model and model != "local-fallback" else "local-fallback"
+        )
+        meta_payload: Dict[str, Any] = {"model": model, "status": status}
+        sources = result.get("sources")
+        if isinstance(sources, list) and sources:
+            meta_payload["sources"] = sources
+        yield f"event: meta\ndata: {json.dumps(meta_payload, default=str)}\n\n"
+        if not reply:
+            yield "event: done\ndata: {}\n\n"
+            done_sent = True
+            return
+        for i in range(0, len(reply), _CHUNK_SIZE):
+            chunk = reply[i : i + _CHUNK_SIZE]
+            yield f"event: chunk\ndata: {json.dumps({'text': chunk})}\n\n"
         yield "event: done\ndata: {}\n\n"
-        return
-    for i in range(0, len(reply), _CHUNK_SIZE):
-        chunk = reply[i : i + _CHUNK_SIZE]
-        yield f"event: chunk\ndata: {json.dumps({'text': chunk})}\n\n"
-    yield "event: done\ndata: {}\n\n"
+        done_sent = True
+    except GeneratorExit:
+        closing = True
+        raise
+    finally:
+        if not done_sent and not closing:
+            yield "event: done\ndata: {}\n\n"
