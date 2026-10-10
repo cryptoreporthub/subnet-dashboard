@@ -174,7 +174,8 @@ def _load_json(path: str, default: Any) -> Any:
             parse_scope = f"{path}:non_dict"
     except Exception:
         pass
-    logger.info(
+    # ponytail: capture-period emit at WARNING — prod root logger suppresses INFO; revert after 1b capture
+    logger.warning(
         "resolver_read_path %s",
         json.dumps(
             {
