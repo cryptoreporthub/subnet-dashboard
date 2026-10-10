@@ -127,7 +127,71 @@ def test_listener_backfill_when_feed_stale(monkeypatch):
         "_feed_stale_fields",
         lambda: {"feed_stale": True, "last_message_age_seconds": 9999.0},
     )
-    listener_service._maybe_backfill_if_stale()
+    assert listener_service._maybe_backfill_if_stale()
     assert fake.called
     listener_service._listener = None
+
+
+def test_listener_start_backfill_when_gap_old(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_GAP_BACKFILL_SECONDS", "60")
+    listener_service._last_backfill_attempt = 0.0
+
+    class _Fake:
+        _running = True
+        called = False
+
+        def trigger_backfill(self, limit=None):
+            self.called = True
+            return True
+
+    fake = _Fake()
+    listener_service._listener = fake
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": False, "last_message_age_seconds": 120.0},
+    )
+    listener_service._maybe_backfill_on_listener_start()
+    assert fake.called
+    listener_service._listener = None
+
+
+def test_feed_stale_watchdog_restarts_after_strikes(monkeypatch):
+    from internal.message_intel import listener_service
+
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "2")
+    listener_service._feed_stale_watchdog_strikes = 0
+    listener_service._last_backfill_attempt = 0.0
+
+    class _Fake:
+        _running = True
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+    fake = _Fake()
+    listener_service._listener = fake
+    restarts = []
+
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+    monkeypatch.setattr(listener_service, "_reset_listener_if_dead", lambda: None)
+    monkeypatch.setattr(
+        listener_service,
+        "start_message_intel_listeners",
+        lambda: restarts.append(1) or True,
+    )
+
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert not restarts
+    listener_service._maybe_restart_listener_if_feed_stale()
+    assert len(restarts) == 1
+    listener_service._listener = None
+    listener_service._feed_stale_watchdog_strikes = 0
 

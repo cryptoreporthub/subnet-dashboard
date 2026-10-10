@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 _listener: Any = None
 _heartbeat_stop: Optional[Any] = None
 _last_backfill_attempt: float = 0.0
+_feed_stale_watchdog_strikes: int = 0
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
 
 
@@ -125,6 +126,21 @@ def _backfill_interval_seconds() -> float:
         return 1800.0
 
 
+def _feed_stale_restart_grace_seconds() -> float:
+    """Age before feed_stale may trigger recovery (default 90m)."""
+    try:
+        return float(os.environ.get("TELEGRAM_FEED_STALE_RESTART_SECONDS", "5400"))
+    except ValueError:
+        return 5400.0
+
+
+def _feed_stale_watchdog_strikes_required() -> int:
+    try:
+        return max(1, int(os.environ.get("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", "2")))
+    except ValueError:
+        return 2
+
+
 def _feed_stale_fields() -> Dict[str, Any]:
     from internal.message_intel.store import live_stats
 
@@ -172,21 +188,21 @@ def _maybe_backfill_if_quiet() -> None:
     logger.info("telegram quiet-gap backfill age=%.0fs ok=%s", age_f, ok)
 
 
-def _maybe_backfill_if_stale() -> None:
+def _maybe_backfill_if_stale(*, force: bool = False) -> bool:
     """ponytail: periodic backfill when feed quiet — live handler misses disconnect gaps."""
     global _last_backfill_attempt
     import time
 
     now = time.time()
-    if now - _last_backfill_attempt < _backfill_interval_seconds():
-        return
+    if not force and now - _last_backfill_attempt < _backfill_interval_seconds():
+        return False
     if _listener is None or not _listener_running_local():
-        return
+        return False
     stats = _feed_stale_fields()
     age = stats.get("last_message_age_seconds")
     threshold = _feed_stale_threshold_seconds()
     if age is not None and float(age) <= threshold:
-        return
+        return False
     _last_backfill_attempt = now
     ok = bool(_listener.trigger_backfill())
     logger.info(
@@ -194,6 +210,73 @@ def _maybe_backfill_if_stale() -> None:
         age if age is not None else "none",
         ok,
     )
+    return ok
+
+
+def _maybe_backfill_on_listener_start() -> None:
+    """Gap-fill soon after listener start (deploy / watchdog restart), not after 30m throttle."""
+    global _last_backfill_attempt
+    import time
+
+    if _listener is None or not _listener_running_local():
+        return
+    stats = _feed_stale_fields()
+    age = stats.get("last_message_age_seconds")
+    if age is None:
+        return
+    if float(age) < _gap_backfill_seconds():
+        return
+    _last_backfill_attempt = time.time()
+    ok = bool(_listener.trigger_backfill())
+    logger.info("telegram listener-start backfill age=%.0fs ok=%s", float(age), ok)
+
+
+def _maybe_restart_listener_if_feed_stale() -> None:
+    """Restart Telethon when thread+heartbeat look fine but ingest is silent (zombie MTProto)."""
+    global _feed_stale_watchdog_strikes
+
+    if _listener is None or not _listener_running_local():
+        _feed_stale_watchdog_strikes = 0
+        return
+    stats = _feed_stale_fields()
+    if not stats.get("feed_stale"):
+        _feed_stale_watchdog_strikes = 0
+        return
+    age = stats.get("last_message_age_seconds")
+    if age is None or float(age) < _feed_stale_restart_grace_seconds():
+        return
+
+    backfill_ok = _maybe_backfill_if_stale(force=True)
+    if not backfill_ok:
+        _feed_stale_watchdog_strikes += 1
+    else:
+        fresh = _feed_stale_fields()
+        if not fresh.get("feed_stale"):
+            _feed_stale_watchdog_strikes = 0
+            return
+        _feed_stale_watchdog_strikes += 1
+
+    need = _feed_stale_watchdog_strikes_required()
+    logger.warning(
+        "listener feed_stale recovery strike=%s/%s age=%.0fs backfill_ok=%s",
+        _feed_stale_watchdog_strikes,
+        need,
+        float(age),
+        backfill_ok,
+    )
+    if _feed_stale_watchdog_strikes < need:
+        return
+
+    logger.warning(
+        "message-intel listener feed_stale watchdog: restarting listener (age=%.0fs)",
+        float(age),
+    )
+    _feed_stale_watchdog_strikes = 0
+    try:
+        _reset_listener_if_dead()
+        start_message_intel_listeners()
+    except Exception as exc:
+        logger.warning("message-intel listener feed_stale watchdog: restart failed: %s", exc)
 
 
 def listener_status() -> Dict[str, Any]:
@@ -421,6 +504,7 @@ def _start_listener_watchdog() -> None:
                 if _listener_running_local():
                     _maybe_backfill_if_quiet()
                     _maybe_backfill_if_stale()
+                    _maybe_restart_listener_if_feed_stale()
                 continue
             if not _has_telegram_creds() or not _has_session_file():
                 continue
@@ -472,6 +556,7 @@ def start_message_intel_listeners() -> bool:
     if started:
         _touch_listener_heartbeat()
         _start_heartbeat_loop()
+        _maybe_backfill_on_listener_start()
         logger.info("Telegram message-intel listener started")
     else:
         _listener = None
