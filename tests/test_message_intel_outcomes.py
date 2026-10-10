@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock, patch
 
@@ -64,10 +65,51 @@ def test_outcome_loop_cross_process_heartbeat(intel_env, tmp_path, monkeypatch):
     hb = tmp_path / "outcome_hb.json"
     monkeypatch.setenv("MESSAGE_INTEL_OUTCOME_HEARTBEAT", str(hb))
     outcome_loop.stop_price_outcome_loop()
-    outcome_loop._touch_outcome_heartbeat()
+    # Simulate a heartbeat written by the worker process (different pid).
+    hb.write_text(
+        json.dumps(
+            {
+                "pid": 999999,
+                "ts": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            }
+        ),
+        encoding="utf-8",
+    )
     assert outcome_loop.outcome_loop_status()["running"] is True
     outcome_loop.stop_price_outcome_loop()
     assert outcome_loop.outcome_loop_status()["running"] is False
+
+
+def test_outcome_status_no_fake_live_from_own_pid_heartbeat(intel_env, tmp_path, monkeypatch):
+    """A crashed local tracker leaves its own fresh heartbeat behind — status
+    must not claim live off it (no fake live markers)."""
+    from internal.message_intel import outcome_loop
+
+    hb = tmp_path / "outcome_hb.json"
+    monkeypatch.setenv("MESSAGE_INTEL_OUTCOME_HEARTBEAT", str(hb))
+    outcome_loop.stop_price_outcome_loop()
+    outcome_loop._touch_outcome_heartbeat()
+    status = outcome_loop.outcome_loop_status()
+    assert status["running"] is False
+    assert status["live"] is False
+
+
+def test_outcome_status_booting_within_boot_budget(intel_env, monkeypatch):
+    """Deferred boot start must be labeled booting, not read as a stall."""
+    from internal.message_intel import outcome_loop
+
+    outcome_loop.stop_price_outcome_loop()
+    monkeypatch.setenv("OUTCOME_LOOP_BOOT_BUDGET_SECONDS", "300")
+    status = outcome_loop.outcome_loop_status()
+    assert status["running"] is False
+    assert status["state"] == "booting"
+    assert status["boot_age_seconds"] < 300
+
+    monkeypatch.setenv("OUTCOME_LOOP_BOOT_BUDGET_SECONDS", "0")
+    status = outcome_loop.outcome_loop_status()
+    assert status["running"] is False
+    assert status["state"] == "stopped"
+    assert "boot_age_seconds" not in status
 
 
 def test_price_tracker_reports_progress_while_checking(intel_env):

@@ -201,6 +201,51 @@ def test_api_message_intel_status_200():
     assert "empty" in body
 
 
+def test_listener_status_payload_has_no_secrets(monkeypatch):
+    """Listener/status payloads must carry hints, never credential values."""
+    import json as _json
+
+    api_id = "1234567"
+    api_hash = "deadbeefcafe1234"
+    monkeypatch.setenv("TELEGRAM_API_ID", api_id)
+    monkeypatch.setenv("TELEGRAM_API_HASH", api_hash)
+    monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "auto")
+    listener_service._listener = None
+    listener_service._clear_listener_heartbeat()
+    status = listener_service.listener_status()
+    blob = _json.dumps(status)
+    assert api_id not in blob
+    assert api_hash not in blob
+
+
+def test_api_message_intel_status_degraded_when_listener_unhealthy(monkeypatch):
+    from internal.message_intel import routes as mi_routes
+
+    monkeypatch.setattr(
+        "internal.message_intel.listener_service.listener_status",
+        lambda: {"reason": "listener_stopped", "live": False, "running": False},
+    )
+    client = TestClient(app)
+    body = client.get("/api/message-intel/status").json()
+    assert body["freshness"]["status"] == "degraded"
+    assert mi_routes._listener_unhealthy({"reason": "listener_stopped"}) is True
+    assert mi_routes._listener_unhealthy({"session_string_error": "bad padding"}) is True
+    assert mi_routes._listener_unhealthy({"entity_resolve_error": "unauthorized"}) is True
+    # Honest-empty without creds is normal operation — never degraded.
+    assert mi_routes._listener_unhealthy({"reason": "missing_telegram_creds"}) is False
+    assert mi_routes._listener_unhealthy({"reason": "missing_session"}) is False
+    assert mi_routes._listener_unhealthy({"reason": "idle_not_started"}) is False
+
+
+def test_api_message_intel_list_degraded_marker(monkeypatch):
+    """List payload carries the bot_contract freshness envelope; an erroring
+    store degrades it, a healthy honest-empty store does not."""
+    client = TestClient(app)
+    healthy = client.get("/api/message-intel").json()
+    assert healthy["freshness"]["source"] in ("message_intel_live", "message_intel_archive")
+    assert healthy["freshness"]["status"] != "degraded"
+
+
 def test_api_list_includes_listener_meta(monkeypatch):
     monkeypatch.setenv("MESSAGE_INTEL_LISTENER", "off")
     client = TestClient(app)

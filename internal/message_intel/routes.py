@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 message_intel_router = APIRouter(tags=["message-intel"])
 
+# Listener states that mean the Telegram ingest path is broken (configured but
+# untrusted). Honest-empty without creds is normal operation, not degraded.
+_LISTENER_UNHEALTHY_REASONS = {"listener_stopped"}
+
+
+def _listener_unhealthy(listener: Any) -> bool:
+    if not isinstance(listener, dict):
+        return True
+    if listener.get("entity_resolve_error") or listener.get("session_string_error"):
+        return True
+    return listener.get("reason") in _LISTENER_UNHEALTHY_REASONS
+
 
 def _rollup_timeout_payload(**fields: Any) -> Dict[str, Any]:
     """Honest-empty 200 when a guarded SQLite rollup times out (cold single-flight)."""
@@ -37,13 +49,19 @@ def _upgrade_response(feature: str, tier: str, route: str = "") -> Dict[str, Any
     }
 
 
-def _message_contract(*, live: bool, captured_at: Optional[str], degraded: bool = False) -> Dict[str, Any]:
+def _message_contract(
+    *,
+    live: bool,
+    captured_at: Optional[str],
+    degraded: bool = False,
+    listener: Any = None,
+) -> Dict[str, Any]:
     from internal.ops.bot_policy import bot_contract
 
     return bot_contract(
         source="message_intel_live" if live else "message_intel_archive",
         captured_at=captured_at,
-        degraded=degraded,
+        degraded=degraded or _listener_unhealthy(listener),
         mode="live" if live else "archive",
         authoritative=live,
     )
@@ -57,12 +75,17 @@ async def api_message_intel_ingest(request: Request):
     except Exception as exc:
         return {"status": "error", "error": f"Invalid JSON body: {exc}"}
 
-    try:
+    def _ingest() -> Dict[str, Any]:
         if isinstance(payload, dict) and isinstance(payload.get("messages"), list):
             return engine.ingest_batch(payload["messages"])
         if isinstance(payload, list):
             return engine.ingest_batch(payload)
         return engine.ingest_message(payload if isinstance(payload, dict) else {})
+
+    try:
+        # SQLite writes + NLP under the listener's write lock — an ingest burst
+        # wedging this POST must not take the event loop (and /health) with it.
+        return await run_in_threadpool(_ingest)
     except engine.MessageIntelUnavailable as exc:
         from internal.api_errors import public_error
 
@@ -110,28 +133,33 @@ async def api_message_intel(
             _message_contract(
                 live=live,
                 captured_at=stats.get("last_message_at"),
-                degraded=not bool(stats.get("ok", True)) or stale_meta,
+                degraded=not bool(stats.get("ok", True)),
+                listener=listener,
             )
         )
         return payload
     except Exception as exc:
         logger.error("message-intel list failed: %s", exc)
-        from internal.message_intel.listener_service import listener_status
 
-        return {
-            "status": "success",
-            "count": 0,
-            "messages": [],
-            "empty": True,
-            "meta": {"total_messages": 0, "ok": False, "error": str(exc), "listener": listener_status()},
-            "sources": {},
-            **_message_contract(live=False, captured_at=None, degraded=True),
-        }
+        def _fallback() -> Dict[str, Any]:
+            # Degraded path still reads SQLite via listener_status() — off-loop
+            # so a wedged store cannot take the event loop with it.
+            from internal.message_intel.listener_service import listener_status
+
+            return {
+                "status": "success",
+                "count": 0,
+                "messages": [],
+                "empty": True,
+                "meta": {"total_messages": 0, "ok": False, "error": str(exc), "listener": listener_status()},
+                "sources": {},
+                **_message_contract(live=False, captured_at=None, degraded=True),
+            }
+
+        return await run_in_threadpool(_fallback)
 
 
-@message_intel_router.get("/api/message-intel/status")
-async def api_message_intel_status():
-    """Listener + store health (no secrets). Honest when creds absent."""
+def _status_payload() -> Dict[str, Any]:
     from internal.message_intel.listener_service import listener_status
     from internal.message_intel.outcome_loop import outcome_loop_status
     from internal.message_intel.store import live_stats
@@ -146,6 +174,7 @@ async def api_message_intel_status():
         live=bool(listener.get("live")),
         captured_at=stats.get("last_message_at"),
         degraded=not bool(stats.get("ok", True)),
+        listener=listener,
     )
     return {
         "status": "success",
@@ -157,6 +186,16 @@ async def api_message_intel_status():
         "empty": int(stats.get("total_messages") or 0) == 0,
         **contract,
     }
+
+
+@message_intel_router.get("/api/message-intel/status")
+async def api_message_intel_status():
+    """Listener + store health (no secrets). Honest when creds absent."""
+    # live_stats() hits SQLite and listener_status() hits it twice more (own
+    # total + _feed_stale_fields). This is the most-polled status surface on
+    # the homepage hydrate path — all of it must stay off the event loop while
+    # the listener holds the SQLite write lock during ingest.
+    return await run_in_threadpool(_status_payload)
 
 
 @message_intel_router.get("/api/message-intel/list")
@@ -222,13 +261,14 @@ async def api_message_intel_authors(
     from internal.message_intel.load_guard import LoadTimeout
     from internal.message_intel.rollup import build_author_reliability_rows, build_reaction_crowns
 
-    try:
-        authors, reaction_crowns = await run_in_threadpool(
-            lambda: (
-                build_author_reliability_rows(days=days, limit=limit),
-                build_reaction_crowns(days=days),
-            )
+    def _authors():
+        return (
+            build_author_reliability_rows(days=days, limit=limit),
+            build_reaction_crowns(days=days),
         )
+
+    try:
+        authors, reaction_crowns = await run_in_threadpool(_authors)
     except LoadTimeout as exc:
         logger.warning("message-intel authors load timeout: %s", exc)
         return _rollup_timeout_payload(
@@ -259,14 +299,18 @@ async def api_message_intel_trending_v2(
     ent = entitlement_from_request(request)
     from internal.message_intel.rollup import build_trending_subnets
 
-    try:
-        result = await run_in_threadpool(
-            build_trending_subnets,
+    def _trending():
+        # _registry_subnet_names() reads config/registry.json from disk — keep
+        # it on the worker thread with the SQLite rollup, not the event loop.
+        return build_trending_subnets(
             limit=limit,
             rank_hours=rank_hours,
             window_hours=window_hours,
             registry_names=engine._registry_subnet_names(),
         )
+
+    try:
+        result = await run_in_threadpool(_trending)
     except Exception as exc:
         logger.error("message-intel trending v2 failed: %s", exc)
         return {
@@ -393,14 +437,17 @@ async def api_message_intel_social(limit: int = Query(default=6, ge=1, le=24)):
     """Per-subnet sentiment rollup from message_intel store (honest-empty)."""
     from internal.message_intel.context import build_social_sentiment_rows
 
-    subnets: List[Dict[str, Any]] = []
-    try:
-        from server import _get_subnets_with_source
+    def _rows():
+        subnets: List[Dict[str, Any]] = []
+        try:
+            from server import _get_subnets_with_source
 
-        subnets, _ = _get_subnets_with_source()
-    except Exception:
-        pass
-    rows = await run_in_threadpool(build_social_sentiment_rows, subnets, limit=limit)
+            subnets, _ = _get_subnets_with_source()
+        except Exception:
+            pass
+        return build_social_sentiment_rows(subnets, limit=limit)
+
+    rows = await run_in_threadpool(_rows)
     return {"status": "success", "rows": rows, "empty": len(rows) == 0}
 
 

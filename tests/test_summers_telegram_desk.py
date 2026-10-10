@@ -45,6 +45,12 @@ def test_summers_desk_first_class_on_home():
     assert "FLAGSHIP" not in html
     assert "Loading live feed" in html or "Warming up Telegram" in html
 
+    # SSR visibility: the desk must not be collapsed inside a <details> drawer —
+    # status/degraded states have to be visible without JS interaction.
+    assert "<details" not in open(
+        "templates/partials/premium/message_intel_feed.html", encoding="utf-8"
+    ).read()
+
     # Must sit on the spine — not only inside the More intel drawer
     mi = html.find('id="section-message-intel"')
     ribs = html.find('id="intel-ribs"')

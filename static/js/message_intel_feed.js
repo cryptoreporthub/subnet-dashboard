@@ -2483,17 +2483,33 @@ function renderTrendingSky(rows) {
     if (feed) feed.setAttribute("aria-busy", "false");
   }
 
+  // Bounded single-attempt status probe (P3b chat warm-path pattern): a slow
+  // or wedged status endpoint must not hold the panel — fail open to the
+  // list payload with a partial/degraded label instead.
+  function fetchStatusProbe() {
+    var opts = { headers: { Accept: "application/json" } };
+    if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) {
+      opts.signal = AbortSignal.timeout(8000);
+    }
+    return fetch("/api/message-intel/status", opts).then(function (res) {
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
+    });
+  }
+
   var hydrateToken = 0;
 
   async function hydrate() {
     var token = ++hydrateToken;
+    var statusDegraded = false;
     try {
       var status = null;
       var payload = null;
       try {
-        status = await fetchJsonWithRetry("/api/message-intel/status");
+        status = await fetchStatusProbe();
       } catch (statusErr) {
         status = null;
+        statusDegraded = true;
       }
       try {
         payload = await fetchJsonWithRetry(buildListUrl(24));
@@ -2521,6 +2537,9 @@ function renderTrendingSky(rows) {
       }
 
       applyMeta(payload, status);
+      if (statusDegraded && meta) {
+        meta.title = "Status probe slow — desk shown from the feed payload (partial).";
+      }
       renderHeroStats(payload, status);
       renderInterceptWave(payload.messages);
       var newestId = payload.messages && payload.messages[0] && payload.messages[0].id;

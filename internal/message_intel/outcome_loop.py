@@ -6,10 +6,20 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+_PROCESS_BOOT_MONOTONIC = time.monotonic()
+
+
+def _boot_budget_seconds() -> float:
+    try:
+        return float(os.environ.get("OUTCOME_LOOP_BOOT_BUDGET_SECONDS", "300"))
+    except ValueError:
+        return 300.0
 
 _tracker: Any = None
 _watchdog_stop: Optional[Any] = None
@@ -58,6 +68,32 @@ def _outcome_alive_cross_process(*, max_age_seconds: int = 360) -> bool:
         return age <= max_age_seconds
     except Exception:
         return False
+
+
+def _outcome_heartbeat_fresh_foreign(*, max_age_seconds: int = 360) -> bool:
+    """Fresh heartbeat written by a DIFFERENT process (worker owns the loop).
+
+    A fresh heartbeat stamped with our own pid proves nothing when the local
+    loop is gone (crashed tracker leaves its last heartbeat behind) — claiming
+    live off that would be a fake live marker for up to 6 minutes.
+    """
+    try:
+        with open(_heartbeat_path(), "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+        if not isinstance(raw, dict) or not raw.get("ts"):
+            return False
+        pid = raw.get("pid")
+        if pid is not None and int(pid) == os.getpid():
+            return False
+        ts = datetime.fromisoformat(str(raw["ts"]).replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - ts.astimezone(timezone.utc)).total_seconds()
+        return age <= max_age_seconds
+    except Exception:
+        return False
+
+
+def _boot_age_seconds() -> float:
+    return time.monotonic() - _PROCESS_BOOT_MONOTONIC
 
 
 def _outcome_running_local() -> bool:
@@ -210,5 +246,16 @@ def stop_price_outcome_loop() -> None:
 
 
 def outcome_loop_status() -> dict:
-    running = _outcome_running_local() or _outcome_alive_cross_process()
-    return {"running": running, "live": running}
+    running = _outcome_running_local() or _outcome_heartbeat_fresh_foreign()
+    out: dict = {"running": running, "live": running}
+    if not running:
+        boot_age = _boot_age_seconds()
+        if boot_age < _boot_budget_seconds():
+            # Deferred boot start (MESSAGE_INTEL_OUTCOME_DEFER_SECONDS) has not
+            # fired yet — label the window so monitors don't raise a false
+            # stall alert in the first minutes post-boot.
+            out["state"] = "booting"
+            out["boot_age_seconds"] = round(boot_age, 1)
+        else:
+            out["state"] = "stopped"
+    return out
