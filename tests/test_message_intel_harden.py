@@ -31,6 +31,8 @@ def _listener_service_isolation():
     listener_service._test_pause_after_recovery = None
     listener_service._test_reached_before_strike_increment = None
     listener_service._test_pause_before_strike_increment = None
+    listener_service._test_reached_before_strike_clear = None
+    listener_service._test_pause_before_strike_clear = None
     listener_service._test_reached_before_restart = None
     listener_service._test_pause_before_restart = None
     reset_db_cache()
@@ -881,4 +883,106 @@ def test_watchdog_strike_increment_fenced_before_lifecycle_race(monkeypatch):
 
     listener_service._listener = None
     listener_service._test_pause_before_strike_increment = None
+
+
+def _stub_listener(tag: int, *, running: bool, instances: list):
+    class _Stub:
+        def __init__(self):
+            self.tag = tag
+            self._running = running
+            self._thread = _alive_thread()
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            instances.append(self)
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+        def stop(self):
+            self._running = False
+            if self._thread is not None:
+                self._thread.join()
+
+    return _Stub()
+
+
+def test_watchdog_early_clear_not_running_fenced_against_new_strikes(monkeypatch):
+    from internal.message_intel import listener_service
+
+    instances: list = []
+    old = _stub_listener(1, running=False, instances=instances)
+    new = _stub_listener(2, running=True, instances=instances)
+    listener_service._listener = old
+    listener_service._listener_generation = 40
+
+    reached = threading.Event()
+    release = threading.Event()
+    done = threading.Event()
+    listener_service._test_reached_before_strike_clear = reached
+    listener_service._test_pause_before_strike_clear = release
+
+    def _watchdog():
+        listener_service._maybe_restart_listener_if_feed_stale()
+        done.set()
+
+    t = threading.Thread(target=_watchdog)
+    t.start()
+    assert reached.wait(timeout=3)
+    listener_service._bump_listener_generation()
+    listener_service._listener = new
+    listener_service._feed_stale_watchdog_strikes = 1
+    listener_service._watchdog_strike_generation = listener_service._listener_generation
+    listener_service._watchdog_strike_listener_id = id(new)
+    release.set()
+    assert done.wait(timeout=3)
+    t.join(timeout=3)
+
+    assert listener_service._feed_stale_watchdog_strikes == 1
+    assert listener_service._listener is new
+    listener_service._listener = None
+    listener_service._test_pause_before_strike_clear = None
+
+
+def test_watchdog_early_clear_not_feed_stale_fenced_against_new_strikes(monkeypatch):
+    from internal.message_intel import listener_service
+
+    instances: list = []
+    old = _stub_listener(1, running=True, instances=instances)
+    new = _stub_listener(2, running=True, instances=instances)
+    listener_service._listener = old
+    listener_service._listener_generation = 50
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": False, "last_message_age_seconds": 10.0},
+    )
+
+    reached = threading.Event()
+    release = threading.Event()
+    done = threading.Event()
+    listener_service._test_reached_before_strike_clear = reached
+    listener_service._test_pause_before_strike_clear = release
+
+    def _watchdog():
+        listener_service._maybe_restart_listener_if_feed_stale()
+        done.set()
+
+    t = threading.Thread(target=_watchdog)
+    t.start()
+    assert reached.wait(timeout=3)
+    listener_service._bump_listener_generation()
+    listener_service._listener = new
+    listener_service._feed_stale_watchdog_strikes = 1
+    listener_service._watchdog_strike_generation = listener_service._listener_generation
+    listener_service._watchdog_strike_listener_id = id(new)
+    release.set()
+    assert done.wait(timeout=3)
+    t.join(timeout=3)
+
+    assert listener_service._feed_stale_watchdog_strikes == 1
+    assert listener_service._listener is new
+    listener_service._listener = None
+    listener_service._test_pause_before_strike_clear = None
 

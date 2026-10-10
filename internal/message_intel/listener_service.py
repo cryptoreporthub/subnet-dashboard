@@ -40,6 +40,8 @@ _test_reached_after_recovery: Optional[Any] = None
 _test_pause_after_recovery: Optional[Any] = None
 _test_reached_before_strike_increment: Optional[Any] = None
 _test_pause_before_strike_increment: Optional[Any] = None
+_test_reached_before_strike_clear: Optional[Any] = None
+_test_pause_before_strike_clear: Optional[Any] = None
 _test_reached_before_restart: Optional[Any] = None
 _test_pause_before_restart: Optional[Any] = None
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
@@ -144,11 +146,16 @@ def _listener_thread_alive(listener: Any = None) -> bool:
     return thread.is_alive()
 
 
+def _listener_running_for(listener: Any) -> bool:
+    """Whether a specific listener instance is actively ingesting."""
+    if listener is None or not _listener_thread_alive(listener):
+        return False
+    return bool(getattr(listener, "_running", False))
+
+
 def _listener_running_local() -> bool:
     """Listener actively ingesting (running flag + worker thread alive)."""
-    if _listener is None or not _listener_thread_alive(_listener):
-        return False
-    return bool(getattr(_listener, "_running", False))
+    return _listener_running_for(_listener)
 
 
 def _feed_stale_threshold_seconds() -> float:
@@ -265,6 +272,25 @@ def _try_increment_watchdog_strike_locked(recovery: BackfillRecovery) -> Optiona
             _watchdog_strike_listener_id = owner_id
         _feed_stale_watchdog_strikes += 1
         return _feed_stale_watchdog_strikes
+
+
+def _watchdog_invocation_snapshot() -> BackfillRecovery:
+    """Capture owner+generation at feed-stale watchdog entry (lifecycle mutex)."""
+    with _lifecycle_lock:
+        return BackfillRecovery("ok", _listener_generation, _listener)
+
+
+def _maybe_fenced_clear_strikes_for_early_exit(invocation: BackfillRecovery) -> None:
+    """Clear strikes only if invocation owner+gen still current (early watchdog exit)."""
+    if invocation.listener is None:
+        return
+    reached = _test_reached_before_strike_clear
+    if reached is not None:
+        reached.set()
+    pause = _test_pause_before_strike_clear
+    if pause is not None:
+        pause.wait(timeout=5)
+    _try_clear_watchdog_strikes_locked(invocation)
 
 
 def _try_clear_watchdog_strikes_locked(recovery: BackfillRecovery) -> bool:
@@ -507,15 +533,15 @@ def _apply_feed_stale_recovery(recovery: BackfillRecovery, age: float) -> None:
 
 def _maybe_restart_listener_if_feed_stale() -> None:
     """Restart Telethon when thread+heartbeat look fine but ingest is silent (zombie MTProto)."""
-    global _feed_stale_watchdog_strikes
+    invocation = _watchdog_invocation_snapshot()
 
-    if _listener is None or not _listener_running_local():
-        _feed_stale_watchdog_strikes = 0
+    if invocation.listener is None or not _listener_running_for(invocation.listener):
+        _maybe_fenced_clear_strikes_for_early_exit(invocation)
         return
     _sync_watchdog_strikes_to_listener_owner()
     stats = _feed_stale_fields()
     if not stats.get("feed_stale"):
-        _feed_stale_watchdog_strikes = 0
+        _maybe_fenced_clear_strikes_for_early_exit(invocation)
         return
     age = stats.get("last_message_age_seconds")
     if age is None or float(age) < _feed_stale_restart_grace_seconds():
