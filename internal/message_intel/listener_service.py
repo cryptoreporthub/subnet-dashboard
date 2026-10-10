@@ -7,9 +7,15 @@ import logging
 import os
 import threading
 from datetime import datetime, timezone
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, Literal, NamedTuple, Optional
 
 BackfillOutcome = Literal["skipped_throttle", "not_ready", "failed", "ok"]
+
+
+class BackfillRecovery(NamedTuple):
+    outcome: BackfillOutcome
+    generation: int
+    listener: Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,12 +29,17 @@ _backfill_lock = threading.Lock()
 _listener_generation: int = 0
 _forced_backfill_generation: int = -1
 _forced_backfill_listener_id: int = 0
+_forced_backfill_listener: Any = None
 _forced_backfill_outcome: Optional[BackfillOutcome] = None
 _forced_backfill_outcome_at: float = 0.0
 _pending_start_backfill: bool = False
 _feed_stale_watchdog_strikes: int = 0
 _watchdog_strike_generation: int = -1
 _watchdog_strike_listener_id: int = 0
+_test_reached_after_recovery: Optional[Any] = None
+_test_pause_after_recovery: Optional[Any] = None
+_test_reached_before_restart: Optional[Any] = None
+_test_pause_before_restart: Optional[Any] = None
 _DEFAULT_HEARTBEAT = "data/.message_intel_listener"
 
 
@@ -204,10 +215,11 @@ def _listener_backfill_ready() -> bool:
 
 
 def _clear_forced_backfill_cache() -> None:
-    global _forced_backfill_generation, _forced_backfill_listener_id
+    global _forced_backfill_generation, _forced_backfill_listener_id, _forced_backfill_listener
     global _forced_backfill_outcome, _forced_backfill_outcome_at
     _forced_backfill_generation = -1
     _forced_backfill_listener_id = 0
+    _forced_backfill_listener = None
     _forced_backfill_outcome = None
     _forced_backfill_outcome_at = 0.0
 
@@ -272,36 +284,53 @@ def _attempt_listener_backfill_unlocked(*, force: bool = False) -> BackfillOutco
     return outcome
 
 
-def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
+def _recovery_fenced(recovery: BackfillRecovery) -> bool:
+    return (
+        recovery.listener is not None
+        and _listener is recovery.listener
+        and _listener_generation == recovery.generation
+    )
+
+
+def _attempt_listener_backfill_with_recovery(*, force: bool = False) -> BackfillRecovery:
     """Single-flight for all backfill attempts; force only bypasses throttle interval."""
-    global _forced_backfill_generation, _forced_backfill_listener_id
+    global _forced_backfill_generation, _forced_backfill_listener_id, _forced_backfill_listener
     global _forced_backfill_outcome, _forced_backfill_outcome_at
     import time
 
     with _backfill_lock:
+        start_gen = _listener_generation
+        start_listener = _listener
         if force:
             now = time.time()
-            gen = _listener_generation
-            owner_id = id(_listener) if _listener is not None else 0
+            owner_id = id(start_listener) if start_listener is not None else 0
             if (
-                _forced_backfill_generation == gen
+                _forced_backfill_generation == start_gen
                 and _forced_backfill_listener_id == owner_id
+                and _forced_backfill_listener is start_listener
                 and _forced_backfill_outcome in ("ok", "failed")
                 and now - _forced_backfill_outcome_at < 45.0
             ):
-                return _forced_backfill_outcome
-        start_gen = _listener_generation
-        start_listener = _listener
+                return BackfillRecovery(
+                    _forced_backfill_outcome,
+                    _forced_backfill_generation,
+                    _forced_backfill_listener,
+                )
         outcome = _attempt_listener_backfill_unlocked(force=force)
         if force and outcome in ("ok", "failed"):
             if _listener_generation == start_gen and _listener is start_listener:
                 _forced_backfill_generation = start_gen
                 _forced_backfill_listener_id = id(start_listener) if start_listener else 0
+                _forced_backfill_listener = start_listener
                 _forced_backfill_outcome = outcome
                 _forced_backfill_outcome_at = time.time()
-                return outcome
-            return "not_ready"
-        return outcome
+            else:
+                outcome = "not_ready"
+        return BackfillRecovery(outcome, start_gen, start_listener)
+
+
+def _attempt_listener_backfill(*, force: bool = False) -> BackfillOutcome:
+    return _attempt_listener_backfill_with_recovery(force=force).outcome
 
 
 def _maybe_backfill_if_quiet() -> None:
@@ -357,6 +386,67 @@ def _maybe_backfill_on_listener_start() -> None:
         )
 
 
+def _apply_feed_stale_recovery(recovery: BackfillRecovery, age: float) -> None:
+    """Consume one forced recovery under owner/gen fence (strike + optional restart)."""
+    global _feed_stale_watchdog_strikes
+
+    if recovery.outcome in ("not_ready", "skipped_throttle"):
+        return
+    if recovery.outcome == "ok":
+        if _recovery_fenced(recovery):
+            fresh = _feed_stale_fields()
+            if not fresh.get("feed_stale"):
+                _feed_stale_watchdog_strikes = 0
+        return
+    if recovery.outcome != "failed":
+        return
+
+    reached = _test_reached_after_recovery
+    if reached is not None:
+        reached.set()
+    pause = _test_pause_after_recovery
+    if pause is not None:
+        pause.wait(timeout=5)
+
+    if not _recovery_fenced(recovery):
+        return
+
+    _sync_watchdog_strikes_to_listener_owner()
+    if not _recovery_fenced(recovery):
+        return
+    _feed_stale_watchdog_strikes += 1
+    need = _feed_stale_watchdog_strikes_required()
+    logger.warning(
+        "listener feed_stale recovery strike=%s/%s age=%.0fs outcome=%s",
+        _feed_stale_watchdog_strikes,
+        need,
+        float(age),
+        recovery.outcome,
+    )
+    if _feed_stale_watchdog_strikes < need:
+        return
+
+    reached_restart = _test_reached_before_restart
+    if reached_restart is not None:
+        reached_restart.set()
+    pause_restart = _test_pause_before_restart
+    if pause_restart is not None:
+        pause_restart.wait(timeout=5)
+
+    if not _recovery_fenced(recovery):
+        return
+
+    logger.warning(
+        "message-intel listener feed_stale watchdog: restarting listener (age=%.0fs)",
+        float(age),
+    )
+    _feed_stale_watchdog_strikes = 0
+    try:
+        restart_message_intel_listeners(expected_owner=recovery.listener)
+    except Exception as exc:
+        logger.warning("message-intel listener feed_stale watchdog: restart failed: %s", exc)
+
+
 def _maybe_restart_listener_if_feed_stale() -> None:
     """Restart Telethon when thread+heartbeat look fine but ingest is silent (zombie MTProto)."""
     global _feed_stale_watchdog_strikes
@@ -373,36 +463,8 @@ def _maybe_restart_listener_if_feed_stale() -> None:
     if age is None or float(age) < _feed_stale_restart_grace_seconds():
         return
 
-    outcome = _attempt_listener_backfill(force=True)
-    if outcome in ("not_ready", "skipped_throttle"):
-        return
-    if outcome == "ok":
-        fresh = _feed_stale_fields()
-        if not fresh.get("feed_stale"):
-            _feed_stale_watchdog_strikes = 0
-        return
-
-    _feed_stale_watchdog_strikes += 1
-    need = _feed_stale_watchdog_strikes_required()
-    logger.warning(
-        "listener feed_stale recovery strike=%s/%s age=%.0fs outcome=%s",
-        _feed_stale_watchdog_strikes,
-        need,
-        float(age),
-        outcome,
-    )
-    if _feed_stale_watchdog_strikes < need:
-        return
-
-    logger.warning(
-        "message-intel listener feed_stale watchdog: restarting listener (age=%.0fs)",
-        float(age),
-    )
-    _feed_stale_watchdog_strikes = 0
-    try:
-        restart_message_intel_listeners()
-    except Exception as exc:
-        logger.warning("message-intel listener feed_stale watchdog: restart failed: %s", exc)
+    recovery = _attempt_listener_backfill_with_recovery(force=True)
+    _apply_feed_stale_recovery(recovery, float(age))
 
 
 def listener_status() -> Dict[str, Any]:
@@ -614,10 +676,15 @@ def _stop_and_join_listener(listener: Any, join_timeout: Optional[float] = None)
     return True
 
 
-def _retire_listener(join_timeout: Optional[float] = None) -> bool:
+def _retire_listener(
+    join_timeout: Optional[float] = None,
+    expected_owner: Any = None,
+) -> bool:
     """Stop listener, join its thread, and clear handles. Fail closed if join times out."""
     global _listener
     with _lifecycle_lock:
+        if expected_owner is not None and _listener is not expected_owner:
+            return False
         old = _listener
         if old is None:
             _stop_heartbeat_loop()
@@ -636,9 +703,9 @@ def _retire_listener(join_timeout: Optional[float] = None) -> bool:
     return True
 
 
-def restart_message_intel_listeners() -> bool:
+def restart_message_intel_listeners(expected_owner: Any = None) -> bool:
     """Full stop/join/replace cycle for feed_stale watchdog and ops."""
-    if not _retire_listener():
+    if not _retire_listener(expected_owner=expected_owner):
         return False
     with _lifecycle_lock:
         return _start_message_intel_listeners_locked()

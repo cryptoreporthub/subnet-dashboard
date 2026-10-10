@@ -18,6 +18,7 @@ def _listener_service_isolation():
     from internal.message_intel.store import reset_db_cache
 
     reset_db_cache()
+    listener_service._clear_forced_backfill_cache()
     yield
     listener_service._stop_heartbeat_loop()
     listener_service._pending_start_backfill = False
@@ -26,6 +27,10 @@ def _listener_service_isolation():
     listener_service._watchdog_strike_listener_id = 0
     listener_service._listener = None
     listener_service._clear_forced_backfill_cache()
+    listener_service._test_reached_after_recovery = None
+    listener_service._test_pause_after_recovery = None
+    listener_service._test_reached_before_restart = None
+    listener_service._test_pause_before_restart = None
     reset_db_cache()
 
 
@@ -674,4 +679,129 @@ def test_watchdog_ignores_stale_failed_outcome_after_restart_midflight(monkeypat
     assert listener_service._feed_stale_watchdog_strikes == 0
     assert 101 in calls
     listener_service._listener = None
+
+
+def _stale_watchdog_env(monkeypatch, listener_service, *, strikes: str = "1"):
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_SECONDS", "60")
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_RESTART_SECONDS", "100")
+    monkeypatch.setenv("TELEGRAM_FEED_STALE_WATCHDOG_STRIKES", strikes)
+    listener_service._clear_forced_backfill_cache()
+    listener_service._last_backfill_attempt = 0.0
+    listener_service._sync_watchdog_strikes_to_listener_owner()
+    monkeypatch.setattr(
+        listener_service,
+        "_feed_stale_fields",
+        lambda: {"feed_stale": True, "last_message_age_seconds": 5000.0},
+    )
+
+
+def test_watchdog_fenced_after_failed_recovery_concurrent_restart(monkeypatch):
+    from internal.message_intel import listener_service
+
+    instances = []
+
+    class _Stub:
+        def __init__(self, tag: int):
+            self.tag = tag
+            self._running = True
+            self._thread = _alive_thread()
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            instances.append(self)
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+        def stop(self):
+            self._running = False
+            if self._thread is not None:
+                self._thread.join()
+
+    old = _Stub(1)
+    new = _Stub(2)
+    listener_service._listener = old
+    listener_service._listener_generation = 10
+    _stale_watchdog_env(monkeypatch, listener_service, strikes="1")
+
+    reached = threading.Event()
+    release = threading.Event()
+    done = threading.Event()
+    listener_service._test_reached_after_recovery = reached
+    listener_service._test_pause_after_recovery = release
+
+    def _watchdog():
+        listener_service._maybe_restart_listener_if_feed_stale()
+        done.set()
+
+    t = threading.Thread(target=_watchdog)
+    t.start()
+    assert reached.wait(timeout=3)
+    listener_service._bump_listener_generation()
+    listener_service._listener = new
+    release.set()
+    assert done.wait(timeout=3)
+    t.join(timeout=3)
+    assert listener_service._listener is new
+    assert new._running
+    listener_service._listener = None
+    listener_service._test_pause_after_recovery = None
+
+
+def test_watchdog_two_strike_restart_fenced_same_invocation(monkeypatch):
+    from internal.message_intel import listener_service
+
+    instances = []
+
+    class _Stub:
+        def __init__(self, tag: int):
+            self.tag = tag
+            self._running = True
+            self._thread = _alive_thread()
+            self.group_connected = True
+            self._monitor_entity = object()
+            self._loop = object()
+            self._client = object()
+            instances.append(self)
+
+        def trigger_backfill(self, limit=None):
+            return False
+
+        def stop(self):
+            self._running = False
+            if self._thread is not None:
+                self._thread.join()
+
+    old = _Stub(1)
+    new = _Stub(2)
+    listener_service._listener = old
+    listener_service._listener_generation = 20
+    _stale_watchdog_env(monkeypatch, listener_service, strikes="2")
+    listener_service._feed_stale_watchdog_strikes = 1
+    listener_service._watchdog_strike_generation = 20
+    listener_service._watchdog_strike_listener_id = id(old)
+
+    reached = threading.Event()
+    release = threading.Event()
+    done = threading.Event()
+    listener_service._test_reached_before_restart = reached
+    listener_service._test_pause_before_restart = release
+
+    def _watchdog():
+        listener_service._maybe_restart_listener_if_feed_stale()
+        done.set()
+
+    t = threading.Thread(target=_watchdog)
+    t.start()
+    assert reached.wait(timeout=3)
+    listener_service._bump_listener_generation()
+    listener_service._listener = new
+    release.set()
+    assert done.wait(timeout=3)
+    t.join(timeout=3)
+    assert listener_service._listener is new
+    assert new._running
+    listener_service._listener = None
+    listener_service._test_pause_before_restart = None
 
