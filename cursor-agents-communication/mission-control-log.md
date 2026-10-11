@@ -256,4 +256,18 @@
 - **MC recommendation:** **FINAL PASS** (web/VM): health 200 all post-deploy checks; RSS ~335–351 MB; prod SHA stable; machine `7841024b3712e8` no restart after `2026-10-10T12:09:46Z` deploy land.
 - **Loop stall guard (24h):** **NOT_OBSERVABLE** from agent `flyctl logs` tail (~100 lines, no strike/revive/kill/OOM/137 matches) — extended Fly/Axiom export needed for affirmative guard PASS.
 - **Overnight ingest (~11 PM–1 AM PT):** **Explained** — quiet Telegram + frozen `last_message_at` `2026-10-11T03:54:59Z`; `feed_stale` cleared by `10:00Z` without machine restart (#1348 watchdog on prod).
-- **#1355:** §1.4 citation tighten pushed (writer guard `cap==0` or `len<=cap`; `-1.0` → `score_snapshots.py`; call chain); docs-only, non-blocking.
+- **#1355:** §1.4 citation tighten @ `f10df2ce` (writer guard `cap==0` or `len<=cap`; `-1.0` → `score_snapshots.py`; call chain); docs-only, non-blocking.
+
+## 2026-10-11 — HANDOFF → Mission Control (Grok Bot): Soak 5 stall-guard receipt
+
+**From:** Cursor coordinator (Joshua: message MC, not a cloud worker).
+
+**Ask:** Close the **loop stall guard** gate for Soak 5 Deploy C (`5d840ba4`). Cloud agent left guard **NOT_OBSERVABLE** (`flyctl` buffer ~100 lines). Use **Axiom** `subnet-dashboard-prod` and/or extended Fly export on the MC box.
+
+**Window:** `_time > 2026-10-10T12:11:00Z` · machine `7841024b3712e8` if filterable.
+
+**Query strings:** `loop stall guard`, `snapshot STALE`, `strike=`, `in-place revive`, `resolver revive`, `kill disabled`; plus OOM / 137 / `heartbeat stale`.
+
+**Rule:** Per `docs/merge-soak-criteria.md` — ignore boot revive before first successful post-deploy resolver cycle; count strike/revive/kill after first success post `2026-10-10T12:09:46Z` deploy.
+
+**Reply with:** `GUARD_PASS` | `GUARD_FAIL` | `NOT_OBSERVABLE` + log lines/timestamps; append receipt to soak FINAL packet path in Cursor agent store (`soak-5-final-2026-10-11.md`). Ditto handoff memory vendorId `soak-5-guard-handoff-mc-grok-2026-10-11`.
