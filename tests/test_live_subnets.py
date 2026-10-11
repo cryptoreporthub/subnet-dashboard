@@ -236,15 +236,15 @@ def test_registry_ready_handles_get_netuids_exception():
         assert registry_ready() is True
 
 
-def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkeypatch):
+def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkeypatch, tmp_path):
     """Verify _fetch_chain_data falls back to _registry_netuids when get_netuids raises."""
     from internal import live_subnets
 
-    seen = {}
+    netuids_path = tmp_path / "netuids.json"
 
     class _Client:
         def get_subnet_price_rows(self, netuids):
-            seen["netuids"] = netuids
+            netuids_path.write_text(json.dumps(netuids), encoding="utf-8")
             return [{"netuid": 42, "price": 1.0}]
 
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
@@ -258,7 +258,7 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
         out = live_subnets._fetch_chain_data()
 
     assert out and out[0]["netuid"] == 42
-    assert seen["netuids"] == [42]
+    assert json.loads(netuids_path.read_text(encoding="utf-8")) == [42]
 
 
 def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_path):
