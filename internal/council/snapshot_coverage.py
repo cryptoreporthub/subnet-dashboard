@@ -226,6 +226,47 @@ def reset_phase1_cycle_state_for_tests() -> None:
     _last_cycle = {}
 
 
+def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
+    """Slim coverage for soul_map RMW — full netuid lists stay on snapshot file only."""
+    if not isinstance(coverage, dict):
+        return {}
+    membership = coverage.get("membership") if isinstance(coverage.get("membership"), dict) else {}
+    out: Dict[str, Any] = {
+        "published": coverage.get("published"),
+        "complete": coverage.get("complete"),
+        "capped_out": coverage.get("capped_out"),
+        "selection_policy": coverage.get("selection_policy"),
+        "subnet_load_source": coverage.get("subnet_load_source"),
+        "timing": dict(coverage.get("timing") or {}),
+        "capture_reason": coverage.get("capture_reason"),
+    }
+    out["membership"] = {
+        k: membership.get(k)
+        for k in (
+            "source",
+            "universe_status",
+            "fresh",
+            "degraded",
+            "cap_reached",
+            "refresh_incomplete",
+            "resolved_at",
+        )
+    }
+    for horizon in ("day", "hour"):
+        block = coverage.get(horizon) if isinstance(coverage.get(horizon), dict) else {}
+        slim: Dict[str, Any] = {
+            "attempted": block.get("attempted"),
+            "succeeded_count": len(block.get("succeeded") or []),
+            "failed_count": len(block.get("failed") or []),
+            "skipped_invalid": block.get("skipped_invalid"),
+            "complete": block.get("complete"),
+        }
+        if horizon == "hour":
+            slim["hour_copied_from_day"] = block.get("hour_copied_from_day")
+        out[horizon] = slim
+    return out
+
+
 def coverage_capture_deadline_seconds(start_mono: float) -> bool:
     return (time.monotonic() - start_mono) <= PHASE1_COVERAGE_CAPTURE_MAX_SECONDS
 

@@ -62,6 +62,8 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
     assert coverage.get("hour", {}).get("hour_copied_from_day") is True
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert "coverage" in saved
+    on_disk_timing = (saved.get("coverage") or {}).get("timing") or {}
+    assert on_disk_timing.get("publish_wall_seconds") is not None
     assert cov.last_coverage_snapshot().get("complete") is True
 
 

@@ -152,6 +152,34 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _patch_snapshot_coverage_timing(
+    snap_path: str, timing: Dict[str, Any]
+) -> None:
+    """AC #9a: ``timing.publish_wall_seconds`` is measured inside ``save_score_snapshot``.
+
+    The first write includes build timing only; after publish we patch
+    ``data/score_snapshots.json`` coverage.timing in-place (same lock).
+    """
+    if not timing:
+        return
+    with _locked_score_snapshot(snap_path):
+        current = load_score_snapshot(snap_path)
+        if not isinstance(current, dict):
+            return
+        coverage = current.get("coverage")
+        if not isinstance(coverage, dict):
+            return
+        cov_timing = coverage.setdefault("timing", {})
+        if not isinstance(cov_timing, dict):
+            cov_timing = {}
+            coverage["timing"] = cov_timing
+        cov_timing.update(timing)
+        tmp = snap_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(current, handle, indent=2)
+        os.replace(tmp, snap_path)
+
+
 def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     snap_path = path or SCORE_SNAPSHOTS_PATH
     os.makedirs(os.path.dirname(snap_path) or ".", exist_ok=True)
@@ -414,8 +442,7 @@ def write_full_universe_snapshot(
             progress_cb=progress_cb,
         )
         build_wall = time.monotonic() - build_started
-        if not coverage_capture_deadline_seconds(capture_started):
-            return {"ok": False, "error": "coverage_capture_timeout"}
+        capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
         inputs = payload.pop("_coverage_inputs", {}) or {}
         receipt = load_membership_receipt()
         expected = scoring_expected_netuids(
@@ -439,6 +466,9 @@ def write_full_universe_snapshot(
         )
         if int(inputs.get("skipped_invalid") or 0):
             coverage["skipped_invalid"] = int(inputs["skipped_invalid"])
+        if capture_timed_out:
+            coverage["complete"] = False
+            coverage["capture_reason"] = "capture_timeout"
         publish_result = save_score_snapshot(
             {**payload, "source": source, "coverage": coverage}
         )
@@ -447,6 +477,12 @@ def write_full_universe_snapshot(
         )
         coverage["timing"] = timing
         published = bool(publish_result.get("published"))
+        skipped_older = bool(publish_result.get("skipped_older"))
+        if published and timing.get("publish_wall_seconds") is not None:
+            _patch_snapshot_coverage_timing(
+                SCORE_SNAPSHOTS_PATH,
+                {"publish_wall_seconds": timing["publish_wall_seconds"]},
+            )
         if not published:
             coverage["published"] = False
             coverage["complete"] = False
@@ -454,15 +490,19 @@ def write_full_universe_snapshot(
         publish_metrics(coverage)
         payload["source"] = source
         payload["coverage"] = coverage
-        return {
+        out: Dict[str, Any] = {
             "ok": published,
             "published": published,
+            "skipped_older": skipped_older,
             "complete": bool(coverage.get("complete")),
             "coverage": coverage,
             "count": payload.get("count"),
             "written_at": payload.get("written_at"),
             "path": SCORE_SNAPSHOTS_PATH,
         }
+        if capture_timed_out and published:
+            out["error"] = "coverage_capture_timeout"
+        return out
 
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
@@ -657,7 +697,11 @@ class ScoreSnapshotScheduler:
         skipped = result.get("skipped")
         if skipped:
             self.liveness.record_skip(str(skipped))
-        elif result.get("complete"):
+            return
+        if result.get("skipped_older"):
+            self.liveness.record_skip("skipped_older")
+            return
+        if result.get("published"):
             evidence = {
                 "count": result.get("count", 0),
                 "path": result.get("path") or SCORE_SNAPSHOTS_PATH,
@@ -665,12 +709,15 @@ class ScoreSnapshotScheduler:
             }
             coverage = result.get("coverage")
             if isinstance(coverage, dict):
-                evidence["coverage"] = coverage
+                from internal.council.snapshot_coverage import coverage_counts_summary
+
+                evidence["coverage"] = coverage_counts_summary(coverage)
+                evidence["coverage"]["complete"] = coverage.get("complete")
             self.liveness.record_success(evidence=evidence)
-        else:
-            self.liveness.record_failure(
-                error=str(result.get("error") or "score_snapshot_incomplete")
-            )
+            return
+        self.liveness.record_failure(
+            error=str(result.get("error") or "score_snapshot_unpublished")
+        )
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
@@ -836,7 +883,9 @@ class ScoreSnapshotScheduler:
         }
         coverage = result.get("coverage")
         if isinstance(coverage, dict):
-            summary["coverage"] = coverage
+            from internal.council.snapshot_coverage import coverage_counts_summary
+
+            summary["coverage"] = coverage_counts_summary(coverage)
         try:
             from internal.council import weights
 
