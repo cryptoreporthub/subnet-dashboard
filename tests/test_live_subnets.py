@@ -3,7 +3,7 @@
 import json
 import logging
 import threading
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -300,21 +300,104 @@ def test_fetch_orphan_blocks_second_sync_and_skips_with_wedge_guard(monkeypatch,
             hang.wait(timeout=30)
             return []
 
-    with (
-        patch("internal.chain_client.get_default_client", return_value=_Client()),
-        patch("internal.subnet_universe.get_netuids", return_value=[1]),
+    try:
+        with (
+            patch("internal.chain_client.get_default_client", return_value=_Client()),
+            patch("internal.subnet_universe.get_netuids", return_value=[1]),
+        ):
+            first = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-a")
+            first.start()
+            first.join(timeout=3)
+            assert workers_started["n"] == 1
+            assert first.is_alive() is False
+
+            second = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-b")
+            second.start()
+            second.join(timeout=3)
+            assert workers_started["n"] == 1
+            assert second.is_alive() is False
+
+        assert any("wedge guard" in r.message for r in caplog.records)
+    finally:
+        hang.set()
+
+
+def test_prod_v1_web_env_disables_auto_sync(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr(live_subnets, "_auto_default", True)
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
+    monkeypatch.setenv("LIVE_SUBNETS_AUTO_SYNC", "true")
+    monkeypatch.setenv("INLINE_WORKER", "on")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+    assert live_subnets._compute_auto_sync() is False
+
+
+def test_split_v2_web_keeps_auto_sync_on(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setattr(live_subnets, "_auto_default", True)
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
+    monkeypatch.setenv("INLINE_WORKER", "on")
+    monkeypatch.setenv("WORKER_SPLIT_V2", "on")
+    monkeypatch.setenv("RUN_MODE", "web")
+    assert live_subnets._compute_auto_sync() is True
+
+
+def test_live_data_freshness_marks_stale_when_sync_disabled(monkeypatch, tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(live_subnets, "AUTO_SYNC", False)
+    old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+    cache = tmp_path / "live_subnets.json"
+    cache.write_text(
+        json.dumps({"synced_at": old, "count": 1, "subnets": [{"netuid": 1}]}),
+        encoding="utf-8",
+    )
+    with patch("internal.data_volume.worker_data_freshness", return_value=None):
+        info = live_subnets.live_data_freshness()
+    assert info["sync_enabled"] is False
+    assert info["stale"] is True
+
+
+def test_essential_inline_worker_schedules_live_subnets_boot(monkeypatch):
+    """Prod v1: essential worker owns live_subnets when web AUTO_SYNC is off."""
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("INLINE_WORKER", "on")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+    scheduled = []
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: scheduled.append(name),
+    )
+    monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
+    for name in (
+        "_start_pump_ladder",
+        "_start_resolver",
+        "_start_whale_warm_scheduler",
+        "_start_pick_schedulers",
+        "_maybe_start_message_intel",
+        "_maybe_start_summary_bot",
+        "_start_pump_desk_snapshot_scheduler",
+        "_warm_judges_cache",
+        "_start_score_snapshot_scheduler",
+        "_start_pick_audit_scheduler",
+        "_start_outcome_snapshot_scheduler",
+        "_start_calibration_snapshot_scheduler",
+        "_start_dev_radar_github_scheduler",
     ):
-        first = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-a")
-        first.start()
-        first.join(timeout=3)
-        assert workers_started["n"] == 1
-        assert first.is_alive() is False
+        monkeypatch.setattr(f"internal.background_boot.{name}", MagicMock())
 
-        second = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-b")
-        second.start()
-        second.join(timeout=3)
-        assert workers_started["n"] == 1
-        assert second.is_alive() is False
+    from internal.background_boot import start_background_workers
 
-    assert any("wedge guard" in r.message for r in caplog.records)
-    hang.set()
+    start_background_workers()
+    assert "live-subnets-boot" in scheduled

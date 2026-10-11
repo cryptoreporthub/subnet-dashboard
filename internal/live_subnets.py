@@ -60,21 +60,32 @@ _in_ci_or_test = bool(
 )
 
 
+def _inline_worker_v1_web_env() -> bool:
+    """Fly v1 web wedge path without run_mode (fail-closed when import breaks)."""
+    if os.environ.get("WORKER_SPLIT_V2", "").strip().lower() in ("1", "true", "yes", "on"):
+        return False
+    if os.environ.get("INLINE_WORKER", "").strip().lower() not in ("1", "true", "yes", "on"):
+        return False
+    return os.environ.get("RUN_MODE", "web").strip().lower() != "worker"
+
+
 def _compute_auto_sync() -> bool:
     if not _auto_default:
         return False
     if _in_ci_or_test:
         return False
-    # ponytail: Fly v1 web+inline worker — essential worker skips live sync; web read
-    # path must not spawn orphan live-subnets-fetch daemons (prod wedge 2026-10-11).
+    # ponytail: Fly v1 web+inline worker — web read path must not spawn orphan fetch
+    # daemons; essential sibling worker owns live_subnets (background_boot).
     try:
         from internal.run_mode import get_run_mode, inline_worker_expected, split_worker_v2_enabled
 
         if inline_worker_expected() and not split_worker_v2_enabled():
             if get_run_mode() != "worker":
                 return False
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("live_subnets: run_mode import failed (%s); fail-closed on v1 web", exc)
+        if _inline_worker_v1_web_env():
+            return False
     return True
 
 
@@ -89,8 +100,8 @@ elif not AUTO_SYNC and _auto_default:
             logger.info(
                 "live_subnets: AUTO_SYNC disabled on web with inline worker (cache / volume reads only)"
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("live_subnets: run_mode import failed logging AUTO_SYNC off (%s)", exc)
 
 _lock = threading.Lock()
 _sync_lock = threading.Lock()
