@@ -277,6 +277,15 @@
 - **Source:** MC Grok Bot · Axiom `subnet-dashboard-prod` · window `2026-10-10T12:11Z`–`2026-10-11T13:15Z` · machine `7841024b3712e8` · **13,742** events (no 30m bucket gaps).
 - **Stall guard:** `12:37:51Z` strike **1/3** (STALE age=14569s); `12:46:23Z` in-place revive **failed** (`write_timeout_480s`); `12:50:27Z` strike **2/3**; **no** strike 3 / kill / OOM / 137 after `12:50Z` (~22.4h clean). Snapshot ages → **carryover** ~4h stale file at Deploy C land.
 - **Outcome watchdog (separate):** `heartbeat stale >420s` ×7 (`12:42`, `13:38`, `14:20`, `17:26`, `18:47` Oct 10; `00:15`, `01:12` Oct 11).
-- **Verdicts:** MC **GUARD_CONDITIONAL** (carryover, no kill). Cursor **strict merge-soak → GUARD_FAIL** (worker `RESOLVER_BOOT_IMMEDIATE` → first resolver success likely before `12:37Z`; strikes + revive count post-first-success unless MC cites later Axiom `resolver … success` line).
-- **P4b:** **HOLD** — `write_timeout_480s` revive failure = same cost class as #1355 Phase 1 snapshot/`soul_map` RMW (not noise).
-- **Artifacts:** agent store `soak-5-stall-guard-receipt-2026-10-11.md`; FINAL packet patched. Ditto vendorId `soak-5-stall-guard-receipt-2026-10-11`.
+- **Verdicts (superseded by tie-break below):** provisional MC **GUARD_CONDITIONAL** vs Cursor strict **GUARD_FAIL** pending first-success line.
+
+## 2026-10-11 — Soak 5 MC tie-break (FINAL — do not re-infer guard)
+
+- **Verdict:** Web/VM **FINAL PASS**; strict merge-soak **GUARD_FAIL**. **P4b HOLD**.
+- **Deploy land:** `2026-10-10T12:09:46Z` · prod SHA `5d840ba4` · machine `7841024b3712e8`.
+- **First resolver success (Axiom verified):** `2026-10-10T12:10:54.888Z` — `resolver lifecycle event=success first=True duration_ms=5694.3`.
+- **Resolver cadence after:** ~every 15–17 min (`12:27:41`, `12:44:16`, `12:59:19`, `13:15:03Z`); `heavy_job_slot` held ~93–96s on two cycles; resolver healthy throughout.
+- **Guard strikes (all after first success):** `12:37:51Z` strike **1/3**; `12:46:23Z` in-place revive **failed** (`write_timeout_480s`); `12:50:27Z` strike **2/3**; **no** strike 3 / kill / OOM / 137; guard silent ~22.4h after `12:50Z`.
+- **Root cause class:** score snapshot **write cost** (>480s); ~4h stale snapshot carryover at boot — **not** resolver pathology. Mitigating facts recorded; **do not** upgrade guard gate.
+- **#1355 Phase 1:** add measured receipt AC — per-cycle score-snapshot **write duration** (Soak 5 evidence >480s timeout); docs @ `fdbebdd2` on `cursor/cap-audit-grok-review-2026-10-11`.
+- **Artifacts:** agent store `internal/soak-5-final-2026-10-11.md`, `internal/soak-5-stall-guard-receipt-2026-10-11.md`. Ditto memory `eea96947-2332-44a7-9030-a257a70cee34`.
