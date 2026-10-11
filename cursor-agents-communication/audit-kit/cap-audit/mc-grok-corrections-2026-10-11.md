@@ -2,7 +2,7 @@
 
 **Seat:** Grok design/judgment (not a paraphrase of Claude).  
 **Adjudicates:** Claude first-pass (parent user paste, 2026-10-11; files opened: `score_snapshots.py`, `pick_scheduler.py`, `subnet_universe.py`, `fly.toml`, ~60% of `server.py`; **not** `scoring_cap.py`, `score_cache.py`, `tradable.py`, CSV).  
-**Mechanical pin:** Composer verification `cursor/cap-audit-composer-verify-2026-10-11` @ `dd195788` (`mc-composer-verification-2026-10-11.md`, subagent `bc-a0716939-8693-5bfe-be85-83569391a85b`).  
+**Mechanical pin:** Composer verification **[PR #1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354)** @ base `dd195788b3222370be8834a8e2b6cee1cf877524` (verification doc head includes MC MODIFY `bf0d87a1`); `mc-composer-verification-2026-10-11.md`.  
 **This branch pin:** `main` @ `dd195788b3222370be8834a8e2b6cee1cf877524` plus this docs commit.  
 **CSV / HTML inventory pin:** `9535c3c2a494293f9a11167ee581574f338d2097` — **not** this SHA. Any count, P0 subset, or “352 P0 caps” claim that assumes that CSV without a re-scan at `dd195788` (or later main) is **UNVERIFIED**.  
 **Composer file on `main`:** absent at Grok start; **read from sibling branch before this commit.**
@@ -19,7 +19,7 @@ Ditto alignment (read, not restated as new design): background full-eligible sna
 |-------|---------|
 | Handoff `cursor-cap-audit-handoff.md` Priority #1–#5 + rollout gate | Contract |
 | Claude 8 findings + taxonomy D→A→B→C + P0 split + 3-phase rollout | Claims to judge |
-| Composer claim table (CONFIRMED 1,2,4,5; PARTIAL 3,6,7,8) + handoff `len(inputs)` **REFUTED** | Byte check, not design |
+| Composer claim table (CONFIRMED 1,2,5; PARTIAL 3,4,6,7,8 per [#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354) @ `dd195788`) + handoff `len(inputs)` **REFUTED** | Byte check, not design |
 | `score_snapshots.py`, `scoring_cap.py`, `tradable.py`, `pick_scheduler.py`, `summary.py`, `subnet_universe.py`, `fly.toml`, `server.py` TOP/cap wrappers at `dd195788` | Independent spot-check |
 | Ditto `1be445d1`, `2dbeafe1`, `d2c62794` | Sequencing / honesty |
 
@@ -34,7 +34,7 @@ No product code in this PR. No Fly probe. Effective web/worker caps stay **UNKNO
 | 1 count / skipped publish still `ok: True` | CONFIRMED | **ACCEPT** |
 | 2 swallowed failures | CONFIRMED | **ACCEPT** with wording MODIFY (`except Exception`, not bare `except`) |
 | 3 `progress_cb` → `soul_map.json` every 20; `fly.toml` ~101s | **PARTIAL** | **MODIFY** — see §Code |
-| 4 rank selector; raising cap ≠ full-active | CONFIRMED | **MODIFY** nuance — see §Code |
+| 4 rank selector; raising cap ≠ full-active | **PARTIAL** ([#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354)) | **MODIFY** nuance — see §1.4 |
 | 5 scheduler `min(24, TOP=20)`; A/B on capped list | CONFIRMED | **ACCEPT** (defaults only; env UNKNOWN) |
 | 6 90s tick → `scheduler_hold`; 129 risky | **PARTIAL** | **MODIFY** — timeout/hold CONFIRMED; 129 cost **not encoded** |
 | 7 hidden 75 / 0–74 / `MAX_NETUIDS=200` | **PARTIAL** | **MODIFY** |
@@ -177,9 +177,26 @@ Count caution 700/565/246 vs 744/590 — **ACCEPT** Claude’s caution; do not u
 **ACCEPT sequence (do not reorder):**  
 Phase 1 telemetry / honesty, **no** universe change → Phase 2 config split **no-op** → Phase 3 stepped **background** expansion with handoff rollback triggers.
 
-**ACCEPT Phase 1 exit:** injected scoring failure stays partial, never green, for several consecutive cycles. Add: skipped-older publish → `ok: false` / `published: false`.
+**Phase 1 scope (MC MODIFY — Replit + Ditto):** Telemetry and honesty only. **Move into Phase 1** (read-only where possible): denominator and **provenance** capture on each snapshot cycle (`expected` source, `universe_status`, membership receipt fields), and **fail-closed** reporting when membership is unknown, stale, `emergency_registry`, degraded, or clipped. **Do not** change scoring caps, membership **selection** policy, or hot-path budgets in Phase 1.
+
+**ACCEPT Phase 1 exit:** injected scoring failure stays **partial**, never green, for **`PHASE1_CONSECUTIVE_PARTIAL_CYCLES`** consecutive cycles (default **3**, testable constant). Skipped-older publish → `ok: false` / `published: false`. Coverage capture must complete within **`PHASE1_COVERAGE_CAPTURE_MAX_SECONDS`** (named in the Phase 1 PR so the gate is exercisable in tests without prod mutation).
 
 **ACCEPT Phase 2 exit:** allowlisted effective dump identical before/after **per split symbol**.
+
+### Phase 1 acceptance criteria (Replit `6105598176` + Ditto `5482225410` — MC accepts all)
+
+Phase 1 implementation PR (draft allowed; no prod deploy) must satisfy:
+
+1. **Membership receipt:** verified, **fresh** membership provenance attached to each coverage block (pinned source + timestamp); not inferred from `len(rows)` alone.
+2. **Root policy:** explicit in coverage (`root_in_scoring_set=false` or equivalent).
+3. **`cap_reached=false`** and **`refresh_incomplete=false`** required for `complete=true` (when those fields apply to the membership source).
+4. **Per-horizon ID equality:** `succeeded` netuid sets must **exactly equal** `expected` for each horizon claimed complete.
+5. **Fail-closed:** unknown, stale, `emergency_registry`, degraded, or **clipped** membership ⇒ `complete=false` (never falsely green).
+6. **Publish honesty:** skipped older stamp ⇒ `published=false` and cycle success must not treat it as a full publish.
+7. **Hour copy label:** day-copied hour rows labeled **`copied_from_day`** (or hour scoring on).
+8. **Counterexample (synthetic, source-level — not prod):** `_compute_membership` / `SnapshotBuilder` can emit **`status=ok`** with **`cap_reached=true`** when inputs exceed `MAX_NETUIDS` (e.g. `tests/test_subnet_universe.py` `test_t4_cap_at_max_netuids`: 250 candidates → 200 netuids). Use only to prove **`ok` ≠ complete**; prod must not treat clipped membership as full-active.
+
+**F04 (persistence):** Cross-process **`soul_map` lost-update** remains **open** and **out of scope** for Phase 1 cap telemetry. [#1317](https://github.com/cryptoreporthub/subnet-dashboard/pull/1317) fixed **same-process** latest-state mutation only; snapshot progress RMW and resolver RMW still share the file across processes.
 
 **MODIFY Phase 3:**
 - **REJECT 40→64→full as a new policy constant.** User/handoff: do not replace 40 with another magic number. **64 may be a measured batch/soak rung**, recorded from Phase 1 cost, not a committed universe. Eligibility = membership; steps = **workload batches**, not `TOP=64`.
@@ -206,13 +223,15 @@ Before an implementation PR: re-scan **exact** source SHA (`dd195788` or then-ma
 
 ## 6. Handoff (this PR)
 
-Priority #3: `count=len(inputs)` → `count=len(rows)` after `tradable_subnets` (successful scores remain a different set). No other handoff rewrite.
+- Priority #3: `count=len(rows)` after `tradable_subnets()` (successful scores remain a different set) — applied in `cursor-cap-audit-handoff.md`.
+- Priority #1 **24 vs 40 @ `dd195788`:** `server.py` default **20**; engine/audit modules default **40** when env unset. `PICK_SCHEDULER_UNIVERSE_CAP` **24** is an upper bound; `pick_scheduler` uses `min(24, server.TOP_SCORING_UNIVERSE)` → **20** on the default web import path. Engine paths that resolve TOP with default 40 may still use `min(24, 40)` → **24**. Handoff Priority #1 updated accordingly (not “scheduler always 24”).
+- Priority #1 **unify intended coverage:** see **§1.4 / §3** — split env names (`HOT_PATH_SCORE_BUDGET`, snapshot cap, scheduler ceiling) instead of one `TOP_SCORING_UNIVERSE` in `fly.toml`.
 
 ---
 
 ## 7. What to implement later (not this PR)
 
-1. Coverage schema + `ok`/`complete`/`degraded` (Phase 1).  
+1. **Phase 1 telemetry PR (draft):** coverage schema + `ok`/`complete`/`degraded` + provenance/denominator capture; must name **`PHASE1_CONSECUTIVE_PARTIAL_CYCLES`** (default 3) and **`PHASE1_COVERAGE_CAPTURE_MAX_SECONDS`** for testable exit gates; satisfy §4 AC above. No cap/membership/budget behavior change.  
 2. Split config symbols + CI duplicate-default test + boot allowlist log (Phase 2).  
 3. Snapshot producer: membership `expected`, no rank eligibility, no `-1.0` ghost ranks, sidecar progress (Phase 3 after gates).  
 4. Request/pick: read snapshot only.
