@@ -255,3 +255,4 @@
 - MC **PASS still stands** after Replit typo fixes on [#1353](https://github.com/cryptoreporthub/subnet-dashboard/pull/1353) head **`d671498343cd8aad066f070826fc8f63fff172c7`**.
 - **Skip** optional `source-cap-register-p0.csv`; HTML P0 + handoff sufficient. **88 vs 42** predicate row-count gap → **cap-program design** open item, not this PR.
 - **Undraft/merge:** Joshua GO only (draft until explicit approval).
+- **Merged** Joshua GO 2026-10-11: squash [#1353](https://github.com/cryptoreporthub/subnet-dashboard/pull/1353) → main **`dd195788b3222370be8834a8e2b6cee1cf877524`** (no fly-deploy).
