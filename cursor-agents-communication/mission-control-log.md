@@ -242,3 +242,14 @@
 - Replit **PASS** @ `8712ad97` (comment [#6097206273](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348#issuecomment-6097206273)); squash-merged [#1348](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348) → main **`fcae69b09053c9107afb0e2e8573fe4074e33cd7`**; main CI smoke [38049956328](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38049956328) **success**. Fly Deploy Guard: **not triggered** (push-to-main deploy disabled; needs docs vehicle + `fly-deploy` label). Prod `/health` unreachable/503 from agent env at merge time; soak 5 still on prior prod (`9535c3c2`) until deploy completes.
 - **Deploy C** docs vehicle opening (target `fcae69b0`; post-merge `fly-deploy` on vehicle PR per #1347 pattern).
 - Deploy C: [#1351](https://github.com/cryptoreporthub/subnet-dashboard/pull/1351) docs-only retry after #1349 guard fail; Fly [38050799242](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38050799242) success; prod `/version` fcae69b0 (verify curl). Note #1349 guard fail reason (MC log in vehicle PR).
+
+## 2026-10-11 — Soak 5 T+24h FINAL (Deploy C `5d840ba4`)
+
+**Author:** Cursor worker (Soak 5 close-out) @ `2026-10-11T13:15Z` UTC.
+
+- **Anchor:** `5d840ba473d2fac9011625ab608e5a97f1028bd0` · start `2026-10-10T12:11:00Z` · FINAL due `2026-10-11T12:11:00Z`.
+- **Verdict:** **PASS** (web/VM on Deploy C window). All timer `/health` 200 on `5d840ba4`; version pinned; RSS ~335–351 MB (close ~338 MB).
+- **Machine `7841024b3712e8`:** started, 1/1 checks; deploy `launch`/`start` only @ `2026-10-10T12:09:46Z` — no post-anchor restart in Fly status events.
+- **Loop stall guard:** **NOT_OBSERVABLE** — `flyctl logs --no-tail` ~100-line buffer; no 24h grep. Do not treat as zero strikes without Axiom/export.
+- **Overnight ingest:** `feed_stale` ~06–08Z UTC Oct 11 (11 PM–1 AM PT); recovered @ 10:00Z without Fly restart (#1348 context).
+- **Packet:** project store `internal/soak-5-final-2026-10-11.md` (Agent Store mirror).
