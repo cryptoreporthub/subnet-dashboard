@@ -152,34 +152,6 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _patch_snapshot_coverage_timing(
-    snap_path: str, timing: Dict[str, Any]
-) -> None:
-    """AC #9a: ``timing.publish_wall_seconds`` is measured inside ``save_score_snapshot``.
-
-    The first write includes build timing only; after publish we patch
-    ``data/score_snapshots.json`` coverage.timing in-place (same lock).
-    """
-    if not timing:
-        return
-    with _locked_score_snapshot(snap_path):
-        current = load_score_snapshot(snap_path)
-        if not isinstance(current, dict):
-            return
-        coverage = current.get("coverage")
-        if not isinstance(coverage, dict):
-            return
-        cov_timing = coverage.setdefault("timing", {})
-        if not isinstance(cov_timing, dict):
-            cov_timing = {}
-            coverage["timing"] = cov_timing
-        cov_timing.update(timing)
-        tmp = snap_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(current, handle, indent=2)
-        os.replace(tmp, snap_path)
-
-
 def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     snap_path = path or SCORE_SNAPSHOTS_PATH
     os.makedirs(os.path.dirname(snap_path) or ".", exist_ok=True)
@@ -478,11 +450,6 @@ def write_full_universe_snapshot(
         coverage["timing"] = timing
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
-        if published and timing.get("publish_wall_seconds") is not None:
-            _patch_snapshot_coverage_timing(
-                SCORE_SNAPSHOTS_PATH,
-                {"publish_wall_seconds": timing["publish_wall_seconds"]},
-            )
         if not published:
             coverage["published"] = False
             coverage["complete"] = False

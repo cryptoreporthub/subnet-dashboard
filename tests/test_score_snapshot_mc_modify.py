@@ -93,12 +93,32 @@ def test_skipped_older_records_liveness_skip(tmp_path, monkeypatch):
     assert sched.liveness.snapshot()["last_skip_reason"] == "skipped_older"
 
 
-def test_on_disk_coverage_has_publish_wall_seconds(tmp_path, monkeypatch):
+def test_on_disk_coverage_timing_is_build_only_ac9a(tmp_path, monkeypatch):
+    """AC #9a: publish_wall_seconds is not persisted in score_snapshots.json."""
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
-    snaps.write_full_universe_snapshot()
-    saved = json.loads(path.read_text(encoding="utf-8"))
-    timing = (saved.get("coverage") or {}).get("timing") or {}
+    out = snaps.write_full_universe_snapshot()
+    timing = (out.get("coverage") or {}).get("timing") or {}
     assert timing.get("publish_wall_seconds") is not None
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    on_disk_timing = (saved.get("coverage") or {}).get("timing") or {}
+    assert on_disk_timing.get("build_wall_seconds") is not None
+    assert "publish_wall_seconds" not in on_disk_timing
+
+
+def test_one_locked_replace_per_publish_cycle(tmp_path, monkeypatch):
+    path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
+    snap_path = str(path)
+    replace_calls: list[str] = []
+    real_replace = __import__("os").replace
+
+    def _spy_replace(src, dst, *args, **kwargs):
+        if dst == snap_path:
+            replace_calls.append(dst)
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr("os.replace", _spy_replace)
+    snaps.write_full_universe_snapshot()
+    assert replace_calls == [snap_path]
 
 
 def test_persist_cycle_summary_coverage_is_counts_only(tmp_path, monkeypatch):

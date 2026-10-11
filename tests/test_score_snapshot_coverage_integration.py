@@ -63,7 +63,8 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert "coverage" in saved
     on_disk_timing = (saved.get("coverage") or {}).get("timing") or {}
-    assert on_disk_timing.get("publish_wall_seconds") is not None
+    assert on_disk_timing.get("build_wall_seconds") is not None
+    assert "publish_wall_seconds" not in on_disk_timing
     assert cov.last_coverage_snapshot().get("complete") is True
 
 
