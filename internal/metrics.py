@@ -57,6 +57,28 @@ UNIVERSE_EMERGENCY_TOTAL = Counter(
     ["reason"],
 )
 
+SCORE_SNAPSHOT_COVERAGE_COMPLETE = Gauge(
+    "subnet_score_snapshot_coverage_complete",
+    "1 if the last score snapshot cycle reported complete coverage",
+)
+SCORE_SNAPSHOT_COVERAGE_PUBLISHED = Gauge(
+    "subnet_score_snapshot_coverage_published",
+    "1 if the last score snapshot cycle published to disk",
+)
+SCORE_SNAPSHOT_TIMING_BUILD_SECONDS = Gauge(
+    "subnet_score_snapshot_build_wall_seconds",
+    "Wall seconds for the last score snapshot scoring build",
+)
+SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS = Gauge(
+    "subnet_score_snapshot_publish_wall_seconds",
+    "Wall seconds for the last score snapshot locked publish",
+)
+SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(
+    "subnet_score_snapshot_horizon_succeeded",
+    "Succeeded netuids in the last coverage block",
+    ["horizon"],
+)
+
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
     if value is None:
@@ -118,6 +140,15 @@ def refresh_from_state() -> None:
         js = job_scheduler_state()
         SCHEDULER_RUNNING.labels(scheduler="apscheduler").set(1 if js.get("running") else 0)
         SCHEDULER_JOB_COUNT.set(js.get("job_count", 0))
+    except Exception:
+        pass
+
+    try:
+        from internal.council.snapshot_coverage import last_coverage_snapshot, publish_metrics
+
+        cov = last_coverage_snapshot()
+        if cov:
+            publish_metrics(cov)
     except Exception:
         pass
 

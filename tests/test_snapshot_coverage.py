@@ -1,0 +1,129 @@
+"""Phase 1 snapshot coverage telemetry — unit checks."""
+
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+import pytest
+
+from internal.council import snapshot_coverage as cov
+from internal.subnet_universe import UniverseSnapshot, _validity_entry
+
+
+@pytest.fixture(autouse=True)
+def _reset_phase1_state():
+    cov.reset_phase1_cycle_state_for_tests()
+    yield
+    cov.reset_phase1_cycle_state_for_tests()
+
+
+def test_env_int_treats_empty_as_default(monkeypatch):
+    monkeypatch.setenv("SCORE_SNAPSHOT_MAX_SUBNETS", "")
+    assert cov.env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 7) == 7
+
+
+def test_membership_fresh_seam():
+    now = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+    resolved = (now - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    assert cov.membership_fresh(resolved, now=now) is True
+    stale = (now - timedelta(days=3)).isoformat().replace("+00:00", "Z")
+    assert cov.membership_fresh(stale, now=now) is False
+
+
+def test_membership_fail_closed_on_emergency_registry():
+    receipt = {
+        "fresh": True,
+        "universe_status": "emergency_registry",
+        "degraded": True,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+    }
+    assert cov.membership_allows_complete(receipt) is False
+
+
+def test_cap_reached_ok_not_complete():
+    receipt = {
+        "fresh": True,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": True,
+        "refresh_incomplete": False,
+    }
+    block = cov.build_coverage_block(
+        receipt=receipt,
+        day_expected=[1, 2],
+        day_succeeded=[1, 2],
+        day_failed=[],
+        hour_succeeded=[1, 2],
+        hour_failed=[],
+        hour_copied_from_day=True,
+        capped_out=0,
+        selection_policy="full",
+        subnet_source="registry",
+        published=True,
+        timing={"build_wall_seconds": 1.0, "publish_wall_seconds": 0.01},
+    )
+    assert block["complete"] is False
+
+
+def test_horizon_id_equality_required_for_complete():
+    receipt = {
+        "fresh": True,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+    }
+    block = cov.build_coverage_block(
+        receipt=receipt,
+        day_expected=[1, 2],
+        day_succeeded=[1],
+        day_failed=[{"netuid": 2, "stage": "day", "error_class": "RuntimeError"}],
+        hour_succeeded=[1],
+        hour_failed=[],
+        hour_copied_from_day=True,
+        capped_out=0,
+        selection_policy="full",
+        subnet_source="registry",
+        published=True,
+        timing={"build_wall_seconds": 2.0, "publish_wall_seconds": 0.02},
+    )
+    assert block["day"]["complete"] is False
+    assert block["complete"] is False
+
+
+def test_phase1_consecutive_partial_cycles_gate(monkeypatch):
+    monkeypatch.setattr(cov, "PHASE1_CONSECUTIVE_PARTIAL_CYCLES", 2)
+    partial = {"complete": False}
+    assert cov.note_cycle(partial) == 1
+    assert cov.note_cycle(partial) == 2
+    assert cov.phase1_exit_gate_met() is True
+    cov.note_cycle({"complete": True})
+    assert cov.consecutive_partial_cycles() == 0
+
+
+def test_scoring_expected_intersects_membership():
+    rows = [{"netuid": 1}, {"netuid": 5}]
+    assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1]
+
+
+def test_load_membership_receipt_from_snapshot(monkeypatch):
+    snap = UniverseSnapshot(
+        netuids=(0, 1, 2),
+        rows=({"netuid": 1}, {"netuid": 2}),
+        resolved_at="2026-10-11T00:00:00Z",
+        status="ok",
+        degraded=False,
+        validity_map={
+            "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
+            "2": _validity_entry(validity="positive", sources=["taomarketcap"]),
+        },
+    )
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: snap,
+    )
+    receipt = cov.load_membership_receipt()
+    assert receipt["root_in_scoring_set"] is True
+    assert receipt["universe_status"] == "ok"
+    assert 1 in receipt["expected_netuids"]
