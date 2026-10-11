@@ -305,3 +305,11 @@
 - **Prod web parent baseline:** OOM **474MB** anon-rss (2026-10-08); soak **~347MB**; live metrics **~350MB** — parent+child **~390MB** vs **1GB** VM.
 - **Tests:** `test_fetch_hung_child_killed_second_sync_proceeds_spawn`; full-suite 2×2 vs main@2ff85cc2 documented in `internal/pr1357-pytest-double-run.md` (no stable live_subnets regression).
 - **Draft only; no deploy.**
+
+## 2026-10-11 — PR #1357 MC MODIFY round 3 (freshness / 90s RPC budget)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **HEAD after push** (continues `b1f61a87` / code `514d4253`).
+- **(a) Prod FETCH_MODE:** `fly.toml` had no key → code default **`lite`** (`internal/live_subnets_fetch_child.py:66-68`; prod `5d840ba4` `live_subnets.py:204`). Branch adds explicit `LIVE_SUBNETS_FETCH_MODE=lite` in `fly.toml`. Web v1 inline worker inherits same `[env]` (`scripts/fly_web_entrypoint.sh:32-34`); `WORKER_HEAVY=essential` skips worker `background_boot` live sync — prod sync is web lazy `AUTO_SYNC` (`get_live_subnets`).
+- **(b) Lite 200 wall:** Docker @ `514d4253` spawn **0.039s**, child **~48MB**, **173** rows; dev repro **0.176s** spawn, **~111s** wall, **195** rows (real RPC). Lite RPC capped by **`LIVE_SUBNETS_BATCH_DEADLINE_SECONDS=85`** (`chain_client.py:578-594`) inside **90s** parent budget (`fly.toml:60`). Full **20 ~345s**; full **200** incomplete **2400s**.
+- **(c) Prod @ `5d840ba4`:** Live `/api/data-freshness` **sync_done ok**, **77** rows, not stale (`2026-10-11T18:36:56Z`). Axiom soak receipt has no live_subnets stall chain; wedge RCA documents pre-PR thread orphan at 90s — addressed by spawn kill on branch.
+- **Verdict:** **PASS** (no deploy). Artifact: agent store `internal/pr1357-freshness-90s-mc-modify.md`.
