@@ -1,6 +1,7 @@
 """Live subnets cache path + worker bootstrap."""
 
 import json
+import logging
 import threading
 from unittest.mock import patch
 
@@ -257,3 +258,63 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
 
     assert out and out[0]["netuid"] == 42
     assert seen["netuids"] == [42]
+
+
+def test_compute_auto_sync_off_on_web_with_inline_worker(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setattr(live_subnets, "_auto_default", True)
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
+    monkeypatch.setenv("INLINE_WORKER", "on")
+    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
+    monkeypatch.setenv("RUN_MODE", "web")
+    assert live_subnets._compute_auto_sync() is False
+
+
+def test_compute_auto_sync_on_worker_with_inline_worker(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setattr(live_subnets, "_auto_default", True)
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
+    monkeypatch.setenv("INLINE_WORKER", "on")
+    monkeypatch.setenv("RUN_MODE", "worker")
+    assert live_subnets._compute_auto_sync() is True
+
+
+def test_fetch_orphan_blocks_second_sync_and_skips_with_wedge_guard(monkeypatch, caplog):
+    """Orphan live-subnets-fetch after join timeout must not start a second worker."""
+    from internal import live_subnets
+
+    caplog.set_level(logging.WARNING, logger="live_subnets")
+    monkeypatch.setattr(live_subnets, "_fetch_thread", None)
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.1")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.1)
+
+    hang = threading.Event()
+    workers_started = {"n": 0}
+
+    class _Client:
+        def get_subnet_price_rows(self, netuids):
+            workers_started["n"] += 1
+            hang.wait(timeout=30)
+            return []
+
+    with (
+        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch("internal.subnet_universe.get_netuids", return_value=[1]),
+    ):
+        first = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-a")
+        first.start()
+        first.join(timeout=3)
+        assert workers_started["n"] == 1
+        assert first.is_alive() is False
+
+        second = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-b")
+        second.start()
+        second.join(timeout=3)
+        assert workers_started["n"] == 1
+        assert second.is_alive() is False
+
+    assert any("wedge guard" in r.message for r in caplog.records)
+    hang.set()

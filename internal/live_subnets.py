@@ -58,9 +58,39 @@ _auto_default = os.environ.get("LIVE_SUBNETS_AUTO_SYNC", "true").lower() in ("1"
 _in_ci_or_test = bool(
     os.environ.get("GITHUB_ACTIONS") or os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI")
 )
-AUTO_SYNC = _auto_default and not _in_ci_or_test
+
+
+def _compute_auto_sync() -> bool:
+    if not _auto_default:
+        return False
+    if _in_ci_or_test:
+        return False
+    # ponytail: Fly v1 web+inline worker — essential worker skips live sync; web read
+    # path must not spawn orphan live-subnets-fetch daemons (prod wedge 2026-10-11).
+    try:
+        from internal.run_mode import get_run_mode, inline_worker_expected, split_worker_v2_enabled
+
+        if inline_worker_expected() and not split_worker_v2_enabled():
+            if get_run_mode() != "worker":
+                return False
+    except Exception:
+        pass
+    return True
+
+
+AUTO_SYNC = _compute_auto_sync()
 if _in_ci_or_test:
     logger.info("live_subnets: sync disabled in CI/test environment (AUTO_SYNC=False)")
+elif not AUTO_SYNC and _auto_default:
+    try:
+        from internal.run_mode import get_run_mode, inline_worker_expected, split_worker_v2_enabled
+
+        if inline_worker_expected() and not split_worker_v2_enabled() and get_run_mode() != "worker":
+            logger.info(
+                "live_subnets: AUTO_SYNC disabled on web with inline worker (cache / volume reads only)"
+            )
+    except Exception:
+        pass
 
 _lock = threading.Lock()
 _sync_lock = threading.Lock()
