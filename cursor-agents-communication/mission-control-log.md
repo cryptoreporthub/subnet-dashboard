@@ -289,3 +289,9 @@
 - **Root cause class:** score snapshot **write cost** (>480s); ~4h stale snapshot carryover at boot — **not** resolver pathology. Mitigating facts recorded; **do not** upgrade guard gate.
 - **#1355 Phase 1:** add measured receipt AC — per-cycle score-snapshot **write duration** (Soak 5 evidence >480s timeout); docs @ `fdbebdd2` on `cursor/cap-audit-grok-review-2026-10-11`.
 - **Artifacts:** agent store `internal/soak-5-final-2026-10-11.md`, `internal/soak-5-stall-guard-receipt-2026-10-11.md`. Ditto memory `eea96947-2332-44a7-9030-a257a70cee34`.
+
+## 2026-10-11 — MC PASS (#1357, #1358) · Joshua GO gate
+
+- [#1357](https://github.com/cryptoreporthub/subnet-dashboard/pull/1357) **PASS** @ `32dd4e81` — prod wedge: disable web `live_subnets` AUTO_SYNC on v1 inline worker. **Draft**; merge/deploy **HOLD** pending Joshua GO. No deploy.
+- [#1358](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358) **PASS** @ `68002fd2` — Phase 1 score snapshot coverage telemetry (#1355 §4). **Draft**; merge/deploy **HOLD** pending Joshua GO. No deploy.
+- Ditto STATUS `2ad65cce-8cf9-4b8e-bcd0-398b73d02877` (source=cursor).
