@@ -249,3 +249,9 @@
 - **Start** `2026-10-10T12:11:00Z` (~5:11 AM PT). **T+24h final** `2026-10-11T12:11:00Z` (~5:11 AM PT Sun 2026-10-11). Read-only spot-checks; no deploy/restart/scale/secrets.
 - Post–Deploy C timer checks **PASS** through `2026-10-11T00:00:14Z` (health 200, RSS ~351 MB, ingest live). **FINAL MC verdict PENDING** until T+24h. **P4b gating unchanged.**
 - Agent store: `internal/soak-5-reanchor-deploy-c-2026-10-10.md`, `internal/soak-5-final-2026-10-11.md` (pending).
+
+## 2026-10-11 — #1353 cap-audit docs (MC re-ack @ `d6714983`)
+
+- MC **PASS still stands** after Replit typo fixes on [#1353](https://github.com/cryptoreporthub/subnet-dashboard/pull/1353) head **`d671498343cd8aad066f070826fc8f63fff172c7`**.
+- **Skip** optional `source-cap-register-p0.csv`; HTML P0 + handoff sufficient. **88 vs 42** predicate row-count gap → **cap-program design** open item, not this PR.
+- **Undraft/merge:** Joshua GO only (draft until explicit approval).
