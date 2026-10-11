@@ -585,18 +585,8 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         _start_calibration_snapshot_scheduler()
         _start_dev_radar_github_scheduler()
 
-    # Full worker runs live_subnets + feed warmup; essential skips feed warmup only.
-    # Fly v1 inline: web AUTO_SYNC is off — essential sibling worker must own refresh.
-    from internal.run_mode import inline_worker_expected, split_worker_v2_enabled
-
+    # WORKER_HEAVY=essential must not start live_subnets.
     run_live_subnets = heavy
-    if (
-        is_worker_mode()
-        and not heavy
-        and inline_worker_expected()
-        and not split_worker_v2_enabled()
-    ):
-        run_live_subnets = True
     if not run_live_subnets and not heavy:
         logger.info("background workers: essential mode (heavy feeds skipped)")
         return

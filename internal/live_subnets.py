@@ -19,18 +19,19 @@ existing TaoMarketCap + registry logic. The app never breaks.
 SAFETY (added after a CI hang):
   - Background sync is FORCED OFF under CI / tests (GITHUB_ACTIONS, PYTEST_CURRENT_TEST, CI).
     In CI get_all_subnets() simply returns the committed registry (fast, no network).
-  - The chain fetch is wrapped in a hard timeout (worker thread + join) so even if the
-    upstream RPC has no socket timeout, the calling process can never block beyond
-    LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS (default 60). The worker is daemon, so it never
-    prevents interpreter shutdown.
+  - Chain fetch runs in a child process with LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS (default 60)
+    hard join; on expiry the child is terminate/kill so no orphan live-subnets-fetch thread
+    can wedge the web or worker process (PR #906 class). RPC calls use chain_client socket
+    timeouts (DEFAULT_TIMEOUT on each request).
 """
 from __future__ import annotations
 
 import json
+import logging
+import multiprocessing
 import os
 import threading
 import time
-import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -58,63 +59,13 @@ _auto_default = os.environ.get("LIVE_SUBNETS_AUTO_SYNC", "true").lower() in ("1"
 _in_ci_or_test = bool(
     os.environ.get("GITHUB_ACTIONS") or os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI")
 )
-
-
-def _inline_worker_v1_web_env() -> bool:
-    """Fly v1 web wedge path without run_mode (fail-closed when import breaks)."""
-    if os.environ.get("WORKER_SPLIT_V2", "").strip().lower() in ("1", "true", "yes", "on"):
-        return False
-    if os.environ.get("INLINE_WORKER", "").strip().lower() not in ("1", "true", "yes", "on"):
-        return False
-    return os.environ.get("RUN_MODE", "web").strip().lower() != "worker"
-
-
-def _compute_auto_sync() -> bool:
-    if not _auto_default:
-        return False
-    if _in_ci_or_test:
-        return False
-    # ponytail: Fly v1 web+inline worker — web read path must not spawn orphan fetch
-    # daemons; essential sibling worker owns live_subnets (background_boot).
-    try:
-        from internal.run_mode import get_run_mode, inline_worker_expected, split_worker_v2_enabled
-
-        if inline_worker_expected() and not split_worker_v2_enabled():
-            if get_run_mode() != "worker":
-                return False
-    except Exception as exc:
-        logger.warning("live_subnets: run_mode import failed (%s); fail-closed on v1 web", exc)
-        if _inline_worker_v1_web_env():
-            return False
-    return True
-
-
-AUTO_SYNC = _compute_auto_sync()
+AUTO_SYNC = _auto_default and not _in_ci_or_test
 if _in_ci_or_test:
     logger.info("live_subnets: sync disabled in CI/test environment (AUTO_SYNC=False)")
-elif not AUTO_SYNC and _auto_default:
-    try:
-        from internal.run_mode import get_run_mode, inline_worker_expected, split_worker_v2_enabled
-
-        if inline_worker_expected() and not split_worker_v2_enabled() and get_run_mode() != "worker":
-            logger.info(
-                "live_subnets: AUTO_SYNC disabled on web with inline worker (cache / volume reads only)"
-            )
-    except Exception as exc:
-        logger.warning("live_subnets: run_mode import failed logging AUTO_SYNC off (%s)", exc)
 
 _lock = threading.Lock()
 _sync_lock = threading.Lock()
 _sync_loop_running = False
-
-# Thread-alive guard for the timed-out fetch worker. live_subnets wraps the chain
-# fetch in a daemon thread + join(timeout); when the join times out the daemon
-# worker KEEPS RUNNING in the background. Without tracking that worker, a new sync
-# stacks behind the _sync_lock once the old one releases it, fighting the previous
-# thread and pinning the boot phase at sync_start. We hold a reference to the last
-# fetch worker and refuse to start a new one while it is still alive.
-_fetch_thread: Optional[threading.Thread] = None
-_fetch_thread_lock = threading.Lock()
 
 
 def _now_iso() -> str:
@@ -223,60 +174,93 @@ def registry_ready() -> bool:
     return bool(netuids or _registry_netuids())
 
 
-def _fetch_chain_data():
-    global _fetch_thread
-    result = {}
-    err = {}
+def _collect_chain_rows():
+    """Blocking RPC fetch (runs in child process). chain_client uses per-request socket timeouts."""
+    from internal.chain_client import get_default_client
 
-    def _run():
+    client = get_default_client()
+    try:
+        from internal.subnet_universe import get_netuids
+
+        netuids = get_netuids()
+    except Exception:
+        netuids = []
+
+    if not netuids:
+        netuids = _registry_netuids()
+    mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
+    if mode in ("lite", "price"):
+        return client.get_subnet_price_rows(netuids)
+    return client.get_all_subnet_data(netuids=netuids or None)
+
+
+def _fetch_child_main(conn) -> None:
+    try:
+        data = _collect_chain_rows()
+        conn.send({"ok": True, "data": data})
+    except Exception as exc:
+        conn.send({"ok": False, "exc": str(exc)})
+    finally:
         try:
-            from internal.chain_client import get_default_client
+            conn.close()
+        except Exception:
+            pass
 
-            client = get_default_client()
-            try:
-                from internal.subnet_universe import get_netuids
 
-                netuids = get_netuids()
-            except Exception:
-                netuids = []
+def _fetch_mp_context() -> multiprocessing.context.BaseContext:
+    # ponytail: fork in pytest so monkeypatched chain_client is visible to the child.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return multiprocessing.get_context("fork")
+    return multiprocessing.get_context("spawn")
 
-            if not netuids:
-                netuids = _registry_netuids()
-            mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
-            if mode in ("lite", "price"):
-                result["data"] = client.get_subnet_price_rows(netuids)
-            else:
-                result["data"] = client.get_all_subnet_data(netuids=netuids or None)
-        except Exception as exc:
-            err["exc"] = exc
 
-    # Thread-alive guard: never start a new fetch while a previous timed-out
-    # worker is still running in the background. Re-entrant syncs competing for
-    # _sync_lock are what pin boot at sync_start; skipping here breaks the wedge.
-    with _fetch_thread_lock:
-        prev = _fetch_thread
-        if prev is not None and prev.is_alive():
-            logger.warning(
-                "live_subnets sync skipped — previous fetch thread still alive "
-                "(wedge guard); waiting for it to drain"
-            )
-            return None
-        worker = threading.Thread(target=_run, daemon=True, name="live-subnets-fetch")
-        worker.start()
-        _fetch_thread = worker
+def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: float = 3.0) -> None:
+    if not proc.is_alive():
+        return
+    proc.terminate()
+    proc.join(timeout=grace_seconds)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(timeout=grace_seconds)
 
+
+def _fetch_chain_data():
     timeout = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
-    worker.join(timeout=timeout)
-    if worker.is_alive():
-        logger.warning(
-            "live_subnets sync timed out after %.0fs (worker still running in background)",
-            timeout,
-        )
+    ctx = _fetch_mp_context()
+    parent_conn, child_conn = ctx.Pipe(duplex=False)
+    proc = ctx.Process(
+        target=_fetch_child_main,
+        args=(child_conn,),
+        name="live-subnets-fetch",
+        daemon=True,
+    )
+    proc.start()
+    child_conn.close()
+    try:
+        if not parent_conn.poll(timeout):
+            logger.warning(
+                "live_subnets sync timed out after %.0fs; terminating fetch child",
+                timeout,
+            )
+            _terminate_fetch_process(proc)
+            return None
+        msg = parent_conn.recv()
+    finally:
+        try:
+            parent_conn.close()
+        except Exception:
+            pass
+        proc.join(timeout=1.0)
+        if proc.is_alive():
+            _terminate_fetch_process(proc)
+
+    if not isinstance(msg, dict):
+        logger.warning("live_subnets sync failed: invalid child response")
         return None
-    if "exc" in err:
-        logger.warning("live_subnets sync failed: %s", err["exc"])
+    if not msg.get("ok"):
+        logger.warning("live_subnets sync failed: %s", msg.get("exc"))
         return None
-    return result.get("data")
+    return msg.get("data")
 
 
 def _boot_status_path() -> str:

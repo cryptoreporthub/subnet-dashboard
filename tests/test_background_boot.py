@@ -104,8 +104,6 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
 def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "worker")
     monkeypatch.setenv("WORKER_HEAVY", "essential")
-    monkeypatch.setenv("INLINE_WORKER", "on")
-    monkeypatch.delenv("WORKER_SPLIT_V2", raising=False)
     scheduled = []
     pump_snapshot = MagicMock()
 
@@ -134,7 +132,7 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch)
     from internal.background_boot import start_background_workers
 
     start_background_workers()
-    assert "live-subnets-boot" in scheduled
+    assert "live-subnets-boot" not in scheduled
     pump_snapshot.assert_called_once()
     for name in (
         "_warm_judges_cache",
