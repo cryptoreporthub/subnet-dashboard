@@ -297,3 +297,11 @@
 - **Timeouts:** RPC budget = `LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS` (**60** default, **90** `fly.toml`, **120** worker-v2) **after** `ready`; spawn grace **30s** (`LIVE_SUBNETS_SPAWN_GRACE_SECONDS`).
 - **Tests:** spawn path, `_sync_lock` concurrency, full-mode Pipe **~30KB** / 128 rows; `test_live_subnets.py` 22 passed (2×).
 - **Handoff:** agent store `internal/wedge-fix-pr-handoff.md`.
+
+## 2026-10-11 — PR #1357 MC MODIFY round 2 (push verified)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **`514d4253`** (`git ls-remote` verified; invalid prior `b8c4e2f1` handoff).
+- **Docker RSS:** `subnet-dashboard:pr1357-rss-514d4253`; full-mode child peak **~42MB** (200-netuid in-flight); lite 200-netuid **~48MB**; spawn→ready **~40ms**. Artifact: agent store `internal/pr1357-spawn-rss-measurement.json`.
+- **Prod web parent baseline:** OOM **474MB** anon-rss (2026-10-08); soak **~347MB**; live metrics **~350MB** — parent+child **~390MB** vs **1GB** VM.
+- **Tests:** `test_fetch_hung_child_killed_second_sync_proceeds_spawn`; full-suite 2×2 vs main@2ff85cc2 documented in `internal/pr1357-pytest-double-run.md` (no stable live_subnets regression).
+- **Draft only; no deploy.**
