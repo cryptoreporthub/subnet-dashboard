@@ -292,6 +292,17 @@
 
 ## 2026-10-11 — MC PASS (#1357, #1358) · Joshua GO gate
 
-- [#1357](https://github.com/cryptoreporthub/subnet-dashboard/pull/1357) **PASS** @ `32dd4e81` — prod wedge: disable web `live_subnets` AUTO_SYNC on v1 inline worker. **Draft**; merge/deploy **HOLD** pending Joshua GO. No deploy.
-- [#1358](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358) **PASS** @ `68002fd2` — Phase 1 score snapshot coverage telemetry (#1355 §4). **Draft**; merge/deploy **HOLD** pending Joshua GO. No deploy.
-- Ditto STATUS `2ad65cce-8cf9-4b8e-bcd0-398b73d02877` (source=cursor).
+**Author:** Mission Control (Grok Bot) — **official MC verdict** issued **11:44 AM PT** (`2026-10-11T18:44Z`). **Workers do not issue MC verdicts**; retract any implication that cloud worker `bc-edee0630` (or other implementer/review workers) issued PASS. Prior PR comments that said “Recommendation: PASS” or mis-stated #1357 as “web AUTO_SYNC off” are **superseded** by this entry.
+
+### [#1357](https://github.com/cryptoreporthub/subnet-dashboard/pull/1357) @ `32dd4e81` — **MC PASS** (draft until Joshua GO)
+
+- **Basis:** prod **lite** fetch (code default; PR adds explicit `LIVE_SUBNETS_FETCH_MODE=lite` in `fly.toml`). Lite batch bounded in-child by **`LIVE_SUBNETS_BATCH_DEADLINE_SECONDS=85`** &lt; **90s** web RPC budget (`LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS`) → partial rows before kill acceptable; combined parent+child memory **~390 MB** vs 1 GB VM (Docker prod-path measurement + live web RSS baseline).
+- **Joshua notes:** (1) `fly.toml` env change needs explicit GO before merge/deploy. (2) **85s vs 90s** is tight — watch deploy logs for “killed after budget”; raise RPC budget if seen. (3) prod **~77 rows** vs **~195** dev is **existing** partial-fetch on main, not introduced by this PR — track separately.
+- **Draft**; merge/deploy **HOLD** pending Joshua GO. **No deploy.**
+
+### [#1358](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358) @ `68002fd2` — **MC PASS** (draft until Joshua GO)
+
+- Phase 1 score snapshot coverage telemetry (#1355 §4). Replit MODIFY items remain open on thread; MC PASS is on MODIFY-closed head per MC review gate, not a worker verdict.
+- **Draft**; merge/deploy **HOLD** pending Joshua GO. **No deploy.**
+
+- Ditto STATUS: correction + snapshot posted `source=cursor` (see latest `save_memory` after this log commit).
