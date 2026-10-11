@@ -34,7 +34,36 @@ SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
 SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS", "0"))
+# Inner build must finish before the outer write timeout (fly.toml: 480s)
+# so save_score_snapshot + _release_write_future can run without racing abandon.
+_BUILD_DEADLINE_SLACK_SECONDS = 30
 JOB_ID = "score-snapshot-scheduler"
+
+
+def _snapshot_build_deadline_budget_seconds() -> Optional[int]:
+    """Seconds the scoring loop may run before truncating.
+
+    Prefer SCORE_SNAPSHOT_BUILD_DEADLINE_SECONDS; otherwise
+    max(1, SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS - 30). None when the
+    outer timeout is disabled (timeout <= 0) and no env override.
+    """
+    raw = os.environ.get("SCORE_SNAPSHOT_BUILD_DEADLINE_SECONDS")
+    if raw is not None and str(raw).strip() != "":
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            pass
+    timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
+    if timeout <= 0:
+        return None
+    return max(1, int(timeout) - _BUILD_DEADLINE_SLACK_SECONDS)
+
+
+def _snapshot_build_deadline_mono() -> Optional[float]:
+    budget = _snapshot_build_deadline_budget_seconds()
+    if budget is None:
+        return None
+    return time.monotonic() + float(budget)
 
 
 def _snapshot_subnet_cap() -> int:
@@ -229,8 +258,16 @@ def build_full_universe_snapshot(
     *,
     score_hour: Optional[bool] = None,
     progress_cb: Optional[Callable[[int, int], None]] = None,
+    deadline_mono: Optional[float] = None,
 ) -> Dict[str, Any]:
-    """Score every subnet (background only). Returns serializable snapshot."""
+    """Score every subnet (background only). Returns serializable snapshot.
+
+    ``count`` is the input tradable universe size (len(rows)), not the number
+    of scored day rows. ``completed_count`` is len(day_rows). ``status`` is
+    ``partial`` when ``deadline_mono`` (``time.monotonic``) expires mid-loop;
+    otherwise ``complete``. Consumers that ignore ``status`` still see a
+    shorter ``day``/``hour`` list — missing netuids rank as -1.0.
+    """
     from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour
     from internal.subnets.tradable import tradable_subnets
 
@@ -242,7 +279,11 @@ def build_full_universe_snapshot(
     hour_rows: List[Dict[str, Any]] = []
     day_rows: List[Dict[str, Any]] = []
     total = len(rows)
+    truncated = False
     for idx, sn in enumerate(rows):
+        if deadline_mono is not None and time.monotonic() >= deadline_mono:
+            truncated = True
+            break
         try:
             netuid = int(sn.get("netuid"))
         except (TypeError, ValueError):
@@ -275,6 +316,13 @@ def build_full_universe_snapshot(
         if progress_cb and total and (idx + 1) % 20 == 0:
             progress_cb(idx + 1, total)
 
+    if truncated:
+        logger.warning(
+            "score snapshot build truncated at deadline: completed=%d target=%d",
+            len(day_rows),
+            total,
+        )
+
     if not score_hour and day_rows:
         hour_rows = [dict(row) for row in day_rows]
 
@@ -284,6 +332,9 @@ def build_full_universe_snapshot(
         "build_started_at": build_started_at,
         "written_at": _now_iso(),
         "count": len(rows),
+        "status": "partial" if truncated else "complete",
+        "completed_count": len(day_rows),
+        "target_count": total,
         "hour": hour_rows,
         "day": day_rows,
     }
@@ -350,6 +401,7 @@ def write_full_universe_snapshot(
             subnets or [],
             ctx,
             progress_cb=progress_cb,
+            deadline_mono=_snapshot_build_deadline_mono(),
         )
         payload["source"] = source
         save_score_snapshot(payload)
@@ -358,6 +410,8 @@ def write_full_universe_snapshot(
             "count": payload.get("count"),
             "written_at": payload.get("written_at"),
             "path": SCORE_SNAPSHOTS_PATH,
+            "status": payload.get("status"),
+            "completed_count": payload.get("completed_count"),
         }
 
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
