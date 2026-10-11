@@ -289,3 +289,11 @@
 - **Root cause class:** score snapshot **write cost** (>480s); ~4h stale snapshot carryover at boot — **not** resolver pathology. Mitigating facts recorded; **do not** upgrade guard gate.
 - **#1355 Phase 1:** add measured receipt AC — per-cycle score-snapshot **write duration** (Soak 5 evidence >480s timeout); docs @ `fdbebdd2` on `cursor/cap-audit-grok-review-2026-10-11`.
 - **Artifacts:** agent store `internal/soak-5-final-2026-10-11.md`, `internal/soak-5-stall-guard-receipt-2026-10-11.md`. Ditto memory `eea96947-2332-44a7-9030-a257a70cee34`.
+
+## 2026-10-11 — PR #1357 MC MODIFY items 1–5 (spawn/RSS/concurrency)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **`5f9e080e`** (draft, no deploy).
+- **Spawn child:** `internal/live_subnets_fetch_child.py`; boot→ready **0.155s**; child peak RSS **~42MB** (lite measure); **≪470MB** OOM / **1GB** VM.
+- **Timeouts:** RPC budget = `LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS` (**60** default, **90** `fly.toml`, **120** worker-v2) **after** `ready`; spawn grace **30s** (`LIVE_SUBNETS_SPAWN_GRACE_SECONDS`).
+- **Tests:** spawn path, `_sync_lock` concurrency, full-mode Pipe **~30KB** / 128 rows; `test_live_subnets.py` 22 passed (2×).
+- **Handoff:** agent store `internal/wedge-fix-pr-handoff.md`.
