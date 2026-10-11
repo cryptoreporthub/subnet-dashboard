@@ -249,3 +249,11 @@
 - [#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354) (Composer @ `dd195788`): claim **4** → **PARTIAL** (bypass sufficient, not necessary); `except Exception: pass` wording; summary **3 CONFIRMED / 5 PARTIAL**. Replit review `6105595517`.
 - [#1355](https://github.com/cryptoreporthub/subnet-dashboard/pull/1355) (Grok adjudication): Phase 1 adds denominator/provenance + fail-closed coverage; Replit/Ditto AC (membership receipt, Root policy, `cap_reached`/`refresh_incomplete`, horizon ID equality, publish skip, `copied_from_day`; synthetic `cap_reached`+`ok` counterexample); F04 cross-process soul_map **open** ([#1317](https://github.com/cryptoreporthub/subnet-dashboard/pull/1317) same-process only); handoff Priority #1 **20/40/24** resolved @ `dd195788`; split-env pointer; [#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354) cited by PR+SHA; Phase 1 PR must name `PHASE1_CONSECUTIVE_PARTIAL_CYCLES` (default 3) + `PHASE1_COVERAGE_CAPTURE_MAX_SECONDS`. Replit `6105598176`; Ditto `5482225410`.
 - **Merge:** HOLD for Joshua GO after Replit re-spot on changed lines only. Phase 1 telemetry may open as **draft** PR carrying AC; no deploy.
+
+## 2026-10-11 — Soak 5 FINAL (Deploy C `5d840ba4`)
+
+- **Anchor:** `2026-10-10T12:11:00Z` → `2026-10-11T12:11:00Z`; packet filed @ `2026-10-11T13:15:00Z` (agent store `soak-5-final-2026-10-11.md`).
+- **MC recommendation:** **FINAL PASS** (web/VM): health 200 all post-deploy checks; RSS ~335–351 MB; prod SHA stable; machine `7841024b3712e8` no restart after `2026-10-10T12:09:46Z` deploy land.
+- **Loop stall guard (24h):** **NOT_OBSERVABLE** from agent `flyctl logs` tail (~100 lines, no strike/revive/kill/OOM/137 matches) — extended Fly/Axiom export needed for affirmative guard PASS.
+- **Overnight ingest (~11 PM–1 AM PT):** **Explained** — quiet Telegram + frozen `last_message_at` `2026-10-11T03:54:59Z`; `feed_stale` cleared by `10:00Z` without machine restart (#1348 watchdog on prod).
+- **#1355:** §1.4 citation tighten pushed (writer guard `cap==0` or `len<=cap`; `-1.0` → `score_snapshots.py`; call chain); docs-only, non-blocking.
