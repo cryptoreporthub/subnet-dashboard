@@ -8,7 +8,8 @@
 | Deploy pin | `5d840ba4` (Deploy C) |
 | Machine | `7841024b3712e8` |
 | Axiom dataset | `subnet-dashboard-prod` |
-| Query window | `2026-10-10T12:11:00Z` → `2026-10-11T13:15:00Z` |
+| Query window (bucket coverage) | `2026-10-10T12:11:00Z` → `2026-10-11T13:15:00Z` |
+| Separate MC query (resolver first-success) | Post-deploy trace **outside** window start — see below |
 | Filed | `2026-10-11` (sanitized; no secrets) |
 
 **Scope:** factual prod log lines supporting Phase 1 AC #9 **(b)** — historical Soak 5 interpretation (snapshot-write cost vs resolver). Stall-guard strict verdict remains **GUARD_FAIL** per merge-soak criteria; this receipt does not upgrade that gate.
@@ -26,7 +27,9 @@
 
 ---
 
-## First post-deploy resolver success
+## First post-deploy resolver success (separate MC Axiom datum)
+
+Not inside the `12:11:00Z` window above (first **in-window** event: `12:11:07Z`). Sourced from MC’s dedicated post-deploy resolver trace (same dataset/machine/deploy pin).
 
 | UTC | Event |
 |-----|--------|
