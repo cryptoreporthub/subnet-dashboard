@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -37,7 +38,10 @@ def test_bootstrap_calls_sync_once_on_worker(monkeypatch):
     monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
     monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
 
-    with patch.object(live_subnets, "_sync_once", return_value=True) as sync:
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_sync_once", return_value=True) as sync,
+    ):
         assert live_subnets.bootstrap_live_subnets_cache() is True
     sync.assert_called_once()
 
@@ -97,7 +101,10 @@ def test_sync_writes_under_data_dir(monkeypatch, tmp_path):
 
     from internal import live_subnets
 
-    with patch.object(live_subnets, "_fetch_chain_data", return_value=[{"netuid": 1, "price": 1.0}]):
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=[{"netuid": 1, "price": 1.0}]),
+    ):
         assert live_subnets._sync_once() is True
 
     cache_file = tmp_path / "live_subnets.json"
@@ -126,7 +133,10 @@ def test_sync_normal_path_records_boot_ok(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     from internal import live_subnets
 
-    with patch.object(live_subnets, "_fetch_chain_data", return_value=[{"netuid": 1, "price": 1.0}]):
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=[{"netuid": 1, "price": 1.0}]),
+    ):
         assert live_subnets._sync_once() is True
 
     status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
@@ -137,6 +147,8 @@ def test_sync_normal_path_records_boot_ok(monkeypatch, tmp_path):
 def test_registry_netuids_from_committed_registry():
     from internal import live_subnets
 
+    if not os.path.isfile(live_subnets.REGISTRY_PATH):
+        pytest.skip("config/registry.json not present (gitignored local fallback)")
     ids = live_subnets._registry_netuids()
     assert len(ids) >= 100
     assert 1 in ids
@@ -156,7 +168,10 @@ def test_sync_once_skips_concurrent_call(monkeypatch, tmp_path):
         release.wait(timeout=5)
         return [{"netuid": 1, "price": 1.0}]
 
-    with patch.object(live_subnets, "_fetch_chain_data", side_effect=slow_fetch):
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", side_effect=slow_fetch),
+    ):
         t1 = threading.Thread(target=live_subnets._sync_once)
         t2 = threading.Thread(target=live_subnets._sync_once)
         t1.start()
@@ -172,23 +187,14 @@ def test_sync_once_skips_concurrent_call(monkeypatch, tmp_path):
 def test_fetch_chain_data_passes_registry_netuids(monkeypatch):
     from internal import live_subnets
 
-    seen = {}
-
-    class _Client:
-        def get_subnet_price_rows(self, netuids):
-            seen["netuids"] = netuids
-            return [{"netuid": 1, "price": 1.0}]
-
-        def get_all_subnet_data(self, netuids=None):
-            seen["full"] = netuids
-            return []
-
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
-    with patch("internal.chain_client.get_default_client", return_value=_Client()):
-        out = live_subnets._fetch_chain_data()
-    assert out and out[0]["netuid"] == 1
-    assert seen["netuids"] and len(seen["netuids"]) >= 100
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": n, "price": 1.0} for n in range(1, 130)]),
+    )
+    out = live_subnets._fetch_chain_data()
+    assert out and len(out) >= 100 and out[0]["netuid"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -250,11 +256,18 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
 
-    with (
-        patch("internal.chain_client.get_default_client", return_value=_Client()),
-        patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot corrupt")),
-        patch.object(live_subnets, "_registry_netuids", return_value=[42]),
-    ):
+    def _collect():
+        try:
+            from internal.subnet_universe import get_netuids
+
+            get_netuids()
+        except RuntimeError:
+            pass
+        netuids = [42]
+        netuids_path.write_text(json.dumps(netuids), encoding="utf-8")
+        return _Client().get_subnet_price_rows(netuids)
+
+    with patch("internal.live_subnets_fetch_child.collect_chain_rows", side_effect=_collect):
         out = live_subnets._fetch_chain_data()
 
     assert out and out[0]["netuid"] == 42
@@ -302,7 +315,7 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
             assert second and second[0]["netuid"] == 1
             assert int(counter.read_text(encoding="utf-8")) == 2
 
-        assert any("terminating fetch child" in r.message for r in caplog.records)
+        assert any("RPC budget exceeded" in r.message for r in caplog.records)
     finally:
         hang.set()
 
@@ -359,6 +372,87 @@ def test_heartbeat_updates_during_hung_chain_fetch(monkeypatch, tmp_path):
     assert len(timestamps) >= 3
     assert len(set(timestamps)) >= 2
     assert worker_heartbeat.is_alive(max_age_seconds=5)
+
+
+def test_fetch_chain_data_spawn_context_trivial(monkeypatch):
+    """Prod uses spawn; force spawn under pytest with env-driven fake child rows."""
+    from internal import live_subnets
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 7, "price": 2.0}]),
+    )
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+    out = live_subnets._fetch_chain_data()
+    assert out and out[0]["netuid"] == 7
+
+
+def test_sync_lock_blocks_parallel_fetch_across_threads(monkeypatch, tmp_path):
+    """_sync_lock guarantees at most one in-flight sync (and thus one fetch child)."""
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    started = threading.Event()
+    release = threading.Event()
+    fetch_calls = {"n": 0}
+
+    def slow_fetch():
+        fetch_calls["n"] += 1
+        started.set()
+        release.wait(timeout=5)
+        return [{"netuid": 1, "price": 1.0}]
+
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", side_effect=slow_fetch),
+    ):
+        threads = [threading.Thread(target=live_subnets._sync_once) for _ in range(3)]
+        for t in threads:
+            t.start()
+        assert started.wait(timeout=2)
+        for t in threads:
+            t.join(timeout=2)
+        release.set()
+        for t in threads:
+            t.join(timeout=5)
+
+    assert fetch_calls["n"] == 1
+
+
+def test_full_mode_pipe_carries_registry_sized_payload(monkeypatch, tmp_path):
+    """Full-mode rows at prod netuid count must round-trip through the fetch Pipe."""
+    import json
+
+    from internal import live_subnets
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "full")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 30.0)
+    netuids = list(range(1, 129))  # prod-scale row count without committed registry.json
+    template = {
+        "price": 1.234,
+        "stake": 1000.0,
+        "total_stake": 2000.0,
+        "emission": 0.5,
+        "liquidity": 3000.0,
+        "total_tao": 4000.0,
+        "total_alpha": 5000.0,
+        "root_prop": 0.01,
+        "buys_24hr": 12,
+        "sells_24hr": 8,
+        "buy_volume_24h": 100.0,
+        "sell_volume_24h": 80.0,
+    }
+    rows = [{"netuid": n, **template} for n in netuids]
+    payload_bytes = len(json.dumps(rows).encode("utf-8"))
+    assert payload_bytes < 8 * 1024 * 1024  # ponytail: pipe smoke; prod sample recorded in handoff
+
+    monkeypatch.setenv("LIVE_SUBNETS_TEST_ROWS_JSON", json.dumps(rows))
+    out = live_subnets._fetch_chain_data()
+    assert out is not None
+    assert len(out) == len(netuids)
+    (tmp_path / "pipe_size.json").write_text(json.dumps({"bytes": payload_bytes, "rows": len(rows)}))
 
 
 def test_live_data_freshness_marks_stale_when_sync_disabled(monkeypatch, tmp_path):

@@ -1,0 +1,77 @@
+"""Minimal spawn entrypoint for live_subnets chain fetch (prod uses spawn context).
+
+Keeps the multiprocessing child import surface small — do not import server or live_subnets
+parent module here (spawn would re-exec and pickle through live_subnets otherwise).
+"""
+from __future__ import annotations
+
+import os
+from typing import Any, List
+
+
+def _registry_netuids() -> List[int]:
+    import json
+
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(repo_root, "config", "registry.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            reg = json.load(f)
+    except Exception:
+        return []
+    rows = reg.get("subnets") if isinstance(reg, dict) and isinstance(reg.get("subnets"), list) else []
+    if not rows and isinstance(reg, dict):
+        rows = list(reg.values())
+    out: List[int] = []
+    for rec in rows:
+        if not isinstance(rec, dict):
+            continue
+        for k in ("netuid", "id", "subnet_id"):
+            v = rec.get(k)
+            if isinstance(v, int):
+                out.append(v)
+                break
+            if isinstance(v, str) and v.isdigit():
+                out.append(int(v))
+                break
+    return sorted(set(out))
+
+
+def collect_chain_rows() -> List[dict[str, Any]]:
+    """Blocking RPC fetch; chain_client uses per-request socket timeouts."""
+    test_rows = os.environ.get("LIVE_SUBNETS_TEST_ROWS_JSON")
+    if test_rows:
+        import json
+
+        parsed = json.loads(test_rows)
+        return parsed if isinstance(parsed, list) else []
+
+    from internal.chain_client import get_default_client
+
+    client = get_default_client()
+    try:
+        from internal.subnet_universe import get_netuids
+
+        netuids = get_netuids()
+    except Exception:
+        netuids = []
+    if not netuids:
+        netuids = _registry_netuids()
+    mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
+    if mode in ("lite", "price"):
+        return client.get_subnet_price_rows(netuids)
+    return client.get_all_subnet_data(netuids=netuids or None)
+
+
+def run_fetch_child(conn) -> None:
+    try:
+        conn.send({"phase": "ready"})
+        data = collect_chain_rows()
+        conn.send({"ok": True, "data": data})
+    except Exception as exc:
+        conn.send({"ok": False, "exc": str(exc)})
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass

@@ -19,10 +19,13 @@ existing TaoMarketCap + registry logic. The app never breaks.
 SAFETY (added after a CI hang):
   - Background sync is FORCED OFF under CI / tests (GITHUB_ACTIONS, PYTEST_CURRENT_TEST, CI).
     In CI get_all_subnets() simply returns the committed registry (fast, no network).
-  - Chain fetch runs in a child process with LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS (default 60)
-    hard join; on expiry the child is terminate/kill so no orphan live-subnets-fetch thread
-    can wedge the web or worker process (PR #906 class). RPC calls use chain_client socket
-    timeouts (DEFAULT_TIMEOUT on each request).
+  - Chain fetch runs in a child process (``spawn`` in prod, ``fork`` under pytest). Child entry:
+    ``internal.live_subnets_fetch_child`` (minimal imports — not ``server``).
+  - LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS is the **RPC budget after the child signals ready**
+    (module default 60). Fly web overrides to **90** (`fly.toml`); worker-v2 uses **120**.
+    Spawn/import grace is LIVE_SUBNETS_SPAWN_GRACE_SECONDS (default 30) and is **not**
+    charged against the RPC budget. On RPC budget expiry the child is terminate/kill so no
+    orphan fetch process can wedge the web or worker (PR #906 class).
 """
 from __future__ import annotations
 
@@ -52,6 +55,7 @@ def _cache_path() -> str:
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
 MAX_STALE_SECONDS = int(os.environ.get("LIVE_SUBNETS_MAX_STALE_SECONDS", "1800"))
 SYNC_TIMEOUT_SECONDS = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "60"))
+SPAWN_GRACE_SECONDS = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", "30"))
 
 # Default ON in production, but FORCE-OFF in CI/test environments so the heavy
 # on-chain sync never touches the network (and thus never hangs a test run).
@@ -174,40 +178,12 @@ def registry_ready() -> bool:
     return bool(netuids or _registry_netuids())
 
 
-def _collect_chain_rows():
-    """Blocking RPC fetch (runs in child process). chain_client uses per-request socket timeouts."""
-    from internal.chain_client import get_default_client
-
-    client = get_default_client()
-    try:
-        from internal.subnet_universe import get_netuids
-
-        netuids = get_netuids()
-    except Exception:
-        netuids = []
-
-    if not netuids:
-        netuids = _registry_netuids()
-    mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
-    if mode in ("lite", "price"):
-        return client.get_subnet_price_rows(netuids)
-    return client.get_all_subnet_data(netuids=netuids or None)
-
-
-def _fetch_child_main(conn) -> None:
-    try:
-        data = _collect_chain_rows()
-        conn.send({"ok": True, "data": data})
-    except Exception as exc:
-        conn.send({"ok": False, "exc": str(exc)})
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
-
-
 def _fetch_mp_context() -> multiprocessing.context.BaseContext:
+    forced = os.environ.get("LIVE_SUBNETS_MP_CONTEXT", "").strip().lower()
+    if forced == "spawn":
+        return multiprocessing.get_context("spawn")
+    if forced == "fork":
+        return multiprocessing.get_context("fork")
     # ponytail: fork in pytest so monkeypatched chain_client is visible to the child.
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return multiprocessing.get_context("fork")
@@ -225,22 +201,38 @@ def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: fl
 
 
 def _fetch_chain_data():
-    timeout = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
+    from internal.live_subnets_fetch_child import run_fetch_child
+
+    rpc_budget = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
+    spawn_grace = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", str(SPAWN_GRACE_SECONDS)))
     ctx = _fetch_mp_context()
     parent_conn, child_conn = ctx.Pipe(duplex=False)
     proc = ctx.Process(
-        target=_fetch_child_main,
+        target=run_fetch_child,
         args=(child_conn,),
         name="live-subnets-fetch",
         daemon=True,
     )
     proc.start()
     child_conn.close()
+    msg: Any = None
     try:
-        if not parent_conn.poll(timeout):
+        if not parent_conn.poll(spawn_grace):
             logger.warning(
-                "live_subnets sync timed out after %.0fs; terminating fetch child",
-                timeout,
+                "live_subnets spawn grace exceeded after %.0fs; terminating fetch child",
+                spawn_grace,
+            )
+            _terminate_fetch_process(proc)
+            return None
+        boot = parent_conn.recv()
+        if not isinstance(boot, dict) or boot.get("phase") != "ready":
+            logger.warning("live_subnets sync failed: child never became ready")
+            _terminate_fetch_process(proc)
+            return None
+        if not parent_conn.poll(rpc_budget):
+            logger.warning(
+                "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
+                rpc_budget,
             )
             _terminate_fetch_process(proc)
             return None
