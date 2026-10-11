@@ -254,20 +254,14 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
             return [{"netuid": 42, "price": 1.0}]
 
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
 
-    def _collect():
-        try:
-            from internal.subnet_universe import get_netuids
-
-            get_netuids()
-        except RuntimeError:
-            pass
-        netuids = [42]
-        netuids_path.write_text(json.dumps(netuids), encoding="utf-8")
-        return _Client().get_subnet_price_rows(netuids)
-
-    with patch("internal.live_subnets_fetch_child.collect_chain_rows", side_effect=_collect):
+    with (
+        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot corrupt")),
+        patch("internal.live_subnets_fetch_child._registry_netuids", return_value=[42]),
+    ):
         out = live_subnets._fetch_chain_data()
 
     assert out and out[0]["netuid"] == 42
