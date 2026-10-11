@@ -241,4 +241,11 @@
 
 - Replit **PASS** @ `8712ad97` (comment [#6097206273](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348#issuecomment-6097206273)); squash-merged [#1348](https://github.com/cryptoreporthub/subnet-dashboard/pull/1348) → main **`fcae69b09053c9107afb0e2e8573fe4074e33cd7`**; main CI smoke [38049956328](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38049956328) **success**. Fly Deploy Guard: **not triggered** (push-to-main deploy disabled; needs docs vehicle + `fly-deploy` label). Prod `/health` unreachable/503 from agent env at merge time; soak 5 still on prior prod (`9535c3c2`) until deploy completes.
 - **Deploy C** docs vehicle opening (target `fcae69b0`; post-merge `fly-deploy` on vehicle PR per #1347 pattern).
-- Deploy C: [#1351](https://github.com/cryptoreporthub/subnet-dashboard/pull/1351) docs-only retry after #1349 guard fail; Fly [38050799242](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38050799242) success; prod `/version` fcae69b0 (verify curl). Note #1349 guard fail reason (MC log in vehicle PR).
+- Deploy C: [#1351](https://github.com/cryptoreporthub/subnet-dashboard/pull/1351) docs-only retry after #1349 guard fail; Fly [38050799242](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38050799242) success; prod `/version` **`5d840ba4`**.
+
+## 2026-10-11 — Soak 5 re-anchor (Deploy C)
+
+- Joshua/MC: **supersede** Soak 5 clock on Deploy B `9535c3c2` (closed **PARTIAL**). **Re-anchor** on prod **`5d840ba473d2fac9011625ab608e5a97f1028bd0`** (#1348 `fcae69b0` via [#1351](https://github.com/cryptoreporthub/subnet-dashboard/pull/1351), Fly [38050799242](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38050799242)).
+- **Start** `2026-10-10T12:11:00Z` (~5:11 AM PT). **T+24h final** `2026-10-11T12:11:00Z` (~5:11 AM PT Sun 2026-10-11). Read-only spot-checks; no deploy/restart/scale/secrets.
+- Post–Deploy C timer checks **PASS** through `2026-10-11T00:00:14Z` (health 200, RSS ~351 MB, ingest live). **FINAL MC verdict PENDING** until T+24h. **P4b gating unchanged.**
+- Agent store: `internal/soak-5-reanchor-deploy-c-2026-10-10.md`, `internal/soak-5-final-2026-10-11.md` (pending).
