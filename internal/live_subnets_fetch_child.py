@@ -46,6 +46,12 @@ def collect_chain_rows() -> List[dict[str, Any]]:
         parsed = json.loads(test_rows)
         return parsed if isinstance(parsed, list) else []
 
+    sleep_s = os.environ.get("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "").strip()
+    if sleep_s:
+        import time
+
+        time.sleep(float(sleep_s))
+
     from internal.chain_client import get_default_client
 
     client = get_default_client()

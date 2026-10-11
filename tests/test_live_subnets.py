@@ -320,6 +320,33 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_fetch_hung_child_killed_second_sync_proceeds_spawn(monkeypatch, caplog):
+    """Spawn child cannot inherit fork monkeypatches; env sleep must still be killable."""
+    import multiprocessing
+
+    from internal import live_subnets
+
+    caplog.set_level(logging.WARNING, logger="live_subnets")
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.25")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.25)
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "30")
+
+    first = live_subnets._fetch_chain_data()
+    assert first is None
+    assert not any(p.is_alive() for p in multiprocessing.active_children())
+
+    monkeypatch.delenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", raising=False)
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+    second = live_subnets._fetch_chain_data()
+    assert second and second[0]["netuid"] == 1
+    assert any("RPC budget exceeded" in r.message for r in caplog.records)
+
+
 def test_heartbeat_updates_during_hung_chain_fetch(monkeypatch, tmp_path):
     from internal import live_subnets
     from internal import worker_heartbeat
