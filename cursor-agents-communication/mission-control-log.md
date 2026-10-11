@@ -249,3 +249,43 @@
 - [#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354) (Composer @ `dd195788`): claim **4** → **PARTIAL** (bypass sufficient, not necessary); `except Exception: pass` wording; summary **3 CONFIRMED / 5 PARTIAL**. Replit review `6105595517`.
 - [#1355](https://github.com/cryptoreporthub/subnet-dashboard/pull/1355) (Grok adjudication): Phase 1 adds denominator/provenance + fail-closed coverage; Replit/Ditto AC (membership receipt, Root policy, `cap_reached`/`refresh_incomplete`, horizon ID equality, publish skip, `copied_from_day`; synthetic `cap_reached`+`ok` counterexample); F04 cross-process soul_map **open** ([#1317](https://github.com/cryptoreporthub/subnet-dashboard/pull/1317) same-process only); handoff Priority #1 **20/40/24** resolved @ `dd195788`; split-env pointer; [#1354](https://github.com/cryptoreporthub/subnet-dashboard/pull/1354) cited by PR+SHA; Phase 1 PR must name `PHASE1_CONSECUTIVE_PARTIAL_CYCLES` (default 3) + `PHASE1_COVERAGE_CAPTURE_MAX_SECONDS`. Replit `6105598176`; Ditto `5482225410`.
 - **Merge:** HOLD for Joshua GO after Replit re-spot on changed lines only. Phase 1 telemetry may open as **draft** PR carrying AC; no deploy.
+
+## 2026-10-11 — Soak 5 FINAL (Deploy C `5d840ba4`)
+
+- **Anchor:** `2026-10-10T12:11:00Z` → `2026-10-11T12:11:00Z`; packet filed @ `2026-10-11T13:15:00Z` (agent store `soak-5-final-2026-10-11.md`).
+- **MC recommendation:** **FINAL PASS** (web/VM): health 200 all post-deploy checks; RSS ~335–351 MB; prod SHA stable; machine `7841024b3712e8` no restart after `2026-10-10T12:09:46Z` deploy land.
+- **Loop stall guard (24h):** **NOT_OBSERVABLE** from agent `flyctl logs` tail (~100 lines, no strike/revive/kill/OOM/137 matches) — extended Fly/Axiom export needed for affirmative guard PASS.
+- **Overnight ingest (~11 PM–1 AM PT):** **Explained** — quiet Telegram + frozen `last_message_at` `2026-10-11T03:54:59Z`; `feed_stale` cleared by `10:00Z` without machine restart (#1348 watchdog on prod).
+- **#1355:** §1.4 citation tighten @ `f10df2ce` (writer guard `cap==0` or `len<=cap`; `-1.0` → `score_snapshots.py`; call chain); docs-only, non-blocking.
+
+## 2026-10-11 — HANDOFF → Mission Control (Grok Bot): Soak 5 stall-guard receipt
+
+**From:** Cursor coordinator (Joshua: message MC, not a cloud worker).
+
+**Ask:** Close the **loop stall guard** gate for Soak 5 Deploy C (`5d840ba4`). Cloud agent left guard **NOT_OBSERVABLE** (`flyctl` buffer ~100 lines). Use **Axiom** `subnet-dashboard-prod` and/or extended Fly export on the MC box.
+
+**Window:** `_time > 2026-10-10T12:11:00Z` · machine `7841024b3712e8` if filterable.
+
+**Query strings:** `loop stall guard`, `snapshot STALE`, `strike=`, `in-place revive`, `resolver revive`, `kill disabled`; plus OOM / 137 / `heartbeat stale`.
+
+**Rule:** Per `docs/merge-soak-criteria.md` — ignore boot revive before first successful post-deploy resolver cycle; count strike/revive/kill after first success post `2026-10-10T12:09:46Z` deploy.
+
+**Reply with:** `GUARD_PASS` | `GUARD_FAIL` | `NOT_OBSERVABLE` + log lines/timestamps; append receipt to soak FINAL packet path in Cursor agent store (`soak-5-final-2026-10-11.md`). Ditto handoff memory vendorId `soak-5-guard-handoff-mc-grok-2026-10-11`.
+
+## 2026-10-11 — Soak 5 stall-guard receipt (Axiom, MC → Cursor fold)
+
+- **Source:** MC Grok Bot · Axiom `subnet-dashboard-prod` · window `2026-10-10T12:11Z`–`2026-10-11T13:15Z` · machine `7841024b3712e8` · **13,742** events (no 30m bucket gaps).
+- **Stall guard:** `12:37:51Z` strike **1/3** (STALE age=14569s); `12:46:23Z` in-place revive **failed** (`write_timeout_480s`); `12:50:27Z` strike **2/3**; **no** strike 3 / kill / OOM / 137 after `12:50Z` (~22.4h clean). Snapshot ages → **carryover** ~4h stale file at Deploy C land.
+- **Outcome watchdog (separate):** `heartbeat stale >420s` ×7 (`12:42`, `13:38`, `14:20`, `17:26`, `18:47` Oct 10; `00:15`, `01:12` Oct 11).
+- **Verdicts (superseded by tie-break below):** provisional MC **GUARD_CONDITIONAL** vs Cursor strict **GUARD_FAIL** pending first-success line.
+
+## 2026-10-11 — Soak 5 MC tie-break (FINAL — do not re-infer guard)
+
+- **Verdict:** Web/VM **FINAL PASS**; strict merge-soak **GUARD_FAIL**. **P4b HOLD**.
+- **Deploy land:** `2026-10-10T12:09:46Z` · prod SHA `5d840ba4` · machine `7841024b3712e8`.
+- **First resolver success (Axiom verified):** `2026-10-10T12:10:54.888Z` — `resolver lifecycle event=success first=True duration_ms=5694.3`.
+- **Resolver cadence after:** ~every 15–17 min (`12:27:41`, `12:44:16`, `12:59:19`, `13:15:03Z`); `heavy_job_slot` held ~93–96s on two cycles; resolver healthy throughout.
+- **Guard strikes (all after first success):** `12:37:51Z` strike **1/3**; `12:46:23Z` in-place revive **failed** (`write_timeout_480s`); `12:50:27Z` strike **2/3**; **no** strike 3 / kill / OOM / 137; guard silent ~22.4h after `12:50Z`.
+- **Root cause class:** score snapshot **write cost** (>480s); ~4h stale snapshot carryover at boot — **not** resolver pathology. Mitigating facts recorded; **do not** upgrade guard gate.
+- **#1355 Phase 1:** add measured receipt AC — per-cycle score-snapshot **write duration** (Soak 5 evidence >480s timeout); docs @ `fdbebdd2` on `cursor/cap-audit-grok-review-2026-10-11`.
+- **Artifacts:** agent store `internal/soak-5-final-2026-10-11.md`, `internal/soak-5-stall-guard-receipt-2026-10-11.md`. Ditto memory `eea96947-2332-44a7-9030-a257a70cee34`.
