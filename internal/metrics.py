@@ -21,8 +21,10 @@ LIVE_AGE_SECONDS = Gauge("subnet_live_age_seconds", "Age of live on-chain cache 
 LIVE_STALE = Gauge("subnet_live_stale", "1 if live on-chain feed is stale")
 LIVE_REFRESH_COMPLETE = Gauge(
     "subnet_live_refresh_complete",
-    "1 if the last live_subnets cache write was a complete refresh (0 if partial)",
+    "1 complete refresh, 0 partial, -1 when live_subnets cache file missing",
 )
+# ponytail: sentinel when no cache file (do not report green complete).
+LIVE_REFRESH_COMPLETE_UNAVAILABLE = -1.0
 SOURCE_AGE_SECONDS = Gauge(
     "subnet_source_age_seconds",
     "Age of a file-backed data source in seconds",
@@ -80,11 +82,14 @@ def refresh_from_state() -> None:
         _set_optional(LIVE_AGE_SECONDS, live.get("age_seconds"))
         if live.get("stale") is not None:
             LIVE_STALE.set(1 if live.get("stale") else 0)
-        refresh_complete = live.get("refresh_complete")
-        if refresh_complete is None:
-            LIVE_REFRESH_COMPLETE.set(1.0)
+        if not live.get("cache_present"):
+            LIVE_REFRESH_COMPLETE.set(LIVE_REFRESH_COMPLETE_UNAVAILABLE)
         else:
-            LIVE_REFRESH_COMPLETE.set(1.0 if refresh_complete else 0.0)
+            refresh_complete = live.get("refresh_complete")
+            if refresh_complete is None:
+                LIVE_REFRESH_COMPLETE.set(1.0)
+            else:
+                LIVE_REFRESH_COMPLETE.set(1.0 if refresh_complete else 0.0)
     except Exception:
         pass
 

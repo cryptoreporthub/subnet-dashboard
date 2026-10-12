@@ -553,9 +553,11 @@ def live_data_freshness() -> Dict[str, Any]:
         "subnet_count": 0,
         "stale": True,
         "cache_path": _cache_path(),
+        "cache_present": False,
     }
     try:
         if os.path.exists(_cache_path()):
+            info["cache_present"] = True
             with open(_cache_path(), "r") as f:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
