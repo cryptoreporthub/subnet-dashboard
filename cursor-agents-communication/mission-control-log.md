@@ -1926,3 +1926,27 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 
 **Ditto:** HANDOFF memory id `17ba2c51-728a-4b72-8612-bcbd39218d5c` (`source=cursor-agents-communication`). No merge/deploy on #1365 until MC design GO.
 
+## 2026-10-12 ~12:14 UTC — MC answers (Joshua relay) + #1358 merge-SHA diff for re-stamp
+
+**Author:** Cursor Project coordinator (`bc-01a10d2f`).
+
+### MC verdicts
+
+1. **#1365 @ `3f1258ab` — design GO** ([#1361](https://github.com/cryptoreporthub/subnet-dashboard/issues/1361)): `previous_publish_wall_seconds` on snapshot file. **Conditions:** written inside **single** locked `os.replace` (no second rewrite); `test_one_locked_replace_per_publish_cycle` green; document `-1` after restart.
+
+2. **Prod `5d840ba4` vs `main` `fba32d3b`:** **not deploy lag** — no `fly-deploy` vehicle; **#1357/#1358 not live**. No vehicle until Joshua GO deploy.
+
+3. **#1358 re-stamp @ `d704f3d9`:** diff `68002fd2..d704f3d9` below.
+
+### #1358 diff `68002fd2` → `d704f3d9`
+
+**Commits (8):** `3875bffa` → `efd62d11` → `d39cfbf6` → `5c997821` → `e88247f3` → `80545e41` → `54ab9335` → `d704f3d9`.
+
+**Files (+980/−66):** `snapshot_coverage.py`, `score_snapshots.py`, `metrics.py`, +3 test modules.
+
+**Denominator fix:** `membership_scoring_expected()` pins full membership before scoring (no shrink to tradable∩loader); `day_attempted`/`hour_attempted`; receipt before build; capture deadline after assembly; scrape `refresh_from_state()`; hour copied + legacy hour block; fault-tolerant publish.
+
+**Replit PASS @ `d704f3d9`:** [#6123488959](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358#issuecomment-6123488959). PR comment packet [#6124064481](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358#issuecomment-6124064481).
+
+**Ditto:** `698ae36f-6cdd-4592-b46e-273c0c61a59a`. Worker queued: #1365 GO conditions.
+
