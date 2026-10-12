@@ -19,7 +19,8 @@ _REFRESHER_STOP = threading.Event()
 _REFRESHER_STARTED = False
 
 _BUILD_SLOT_LOCK = threading.Lock()
-_BUILD_IN_FLIGHT = 0
+_BUILD_GENERATION = 0
+_ACTIVE_BUILD_GENERATION: Optional[int] = None
 _BUILD_STARTED_AT = 0.0
 _BUILD_INVOCATIONS = 0
 
@@ -68,6 +69,19 @@ def _store(payload: Dict[str, Any]) -> Dict[str, Any]:
         _CACHE["payload"] = payload
     _touch_metrics_after_store()
     return payload
+
+
+def _store_if_current(payload: Dict[str, Any], generation: int) -> Dict[str, Any]:
+    with _BUILD_SLOT_LOCK:
+        if generation != _BUILD_GENERATION:
+            logger.info(
+                "readiness build generation %s abandoned (current %s); cache unchanged",
+                generation,
+                _BUILD_GENERATION,
+            )
+            stale = _stale_copy()
+            return stale if stale is not None else payload
+    return _store(payload)
 
 
 def _touch_metrics_after_store() -> None:
@@ -119,26 +133,29 @@ def _envelope(
     return out
 
 
-def _try_begin_build() -> bool:
-    global _BUILD_STARTED_AT, _BUILD_IN_FLIGHT
+def _try_begin_build() -> Optional[int]:
+    global _BUILD_STARTED_AT, _BUILD_GENERATION, _ACTIVE_BUILD_GENERATION
     now = time.time()
     with _BUILD_SLOT_LOCK:
-        if _BUILD_IN_FLIGHT > 0 and (now - _BUILD_STARTED_AT) < BUILD_WATCHDOG_SECONDS:
-            return False
-        if _BUILD_IN_FLIGHT > 0:
+        if _ACTIVE_BUILD_GENERATION is not None and (now - _BUILD_STARTED_AT) < BUILD_WATCHDOG_SECONDS:
+            return None
+        if _ACTIVE_BUILD_GENERATION is not None:
             logger.warning(
                 "readiness build watchdog: prior build exceeded %.1fs; allowing new build",
                 BUILD_WATCHDOG_SECONDS,
             )
-        _BUILD_IN_FLIGHT += 1
+        _BUILD_GENERATION += 1
+        generation = _BUILD_GENERATION
+        _ACTIVE_BUILD_GENERATION = generation
         _BUILD_STARTED_AT = now
-        return True
+        return generation
 
 
-def _end_build() -> None:
-    global _BUILD_IN_FLIGHT
+def _end_build(generation: int) -> None:
+    global _ACTIVE_BUILD_GENERATION
     with _BUILD_SLOT_LOCK:
-        _BUILD_IN_FLIGHT = max(0, _BUILD_IN_FLIGHT - 1)
+        if _ACTIVE_BUILD_GENERATION == generation:
+            _ACTIVE_BUILD_GENERATION = None
 
 
 def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
@@ -149,7 +166,8 @@ def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
             if age < TTL:
                 return stale
 
-    if not _try_begin_build():
+    generation = _try_begin_build()
+    if generation is None:
         stale = _stale_copy()
         if stale is not None and not force:
             return stale
@@ -167,9 +185,9 @@ def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
             READINESS_BUILDS_TOTAL.inc()
         except Exception:
             pass
-        return _store(payload)
+        return _store_if_current(payload, generation)
     finally:
-        _end_build()
+        _end_build(generation)
 
 
 def _kick_background_build() -> None:
@@ -262,6 +280,7 @@ async def get_readiness_report(*, force: bool = False) -> Dict[str, Any]:
     if not force:
         payload = _stale_copy()
         if payload is None:
+            _kick_background_build()
             return _empty_read_payload()
         return _envelope(payload, cached=True)
 

@@ -20,9 +20,12 @@ def _reset_cache():
         cache._CACHE["at"] = 0.0
         cache._CACHE["payload"] = None
     with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_IN_FLIGHT = 0
+        cache._BUILD_GENERATION = 0
+        cache._ACTIVE_BUILD_GENERATION = None
         cache._BUILD_STARTED_AT = 0.0
     cache._BUILD_INVOCATIONS = 0
+    cache._REFRESHER_STARTED = False
+    cache._REFRESHER_STOP.clear()
 
 
 def test_stale_payload_marks_ready_false(monkeypatch):
@@ -99,11 +102,65 @@ def test_watchdog_allows_next_build(monkeypatch):
     monkeypatch.setattr(cache, "BUILD_WATCHDOG_SECONDS", 0.05)
 
     with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_IN_FLIGHT = 1
+        cache._ACTIVE_BUILD_GENERATION = 1
+        cache._BUILD_GENERATION = 1
         cache._BUILD_STARTED_AT = time.time() - 1.0
 
-    assert cache._try_begin_build() is True
-    cache._end_build()
+    gen = cache._try_begin_build()
+    assert gen == 2
+    cache._end_build(gen)
+
+
+def test_section_timeout_returns_within_bound(monkeypatch):
+    import internal.ops.readiness as readiness
+
+    monkeypatch.setattr(readiness, "_SECTION_TIMEOUT", 0.05)
+
+    def _slow():
+        time.sleep(2.0)
+        return {"graded": 1}
+
+    started = time.perf_counter()
+    with patch.object(readiness, "_learning_summary", _slow):
+        readiness.build_readiness_report()
+    assert time.perf_counter() - started < 0.5
+
+
+def test_lifespan_refresher_warms_when_background_on_web_off(monkeypatch):
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    monkeypatch.setenv("BACKGROUND_ON_WEB", "off")
+    monkeypatch.setattr(cache, "TTL", 0.05)
+
+    def _fake_report():
+        return {"status": "ready", "ready": True, "issues": ["warmed"]}
+
+    with patch("internal.ops.readiness.build_readiness_report", side_effect=_fake_report):
+        with TestClient(app) as client:
+            client.get("/health")
+            for _ in range(80):
+                if cache._stale_copy():
+                    break
+                time.sleep(0.05)
+    payload = cache._stale_copy()
+    assert payload is not None
+    assert "warmed" in (payload.get("issues") or [])
+
+
+def test_abandoned_build_does_not_overwrite_cache():
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    with cache._CACHE_LOCK:
+        cache._CACHE["payload"] = {"marker": "new", "ready": True, "issues": []}
+        cache._CACHE["at"] = time.time()
+    with cache._BUILD_SLOT_LOCK:
+        cache._BUILD_GENERATION = 2
+    out = cache._store_if_current({"marker": "old", "ready": False, "issues": []}, 1)
+    assert out.get("marker") == "new"
+    with cache._CACHE_LOCK:
+        assert cache._CACHE["payload"]["marker"] == "new"
 
 
 def test_build_failure_increments_metric():

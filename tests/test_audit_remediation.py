@@ -31,8 +31,11 @@ def _reset_readiness_cache():
         cache._CACHE["at"] = 0.0
         cache._CACHE["payload"] = None
     with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_IN_FLIGHT = 0
+        cache._BUILD_GENERATION = 0
+        cache._ACTIVE_BUILD_GENERATION = None
         cache._BUILD_STARTED_AT = 0.0
+    cache._REFRESHER_STARTED = False
+    cache._REFRESHER_STOP.clear()
 
 
 def test_readiness_uses_cache(monkeypatch):
@@ -124,7 +127,8 @@ def test_readiness_busy_lock_does_not_block(monkeypatch):
     import internal.ops.readiness_cache as cache
 
     with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_IN_FLIGHT = 1
+        cache._ACTIVE_BUILD_GENERATION = 1
+        cache._BUILD_GENERATION = 1
         cache._BUILD_STARTED_AT = time.time()
     try:
         with cache._CACHE_LOCK:
@@ -134,7 +138,7 @@ def test_readiness_busy_lock_does_not_block(monkeypatch):
         assert out.get("ready") is True
     finally:
         with cache._BUILD_SLOT_LOCK:
-            cache._BUILD_IN_FLIGHT = 0
+            cache._ACTIVE_BUILD_GENERATION = None
 
 
 def test_write_auth_blocks_ingest_when_token_set(monkeypatch):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
@@ -12,6 +13,11 @@ from typing import Any, Callable, Dict, List, TypeVar
 from internal.subnets.feed import probe_feed_layers, subnet_feed_meta
 
 _SECTION_TIMEOUT = float(os.environ.get("READINESS_SECTION_TIMEOUT_SECONDS", "3"))
+_SECTION_HUNG_SECONDS = float(
+    os.environ.get("READINESS_SECTION_HUNG_SECONDS", str(_SECTION_TIMEOUT * 2))
+)
+_SECTION_LOCK = threading.Lock()
+_SECTION_STATE: Dict[str, Dict[str, float]] = {}
 _T = TypeVar("_T")
 
 
@@ -23,12 +29,30 @@ def _run_readiness_section(
     issues: List[str],
     meta: List[Dict[str, Any]],
 ) -> _T:
+    now = time.time()
+    with _SECTION_LOCK:
+        state = _SECTION_STATE.get(name) or {}
+        if state.get("running") and (now - float(state.get("since") or 0)) < _SECTION_HUNG_SECONDS:
+            issues.append(f"readiness_section_skipped:{name}")
+            meta.append(
+                {
+                    "section": name,
+                    "status": "skipped",
+                    "duration_s": 0.0,
+                }
+            )
+            return default
+        _SECTION_STATE[name] = {"running": 1.0, "since": now}
+
     started = time.perf_counter()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        fut = pool.submit(fn)
+    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"readiness-{name}")
+    fut = pool.submit(fn)
+    timed_out = False
+    try:
         try:
             out = fut.result(timeout=_SECTION_TIMEOUT)
         except FuturesTimeoutError:
+            timed_out = True
             issues.append(f"readiness_section_timeout:{name}")
             meta.append(
                 {
@@ -49,10 +73,18 @@ def _run_readiness_section(
                 }
             )
             return default
-    meta.append(
-        {"section": name, "status": "ok", "duration_s": round(time.perf_counter() - started, 3)}
-    )
-    return out
+        meta.append(
+            {"section": name, "status": "ok", "duration_s": round(time.perf_counter() - started, 3)}
+        )
+        return out
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+        with _SECTION_LOCK:
+            if timed_out:
+                # ponytail: leave running=True so concurrent report builds skip this hung section.
+                _SECTION_STATE[name] = {"running": 1.0, "since": started}
+            else:
+                _SECTION_STATE[name] = {"running": 0.0, "since": time.time()}
 
 
 def _utcnow_z() -> str:
