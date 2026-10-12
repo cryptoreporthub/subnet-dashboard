@@ -156,15 +156,15 @@ def test_hung_section_bounded_threads_across_builds(monkeypatch):
             time.sleep(0.02)
         return {"graded": 0}
 
-    readiness.build_readiness_report()
-    before = _section_pool_thread_count()
     with patch.object(readiness, "_learning_summary", _block):
-        for _ in range(6):
+        readiness.build_readiness_report()
+        baseline = _section_pool_thread_count()
+        for _ in range(5):
             readiness.build_readiness_report()
+        after_cycles = _section_pool_thread_count()
     hang["stop"] = True
     time.sleep(0.15)
-    after = _section_pool_thread_count()
-    assert after - before <= 1
+    assert after_cycles - baseline <= 1
 
 
 def test_abandoned_build_does_not_overwrite_cache():

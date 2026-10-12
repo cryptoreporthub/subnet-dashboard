@@ -303,7 +303,8 @@ def start_readiness_refresher() -> None:
                 pass
             except Exception as exc:
                 _record_build_failure(type(exc).__name__)
-        _REFRESHER_STARTED = False
+        if generation == _REFRESHER_GENERATION:
+            _REFRESHER_STARTED = False
 
     _REFRESHER_THREAD = threading.Thread(
         target=_loop, name="readiness-refresher", daemon=True
