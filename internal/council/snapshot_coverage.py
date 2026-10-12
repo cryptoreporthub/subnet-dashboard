@@ -312,11 +312,9 @@ def coverage_timing_for_disk(timing: Dict[str, Any]) -> Dict[str, Any]:
 def _publish_wall_gauge_value(timing: Dict[str, Any]) -> float:
     from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
 
-    global _process_publish_wall_seconds
     on_wire = timing.get("publish_wall_seconds")
     if on_wire is not None:
-        _process_publish_wall_seconds = float(on_wire)
-        return _process_publish_wall_seconds
+        return float(on_wire)
     if _process_publish_wall_seconds is not None:
         return _process_publish_wall_seconds
     prev = timing.get("previous_publish_wall_seconds")

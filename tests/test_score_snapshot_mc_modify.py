@@ -105,6 +105,40 @@ def test_on_disk_coverage_timing_is_build_only_ac9a(tmp_path, monkeypatch):
     assert "publish_wall_seconds" not in on_disk_timing
 
 
+def test_skipped_older_does_not_poison_previous_publish_wall(tmp_path, monkeypatch):
+    path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
+    snap_path = str(path)
+    payloads_at_save: list[dict] = []
+    real_save = snaps.save_score_snapshot
+    save_calls = 0
+
+    def _save_with_skip(payload, path_arg=None):
+        nonlocal save_calls
+        save_calls += 1
+        payloads_at_save.append(payload)
+        if save_calls == 2:
+            return {
+                "published": False,
+                "skipped_older": True,
+                "timing": {"publish_wall_seconds": 0.0001},
+            }
+        return real_save(payload, path_arg or snap_path)
+
+    monkeypatch.setattr(snaps, "save_score_snapshot", _save_with_skip)
+    first = snaps.write_full_universe_snapshot()
+    first_pub = (first.get("coverage") or {}).get("timing", {}).get("publish_wall_seconds")
+    assert first_pub is not None
+    snaps.write_full_universe_snapshot()
+    snaps.write_full_universe_snapshot()
+    assert save_calls == 3
+    third_payload = payloads_at_save[2]
+    prev = (third_payload.get("coverage") or {}).get("timing", {}).get(
+        "previous_publish_wall_seconds"
+    )
+    assert prev == round(float(first_pub), 6)
+    assert prev != 0.0001
+
+
 def test_one_locked_replace_per_publish_cycle(tmp_path, monkeypatch):
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
     snap_path = str(path)

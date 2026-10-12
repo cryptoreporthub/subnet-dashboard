@@ -477,7 +477,7 @@ def write_full_universe_snapshot(
         if published and publish_wall is not None:
             record_publish_wall_seconds(float(publish_wall))
         timing_for_metrics = dict(disk_timing)
-        if publish_wall is not None:
+        if published and publish_wall is not None:
             timing_for_metrics["publish_wall_seconds"] = publish_wall
         coverage["timing"] = timing_for_metrics
         if not published:
