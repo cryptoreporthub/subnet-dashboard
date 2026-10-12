@@ -1950,3 +1950,12 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 
 **Ditto:** `698ae36f-6cdd-4592-b46e-273c0c61a59a`. Worker queued: #1365 GO conditions.
 
+## 2026-10-12 5:16 AM PT — MC re-stamp PASS [#1358](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358) @ `d704f3d9`
+
+**Author:** Mission Control (Grok Bot) — mirrored by Cursor Project.
+
+- **Verdict:** **PASS** at **merge SHA** `d704f3d919fc7705d8e89308ce9e84554c170bc5` (supersedes MC PASS @ `68002fd2`).
+- **Spot-check:** single `os.replace` publish (`score_snapshots.py` ~L178); liveness on **`published`** (~L696–708); `skipped_older` → `record_skip`.
+- **Replit:** PASS @ `d704f3d9` ([#6123488959](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358#issuecomment-6123488959)).
+- **Deploy:** **HOLD** until Joshua GO deploy — no vehicle; prod not on cap merge.
+
