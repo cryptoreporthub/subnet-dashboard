@@ -32,6 +32,8 @@ MEMBERSHIP_FRESH_MAX_SECONDS = max(
 
 _last_cycle: Dict[str, Any] = {}
 _consecutive_partial_cycles = 0
+# Process-local publish timing (not on disk); survives disk-backed publish_metrics refresh.
+_process_publish_wall_seconds: Optional[float] = None
 
 
 def _parse_iso(value: Any) -> Optional[datetime]:
@@ -287,9 +289,73 @@ def phase1_exit_gate_met() -> bool:
 
 
 def reset_phase1_cycle_state_for_tests() -> None:
-    global _consecutive_partial_cycles, _last_cycle
+    global _consecutive_partial_cycles, _last_cycle, _process_publish_wall_seconds
     _consecutive_partial_cycles = 0
     _last_cycle = {}
+    _process_publish_wall_seconds = None
+
+
+def _soul_map_publish_wall_seconds() -> Optional[float]:
+    try:
+        from internal.council import weights
+
+        data = weights._load_raw(weights.SOUL_MAP_PATH)
+        sched = data.get("score_snapshot_scheduler") if isinstance(data, dict) else None
+        if not isinstance(sched, dict):
+            return None
+        last = sched.get("last_cycle")
+        if not isinstance(last, dict):
+            return None
+        cov = last.get("coverage")
+        if not isinstance(cov, dict):
+            return None
+        timing = cov.get("timing")
+        if not isinstance(timing, dict):
+            return None
+        pub = timing.get("publish_wall_seconds")
+        if pub is None:
+            return None
+        return float(pub)
+    except Exception:
+        return None
+
+
+def _publish_wall_gauge_value(timing: Dict[str, Any]) -> float:
+    from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+
+    global _process_publish_wall_seconds
+    on_wire = timing.get("publish_wall_seconds")
+    if on_wire is not None:
+        _process_publish_wall_seconds = float(on_wire)
+        return _process_publish_wall_seconds
+    if _process_publish_wall_seconds is not None:
+        return _process_publish_wall_seconds
+    from_soul = _soul_map_publish_wall_seconds()
+    if from_soul is not None:
+        return from_soul
+    return SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+
+
+def _build_wall_gauge_value(timing: Dict[str, Any]) -> float:
+    from internal.metrics import SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE
+
+    build = timing.get("build_wall_seconds")
+    if build is None:
+        return SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE
+    return float(build)
+
+
+def _horizon_scored_count(block: Dict[str, Any], horizon: str) -> int:
+    succeeded = block.get("succeeded") or []
+    if horizon == "hour" and block.get("status") == "copied":
+        return 0
+    return len(succeeded)
+
+
+def _horizon_copied_count(block: Dict[str, Any], horizon: str) -> int:
+    if horizon != "hour" or block.get("status") != "copied":
+        return 0
+    return len(block.get("succeeded") or [])
 
 
 def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
@@ -343,6 +409,7 @@ def reset_score_snapshot_gauges() -> None:
         from internal.metrics import (
             SCORE_SNAPSHOT_COVERAGE_COMPLETE,
             SCORE_SNAPSHOT_COVERAGE_PUBLISHED,
+            SCORE_SNAPSHOT_HORIZON_COPIED,
             SCORE_SNAPSHOT_HORIZON_SUCCEEDED,
             SCORE_SNAPSHOT_TIMING_BUILD_SECONDS,
             SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
@@ -352,12 +419,13 @@ def reset_score_snapshot_gauges() -> None:
     try:
         SCORE_SNAPSHOT_COVERAGE_COMPLETE.set(0.0)
         SCORE_SNAPSHOT_COVERAGE_PUBLISHED.set(0.0)
-        SCORE_SNAPSHOT_TIMING_BUILD_SECONDS.set(0.0)
-        from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+        from internal.metrics import SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE
 
-        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE)
+        SCORE_SNAPSHOT_TIMING_BUILD_SECONDS.set(SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE)
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(_publish_wall_gauge_value({}))
         for horizon in ("day", "hour"):
             SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon=horizon).set(0.0)
+            SCORE_SNAPSHOT_HORIZON_COPIED.labels(horizon=horizon).set(0.0)
     except Exception:
         pass
 
@@ -382,28 +450,29 @@ def publish_metrics(coverage: Dict[str, Any]) -> None:
         except Exception:
             pass
 
-    from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
-
     _set(SCORE_SNAPSHOT_COVERAGE_COMPLETE, 1.0 if coverage.get("complete") else 0.0)
     _set(SCORE_SNAPSHOT_COVERAGE_PUBLISHED, 1.0 if coverage.get("published") else 0.0)
-    _set(SCORE_SNAPSHOT_TIMING_BUILD_SECONDS, timing.get("build_wall_seconds"))
-    publish_wall = timing.get("publish_wall_seconds")
-    if publish_wall is None:
-        try:
-            SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(
-                SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
-            )
-        except Exception:
-            pass
-    else:
-        _set(SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS, publish_wall)
+    try:
+        SCORE_SNAPSHOT_TIMING_BUILD_SECONDS.set(_build_wall_gauge_value(timing))
+    except Exception:
+        pass
+    try:
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(_publish_wall_gauge_value(timing))
+    except Exception:
+        pass
     for horizon in ("day", "hour"):
         block = coverage.get(horizon) or {}
         try:
-            from internal.metrics import SCORE_SNAPSHOT_HORIZON_SUCCEEDED
+            from internal.metrics import (
+                SCORE_SNAPSHOT_HORIZON_COPIED,
+                SCORE_SNAPSHOT_HORIZON_SUCCEEDED,
+            )
 
             SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon=horizon).set(
-                len(block.get("succeeded") or [])
+                _horizon_scored_count(block, horizon)
+            )
+            SCORE_SNAPSHOT_HORIZON_COPIED.labels(horizon=horizon).set(
+                _horizon_copied_count(block, horizon)
             )
         except Exception:
             pass

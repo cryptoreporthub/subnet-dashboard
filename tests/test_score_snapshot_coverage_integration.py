@@ -356,6 +356,87 @@ def test_metrics_skips_stale_disk_coverage(tmp_path, monkeypatch):
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
 
 
+def test_write_then_scrape_keeps_process_publish_wall(tmp_path, monkeypatch):
+    from internal.metrics import (
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
+        SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(),
+    )
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    snaps.write_full_universe_snapshot()
+    after_write = SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
+    assert after_write > 0
+    refresh_from_state()
+    after_scrape = SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
+    assert after_scrape == after_write
+    assert after_scrape != SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+
+
+def test_fresh_process_publish_wall_unavailable(tmp_path, monkeypatch):
+    from internal.metrics import (
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
+        SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    cov.reset_phase1_cycle_state_for_tests()
+    refresh_from_state()
+    assert (
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
+        == SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+    )
+
+
+def test_hour_copied_horizon_gauges_on_scrape(tmp_path, monkeypatch):
+    from internal.metrics import (
+        SCORE_SNAPSHOT_HORIZON_COPIED,
+        SCORE_SNAPSHOT_HORIZON_SUCCEEDED,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(),
+    )
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    snaps.write_full_universe_snapshot()
+    refresh_from_state()
+    assert SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon="hour")._value.get() == 0.0
+    assert SCORE_SNAPSHOT_HORIZON_COPIED.labels(horizon="hour")._value.get() == 2.0
+    assert SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon="day")._value.get() == 2.0
+
+
 def test_metrics_publish_wall_unavailable_from_disk_coverage(tmp_path, monkeypatch):
     from internal.metrics import (
         SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
@@ -384,6 +465,7 @@ def test_metrics_publish_wall_unavailable_from_disk_coverage(tmp_path, monkeypat
         encoding="utf-8",
     )
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    cov.reset_phase1_cycle_state_for_tests()
     SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(0.5)
     refresh_from_state()
     assert (
@@ -395,8 +477,10 @@ def test_metrics_publish_wall_unavailable_from_disk_coverage(tmp_path, monkeypat
 def test_metrics_registry_exposes_coverage_gauges():
     from internal.metrics import (
         SCORE_SNAPSHOT_COVERAGE_COMPLETE,
+        SCORE_SNAPSHOT_HORIZON_COPIED,
         SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
     )
 
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._name.startswith("subnet_score_snapshot")
     assert SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._name.endswith("publish_wall_seconds")
+    assert SCORE_SNAPSHOT_HORIZON_COPIED._name.endswith("horizon_copied")

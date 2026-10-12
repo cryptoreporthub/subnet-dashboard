@@ -67,8 +67,9 @@ SCORE_SNAPSHOT_COVERAGE_PUBLISHED = Gauge(
 )
 SCORE_SNAPSHOT_TIMING_BUILD_SECONDS = Gauge(
     "subnet_score_snapshot_build_wall_seconds",
-    "Wall seconds for the last score snapshot scoring build",
+    "Wall seconds for the last score snapshot scoring build (-1 when unavailable)",
 )
+SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE = -1.0
 SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS = Gauge(
     "subnet_score_snapshot_publish_wall_seconds",
     "Wall seconds for the last score snapshot locked publish (-1 when not on disk)",
@@ -76,7 +77,12 @@ SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS = Gauge(
 SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE = -1.0
 SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(
     "subnet_score_snapshot_horizon_succeeded",
-    "Succeeded netuids in the last coverage block",
+    "Independently scored netuids in the last coverage block (hour=0 when copied)",
+    ["horizon"],
+)
+SCORE_SNAPSHOT_HORIZON_COPIED = Gauge(
+    "subnet_score_snapshot_horizon_copied",
+    "Rows covered by copy-from-day (not independent hour scoring)",
     ["horizon"],
 )
 SCORE_SNAPSHOT_AGE_SECONDS = Gauge(
