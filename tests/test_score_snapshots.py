@@ -701,6 +701,43 @@ def test_build_snapshot_refreshes_pump_state_on_next_build(monkeypatch):
     assert first_score != second_score
 
 
+def test_day_scoring_seconds_excludes_hour_latency(monkeypatch):
+    """day_scoring_seconds is sum of per-row day scorer time, not loop wall clock."""
+    hour_delay = 0.05
+
+    def _hour(sn, ctx):
+        time.sleep(hour_delay)
+        return {"total_score": 1.0}
+
+    def _day(sn, ctx):
+        return {"total_score": 2.0}
+
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        _hour,
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        _day,
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+    subnets = [{"netuid": i} for i in range(3)]
+    out_with_hour = snaps.build_full_universe_snapshot(subnets, {}, score_hour=True)
+    out_day_only = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    timing_hour = out_with_hour.get("build_stage_timing") or {}
+    timing_day = out_day_only.get("build_stage_timing") or {}
+    day_with = timing_hour.get("day_scoring_seconds") or 0.0
+    day_without = timing_day.get("day_scoring_seconds") or 0.0
+    hour_metric = timing_hour.get("hour_scoring_seconds") or 0.0
+    loop_wall = timing_hour.get("subnet_scoring_loop_wall_seconds") or 0.0
+    assert hour_metric >= hour_delay * len(subnets) * 0.9
+    assert abs(day_with - day_without) < 0.01
+    assert loop_wall >= hour_metric + day_with * 0.9
+
+
 def test_write_snapshot_includes_stage_timing(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))

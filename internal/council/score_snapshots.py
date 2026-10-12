@@ -278,7 +278,8 @@ def build_full_universe_snapshot(
     hour_attempted: List[int] = []
     skipped_invalid = 0
     total = len(rows)
-    day_scoring_started = time.monotonic()
+    subnet_loop_started = time.monotonic()
+    day_scoring_seconds = 0.0
     hour_scoring_seconds = 0.0
     slowest_day: List[Tuple[float, int]] = []
     for idx, sn in enumerate(rows):
@@ -332,6 +333,7 @@ def build_full_universe_snapshot(
                 }
             )
         day_elapsed = time.monotonic() - day_started
+        day_scoring_seconds += day_elapsed
         if len(slowest_day) < _SLOWEST_NETUID_SAMPLES:
             slowest_day.append((day_elapsed, netuid))
             slowest_day.sort(reverse=True)
@@ -351,11 +353,12 @@ def build_full_universe_snapshot(
 
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
-    day_scoring_seconds = time.monotonic() - day_scoring_started
+    subnet_scoring_loop_wall_seconds = time.monotonic() - subnet_loop_started
     build_stage_timing = {
         "pump_state_load_seconds": round(pump_load_seconds, 6),
         "day_scoring_seconds": round(day_scoring_seconds, 6),
         "hour_scoring_seconds": round(hour_scoring_seconds, 6),
+        "subnet_scoring_loop_wall_seconds": round(subnet_scoring_loop_wall_seconds, 6),
         "slowest_day_netuids": [
             {"netuid": nu, "seconds": round(sec, 6)}
             for sec, nu in slowest_day
