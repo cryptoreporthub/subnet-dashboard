@@ -75,6 +75,16 @@ def collect_chain_rows() -> List[dict[str, Any]]:
     return client.get_all_subnet_data(netuids=netuids or None)
 
 
+def _rpc_return_margin_seconds() -> float:
+    """Reserve parent RPC window for executor shutdown + framed result send."""
+    raw = os.environ.get("LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS", "3").strip()
+    try:
+        margin = float(raw)
+    except ValueError:
+        margin = 3.0
+    return max(0.5, margin)
+
+
 def _child_send_deadline() -> float:
     import time
 
@@ -89,6 +99,7 @@ def run_fetch_child(conn) -> None:
     from internal.live_subnets_ipc import send_message
 
     os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
+    params: dict[str, Any] | None = None
     try:
         ready_sleep = os.environ.get("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "").strip()
         if ready_sleep:
@@ -100,16 +111,21 @@ def run_fetch_child(conn) -> None:
         params = recv_message(conn, time.monotonic() + 5.0)
         if not isinstance(params, dict) or params.get("rpc_deadline_monotonic") is None:
             return
-        os.environ["LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC"] = str(
-            float(params["rpc_deadline_monotonic"])
-        )
+        rpc_deadline = float(params["rpc_deadline_monotonic"])
+        batch_deadline = rpc_deadline - _rpc_return_margin_seconds()
+        if batch_deadline <= time.monotonic():
+            batch_deadline = time.monotonic() + 0.01
+        os.environ["LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC"] = str(batch_deadline)
         try:
             data = collect_chain_rows()
         finally:
             os.environ.pop("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", None)
-        send_message(conn, {"ok": True, "data": data}, deadline=_child_send_deadline())
+        send_message(conn, {"ok": True, "data": data}, deadline=rpc_deadline)
     except Exception as exc:
-        send_message(conn, {"ok": False, "exc": str(exc)}, deadline=_child_send_deadline())
+        send_deadline = _child_send_deadline()
+        if isinstance(params, dict) and params.get("rpc_deadline_monotonic") is not None:
+            send_deadline = float(params["rpc_deadline_monotonic"])
+        send_message(conn, {"ok": False, "exc": str(exc)}, deadline=send_deadline)
     finally:
         try:
             conn.close()

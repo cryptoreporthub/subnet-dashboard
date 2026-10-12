@@ -346,6 +346,45 @@ def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
     assert sent_deadlines[0] <= t0 + 1.05
 
 
+def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
+    """Slow lite batch exceeds inner batch window; parent still gets partial rows."""
+    from internal import live_subnets
+    from internal.chain_client import ChainClient
+
+    inner = ChainClient.__new__(ChainClient)
+    inner.is_healthy = lambda: True
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+
+    def price(netuid):
+        if netuid == 2:
+            time.sleep(1.0)
+        return float(netuid)
+
+    inner.get_alpha_price = price
+
+    class _Client:
+        def get_subnet_price_rows(self, netuids):
+            return inner.get_subnet_price_rows(netuids)
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS", "0.35")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "1.1")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 1.1)
+
+    t0 = time.monotonic()
+    with (
+        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch("internal.subnet_universe.get_netuids", return_value=[2, 1]),
+    ):
+        out = live_subnets._fetch_chain_data()
+    elapsed = time.monotonic() - t0
+
+    assert out is not None
+    assert [r["netuid"] for r in out] == [1]
+    assert elapsed < 1.05
+
+
 def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):
     from internal import live_subnets
 
