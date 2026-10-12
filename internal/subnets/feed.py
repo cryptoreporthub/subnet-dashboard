@@ -175,15 +175,38 @@ def _feed_layers_from_freshness(remote: Dict[str, Any]) -> Dict[str, Any]:
     subnet_count = int(remote.get("subnet_count") or 0)
     tmc_count = int(remote.get("tmc_cache_count") or 0)
     registry_count = int(remote.get("registry_count") or 0)
-    effective = str(remote.get("effective_source") or "none")
+    refresh_complete = remote.get("refresh_complete")
+    from internal.live_subnets import resolve_live_row_count_from_remote
+
+    live_row_count = resolve_live_row_count_from_remote(remote)
+    stale = bool(remote.get("stale"))
+    from internal.live_subnets import blockmachine_effective_source_active, live_cache_partial_refresh
+
+    probe = {
+        "exists": subnet_count > 0 or bool(remote.get("last_sync")),
+        "stale": stale,
+        "live_row_count": live_row_count,
+        "refresh_complete": refresh_complete,
+    }
+    if blockmachine_effective_source_active(probe):
+        effective = "blockmachine"
+    elif tmc_count > 0:
+        effective = "taomarketcap"
+    elif registry_count > 0:
+        effective = "registry"
+    else:
+        effective = "none"
     return {
         "effective_source": effective,
+        "live_cache_partial_refresh": live_cache_partial_refresh(probe),
         "registry_count": registry_count,
         "live_cache": {
             "exists": subnet_count > 0 or bool(remote.get("last_sync")),
             "count": subnet_count,
+            "live_row_count": live_row_count,
             "synced_at": remote.get("last_sync"),
-            "stale": bool(remote.get("stale")),
+            "stale": stale,
+            "refresh_complete": refresh_complete,
         },
         "tmc_cache": {"exists": tmc_count > 0, "count": tmc_count},
         "likely_total": int(
@@ -202,26 +225,14 @@ def probe_feed_layers() -> Dict[str, Any]:
             return _feed_layers_from_freshness(remote)
     except Exception:
         pass
-    from internal.live_subnets import _cache_path
+    from internal.live_subnets import (
+        blockmachine_effective_source_active,
+        live_cache_partial_refresh,
+        read_live_cache_probe,
+    )
 
-    cache_file = _cache_path()
     registry_count = len(_registry_rows())
-    live_cache = {
-        "exists": False,
-        "count": 0,
-        "synced_at": None,
-        "stale": True,
-    }
-    try:
-        if os.path.exists(cache_file):
-            with open(cache_file, "r") as f:
-                data = json.load(f)
-            live_cache["exists"] = True
-            live_cache["count"] = int(data.get("count") or len(data.get("subnets") or []))
-            live_cache["synced_at"] = data.get("synced_at")
-            live_cache["stale"] = not live_cache["count"]
-    except Exception as exc:
-        logger.debug("live cache probe failed: %s", exc)
+    live_cache = read_live_cache_probe()
 
     tmc_cache = {"exists": False, "count": 0}
     try:
@@ -235,7 +246,7 @@ def probe_feed_layers() -> Dict[str, Any]:
     except Exception as exc:
         logger.debug("tmc cache probe failed: %s", exc)
 
-    if live_cache["count"] > 0 and not live_cache["stale"]:
+    if blockmachine_effective_source_active(live_cache):
         effective_source = "blockmachine"
     elif tmc_cache["count"] > 0:
         effective_source = "taomarketcap"
@@ -246,6 +257,7 @@ def probe_feed_layers() -> Dict[str, Any]:
 
     return {
         "effective_source": effective_source,
+        "live_cache_partial_refresh": live_cache_partial_refresh(live_cache),
         "registry_count": registry_count,
         "live_cache": live_cache,
         "tmc_cache": tmc_cache,
