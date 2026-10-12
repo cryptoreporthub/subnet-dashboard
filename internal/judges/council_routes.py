@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 
 from internal.static_version import STATIC_V
@@ -407,20 +407,34 @@ def _api_judges_netuid_sync(netuid: int):
     return {"error": "subnet not found", "netuid": netuid}
 
 
+def _judge_postmortems_response(judge_name: str) -> Dict[str, Any]:
+    from internal.judges.postmortems import (
+        UnknownJudgeError,
+        UnsafeJudgePathError,
+        canonical_judge_name,
+        list_for_judge,
+    )
+
+    try:
+        slug = canonical_judge_name(judge_name)
+        postmortems = list_for_judge(slug)
+    except UnknownJudgeError:
+        raise HTTPException(status_code=404, detail="unknown judge") from None
+    except UnsafeJudgePathError:
+        raise HTTPException(status_code=400, detail="invalid judge") from None
+    return {"status": "success", "judge": slug, "postmortems": postmortems}
+
+
 @council_router.get("/api/judges/{judge}/postmortems")
 async def api_judge_postmortems(judge: str):
     """Return scientific-method postmortems for a single judge."""
     try:
-        from internal.judges import get_judge
-        from internal.judges.postmortems import list_for_judge
-
-        name = judge.lower()
-        if get_judge(name) is None:
-            return {"status": "error", "error": f"Unknown judge: {judge}"}
-        return {"status": "success", "judge": name, "postmortems": list_for_judge(name)}
+        return _judge_postmortems_response(judge)
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("api_judge_postmortems failed: %s", exc)
-        return {"status": "stub", "judge": judge, "postmortems": [], "error": str(exc)}
+        raise HTTPException(status_code=500, detail="postmortems unavailable") from exc
 
 
 @council_router.get("/api/council-ab")
@@ -498,29 +512,31 @@ async def api_portfolios():
 async def api_postmortems(judge: Optional[str] = None):
     """Return all postmortems, optionally filtered by judge name."""
     try:
-        from internal.judges.postmortems import all_postmortems, list_for_judge
+        from internal.judges.postmortems import all_postmortems
 
         if judge:
-            pms = list_for_judge(judge)
-            return {"judge": judge, "postmortems": pms if isinstance(pms, list) else []}
+            body = _judge_postmortems_response(judge)
+            return {"judge": body["judge"], "postmortems": body["postmortems"]}
         pms = all_postmortems()
         return {"postmortems": pms if isinstance(pms, dict) else {}}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning("Postmortem fetch failed: %s", e)
-        return {"postmortems": {}}
+        raise HTTPException(status_code=500, detail="postmortems unavailable") from e
 
 
 @council_router.get("/api/postmortems/{judge_name}")
 async def api_postmortems_by_judge(judge_name: str):
     """Return postmortems for a specific judge."""
     try:
-        from internal.judges.postmortems import list_for_judge
-
-        pms = list_for_judge(judge_name)
-        return {"judge": judge_name, "postmortems": pms if isinstance(pms, list) else []}
+        body = _judge_postmortems_response(judge_name)
+        return {"judge": body["judge"], "postmortems": body["postmortems"]}
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.warning("Postmortem fetch failed for %s: %s", judge_name, e)
-        return {"judge": judge_name, "postmortems": []}
+        logger.warning("Postmortem fetch failed: %s", e)
+        raise HTTPException(status_code=500, detail="postmortems unavailable") from e
 
 
 @council_router.get("/judge-council", response_class=HTMLResponse)

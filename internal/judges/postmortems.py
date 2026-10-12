@@ -18,19 +18,55 @@ from typing import Any, Dict, List, Optional
 
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 
+_KNOWN_JUDGES = frozenset({"oracle", "echo", "pulse"})
+
+
+class UnknownJudgeError(ValueError):
+    """Judge name is not a registered council judge."""
+
+
+class UnsafeJudgePathError(ValueError):
+    """Resolved postmortem path escapes the postmortems directory."""
+
+
+def canonical_judge_name(judge_name: str) -> str:
+    """Return a validated lowercase judge slug or raise UnknownJudgeError."""
+    slug = (judge_name or "").strip().lower()
+    if slug not in _KNOWN_JUDGES:
+        raise UnknownJudgeError("unknown judge")
+    return slug
+
+
 def _path(judge_name: str) -> str:
-    return os.path.join(POSTMORTEMS_DIR, f"{judge_name.lower()}.json")
+    slug = canonical_judge_name(judge_name)
+    path = os.path.join(POSTMORTEMS_DIR, f"{slug}.json")
+    root = os.path.realpath(POSTMORTEMS_DIR)
+    resolved = os.path.realpath(path)
+    try:
+        if os.path.commonpath([root, resolved]) != root:
+            raise UnsafeJudgePathError("invalid judge path")
+    except ValueError:
+        raise UnsafeJudgePathError("invalid judge path") from None
+    return path
+
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 def _load(judge_name: str) -> List[Dict[str, Any]]:
     path = _path(judge_name)
     try:
         with open(path, "r") as f:
-            return json.load(f)
-    except Exception:
+            data = json.load(f)
+    except FileNotFoundError:
         return []
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    return data
+
 
 def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
@@ -39,6 +75,7 @@ def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     with open(tmp, "w") as f:
         json.dump(entries, f, indent=2)
     os.replace(tmp, path)
+
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
     """Generate the four scientific-method questions for a wrong pick."""
@@ -93,16 +130,18 @@ def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[
 
     return {"what": q1, "why": q2, "rule": q3, "devil": q4}
 
+
 def record(
     judge_name: str,
     prediction: Dict[str, Any],
     actual_pct: Optional[float] = None,
 ) -> Dict[str, Any]:
     """Record a new postmortem for a wrong pick."""
-    entries = _load(judge_name)
+    slug = canonical_judge_name(judge_name)
+    entries = _load(slug)
     diagnosis = _diagnosis(prediction, actual_pct)
     entry = {
-        "judge": judge_name.lower(),
+        "judge": slug,
         "prediction_id": prediction.get("id"),
         "netuid": prediction.get("netuid"),
         "name": prediction.get("name"),
@@ -114,12 +153,14 @@ def record(
         "created_at": _utcnow(),
     }
     entries.append(entry)
-    _save(judge_name, entries)
+    _save(slug, entries)
     return entry
+
 
 def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     """Return all postmortems for a judge, newest first."""
     return list(reversed(_load(judge_name)))
+
 
 def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
     """Return postmortems for all three judges."""
