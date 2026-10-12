@@ -77,6 +77,42 @@ def test_unknown_judge_query_param(client):
     assert response.json().get("detail") == "Unknown judge"
 
 
+def test_symlink_judge_json_outside_dir_not_leaked_via_api(tmp_path, monkeypatch, client):
+    """Registered judge file symlinked outside POSTMORTEMS_DIR must not expose data."""
+    data_dir = tmp_path / "data"
+    postmortems_dir = data_dir / "postmortems"
+    postmortems_dir.mkdir(parents=True)
+    outside = data_dir / "outside.json"
+    outside.write_text(json.dumps([{"secret": "symlink-leak"}]), encoding="utf-8")
+    (postmortems_dir / "oracle.json").symlink_to(outside)
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(postmortems_dir))
+
+    with pytest.raises(ValueError, match="outside postmortems"):
+        postmortems.list_for_judge("oracle")
+
+    for route in (
+        "/api/postmortems/oracle",
+        "/api/postmortems?judge=oracle",
+        "/api/judges/oracle/postmortems",
+    ):
+        response = client.get(route)
+        assert response.status_code == 404
+        assert "secret" not in response.text
+        assert "symlink-leak" not in response.text
+
+
+def test_save_refuses_tmp_symlink(tmp_path, monkeypatch):
+    postmortems_dir = tmp_path / "postmortems"
+    postmortems_dir.mkdir()
+    outside = tmp_path / "escaped.json"
+    outside.write_text("[]", encoding="utf-8")
+    (postmortems_dir / "oracle.json.tmp").symlink_to(outside)
+    monkeypatch.setattr(postmortems, "POSTMORTEMS_DIR", str(postmortems_dir))
+    with pytest.raises(OSError, match="symlink"):
+        postmortems._save("oracle", [{"judge": "oracle"}])
+    assert outside.read_text(encoding="utf-8") == "[]"
+
+
 def test_valid_judges_all_routes(client):
     for name in ("oracle", "ECHO", "pulse"):
         canon = name.lower()

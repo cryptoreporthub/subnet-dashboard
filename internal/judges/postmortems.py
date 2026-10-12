@@ -44,12 +44,29 @@ def _load(judge_name: str) -> List[Dict[str, Any]]:
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
 
+def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
+    """Write JSON to a fresh tmp file; refuse pre-existing symlinks (TOCTOU hardening)."""
+    if os.path.lexists(tmp):
+        if os.path.islink(tmp):
+            raise OSError("refusing to write postmortem tmp through symlink")
+        os.unlink(tmp)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(entries, f, indent=2)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
     path = _path(judge_name)
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(entries, f, indent=2)
+    _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:

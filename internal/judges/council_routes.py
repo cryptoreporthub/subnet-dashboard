@@ -416,13 +416,20 @@ def _canonical_postmortem_judge(raw: str) -> str:
     return name
 
 
+def _safe_list_postmortems(judge_name: str) -> List[Dict[str, Any]]:
+    from internal.judges.postmortems import list_for_judge
+
+    try:
+        return list_for_judge(judge_name)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Unknown judge") from None
+
+
 @council_router.get("/api/judges/{judge}/postmortems")
 async def api_judge_postmortems(judge: str):
     """Return scientific-method postmortems for a single judge."""
-    from internal.judges.postmortems import list_for_judge
-
     name = _canonical_postmortem_judge(judge)
-    return {"status": "success", "judge": name, "postmortems": list_for_judge(name)}
+    return {"status": "success", "judge": name, "postmortems": _safe_list_postmortems(name)}
 
 
 @council_router.get("/api/council-ab")
@@ -499,14 +506,14 @@ async def api_portfolios():
 @council_router.get("/api/postmortems")
 async def api_postmortems(judge: Optional[str] = None):
     """Return all postmortems, optionally filtered by judge name."""
-    from internal.judges.postmortems import all_postmortems, list_for_judge
+    from internal.judges.postmortems import all_postmortems
 
     if judge is not None:
         name = _canonical_postmortem_judge(judge)
         return {
             "status": "success",
             "judge": name,
-            "postmortems": list_for_judge(name),
+            "postmortems": _safe_list_postmortems(name),
         }
     return {"postmortems": all_postmortems()}
 
@@ -514,10 +521,8 @@ async def api_postmortems(judge: Optional[str] = None):
 @council_router.get("/api/postmortems/{judge_name}")
 async def api_postmortems_by_judge(judge_name: str):
     """Return postmortems for a specific judge."""
-    from internal.judges.postmortems import list_for_judge
-
     name = _canonical_postmortem_judge(judge_name)
-    return {"status": "success", "judge": name, "postmortems": list_for_judge(name)}
+    return {"status": "success", "judge": name, "postmortems": _safe_list_postmortems(name)}
 
 
 @council_router.get("/judge-council", response_class=HTMLResponse)
