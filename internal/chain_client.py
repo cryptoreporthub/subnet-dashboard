@@ -575,8 +575,13 @@ class ChainClient:
         # pool for many seconds past live_subnets' join() ceiling and wedging the
         # sync at sync_start. Break out once the budget elapses and return the
         # rows that already completed (still netuid-sorted, same shape).
-        batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-        deadline = time.monotonic() + batch_budget
+        deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
+        if deadline_mono:
+            deadline = float(deadline_mono)
+            batch_budget = max(0.0, deadline - time.monotonic())
+        else:
+            batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+            deadline = time.monotonic() + batch_budget
 
         rows = []
         pool = ThreadPoolExecutor(max_workers=workers)

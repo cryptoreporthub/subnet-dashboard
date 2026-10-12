@@ -25,6 +25,28 @@ def test_price_batch_deadline_returns_completed_rows(monkeypatch):
     }]
 
 
+def test_batch_deadline_honors_parent_monotonic_deadline(monkeypatch):
+    from internal.chain_client import ChainClient
+
+    client = ChainClient.__new__(ChainClient)
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+    monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC",
+        str(time.monotonic() + 0.08),
+    )
+    client.is_healthy = lambda: True
+
+    def price(netuid):
+        if netuid == 2:
+            time.sleep(0.25)
+        return float(netuid)
+
+    client.get_alpha_price = price
+    rows = client.get_subnet_price_rows([2, 1])
+    assert [r["netuid"] for r in rows] == [1]
+
+
 def test_price_batch_deadline_includes_executor_shutdown(monkeypatch):
     from internal.chain_client import ChainClient
 

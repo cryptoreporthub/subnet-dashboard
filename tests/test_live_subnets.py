@@ -314,6 +314,38 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
+    """Child batch clock must match parent RPC window (not a fresh 85s after setup)."""
+    from internal import live_subnets
+    import internal.live_subnets_ipc as ipc
+
+    sent_deadlines: list[float] = []
+    real_send = ipc.send_message
+
+    def _spy_send(conn, payload, *, deadline=None):
+        if isinstance(payload, dict) and "rpc_deadline_monotonic" in payload:
+            sent_deadlines.append(float(payload["rpc_deadline_monotonic"]))
+        return real_send(conn, payload, deadline=deadline)
+
+    monkeypatch.setattr(ipc, "send_message", _spy_send)
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_SETUP_SLEEP_SECONDS", "0.25")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "1.0")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 1.0)
+
+    t0 = time.monotonic()
+    out = live_subnets._fetch_chain_data()
+    assert out and out[0]["netuid"] == 1
+    assert len(sent_deadlines) == 1
+    assert sent_deadlines[0] > t0
+    assert sent_deadlines[0] <= t0 + 1.05
+
+
 def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):
     from internal import live_subnets
 

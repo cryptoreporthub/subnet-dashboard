@@ -203,8 +203,9 @@ def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: fl
 def _fetch_chain_data():
     """Spawn fetch child; ``spawn_grace`` covers only the ready handshake.
 
-    ``LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS`` (RPC budget) starts after ready and
-    includes child setup imports plus ``collect_chain_rows()`` work.
+    After ready, parent sends ``rpc_deadline_monotonic`` (absolute clock) so the
+    child's lite batch deadline is the remaining parent RPC window, not a fresh
+    ``LIVE_SUBNETS_BATCH_DEADLINE_SECONDS`` slice after setup imports.
     """
     from internal.live_subnets_fetch_child import run_fetch_child
     from internal.live_subnets_ipc import recv_message
@@ -238,7 +239,18 @@ def _fetch_chain_data():
             killed = True
             _terminate_fetch_process(proc)
             return None
+        from internal.live_subnets_ipc import send_message
+
         rpc_deadline = time.monotonic() + rpc_budget
+        if not send_message(
+            parent_sock,
+            {"rpc_deadline_monotonic": rpc_deadline},
+            deadline=time.monotonic() + min(5.0, rpc_budget),
+        ):
+            logger.warning("live_subnets failed to send RPC deadline to fetch child")
+            killed = True
+            _terminate_fetch_process(proc)
+            return None
         msg = recv_message(parent_sock, rpc_deadline)
         if msg is None:
             logger.warning(

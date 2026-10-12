@@ -39,6 +39,12 @@ def _registry_netuids() -> List[int]:
 
 def collect_chain_rows() -> List[dict[str, Any]]:
     """Blocking RPC fetch; chain_client uses per-request socket timeouts."""
+    setup_sleep = os.environ.get("LIVE_SUBNETS_CHILD_SETUP_SLEEP_SECONDS", "").strip()
+    if setup_sleep:
+        import time
+
+        time.sleep(float(setup_sleep))
+
     sleep_s = os.environ.get("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "").strip()
     if sleep_s:
         import time
@@ -87,9 +93,20 @@ def run_fetch_child(conn) -> None:
         ready_sleep = os.environ.get("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "").strip()
         if ready_sleep:
             time.sleep(float(ready_sleep))
+        from internal.live_subnets_ipc import recv_message
+
         if not send_message(conn, {"phase": "ready"}, deadline=_child_send_deadline()):
             return
-        data = collect_chain_rows()
+        params = recv_message(conn, time.monotonic() + 5.0)
+        if not isinstance(params, dict) or params.get("rpc_deadline_monotonic") is None:
+            return
+        os.environ["LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC"] = str(
+            float(params["rpc_deadline_monotonic"])
+        )
+        try:
+            data = collect_chain_rows()
+        finally:
+            os.environ.pop("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", None)
         send_message(conn, {"ok": True, "data": data}, deadline=_child_send_deadline())
     except Exception as exc:
         send_message(conn, {"ok": False, "exc": str(exc)}, deadline=_child_send_deadline())
