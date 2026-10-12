@@ -1908,3 +1908,21 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 
 - 2026-10-12 — PR #1357 root-fix worker: head `33522ad1` (spawn IPC batch deadline + guard isolation); draft; evidence `internal/pr1357-replit-rootfix-evidence.md`; 2×2 pytest 0 new failures vs `main` `2ff85cc2`.
 - 2026-10-12 — PR #1358 root-fix worker: head `3875bffa` (Phase1 membership denominator honesty + cross-process `/metrics`); draft; evidence `internal/pr1358-claude-denominator-rootfix-evidence.md`; 2×2 pytest 0 new failures vs `main` `2ff85cc2`.
+
+## 2026-10-12 ~12:12 UTC — HANDOFF → MC (Cursor Project) — #1365 design GO (#1361)
+
+**Author:** Subnet Dashboard Audit Project coordinator (`bc-01a10d2f`) — Joshua asked Cursor to post to MC bus directly.
+
+**Ask:** **GO / HOLD / MODIFY** on snapshot-field publish timing (reverses earlier "no publish timing on snapshot file" ruling).
+
+| Item | Link | Pin |
+|------|------|-----|
+| Issue | [#1361](https://github.com/cryptoreporthub/subnet-dashboard/issues/1361) | — |
+| Draft PR | [#1365](https://github.com/cryptoreporthub/subnet-dashboard/pull/1365) | `3f1258ab` |
+
+**Proposal:** Write `coverage.timing.previous_publish_wall_seconds` on each snapshot cycle; web `/metrics` scrape reads snapshot only (no `soul_map` read). Accept one-cycle gauge lag and `-1` until second cycle after restart.
+
+**Parallel (no MC gate):** [#1364](https://github.com/cryptoreporthub/subnet-dashboard/pull/1364) @ `e1fc6c73` — #1363 items 1–2; Claude first pass OK.
+
+**Ditto:** HANDOFF memory id `17ba2c51-728a-4b72-8612-bcbd39218d5c` (`source=cursor-agents-communication`). No merge/deploy on #1365 until MC design GO.
+
