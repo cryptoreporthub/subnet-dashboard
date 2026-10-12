@@ -1905,3 +1905,6 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **Draft**; merge/deploy **HOLD** pending Joshua GO. **No deploy.**
 
 - Ditto STATUS: correction + snapshot posted `source=cursor` (see latest `save_memory` after this log commit).
+
+- 2026-10-12 — PR #1357 root-fix worker: head `33522ad1` (spawn IPC batch deadline + guard isolation); draft; evidence `internal/pr1357-replit-rootfix-evidence.md`; 2×2 pytest 0 new failures vs `main` `2ff85cc2`.
+- 2026-10-12 — PR #1358 root-fix worker: head `3875bffa` (Phase1 membership denominator honesty + cross-process `/metrics`); draft; evidence `internal/pr1358-claude-denominator-rootfix-evidence.md`; 2×2 pytest 0 new failures vs `main` `2ff85cc2`.
