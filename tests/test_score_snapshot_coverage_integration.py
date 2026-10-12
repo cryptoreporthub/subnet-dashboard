@@ -59,7 +59,11 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
     timing = coverage.get("timing") or {}
     assert timing.get("build_wall_seconds") is not None
     assert timing.get("publish_wall_seconds") is not None
-    assert coverage.get("hour", {}).get("hour_copied_from_day") is True
+    hour_block = coverage.get("hour") or {}
+    assert hour_block.get("hour_copied_from_day") is True
+    assert hour_block.get("status") == "copied"
+    assert hour_block.get("attempted") == 0
+    assert coverage.get("complete") is True
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert "coverage" in saved
     on_disk_timing = (saved.get("coverage") or {}).get("timing") or {}
@@ -350,6 +354,42 @@ def test_metrics_skips_stale_disk_coverage(tmp_path, monkeypatch):
     SCORE_SNAPSHOT_COVERAGE_COMPLETE.set(0.0)
     refresh_from_state()
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
+
+
+def test_metrics_publish_wall_unavailable_from_disk_coverage(tmp_path, monkeypatch):
+    from internal.metrics import (
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
+        SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    path.write_text(
+        json.dumps(
+            {
+                "written_at": now,
+                "build_started_at": now,
+                "day": [{"netuid": 1, "total_score": 1.0}],
+                "hour": [],
+                "coverage": {
+                    "published": True,
+                    "complete": False,
+                    "timing": {"build_wall_seconds": 1.0},
+                    "day": {"succeeded": [1], "complete": False},
+                    "hour": {"succeeded": [], "complete": False},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(0.5)
+    refresh_from_state()
+    assert (
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
+        == SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+    )
 
 
 def test_metrics_registry_exposes_coverage_gauges():

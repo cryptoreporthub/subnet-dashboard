@@ -137,9 +137,29 @@ def _horizon_block(
         attempted_set = {int(n) for n in attempted_netuids}
     else:
         attempted_set = succeeded_set | failed_ids
-    tradable_set = tradable_netuids or set()
-    missing_not_admitted = sorted(expected_set - tradable_set) if tradable_set else []
+    if tradable_netuids is None:
+        missing_not_admitted = []
+    else:
+        tradable_set = set(tradable_netuids)
+        missing_not_admitted = sorted(expected_set - tradable_set)
     unaccounted = sorted(expected_set - succeeded_set - failed_ids)
+    scored_complete = (
+        succeeded_set == expected_set
+        and bool(expected_set)
+        and not missing_not_admitted
+        and not unaccounted
+    )
+    hour_status: Optional[str] = None
+    if horizon == "hour":
+        if hour_copied_from_day:
+            hour_status = "copied"
+            # Copied hour rows satisfy the horizon without independent hour scoring attempts.
+            complete = scored_complete
+        else:
+            hour_status = "scored"
+            complete = scored_complete and bool(attempted_set)
+    else:
+        complete = scored_complete
     return {
         "horizon": horizon,
         "expected": expected,
@@ -150,12 +170,8 @@ def _horizon_block(
         "missing_not_admitted": missing_not_admitted,
         "unaccounted": unaccounted,
         "skipped_invalid": max(0, len(expected) - len(succeeded_set) - len(failed)),
-        "complete": (
-            succeeded_set == expected_set
-            and bool(expected_set)
-            and not missing_not_admitted
-            and not unaccounted
-        ),
+        "complete": complete,
+        "status": hour_status,
         "hour_copied_from_day": hour_copied_from_day if horizon == "hour" else False,
     }
 
@@ -213,7 +229,12 @@ def build_coverage_block(
         attempted_netuids=hour_attempted,
     )
     membership_ok = membership_allows_complete(receipt)
-    horizons_complete = day_block["complete"] and hour_block["complete"]
+    hour_ok = False
+    if hour_block.get("hour_copied_from_day"):
+        hour_ok = hour_block.get("status") == "copied" and hour_block.get("complete") is True
+    else:
+        hour_ok = hour_block.get("status") == "scored" and hour_block.get("complete") is True
+    horizons_complete = day_block["complete"] and hour_ok
     complete = bool(
         published
         and membership_ok
@@ -308,6 +329,7 @@ def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
         }
         if horizon == "hour":
             slim["hour_copied_from_day"] = block.get("hour_copied_from_day")
+            slim["status"] = block.get("status")
         out[horizon] = slim
     return out
 
@@ -331,7 +353,9 @@ def reset_score_snapshot_gauges() -> None:
         SCORE_SNAPSHOT_COVERAGE_COMPLETE.set(0.0)
         SCORE_SNAPSHOT_COVERAGE_PUBLISHED.set(0.0)
         SCORE_SNAPSHOT_TIMING_BUILD_SECONDS.set(0.0)
-        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(0.0)
+        from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE)
         for horizon in ("day", "hour"):
             SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon=horizon).set(0.0)
     except Exception:
@@ -358,10 +382,21 @@ def publish_metrics(coverage: Dict[str, Any]) -> None:
         except Exception:
             pass
 
+    from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+
     _set(SCORE_SNAPSHOT_COVERAGE_COMPLETE, 1.0 if coverage.get("complete") else 0.0)
     _set(SCORE_SNAPSHOT_COVERAGE_PUBLISHED, 1.0 if coverage.get("published") else 0.0)
     _set(SCORE_SNAPSHOT_TIMING_BUILD_SECONDS, timing.get("build_wall_seconds"))
-    _set(SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS, timing.get("publish_wall_seconds"))
+    publish_wall = timing.get("publish_wall_seconds")
+    if publish_wall is None:
+        try:
+            SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(
+                SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+            )
+        except Exception:
+            pass
+    else:
+        _set(SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS, publish_wall)
     for horizon in ("day", "hour"):
         block = coverage.get(horizon) or {}
         try:

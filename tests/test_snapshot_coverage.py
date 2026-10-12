@@ -139,6 +139,34 @@ def test_membership_expected_is_full_set_not_tradable_shrink():
     assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1, 2, 3]
 
 
+def test_empty_tradable_set_is_known_not_unknown():
+    receipt = {
+        "fresh": True,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+        "expected_netuids": [1, 2],
+    }
+    block = cov.build_coverage_block(
+        receipt=receipt,
+        day_expected=[1, 2],
+        day_succeeded=[],
+        day_failed=[],
+        hour_succeeded=[],
+        hour_failed=[],
+        hour_copied_from_day=True,
+        capped_out=0,
+        selection_policy="full",
+        subnet_source="registry",
+        published=True,
+        timing={"build_wall_seconds": 1.0},
+        tradable_netuids=set(),
+    )
+    assert block["day"]["missing_not_admitted"] == [1, 2]
+    assert block["day"]["unaccounted"] == [1, 2]
+
+
 def test_horizon_tracks_missing_not_admitted():
     receipt = {
         "fresh": True,

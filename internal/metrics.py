@@ -71,8 +71,9 @@ SCORE_SNAPSHOT_TIMING_BUILD_SECONDS = Gauge(
 )
 SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS = Gauge(
     "subnet_score_snapshot_publish_wall_seconds",
-    "Wall seconds for the last score snapshot locked publish",
+    "Wall seconds for the last score snapshot locked publish (-1 when not on disk)",
 )
+SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE = -1.0
 SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(
     "subnet_score_snapshot_horizon_succeeded",
     "Succeeded netuids in the last coverage block",
