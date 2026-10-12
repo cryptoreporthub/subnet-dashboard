@@ -299,7 +299,7 @@ def _soul_map_publish_wall_seconds() -> Optional[float]:
     try:
         from internal.council import weights
 
-        data = weights._load_raw(weights.SOUL_MAP_PATH)
+        data = weights._load_raw(weights.SOUL_MAP_PATH, copy_blob=False)
         sched = data.get("score_snapshot_scheduler") if isinstance(data, dict) else None
         if not isinstance(sched, dict):
             return None
@@ -345,15 +345,23 @@ def _build_wall_gauge_value(timing: Dict[str, Any]) -> float:
     return float(build)
 
 
+def _hour_block_is_copied(block: Dict[str, Any]) -> bool:
+    """Honor explicit status; infer copied from legacy hour_copied_from_day when absent."""
+    status = block.get("status")
+    if status is not None:
+        return status == "copied"
+    return bool(block.get("hour_copied_from_day"))
+
+
 def _horizon_scored_count(block: Dict[str, Any], horizon: str) -> int:
     succeeded = block.get("succeeded") or []
-    if horizon == "hour" and block.get("status") == "copied":
+    if horizon == "hour" and _hour_block_is_copied(block):
         return 0
     return len(succeeded)
 
 
 def _horizon_copied_count(block: Dict[str, Any], horizon: str) -> int:
-    if horizon != "hour" or block.get("status") != "copied":
+    if horizon != "hour" or not _hour_block_is_copied(block):
         return 0
     return len(block.get("succeeded") or [])
 

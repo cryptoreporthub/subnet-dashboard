@@ -437,6 +437,48 @@ def test_hour_copied_horizon_gauges_on_scrape(tmp_path, monkeypatch):
     assert SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon="day")._value.get() == 2.0
 
 
+def test_legacy_disk_hour_without_status_infers_copied_on_scrape(tmp_path, monkeypatch):
+    from internal.metrics import (
+        SCORE_SNAPSHOT_HORIZON_COPIED,
+        SCORE_SNAPSHOT_HORIZON_SUCCEEDED,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    path.write_text(
+        json.dumps(
+            {
+                "written_at": now,
+                "build_started_at": now,
+                "day": [{"netuid": 1, "total_score": 1.0}, {"netuid": 2, "total_score": 2.0}],
+                "hour": [],
+                "coverage": {
+                    "published": True,
+                    "complete": True,
+                    "timing": {"build_wall_seconds": 1.0},
+                    "day": {
+                        "succeeded": [1, 2],
+                        "complete": True,
+                    },
+                    "hour": {
+                        "succeeded": [1, 2],
+                        "hour_copied_from_day": True,
+                        "attempted": 0,
+                        "complete": True,
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    cov.reset_phase1_cycle_state_for_tests()
+    refresh_from_state()
+    assert SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon="hour")._value.get() == 0.0
+    assert SCORE_SNAPSHOT_HORIZON_COPIED.labels(horizon="hour")._value.get() == 2.0
+
+
 def test_metrics_publish_wall_unavailable_from_disk_coverage(tmp_path, monkeypatch):
     from internal.metrics import (
         SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,

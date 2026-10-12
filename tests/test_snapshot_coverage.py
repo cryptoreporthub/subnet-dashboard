@@ -139,6 +139,27 @@ def test_membership_expected_is_full_set_not_tradable_shrink():
     assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1, 2, 3]
 
 
+def test_legacy_hour_copied_infers_without_status_field():
+    block = {
+        "succeeded": [1, 2],
+        "hour_copied_from_day": True,
+        "attempted": 0,
+    }
+    assert cov._horizon_scored_count(block, "hour") == 0
+    assert cov._horizon_copied_count(block, "hour") == 2
+
+
+def test_explicit_hour_status_scored_overrides_legacy_flag():
+    block = {
+        "succeeded": [1, 2],
+        "hour_copied_from_day": True,
+        "status": "scored",
+        "attempted": 2,
+    }
+    assert cov._horizon_scored_count(block, "hour") == 2
+    assert cov._horizon_copied_count(block, "hour") == 0
+
+
 def test_empty_tradable_set_is_known_not_unknown():
     receipt = {
         "fresh": True,
