@@ -19,7 +19,19 @@ from typing import Any, Dict, List, Optional
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 
 def _path(judge_name: str) -> str:
-    return os.path.join(POSTMORTEMS_DIR, f"{judge_name.lower()}.json")
+    """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
+    name = judge_name.lower()
+    from internal.judges import get_judge
+
+    if get_judge(name) is None:
+        raise ValueError("Unknown judge")
+
+    path = os.path.join(POSTMORTEMS_DIR, f"{name}.json")
+    base = os.path.realpath(POSTMORTEMS_DIR)
+    resolved = os.path.realpath(path)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        raise ValueError("path outside postmortems directory")
+    return path
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -28,16 +40,34 @@ def _load(judge_name: str) -> List[Dict[str, Any]]:
     path = _path(judge_name)
     try:
         with open(path, "r") as f:
-            return json.load(f)
-    except Exception:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
+
+def _write_tmp_json(tmp: str, entries: List[Dict[str, Any]]) -> None:
+    """Write JSON to a fresh tmp file; refuse pre-existing symlinks (TOCTOU hardening)."""
+    if os.path.lexists(tmp):
+        if os.path.islink(tmp):
+            raise OSError("refusing to write postmortem tmp through symlink")
+        os.unlink(tmp)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(entries, f, indent=2)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 
 def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
     os.makedirs(POSTMORTEMS_DIR, exist_ok=True)
     path = _path(judge_name)
     tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(entries, f, indent=2)
+    _write_tmp_json(tmp, entries)
     os.replace(tmp, path)
 
 def _diagnosis(prediction: Dict[str, Any], actual_pct: Optional[float]) -> Dict[str, str]:
@@ -121,10 +151,19 @@ def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     """Return all postmortems for a judge, newest first."""
     return list(reversed(_load(judge_name)))
 
+
+def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:
+    """Like list_for_judge but returns [] when path validation fails (aggregate reads)."""
+    try:
+        return list_for_judge(judge_name)
+    except ValueError:
+        return []
+
+
 def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
     """Return postmortems for all three judges."""
     return {
-        "oracle": list_for_judge("oracle"),
-        "echo": list_for_judge("echo"),
-        "pulse": list_for_judge("pulse"),
+        "oracle": _list_for_judge_fail_empty("oracle"),
+        "echo": _list_for_judge_fail_empty("echo"),
+        "pulse": _list_for_judge_fail_empty("pulse"),
     }
