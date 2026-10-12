@@ -1959,3 +1959,10 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **Replit:** PASS @ `d704f3d9` ([#6123488959](https://github.com/cryptoreporthub/subnet-dashboard/pull/1358#issuecomment-6123488959)).
 - **Deploy:** **HOLD** until Joshua GO deploy — no vehicle; prod not on cap merge.
 
+## 2026-10-12 — P0 #1367 postmortems path traversal (draft PR)
+
+- **Branch:** `cursor/postmortems-path-traversal-1367-3113` @ **`5bb94a48`**.
+- **Fix:** Allow-list + `realpath` containment in `postmortems._path`; aligned `/api/postmortems` routes; tests `test_postmortems_security.py`.
+- **PR:** [#1371](https://github.com/cryptoreporthub/subnet-dashboard/pull/1371) draft, **Fixes #1367**; no deploy.
+- **Tests:** `PYTHONPATH=. pytest tests/test_postmortems_security.py tests/test_endpoint_contract.py -q` → **161 passed**.
+
