@@ -539,37 +539,34 @@ class ChainClient:
         if not self.is_healthy():
             logger.warning("RPC health false-negative — attempting lite price fetch anyway")
 
-        outcomes: dict[int, str] = {}
-
         def _one(netuid: int):
+            """Return row + outcome; caller alone records outcomes (no shared mutable dict)."""
             try:
                 price = self.get_alpha_price(netuid)
-                if price is not None:
-                    outcomes[netuid] = "ok"
-                    row = {
-                        "netuid": netuid,
-                        "name": f"SN{netuid}",
-                        "price": price,
-                        "source": "blockmachine",
-                    }
-                    pool = self.get_pool_state(netuid)
-                    if pool:
-                        row.update(
-                            {
-                                "liquidity": pool.get("liquidity"),
-                                "total_tao": pool.get("total_tao"),
-                                "total_alpha": pool.get("total_alpha"),
-                                "taoLiquidity": pool.get("total_tao"),
-                                "tao_reserve_raw": pool.get("tao_reserve_raw"),
-                                "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
-                            }
-                        )
-                    return row
-                outcomes[netuid] = "no_price"
+                if price is None:
+                    return None, "no_price"
+                row = {
+                    "netuid": netuid,
+                    "name": f"SN{netuid}",
+                    "price": price,
+                    "source": "blockmachine",
+                }
+                pool = self.get_pool_state(netuid)
+                if pool:
+                    row.update(
+                        {
+                            "liquidity": pool.get("liquidity"),
+                            "total_tao": pool.get("total_tao"),
+                            "total_alpha": pool.get("total_alpha"),
+                            "taoLiquidity": pool.get("total_tao"),
+                            "tao_reserve_raw": pool.get("tao_reserve_raw"),
+                            "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
+                        }
+                    )
+                return row, "ok"
             except Exception as exc:
                 logger.debug("price fetch netuid %d: %s", netuid, exc)
-                outcomes[netuid] = "rpc_error"
-            return None
+                return None, "rpc_error"
 
         try:
             workers = int(os.environ.get("LIVE_SUBNETS_LITE_WORKERS", "8"))
@@ -588,6 +585,7 @@ class ChainClient:
             deadline = time.monotonic() + batch_budget
 
         rows = []
+        outcomes: dict[int, str] = {}
         pool = ThreadPoolExecutor(max_workers=workers)
         try:
             futures = {pool.submit(_one, n): n for n in netuids}
@@ -597,16 +595,15 @@ class ChainClient:
                     slice_timeout = max(0.0, min(0.25, deadline - time.monotonic()))
                     for fut in as_completed(remaining, timeout=slice_timeout):
                         remaining.discard(fut)
-                        row = fut.result()
+                        row, outcome = fut.result()
+                        outcomes[futures[fut]] = outcome
                         if row:
                             rows.append(row)
                 except _FutureTimeout:
                     if time.monotonic() >= deadline:
                         break
             for fut in remaining:
-                netuid = futures[fut]
-                if netuid not in outcomes:
-                    outcomes[netuid] = "batch_expired"
+                outcomes[futures[fut]] = "batch_expired"
                 fut.cancel()
         finally:
             shutdown_wait = max(0.0, deadline - time.monotonic())
@@ -627,7 +624,7 @@ class ChainClient:
         return {
             "rows": rows,
             "batch_expired": batch_expired,
-            "netuid_outcomes": outcomes,
+            "netuid_outcomes": dict(outcomes),
         }
 
 

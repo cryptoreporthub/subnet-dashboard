@@ -759,4 +759,3 @@ def test_live_data_freshness_marks_stale_when_sync_disabled(monkeypatch, tmp_pat
         info = live_subnets.live_data_freshness()
     assert info["sync_enabled"] is False
     assert info["stale"] is True
-
