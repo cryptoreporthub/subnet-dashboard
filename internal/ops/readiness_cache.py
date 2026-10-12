@@ -15,6 +15,8 @@ _CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _CACHE_LOCK = threading.Lock()
 _BG_LOCK = threading.Lock()
 _BG_STARTED = False
+_WARM_GENERATION = 0
+_WARM_THREAD: Optional[threading.Thread] = None
 _REFRESHER_STOP = threading.Event()
 _REFRESHER_STARTED = False
 _REFRESHER_GENERATION = 0
@@ -48,12 +50,16 @@ def build_invocation_count() -> int:
 
 def reset_readiness_cache() -> None:
     """Tests/isolation: clear cached readiness, builds, and section in-flight state."""
-    global _REFRESHER_GENERATION, _REFRESHER_STARTED
+    global _REFRESHER_GENERATION, _REFRESHER_STARTED, _WARM_GENERATION
     _REFRESHER_GENERATION += 1
+    _WARM_GENERATION += 1
     stop_readiness_refresher()
     t = _REFRESHER_THREAD
     if t is not None and t.is_alive():
         t.join(timeout=3.0)
+    wt = _WARM_THREAD
+    if wt is not None and wt.is_alive():
+        wt.join(timeout=3.0)
     with _CACHE_LOCK:
         _CACHE["at"] = 0.0
         _CACHE["payload"] = None
@@ -224,7 +230,8 @@ def _build_blocking(*, force: bool = False) -> Dict[str, Any]:
 
 def _kick_background_build() -> None:
     """Warm cache after a timeout without cancelling mid-build waiters."""
-    global _BG_STARTED
+    global _BG_STARTED, _WARM_THREAD
+    generation = _WARM_GENERATION
     with _BG_LOCK:
         if _BG_STARTED:
             return
@@ -233,6 +240,8 @@ def _kick_background_build() -> None:
     def _run() -> None:
         global _BG_STARTED
         try:
+            if generation != _WARM_GENERATION:
+                return
             _build_blocking(force=True)
         except _BuildBusy:
             pass
@@ -240,9 +249,13 @@ def _kick_background_build() -> None:
             _record_build_failure(type(exc).__name__)
         finally:
             with _BG_LOCK:
-                _BG_STARTED = False
+                if generation == _WARM_GENERATION:
+                    _BG_STARTED = False
 
-    threading.Thread(target=_run, name="readiness-cache-warm", daemon=True).start()
+    _WARM_THREAD = threading.Thread(
+        target=_run, name="readiness-cache-warm", daemon=True
+    )
+    _WARM_THREAD.start()
 
 
 def _busy_payload(*, stale: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

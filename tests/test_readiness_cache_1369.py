@@ -182,6 +182,62 @@ def test_abandoned_build_does_not_overwrite_cache():
         assert cache._CACHE["payload"]["marker"] == "new"
 
 
+def _warm_thread_count() -> int:
+    import threading
+
+    return sum(1 for t in threading.enumerate() if t.name == "readiness-cache-warm")
+
+
+def test_warm_reset_fences_old_worker(monkeypatch):
+    """Blocked warm build → reset → re-kick must not leave two warm workers."""
+    import threading
+
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    gate = threading.Event()
+    calls = {"n": 0, "lock": threading.Lock()}
+
+    def _blocking_build(*, force: bool = False):
+        with calls["lock"]:
+            calls["n"] += 1
+        gate.wait(timeout=2.0)
+        return {"status": "ready", "ready": True, "issues": []}
+
+    with patch.object(cache, "_build_blocking", side_effect=_blocking_build):
+        cache._kick_background_build()
+        for _ in range(40):
+            if calls["n"] >= 1:
+                break
+            time.sleep(0.02)
+        assert calls["n"] >= 1
+        assert _warm_thread_count() == 1
+        cache.reset_readiness_cache()
+        gate.set()
+        for _ in range(40):
+            if _warm_thread_count() == 0:
+                break
+            time.sleep(0.02)
+        gate.clear()
+        with calls["lock"]:
+            calls["n"] = 0
+        cache._kick_background_build()
+        for _ in range(40):
+            if calls["n"] >= 1:
+                break
+            time.sleep(0.02)
+        assert _warm_thread_count() == 1
+        cache._kick_background_build()
+        assert _warm_thread_count() == 1
+        gate.set()
+        for _ in range(40):
+            if _warm_thread_count() == 0:
+                break
+            time.sleep(0.02)
+        cache.reset_readiness_cache()
+    assert calls["n"] == 1
+
+
 def test_refresher_reset_fences_old_loop(monkeypatch):
     """Blocked build → reset → restart must not double refresher cadence."""
     import threading
