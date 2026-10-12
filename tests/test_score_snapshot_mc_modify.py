@@ -94,7 +94,7 @@ def test_skipped_older_records_liveness_skip(tmp_path, monkeypatch):
 
 
 def test_on_disk_coverage_timing_is_build_only_ac9a(tmp_path, monkeypatch):
-    """AC #9a: publish_wall_seconds is not persisted in score_snapshots.json."""
+    """AC #9a: current publish_wall_seconds is not persisted; previous cycle may be."""
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
     out = snaps.write_full_universe_snapshot()
     timing = (out.get("coverage") or {}).get("timing") or {}
@@ -109,16 +109,29 @@ def test_one_locked_replace_per_publish_cycle(tmp_path, monkeypatch):
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
     snap_path = str(path)
     replace_calls: list[str] = []
+    payloads_at_replace: list[dict] = []
     real_replace = __import__("os").replace
 
     def _spy_replace(src, dst, *args, **kwargs):
         if dst == snap_path:
             replace_calls.append(dst)
+            payloads_at_replace.append(json.loads(open(src, encoding="utf-8").read()))
         return real_replace(src, dst, *args, **kwargs)
 
     monkeypatch.setattr("os.replace", _spy_replace)
-    snaps.write_full_universe_snapshot()
+    first = snaps.write_full_universe_snapshot()
     assert replace_calls == [snap_path]
+    first_pub = (first.get("coverage") or {}).get("timing", {}).get("publish_wall_seconds")
+    snaps.write_full_universe_snapshot()
+    assert replace_calls == [snap_path, snap_path]
+    second_payload = payloads_at_replace[1]
+    prev = (second_payload.get("coverage") or {}).get("timing", {}).get(
+        "previous_publish_wall_seconds"
+    )
+    assert prev == round(float(first_pub), 6)
+    assert "publish_wall_seconds" not in (
+        (second_payload.get("coverage") or {}).get("timing") or {}
+    )
 
 
 def test_equality_with_capped_input_is_not_green(tmp_path, monkeypatch):
