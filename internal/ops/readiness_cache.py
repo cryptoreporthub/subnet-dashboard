@@ -44,6 +44,31 @@ def build_invocation_count() -> int:
     return _BUILD_INVOCATIONS
 
 
+def reset_readiness_cache() -> None:
+    """Tests/isolation: clear cached readiness, builds, and section in-flight state."""
+    stop_readiness_refresher()
+    with _CACHE_LOCK:
+        _CACHE["at"] = 0.0
+        _CACHE["payload"] = None
+    with _BUILD_SLOT_LOCK:
+        global _BUILD_GENERATION, _ACTIVE_BUILD_GENERATION, _BUILD_STARTED_AT, _BUILD_INVOCATIONS
+        _BUILD_GENERATION = 0
+        _ACTIVE_BUILD_GENERATION = None
+        _BUILD_STARTED_AT = 0.0
+        _BUILD_INVOCATIONS = 0
+    global _REFRESHER_STARTED, _BG_STARTED
+    _REFRESHER_STARTED = False
+    _REFRESHER_STOP.clear()
+    with _BG_LOCK:
+        _BG_STARTED = False
+    try:
+        from internal.ops.readiness import reset_readiness_section_state
+
+        reset_readiness_section_state()
+    except Exception:
+        pass
+
+
 def readiness_report_age_seconds() -> Optional[float]:
     """Age of cached readiness payload; None when cache empty."""
     with _CACHE_LOCK:

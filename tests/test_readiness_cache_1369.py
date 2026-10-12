@@ -14,18 +14,9 @@ from server import app
 
 
 def _reset_cache():
-    import internal.ops.readiness_cache as cache
+    from internal.ops.readiness_cache import reset_readiness_cache
 
-    with cache._CACHE_LOCK:
-        cache._CACHE["at"] = 0.0
-        cache._CACHE["payload"] = None
-    with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_GENERATION = 0
-        cache._ACTIVE_BUILD_GENERATION = None
-        cache._BUILD_STARTED_AT = 0.0
-    cache._BUILD_INVOCATIONS = 0
-    cache._REFRESHER_STARTED = False
-    cache._REFRESHER_STOP.clear()
+    reset_readiness_cache()
 
 
 def test_stale_payload_marks_ready_false(monkeypatch):
@@ -146,6 +137,29 @@ def test_lifespan_refresher_warms_when_background_on_web_off(monkeypatch):
     payload = cache._stale_copy()
     assert payload is not None
     assert "warmed" in (payload.get("issues") or [])
+
+
+def test_hung_section_bounded_threads_across_builds(monkeypatch):
+    import threading
+
+    import internal.ops.readiness as readiness
+
+    monkeypatch.setattr(readiness, "_SECTION_TIMEOUT", 0.05)
+    hang = {"stop": False}
+
+    def _block():
+        while not hang["stop"]:
+            time.sleep(0.02)
+        return {"graded": 0}
+
+    before = threading.active_count()
+    with patch.object(readiness, "_learning_summary", _block):
+        for _ in range(6):
+            readiness.build_readiness_report()
+    hang["stop"] = True
+    time.sleep(0.15)
+    after = threading.active_count()
+    assert after - before <= 2
 
 
 def test_abandoned_build_does_not_overwrite_cache():

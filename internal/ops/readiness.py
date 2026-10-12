@@ -6,19 +6,32 @@ import json
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, TypeVar
 
 from internal.subnets.feed import probe_feed_layers, subnet_feed_meta
 
 _SECTION_TIMEOUT = float(os.environ.get("READINESS_SECTION_TIMEOUT_SECONDS", "3"))
-_SECTION_HUNG_SECONDS = float(
-    os.environ.get("READINESS_SECTION_HUNG_SECONDS", str(_SECTION_TIMEOUT * 2))
-)
 _SECTION_LOCK = threading.Lock()
-_SECTION_STATE: Dict[str, Dict[str, float]] = {}
+_SECTION_INFLIGHT: Dict[str, Future] = {}
+_SECTION_EXECUTOR = ThreadPoolExecutor(
+    max_workers=int(os.environ.get("READINESS_SECTION_POOL_SIZE", "8")),
+    thread_name_prefix="readiness-section",
+)
 _T = TypeVar("_T")
+
+
+def reset_readiness_section_state() -> None:
+    """Tests: clear in-flight section tracking (hung worker threads may still exit on their own)."""
+    with _SECTION_LOCK:
+        _SECTION_INFLIGHT.clear()
+
+
+def _section_release(name: str, fut: Future) -> None:
+    with _SECTION_LOCK:
+        if _SECTION_INFLIGHT.get(name) is fut:
+            del _SECTION_INFLIGHT[name]
 
 
 def _run_readiness_section(
@@ -29,10 +42,9 @@ def _run_readiness_section(
     issues: List[str],
     meta: List[Dict[str, Any]],
 ) -> _T:
-    now = time.time()
     with _SECTION_LOCK:
-        state = _SECTION_STATE.get(name) or {}
-        if state.get("running") and (now - float(state.get("since") or 0)) < _SECTION_HUNG_SECONDS:
+        inflight = _SECTION_INFLIGHT.get(name)
+        if inflight is not None and not inflight.done():
             issues.append(f"readiness_section_skipped:{name}")
             meta.append(
                 {
@@ -42,49 +54,40 @@ def _run_readiness_section(
                 }
             )
             return default
-        _SECTION_STATE[name] = {"running": 1.0, "since": now}
 
     started = time.perf_counter()
-    pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"readiness-{name}")
-    fut = pool.submit(fn)
-    timed_out = False
+    fut = _SECTION_EXECUTOR.submit(fn)
+    fut.add_done_callback(lambda done: _section_release(name, done))
+    with _SECTION_LOCK:
+        _SECTION_INFLIGHT[name] = fut
+
     try:
-        try:
-            out = fut.result(timeout=_SECTION_TIMEOUT)
-        except FuturesTimeoutError:
-            timed_out = True
-            issues.append(f"readiness_section_timeout:{name}")
-            meta.append(
-                {
-                    "section": name,
-                    "status": "timeout",
-                    "duration_s": round(time.perf_counter() - started, 3),
-                }
-            )
-            return default
-        except Exception as exc:
-            issues.append(f"readiness_section_error:{name}")
-            meta.append(
-                {
-                    "section": name,
-                    "status": "error",
-                    "duration_s": round(time.perf_counter() - started, 3),
-                    "error": str(exc)[:200],
-                }
-            )
-            return default
+        out = fut.result(timeout=_SECTION_TIMEOUT)
+    except FuturesTimeoutError:
+        issues.append(f"readiness_section_timeout:{name}")
         meta.append(
-            {"section": name, "status": "ok", "duration_s": round(time.perf_counter() - started, 3)}
+            {
+                "section": name,
+                "status": "timeout",
+                "duration_s": round(time.perf_counter() - started, 3),
+            }
         )
-        return out
-    finally:
-        pool.shutdown(wait=False, cancel_futures=True)
-        with _SECTION_LOCK:
-            if timed_out:
-                # ponytail: leave running=True so concurrent report builds skip this hung section.
-                _SECTION_STATE[name] = {"running": 1.0, "since": started}
-            else:
-                _SECTION_STATE[name] = {"running": 0.0, "since": time.time()}
+        return default
+    except Exception as exc:
+        issues.append(f"readiness_section_error:{name}")
+        meta.append(
+            {
+                "section": name,
+                "status": "error",
+                "duration_s": round(time.perf_counter() - started, 3),
+                "error": str(exc)[:200],
+            }
+        )
+        return default
+    meta.append(
+        {"section": name, "status": "ok", "duration_s": round(time.perf_counter() - started, 3)}
+    )
+    return out
 
 
 def _utcnow_z() -> str:

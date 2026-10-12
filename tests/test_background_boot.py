@@ -160,6 +160,7 @@ def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
     monkeypatch.setattr("internal.background_boot._start_resolver", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_whale_warm_scheduler", MagicMock())
     monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    monkeypatch.setattr("internal.live_subnets.registry_ready", lambda: True)
 
     from internal.background_boot import start_background_workers
 
@@ -336,7 +337,13 @@ def test_worker_peer_split_v2_web(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     monkeypatch.setenv("WORKER_SPLIT_V2", "on")
     monkeypatch.setenv("INLINE_WORKER", "0")
-    remote = {"worker_peer": {"alive": True, "heartbeat": {"ts": "2026-07-28T16:00:00Z"}}}
+    remote = {
+        "worker_peer": {
+            "alive": True,
+            "source": "file",
+            "heartbeat": {"ts": "2026-07-28T16:00:00Z"},
+        }
+    }
     with patch("internal.worker_proxy.fetch_worker_json_sync", return_value=remote):
         peer = _worker_peer()
     assert peer["peer"] == "dedicated_worker"

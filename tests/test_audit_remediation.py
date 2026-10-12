@@ -24,22 +24,10 @@ def test_ops_live_is_fast_and_minimal():
     assert "worker_peer" in body
 
 
-def _reset_readiness_cache():
-    import internal.ops.readiness_cache as cache
-
-    with cache._CACHE_LOCK:
-        cache._CACHE["at"] = 0.0
-        cache._CACHE["payload"] = None
-    with cache._BUILD_SLOT_LOCK:
-        cache._BUILD_GENERATION = 0
-        cache._ACTIVE_BUILD_GENERATION = None
-        cache._BUILD_STARTED_AT = 0.0
-    cache._REFRESHER_STARTED = False
-    cache._REFRESHER_STOP.clear()
-
-
 def test_readiness_uses_cache(monkeypatch):
-    _reset_readiness_cache()
+    from internal.ops.readiness_cache import reset_readiness_cache
+
+    reset_readiness_cache()
     import internal.ops.readiness_cache as cache
 
     calls = {"n": 0}
@@ -64,7 +52,9 @@ def test_readiness_uses_cache(monkeypatch):
 
 
 def test_readiness_refresh_bypasses_cache(monkeypatch):
-    _reset_readiness_cache()
+    from internal.ops.readiness_cache import reset_readiness_cache
+
+    reset_readiness_cache()
     import internal.ops.readiness_cache as cache
 
     calls = {"n": 0}
@@ -86,7 +76,9 @@ def test_readiness_refresh_bypasses_cache(monkeypatch):
 
 def test_readiness_timeout_serves_stale_primary(monkeypatch):
     """Under build timeout, return last good report — not a naked busy shell."""
-    _reset_readiness_cache()
+    from internal.ops.readiness_cache import reset_readiness_cache
+
+    reset_readiness_cache()
     import asyncio
     import internal.ops.readiness_cache as cache
 
@@ -123,7 +115,9 @@ def test_readiness_timeout_serves_stale_primary(monkeypatch):
 
 
 def test_readiness_busy_lock_does_not_block(monkeypatch):
-    _reset_readiness_cache()
+    from internal.ops.readiness_cache import reset_readiness_cache
+
+    reset_readiness_cache()
     import internal.ops.readiness_cache as cache
 
     with cache._BUILD_SLOT_LOCK:
