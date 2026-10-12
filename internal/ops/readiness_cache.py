@@ -17,6 +17,8 @@ _BG_LOCK = threading.Lock()
 _BG_STARTED = False
 _REFRESHER_STOP = threading.Event()
 _REFRESHER_STARTED = False
+_REFRESHER_GENERATION = 0
+_REFRESHER_THREAD: Optional[threading.Thread] = None
 
 _BUILD_SLOT_LOCK = threading.Lock()
 _BUILD_GENERATION = 0
@@ -46,7 +48,12 @@ def build_invocation_count() -> int:
 
 def reset_readiness_cache() -> None:
     """Tests/isolation: clear cached readiness, builds, and section in-flight state."""
+    global _REFRESHER_GENERATION, _REFRESHER_STARTED
+    _REFRESHER_GENERATION += 1
     stop_readiness_refresher()
+    t = _REFRESHER_THREAD
+    if t is not None and t.is_alive():
+        t.join(timeout=3.0)
     with _CACHE_LOCK:
         _CACHE["at"] = 0.0
         _CACHE["payload"] = None
@@ -56,7 +63,7 @@ def reset_readiness_cache() -> None:
         _ACTIVE_BUILD_GENERATION = None
         _BUILD_STARTED_AT = 0.0
         _BUILD_INVOCATIONS = 0
-    global _REFRESHER_STARTED, _BG_STARTED
+    global _BG_STARTED
     _REFRESHER_STARTED = False
     _REFRESHER_STOP.clear()
     with _BG_LOCK:
@@ -275,16 +282,20 @@ def _empty_read_payload() -> Dict[str, Any]:
 
 def start_readiness_refresher() -> None:
     """Background interval builds — readiness is not computed on the GET path."""
-    global _REFRESHER_STARTED
+    global _REFRESHER_STARTED, _REFRESHER_THREAD
     if _REFRESHER_STARTED:
         return
     _REFRESHER_STARTED = True
     _REFRESHER_STOP.clear()
+    generation = _REFRESHER_GENERATION
 
     def _loop() -> None:
+        global _REFRESHER_STARTED
         # First build soon after boot so monitors do not see readiness_not_warmed long.
         delay = min(5.0, TTL)
         while not _REFRESHER_STOP.wait(delay):
+            if generation != _REFRESHER_GENERATION:
+                break
             delay = TTL
             try:
                 _build_blocking(force=True)
@@ -292,8 +303,12 @@ def start_readiness_refresher() -> None:
                 pass
             except Exception as exc:
                 _record_build_failure(type(exc).__name__)
+        _REFRESHER_STARTED = False
 
-    threading.Thread(target=_loop, name="readiness-refresher", daemon=True).start()
+    _REFRESHER_THREAD = threading.Thread(
+        target=_loop, name="readiness-refresher", daemon=True
+    )
+    _REFRESHER_THREAD.start()
 
 
 def stop_readiness_refresher() -> None:

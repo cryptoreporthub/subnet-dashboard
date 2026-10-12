@@ -139,9 +139,13 @@ def test_lifespan_refresher_warms_when_background_on_web_off(monkeypatch):
     assert "warmed" in (payload.get("issues") or [])
 
 
-def test_hung_section_bounded_threads_across_builds(monkeypatch):
+def _section_pool_thread_count() -> int:
     import threading
 
+    return sum(1 for t in threading.enumerate() if t.name.startswith("readiness-section"))
+
+
+def test_hung_section_bounded_threads_across_builds(monkeypatch):
     import internal.ops.readiness as readiness
 
     monkeypatch.setattr(readiness, "_SECTION_TIMEOUT", 0.05)
@@ -152,14 +156,15 @@ def test_hung_section_bounded_threads_across_builds(monkeypatch):
             time.sleep(0.02)
         return {"graded": 0}
 
-    before = threading.active_count()
+    readiness.build_readiness_report()
+    before = _section_pool_thread_count()
     with patch.object(readiness, "_learning_summary", _block):
         for _ in range(6):
             readiness.build_readiness_report()
     hang["stop"] = True
     time.sleep(0.15)
-    after = threading.active_count()
-    assert after - before <= 2
+    after = _section_pool_thread_count()
+    assert after - before <= 1
 
 
 def test_abandoned_build_does_not_overwrite_cache():
@@ -175,6 +180,41 @@ def test_abandoned_build_does_not_overwrite_cache():
     assert out.get("marker") == "new"
     with cache._CACHE_LOCK:
         assert cache._CACHE["payload"]["marker"] == "new"
+
+
+def test_refresher_reset_fences_old_loop(monkeypatch):
+    """Blocked build → reset → restart must not double refresher cadence."""
+    import threading
+
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    monkeypatch.setattr(cache, "TTL", 0.12)
+    gate = threading.Event()
+    calls = {"n": 0, "lock": threading.Lock()}
+
+    def _blocking_build(*, force: bool = False):
+        with calls["lock"]:
+            calls["n"] += 1
+        gate.wait(timeout=2.0)
+        return {"status": "ready", "ready": True, "issues": []}
+
+    with patch.object(cache, "_build_blocking", side_effect=_blocking_build):
+        cache.start_readiness_refresher()
+        for _ in range(40):
+            if calls["n"] >= 1:
+                break
+            time.sleep(0.02)
+        assert calls["n"] >= 1
+        cache.reset_readiness_cache()
+        gate.set()
+        with calls["lock"]:
+            calls["n"] = 0
+        cache.start_readiness_refresher()
+        time.sleep(0.17)
+        cache.stop_readiness_refresher()
+        cache.reset_readiness_cache()
+    assert calls["n"] == 1
 
 
 def test_build_failure_increments_metric():
