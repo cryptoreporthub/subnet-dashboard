@@ -112,16 +112,22 @@ def _store(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _store_if_current(payload: Dict[str, Any], generation: int) -> Dict[str, Any]:
-    with _BUILD_SLOT_LOCK:
-        if generation != _BUILD_GENERATION:
-            logger.info(
-                "readiness build generation %s abandoned (current %s); cache unchanged",
-                generation,
-                _BUILD_GENERATION,
-            )
-            stale = _stale_copy()
-            return stale if stale is not None else payload
-    return _store(payload)
+    # Lock order matches reset_readiness_cache: _CACHE_LOCK then _BUILD_SLOT_LOCK.
+    with _CACHE_LOCK:
+        with _BUILD_SLOT_LOCK:
+            if generation != _BUILD_GENERATION:
+                logger.info(
+                    "readiness build generation %s abandoned (current %s); cache unchanged",
+                    generation,
+                    _BUILD_GENERATION,
+                )
+                cached = _CACHE.get("payload")
+                stale = dict(cached) if isinstance(cached, dict) else None
+                return stale if stale is not None else payload
+            _CACHE["at"] = time.time()
+            _CACHE["payload"] = payload
+    _touch_metrics_after_store()
+    return payload
 
 
 def _touch_metrics_after_store() -> None:

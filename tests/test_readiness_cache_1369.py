@@ -189,7 +189,7 @@ def _warm_thread_count() -> int:
 
 
 def test_reset_bumps_build_generation_abandoned_warm_store():
-    """Blocked build_readiness_report → reset → new store → release old must keep NEW."""
+    """Blocked build_readiness_report → reset (join timeout) → NEW → release old keeps NEW."""
     import threading
 
     import internal.ops.readiness_cache as cache
@@ -203,28 +203,77 @@ def test_reset_bumps_build_generation_abandoned_warm_store():
             calls["n"] += 1
             n = calls["n"]
         if n == 1:
-            gate.wait(timeout=2.0)
+            gate.wait()
             return {"marker": "OLD", "ready": True, "issues": []}
         return {"marker": "NEW", "ready": True, "issues": []}
 
     with patch("internal.ops.readiness.build_readiness_report", side_effect=_report):
         cache._kick_background_build()
-        for _ in range(40):
+        for _ in range(80):
             with calls["lock"]:
                 if calls["n"] >= 1:
                     break
             time.sleep(0.02)
         assert calls["n"] >= 1
+        warm = cache._WARM_THREAD
+        assert warm is not None and warm.is_alive()
+        t0 = time.perf_counter()
         cache.reset_readiness_cache()
+        assert time.perf_counter() - t0 >= 2.5
+        assert warm.is_alive()
         cache._build_blocking(force=True)
         with cache._CACHE_LOCK:
             assert cache._CACHE["payload"]["marker"] == "NEW"
         gate.set()
-        for _ in range(40):
-            with calls["lock"]:
-                if calls["n"] >= 2:
+        warm.join(timeout=5.0)
+        assert not warm.is_alive()
+    with cache._CACHE_LOCK:
+        assert cache._CACHE["payload"]["marker"] == "NEW"
+
+
+def test_store_if_current_barrier_reset_does_not_clobber():
+    """Interleave reset after gen check: atomic store must not publish OLD payload."""
+    import threading
+
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    at_check = threading.Event()
+    release_old = threading.Event()
+    calls = {"n": 0, "lock": threading.Lock()}
+
+    def _report():
+        with calls["lock"]:
+            calls["n"] += 1
+            n = calls["n"]
+        if n == 1:
+            return {"marker": "OLD", "ready": True, "issues": []}
+        return {"marker": "NEW", "ready": True, "issues": []}
+
+    real_store_if_current = cache._store_if_current
+
+    def _barrier_store_if_current(payload, generation):
+        if payload.get("marker") == "OLD":
+            at_check.set()
+            release_old.wait(timeout=5.0)
+        return real_store_if_current(payload, generation)
+
+    with patch("internal.ops.readiness.build_readiness_report", side_effect=_report):
+        with patch.object(cache, "_store_if_current", side_effect=_barrier_store_if_current):
+            cache._kick_background_build()
+            for _ in range(80):
+                if at_check.is_set():
                     break
-            time.sleep(0.02)
+                time.sleep(0.02)
+            assert at_check.is_set()
+            cache.reset_readiness_cache()
+            cache._build_blocking(force=True)
+            with cache._CACHE_LOCK:
+                assert cache._CACHE["payload"]["marker"] == "NEW"
+            release_old.set()
+            warm = cache._WARM_THREAD
+            if warm is not None:
+                warm.join(timeout=5.0)
     with cache._CACHE_LOCK:
         assert cache._CACHE["payload"]["marker"] == "NEW"
 
