@@ -112,6 +112,26 @@ def recv_message(conn: _Conn, deadline: float) -> Optional[Any]:
         return None
 
 
+def send_framed_body(
+    conn: _Conn,
+    body: bytes,
+    *,
+    deadline: Optional[float] = None,
+) -> bool:
+    """Send one length-prefixed frame; body already pickled."""
+    end = deadline if deadline is not None else (time.monotonic() + 60.0)
+    try:
+        if len(body) > _MAX_PAYLOAD:
+            return False
+        frame = _HEADER.pack(len(body)) + body
+        if hasattr(conn, "send") or hasattr(conn, "fileno"):
+            return _send_exact(conn, frame, end)
+        conn.send_bytes(frame)
+        return True
+    except (EOFError, OSError, BrokenPipeError):
+        return False
+
+
 def send_message(
     conn: _Conn,
     payload: Any,

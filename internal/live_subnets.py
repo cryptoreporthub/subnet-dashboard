@@ -100,17 +100,17 @@ def read_live_cache_probe() -> Dict[str, Any]:
     return probe
 
 
-def blockmachine_layer_trusted(probe: Dict[str, Any]) -> bool:
-    """True when chain live rows are present and refresh was complete."""
+def blockmachine_effective_source_active(probe: Dict[str, Any]) -> bool:
+    """Fresh cache with at least one live chain row (#1357: completeness is separate)."""
     if not probe.get("exists"):
         return False
     if probe.get("stale"):
         return False
-    if int(probe.get("live_row_count") or 0) <= 0:
-        return False
-    if probe.get("refresh_complete") is False:
-        return False
-    return True
+    return int(probe.get("live_row_count") or 0) > 0
+
+
+def live_cache_partial_refresh(probe: Dict[str, Any]) -> bool:
+    return probe.get("refresh_complete") is False and int(probe.get("live_row_count") or 0) > 0
 
 
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
@@ -242,7 +242,10 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append(merged)
     for n, lv in by_netuid.items():
         if n not in seen:
-            out.append(lv)
+            extra = dict(lv)
+            extra["live"] = True
+            extra.setdefault("source", "blockmachine")
+            out.append(extra)
     return out
 
 
@@ -343,10 +346,15 @@ def _fetch_chain_data():
             return None
         msg = recv_message(parent_sock, rpc_deadline)
         if msg is None:
-            logger.warning(
-                "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
-                rpc_budget,
-            )
+            if time.monotonic() >= rpc_deadline:
+                logger.warning(
+                    "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
+                    rpc_budget,
+                )
+            else:
+                logger.warning(
+                    "live_subnets fetch child closed before result (send failure or crash)"
+                )
             killed = True
             _terminate_fetch_process(proc)
             return None

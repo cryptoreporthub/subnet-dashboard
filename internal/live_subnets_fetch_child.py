@@ -197,7 +197,7 @@ def _child_send_deadline() -> float:
 
 
 def _send_child_frame(conn, payload: dict[str, Any], *, deadline: float) -> bool:
-    from internal.live_subnets_ipc import _MAX_PAYLOAD, send_message
+    from internal.live_subnets_ipc import _MAX_PAYLOAD, send_framed_body, send_message
 
     try:
         body = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
@@ -213,10 +213,12 @@ def _send_child_frame(conn, payload: dict[str, Any], *, deadline: float) -> bool
         )
         send_message(conn, {"ok": False, "exc": "payload_too_large"}, deadline=deadline)
         return False
-    if send_message(conn, payload, deadline=deadline):
+    if send_framed_body(conn, body, deadline=deadline):
         return True
-    logger.warning("live_subnets fetch child: send failed (%s)", payload.get("phase") or "result")
-    send_message(conn, {"ok": False, "exc": "child_send_failed"}, deadline=deadline)
+    logger.warning(
+        "live_subnets fetch child: send failed (%s)",
+        payload.get("phase") or "result",
+    )
     return False
 
 

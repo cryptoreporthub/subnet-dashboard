@@ -132,7 +132,11 @@ def _read_predictions_readonly() -> Dict[str, Any]:
 
 def _live_cache_freshness() -> Dict[str, Any]:
     """Read data/live_subnets.json only. Does not call probe_feed_layers/init_db."""
-    from internal.live_subnets import _cache_path, blockmachine_layer_trusted, read_live_cache_probe
+    from internal.live_subnets import (
+        _cache_path,
+        blockmachine_effective_source_active,
+        read_live_cache_probe,
+    )
 
     probe = read_live_cache_probe()
     info: Dict[str, Any] = {
@@ -151,7 +155,7 @@ def _live_cache_freshness() -> Dict[str, Any]:
             info["age_seconds"] = int(age)
         except (TypeError, ValueError, OverflowError):
             pass
-    if blockmachine_layer_trusted(probe):
+    if blockmachine_effective_source_active(probe):
         info["effective_source"] = "blockmachine"
         info["effective_total"] = info["live_row_count"]
     else:

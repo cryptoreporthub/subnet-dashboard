@@ -2,6 +2,7 @@
 
 import json
 import logging
+import pickle
 import os
 import threading
 import time
@@ -322,18 +323,86 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_child_logs_payload_too_large(monkeypatch, caplog):
+    from internal.live_subnets_fetch_child import _send_child_frame
+    import socket
+
+    caplog.set_level(logging.WARNING, logger="live_subnets_fetch_child")
+    monkeypatch.setattr("internal.live_subnets_ipc._MAX_PAYLOAD", 64)
+    left, right = socket.socketpair()
+    left.setblocking(False)
+    right.setblocking(False)
+    huge = {"ok": True, "data": [{"netuid": i, "price": float(i)} for i in range(200)]}
+    assert (
+        _send_child_frame(left, huge, deadline=time.monotonic() + 2.0) is False
+    )
+    assert any("payload" in r.message and "exceeds" in r.message for r in caplog.records)
+
+
+def test_child_logs_pickle_failed(monkeypatch, caplog):
+    from internal.live_subnets_fetch_child import _send_child_frame
+    import socket
+
+    caplog.set_level(logging.WARNING, logger="live_subnets_fetch_child")
+
+    class _Bad:
+        def __reduce__(self):
+            raise RuntimeError("nope")
+
+    left, right = socket.socketpair()
+    left.setblocking(False)
+    right.setblocking(False)
+    assert _send_child_frame(left, {"ok": True, "bad": _Bad()}, deadline=time.monotonic() + 2.0) is False
+    assert any("pickle failed" in r.message for r in caplog.records)
+
+
+def test_parent_logs_child_closed_not_timeout_on_send_fail(monkeypatch, caplog):
+    from internal import live_subnets
+    import internal.live_subnets_ipc as ipc
+
+    caplog.set_level(logging.WARNING, logger="live_subnets")
+    real_framed = ipc.send_framed_body
+
+    def _fail_result(conn, body, *, deadline=None):
+        try:
+            msg = pickle.loads(body)
+            if isinstance(msg, dict) and msg.get("ok") and "data" in msg:
+                return False
+        except Exception:
+            pass
+        return real_framed(conn, body, deadline=deadline)
+
+    monkeypatch.setattr(ipc, "send_framed_body", _fail_result)
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "5.0")
+
+    assert live_subnets._fetch_chain_data() is None
+    assert any("closed before result" in r.message for r in caplog.records)
+    assert not any("RPC budget exceeded" in r.message for r in caplog.records)
+
+
 def test_child_result_send_failure_returns_none(monkeypatch):
     from internal import live_subnets
     import internal.live_subnets_ipc as ipc
 
-    real_send = ipc.send_message
+    real_framed = ipc.send_framed_body
 
-    def _fail_large_result(conn, payload, *, deadline=None):
-        if isinstance(payload, dict) and payload.get("ok") and "data" in payload:
-            return False
-        return real_send(conn, payload, deadline=deadline)
+    def _fail_result(conn, body, *, deadline=None):
+        try:
+            msg = pickle.loads(body)
+            if isinstance(msg, dict) and msg.get("ok") and "data" in msg:
+                return False
+        except Exception:
+            pass
+        return real_framed(conn, body, deadline=deadline)
 
-    monkeypatch.setattr(ipc, "send_message", _fail_large_result)
+    monkeypatch.setattr(ipc, "send_framed_body", _fail_result)
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv(
