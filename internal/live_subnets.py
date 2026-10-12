@@ -67,6 +67,35 @@ def _cache_path() -> str:
     return os.path.join(data_dir, "live_subnets.json")
 
 
+def resolve_live_row_count_from_cache(data: Dict[str, Any]) -> int:
+    """Honest live-row count: explicit field wins; else derive from per-row live flags."""
+    if "live_row_count" in data:
+        try:
+            return int(data.get("live_row_count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    subnets = data.get("subnets")
+    if not isinstance(subnets, list):
+        return 0
+    if not any(isinstance(row, dict) and "live" in row for row in subnets):
+        return 0
+    return sum(
+        1
+        for row in subnets
+        if isinstance(row, dict) and row.get("live") is True
+    )
+
+
+def resolve_live_row_count_from_remote(remote: Dict[str, Any]) -> int:
+    """Worker freshness: never substitute aggregate subnet_count for live rows."""
+    if "live_row_count" in remote:
+        try:
+            return int(remote.get("live_row_count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
 def read_live_cache_probe() -> Dict[str, Any]:
     """Read live_subnets.json for feed/sentinel probes (no network)."""
     probe: Dict[str, Any] = {
@@ -87,7 +116,7 @@ def read_live_cache_probe() -> Dict[str, Any]:
             return probe
         probe["exists"] = True
         probe["count"] = int(data.get("count") or len(data.get("subnets") or []) or 0)
-        probe["live_row_count"] = int(data.get("live_row_count", probe["count"]) or 0)
+        probe["live_row_count"] = resolve_live_row_count_from_cache(data)
         probe["synced_at"] = data.get("synced_at")
         probe["refresh_complete"] = data.get("refresh_complete")
         synced = data.get("synced_at")
@@ -617,7 +646,7 @@ def live_data_freshness() -> Dict[str, Any]:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
             info["subnet_count"] = data.get("count", 0)
-            info["live_row_count"] = data.get("live_row_count", data.get("count", 0))
+            info["live_row_count"] = resolve_live_row_count_from_cache(data)
             info["requested_netuids"] = data.get("requested_netuids") or []
             info["completed_netuids"] = data.get("completed_netuids") or []
             info["missing_netuids"] = data.get("missing_netuids") or []

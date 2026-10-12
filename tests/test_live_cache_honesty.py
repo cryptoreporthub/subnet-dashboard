@@ -81,6 +81,49 @@ def test_merge_chain_only_netuid_is_live_for_market_desk(tmp_path, monkeypatch):
     assert _read_live_cache(99).get("subnet", {}).get("netuid") == 99
 
 
+def test_explicit_zero_live_rows_not_blockmachine(tmp_path, monkeypatch):
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "synced_at": now,
+            "count": 10,
+            "live_row_count": 0,
+            "refresh_complete": True,
+            "subnets": [{"netuid": 1, "live": False}],
+        },
+    )
+    layers = probe_feed_layers()
+    assert layers["live_cache"]["live_row_count"] == 0
+    assert layers["effective_source"] != "blockmachine"
+    info = _live_cache_freshness()
+    assert info.get("effective_source") is None
+    assert info.get("live_row_count") == 0
+
+
+def test_legacy_cache_all_live_false_not_blockmachine(tmp_path, monkeypatch):
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    _write_cache(
+        tmp_path,
+        monkeypatch,
+        {
+            "synced_at": now,
+            "count": 4,
+            "subnets": [
+                {"netuid": 1, "live": False},
+                {"netuid": 2, "live": False},
+                {"netuid": 3, "live": False},
+                {"netuid": 4, "live": False},
+            ],
+        },
+    )
+    layers = probe_feed_layers()
+    assert layers["live_cache"]["live_row_count"] == 0
+    assert layers["effective_source"] != "blockmachine"
+    assert _live_cache_freshness().get("effective_source") is None
+
+
 def test_market_desk_skips_registry_only_row(tmp_path, monkeypatch):
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     _write_cache(

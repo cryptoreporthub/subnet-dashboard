@@ -176,7 +176,9 @@ def _feed_layers_from_freshness(remote: Dict[str, Any]) -> Dict[str, Any]:
     tmc_count = int(remote.get("tmc_cache_count") or 0)
     registry_count = int(remote.get("registry_count") or 0)
     refresh_complete = remote.get("refresh_complete")
-    live_row_count = int(remote.get("live_row_count") or subnet_count)
+    from internal.live_subnets import resolve_live_row_count_from_remote
+
+    live_row_count = resolve_live_row_count_from_remote(remote)
     stale = bool(remote.get("stale"))
     from internal.live_subnets import blockmachine_effective_source_active, live_cache_partial_refresh
 
