@@ -314,6 +314,18 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_killed_child_does_not_return_partial_rows(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.2")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.2)
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "30")
+    out = live_subnets._fetch_chain_data()
+    assert out is None
+
+
 def test_fetch_hung_child_killed_second_sync_proceeds_spawn(monkeypatch, caplog):
     """Spawn child cannot inherit fork monkeypatches; env sleep must still be killable."""
     import multiprocessing

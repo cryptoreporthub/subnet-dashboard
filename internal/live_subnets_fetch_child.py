@@ -70,12 +70,18 @@ def collect_chain_rows() -> List[dict[str, Any]]:
 
 
 def run_fetch_child(conn) -> None:
+    os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
     try:
-        conn.send({"phase": "ready"})
+        from internal.live_subnets_ipc import send_message
+
+        if not send_message(conn, {"phase": "ready"}):
+            return
         data = collect_chain_rows()
-        conn.send({"ok": True, "data": data})
+        send_message(conn, {"ok": True, "data": data})
     except Exception as exc:
-        conn.send({"ok": False, "exc": str(exc)})
+        from internal.live_subnets_ipc import send_message
+
+        send_message(conn, {"ok": False, "exc": str(exc)})
     finally:
         try:
             conn.close()

@@ -202,6 +202,7 @@ def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: fl
 
 def _fetch_chain_data():
     from internal.live_subnets_fetch_child import run_fetch_child
+    from internal.live_subnets_ipc import recv_message
 
     rpc_budget = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
     spawn_grace = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", str(SPAWN_GRACE_SECONDS)))
@@ -216,27 +217,28 @@ def _fetch_chain_data():
     proc.start()
     child_conn.close()
     msg: Any = None
+    killed = False
     try:
-        if not parent_conn.poll(spawn_grace):
+        boot_deadline = time.monotonic() + spawn_grace
+        boot = recv_message(parent_conn, boot_deadline)
+        if not isinstance(boot, dict) or boot.get("phase") != "ready":
             logger.warning(
                 "live_subnets spawn grace exceeded after %.0fs; terminating fetch child",
                 spawn_grace,
             )
+            killed = True
             _terminate_fetch_process(proc)
             return None
-        boot = parent_conn.recv()
-        if not isinstance(boot, dict) or boot.get("phase") != "ready":
-            logger.warning("live_subnets sync failed: child never became ready")
-            _terminate_fetch_process(proc)
-            return None
-        if not parent_conn.poll(rpc_budget):
+        rpc_deadline = time.monotonic() + rpc_budget
+        msg = recv_message(parent_conn, rpc_deadline)
+        if msg is None:
             logger.warning(
                 "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
                 rpc_budget,
             )
+            killed = True
             _terminate_fetch_process(proc)
             return None
-        msg = parent_conn.recv()
     finally:
         try:
             parent_conn.close()
@@ -246,7 +248,7 @@ def _fetch_chain_data():
         if proc.is_alive():
             _terminate_fetch_process(proc)
 
-    if not isinstance(msg, dict):
+    if killed or not isinstance(msg, dict):
         logger.warning("live_subnets sync failed: invalid child response")
         return None
     if not msg.get("ok"):

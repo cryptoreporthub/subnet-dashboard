@@ -576,22 +576,34 @@ class ChainClient:
         # sync at sync_start. Break out once the budget elapses and return the
         # rows that already completed (still netuid-sorted, same shape).
         batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-        deadline = time.time() + batch_budget
+        deadline = time.monotonic() + batch_budget
 
         rows = []
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_one, n) for n in netuids]
-            remaining = set(futures)
-            while remaining and time.time() < deadline:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
+            futures = {pool.submit(_one, n): n for n in netuids}
+            remaining = set(futures.keys())
+            while remaining and time.monotonic() < deadline:
                 try:
-                    for fut in as_completed(remaining, timeout=max(0.0, deadline - time.time())):
+                    slice_timeout = max(0.0, min(0.25, deadline - time.monotonic()))
+                    for fut in as_completed(remaining, timeout=slice_timeout):
                         remaining.discard(fut)
                         row = fut.result()
                         if row:
                             rows.append(row)
                 except _FutureTimeout:
-                    # Budget exhausted — stop awaiting; keep whatever completed.
-                    break
+                    if time.monotonic() >= deadline:
+                        break
+            for fut in remaining:
+                fut.cancel()
+        finally:
+            shutdown_wait = max(0.0, deadline - time.monotonic())
+            pool.shutdown(wait=False, cancel_futures=True)
+            if shutdown_wait > 0:
+                # ponytail: bounded wait for worker threads; ceiling = remaining batch budget.
+                end = time.monotonic() + shutdown_wait
+                for t in pool._threads:
+                    t.join(timeout=max(0.0, end - time.monotonic()))
         rows.sort(key=lambda r: r["netuid"])
         logger.info(
             "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
