@@ -37,7 +37,60 @@ def _registry_netuids() -> List[int]:
     return sorted(set(out))
 
 
-def collect_chain_rows() -> List[dict[str, Any]]:
+def _row_netuid(row: dict[str, Any]) -> int | None:
+    for key in ("netuid", "id", "subnet_id"):
+        val = row.get(key)
+        if isinstance(val, int):
+            return val
+        if isinstance(val, str) and val.isdigit():
+            return int(val)
+    return None
+
+
+def resolve_fetch_netuids() -> List[int]:
+    """Pinned chain IDs for this fetch (before RPC)."""
+    test_requested = os.environ.get("LIVE_SUBNETS_TEST_REQUESTED_NETUIDS", "").strip()
+    if test_requested:
+        import json
+
+        parsed = json.loads(test_requested)
+        if isinstance(parsed, list):
+            return sorted({int(n) for n in parsed})
+    try:
+        from internal.subnet_universe import get_netuids
+
+        netuids = get_netuids()
+    except Exception:
+        netuids = []
+    if not netuids:
+        netuids = _registry_netuids()
+    return sorted({int(n) for n in netuids})
+
+
+def fetch_meta_from_rows(
+    requested_netuids: List[int],
+    rows: List[dict[str, Any]],
+    *,
+    degraded_reason: str | None = None,
+) -> dict[str, Any]:
+    completed = sorted(
+        {n for n in (_row_netuid(r) for r in rows) if n is not None}
+    )
+    missing = [n for n in requested_netuids if n not in set(completed)]
+    refresh_complete = not missing
+    reason = degraded_reason
+    if not refresh_complete and reason is None:
+        reason = "batch_deadline"
+    return {
+        "requested_netuids": list(requested_netuids),
+        "completed_netuids": completed,
+        "missing_netuids": missing,
+        "refresh_complete": refresh_complete,
+        "degraded_reason": reason,
+    }
+
+
+def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int]]:
     """Blocking RPC fetch; chain_client uses per-request socket timeouts."""
     setup_sleep = os.environ.get("LIVE_SUBNETS_CHILD_SETUP_SLEEP_SECONDS", "").strip()
     if setup_sleep:
@@ -51,28 +104,24 @@ def collect_chain_rows() -> List[dict[str, Any]]:
 
         time.sleep(float(sleep_s))
 
+    requested = resolve_fetch_netuids()
     test_rows = os.environ.get("LIVE_SUBNETS_TEST_ROWS_JSON")
     if test_rows:
         import json
 
         parsed = json.loads(test_rows)
-        return parsed if isinstance(parsed, list) else []
+        rows = parsed if isinstance(parsed, list) else []
+        return rows, requested
 
     from internal.chain_client import get_default_client
 
     client = get_default_client()
-    try:
-        from internal.subnet_universe import get_netuids
-
-        netuids = get_netuids()
-    except Exception:
-        netuids = []
-    if not netuids:
-        netuids = _registry_netuids()
     mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
     if mode in ("lite", "price"):
-        return client.get_subnet_price_rows(netuids)
-    return client.get_all_subnet_data(netuids=netuids or None)
+        rows = client.get_subnet_price_rows(requested)
+    else:
+        rows = client.get_all_subnet_data(netuids=requested or None)
+    return rows, requested
 
 
 def _rpc_return_margin_seconds() -> float:
@@ -117,10 +166,15 @@ def run_fetch_child(conn) -> None:
             batch_deadline = time.monotonic() + 0.01
         os.environ["LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC"] = str(batch_deadline)
         try:
-            data = collect_chain_rows()
+            data, requested = collect_chain_rows()
         finally:
             os.environ.pop("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", None)
-        send_message(conn, {"ok": True, "data": data}, deadline=rpc_deadline)
+        meta = fetch_meta_from_rows(requested, data)
+        send_message(
+            conn,
+            {"ok": True, "data": data, **meta},
+            deadline=rpc_deadline,
+        )
     except Exception as exc:
         send_deadline = _child_send_deadline()
         if isinstance(params, dict) and params.get("rpc_deadline_monotonic") is not None:

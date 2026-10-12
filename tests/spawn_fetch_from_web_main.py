@@ -18,7 +18,9 @@ def _child_fetch() -> None:
     )
     from internal.live_subnets import _fetch_chain_data
 
-    data = _fetch_chain_data()
+    from internal.live_subnets import chain_fetch_rows
+
+    data = chain_fetch_rows(_fetch_chain_data())
     if not data or data[0].get("netuid") != 1:
         raise SystemExit(3)
 

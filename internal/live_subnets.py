@@ -36,7 +36,19 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict, Union
+
+
+class ChainFetchResult(TypedDict, total=False):
+    rows: List[Dict[str, Any]]
+    requested_netuids: List[int]
+    completed_netuids: List[int]
+    missing_netuids: List[int]
+    refresh_complete: bool
+    degraded_reason: Optional[str]
+
+
+FetchChainReturn = Union[ChainFetchResult, List[Dict[str, Any]], None]
 
 logger = logging.getLogger("live_subnets")
 
@@ -103,6 +115,34 @@ def _netuid_of(rec: Dict[str, Any]) -> Optional[int]:
             return v
         if isinstance(v, str) and v.isdigit():
             return int(v)
+    return None
+
+
+def chain_fetch_rows(raw: FetchChainReturn) -> List[Dict[str, Any]]:
+    """Rows from ``_fetch_chain_data`` (dict or legacy list mocks)."""
+    normalized = _normalize_fetch_result(raw)
+    if not normalized:
+        return []
+    return list(normalized.get("rows") or [])
+
+
+def _normalize_fetch_result(raw: FetchChainReturn) -> Optional[ChainFetchResult]:
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        completed = sorted(
+            {n for n in (_netuid_of(r) for r in raw) if n is not None}
+        )
+        return {
+            "rows": raw,
+            "requested_netuids": completed,
+            "completed_netuids": completed,
+            "missing_netuids": [],
+            "refresh_complete": True,
+            "degraded_reason": None,
+        }
+    if isinstance(raw, dict) and "rows" in raw:
+        return raw
     return None
 
 
@@ -276,7 +316,17 @@ def _fetch_chain_data():
     if not msg.get("ok"):
         logger.warning("live_subnets sync failed: %s", msg.get("exc"))
         return None
-    return msg.get("data")
+    rows = msg.get("data")
+    if not isinstance(rows, list):
+        return None
+    return {
+        "rows": rows,
+        "requested_netuids": list(msg.get("requested_netuids") or []),
+        "completed_netuids": list(msg.get("completed_netuids") or []),
+        "missing_netuids": list(msg.get("missing_netuids") or []),
+        "refresh_complete": bool(msg.get("refresh_complete", not msg.get("missing_netuids"))),
+        "degraded_reason": msg.get("degraded_reason"),
+    }
 
 
 def _boot_status_path() -> str:
@@ -324,22 +374,30 @@ def _sync_once() -> bool:
             )
             logger.info("live_subnets sync deferred until registry is ready")
             return False
-        raw = _fetch_chain_data()
-        if raw is None:
+        fetch = _normalize_fetch_result(_fetch_chain_data())
+        if fetch is None:
             logger.warning("live_subnets sync: chain fetch failed or timed out")
             _record_boot_status(phase="sync_done", ok=False, reason="timeout")
             return False
-        if not raw:
+        rows = fetch.get("rows") or []
+        if not rows:
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
             return False
-        merged = _merge_into_registry(raw)
+        merged = _merge_into_registry(rows)
+        refresh_complete = bool(fetch.get("refresh_complete", True))
         payload = {
             "synced_at": _now_iso(),
             "source": "blockmachine",
             "count": len(merged),
+            "live_row_count": len(rows),
             "subnets": merged,
+            "requested_netuids": fetch.get("requested_netuids") or [],
+            "completed_netuids": fetch.get("completed_netuids") or [],
+            "missing_netuids": fetch.get("missing_netuids") or [],
+            "refresh_complete": refresh_complete,
+            "degraded_reason": fetch.get("degraded_reason"),
         }
         try:
             os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
@@ -347,9 +405,33 @@ def _sync_once() -> bool:
             with open(tmp, "w") as f:
                 json.dump(payload, f)
             os.replace(tmp, _cache_path())
-            logger.info("live_subnets sync OK: %d subnets", len(merged))
-            _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
-            return True
+            if refresh_complete:
+                logger.info("live_subnets sync OK: %d subnets (%d live rows)", len(merged), len(rows))
+                _record_boot_status(
+                    phase="sync_done",
+                    ok=True,
+                    rows=len(merged),
+                    live_rows=len(rows),
+                    refresh_complete=True,
+                )
+                return True
+            reason = fetch.get("degraded_reason") or "partial_fetch"
+            logger.warning(
+                "live_subnets partial sync: %d live rows, %d merged, missing=%s",
+                len(rows),
+                len(merged),
+                fetch.get("missing_netuids"),
+            )
+            _record_boot_status(
+                phase="sync_done",
+                ok=False,
+                reason=reason,
+                rows=len(merged),
+                live_rows=len(rows),
+                refresh_complete=False,
+                missing_netuids=fetch.get("missing_netuids") or [],
+            )
+            return False
         except Exception as exc:
             logger.warning("live_subnets cache write failed: %s", exc)
             _record_boot_status(phase="sync_done", ok=False, reason=f"write:{exc}")
@@ -469,10 +551,18 @@ def live_data_freshness() -> Dict[str, Any]:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
             info["subnet_count"] = data.get("count", 0)
+            info["live_row_count"] = data.get("live_row_count", data.get("count", 0))
+            info["requested_netuids"] = data.get("requested_netuids") or []
+            info["completed_netuids"] = data.get("completed_netuids") or []
+            info["missing_netuids"] = data.get("missing_netuids") or []
+            info["refresh_complete"] = data.get("refresh_complete")
+            info["degraded_reason"] = data.get("degraded_reason")
             if data.get("synced_at"):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(data["synced_at"])).total_seconds()
                 info["age_seconds"] = int(age)
-                info["stale"] = age > MAX_STALE_SECONDS
+                age_stale = age > MAX_STALE_SECONDS
+                partial = data.get("refresh_complete") is False
+                info["stale"] = age_stale or partial
     except Exception as exc:
         logger.debug("freshness read failed: %s", exc)
     try:

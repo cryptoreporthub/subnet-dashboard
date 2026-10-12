@@ -10,6 +10,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 
+def _fetch_rows(result):
+    if isinstance(result, dict):
+        return result.get("rows") or []
+    return result or []
+
+
 def test_cache_path_respects_data_dir(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "vol"))
     from internal import live_subnets
@@ -194,7 +200,9 @@ def test_fetch_chain_data_passes_registry_netuids(monkeypatch):
         json.dumps([{"netuid": n, "price": 1.0} for n in range(1, 130)]),
     )
     out = live_subnets._fetch_chain_data()
-    assert out and len(out) >= 100 and out[0]["netuid"] == 1
+    rows = _fetch_rows(out)
+    assert rows and len(rows) >= 100 and rows[0]["netuid"] == 1
+    assert isinstance(out, dict) and out.get("refresh_complete") is True
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +272,7 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
     ):
         out = live_subnets._fetch_chain_data()
 
-    assert out and out[0]["netuid"] == 42
+    assert _fetch_rows(out) and _fetch_rows(out)[0]["netuid"] == 42
     assert json.loads(netuids_path.read_text(encoding="utf-8")) == [42]
 
 
@@ -306,7 +314,7 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
             assert fetch_threads == []
 
             second = live_subnets._fetch_chain_data()
-            assert second and second[0]["netuid"] == 1
+            assert _fetch_rows(second) and _fetch_rows(second)[0]["netuid"] == 1
             assert int(counter.read_text(encoding="utf-8")) == 2
 
         assert any("RPC budget exceeded" in r.message for r in caplog.records)
@@ -340,7 +348,7 @@ def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
 
     t0 = time.monotonic()
     out = live_subnets._fetch_chain_data()
-    assert out and out[0]["netuid"] == 1
+    assert _fetch_rows(out) and _fetch_rows(out)[0]["netuid"] == 1
     assert len(sent_deadlines) == 1
     assert sent_deadlines[0] > t0
     assert sent_deadlines[0] <= t0 + 1.05
@@ -381,7 +389,9 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
     elapsed = time.monotonic() - t0
 
     assert out is not None
-    assert [r["netuid"] for r in out] == [1]
+    assert [r["netuid"] for r in _fetch_rows(out)] == [1]
+    assert out.get("refresh_complete") is False
+    assert out.get("missing_netuids") == [2]
     assert elapsed < 1.05
 
 
@@ -407,7 +417,7 @@ def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):
 
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
     out = live_subnets._fetch_chain_data()
-    assert out and out[0]["netuid"] == 1
+    assert _fetch_rows(out) and _fetch_rows(out)[0]["netuid"] == 1
 
 
 def test_killed_child_does_not_return_partial_rows(monkeypatch):
@@ -445,7 +455,7 @@ def test_fetch_hung_child_killed_second_sync_proceeds_spawn(monkeypatch, caplog)
         json.dumps([{"netuid": 1, "price": 1.0}]),
     )
     second = live_subnets._fetch_chain_data()
-    assert second and second[0]["netuid"] == 1
+    assert _fetch_rows(second) and _fetch_rows(second)[0]["netuid"] == 1
     assert any("RPC budget exceeded" in r.message for r in caplog.records)
 
 
@@ -514,7 +524,7 @@ def test_fetch_chain_data_spawn_context_trivial(monkeypatch):
     )
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
     out = live_subnets._fetch_chain_data()
-    assert out and out[0]["netuid"] == 7
+    assert _fetch_rows(out) and _fetch_rows(out)[0]["netuid"] == 7
 
 
 def test_sync_lock_blocks_parallel_fetch_across_threads(monkeypatch, tmp_path):
@@ -580,8 +590,90 @@ def test_full_mode_pipe_carries_registry_sized_payload(monkeypatch, tmp_path):
     monkeypatch.setenv("LIVE_SUBNETS_TEST_ROWS_JSON", json.dumps(rows))
     out = live_subnets._fetch_chain_data()
     assert out is not None
-    assert len(out) == len(netuids)
+    assert len(_fetch_rows(out)) == len(netuids)
     (tmp_path / "pipe_size.json").write_text(json.dumps({"bytes": payload_bytes, "rows": len(rows)}))
+
+
+def test_sync_once_partial_fetch_records_incomplete(monkeypatch, tmp_path):
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    partial = {
+        "rows": [{"netuid": 1, "price": 1.0}],
+        "requested_netuids": [1, 2],
+        "completed_netuids": [1],
+        "missing_netuids": [2],
+        "refresh_complete": False,
+        "degraded_reason": "batch_deadline",
+    }
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=partial),
+    ):
+        assert live_subnets._sync_once() is False
+
+    cache = json.loads((tmp_path / "live_subnets.json").read_text(encoding="utf-8"))
+    assert cache["live_row_count"] == 1
+    assert cache["refresh_complete"] is False
+    assert cache["missing_netuids"] == [2]
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
+    assert status["ok"] is False
+    assert status["refresh_complete"] is False
+    assert status["reason"] == "batch_deadline"
+
+
+def test_sync_once_complete_fetch_control(monkeypatch, tmp_path):
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    complete = {
+        "rows": [{"netuid": 1, "price": 1.0}, {"netuid": 2, "price": 2.0}],
+        "requested_netuids": [1, 2],
+        "completed_netuids": [1, 2],
+        "missing_netuids": [],
+        "refresh_complete": True,
+        "degraded_reason": None,
+    }
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=complete),
+    ):
+        assert live_subnets._sync_once() is True
+
+    cache = json.loads((tmp_path / "live_subnets.json").read_text(encoding="utf-8"))
+    assert cache["refresh_complete"] is True
+    assert cache["live_row_count"] == 2
+
+
+def test_live_data_freshness_partial_marks_stale(monkeypatch, tmp_path):
+    from datetime import datetime, timezone
+
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    now = datetime.now(timezone.utc).isoformat()
+    cache = tmp_path / "live_subnets.json"
+    cache.write_text(
+        json.dumps(
+            {
+                "synced_at": now,
+                "count": 5,
+                "live_row_count": 1,
+                "refresh_complete": False,
+                "missing_netuids": [2],
+                "degraded_reason": "batch_deadline",
+                "subnets": [{"netuid": 1}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    with patch("internal.data_volume.worker_data_freshness", return_value=None):
+        info = live_subnets.live_data_freshness()
+    assert info["stale"] is True
+    assert info["refresh_complete"] is False
+    assert info["live_row_count"] == 1
+    assert info["subnet_count"] == 5
+    assert info["missing_netuids"] == [2]
 
 
 def test_live_data_freshness_marks_stale_when_sync_disabled(monkeypatch, tmp_path):
