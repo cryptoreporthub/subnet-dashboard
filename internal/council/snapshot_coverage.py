@@ -296,6 +296,7 @@ def reset_phase1_cycle_state_for_tests() -> None:
 
 
 def _soul_map_publish_wall_seconds() -> Optional[float]:
+    """Read-only soul_map peek for web workers; no deep copy on metrics scrape."""
     try:
         from internal.council import weights
 

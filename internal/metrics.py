@@ -72,7 +72,12 @@ SCORE_SNAPSHOT_TIMING_BUILD_SECONDS = Gauge(
 SCORE_SNAPSHOT_TIMING_BUILD_UNAVAILABLE = -1.0
 SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS = Gauge(
     "subnet_score_snapshot_publish_wall_seconds",
-    "Wall seconds for the last score snapshot locked publish (-1 when not on disk)",
+    (
+        "Wall seconds for the last publish (process-local or soul_map cycle timing; "
+        "not persisted on score_snapshots.json). On stale/missing snapshot scrape, "
+        "build/age/coverage gauges reset but this may keep the last-known value; "
+        "-1 only when never observed in-process or in soul_map."
+    ),
 )
 SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE = -1.0
 SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(

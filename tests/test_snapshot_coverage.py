@@ -139,6 +139,24 @@ def test_membership_expected_is_full_set_not_tradable_shrink():
     assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1, 2, 3]
 
 
+def test_soul_map_publish_read_uses_copy_blob_false(monkeypatch):
+    seen: dict[str, bool] = {}
+
+    def _fake_load(_path, *, copy_blob=True):
+        seen["copy_blob"] = copy_blob
+        return {
+            "score_snapshot_scheduler": {
+                "last_cycle": {
+                    "coverage": {"timing": {"publish_wall_seconds": 0.012}},
+                }
+            }
+        }
+
+    monkeypatch.setattr("internal.council.weights._load_raw", _fake_load)
+    assert cov._soul_map_publish_wall_seconds() == 0.012
+    assert seen.get("copy_blob") is False
+
+
 def test_legacy_hour_copied_infers_without_status_field():
     block = {
         "succeeded": [1, 2],

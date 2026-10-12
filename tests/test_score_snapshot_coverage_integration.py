@@ -330,6 +330,53 @@ def test_capture_budget_includes_hydration_delay(tmp_path, monkeypatch):
     assert coverage.get("capture_reason") == "capture_timeout"
 
 
+def test_stale_scrape_resets_coverage_but_keeps_process_publish_wall(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from internal.metrics import (
+        SCORE_SNAPSHOT_COVERAGE_COMPLETE,
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
+        refresh_from_state,
+    )
+
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(),
+    )
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    snaps.write_full_universe_snapshot()
+    publish_before = SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
+    assert publish_before > 0
+    old = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat().replace("+00:00", "Z")
+    path.write_text(
+        json.dumps(
+            {
+                "written_at": old,
+                "build_started_at": old,
+                "day": [],
+                "hour": [],
+                "coverage": {"complete": True, "published": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    refresh_from_state()
+    assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
+    assert SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get() == publish_before
+
+
 def test_metrics_skips_stale_disk_coverage(tmp_path, monkeypatch):
     from datetime import timedelta
 
