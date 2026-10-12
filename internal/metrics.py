@@ -80,8 +80,10 @@ SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(
 )
 SCORE_SNAPSHOT_AGE_SECONDS = Gauge(
     "subnet_score_snapshot_age_seconds",
-    "Age of score_snapshots.json on disk in seconds",
+    "Age of score_snapshots.json on disk in seconds (-1 when file missing)",
 )
+# ponytail: sentinel for missing/unreadable snapshot file (always set gauge; never skip).
+SCORE_SNAPSHOT_AGE_UNAVAILABLE = -1.0
 
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
@@ -153,6 +155,11 @@ def refresh_from_state() -> None:
         pass
 
 
+def _set_score_snapshot_age_gauge(age: Optional[float]) -> None:
+    value = age if age is not None else SCORE_SNAPSHOT_AGE_UNAVAILABLE
+    SCORE_SNAPSHOT_AGE_SECONDS.set(value)
+
+
 def _refresh_score_snapshot_gauges() -> None:
     """Recompute snapshot coverage gauges from disk each scrape (no sticky greens)."""
     from internal.council.score_snapshots import (
@@ -167,7 +174,7 @@ def _refresh_score_snapshot_gauges() -> None:
     )
 
     age = snapshot_age_seconds()
-    _set_optional(SCORE_SNAPSHOT_AGE_SECONDS, age)
+    _set_score_snapshot_age_gauge(age)
     disk_fresh = age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS
     if not disk_fresh:
         reset_score_snapshot_gauges()

@@ -211,7 +211,12 @@ def test_metrics_green_to_stale_resets_gauges(tmp_path, monkeypatch):
 
 
 def test_metrics_green_to_missing_disk_resets_gauges(tmp_path, monkeypatch):
-    from internal.metrics import SCORE_SNAPSHOT_COVERAGE_COMPLETE, refresh_from_state
+    from internal.metrics import (
+        SCORE_SNAPSHOT_AGE_SECONDS,
+        SCORE_SNAPSHOT_AGE_UNAVAILABLE,
+        SCORE_SNAPSHOT_COVERAGE_COMPLETE,
+        refresh_from_state,
+    )
 
     path = tmp_path / "score_snapshots.json"
     fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -230,9 +235,13 @@ def test_metrics_green_to_missing_disk_resets_gauges(tmp_path, monkeypatch):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     refresh_from_state()
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 1.0
+    fresh_age = SCORE_SNAPSHOT_AGE_SECONDS._value.get()
+    assert fresh_age is not None and fresh_age >= 0.0
     path.unlink()
     refresh_from_state()
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
+    assert SCORE_SNAPSHOT_AGE_SECONDS._value.get() == SCORE_SNAPSHOT_AGE_UNAVAILABLE
+    assert SCORE_SNAPSHOT_AGE_SECONDS._value.get() != fresh_age
 
 
 def test_metrics_stale_in_process_reads_fresher_disk(tmp_path, monkeypatch):
