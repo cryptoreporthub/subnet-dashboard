@@ -121,6 +121,61 @@ def test_one_locked_replace_per_publish_cycle(tmp_path, monkeypatch):
     assert replace_calls == [snap_path]
 
 
+def test_equality_with_capped_input_is_not_green(tmp_path, monkeypatch):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(
+            cap_reached=False,
+            refresh_incomplete=False,
+        ),
+    )
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    out = snaps.write_full_universe_snapshot()
+    assert out.get("published") is True
+    assert out.get("complete") is False
+    day = (out.get("coverage") or {}).get("day") or {}
+    assert 2 in (day.get("missing_not_admitted") or [])
+
+
+def test_coverage_assembly_error_still_publishes(tmp_path, monkeypatch):
+    path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
+    monkeypatch.setattr(
+        cov,
+        "build_coverage_block",
+        lambda **kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+    out = snaps.write_full_universe_snapshot()
+    assert out.get("published") is True
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved.get("coverage", {}).get("capture_reason") == "coverage_assembly_error"
+
+
+def test_publish_metrics_gauge_failure_does_not_block_save(tmp_path, monkeypatch):
+    path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
+
+    def _boom_set(_value):
+        raise RuntimeError("prometheus down")
+
+    from internal.metrics import SCORE_SNAPSHOT_COVERAGE_COMPLETE
+
+    monkeypatch.setattr(SCORE_SNAPSHOT_COVERAGE_COMPLETE, "set", _boom_set)
+    out = snaps.write_full_universe_snapshot()
+    assert out.get("published") is True
+    assert path.is_file()
+
+
 def test_persist_cycle_summary_coverage_is_counts_only(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")

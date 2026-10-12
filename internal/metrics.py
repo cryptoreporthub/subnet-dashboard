@@ -147,6 +147,14 @@ def refresh_from_state() -> None:
         from internal.council.snapshot_coverage import last_coverage_snapshot, publish_metrics
 
         cov = last_coverage_snapshot()
+        if not cov:
+            from internal.council.score_snapshots import load_score_snapshot
+
+            snap = load_score_snapshot()
+            if isinstance(snap, dict):
+                disk_cov = snap.get("coverage")
+                if isinstance(disk_cov, dict):
+                    cov = disk_cov
         if cov:
             publish_metrics(cov)
     except Exception:

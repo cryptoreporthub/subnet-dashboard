@@ -94,6 +94,40 @@ def test_skipped_older_publish_sets_ok_false(tmp_path, monkeypatch):
     assert result.get("timing", {}).get("publish_wall_seconds") is not None
 
 
+def test_metrics_endpoint_shows_coverage_after_disk_snapshot(tmp_path, monkeypatch):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(),
+    )
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    worker = __import__("multiprocessing").get_context("spawn").Process(
+        target=snaps.write_full_universe_snapshot,
+    )
+    worker.start()
+    worker.join(30)
+    assert worker.exitcode == 0
+
+    from fastapi.testclient import TestClient
+
+    from server import app
+
+    body = TestClient(app).get("/metrics").text
+    assert "subnet_score_snapshot_coverage_complete" in body
+    assert "subnet_score_snapshot_coverage_published" in body
+
+
 def test_metrics_registry_exposes_coverage_gauges():
     from internal.metrics import (
         SCORE_SNAPSHOT_COVERAGE_COMPLETE,

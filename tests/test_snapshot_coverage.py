@@ -102,9 +102,38 @@ def test_phase1_consecutive_partial_cycles_gate(monkeypatch):
     assert cov.consecutive_partial_cycles() == 0
 
 
-def test_scoring_expected_intersects_membership():
+def test_membership_expected_is_full_set_not_tradable_shrink():
     rows = [{"netuid": 1}, {"netuid": 5}]
-    assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1]
+    assert cov.membership_scoring_expected([1, 2, 3]) == [1, 2, 3]
+    assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1, 2, 3]
+
+
+def test_horizon_tracks_missing_not_admitted():
+    receipt = {
+        "fresh": True,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+        "expected_netuids": [1, 2],
+    }
+    block = cov.build_coverage_block(
+        receipt=receipt,
+        day_expected=[1, 2],
+        day_succeeded=[1],
+        day_failed=[],
+        hour_succeeded=[1],
+        hour_failed=[],
+        hour_copied_from_day=True,
+        capped_out=0,
+        selection_policy="full",
+        subnet_source="registry",
+        published=True,
+        timing={"build_wall_seconds": 1.0},
+        tradable_netuids={1},
+    )
+    assert block["day"]["missing_not_admitted"] == [2]
+    assert block["complete"] is False
 
 
 def test_load_membership_receipt_from_snapshot(monkeypatch):

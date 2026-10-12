@@ -401,12 +401,15 @@ def write_full_universe_snapshot(
             build_coverage_block,
             coverage_capture_deadline_seconds,
             load_membership_receipt,
+            membership_scoring_expected,
             note_cycle,
             publish_metrics,
-            scoring_expected_netuids,
+            tradable_netuid_set,
         )
 
         capture_started = time.monotonic()
+        receipt = load_membership_receipt()
+        expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
         payload = build_full_universe_snapshot(
             subnets or [],
@@ -414,30 +417,37 @@ def write_full_universe_snapshot(
             progress_cb=progress_cb,
         )
         build_wall = time.monotonic() - build_started
-        capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
         inputs = payload.pop("_coverage_inputs", {}) or {}
-        receipt = load_membership_receipt()
-        expected = scoring_expected_netuids(
-            list(receipt.get("expected_netuids") or []),
-            list(inputs.get("tradable_rows") or []),
-        )
+        tradable_ids = tradable_netuid_set(list(inputs.get("tradable_rows") or []))
         timing: Dict[str, Any] = {"build_wall_seconds": round(build_wall, 6)}
-        coverage = build_coverage_block(
-            receipt=receipt,
-            day_expected=expected,
-            day_succeeded=list(inputs.get("day_succeeded") or []),
-            day_failed=list(inputs.get("day_failed") or []),
-            hour_succeeded=list(inputs.get("hour_succeeded") or []),
-            hour_failed=list(inputs.get("hour_failed") or []),
-            hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
-            capped_out=capped_out,
-            selection_policy=selection_policy,
-            subnet_source=str(source),
-            published=True,
-            timing=timing,
-        )
+        try:
+            coverage = build_coverage_block(
+                receipt=receipt,
+                day_expected=expected,
+                day_succeeded=list(inputs.get("day_succeeded") or []),
+                day_failed=list(inputs.get("day_failed") or []),
+                hour_succeeded=list(inputs.get("hour_succeeded") or []),
+                hour_failed=list(inputs.get("hour_failed") or []),
+                hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
+                capped_out=capped_out,
+                selection_policy=selection_policy,
+                subnet_source=str(source),
+                published=True,
+                timing=timing,
+                tradable_netuids=tradable_ids,
+            )
+        except Exception as exc:
+            coverage = {
+                "membership": receipt,
+                "published": True,
+                "complete": False,
+                "capture_reason": "coverage_assembly_error",
+                "coverage_error": str(exc),
+                "timing": timing,
+            }
         if int(inputs.get("skipped_invalid") or 0):
             coverage["skipped_invalid"] = int(inputs["skipped_invalid"])
+        capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
         if capture_timed_out:
             coverage["complete"] = False
             coverage["capture_reason"] = "capture_timeout"
@@ -454,7 +464,10 @@ def write_full_universe_snapshot(
             coverage["published"] = False
             coverage["complete"] = False
         note_cycle(coverage)
-        publish_metrics(coverage)
+        try:
+            publish_metrics(coverage)
+        except Exception:
+            pass
         payload["source"] = source
         payload["coverage"] = coverage
         out: Dict[str, Any] = {

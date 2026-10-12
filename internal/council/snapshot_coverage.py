@@ -9,28 +9,29 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from internal.subnets.tradable import subnet_netuid
 
-PHASE1_CONSECUTIVE_PARTIAL_CYCLES = max(
-    1,
-    int(os.environ.get("PHASE1_CONSECUTIVE_PARTIAL_CYCLES", "3")),
-)
-PHASE1_COVERAGE_CAPTURE_MAX_SECONDS = max(
-    1,
-    int(os.environ.get("PHASE1_COVERAGE_CAPTURE_MAX_SECONDS", "600")),
-)
-MEMBERSHIP_FRESH_MAX_SECONDS = max(
-    60,
-    int(os.environ.get("PHASE1_MEMBERSHIP_FRESH_MAX_SECONDS", "172800")),
-)
-
-_last_cycle: Dict[str, Any] = {}
-_consecutive_partial_cycles = 0
-
 
 def env_int(name: str, default: int) -> int:
     raw = os.environ.get(name)
     if raw is None or str(raw).strip() == "":
         return default
     return int(raw)
+
+
+PHASE1_CONSECUTIVE_PARTIAL_CYCLES = max(
+    1,
+    env_int("PHASE1_CONSECUTIVE_PARTIAL_CYCLES", 3),
+)
+PHASE1_COVERAGE_CAPTURE_MAX_SECONDS = max(
+    1,
+    env_int("PHASE1_COVERAGE_CAPTURE_MAX_SECONDS", 600),
+)
+MEMBERSHIP_FRESH_MAX_SECONDS = max(
+    60,
+    env_int("PHASE1_MEMBERSHIP_FRESH_MAX_SECONDS", 172800),
+)
+
+_last_cycle: Dict[str, Any] = {}
+_consecutive_partial_cycles = 0
 
 
 def _parse_iso(value: Any) -> Optional[datetime]:
@@ -94,19 +95,25 @@ def load_membership_receipt() -> Dict[str, Any]:
         }
 
 
+def membership_scoring_expected(membership_netuids: List[int]) -> List[int]:
+    """Pinned membership denominator before scoring — never tradable∩shrink."""
+    return sorted({int(n) for n in membership_netuids if int(n) > 0})
+
+
+def tradable_netuid_set(tradable_rows: List[Dict[str, Any]]) -> Set[int]:
+    return {
+        n
+        for n in (subnet_netuid(row) for row in tradable_rows)
+        if n is not None and int(n) > 0
+    }
+
+
 def scoring_expected_netuids(
     membership_netuids: List[int],
     tradable_rows: List[Dict[str, Any]],
 ) -> List[int]:
-    tradable = {
-        n
-        for n in (subnet_netuid(row) for row in tradable_rows)
-        if n is not None and n > 0
-    }
-    membership = {int(n) for n in membership_netuids if int(n) > 0}
-    if membership:
-        return sorted(tradable & membership)
-    return sorted(tradable)
+    """Backward-compatible alias — denominator is full membership only."""
+    return membership_scoring_expected(membership_netuids)
 
 
 def _horizon_block(
@@ -116,17 +123,33 @@ def _horizon_block(
     succeeded: List[int],
     failed: List[Dict[str, Any]],
     hour_copied_from_day: bool,
+    tradable_netuids: Optional[Set[int]] = None,
 ) -> Dict[str, Any]:
     expected_set = set(expected)
     succeeded_set = set(succeeded)
+    failed_ids = {
+        int(f["netuid"])
+        for f in failed
+        if isinstance(f, dict) and f.get("netuid") is not None
+    }
+    tradable_set = tradable_netuids or set()
+    missing_not_admitted = sorted(expected_set - tradable_set) if tradable_set else []
+    unaccounted = sorted(expected_set - succeeded_set - failed_ids)
     return {
         "horizon": horizon,
         "expected": expected,
         "attempted": len(expected),
         "succeeded": sorted(succeeded_set),
         "failed": failed,
+        "missing_not_admitted": missing_not_admitted,
+        "unaccounted": unaccounted,
         "skipped_invalid": max(0, len(expected) - len(succeeded_set) - len(failed)),
-        "complete": succeeded_set == expected_set and bool(expected_set),
+        "complete": (
+            succeeded_set == expected_set
+            and bool(expected_set)
+            and not missing_not_admitted
+            and not unaccounted
+        ),
         "hour_copied_from_day": hour_copied_from_day if horizon == "hour" else False,
     }
 
@@ -160,13 +183,16 @@ def build_coverage_block(
     subnet_source: str,
     published: bool,
     timing: Dict[str, float],
+    tradable_netuids: Optional[Set[int]] = None,
 ) -> Dict[str, Any]:
+    scoring_set = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
     day_block = _horizon_block(
         horizon="day",
         expected=day_expected,
         succeeded=day_succeeded,
         failed=day_failed,
         hour_copied_from_day=False,
+        tradable_netuids=tradable_netuids,
     )
     hour_block = _horizon_block(
         horizon="hour",
@@ -174,6 +200,7 @@ def build_coverage_block(
         succeeded=hour_succeeded,
         failed=hour_failed,
         hour_copied_from_day=hour_copied_from_day,
+        tradable_netuids=tradable_netuids,
     )
     membership_ok = membership_allows_complete(receipt)
     horizons_complete = day_block["complete"] and hour_block["complete"]
@@ -185,6 +212,8 @@ def build_coverage_block(
     )
     return {
         "membership": receipt,
+        "scoring_set_netuids": scoring_set,
+        "root_in_scoring_set": 0 in scoring_set,
         "day": day_block,
         "hour": hour_block,
         "capped_out": capped_out,
@@ -282,7 +311,15 @@ def publish_metrics(coverage: Dict[str, Any]) -> None:
     except Exception:
         return
     timing = coverage.get("timing") or {}
-    _set = lambda g, v: g.set(v) if v is not None else None
+
+    def _set(gauge, value) -> None:
+        if value is None:
+            return
+        try:
+            gauge.set(value)
+        except Exception:
+            pass
+
     _set(SCORE_SNAPSHOT_COVERAGE_COMPLETE, 1.0 if coverage.get("complete") else 0.0)
     _set(SCORE_SNAPSHOT_COVERAGE_PUBLISHED, 1.0 if coverage.get("published") else 0.0)
     _set(SCORE_SNAPSHOT_TIMING_BUILD_SECONDS, timing.get("build_wall_seconds"))
