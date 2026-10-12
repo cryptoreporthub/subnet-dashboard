@@ -66,6 +66,82 @@ def _cache_path() -> str:
         data_dir = os.path.join(REPO_ROOT, data_dir)
     return os.path.join(data_dir, "live_subnets.json")
 
+
+def resolve_live_row_count_from_cache(data: Dict[str, Any]) -> int:
+    """Honest live-row count: explicit field wins; else derive from per-row live flags."""
+    if "live_row_count" in data:
+        try:
+            return int(data.get("live_row_count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    subnets = data.get("subnets")
+    if not isinstance(subnets, list):
+        return 0
+    if not any(isinstance(row, dict) and "live" in row for row in subnets):
+        return 0
+    return sum(
+        1
+        for row in subnets
+        if isinstance(row, dict) and row.get("live") is True
+    )
+
+
+def resolve_live_row_count_from_remote(remote: Dict[str, Any]) -> int:
+    """Worker freshness: never substitute aggregate subnet_count for live rows."""
+    if "live_row_count" in remote:
+        try:
+            return int(remote.get("live_row_count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def read_live_cache_probe() -> Dict[str, Any]:
+    """Read live_subnets.json for feed/sentinel probes (no network)."""
+    probe: Dict[str, Any] = {
+        "exists": False,
+        "count": 0,
+        "live_row_count": 0,
+        "synced_at": None,
+        "stale": True,
+        "refresh_complete": None,
+    }
+    path = _cache_path()
+    if not os.path.isfile(path):
+        return probe
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        if not isinstance(data, dict):
+            return probe
+        probe["exists"] = True
+        probe["count"] = int(data.get("count") or len(data.get("subnets") or []) or 0)
+        probe["live_row_count"] = resolve_live_row_count_from_cache(data)
+        probe["synced_at"] = data.get("synced_at")
+        probe["refresh_complete"] = data.get("refresh_complete")
+        synced = data.get("synced_at")
+        if synced:
+            parsed = datetime.fromisoformat(str(synced).replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            probe["stale"] = age > MAX_STALE_SECONDS
+    except Exception as exc:
+        logger.debug("live cache probe read failed: %s", exc)
+    return probe
+
+
+def blockmachine_effective_source_active(probe: Dict[str, Any]) -> bool:
+    """Fresh cache with at least one live chain row (#1357: completeness is separate)."""
+    if not probe.get("exists"):
+        return False
+    if probe.get("stale"):
+        return False
+    return int(probe.get("live_row_count") or 0) > 0
+
+
+def live_cache_partial_refresh(probe: Dict[str, Any]) -> bool:
+    return probe.get("refresh_complete") is False and int(probe.get("live_row_count") or 0) > 0
+
+
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
 MAX_STALE_SECONDS = int(os.environ.get("LIVE_SUBNETS_MAX_STALE_SECONDS", "1800"))
 SYNC_TIMEOUT_SECONDS = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "60"))
@@ -195,7 +271,10 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         out.append(merged)
     for n, lv in by_netuid.items():
         if n not in seen:
-            out.append(lv)
+            extra = dict(lv)
+            extra["live"] = True
+            extra.setdefault("source", "blockmachine")
+            out.append(extra)
     return out
 
 
@@ -296,10 +375,15 @@ def _fetch_chain_data():
             return None
         msg = recv_message(parent_sock, rpc_deadline)
         if msg is None:
-            logger.warning(
-                "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
-                rpc_budget,
-            )
+            if time.monotonic() >= rpc_deadline:
+                logger.warning(
+                    "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
+                    rpc_budget,
+                )
+            else:
+                logger.warning(
+                    "live_subnets fetch child closed before result (send failure or crash)"
+                )
             killed = True
             _terminate_fetch_process(proc)
             return None
@@ -562,7 +646,7 @@ def live_data_freshness() -> Dict[str, Any]:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
             info["subnet_count"] = data.get("count", 0)
-            info["live_row_count"] = data.get("live_row_count", data.get("count", 0))
+            info["live_row_count"] = resolve_live_row_count_from_cache(data)
             info["requested_netuids"] = data.get("requested_netuids") or []
             info["completed_netuids"] = data.get("completed_netuids") or []
             info["missing_netuids"] = data.get("missing_netuids") or []
