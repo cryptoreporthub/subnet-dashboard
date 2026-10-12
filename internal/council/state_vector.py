@@ -1744,7 +1744,10 @@ def score_subnet_for_hour(
         try:
             from internal.council.pump_overlay import apply_pump_score_overlay
 
-            total, pump_overlay = apply_pump_score_overlay(total, sn)
+            pump_state = (market_context or {}).get("pump_ladder_state")
+            total, pump_overlay = apply_pump_score_overlay(
+                total, sn, pump_ladder_state=pump_state
+            )
         except Exception:
             pass
 
@@ -1902,7 +1905,10 @@ def score_subnet_for_day(
         try:
             from internal.council.pump_overlay import apply_pump_score_overlay
 
-            total, pump_overlay = apply_pump_score_overlay(total, sn)
+            pump_state = (market_context or {}).get("pump_ladder_state")
+            total, pump_overlay = apply_pump_score_overlay(
+                total, sn, pump_ladder_state=pump_state
+            )
         except Exception:
             pass
 
