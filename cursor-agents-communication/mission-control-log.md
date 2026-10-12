@@ -289,3 +289,27 @@
 - **Root cause class:** score snapshot **write cost** (>480s); ~4h stale snapshot carryover at boot — **not** resolver pathology. Mitigating facts recorded; **do not** upgrade guard gate.
 - **#1355 Phase 1:** add measured receipt AC — per-cycle score-snapshot **write duration** (Soak 5 evidence >480s timeout); docs @ `fdbebdd2` on `cursor/cap-audit-grok-review-2026-10-11`.
 - **Artifacts:** agent store `internal/soak-5-final-2026-10-11.md`, `internal/soak-5-stall-guard-receipt-2026-10-11.md`. Ditto memory `eea96947-2332-44a7-9030-a257a70cee34`.
+
+## 2026-10-11 — PR #1357 MC MODIFY items 1–5 (spawn/RSS/concurrency)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **`5f9e080e`** (draft, no deploy).
+- **Spawn child:** `internal/live_subnets_fetch_child.py`; boot→ready **0.155s**; child peak RSS **~42MB** (lite measure); **≪470MB** OOM / **1GB** VM.
+- **Timeouts:** RPC budget = `LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS` (**60** default, **90** `fly.toml`, **120** worker-v2) **after** `ready`; spawn grace **30s** (`LIVE_SUBNETS_SPAWN_GRACE_SECONDS`).
+- **Tests:** spawn path, `_sync_lock` concurrency, full-mode Pipe **~30KB** / 128 rows; `test_live_subnets.py` 22 passed (2×).
+- **Handoff:** agent store `internal/wedge-fix-pr-handoff.md`.
+
+## 2026-10-11 — PR #1357 MC MODIFY round 2 (push verified)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **`514d4253`** (`git ls-remote` verified; invalid prior `b8c4e2f1` handoff).
+- **Docker RSS:** `subnet-dashboard:pr1357-rss-514d4253`; full-mode child peak **~42MB** (200-netuid in-flight); lite 200-netuid **~48MB**; spawn→ready **~40ms**. Artifact: agent store `internal/pr1357-spawn-rss-measurement.json`.
+- **Prod web parent baseline:** OOM **474MB** anon-rss (2026-10-08); soak **~347MB**; live metrics **~350MB** — parent+child **~390MB** vs **1GB** VM.
+- **Tests:** `test_fetch_hung_child_killed_second_sync_proceeds_spawn`; full-suite 2×2 vs main@2ff85cc2 documented in `internal/pr1357-pytest-double-run.md` (no stable live_subnets regression).
+- **Draft only; no deploy.**
+
+## 2026-10-11 — PR #1357 MC MODIFY round 3 (freshness / 90s RPC budget)
+
+- **Branch:** `cursor/prod-wedge-heavy-job-live-subnets-0979` @ **HEAD after push** (continues `b1f61a87` / code `514d4253`).
+- **(a) Prod FETCH_MODE:** `fly.toml` had no key → code default **`lite`** (`internal/live_subnets_fetch_child.py:66-68`; prod `5d840ba4` `live_subnets.py:204`). Branch adds explicit `LIVE_SUBNETS_FETCH_MODE=lite` in `fly.toml`. Web v1 inline worker inherits same `[env]` (`scripts/fly_web_entrypoint.sh:32-34`); `WORKER_HEAVY=essential` skips worker `background_boot` live sync — prod sync is web lazy `AUTO_SYNC` (`get_live_subnets`).
+- **(b) Lite 200 wall:** Docker @ `514d4253` spawn **0.039s**, child **~48MB**, **173** rows; dev repro **0.176s** spawn, **~111s** wall, **195** rows (real RPC). Lite RPC capped by **`LIVE_SUBNETS_BATCH_DEADLINE_SECONDS=85`** (`chain_client.py:578-594`) inside **90s** parent budget (`fly.toml:60`). Full **20 ~345s**; full **200** incomplete **2400s**.
+- **(c) Prod @ `5d840ba4`:** Live `/api/data-freshness` **sync_done ok**, **77** rows, not stale (`2026-10-11T18:36:56Z`). Axiom soak receipt has no live_subnets stall chain; wedge RCA documents pre-PR thread orphan at 90s — addressed by spawn kill on branch.
+- **Verdict:** **PASS** (no deploy). Artifact: agent store `internal/pr1357-freshness-90s-mc-modify.md`.

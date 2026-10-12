@@ -18,13 +18,16 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
-from internal.snapshot_guard import install
-
-install()
-
-import uvicorn
-
 if __name__ == "__main__":
+    from internal.snapshot_guard import install
+
+    # Spawned multiprocessing children re-import this module as __main__ on Fly;
+    # never install the learning snapshot guard / prewarm thread in fetch children.
+    if os.environ.get("LIVE_SUBNETS_FETCH_CHILD") != "1":
+        install()
+
+    import uvicorn
+
     uvicorn.run(
         "asgi_entry:app",
         host=os.environ.get("HOST", "0.0.0.0"),

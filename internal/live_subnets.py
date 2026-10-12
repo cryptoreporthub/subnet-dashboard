@@ -19,20 +19,38 @@ existing TaoMarketCap + registry logic. The app never breaks.
 SAFETY (added after a CI hang):
   - Background sync is FORCED OFF under CI / tests (GITHUB_ACTIONS, PYTEST_CURRENT_TEST, CI).
     In CI get_all_subnets() simply returns the committed registry (fast, no network).
-  - The chain fetch is wrapped in a hard timeout (worker thread + join) so even if the
-    upstream RPC has no socket timeout, the calling process can never block beyond
-    LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS (default 60). The worker is daemon, so it never
-    prevents interpreter shutdown.
+  - Chain fetch runs in a child process (``spawn`` in prod, ``fork`` under pytest). Child entry:
+    ``internal.live_subnets_fetch_child`` (minimal imports — not ``server``).
+  - LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS is the **RPC budget after the child signals ready**
+    (module default 60). Fly web overrides to **90** (`fly.toml`); worker-v2 uses **120**.
+    Spawn/import grace is LIVE_SUBNETS_SPAWN_GRACE_SECONDS (default 30) and is **not**
+    charged against the RPC budget. On RPC budget expiry the child is terminate/kill so no
+    orphan fetch process can wedge the web or worker (PR #906 class).
 """
 from __future__ import annotations
 
 import json
+import logging
+import multiprocessing
 import os
 import threading
 import time
-import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TypedDict, Union
+
+
+class ChainFetchResult(TypedDict, total=False):
+    rows: List[Dict[str, Any]]
+    requested_netuids: List[int]
+    completed_netuids: List[int]
+    missing_netuids: List[int]
+    refresh_complete: bool
+    degraded_reason: Optional[str]
+    batch_expired: bool
+    netuid_outcomes: Dict[int, str]
+
+
+FetchChainReturn = Union[ChainFetchResult, List[Dict[str, Any]], None]
 
 logger = logging.getLogger("live_subnets")
 
@@ -51,6 +69,7 @@ def _cache_path() -> str:
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
 MAX_STALE_SECONDS = int(os.environ.get("LIVE_SUBNETS_MAX_STALE_SECONDS", "1800"))
 SYNC_TIMEOUT_SECONDS = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "60"))
+SPAWN_GRACE_SECONDS = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", "30"))
 
 # Default ON in production, but FORCE-OFF in CI/test environments so the heavy
 # on-chain sync never touches the network (and thus never hangs a test run).
@@ -65,15 +84,6 @@ if _in_ci_or_test:
 _lock = threading.Lock()
 _sync_lock = threading.Lock()
 _sync_loop_running = False
-
-# Thread-alive guard for the timed-out fetch worker. live_subnets wraps the chain
-# fetch in a daemon thread + join(timeout); when the join times out the daemon
-# worker KEEPS RUNNING in the background. Without tracking that worker, a new sync
-# stacks behind the _sync_lock once the old one releases it, fighting the previous
-# thread and pinning the boot phase at sync_start. We hold a reference to the last
-# fetch worker and refuse to start a new one while it is still alive.
-_fetch_thread: Optional[threading.Thread] = None
-_fetch_thread_lock = threading.Lock()
 
 
 def _now_iso() -> str:
@@ -107,6 +117,34 @@ def _netuid_of(rec: Dict[str, Any]) -> Optional[int]:
             return v
         if isinstance(v, str) and v.isdigit():
             return int(v)
+    return None
+
+
+def chain_fetch_rows(raw: FetchChainReturn) -> List[Dict[str, Any]]:
+    """Rows from ``_fetch_chain_data`` (dict or legacy list mocks)."""
+    normalized = _normalize_fetch_result(raw)
+    if not normalized:
+        return []
+    return list(normalized.get("rows") or [])
+
+
+def _normalize_fetch_result(raw: FetchChainReturn) -> Optional[ChainFetchResult]:
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        completed = sorted(
+            {n for n in (_netuid_of(r) for r in raw) if n is not None}
+        )
+        return {
+            "rows": raw,
+            "requested_netuids": completed,
+            "completed_netuids": completed,
+            "missing_netuids": [],
+            "refresh_complete": True,
+            "degraded_reason": None,
+        }
+    if isinstance(raw, dict) and "rows" in raw:
+        return raw
     return None
 
 
@@ -182,60 +220,120 @@ def registry_ready() -> bool:
     return bool(netuids or _registry_netuids())
 
 
+def _fetch_mp_context() -> multiprocessing.context.BaseContext:
+    forced = os.environ.get("LIVE_SUBNETS_MP_CONTEXT", "").strip().lower()
+    if forced == "spawn":
+        return multiprocessing.get_context("spawn")
+    if forced == "fork":
+        return multiprocessing.get_context("fork")
+    # ponytail: fork in pytest so monkeypatched chain_client is visible to the child.
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return multiprocessing.get_context("fork")
+    return multiprocessing.get_context("spawn")
+
+
+def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: float = 3.0) -> None:
+    if not proc.is_alive():
+        return
+    proc.terminate()
+    proc.join(timeout=grace_seconds)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(timeout=grace_seconds)
+
+
 def _fetch_chain_data():
-    global _fetch_thread
-    result = {}
-    err = {}
+    """Spawn fetch child; ``spawn_grace`` covers only the ready handshake.
 
-    def _run():
-        try:
-            from internal.chain_client import get_default_client
+    After ready, parent sends ``rpc_deadline_monotonic`` (absolute clock). The child
+    sets its lite batch deadline to that minus ``LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS``
+    (default 3s) so executor shutdown and framed IPC send fit inside the parent's
+    recv/terminate window. Parent keeps the full ``rpc_deadline`` for recv.
+    """
+    from internal.live_subnets_fetch_child import run_fetch_child
+    from internal.live_subnets_ipc import recv_message
 
-            client = get_default_client()
-            try:
-                from internal.subnet_universe import get_netuids
+    rpc_budget = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
+    spawn_grace = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", str(SPAWN_GRACE_SECONDS)))
+    import socket
 
-                netuids = get_netuids()
-            except Exception:
-                netuids = []
-
-            if not netuids:
-                netuids = _registry_netuids()
-            mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
-            if mode in ("lite", "price"):
-                result["data"] = client.get_subnet_price_rows(netuids)
-            else:
-                result["data"] = client.get_all_subnet_data(netuids=netuids or None)
-        except Exception as exc:
-            err["exc"] = exc
-
-    # Thread-alive guard: never start a new fetch while a previous timed-out
-    # worker is still running in the background. Re-entrant syncs competing for
-    # _sync_lock are what pin boot at sync_start; skipping here breaks the wedge.
-    with _fetch_thread_lock:
-        prev = _fetch_thread
-        if prev is not None and prev.is_alive():
+    ctx = _fetch_mp_context()
+    parent_sock, child_sock = socket.socketpair()
+    parent_sock.setblocking(False)
+    child_sock.setblocking(False)
+    proc = ctx.Process(
+        target=run_fetch_child,
+        args=(child_sock,),
+        name="live-subnets-fetch",
+        daemon=True,
+    )
+    proc.start()
+    child_sock.close()
+    msg: Any = None
+    killed = False
+    try:
+        boot_deadline = time.monotonic() + spawn_grace
+        boot = recv_message(parent_sock, boot_deadline)
+        if not isinstance(boot, dict) or boot.get("phase") != "ready":
             logger.warning(
-                "live_subnets sync skipped — previous fetch thread still alive "
-                "(wedge guard); waiting for it to drain"
+                "live_subnets spawn grace exceeded after %.0fs; terminating fetch child",
+                spawn_grace,
             )
+            killed = True
+            _terminate_fetch_process(proc)
             return None
-        worker = threading.Thread(target=_run, daemon=True, name="live-subnets-fetch")
-        worker.start()
-        _fetch_thread = worker
+        from internal.live_subnets_ipc import send_message
 
-    timeout = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
-    worker.join(timeout=timeout)
-    if worker.is_alive():
-        logger.warning(
-            "live_subnets sync timed out after %.0fs (worker still running in background)",
-            timeout,
-        )
+        rpc_deadline = time.monotonic() + rpc_budget
+        if not send_message(
+            parent_sock,
+            {"rpc_deadline_monotonic": rpc_deadline},
+            deadline=time.monotonic() + min(5.0, rpc_budget),
+        ):
+            logger.warning("live_subnets failed to send RPC deadline to fetch child")
+            killed = True
+            _terminate_fetch_process(proc)
+            return None
+        msg = recv_message(parent_sock, rpc_deadline)
+        if msg is None:
+            logger.warning(
+                "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
+                rpc_budget,
+            )
+            killed = True
+            _terminate_fetch_process(proc)
+            return None
+    finally:
+        try:
+            parent_sock.close()
+        except Exception:
+            pass
+        proc.join(timeout=1.0)
+        if proc.is_alive():
+            _terminate_fetch_process(proc)
+
+    if killed or not isinstance(msg, dict):
+        logger.warning("live_subnets sync failed: invalid child response")
         return None
-    if "exc" in err:
-        logger.warning("live_subnets sync failed: %s", err["exc"])
+    if not msg.get("ok"):
+        logger.warning("live_subnets sync failed: %s", msg.get("exc"))
         return None
-    return result.get("data")
+    rows = msg.get("data")
+    if not isinstance(rows, list):
+        return None
+    return {
+        "rows": rows,
+        "requested_netuids": list(msg.get("requested_netuids") or []),
+        "completed_netuids": list(msg.get("completed_netuids") or []),
+        "missing_netuids": list(msg.get("missing_netuids") or []),
+        "refresh_complete": bool(msg.get("refresh_complete", not msg.get("missing_netuids"))),
+        "degraded_reason": msg.get("degraded_reason"),
+        "batch_expired": bool(msg.get("batch_expired")),
+        "netuid_outcomes": {
+            int(k): str(v)
+            for k, v in (msg.get("netuid_outcomes") or {}).items()
+        },
+    }
 
 
 def _boot_status_path() -> str:
@@ -283,22 +381,32 @@ def _sync_once() -> bool:
             )
             logger.info("live_subnets sync deferred until registry is ready")
             return False
-        raw = _fetch_chain_data()
-        if raw is None:
+        fetch = _normalize_fetch_result(_fetch_chain_data())
+        if fetch is None:
             logger.warning("live_subnets sync: chain fetch failed or timed out")
             _record_boot_status(phase="sync_done", ok=False, reason="timeout")
             return False
-        if not raw:
+        rows = fetch.get("rows") or []
+        if not rows:
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
             return False
-        merged = _merge_into_registry(raw)
+        merged = _merge_into_registry(rows)
+        refresh_complete = bool(fetch.get("refresh_complete", True))
         payload = {
             "synced_at": _now_iso(),
             "source": "blockmachine",
             "count": len(merged),
+            "live_row_count": len(rows),
             "subnets": merged,
+            "requested_netuids": fetch.get("requested_netuids") or [],
+            "completed_netuids": fetch.get("completed_netuids") or [],
+            "missing_netuids": fetch.get("missing_netuids") or [],
+            "refresh_complete": refresh_complete,
+            "degraded_reason": fetch.get("degraded_reason"),
+            "batch_expired": bool(fetch.get("batch_expired")),
+            "netuid_outcomes": fetch.get("netuid_outcomes") or {},
         }
         try:
             os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
@@ -306,9 +414,33 @@ def _sync_once() -> bool:
             with open(tmp, "w") as f:
                 json.dump(payload, f)
             os.replace(tmp, _cache_path())
-            logger.info("live_subnets sync OK: %d subnets", len(merged))
-            _record_boot_status(phase="sync_done", ok=True, rows=len(merged))
-            return True
+            if refresh_complete:
+                logger.info("live_subnets sync OK: %d subnets (%d live rows)", len(merged), len(rows))
+                _record_boot_status(
+                    phase="sync_done",
+                    ok=True,
+                    rows=len(merged),
+                    live_rows=len(rows),
+                    refresh_complete=True,
+                )
+                return True
+            reason = fetch.get("degraded_reason") or "partial_fetch"
+            logger.warning(
+                "live_subnets partial sync: %d live rows, %d merged, missing=%s",
+                len(rows),
+                len(merged),
+                fetch.get("missing_netuids"),
+            )
+            _record_boot_status(
+                phase="sync_done",
+                ok=False,
+                reason=reason,
+                rows=len(merged),
+                live_rows=len(rows),
+                refresh_complete=False,
+                missing_netuids=fetch.get("missing_netuids") or [],
+            )
+            return False
         except Exception as exc:
             logger.warning("live_subnets cache write failed: %s", exc)
             _record_boot_status(phase="sync_done", ok=False, reason=f"write:{exc}")
@@ -421,16 +553,30 @@ def live_data_freshness() -> Dict[str, Any]:
         "subnet_count": 0,
         "stale": True,
         "cache_path": _cache_path(),
+        "cache_present": False,
     }
     try:
         if os.path.exists(_cache_path()):
+            info["cache_present"] = True
             with open(_cache_path(), "r") as f:
                 data = json.load(f)
             info["last_sync"] = data.get("synced_at")
             info["subnet_count"] = data.get("count", 0)
+            info["live_row_count"] = data.get("live_row_count", data.get("count", 0))
+            info["requested_netuids"] = data.get("requested_netuids") or []
+            info["completed_netuids"] = data.get("completed_netuids") or []
+            info["missing_netuids"] = data.get("missing_netuids") or []
+            info["refresh_complete"] = data.get("refresh_complete")
+            info["degraded_reason"] = data.get("degraded_reason")
+            info["batch_expired"] = data.get("batch_expired")
+            raw_outcomes = data.get("netuid_outcomes") or {}
+            info["netuid_outcomes"] = {
+                int(k): str(v) for k, v in raw_outcomes.items() if str(k).isdigit() or isinstance(k, int)
+            }
             if data.get("synced_at"):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(data["synced_at"])).total_seconds()
                 info["age_seconds"] = int(age)
+                # Age-only stale: partial lite fetch is surfaced via refresh_complete / degraded_reason.
                 info["stale"] = age > MAX_STALE_SECONDS
     except Exception as exc:
         logger.debug("freshness read failed: %s", exc)

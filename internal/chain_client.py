@@ -531,36 +531,42 @@ class ChainClient:
 
     def get_subnet_price_rows(self, netuids):
         """Fast path for live_subnets cache with price and pool reserves."""
+        return self.get_subnet_price_rows_batch(netuids)["rows"]
+
+    def get_subnet_price_rows_batch(self, netuids):
+        """Lite price fetch with per-netuid outcomes and batch_expired flag."""
         # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
         if not self.is_healthy():
             logger.warning("RPC health false-negative — attempting lite price fetch anyway")
 
         def _one(netuid: int):
+            """Return row + outcome; caller alone records outcomes (no shared mutable dict)."""
             try:
                 price = self.get_alpha_price(netuid)
-                if price is not None:
-                    row = {
-                        "netuid": netuid,
-                        "name": f"SN{netuid}",
-                        "price": price,
-                        "source": "blockmachine",
-                    }
-                    pool = self.get_pool_state(netuid)
-                    if pool:
-                        row.update(
-                            {
-                                "liquidity": pool.get("liquidity"),
-                                "total_tao": pool.get("total_tao"),
-                                "total_alpha": pool.get("total_alpha"),
-                                "taoLiquidity": pool.get("total_tao"),
-                                "tao_reserve_raw": pool.get("tao_reserve_raw"),
-                                "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
-                            }
-                        )
-                    return row
+                if price is None:
+                    return None, "no_price"
+                row = {
+                    "netuid": netuid,
+                    "name": f"SN{netuid}",
+                    "price": price,
+                    "source": "blockmachine",
+                }
+                pool = self.get_pool_state(netuid)
+                if pool:
+                    row.update(
+                        {
+                            "liquidity": pool.get("liquidity"),
+                            "total_tao": pool.get("total_tao"),
+                            "total_alpha": pool.get("total_alpha"),
+                            "taoLiquidity": pool.get("total_tao"),
+                            "tao_reserve_raw": pool.get("tao_reserve_raw"),
+                            "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
+                        }
+                    )
+                return row, "ok"
             except Exception as exc:
                 logger.debug("price fetch netuid %d: %s", netuid, exc)
-            return None
+                return None, "rpc_error"
 
         try:
             workers = int(os.environ.get("LIVE_SUBNETS_LITE_WORKERS", "8"))
@@ -570,36 +576,56 @@ class ChainClient:
 
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
 
-        # Bounded overall batch budget: when RPC degrades, as_completed would
-        # otherwise wait on ALL futures with no wall-clock cap, holding the whole
-        # pool for many seconds past live_subnets' join() ceiling and wedging the
-        # sync at sync_start. Break out once the budget elapses and return the
-        # rows that already completed (still netuid-sorted, same shape).
-        batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-        deadline = time.time() + batch_budget
+        deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
+        if deadline_mono:
+            deadline = float(deadline_mono)
+            batch_budget = max(0.0, deadline - time.monotonic())
+        else:
+            batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+            deadline = time.monotonic() + batch_budget
 
         rows = []
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = [pool.submit(_one, n) for n in netuids]
-            remaining = set(futures)
-            while remaining and time.time() < deadline:
+        outcomes: dict[int, str] = {}
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
+            futures = {pool.submit(_one, n): n for n in netuids}
+            remaining = set(futures.keys())
+            while remaining and time.monotonic() < deadline:
                 try:
-                    for fut in as_completed(remaining, timeout=max(0.0, deadline - time.time())):
+                    slice_timeout = max(0.0, min(0.25, deadline - time.monotonic()))
+                    for fut in as_completed(remaining, timeout=slice_timeout):
                         remaining.discard(fut)
-                        row = fut.result()
+                        row, outcome = fut.result()
+                        outcomes[futures[fut]] = outcome
                         if row:
                             rows.append(row)
                 except _FutureTimeout:
-                    # Budget exhausted — stop awaiting; keep whatever completed.
-                    break
+                    if time.monotonic() >= deadline:
+                        break
+            for fut in remaining:
+                outcomes[futures[fut]] = "batch_expired"
+                fut.cancel()
+        finally:
+            shutdown_wait = max(0.0, deadline - time.monotonic())
+            pool.shutdown(wait=False, cancel_futures=True)
+            if shutdown_wait > 0:
+                end = time.monotonic() + shutdown_wait
+                for t in pool._threads:
+                    t.join(timeout=max(0.0, end - time.monotonic()))
         rows.sort(key=lambda r: r["netuid"])
+        batch_expired = any(v == "batch_expired" for v in outcomes.values())
         logger.info(
-            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
+            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs, batch_expired=%s)",
             len(rows),
             workers,
             batch_budget,
+            batch_expired,
         )
-        return rows
+        return {
+            "rows": rows,
+            "batch_expired": batch_expired,
+            "netuid_outcomes": dict(outcomes),
+        }
 
 
 _default_client = None

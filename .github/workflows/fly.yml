@@ -321,7 +321,9 @@ jobs:
           boot=d.get('boot_status') or {}
           phase=boot.get('phase')
           ok=boot.get('ok')
-          print(f'live_subnets attempt {sys.argv[1]}: subnet_count={count} stale={stale} boot={phase} ok={ok}')
+          refresh_complete=d.get('refresh_complete')
+          degraded=d.get('degraded_reason')
+          print(f'live_subnets attempt {sys.argv[1]}: subnet_count={count} stale={stale} refresh_complete={refresh_complete} degraded={degraded} boot={phase} ok={ok}')
           warm=count>0 and (stale is False or (phase=='sync_done' and ok is True))
           sys.exit(0 if warm else 1)
           " "$i" && { echo "live_subnets cache warm"; exit 0; }
