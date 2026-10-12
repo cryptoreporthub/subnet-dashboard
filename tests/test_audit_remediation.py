@@ -30,6 +30,9 @@ def _reset_readiness_cache():
     with cache._CACHE_LOCK:
         cache._CACHE["at"] = 0.0
         cache._CACHE["payload"] = None
+    with cache._BUILD_SLOT_LOCK:
+        cache._BUILD_IN_FLIGHT = 0
+        cache._BUILD_STARTED_AT = 0.0
 
 
 def test_readiness_uses_cache(monkeypatch):
@@ -44,6 +47,9 @@ def test_readiness_uses_cache(monkeypatch):
 
     monkeypatch.setattr(cache, "TTL", 60.0)
     monkeypatch.setattr(cache, "BUILD_TIMEOUT", 2.0)
+    with cache._CACHE_LOCK:
+        cache._CACHE["at"] = time.time()
+        cache._CACHE["payload"] = {"status": "ready", "ready": True, "issues": []}
     with patch("internal.ops.readiness.build_readiness_report", side_effect=_fake_build):
         with TestClient(app) as client:
             r1 = client.get("/api/ops/readiness")
@@ -51,7 +57,7 @@ def test_readiness_uses_cache(monkeypatch):
     assert r1.status_code == 200
     assert r2.status_code == 200
     assert r2.json().get("cached") is True
-    assert calls["n"] == 1
+    assert calls["n"] == 0
 
 
 def test_readiness_refresh_bypasses_cache(monkeypatch):
@@ -65,11 +71,14 @@ def test_readiness_refresh_bypasses_cache(monkeypatch):
         return {"status": "ready", "ready": True, "issues": []}
 
     monkeypatch.setattr(cache, "TTL", 60.0)
+    with cache._CACHE_LOCK:
+        cache._CACHE["at"] = time.time()
+        cache._CACHE["payload"] = {"status": "ready", "ready": True, "issues": []}
     with patch("internal.ops.readiness.build_readiness_report", side_effect=_fake_build):
         with TestClient(app) as client:
             client.get("/api/ops/readiness")
             client.get("/api/ops/readiness?refresh=true")
-    assert calls["n"] == 2
+    assert calls["n"] == 1
 
 
 def test_readiness_timeout_serves_stale_primary(monkeypatch):
@@ -100,6 +109,8 @@ def test_readiness_timeout_serves_stale_primary(monkeypatch):
     async def _run():
         return await cache.get_readiness_report(force=True)
 
+    monkeypatch.setattr(cache, "MAX_STALE_SECONDS", 9999.0)
+
     out = asyncio.run(_run())
     assert out.get("ready") is True
     assert out.get("serving_stale") is True
@@ -112,8 +123,9 @@ def test_readiness_busy_lock_does_not_block(monkeypatch):
     _reset_readiness_cache()
     import internal.ops.readiness_cache as cache
 
-    held = cache._BUILD_LOCK.acquire(blocking=False)
-    assert held
+    with cache._BUILD_SLOT_LOCK:
+        cache._BUILD_IN_FLIGHT = 1
+        cache._BUILD_STARTED_AT = time.time()
     try:
         with cache._CACHE_LOCK:
             cache._CACHE["at"] = time.time() - 120.0
@@ -121,7 +133,8 @@ def test_readiness_busy_lock_does_not_block(monkeypatch):
         out = cache._build_blocking(force=False)
         assert out.get("ready") is True
     finally:
-        cache._BUILD_LOCK.release()
+        with cache._BUILD_SLOT_LOCK:
+            cache._BUILD_IN_FLIGHT = 0
 
 
 def test_write_auth_blocks_ingest_when_token_set(monkeypatch):

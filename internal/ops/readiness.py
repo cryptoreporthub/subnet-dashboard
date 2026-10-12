@@ -4,10 +4,55 @@ from __future__ import annotations
 
 import json
 import os
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, TypeVar
 
 from internal.subnets.feed import probe_feed_layers, subnet_feed_meta
+
+_SECTION_TIMEOUT = float(os.environ.get("READINESS_SECTION_TIMEOUT_SECONDS", "3"))
+_T = TypeVar("_T")
+
+
+def _run_readiness_section(
+    name: str,
+    fn: Callable[[], _T],
+    *,
+    default: _T,
+    issues: List[str],
+    meta: List[Dict[str, Any]],
+) -> _T:
+    started = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        fut = pool.submit(fn)
+        try:
+            out = fut.result(timeout=_SECTION_TIMEOUT)
+        except FuturesTimeoutError:
+            issues.append(f"readiness_section_timeout:{name}")
+            meta.append(
+                {
+                    "section": name,
+                    "status": "timeout",
+                    "duration_s": round(time.perf_counter() - started, 3),
+                }
+            )
+            return default
+        except Exception as exc:
+            issues.append(f"readiness_section_error:{name}")
+            meta.append(
+                {
+                    "section": name,
+                    "status": "error",
+                    "duration_s": round(time.perf_counter() - started, 3),
+                    "error": str(exc)[:200],
+                }
+            )
+            return default
+    meta.append(
+        {"section": name, "status": "ok", "duration_s": round(time.perf_counter() - started, 3)}
+    )
+    return out
 
 
 def _utcnow_z() -> str:
@@ -181,28 +226,58 @@ def build_liveness_report(*, probe_worker: bool = True) -> Dict[str, Any]:
 def build_readiness_report() -> Dict[str, Any]:
     """Aggregate scheduler, volume, feed, and cred signals for operators."""
     issues: List[str] = []
+    section_meta: List[Dict[str, Any]] = []
 
     from internal.live_subnets import live_data_freshness
     from internal.freshness import get_sync_state
     from internal.liveness import build_liveness_registry, public_liveness_registry
 
-    live = live_data_freshness()
-    feed = probe_feed_layers()
-    sync = get_sync_state()
-    liveness = build_liveness_registry()
+    live = _run_readiness_section(
+        "live_cache", live_data_freshness, default={}, issues=issues, meta=section_meta
+    )
+    feed = _run_readiness_section(
+        "subnet_feed", probe_feed_layers, default={}, issues=issues, meta=section_meta
+    )
+    sync = _run_readiness_section(
+        "registry_sync", get_sync_state, default={}, issues=issues, meta=section_meta
+    )
+    liveness = _run_readiness_section(
+        "liveness_registry",
+        build_liveness_registry,
+        default={"trackers": {}},
+        issues=issues,
+        meta=section_meta,
+    )
     trackers = liveness.get("trackers") or {}
     resolver_snap = trackers.get("prediction_resolver") or {}
-    learning = _learning_summary()
-    daily = _daily_pick_summary()
+    learning = _run_readiness_section(
+        "learning", _learning_summary, default={}, issues=issues, meta=section_meta
+    )
+    daily = _run_readiness_section(
+        "daily_pick", _daily_pick_summary, default={}, issues=issues, meta=section_meta
+    )
     pump_desk_trust = _pump_desk_trust_from_liveness(liveness)
-    try:
+
+    def _pump_scheduler_state() -> Dict[str, Any]:
         from internal.pump.desk_snapshot_scheduler import get_pump_desk_snapshot_scheduler_state
 
-        pump_desk_snapshot_scheduler = get_pump_desk_snapshot_scheduler_state()
-    except Exception as exc:
-        pump_desk_snapshot_scheduler = {"enabled": None, "error": str(exc)}
+        return get_pump_desk_snapshot_scheduler_state()
 
-    loop_health = _learning_loop_health()
+    pump_desk_snapshot_scheduler = _run_readiness_section(
+        "pump_desk_snapshot_scheduler",
+        _pump_scheduler_state,
+        default={"enabled": None},
+        issues=issues,
+        meta=section_meta,
+    )
+
+    loop_health = _run_readiness_section(
+        "learning_loop_health",
+        _learning_loop_health,
+        default={},
+        issues=issues,
+        meta=section_meta,
+    )
     if loop_health.get("status") == "stalled":
         issues.append("learning_loop_stalled")
     elif loop_health.get("ledger", {}).get("gap"):
@@ -213,7 +288,13 @@ def build_readiness_report() -> Dict[str, Any]:
 
     inline_worker = inline_worker_expected()
     split_v2 = split_worker_v2_enabled()
-    worker_peer = get_worker_peer()
+    worker_peer = _run_readiness_section(
+        "worker_peer",
+        get_worker_peer,
+        default={},
+        issues=issues,
+        meta=section_meta,
+    )
     worker_peer_alive = bool(worker_peer.get("alive"))
     if is_worker_mode() and worker_peer_alive:
         resolver = _scheduler_view_from_tracker(
@@ -320,6 +401,7 @@ def build_readiness_report() -> Dict[str, Any]:
         "worker_peer": worker_peer,
         "thin_ui_likely": thin_ui,
         "issues": issues,
+        "readiness_sections": section_meta,
         "learning": learning,
         "learning_loop_health": loop_health,
         "liveness": public_liveness_registry(liveness),

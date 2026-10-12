@@ -532,6 +532,15 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     defer_boot("subnet-name-cache", _warm_subnet_name_cache, delay=0)
 
     try:
+        from internal.ops.readiness_cache import TTL as readiness_ttl
+        from internal.ops.readiness_cache import start_readiness_refresher
+
+        start_readiness_refresher()
+        logger.info("Readiness background refresher started (interval=%ss)", readiness_ttl)
+    except Exception as exc:
+        logger.warning("Readiness refresher failed to start: %s", exc)
+
+    try:
         if is_worker_mode():
             from internal.subnet_universe import ensure_background_refresh
 
@@ -732,5 +741,11 @@ def stop_background_workers() -> None:
 
         cancel_job("whale-ledger-warm")
         shutdown_background_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.ops.readiness_cache import stop_readiness_refresher
+
+        stop_readiness_refresher()
     except Exception:
         pass
