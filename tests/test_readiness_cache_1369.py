@@ -278,6 +278,38 @@ def test_store_if_current_barrier_reset_does_not_clobber():
         assert cache._CACHE["payload"]["marker"] == "NEW"
 
 
+def test_reset_atomic_stale_store_cannot_repopulate():
+    """Clear+bump under nested locks: concurrent stale _store_if_current cannot refill."""
+    import threading
+
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    with cache._BUILD_SLOT_LOCK:
+        stale_gen = cache._BUILD_GENERATION
+    stop = threading.Event()
+
+    def _spam_stale_store() -> None:
+        while not stop.is_set():
+            cache._store_if_current(
+                {"marker": "OLD", "ready": True, "issues": []}, stale_gen
+            )
+
+    workers = [threading.Thread(target=_spam_stale_store, daemon=True) for _ in range(8)]
+    for t in workers:
+        t.start()
+    for _ in range(40):
+        cache.reset_readiness_cache()
+    stop.set()
+    for t in workers:
+        t.join(timeout=3.0)
+    with cache._CACHE_LOCK:
+        payload = cache._CACHE.get("payload")
+        assert payload is None or (
+            isinstance(payload, dict) and payload.get("marker") != "OLD"
+        )
+
+
 def test_warm_reset_fences_old_worker(monkeypatch):
     """Blocked warm build → reset → re-kick must not leave two warm workers."""
     import threading
