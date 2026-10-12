@@ -153,6 +153,13 @@ def test_publish_gauge_reads_previous_from_disk_timing():
     assert value == 0.02
 
 
+def test_publish_gauge_prefers_process_local_over_disk_previous():
+    cov.reset_phase1_cycle_state_for_tests()
+    cov.record_publish_wall_seconds(0.05)
+    value = cov._publish_wall_gauge_value({"previous_publish_wall_seconds": 0.02})
+    assert value == 0.05
+
+
 def test_legacy_hour_copied_infers_without_status_field():
     block = {
         "succeeded": [1, 2],

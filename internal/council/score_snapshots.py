@@ -471,15 +471,15 @@ def write_full_universe_snapshot(
         publish_result = save_score_snapshot(
             {**payload, "source": source, "coverage": coverage}
         )
+        published = bool(publish_result.get("published"))
+        skipped_older = bool(publish_result.get("skipped_older"))
         publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
-        if publish_wall is not None:
+        if published and publish_wall is not None:
             record_publish_wall_seconds(float(publish_wall))
         timing_for_metrics = dict(disk_timing)
         if publish_wall is not None:
             timing_for_metrics["publish_wall_seconds"] = publish_wall
         coverage["timing"] = timing_for_metrics
-        published = bool(publish_result.get("published"))
-        skipped_older = bool(publish_result.get("skipped_older"))
         if not published:
             coverage["published"] = False
             coverage["complete"] = False

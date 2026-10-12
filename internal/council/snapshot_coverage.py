@@ -317,11 +317,11 @@ def _publish_wall_gauge_value(timing: Dict[str, Any]) -> float:
     if on_wire is not None:
         _process_publish_wall_seconds = float(on_wire)
         return _process_publish_wall_seconds
+    if _process_publish_wall_seconds is not None:
+        return _process_publish_wall_seconds
     prev = timing.get("previous_publish_wall_seconds")
     if prev is not None:
         return float(prev)
-    if _process_publish_wall_seconds is not None:
-        return _process_publish_wall_seconds
     return SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
 
 
