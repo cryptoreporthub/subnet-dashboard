@@ -574,9 +574,8 @@ def live_data_freshness() -> Dict[str, Any]:
             if data.get("synced_at"):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(data["synced_at"])).total_seconds()
                 info["age_seconds"] = int(age)
-                age_stale = age > MAX_STALE_SECONDS
-                partial = data.get("refresh_complete") is False
-                info["stale"] = age_stale or partial
+                # Age-only stale: partial lite fetch is surfaced via refresh_complete / degraded_reason.
+                info["stale"] = age > MAX_STALE_SECONDS
     except Exception as exc:
         logger.debug("freshness read failed: %s", exc)
     try:

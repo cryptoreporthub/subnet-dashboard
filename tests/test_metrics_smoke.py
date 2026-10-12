@@ -12,3 +12,4 @@ def test_metrics_exposes_http_and_freshness_gauges():
     body = response.text
     assert "requests_total" in body or "request_processing_time" in body
     assert "subnet_live_stale" in body or "subnet_scheduler_running" in body
+    assert "subnet_live_refresh_complete" in body

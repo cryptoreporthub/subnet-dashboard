@@ -711,7 +711,7 @@ def test_sync_once_complete_fetch_control(monkeypatch, tmp_path):
     assert cache["live_row_count"] == 2
 
 
-def test_live_data_freshness_partial_marks_stale(monkeypatch, tmp_path):
+def test_live_data_freshness_partial_does_not_force_stale(monkeypatch, tmp_path):
     from datetime import datetime, timezone
 
     from internal import live_subnets
@@ -735,7 +735,7 @@ def test_live_data_freshness_partial_marks_stale(monkeypatch, tmp_path):
     )
     with patch("internal.data_volume.worker_data_freshness", return_value=None):
         info = live_subnets.live_data_freshness()
-    assert info["stale"] is True
+    assert info["stale"] is False
     assert info["refresh_complete"] is False
     assert info["live_row_count"] == 1
     assert info["subnet_count"] == 5
