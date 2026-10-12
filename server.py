@@ -224,6 +224,10 @@ async def _lifespan(app: FastAPI):
 
     validate_calibration_config()
 
+    from internal.ops.readiness_cache import start_readiness_refresher, stop_readiness_refresher
+
+    start_readiness_refresher()
+
     from internal.run_mode import (
         background_boot_allowed,
         background_on_web,
@@ -232,155 +236,158 @@ async def _lifespan(app: FastAPI):
         worker_heavy_feeds_enabled,
     )
 
-    if is_worker_mode():
-        if stage2_hop_mode():
-            from internal.worker_heartbeat import start_heartbeat_thread, touch_heartbeat
+    try:
+        if is_worker_mode():
+            if stage2_hop_mode():
+                from internal.worker_heartbeat import start_heartbeat_thread, touch_heartbeat
 
-            touch_heartbeat()
-            start_heartbeat_thread()
-            logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat thread")
+                touch_heartbeat()
+                start_heartbeat_thread()
+                logger.info("Stage 2 hop worker lifespan — HTTP + heartbeat thread")
+                yield
+                return
+
+            if background_boot_allowed():
+                from internal.background_boot import start_background_workers, stop_background_workers
+                from internal.worker_heartbeat import touch_heartbeat
+
+                heavy = worker_heavy_feeds_enabled()
+                start_background_workers(heavy=heavy)
+                touch_heartbeat()
+
+                def _beat() -> None:
+                    import time
+
+                    # Zombie-loop guard: pause heartbeat when the background scheduler
+                    # has no live jobs so the Fly supervisor sees a stale heartbeat and
+                    # restarts the worker instead of serving a "healthy" signal while
+                    # the learning loop is silently frozen (mirrors internal/worker.py).
+                    while True:
+                        time.sleep(30)
+                        try:
+                            from internal.job_scheduler import state as _sched_state
+
+                            _st = _sched_state()
+                            if not _st.get("running") or int(_st.get("job_count", 0) or 0) <= 0:
+                                logger.warning(
+                                    "background scheduler unhealthy (%s); heartbeat paused", _st
+                                )
+                                continue
+                            touch_heartbeat()
+                        except Exception as exc:
+                            logger.debug("worker heartbeat tick failed: %s", exc)
+
+                threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
+
+                # Loop stall guard: watches pump desk snapshot age and resolver tick
+                # age; exits the worker process when both stay stale so the Fly
+                # supervisor restarts it fresh (re-runs start_background_workers).
+                try:
+                    from internal.loop_stall_guard import start_loop_stall_guard
+
+                    start_loop_stall_guard()
+                except Exception as _lsg_exc:
+                    logger.warning("loop stall guard failed to start: %s", _lsg_exc)
+
+                # Log resolver readiness for operator diagnosis on startup.
+                try:
+                    from internal.council.resolver_scheduler import (
+                        get_prediction_resolver_scheduler_state,
+                    )
+
+                    _rs = get_prediction_resolver_scheduler_state()
+                    logger.info(
+                        "resolver scheduler boot state: lifecycle=%s running=%s refresh_minutes=%s",
+                        _rs.get("lifecycle"),
+                        _rs.get("running"),
+                        _rs.get("refresh_minutes"),
+                    )
+                except Exception as _rs_exc:
+                    logger.warning("resolver scheduler state unavailable at boot: %s", _rs_exc)
+
+                logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
             yield
+            if background_boot_allowed():
+                from internal.background_boot import stop_background_workers
+
+                stop_background_workers()
             return
 
-        if background_boot_allowed():
+        # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
+        threading.Thread(
+            target=_prime_emergency_home_html,
+            daemon=True,
+            name="emergency-prime",
+        ).start()
+        threading.Thread(
+            target=lambda: _warm_homepage_cache(None),
+            daemon=True,
+            name="homepage-warm-boot",
+        ).start()
+        threading.Thread(
+            target=_registry_name_boot_sync,
+            daemon=True,
+            name="registry-name-sync",
+        ).start()
+        threading.Thread(
+            target=_council_weight_rebalance_boot,
+            daemon=True,
+            name="council-weight-rebalance",
+        ).start()
+
+        if not is_worker_mode():
+
+            def _cache_coverage_audit_boot() -> None:
+                try:
+                    from internal.council.price_reference import run_startup_cache_coverage_audit
+
+                    run_startup_cache_coverage_audit()
+                except Exception as exc:
+                    logger.warning("cache coverage audit (web) failed: %s", exc)
+
+            if not (background_on_web() and background_boot_allowed()):
+                threading.Thread(
+                    target=_cache_coverage_audit_boot,
+                    daemon=True,
+                    name="cache-coverage-audit",
+                ).start()
+
+        try:
+            from internal.data_volume import needs_worker_volume_proxy
+
+            if needs_worker_volume_proxy():
+                from internal.worker_proxy import start_worker_base_discovery
+
+                start_worker_base_discovery()
+        except Exception as exc:
+            logger.debug("worker base discovery skipped: %s", exc)
+
+        if background_on_web() and background_boot_allowed():
             from internal.background_boot import start_background_workers, stop_background_workers
-            from internal.worker_heartbeat import touch_heartbeat
 
-            heavy = worker_heavy_feeds_enabled()
-            start_background_workers(heavy=heavy)
-            touch_heartbeat()
+            start_background_workers()
 
-            def _beat() -> None:
-                import time
+        # ponytail: cap default asyncio thread pool — timed-out pick/weighed work can't exhaust all slots
+        pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
+        aio_pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=pool_cap, thread_name_prefix="aio-web"
+        )
+        asyncio.get_running_loop().set_default_executor(aio_pool)
 
-                # Zombie-loop guard: pause heartbeat when the background scheduler
-                # has no live jobs so the Fly supervisor sees a stale heartbeat and
-                # restarts the worker instead of serving a "healthy" signal while
-                # the learning loop is silently frozen (mirrors internal/worker.py).
-                while True:
-                    time.sleep(30)
-                    try:
-                        from internal.job_scheduler import state as _sched_state
-
-                        _st = _sched_state()
-                        if not _st.get("running") or int(_st.get("job_count", 0) or 0) <= 0:
-                            logger.warning(
-                                "background scheduler unhealthy (%s); heartbeat paused", _st
-                            )
-                            continue
-                        touch_heartbeat()
-                    except Exception as exc:
-                        logger.debug("worker heartbeat tick failed: %s", exc)
-
-            threading.Thread(target=_beat, daemon=True, name="worker-heartbeat").start()
-
-            # Loop stall guard: watches pump desk snapshot age and resolver tick
-            # age; exits the worker process when both stay stale so the Fly
-            # supervisor restarts it fresh (re-runs start_background_workers).
-            try:
-                from internal.loop_stall_guard import start_loop_stall_guard
-
-                start_loop_stall_guard()
-            except Exception as _lsg_exc:
-                logger.warning("loop stall guard failed to start: %s", _lsg_exc)
-
-            # Log resolver readiness for operator diagnosis on startup.
-            try:
-                from internal.council.resolver_scheduler import (
-                    get_prediction_resolver_scheduler_state,
-                )
-
-                _rs = get_prediction_resolver_scheduler_state()
-                logger.info(
-                    "resolver scheduler boot state: lifecycle=%s running=%s refresh_minutes=%s",
-                    _rs.get("lifecycle"),
-                    _rs.get("running"),
-                    _rs.get("refresh_minutes"),
-                )
-            except Exception as _rs_exc:
-                logger.warning("resolver scheduler state unavailable at boot: %s", _rs_exc)
-
-            logger.info("dedicated worker lifespan boot (heavy=%s)", heavy)
         yield
-        if background_boot_allowed():
+        if background_on_web() and background_boot_allowed():
             from internal.background_boot import stop_background_workers
 
             stop_background_workers()
-        return
+        try:
+            from internal.http_client import close_async_client
 
-    # Never block lifespan on Jinja — Fly health checks fail and edge returns 0 bytes.
-    threading.Thread(
-        target=_prime_emergency_home_html,
-        daemon=True,
-        name="emergency-prime",
-    ).start()
-    threading.Thread(
-        target=lambda: _warm_homepage_cache(None),
-        daemon=True,
-        name="homepage-warm-boot",
-    ).start()
-    threading.Thread(
-        target=_registry_name_boot_sync,
-        daemon=True,
-        name="registry-name-sync",
-    ).start()
-    threading.Thread(
-        target=_council_weight_rebalance_boot,
-        daemon=True,
-        name="council-weight-rebalance",
-    ).start()
-
-    if not is_worker_mode():
-
-        def _cache_coverage_audit_boot() -> None:
-            try:
-                from internal.council.price_reference import run_startup_cache_coverage_audit
-
-                run_startup_cache_coverage_audit()
-            except Exception as exc:
-                logger.warning("cache coverage audit (web) failed: %s", exc)
-
-        if not (background_on_web() and background_boot_allowed()):
-            threading.Thread(
-                target=_cache_coverage_audit_boot,
-                daemon=True,
-                name="cache-coverage-audit",
-            ).start()
-
-    try:
-        from internal.data_volume import needs_worker_volume_proxy
-
-        if needs_worker_volume_proxy():
-            from internal.worker_proxy import start_worker_base_discovery
-
-            start_worker_base_discovery()
-    except Exception as exc:
-        logger.debug("worker base discovery skipped: %s", exc)
-
-    if background_on_web() and background_boot_allowed():
-        from internal.background_boot import start_background_workers, stop_background_workers
-
-        start_background_workers()
-
-    # ponytail: cap default asyncio thread pool — timed-out pick/weighed work can't exhaust all slots
-    pool_cap = int(os.environ.get("AIO_WORKER_POOL_SIZE", "4"))
-    aio_pool = concurrent.futures.ThreadPoolExecutor(
-        max_workers=pool_cap, thread_name_prefix="aio-web"
-    )
-    asyncio.get_running_loop().set_default_executor(aio_pool)
-
-    yield
-    if background_on_web() and background_boot_allowed():
-        from internal.background_boot import stop_background_workers
-
-        stop_background_workers()
-    try:
-        from internal.http_client import close_async_client
-
-        await close_async_client()
-    except Exception:
-        pass
-    aio_pool.shutdown(wait=False, cancel_futures=True)
+            await close_async_client()
+        except Exception:
+            pass
+        aio_pool.shutdown(wait=False, cancel_futures=True)
+    finally:
+        stop_readiness_refresher()
 
 
 app = FastAPI(title="Subnet Dashboard", lifespan=_lifespan)

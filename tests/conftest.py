@@ -39,6 +39,24 @@ def _isolate_message_intel_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _isolate_readiness_cache():
+    """Prevent readiness cache/refresher state leaking between tests."""
+    try:
+        from internal.ops.readiness_cache import reset_readiness_cache
+
+        reset_readiness_cache()
+    except Exception:
+        pass
+    yield
+    try:
+        from internal.ops.readiness_cache import reset_readiness_cache
+
+        reset_readiness_cache()
+    except Exception:
+        pass
+
+
+@pytest.fixture(autouse=True)
 def _clear_message_intel_load_cache():
     try:
         from internal.message_intel.load_guard import clear_message_intel_load_cache

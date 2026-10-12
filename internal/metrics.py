@@ -103,6 +103,25 @@ SCORE_SNAPSHOT_AGE_SECONDS = Gauge(
 # ponytail: sentinel for missing/unreadable snapshot file (always set gauge; never skip).
 SCORE_SNAPSHOT_AGE_UNAVAILABLE = -1.0
 
+READINESS_REPORT_AGE_SECONDS = Gauge(
+    "readiness_report_age_seconds",
+    "Age of the last stored /api/ops/readiness payload in seconds (-1 when never built)",
+)
+READINESS_LAST_SUCCESS_UNIX = Gauge(
+    "readiness_last_success_build_unixtime",
+    "Unix time of the last successful readiness cache store (0 when never built)",
+)
+READINESS_BUILDS_TOTAL = Counter(
+    "readiness_builds_total",
+    "Successful readiness report builds stored to cache",
+)
+READINESS_BUILD_FAILURES = Counter(
+    "readiness_build_failures_total",
+    "Readiness background or forced build failures",
+    ["reason"],
+)
+READINESS_REPORT_AGE_UNAVAILABLE = -1.0
+
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
     if value is None:
@@ -177,6 +196,16 @@ def refresh_from_state() -> None:
 
     try:
         _refresh_score_snapshot_gauges()
+    except Exception:
+        pass
+
+    try:
+        from internal.ops.readiness_cache import readiness_report_age_seconds
+
+        age = readiness_report_age_seconds()
+        READINESS_REPORT_AGE_SECONDS.set(
+            age if age is not None else READINESS_REPORT_AGE_UNAVAILABLE
+        )
     except Exception:
         pass
 
