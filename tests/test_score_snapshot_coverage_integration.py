@@ -403,13 +403,46 @@ def test_metrics_skips_stale_disk_coverage(tmp_path, monkeypatch):
     assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
 
 
-def test_write_then_scrape_keeps_process_publish_wall(tmp_path, monkeypatch):
+def test_scrape_reads_previous_publish_from_snapshot_not_soul_map(tmp_path, monkeypatch):
     from internal.metrics import (
         SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
-        SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE,
         refresh_from_state,
     )
 
+    def _forbid_soul_map(*_args, **_kwargs):
+        raise AssertionError("soul_map read on metrics scrape")
+
+    monkeypatch.setattr("internal.council.weights._load_raw", _forbid_soul_map)
+    path = tmp_path / "score_snapshots.json"
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    path.write_text(
+        json.dumps(
+            {
+                "written_at": now,
+                "build_started_at": now,
+                "day": [{"netuid": 1, "total_score": 1.0}],
+                "hour": [],
+                "coverage": {
+                    "published": True,
+                    "complete": False,
+                    "timing": {
+                        "build_wall_seconds": 1.0,
+                        "previous_publish_wall_seconds": 0.015,
+                    },
+                    "day": {"succeeded": [1], "complete": False},
+                    "hour": {"succeeded": [], "complete": False},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    cov.reset_phase1_cycle_state_for_tests()
+    refresh_from_state()
+    assert SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get() == 0.015
+
+
+def test_second_write_persists_previous_publish_one_cycle_behind(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
@@ -427,13 +460,21 @@ def test_write_then_scrape_keeps_process_publish_wall(tmp_path, monkeypatch):
     hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
-    snaps.write_full_universe_snapshot()
-    after_write = SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
-    assert after_write > 0
-    refresh_from_state()
-    after_scrape = SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS._value.get()
-    assert after_scrape == after_write
-    assert after_scrape != SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
+    first = snaps.write_full_universe_snapshot()
+    first_pub = (first.get("coverage") or {}).get("timing", {}).get("publish_wall_seconds")
+    assert first_pub is not None
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert "previous_publish_wall_seconds" not in (
+        (saved.get("coverage") or {}).get("timing") or {}
+    )
+    second = snaps.write_full_universe_snapshot()
+    saved2 = json.loads(path.read_text(encoding="utf-8"))
+    on_disk_prev = (saved2.get("coverage") or {}).get("timing", {}).get(
+        "previous_publish_wall_seconds"
+    )
+    assert on_disk_prev == round(float(first_pub), 6)
+    second_pub = (second.get("coverage") or {}).get("timing", {}).get("publish_wall_seconds")
+    assert second_pub is not None
 
 
 def test_fresh_process_publish_wall_unavailable(tmp_path, monkeypatch):

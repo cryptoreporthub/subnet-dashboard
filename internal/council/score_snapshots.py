@@ -408,6 +408,8 @@ def write_full_universe_snapshot(
         from internal.council.snapshot_coverage import (
             build_coverage_block,
             coverage_capture_deadline_seconds,
+            coverage_timing_for_disk,
+            record_publish_wall_seconds,
             load_membership_receipt,
             membership_scoring_expected,
             note_cycle,
@@ -463,15 +465,21 @@ def write_full_universe_snapshot(
         if capture_timed_out:
             coverage["complete"] = False
             coverage["capture_reason"] = "capture_timeout"
+        # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
+        disk_timing = coverage_timing_for_disk(timing)
+        coverage["timing"] = disk_timing
         publish_result = save_score_snapshot(
             {**payload, "source": source, "coverage": coverage}
         )
-        timing["publish_wall_seconds"] = (publish_result.get("timing") or {}).get(
-            "publish_wall_seconds"
-        )
-        coverage["timing"] = timing
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
+        publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
+        if published and publish_wall is not None:
+            record_publish_wall_seconds(float(publish_wall))
+        timing_for_metrics = dict(disk_timing)
+        if published and publish_wall is not None:
+            timing_for_metrics["publish_wall_seconds"] = publish_wall
+        coverage["timing"] = timing_for_metrics
         if not published:
             coverage["published"] = False
             coverage["complete"] = False

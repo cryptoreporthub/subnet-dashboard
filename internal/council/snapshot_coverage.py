@@ -295,45 +295,31 @@ def reset_phase1_cycle_state_for_tests() -> None:
     _process_publish_wall_seconds = None
 
 
-def _soul_map_publish_wall_seconds() -> Optional[float]:
-    """Read-only soul_map peek for web workers; no deep copy on metrics scrape."""
-    try:
-        from internal.council import weights
+def record_publish_wall_seconds(value: float) -> None:
+    """Remember last publish duration for the next snapshot write (process-local)."""
+    global _process_publish_wall_seconds
+    _process_publish_wall_seconds = float(value)
 
-        data = weights._load_raw(weights.SOUL_MAP_PATH, copy_blob=False)
-        sched = data.get("score_snapshot_scheduler") if isinstance(data, dict) else None
-        if not isinstance(sched, dict):
-            return None
-        last = sched.get("last_cycle")
-        if not isinstance(last, dict):
-            return None
-        cov = last.get("coverage")
-        if not isinstance(cov, dict):
-            return None
-        timing = cov.get("timing")
-        if not isinstance(timing, dict):
-            return None
-        pub = timing.get("publish_wall_seconds")
-        if pub is None:
-            return None
-        return float(pub)
-    except Exception:
-        return None
+
+def coverage_timing_for_disk(timing: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist build + previous publish timing; current publish stays process-only."""
+    out = {k: v for k, v in (timing or {}).items() if k != "publish_wall_seconds"}
+    if _process_publish_wall_seconds is not None:
+        out["previous_publish_wall_seconds"] = round(_process_publish_wall_seconds, 6)
+    return out
 
 
 def _publish_wall_gauge_value(timing: Dict[str, Any]) -> float:
     from internal.metrics import SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
 
-    global _process_publish_wall_seconds
     on_wire = timing.get("publish_wall_seconds")
     if on_wire is not None:
-        _process_publish_wall_seconds = float(on_wire)
-        return _process_publish_wall_seconds
+        return float(on_wire)
     if _process_publish_wall_seconds is not None:
         return _process_publish_wall_seconds
-    from_soul = _soul_map_publish_wall_seconds()
-    if from_soul is not None:
-        return from_soul
+    prev = timing.get("previous_publish_wall_seconds")
+    if prev is not None:
+        return float(prev)
     return SCORE_SNAPSHOT_TIMING_PUBLISH_UNAVAILABLE
 
 
