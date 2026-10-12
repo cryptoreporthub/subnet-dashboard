@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
 
@@ -33,7 +34,7 @@ SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_STUCK_SECONDS"
 SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
-SCORE_SNAPSHOT_MAX_SUBNETS = int(os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS", "0"))
+SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
 JOB_ID = "score-snapshot-scheduler"
 
 
@@ -151,10 +152,11 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
 
 
-def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> None:
+def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     snap_path = path or SCORE_SNAPSHOTS_PATH
     os.makedirs(os.path.dirname(snap_path) or ".", exist_ok=True)
     with _locked_score_snapshot(snap_path):
+        publish_started = time.monotonic()
         current = load_score_snapshot(snap_path)
         incoming = _snapshot_stamp(payload)
         on_disk = _snapshot_stamp(current)
@@ -164,11 +166,22 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
                 payload.get("build_started_at") or payload.get("written_at"),
                 (current or {}).get("build_started_at") or (current or {}).get("written_at"),
             )
-            return
+            publish_wall = time.monotonic() - publish_started
+            return {
+                "published": False,
+                "skipped_older": True,
+                "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+            }
         tmp = snap_path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
         os.replace(tmp, snap_path)
+        publish_wall = time.monotonic() - publish_started
+        return {
+            "published": True,
+            "skipped_older": False,
+            "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+        }
 
 
 def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
@@ -241,13 +254,22 @@ def build_full_universe_snapshot(
     build_started_at = _now_iso()
     hour_rows: List[Dict[str, Any]] = []
     day_rows: List[Dict[str, Any]] = []
+    day_failed: List[Dict[str, Any]] = []
+    hour_failed: List[Dict[str, Any]] = []
+    day_succeeded: List[int] = []
+    hour_succeeded: List[int] = []
+    day_attempted: List[int] = []
+    hour_attempted: List[int] = []
+    skipped_invalid = 0
     total = len(rows)
     for idx, sn in enumerate(rows):
         try:
             netuid = int(sn.get("netuid"))
         except (TypeError, ValueError):
+            skipped_invalid += 1
             continue
         if score_hour:
+            hour_attempted.append(netuid)
             try:
                 h = score_subnet_for_hour(sn, market_context)
                 hour_rows.append(
@@ -258,8 +280,16 @@ def build_full_universe_snapshot(
                         "recovery_context": h.get("recovery_context"),
                     }
                 )
-            except Exception:
-                pass
+                hour_succeeded.append(netuid)
+            except Exception as exc:
+                hour_failed.append(
+                    {
+                        "netuid": netuid,
+                        "stage": "hour",
+                        "error_class": type(exc).__name__,
+                    }
+                )
+        day_attempted.append(netuid)
         try:
             d = score_subnet_for_day(sn, market_context)
             day_rows.append(
@@ -270,13 +300,25 @@ def build_full_universe_snapshot(
                     "recovery_context": d.get("recovery_context"),
                 }
             )
-        except Exception:
-            pass
+            day_succeeded.append(netuid)
+        except Exception as exc:
+            day_failed.append(
+                {
+                    "netuid": netuid,
+                    "stage": "day",
+                    "error_class": type(exc).__name__,
+                }
+            )
         if progress_cb and total and (idx + 1) % 20 == 0:
             progress_cb(idx + 1, total)
 
+    hour_copied_from_day = False
     if not score_hour and day_rows:
-        hour_rows = [dict(row) for row in day_rows]
+        hour_copied_from_day = True
+        hour_rows = [{**row, "source": "copied_from_day"} for row in day_rows]
+        hour_succeeded = list(day_succeeded)
+        hour_failed = []
+        hour_attempted = []
 
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
@@ -286,6 +328,17 @@ def build_full_universe_snapshot(
         "count": len(rows),
         "hour": hour_rows,
         "day": day_rows,
+        "_coverage_inputs": {
+            "day_succeeded": day_succeeded,
+            "day_failed": day_failed,
+            "hour_succeeded": hour_succeeded,
+            "hour_failed": hour_failed,
+            "hour_copied_from_day": hour_copied_from_day,
+            "day_attempted": day_attempted,
+            "hour_attempted": hour_attempted,
+            "skipped_invalid": skipped_invalid,
+            "tradable_rows": rows,
+        },
     }
 
 
@@ -321,6 +374,7 @@ def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
     """Load subnets, score, persist. Call only from background."""
+    capture_started = time.monotonic()
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
@@ -331,10 +385,15 @@ def write_full_universe_snapshot(
             if not subnets:
                 subnets, source = _get_subnets_hydrate()
         cap = _snapshot_subnet_cap()
+        capped_out = 0
+        selection_policy = "full"
+        pre_cap_len = len(subnets or [])
         if cap > 0 and subnets and len(subnets) > cap:
             from server import _cap_subnets_for_scoring
 
             subnets = _cap_subnets_for_scoring(subnets, limit=cap)
+            capped_out = max(0, pre_cap_len - len(subnets or []))
+            selection_policy = "rank_cap"
         ctx = _market_context_with_weights(subnets or [])
         logger.info(
             "score snapshot build started: source=%s registry_only=%s subnets=%d",
@@ -346,19 +405,96 @@ def write_full_universe_snapshot(
         return {"ok": False, "error": f"subnet load: {exc}"}
 
     def _build_and_save() -> Dict[str, Any]:
+        from internal.council.snapshot_coverage import (
+            build_coverage_block,
+            coverage_capture_deadline_seconds,
+            load_membership_receipt,
+            membership_scoring_expected,
+            note_cycle,
+            publish_metrics,
+            tradable_netuid_set,
+        )
+
+        receipt = load_membership_receipt()
+        expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
+        build_started = time.monotonic()
         payload = build_full_universe_snapshot(
             subnets or [],
             ctx,
             progress_cb=progress_cb,
         )
+        build_wall = time.monotonic() - build_started
+        inputs = payload.pop("_coverage_inputs", {}) or {}
+        tradable_ids = tradable_netuid_set(list(inputs.get("tradable_rows") or []))
+        timing: Dict[str, Any] = {
+            "build_wall_seconds": round(build_wall, 6),
+            "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
+        }
+        try:
+            coverage = build_coverage_block(
+                receipt=receipt,
+                day_expected=expected,
+                day_succeeded=list(inputs.get("day_succeeded") or []),
+                day_failed=list(inputs.get("day_failed") or []),
+                hour_succeeded=list(inputs.get("hour_succeeded") or []),
+                hour_failed=list(inputs.get("hour_failed") or []),
+                day_attempted=list(inputs.get("day_attempted") or []),
+                hour_attempted=list(inputs.get("hour_attempted") or []),
+                hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
+                capped_out=capped_out,
+                selection_policy=selection_policy,
+                subnet_source=str(source),
+                published=True,
+                timing=timing,
+                tradable_netuids=tradable_ids,
+            )
+        except Exception as exc:
+            coverage = {
+                "membership": receipt,
+                "published": True,
+                "complete": False,
+                "capture_reason": "coverage_assembly_error",
+                "coverage_error": str(exc),
+                "timing": timing,
+            }
+        if int(inputs.get("skipped_invalid") or 0):
+            coverage["skipped_invalid"] = int(inputs["skipped_invalid"])
+        capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
+        if capture_timed_out:
+            coverage["complete"] = False
+            coverage["capture_reason"] = "capture_timeout"
+        publish_result = save_score_snapshot(
+            {**payload, "source": source, "coverage": coverage}
+        )
+        timing["publish_wall_seconds"] = (publish_result.get("timing") or {}).get(
+            "publish_wall_seconds"
+        )
+        coverage["timing"] = timing
+        published = bool(publish_result.get("published"))
+        skipped_older = bool(publish_result.get("skipped_older"))
+        if not published:
+            coverage["published"] = False
+            coverage["complete"] = False
+        note_cycle(coverage)
+        try:
+            publish_metrics(coverage)
+        except Exception:
+            pass
         payload["source"] = source
-        save_score_snapshot(payload)
-        return {
-            "ok": True,
+        payload["coverage"] = coverage
+        out: Dict[str, Any] = {
+            "ok": published,
+            "published": published,
+            "skipped_older": skipped_older,
+            "complete": bool(coverage.get("complete")),
+            "coverage": coverage,
             "count": payload.get("count"),
             "written_at": payload.get("written_at"),
             "path": SCORE_SNAPSHOTS_PATH,
         }
+        if capture_timed_out and published:
+            out["error"] = "coverage_capture_timeout"
+        return out
 
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
@@ -553,16 +689,27 @@ class ScoreSnapshotScheduler:
         skipped = result.get("skipped")
         if skipped:
             self.liveness.record_skip(str(skipped))
-        elif result.get("ok"):
-            self.liveness.record_success(
-                evidence={
-                    "count": result.get("count", 0),
-                    "path": result.get("path") or SCORE_SNAPSHOTS_PATH,
-                    "op": "score_snapshot",
-                }
-            )
-        else:
-            self.liveness.record_failure(error=str(result.get("error") or "score_snapshot_failed"))
+            return
+        if result.get("skipped_older"):
+            self.liveness.record_skip("skipped_older")
+            return
+        if result.get("published"):
+            evidence = {
+                "count": result.get("count", 0),
+                "path": result.get("path") or SCORE_SNAPSHOTS_PATH,
+                "op": "score_snapshot",
+            }
+            coverage = result.get("coverage")
+            if isinstance(coverage, dict):
+                from internal.council.snapshot_coverage import coverage_counts_summary
+
+                evidence["coverage"] = coverage_counts_summary(coverage)
+                evidence["coverage"]["complete"] = coverage.get("complete")
+            self.liveness.record_success(evidence=evidence)
+            return
+        self.liveness.record_failure(
+            error=str(result.get("error") or "score_snapshot_unpublished")
+        )
 
     def _tick(self, reschedule: bool = True) -> Dict[str, Any]:
         from internal.heavy_job_gate import heavy_job_slot
@@ -716,6 +863,8 @@ class ScoreSnapshotScheduler:
         summary = {
             "run_at": result.get("run_at"),
             "ok": bool(result.get("ok")),
+            "published": result.get("published"),
+            "complete": result.get("complete"),
             "count": result.get("count"),
             "written_at": result.get("written_at"),
             "path": result.get("path"),
@@ -724,6 +873,11 @@ class ScoreSnapshotScheduler:
             "phase": result.get("phase"),
             "progress": result.get("progress"),
         }
+        coverage = result.get("coverage")
+        if isinstance(coverage, dict):
+            from internal.council.snapshot_coverage import coverage_counts_summary
+
+            summary["coverage"] = coverage_counts_summary(coverage)
         try:
             from internal.council import weights
 

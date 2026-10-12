@@ -148,7 +148,14 @@ def test_tick_runs_cycle_when_gate_free(tmp_path, monkeypatch):
     def _fake_write(progress_cb=None):
         if progress_cb:
             progress_cb(1, 1)
-        return {"ok": True, "count": 3, "written_at": "2026-08-07T00:00:00Z", "path": "data/score_snapshots.json"}
+        return {
+            "ok": True,
+            "complete": True,
+            "published": True,
+            "count": 3,
+            "written_at": "2026-08-07T00:00:00Z",
+            "path": "data/score_snapshots.json",
+        }
 
     monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fake_write)
     sched = snaps.ScoreSnapshotScheduler()
