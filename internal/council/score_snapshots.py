@@ -236,6 +236,20 @@ def rank_subnets_by_snapshot(
     return sorted(subnets, key=_key, reverse=True)
 
 
+def _load_pump_ladder_state_for_build() -> Dict[str, Any]:
+    """One disk read per snapshot build; not cached across builds."""
+    try:
+        from internal.pump.state import load_state
+
+        st = load_state()
+        return st if isinstance(st, dict) else {"subnets": {}, "meta": {}}
+    except Exception:
+        return {"version": "1.0", "subnets": {}, "meta": {}}
+
+
+_SLOWEST_NETUID_SAMPLES = 8
+
+
 def build_full_universe_snapshot(
     subnets: List[Dict[str, Any]],
     market_context: Optional[Dict[str, Any]] = None,
@@ -249,7 +263,9 @@ def build_full_universe_snapshot(
 
     if score_hour is None:
         score_hour = _score_hour_enabled()
-    market_context = market_context or {}
+    pump_load_started = time.monotonic()
+    build_context = {**(market_context or {}), "pump_ladder_state": _load_pump_ladder_state_for_build()}
+    pump_load_seconds = time.monotonic() - pump_load_started
     rows = tradable_subnets(subnets) if subnets else []
     build_started_at = _now_iso()
     hour_rows: List[Dict[str, Any]] = []
@@ -262,6 +278,9 @@ def build_full_universe_snapshot(
     hour_attempted: List[int] = []
     skipped_invalid = 0
     total = len(rows)
+    day_scoring_started = time.monotonic()
+    hour_scoring_seconds = 0.0
+    slowest_day: List[Tuple[float, int]] = []
     for idx, sn in enumerate(rows):
         try:
             netuid = int(sn.get("netuid"))
@@ -270,8 +289,9 @@ def build_full_universe_snapshot(
             continue
         if score_hour:
             hour_attempted.append(netuid)
+            hour_started = time.monotonic()
             try:
-                h = score_subnet_for_hour(sn, market_context)
+                h = score_subnet_for_hour(sn, build_context)
                 hour_rows.append(
                     {
                         "netuid": netuid,
@@ -289,9 +309,11 @@ def build_full_universe_snapshot(
                         "error_class": type(exc).__name__,
                     }
                 )
+            hour_scoring_seconds += time.monotonic() - hour_started
         day_attempted.append(netuid)
+        day_started = time.monotonic()
         try:
-            d = score_subnet_for_day(sn, market_context)
+            d = score_subnet_for_day(sn, build_context)
             day_rows.append(
                 {
                     "netuid": netuid,
@@ -309,6 +331,13 @@ def build_full_universe_snapshot(
                     "error_class": type(exc).__name__,
                 }
             )
+        day_elapsed = time.monotonic() - day_started
+        if len(slowest_day) < _SLOWEST_NETUID_SAMPLES:
+            slowest_day.append((day_elapsed, netuid))
+            slowest_day.sort(reverse=True)
+        elif day_elapsed > slowest_day[-1][0]:
+            slowest_day[-1] = (day_elapsed, netuid)
+            slowest_day.sort(reverse=True)
         if progress_cb and total and (idx + 1) % 20 == 0:
             progress_cb(idx + 1, total)
 
@@ -322,12 +351,23 @@ def build_full_universe_snapshot(
 
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
+    day_scoring_seconds = time.monotonic() - day_scoring_started
+    build_stage_timing = {
+        "pump_state_load_seconds": round(pump_load_seconds, 6),
+        "day_scoring_seconds": round(day_scoring_seconds, 6),
+        "hour_scoring_seconds": round(hour_scoring_seconds, 6),
+        "slowest_day_netuids": [
+            {"netuid": nu, "seconds": round(sec, 6)}
+            for sec, nu in slowest_day
+        ],
+    }
     return {
         "build_started_at": build_started_at,
         "written_at": _now_iso(),
         "count": len(rows),
         "hour": hour_rows,
         "day": day_rows,
+        "build_stage_timing": build_stage_timing,
         "_coverage_inputs": {
             "day_succeeded": day_succeeded,
             "day_failed": day_failed,
@@ -427,11 +467,14 @@ def write_full_universe_snapshot(
         )
         build_wall = time.monotonic() - build_started
         inputs = payload.pop("_coverage_inputs", {}) or {}
+        stage_timing = payload.pop("build_stage_timing", None)
         tradable_ids = tradable_netuid_set(list(inputs.get("tradable_rows") or []))
         timing: Dict[str, Any] = {
             "build_wall_seconds": round(build_wall, 6),
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
+        if isinstance(stage_timing, dict):
+            timing.update(stage_timing)
         try:
             coverage = build_coverage_block(
                 receipt=receipt,

@@ -584,6 +584,149 @@ def test_module_start_schedules_when_lifecycle_started(tmp_path, monkeypatch):
         snaps.stop_score_snapshot_scheduler()
 
 
+def test_build_snapshot_loads_pump_state_once(monkeypatch, tmp_path):
+    """Per-build pump ladder state: one load_state per build_full_universe_snapshot."""
+    load_calls = {"n": 0}
+    pump_state = {
+        "subnets": {
+            "3": {"netuid": 3, "phase": "PUMPING", "composite_score": 0.8},
+            "8": {"netuid": 8, "phase": "DORMANT", "composite_score": 0.1},
+        }
+    }
+
+    def _load_state(path=None):
+        load_calls["n"] += 1
+        return pump_state
+
+    monkeypatch.setattr("internal.pump.state.load_state", _load_state)
+
+    overlay_calls = {"n": 0}
+
+    def _day(sn, ctx):
+        from internal.council.pump_overlay import apply_pump_score_overlay
+
+        overlay_calls["n"] += 1
+        total, _ = apply_pump_score_overlay(
+            50.0, sn, pump_ladder_state=ctx.get("pump_ladder_state")
+        )
+        return {"total_score": total}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr("internal.subnets.tradable.tradable_subnets", lambda rows: rows)
+    subnets = [{"netuid": 3}, {"netuid": 8}, {"netuid": 12}]
+    out = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    assert load_calls["n"] == 1
+    assert overlay_calls["n"] == 3
+    timing = out.get("build_stage_timing") or {}
+    assert timing.get("pump_state_load_seconds") is not None
+
+
+def test_build_snapshot_pump_overlay_matches_per_subnet_load(monkeypatch, tmp_path):
+    """Run-scoped state must not change overlay scores vs per-subnet load_state."""
+    pump_state = {
+        "subnets": {
+            "5": {"netuid": 5, "phase": "STIRRING", "composite_score": 0.6},
+        }
+    }
+    monkeypatch.setattr("internal.pump.state.load_state", lambda path=None: pump_state)
+    monkeypatch.setenv("PUMP_SCORE_OVERLAY_ALPHA", "0.10")
+
+    def _day_scoped(sn, ctx):
+        from internal.council.pump_overlay import apply_pump_score_overlay
+
+        total, _ = apply_pump_score_overlay(
+            40.0, sn, pump_ladder_state=ctx.get("pump_ladder_state")
+        )
+        return {"total_score": total}
+
+    def _day_legacy(sn, _ctx):
+        from internal.council.pump_overlay import apply_pump_score_overlay
+
+        total, _ = apply_pump_score_overlay(40.0, sn)
+        return {"total_score": total}
+
+    monkeypatch.setattr("internal.subnets.tradable.tradable_subnets", lambda rows: rows)
+    subnets = [{"netuid": 5}, {"netuid": 99}]
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day_scoped)
+    scoped = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day_legacy)
+    legacy = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    scoped_scores = {r["netuid"]: r["total_score"] for r in scoped["day"]}
+    legacy_scores = {r["netuid"]: r["total_score"] for r in legacy["day"]}
+    assert scoped_scores == legacy_scores
+
+
+def test_build_snapshot_refreshes_pump_state_on_next_build(monkeypatch):
+    """Separate builds must re-read ladder state (no cross-build cache)."""
+    versions = [
+        {"subnets": {"7": {"netuid": 7, "phase": "PUMPING", "composite_score": 0.9}}},
+        {"subnets": {"7": {"netuid": 7, "phase": "DORMANT", "composite_score": 0.1}}},
+    ]
+    load_calls = {"n": 0}
+
+    def _load_state(path=None):
+        load_calls["n"] += 1
+        return versions[min(load_calls["n"] - 1, len(versions) - 1)]
+
+    monkeypatch.setattr("internal.pump.state.load_state", _load_state)
+    monkeypatch.setenv("PUMP_SCORE_OVERLAY_ALPHA", "0.10")
+
+    def _day(sn, ctx):
+        from internal.council.pump_overlay import apply_pump_score_overlay
+
+        total, _ = apply_pump_score_overlay(
+            60.0, sn, pump_ladder_state=ctx.get("pump_ladder_state")
+        )
+        return {"total_score": total}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.subnets.tradable.tradable_subnets",
+        lambda rows: rows,
+    )
+    subnets = [{"netuid": 7}]
+    first = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    second = snaps.build_full_universe_snapshot(subnets, {}, score_hour=False)
+    assert load_calls["n"] == 2
+    first_score = next(r["total_score"] for r in first["day"] if r["netuid"] == 7)
+    second_score = next(r["total_score"] for r in second["day"] if r["netuid"] == 7)
+    assert first_score != second_score
+
+
+def test_write_snapshot_includes_stage_timing(monkeypatch, tmp_path):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": 2, "name": "Two"}], "registry-fallback"),
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_hour",
+        lambda sn, ctx: {"total_score": 1.0},
+    )
+    monkeypatch.setattr(
+        "internal.council.state_vector.score_subnet_for_day",
+        lambda sn, ctx: {"total_score": 2.0},
+    )
+    monkeypatch.setattr("internal.subnets.tradable.tradable_subnets", lambda rows: rows)
+    monkeypatch.setattr("internal.pump.state.load_state", lambda path=None: {"subnets": {}})
+    out = snaps.write_full_universe_snapshot()
+    assert out["ok"] is True
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    timing = (saved.get("coverage") or {}).get("timing") or {}
+    assert timing.get("pump_state_load_seconds") is not None
+    assert timing.get("day_scoring_seconds") is not None
+
+
 def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
     from tests.liveness_conformance import assert_liveness_compliant
 
