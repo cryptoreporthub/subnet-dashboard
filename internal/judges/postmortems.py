@@ -19,7 +19,19 @@ from typing import Any, Dict, List, Optional
 POSTMORTEMS_DIR = os.path.join("data", "postmortems")
 
 def _path(judge_name: str) -> str:
-    return os.path.join(POSTMORTEMS_DIR, f"{judge_name.lower()}.json")
+    """Resolve the on-disk path for a judge's postmortem file (registry + containment)."""
+    name = judge_name.lower()
+    from internal.judges import get_judge
+
+    if get_judge(name) is None:
+        raise ValueError("Unknown judge")
+
+    path = os.path.join(POSTMORTEMS_DIR, f"{name}.json")
+    base = os.path.realpath(POSTMORTEMS_DIR)
+    resolved = os.path.realpath(path)
+    if resolved != base and not resolved.startswith(base + os.sep):
+        raise ValueError("path outside postmortems directory")
+    return path
 
 def _utcnow() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -29,7 +41,7 @@ def _load(judge_name: str) -> List[Dict[str, Any]]:
     try:
         with open(path, "r") as f:
             return json.load(f)
-    except Exception:
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
 
 def _save(judge_name: str, entries: List[Dict[str, Any]]) -> None:
