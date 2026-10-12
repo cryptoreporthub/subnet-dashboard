@@ -66,6 +66,53 @@ def _cache_path() -> str:
         data_dir = os.path.join(REPO_ROOT, data_dir)
     return os.path.join(data_dir, "live_subnets.json")
 
+
+def read_live_cache_probe() -> Dict[str, Any]:
+    """Read live_subnets.json for feed/sentinel probes (no network)."""
+    probe: Dict[str, Any] = {
+        "exists": False,
+        "count": 0,
+        "live_row_count": 0,
+        "synced_at": None,
+        "stale": True,
+        "refresh_complete": None,
+    }
+    path = _cache_path()
+    if not os.path.isfile(path):
+        return probe
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        if not isinstance(data, dict):
+            return probe
+        probe["exists"] = True
+        probe["count"] = int(data.get("count") or len(data.get("subnets") or []) or 0)
+        probe["live_row_count"] = int(data.get("live_row_count", probe["count"]) or 0)
+        probe["synced_at"] = data.get("synced_at")
+        probe["refresh_complete"] = data.get("refresh_complete")
+        synced = data.get("synced_at")
+        if synced:
+            parsed = datetime.fromisoformat(str(synced).replace("Z", "+00:00"))
+            age = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
+            probe["stale"] = age > MAX_STALE_SECONDS
+    except Exception as exc:
+        logger.debug("live cache probe read failed: %s", exc)
+    return probe
+
+
+def blockmachine_layer_trusted(probe: Dict[str, Any]) -> bool:
+    """True when chain live rows are present and refresh was complete."""
+    if not probe.get("exists"):
+        return False
+    if probe.get("stale"):
+        return False
+    if int(probe.get("live_row_count") or 0) <= 0:
+        return False
+    if probe.get("refresh_complete") is False:
+        return False
+    return True
+
+
 SYNC_INTERVAL_SECONDS = int(os.environ.get("LIVE_SUBNETS_SYNC_INTERVAL_SECONDS", "300"))
 MAX_STALE_SECONDS = int(os.environ.get("LIVE_SUBNETS_MAX_STALE_SECONDS", "1800"))
 SYNC_TIMEOUT_SECONDS = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "60"))

@@ -132,38 +132,28 @@ def _read_predictions_readonly() -> Dict[str, Any]:
 
 def _live_cache_freshness() -> Dict[str, Any]:
     """Read data/live_subnets.json only. Does not call probe_feed_layers/init_db."""
-    from internal.live_subnets import MAX_STALE_SECONDS, _cache_path
+    from internal.live_subnets import _cache_path, blockmachine_layer_trusted, read_live_cache_probe
 
+    probe = read_live_cache_probe()
     info: Dict[str, Any] = {
-        "last_sync": None,
+        "last_sync": probe.get("synced_at"),
         "age_seconds": None,
-        "subnet_count": 0,
-        "stale": True,
+        "subnet_count": int(probe.get("count") or 0),
+        "live_row_count": int(probe.get("live_row_count") or 0),
+        "stale": bool(probe.get("stale")),
+        "refresh_complete": probe.get("refresh_complete"),
         "cache_path": _cache_path(),
     }
-    path = _cache_path()
-    if not os.path.isfile(path):
-        return info
-    with open(path, encoding="utf-8") as handle:
-        data = json.load(handle)
-    if not isinstance(data, dict):
-        return info
-    info["last_sync"] = data.get("synced_at")
-    try:
-        info["subnet_count"] = int(data.get("count") or len(data.get("subnets") or []) or 0)
-    except (TypeError, ValueError):
-        info["subnet_count"] = 0
-    if data.get("synced_at"):
+    if probe.get("synced_at"):
         try:
-            parsed = datetime.fromisoformat(str(data["synced_at"]).replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(str(probe["synced_at"]).replace("Z", "+00:00"))
             age = (datetime.now(timezone.utc) - parsed.astimezone(timezone.utc)).total_seconds()
             info["age_seconds"] = int(age)
-            info["stale"] = age > MAX_STALE_SECONDS
         except (TypeError, ValueError, OverflowError):
             pass
-    if info["subnet_count"] > 0:
+    if blockmachine_layer_trusted(probe):
         info["effective_source"] = "blockmachine"
-        info["effective_total"] = info["subnet_count"]
+        info["effective_total"] = info["live_row_count"]
     else:
         info["effective_source"] = None
         info["effective_total"] = 0

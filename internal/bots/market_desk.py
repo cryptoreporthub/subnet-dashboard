@@ -333,7 +333,13 @@ def _read_live_cache(netuid: Optional[int], collected: Optional[Dict[str, Any]] 
             if isinstance(row, dict) and _same_netuid(row.get("netuid"), netuid):
                 subnet = row
                 break
-    return {"subnet": subnet, "synced_at": data.get("synced_at")}
+    if isinstance(subnet, dict) and not subnet.get("live", False):
+        subnet = None
+    return {
+        "subnet": subnet,
+        "synced_at": data.get("synced_at"),
+        "refresh_complete": data.get("refresh_complete"),
+    }
 
 
 def _same_netuid(value: Any, netuid: int) -> bool:

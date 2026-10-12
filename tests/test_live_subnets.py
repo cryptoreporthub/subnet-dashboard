@@ -322,6 +322,30 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_child_result_send_failure_returns_none(monkeypatch):
+    from internal import live_subnets
+    import internal.live_subnets_ipc as ipc
+
+    real_send = ipc.send_message
+
+    def _fail_large_result(conn, payload, *, deadline=None):
+        if isinstance(payload, dict) and payload.get("ok") and "data" in payload:
+            return False
+        return real_send(conn, payload, deadline=deadline)
+
+    monkeypatch.setattr(ipc, "send_message", _fail_large_result)
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 2.0)
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2.0")
+
+    assert live_subnets._fetch_chain_data() is None
+
+
 def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
     """Child batch clock must match parent RPC window (not a fresh 85s after setup)."""
     from internal import live_subnets

@@ -5,8 +5,12 @@ parent module here (spawn would re-exec and pickle through live_subnets otherwis
 """
 from __future__ import annotations
 
+import logging
 import os
+import pickle
 from typing import Any, List
+
+logger = logging.getLogger("live_subnets_fetch_child")
 
 
 def _registry_netuids() -> List[int]:
@@ -192,6 +196,30 @@ def _child_send_deadline() -> float:
     return time.monotonic() + seconds
 
 
+def _send_child_frame(conn, payload: dict[str, Any], *, deadline: float) -> bool:
+    from internal.live_subnets_ipc import _MAX_PAYLOAD, send_message
+
+    try:
+        body = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception as exc:
+        logger.warning("live_subnets fetch child: pickle failed: %s", exc)
+        send_message(conn, {"ok": False, "exc": "pickle_failed"}, deadline=deadline)
+        return False
+    if len(body) > _MAX_PAYLOAD:
+        logger.warning(
+            "live_subnets fetch child: payload %d bytes exceeds max %d",
+            len(body),
+            _MAX_PAYLOAD,
+        )
+        send_message(conn, {"ok": False, "exc": "payload_too_large"}, deadline=deadline)
+        return False
+    if send_message(conn, payload, deadline=deadline):
+        return True
+    logger.warning("live_subnets fetch child: send failed (%s)", payload.get("phase") or "result")
+    send_message(conn, {"ok": False, "exc": "child_send_failed"}, deadline=deadline)
+    return False
+
+
 def run_fetch_child(conn) -> None:
     import time
 
@@ -205,7 +233,7 @@ def run_fetch_child(conn) -> None:
             time.sleep(float(ready_sleep))
         from internal.live_subnets_ipc import recv_message
 
-        if not send_message(conn, {"phase": "ready"}, deadline=_child_send_deadline()):
+        if not _send_child_frame(conn, {"phase": "ready"}, deadline=_child_send_deadline()):
             return
         params = recv_message(conn, time.monotonic() + 5.0)
         if not isinstance(params, dict) or params.get("rpc_deadline_monotonic") is None:
@@ -219,7 +247,7 @@ def run_fetch_child(conn) -> None:
             data, requested, meta = collect_chain_rows()
         finally:
             os.environ.pop("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", None)
-        send_message(
+        _send_child_frame(
             conn,
             {"ok": True, "data": data, **meta},
             deadline=rpc_deadline,
@@ -228,7 +256,7 @@ def run_fetch_child(conn) -> None:
         send_deadline = _child_send_deadline()
         if isinstance(params, dict) and params.get("rpc_deadline_monotonic") is not None:
             send_deadline = float(params["rpc_deadline_monotonic"])
-        send_message(conn, {"ok": False, "exc": str(exc)}, deadline=send_deadline)
+        _send_child_frame(conn, {"ok": False, "exc": str(exc)}, deadline=send_deadline)
     finally:
         try:
             conn.close()
