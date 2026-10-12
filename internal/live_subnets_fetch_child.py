@@ -67,30 +67,36 @@ def resolve_fetch_netuids() -> List[int]:
     return sorted({int(n) for n in netuids})
 
 
-def fetch_meta_from_rows(
+def fetch_meta_from_batch(
     requested_netuids: List[int],
     rows: List[dict[str, Any]],
     *,
-    degraded_reason: str | None = None,
+    batch_expired: bool,
+    netuid_outcomes: dict[int, str],
 ) -> dict[str, Any]:
     completed = sorted(
         {n for n in (_row_netuid(r) for r in rows) if n is not None}
     )
     missing = [n for n in requested_netuids if n not in set(completed)]
     refresh_complete = not missing
-    reason = degraded_reason
-    if not refresh_complete and reason is None:
-        reason = "batch_deadline"
+    if refresh_complete:
+        degraded_reason = None
+    elif any(netuid_outcomes.get(n) == "batch_expired" for n in missing):
+        degraded_reason = "batch_deadline"
+    else:
+        degraded_reason = "fetch_errors"
     return {
         "requested_netuids": list(requested_netuids),
         "completed_netuids": completed,
         "missing_netuids": missing,
         "refresh_complete": refresh_complete,
-        "degraded_reason": reason,
+        "degraded_reason": degraded_reason,
+        "batch_expired": batch_expired,
+        "netuid_outcomes": {int(k): str(v) for k, v in netuid_outcomes.items()},
     }
 
 
-def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int]]:
+def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int], dict[str, Any]]:
     """Blocking RPC fetch; chain_client uses per-request socket timeouts."""
     setup_sleep = os.environ.get("LIVE_SUBNETS_CHILD_SETUP_SLEEP_SECONDS", "").strip()
     if setup_sleep:
@@ -111,17 +117,61 @@ def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int]]:
 
         parsed = json.loads(test_rows)
         rows = parsed if isinstance(parsed, list) else []
-        return rows, requested
+        outcomes: dict[int, str] = {}
+        for row in rows:
+            n = _row_netuid(row)
+            if n is not None:
+                outcomes[int(n)] = "ok"
+        for n in requested:
+            outcomes.setdefault(int(n), "no_price")
+        meta = fetch_meta_from_batch(
+            requested,
+            rows,
+            batch_expired=False,
+            netuid_outcomes=outcomes,
+        )
+        return rows, requested, meta
 
     from internal.chain_client import get_default_client
 
     client = get_default_client()
     mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
     if mode in ("lite", "price"):
-        rows = client.get_subnet_price_rows(requested)
-    else:
-        rows = client.get_all_subnet_data(netuids=requested or None)
-    return rows, requested
+        if hasattr(client, "get_subnet_price_rows_batch"):
+            batch = client.get_subnet_price_rows_batch(requested)
+        else:
+            rows = client.get_subnet_price_rows(requested)
+            outcomes: dict[int, str] = {}
+            for row in rows:
+                n = _row_netuid(row)
+                if n is not None:
+                    outcomes[int(n)] = "ok"
+            for n in requested:
+                outcomes.setdefault(int(n), "no_price")
+            batch = {
+                "rows": rows,
+                "batch_expired": False,
+                "netuid_outcomes": outcomes,
+            }
+        meta = fetch_meta_from_batch(
+            requested,
+            batch["rows"],
+            batch_expired=bool(batch.get("batch_expired")),
+            netuid_outcomes=dict(batch.get("netuid_outcomes") or {}),
+        )
+        return batch["rows"], requested, meta
+    rows = client.get_all_subnet_data(netuids=requested or None)
+    outcomes = {int(n): "ok" for n in (_row_netuid(r) for r in rows) if n is not None}
+    for n in requested:
+        if int(n) not in outcomes:
+            outcomes[int(n)] = "fetch_errors"
+    meta = fetch_meta_from_batch(
+        requested,
+        rows,
+        batch_expired=False,
+        netuid_outcomes=outcomes,
+    )
+    return rows, requested, meta
 
 
 def _rpc_return_margin_seconds() -> float:
@@ -166,10 +216,9 @@ def run_fetch_child(conn) -> None:
             batch_deadline = time.monotonic() + 0.01
         os.environ["LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC"] = str(batch_deadline)
         try:
-            data, requested = collect_chain_rows()
+            data, requested, meta = collect_chain_rows()
         finally:
             os.environ.pop("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", None)
-        meta = fetch_meta_from_rows(requested, data)
         send_message(
             conn,
             {"ok": True, "data": data, **meta},

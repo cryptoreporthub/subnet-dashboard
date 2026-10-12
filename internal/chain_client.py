@@ -531,14 +531,21 @@ class ChainClient:
 
     def get_subnet_price_rows(self, netuids):
         """Fast path for live_subnets cache with price and pool reserves."""
+        return self.get_subnet_price_rows_batch(netuids)["rows"]
+
+    def get_subnet_price_rows_batch(self, netuids):
+        """Lite price fetch with per-netuid outcomes and batch_expired flag."""
         # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
         if not self.is_healthy():
             logger.warning("RPC health false-negative — attempting lite price fetch anyway")
+
+        outcomes: dict[int, str] = {}
 
         def _one(netuid: int):
             try:
                 price = self.get_alpha_price(netuid)
                 if price is not None:
+                    outcomes[netuid] = "ok"
                     row = {
                         "netuid": netuid,
                         "name": f"SN{netuid}",
@@ -558,8 +565,10 @@ class ChainClient:
                             }
                         )
                     return row
+                outcomes[netuid] = "no_price"
             except Exception as exc:
                 logger.debug("price fetch netuid %d: %s", netuid, exc)
+                outcomes[netuid] = "rpc_error"
             return None
 
         try:
@@ -570,11 +579,6 @@ class ChainClient:
 
         from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
 
-        # Bounded overall batch budget: when RPC degrades, as_completed would
-        # otherwise wait on ALL futures with no wall-clock cap, holding the whole
-        # pool for many seconds past live_subnets' join() ceiling and wedging the
-        # sync at sync_start. Break out once the budget elapses and return the
-        # rows that already completed (still netuid-sorted, same shape).
         deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
         if deadline_mono:
             deadline = float(deadline_mono)
@@ -600,23 +604,31 @@ class ChainClient:
                     if time.monotonic() >= deadline:
                         break
             for fut in remaining:
+                netuid = futures[fut]
+                if netuid not in outcomes:
+                    outcomes[netuid] = "batch_expired"
                 fut.cancel()
         finally:
             shutdown_wait = max(0.0, deadline - time.monotonic())
             pool.shutdown(wait=False, cancel_futures=True)
             if shutdown_wait > 0:
-                # ponytail: bounded wait for worker threads; ceiling = remaining batch budget.
                 end = time.monotonic() + shutdown_wait
                 for t in pool._threads:
                     t.join(timeout=max(0.0, end - time.monotonic()))
         rows.sort(key=lambda r: r["netuid"])
+        batch_expired = any(v == "batch_expired" for v in outcomes.values())
         logger.info(
-            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs)",
+            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs, batch_expired=%s)",
             len(rows),
             workers,
             batch_budget,
+            batch_expired,
         )
-        return rows
+        return {
+            "rows": rows,
+            "batch_expired": batch_expired,
+            "netuid_outcomes": outcomes,
+        }
 
 
 _default_client = None

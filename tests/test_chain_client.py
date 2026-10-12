@@ -66,3 +66,89 @@ def test_price_batch_deadline_includes_executor_shutdown(monkeypatch):
     elapsed = time.monotonic() - started
     assert {r["netuid"] for r in rows} == {1, 2}
     assert elapsed < 0.35
+
+
+def test_price_batch_no_price_is_fetch_errors_not_batch_deadline(monkeypatch):
+    from internal.chain_client import ChainClient
+
+    client = ChainClient.__new__(ChainClient)
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+    monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "2")
+    client.is_healthy = lambda: True
+
+    def price(netuid):
+        if netuid == 2:
+            return None
+        return float(netuid)
+
+    client.get_alpha_price = price
+    batch = client.get_subnet_price_rows_batch([1, 2])
+    assert batch["batch_expired"] is False
+    assert batch["netuid_outcomes"][2] == "no_price"
+    from internal.live_subnets_fetch_child import fetch_meta_from_batch
+
+    meta = fetch_meta_from_batch(
+        [1, 2],
+        batch["rows"],
+        batch_expired=batch["batch_expired"],
+        netuid_outcomes=batch["netuid_outcomes"],
+    )
+    assert meta["degraded_reason"] == "fetch_errors"
+
+
+def test_price_batch_rpc_error_is_fetch_errors_not_batch_deadline(monkeypatch):
+    from internal.chain_client import ChainClient
+
+    client = ChainClient.__new__(ChainClient)
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+    monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "2")
+    client.is_healthy = lambda: True
+
+    def price(netuid):
+        if netuid == 2:
+            raise RuntimeError("rpc down")
+        return float(netuid)
+
+    client.get_alpha_price = price
+    batch = client.get_subnet_price_rows_batch([1, 2])
+    assert batch["batch_expired"] is False
+    assert batch["netuid_outcomes"][2] == "rpc_error"
+    from internal.live_subnets_fetch_child import fetch_meta_from_batch
+
+    meta = fetch_meta_from_batch(
+        [1, 2],
+        batch["rows"],
+        batch_expired=batch["batch_expired"],
+        netuid_outcomes=batch["netuid_outcomes"],
+    )
+    assert meta["degraded_reason"] == "fetch_errors"
+
+
+def test_price_batch_deadline_partial_sets_batch_expired(monkeypatch):
+    from internal.chain_client import ChainClient
+
+    client = ChainClient.__new__(ChainClient)
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+    monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "0.08")
+    client.is_healthy = lambda: True
+
+    def price(netuid):
+        if netuid == 2:
+            import time
+
+            time.sleep(0.25)
+        return float(netuid)
+
+    client.get_alpha_price = price
+    batch = client.get_subnet_price_rows_batch([2, 1])
+    assert batch["batch_expired"] is True
+    assert batch["netuid_outcomes"].get(2) == "batch_expired"
+    from internal.live_subnets_fetch_child import fetch_meta_from_batch
+
+    meta = fetch_meta_from_batch(
+        [2, 1],
+        batch["rows"],
+        batch_expired=batch["batch_expired"],
+        netuid_outcomes=batch["netuid_outcomes"],
+    )
+    assert meta["degraded_reason"] == "batch_deadline"

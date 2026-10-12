@@ -371,8 +371,8 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
     inner.get_alpha_price = price
 
     class _Client:
-        def get_subnet_price_rows(self, netuids):
-            return inner.get_subnet_price_rows(netuids)
+        def get_subnet_price_rows_batch(self, netuids):
+            return inner.get_subnet_price_rows_batch(netuids)
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
     monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
@@ -392,7 +392,48 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
     assert [r["netuid"] for r in _fetch_rows(out)] == [1]
     assert out.get("refresh_complete") is False
     assert out.get("missing_netuids") == [2]
+    assert out.get("degraded_reason") == "batch_deadline"
+    assert out.get("batch_expired") is True
+    assert out.get("netuid_outcomes", {}).get(2) == "batch_expired"
     assert elapsed < 1.05
+
+
+def test_fetch_chain_data_carries_netuid_outcomes_on_no_price(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 2.0)
+    monkeypatch.setenv("LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS", "0.35")
+    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
+    monkeypatch.setenv("LIVE_SUBNETS_TEST_REQUESTED_NETUIDS", json.dumps([2, 1]))
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+
+    class _Client:
+        def get_subnet_price_rows_batch(self, netuids):
+            from internal.chain_client import ChainClient
+
+            inner = ChainClient.__new__(ChainClient)
+            inner.is_healthy = lambda: True
+
+            def price(netuid):
+                if netuid == 2:
+                    return None
+                return float(netuid)
+
+            inner.get_alpha_price = price
+            return inner.get_subnet_price_rows_batch(netuids)
+
+    with patch("internal.chain_client.get_default_client", return_value=_Client()):
+        out = live_subnets._fetch_chain_data()
+    assert out is not None
+    assert out.get("degraded_reason") == "fetch_errors"
+    assert out.get("netuid_outcomes", {}).get(2) == "no_price"
+    assert out.get("batch_expired") is False
 
 
 def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):
@@ -604,7 +645,9 @@ def test_sync_once_partial_fetch_records_incomplete(monkeypatch, tmp_path):
         "completed_netuids": [1],
         "missing_netuids": [2],
         "refresh_complete": False,
-        "degraded_reason": "batch_deadline",
+        "degraded_reason": "fetch_errors",
+        "batch_expired": False,
+        "netuid_outcomes": {1: "ok", 2: "rpc_error"},
     }
     with (
         patch.object(live_subnets, "registry_ready", return_value=True),
@@ -619,6 +662,29 @@ def test_sync_once_partial_fetch_records_incomplete(monkeypatch, tmp_path):
     status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
     assert status["ok"] is False
     assert status["refresh_complete"] is False
+    assert status["reason"] == "fetch_errors"
+
+
+def test_sync_once_batch_deadline_reason_when_batch_expired(monkeypatch, tmp_path):
+    from internal import live_subnets
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    partial = {
+        "rows": [{"netuid": 1, "price": 1.0}],
+        "requested_netuids": [1, 2],
+        "completed_netuids": [1],
+        "missing_netuids": [2],
+        "refresh_complete": False,
+        "degraded_reason": "batch_deadline",
+        "batch_expired": True,
+        "netuid_outcomes": {1: "ok", 2: "batch_expired"},
+    }
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=partial),
+    ):
+        live_subnets._sync_once()
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
     assert status["reason"] == "batch_deadline"
 
 

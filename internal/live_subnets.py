@@ -46,6 +46,8 @@ class ChainFetchResult(TypedDict, total=False):
     missing_netuids: List[int]
     refresh_complete: bool
     degraded_reason: Optional[str]
+    batch_expired: bool
+    netuid_outcomes: Dict[int, str]
 
 
 FetchChainReturn = Union[ChainFetchResult, List[Dict[str, Any]], None]
@@ -326,6 +328,11 @@ def _fetch_chain_data():
         "missing_netuids": list(msg.get("missing_netuids") or []),
         "refresh_complete": bool(msg.get("refresh_complete", not msg.get("missing_netuids"))),
         "degraded_reason": msg.get("degraded_reason"),
+        "batch_expired": bool(msg.get("batch_expired")),
+        "netuid_outcomes": {
+            int(k): str(v)
+            for k, v in (msg.get("netuid_outcomes") or {}).items()
+        },
     }
 
 
@@ -398,6 +405,8 @@ def _sync_once() -> bool:
             "missing_netuids": fetch.get("missing_netuids") or [],
             "refresh_complete": refresh_complete,
             "degraded_reason": fetch.get("degraded_reason"),
+            "batch_expired": bool(fetch.get("batch_expired")),
+            "netuid_outcomes": fetch.get("netuid_outcomes") or {},
         }
         try:
             os.makedirs(os.path.dirname(_cache_path()), exist_ok=True)
@@ -557,6 +566,11 @@ def live_data_freshness() -> Dict[str, Any]:
             info["missing_netuids"] = data.get("missing_netuids") or []
             info["refresh_complete"] = data.get("refresh_complete")
             info["degraded_reason"] = data.get("degraded_reason")
+            info["batch_expired"] = data.get("batch_expired")
+            raw_outcomes = data.get("netuid_outcomes") or {}
+            info["netuid_outcomes"] = {
+                int(k): str(v) for k, v in raw_outcomes.items() if str(k).isdigit() or isinstance(k, int)
+            }
             if data.get("synced_at"):
                 age = (datetime.now(timezone.utc) - datetime.fromisoformat(data["synced_at"])).total_seconds()
                 info["age_seconds"] = int(age)
