@@ -258,6 +258,8 @@ def build_full_universe_snapshot(
     hour_failed: List[Dict[str, Any]] = []
     day_succeeded: List[int] = []
     hour_succeeded: List[int] = []
+    day_attempted: List[int] = []
+    hour_attempted: List[int] = []
     skipped_invalid = 0
     total = len(rows)
     for idx, sn in enumerate(rows):
@@ -267,6 +269,7 @@ def build_full_universe_snapshot(
             skipped_invalid += 1
             continue
         if score_hour:
+            hour_attempted.append(netuid)
             try:
                 h = score_subnet_for_hour(sn, market_context)
                 hour_rows.append(
@@ -286,6 +289,7 @@ def build_full_universe_snapshot(
                         "error_class": type(exc).__name__,
                     }
                 )
+        day_attempted.append(netuid)
         try:
             d = score_subnet_for_day(sn, market_context)
             day_rows.append(
@@ -314,6 +318,7 @@ def build_full_universe_snapshot(
         hour_rows = [{**row, "source": "copied_from_day"} for row in day_rows]
         hour_succeeded = list(day_succeeded)
         hour_failed = []
+        hour_attempted = []
 
     hour_rows.sort(key=lambda r: r["total_score"], reverse=True)
     day_rows.sort(key=lambda r: r["total_score"], reverse=True)
@@ -329,6 +334,8 @@ def build_full_universe_snapshot(
             "hour_succeeded": hour_succeeded,
             "hour_failed": hour_failed,
             "hour_copied_from_day": hour_copied_from_day,
+            "day_attempted": day_attempted,
+            "hour_attempted": hour_attempted,
             "skipped_invalid": skipped_invalid,
             "tradable_rows": rows,
         },
@@ -367,6 +374,7 @@ def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
     """Load subnets, score, persist. Call only from background."""
+    capture_started = time.monotonic()
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
@@ -407,7 +415,6 @@ def write_full_universe_snapshot(
             tradable_netuid_set,
         )
 
-        capture_started = time.monotonic()
         receipt = load_membership_receipt()
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
@@ -419,7 +426,10 @@ def write_full_universe_snapshot(
         build_wall = time.monotonic() - build_started
         inputs = payload.pop("_coverage_inputs", {}) or {}
         tradable_ids = tradable_netuid_set(list(inputs.get("tradable_rows") or []))
-        timing: Dict[str, Any] = {"build_wall_seconds": round(build_wall, 6)}
+        timing: Dict[str, Any] = {
+            "build_wall_seconds": round(build_wall, 6),
+            "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
+        }
         try:
             coverage = build_coverage_block(
                 receipt=receipt,
@@ -428,6 +438,8 @@ def write_full_universe_snapshot(
                 day_failed=list(inputs.get("day_failed") or []),
                 hour_succeeded=list(inputs.get("hour_succeeded") or []),
                 hour_failed=list(inputs.get("hour_failed") or []),
+                day_attempted=list(inputs.get("day_attempted") or []),
+                hour_attempted=list(inputs.get("hour_attempted") or []),
                 hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
                 capped_out=capped_out,
                 selection_policy=selection_policy,

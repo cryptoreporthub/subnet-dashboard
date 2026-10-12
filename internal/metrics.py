@@ -148,27 +148,38 @@ def refresh_from_state() -> None:
         pass
 
     try:
-        from internal.council.score_snapshots import (
-            SCORE_SNAPSHOT_MAX_AGE_SECONDS,
-            load_score_snapshot,
-            snapshot_age_seconds,
-        )
-        from internal.council.snapshot_coverage import last_coverage_snapshot, publish_metrics
-
-        age = snapshot_age_seconds()
-        _set_optional(SCORE_SNAPSHOT_AGE_SECONDS, age)
-        cov = last_coverage_snapshot()
-        if not cov:
-            if age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS:
-                snap = load_score_snapshot()
-                if isinstance(snap, dict):
-                    disk_cov = snap.get("coverage")
-                    if isinstance(disk_cov, dict):
-                        cov = disk_cov
-        if cov:
-            publish_metrics(cov)
+        _refresh_score_snapshot_gauges()
     except Exception:
         pass
+
+
+def _refresh_score_snapshot_gauges() -> None:
+    """Recompute snapshot coverage gauges from disk each scrape (no sticky greens)."""
+    from internal.council.score_snapshots import (
+        SCORE_SNAPSHOT_MAX_AGE_SECONDS,
+        load_score_snapshot,
+        snapshot_age_seconds,
+    )
+    from internal.council.snapshot_coverage import (
+        clear_last_coverage_snapshot,
+        publish_metrics,
+        reset_score_snapshot_gauges,
+    )
+
+    age = snapshot_age_seconds()
+    _set_optional(SCORE_SNAPSHOT_AGE_SECONDS, age)
+    disk_fresh = age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS
+    if not disk_fresh:
+        reset_score_snapshot_gauges()
+        clear_last_coverage_snapshot()
+        return
+    snap = load_score_snapshot()
+    disk_cov = snap.get("coverage") if isinstance(snap, dict) else None
+    if not isinstance(disk_cov, dict) or not disk_cov:
+        reset_score_snapshot_gauges()
+        clear_last_coverage_snapshot()
+        return
+    publish_metrics(disk_cov)
 
 
 def _resolver_state() -> Dict[str, Any]:

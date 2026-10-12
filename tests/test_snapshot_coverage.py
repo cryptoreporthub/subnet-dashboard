@@ -66,6 +66,37 @@ def test_cap_reached_ok_not_complete():
     assert block["complete"] is False
 
 
+def test_horizon_attempted_uses_call_site_ids_not_expected_len():
+    receipt = {
+        "fresh": True,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+        "expected_netuids": [1, 2, 3],
+    }
+    block = cov.build_coverage_block(
+        receipt=receipt,
+        day_expected=[1, 2, 3],
+        day_succeeded=[1],
+        day_failed=[{"netuid": 2, "stage": "day", "error_class": "RuntimeError"}],
+        hour_succeeded=[1],
+        hour_failed=[],
+        day_attempted=[1, 2],
+        hour_attempted=[],
+        hour_copied_from_day=True,
+        capped_out=0,
+        selection_policy="full",
+        subnet_source="registry",
+        published=True,
+        timing={"build_wall_seconds": 1.0},
+    )
+    assert block["day"]["attempted"] == 2
+    assert block["day"]["attempted_netuids"] == [1, 2]
+    assert block["hour"]["attempted"] == 0
+    assert block["hour"]["hour_copied_from_day"] is True
+
+
 def test_horizon_id_equality_required_for_complete():
     receipt = {
         "fresh": True,

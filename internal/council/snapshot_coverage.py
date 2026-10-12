@@ -124,6 +124,7 @@ def _horizon_block(
     failed: List[Dict[str, Any]],
     hour_copied_from_day: bool,
     tradable_netuids: Optional[Set[int]] = None,
+    attempted_netuids: Optional[List[int]] = None,
 ) -> Dict[str, Any]:
     expected_set = set(expected)
     succeeded_set = set(succeeded)
@@ -132,13 +133,18 @@ def _horizon_block(
         for f in failed
         if isinstance(f, dict) and f.get("netuid") is not None
     }
+    if attempted_netuids is not None:
+        attempted_set = {int(n) for n in attempted_netuids}
+    else:
+        attempted_set = succeeded_set | failed_ids
     tradable_set = tradable_netuids or set()
     missing_not_admitted = sorted(expected_set - tradable_set) if tradable_set else []
     unaccounted = sorted(expected_set - succeeded_set - failed_ids)
     return {
         "horizon": horizon,
         "expected": expected,
-        "attempted": len(expected),
+        "attempted": len(attempted_set),
+        "attempted_netuids": sorted(attempted_set),
         "succeeded": sorted(succeeded_set),
         "failed": failed,
         "missing_not_admitted": missing_not_admitted,
@@ -177,6 +183,8 @@ def build_coverage_block(
     day_failed: List[Dict[str, Any]],
     hour_succeeded: List[int],
     hour_failed: List[Dict[str, Any]],
+    day_attempted: Optional[List[int]] = None,
+    hour_attempted: Optional[List[int]] = None,
     hour_copied_from_day: bool,
     capped_out: int,
     selection_policy: str,
@@ -193,6 +201,7 @@ def build_coverage_block(
         failed=day_failed,
         hour_copied_from_day=False,
         tradable_netuids=tradable_netuids,
+        attempted_netuids=day_attempted,
     )
     hour_block = _horizon_block(
         horizon="hour",
@@ -201,6 +210,7 @@ def build_coverage_block(
         failed=hour_failed,
         hour_copied_from_day=hour_copied_from_day,
         tradable_netuids=tradable_netuids,
+        attempted_netuids=hour_attempted,
     )
     membership_ok = membership_allows_complete(receipt)
     horizons_complete = day_block["complete"] and hour_block["complete"]
@@ -242,6 +252,12 @@ def consecutive_partial_cycles() -> int:
 
 def last_coverage_snapshot() -> Dict[str, Any]:
     return dict(_last_cycle)
+
+
+def clear_last_coverage_snapshot() -> None:
+    """Drop in-process coverage (e.g. when disk snapshot is stale/missing)."""
+    global _last_cycle
+    _last_cycle = {}
 
 
 def phase1_exit_gate_met() -> bool:
@@ -298,6 +314,28 @@ def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
 
 def coverage_capture_deadline_seconds(start_mono: float) -> bool:
     return (time.monotonic() - start_mono) <= PHASE1_COVERAGE_CAPTURE_MAX_SECONDS
+
+
+def reset_score_snapshot_gauges() -> None:
+    try:
+        from internal.metrics import (
+            SCORE_SNAPSHOT_COVERAGE_COMPLETE,
+            SCORE_SNAPSHOT_COVERAGE_PUBLISHED,
+            SCORE_SNAPSHOT_HORIZON_SUCCEEDED,
+            SCORE_SNAPSHOT_TIMING_BUILD_SECONDS,
+            SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS,
+        )
+    except Exception:
+        return
+    try:
+        SCORE_SNAPSHOT_COVERAGE_COMPLETE.set(0.0)
+        SCORE_SNAPSHOT_COVERAGE_PUBLISHED.set(0.0)
+        SCORE_SNAPSHOT_TIMING_BUILD_SECONDS.set(0.0)
+        SCORE_SNAPSHOT_TIMING_PUBLISH_SECONDS.set(0.0)
+        for horizon in ("day", "hour"):
+            SCORE_SNAPSHOT_HORIZON_SUCCEEDED.labels(horizon=horizon).set(0.0)
+    except Exception:
+        pass
 
 
 def publish_metrics(coverage: Dict[str, Any]) -> None:
