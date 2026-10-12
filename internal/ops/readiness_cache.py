@@ -65,7 +65,9 @@ def reset_readiness_cache() -> None:
         _CACHE["payload"] = None
     with _BUILD_SLOT_LOCK:
         global _BUILD_GENERATION, _ACTIVE_BUILD_GENERATION, _BUILD_STARTED_AT, _BUILD_INVOCATIONS
-        _BUILD_GENERATION = 0
+        # ponytail: monotonic fence — do not reset to 0; a slow build that survived reset
+        # must not share generation with the next _try_begin_build after reset.
+        _BUILD_GENERATION += 1
         _ACTIVE_BUILD_GENERATION = None
         _BUILD_STARTED_AT = 0.0
         _BUILD_INVOCATIONS = 0

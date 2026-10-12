@@ -188,6 +188,47 @@ def _warm_thread_count() -> int:
     return sum(1 for t in threading.enumerate() if t.name == "readiness-cache-warm")
 
 
+def test_reset_bumps_build_generation_abandoned_warm_store():
+    """Blocked build_readiness_report → reset → new store → release old must keep NEW."""
+    import threading
+
+    import internal.ops.readiness_cache as cache
+
+    _reset_cache()
+    gate = threading.Event()
+    calls = {"n": 0, "lock": threading.Lock()}
+
+    def _report():
+        with calls["lock"]:
+            calls["n"] += 1
+            n = calls["n"]
+        if n == 1:
+            gate.wait(timeout=2.0)
+            return {"marker": "OLD", "ready": True, "issues": []}
+        return {"marker": "NEW", "ready": True, "issues": []}
+
+    with patch("internal.ops.readiness.build_readiness_report", side_effect=_report):
+        cache._kick_background_build()
+        for _ in range(40):
+            with calls["lock"]:
+                if calls["n"] >= 1:
+                    break
+            time.sleep(0.02)
+        assert calls["n"] >= 1
+        cache.reset_readiness_cache()
+        cache._build_blocking(force=True)
+        with cache._CACHE_LOCK:
+            assert cache._CACHE["payload"]["marker"] == "NEW"
+        gate.set()
+        for _ in range(40):
+            with calls["lock"]:
+                if calls["n"] >= 2:
+                    break
+            time.sleep(0.02)
+    with cache._CACHE_LOCK:
+        assert cache._CACHE["payload"]["marker"] == "NEW"
+
+
 def test_warm_reset_fences_old_worker(monkeypatch):
     """Blocked warm build → reset → re-kick must not leave two warm workers."""
     import threading
