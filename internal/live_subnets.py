@@ -201,6 +201,11 @@ def _terminate_fetch_process(proc: multiprocessing.Process, *, grace_seconds: fl
 
 
 def _fetch_chain_data():
+    """Spawn fetch child; ``spawn_grace`` covers only the ready handshake.
+
+    ``LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS`` (RPC budget) starts after ready and
+    includes child setup imports plus ``collect_chain_rows()`` work.
+    """
     from internal.live_subnets_fetch_child import run_fetch_child
     from internal.live_subnets_ipc import recv_message
 

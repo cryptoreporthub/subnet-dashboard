@@ -69,24 +69,30 @@ def collect_chain_rows() -> List[dict[str, Any]]:
     return client.get_all_subnet_data(netuids=netuids or None)
 
 
+def _child_send_deadline() -> float:
+    import time
+
+    raw = os.environ.get("LIVE_SUBNETS_CHILD_SEND_DEADLINE_SECONDS", "").strip()
+    seconds = float(raw) if raw else 60.0
+    return time.monotonic() + seconds
+
+
 def run_fetch_child(conn) -> None:
+    import time
+
+    from internal.live_subnets_ipc import send_message
+
     os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
     try:
-        from internal.live_subnets_ipc import send_message
-
         ready_sleep = os.environ.get("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "").strip()
         if ready_sleep:
-            import time
-
             time.sleep(float(ready_sleep))
-        if not send_message(conn, {"phase": "ready"}):
+        if not send_message(conn, {"phase": "ready"}, deadline=_child_send_deadline()):
             return
         data = collect_chain_rows()
-        send_message(conn, {"ok": True, "data": data})
+        send_message(conn, {"ok": True, "data": data}, deadline=_child_send_deadline())
     except Exception as exc:
-        from internal.live_subnets_ipc import send_message
-
-        send_message(conn, {"ok": False, "exc": str(exc)})
+        send_message(conn, {"ok": False, "exc": str(exc)}, deadline=_child_send_deadline())
     finally:
         try:
             conn.close()

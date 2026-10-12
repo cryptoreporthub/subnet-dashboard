@@ -19,22 +19,6 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 if __name__ == "__main__":
-    _self_test = os.environ.get("RUN_WEB_WITH_GUARD_SELF_TEST", "").strip()
-    if _self_test == "child_main":
-        import threading
-
-        if os.environ.get("LIVE_SUBNETS_FETCH_CHILD") != "1":
-            raise SystemExit(2)
-        import internal.snapshot_guard as guard
-
-        if guard._ORIG is not None:
-            raise SystemExit(3)
-        if any(t.name == "learning-snapshot-prewarm" for t in threading.enumerate()):
-            raise SystemExit(4)
-        if "internal.learning.routes" in sys.modules:
-            raise SystemExit(5)
-        raise SystemExit(0)
-
     from internal.snapshot_guard import install
 
     # Spawned multiprocessing children re-import this module as __main__ on Fly;

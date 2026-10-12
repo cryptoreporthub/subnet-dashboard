@@ -71,3 +71,31 @@ def test_start_failure_timeout_before_data():
     left.setblocking(False)
     right.setblocking(False)
     assert recv_message(right, time.monotonic() + 0.05) is None
+
+
+def test_send_one_megabyte_with_small_socket_buffers():
+    left, right = socket.socketpair()
+    left.setblocking(False)
+    right.setblocking(False)
+    left.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    right.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+    payload = {"blob": "x" * (1024 * 1024)}
+    received: dict = {}
+
+    def _reader():
+        received["out"] = recv_message(right, time.monotonic() + 30.0)
+
+    reader = threading.Thread(target=_reader, daemon=True)
+    reader.start()
+    assert send_message(left, payload, deadline=time.monotonic() + 30.0) is True
+    reader.join(timeout=35.0)
+    assert received.get("out") == payload
+
+
+def test_send_times_out_when_peer_never_reads():
+    left, right = socket.socketpair()
+    left.setblocking(False)
+    right.setblocking(False)
+    left.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 4096)
+    payload = {"blob": "y" * (1024 * 1024)}
+    assert send_message(left, payload, deadline=time.monotonic() + 0.15) is False

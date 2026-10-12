@@ -20,19 +20,12 @@ def test_run_web_with_guard_import_does_not_install_guard():
     assert guard._ORIG is None
 
 
-def test_run_web_with_guard_child_main_no_guard_or_prewarm():
+def test_run_web_with_guard_as_main_fetch_child_skips_guard():
     root = Path(__file__).resolve().parents[1]
-    script = root / "scripts" / "run_web_with_guard.py"
     env = {k: v for k, v in __import__("os").environ.items()}
-    env.update(
-        {
-            "PYTHONPATH": str(root),
-            "LIVE_SUBNETS_FETCH_CHILD": "1",
-            "RUN_WEB_WITH_GUARD_SELF_TEST": "child_main",
-        }
-    )
+    env["PYTHONPATH"] = str(root)
     proc = subprocess.run(
-        [sys.executable, str(script)],
+        [sys.executable, str(root / "tests" / "spawn_web_guard_as_main.py")],
         cwd=root,
         env=env,
         capture_output=True,
