@@ -153,6 +153,6 @@ def test_load_membership_receipt_from_snapshot(monkeypatch):
         lambda: snap,
     )
     receipt = cov.load_membership_receipt()
-    assert receipt["root_in_scoring_set"] is True
+    assert receipt["root_netuid_in_membership"] is True
     assert receipt["universe_status"] == "ok"
     assert 1 in receipt["expected_netuids"]

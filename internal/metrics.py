@@ -78,6 +78,10 @@ SCORE_SNAPSHOT_HORIZON_SUCCEEDED = Gauge(
     "Succeeded netuids in the last coverage block",
     ["horizon"],
 )
+SCORE_SNAPSHOT_AGE_SECONDS = Gauge(
+    "subnet_score_snapshot_age_seconds",
+    "Age of score_snapshots.json on disk in seconds",
+)
 
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
@@ -144,17 +148,23 @@ def refresh_from_state() -> None:
         pass
 
     try:
+        from internal.council.score_snapshots import (
+            SCORE_SNAPSHOT_MAX_AGE_SECONDS,
+            load_score_snapshot,
+            snapshot_age_seconds,
+        )
         from internal.council.snapshot_coverage import last_coverage_snapshot, publish_metrics
 
+        age = snapshot_age_seconds()
+        _set_optional(SCORE_SNAPSHOT_AGE_SECONDS, age)
         cov = last_coverage_snapshot()
         if not cov:
-            from internal.council.score_snapshots import load_score_snapshot
-
-            snap = load_score_snapshot()
-            if isinstance(snap, dict):
-                disk_cov = snap.get("coverage")
-                if isinstance(disk_cov, dict):
-                    cov = disk_cov
+            if age is not None and age <= SCORE_SNAPSHOT_MAX_AGE_SECONDS:
+                snap = load_score_snapshot()
+                if isinstance(snap, dict):
+                    disk_cov = snap.get("coverage")
+                    if isinstance(disk_cov, dict):
+                        cov = disk_cov
         if cov:
             publish_metrics(cov)
     except Exception:

@@ -128,6 +128,74 @@ def test_metrics_endpoint_shows_coverage_after_disk_snapshot(tmp_path, monkeypat
     assert "subnet_score_snapshot_coverage_published" in body
 
 
+def test_integration_rank_cap_below_membership_is_not_complete(tmp_path, monkeypatch):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setenv("SCORE_SNAPSHOT_MAX_SUBNETS", "1")
+    snap = UniverseSnapshot(
+        netuids=(1, 2, 3),
+        rows=(
+            {"netuid": 1, "name": "A"},
+            {"netuid": 2, "name": "B"},
+            {"netuid": 3, "name": "C"},
+        ),
+        resolved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
+            "2": _validity_entry(validity="positive", sources=["taomarketcap"]),
+            "3": _validity_entry(validity="positive", sources=["taomarketcap"]),
+        },
+    )
+    monkeypatch.setattr("internal.subnet_universe.get_snapshot", lambda: snap)
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [
+        {"netuid": 1, "name": "A"},
+        {"netuid": 2, "name": "B"},
+        {"netuid": 3, "name": "C"},
+    ]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    out = snaps.write_full_universe_snapshot()
+    coverage = out.get("coverage") or {}
+    assert coverage.get("capped_out", 0) > 0
+    assert out.get("complete") is False
+
+
+def test_metrics_skips_stale_disk_coverage(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from internal.metrics import SCORE_SNAPSHOT_COVERAGE_COMPLETE, refresh_from_state
+
+    path = tmp_path / "score_snapshots.json"
+    old = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat().replace("+00:00", "Z")
+    path.write_text(
+        json.dumps(
+            {
+                "written_at": old,
+                "build_started_at": old,
+                "day": [],
+                "hour": [],
+                "coverage": {"complete": True, "published": True},
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    cov.reset_phase1_cycle_state_for_tests()
+    SCORE_SNAPSHOT_COVERAGE_COMPLETE.set(0.0)
+    refresh_from_state()
+    assert SCORE_SNAPSHOT_COVERAGE_COMPLETE._value.get() == 0.0
+
+
 def test_metrics_registry_exposes_coverage_gauges():
     from internal.metrics import (
         SCORE_SNAPSHOT_COVERAGE_COMPLETE,

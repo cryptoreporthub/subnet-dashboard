@@ -76,7 +76,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "refresh_incomplete": bool(snap.refresh_incomplete),
             "expected_netuids": list(netuids),
             "fresh": membership_fresh(snap.resolved_at),
-            "root_in_scoring_set": 0 in snap.netuids,
+            "root_netuid_in_membership": 0 in snap.netuids,
             "message": snap.message,
         }
     except Exception as exc:
@@ -90,7 +90,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "refresh_incomplete": True,
             "expected_netuids": [],
             "fresh": False,
-            "root_in_scoring_set": False,
+            "root_netuid_in_membership": False,
             "message": str(exc),
         }
 
@@ -213,7 +213,7 @@ def build_coverage_block(
     return {
         "membership": receipt,
         "scoring_set_netuids": scoring_set,
-        "root_in_scoring_set": 0 in scoring_set,
+        "root_netuid_in_scoring_set": 0 in scoring_set,
         "day": day_block,
         "hour": hour_block,
         "capped_out": capped_out,
