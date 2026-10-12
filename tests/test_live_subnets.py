@@ -314,6 +314,31 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
         hang.set()
 
 
+def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):
+    from internal import live_subnets
+
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "0.35")
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "0")
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 1, "price": 1.0}]),
+    )
+    monkeypatch.setenv("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", "0.1")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
+    assert live_subnets._fetch_chain_data() is None
+
+    monkeypatch.delenv("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", raising=False)
+    monkeypatch.setenv("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", "1")
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "0.35")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.1")
+    assert live_subnets._fetch_chain_data() is None
+
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
+    out = live_subnets._fetch_chain_data()
+    assert out and out[0]["netuid"] == 1
+
+
 def test_killed_child_does_not_return_partial_rows(monkeypatch):
     from internal import live_subnets
 

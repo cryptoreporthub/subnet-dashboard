@@ -39,18 +39,18 @@ def _registry_netuids() -> List[int]:
 
 def collect_chain_rows() -> List[dict[str, Any]]:
     """Blocking RPC fetch; chain_client uses per-request socket timeouts."""
+    sleep_s = os.environ.get("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "").strip()
+    if sleep_s:
+        import time
+
+        time.sleep(float(sleep_s))
+
     test_rows = os.environ.get("LIVE_SUBNETS_TEST_ROWS_JSON")
     if test_rows:
         import json
 
         parsed = json.loads(test_rows)
         return parsed if isinstance(parsed, list) else []
-
-    sleep_s = os.environ.get("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "").strip()
-    if sleep_s:
-        import time
-
-        time.sleep(float(sleep_s))
 
     from internal.chain_client import get_default_client
 
@@ -74,6 +74,11 @@ def run_fetch_child(conn) -> None:
     try:
         from internal.live_subnets_ipc import send_message
 
+        ready_sleep = os.environ.get("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "").strip()
+        if ready_sleep:
+            import time
+
+            time.sleep(float(ready_sleep))
         if not send_message(conn, {"phase": "ready"}):
             return
         data = collect_chain_rows()

@@ -206,21 +206,25 @@ def _fetch_chain_data():
 
     rpc_budget = float(os.environ.get("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", str(SYNC_TIMEOUT_SECONDS)))
     spawn_grace = float(os.environ.get("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", str(SPAWN_GRACE_SECONDS)))
+    import socket
+
     ctx = _fetch_mp_context()
-    parent_conn, child_conn = ctx.Pipe(duplex=False)
+    parent_sock, child_sock = socket.socketpair()
+    parent_sock.setblocking(False)
+    child_sock.setblocking(False)
     proc = ctx.Process(
         target=run_fetch_child,
-        args=(child_conn,),
+        args=(child_sock,),
         name="live-subnets-fetch",
         daemon=True,
     )
     proc.start()
-    child_conn.close()
+    child_sock.close()
     msg: Any = None
     killed = False
     try:
         boot_deadline = time.monotonic() + spawn_grace
-        boot = recv_message(parent_conn, boot_deadline)
+        boot = recv_message(parent_sock, boot_deadline)
         if not isinstance(boot, dict) or boot.get("phase") != "ready":
             logger.warning(
                 "live_subnets spawn grace exceeded after %.0fs; terminating fetch child",
@@ -230,7 +234,7 @@ def _fetch_chain_data():
             _terminate_fetch_process(proc)
             return None
         rpc_deadline = time.monotonic() + rpc_budget
-        msg = recv_message(parent_conn, rpc_deadline)
+        msg = recv_message(parent_sock, rpc_deadline)
         if msg is None:
             logger.warning(
                 "live_subnets RPC budget exceeded after %.0fs; terminating fetch child",
@@ -241,7 +245,7 @@ def _fetch_chain_data():
             return None
     finally:
         try:
-            parent_conn.close()
+            parent_sock.close()
         except Exception:
             pass
         proc.join(timeout=1.0)
