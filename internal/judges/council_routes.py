@@ -416,12 +416,17 @@ def _canonical_postmortem_judge(raw: str) -> str:
     return name
 
 
+_POSTMORTEM_VALUE_ERRORS = frozenset({"Unknown judge", "path outside postmortems directory"})
+
+
 def _safe_list_postmortems(judge_name: str) -> List[Dict[str, Any]]:
     from internal.judges.postmortems import list_for_judge
 
     try:
         return list_for_judge(judge_name)
-    except ValueError:
+    except ValueError as exc:
+        if str(exc) not in _POSTMORTEM_VALUE_ERRORS:
+            raise
         raise HTTPException(status_code=404, detail="Unknown judge") from None
 
 

@@ -40,7 +40,8 @@ def _load(judge_name: str) -> List[Dict[str, Any]]:
     path = _path(judge_name)
     try:
         with open(path, "r") as f:
-            return json.load(f)
+            data = json.load(f)
+        return data if isinstance(data, list) else []
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
 
@@ -150,10 +151,19 @@ def list_for_judge(judge_name: str) -> List[Dict[str, Any]]:
     """Return all postmortems for a judge, newest first."""
     return list(reversed(_load(judge_name)))
 
+
+def _list_for_judge_fail_empty(judge_name: str) -> List[Dict[str, Any]]:
+    """Like list_for_judge but returns [] when path validation fails (aggregate reads)."""
+    try:
+        return list_for_judge(judge_name)
+    except ValueError:
+        return []
+
+
 def all_postmortems() -> Dict[str, List[Dict[str, Any]]]:
     """Return postmortems for all three judges."""
     return {
-        "oracle": list_for_judge("oracle"),
-        "echo": list_for_judge("echo"),
-        "pulse": list_for_judge("pulse"),
+        "oracle": _list_for_judge_fail_empty("oracle"),
+        "echo": _list_for_judge_fail_empty("echo"),
+        "pulse": _list_for_judge_fail_empty("pulse"),
     }

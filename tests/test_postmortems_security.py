@@ -100,6 +100,13 @@ def test_symlink_judge_json_outside_dir_not_leaked_via_api(tmp_path, monkeypatch
         assert "secret" not in response.text
         assert "symlink-leak" not in response.text
 
+    aggregate = client.get("/api/postmortems")
+    assert aggregate.status_code == 200
+    body = aggregate.json()
+    assert body["postmortems"]["oracle"] == []
+    assert "symlink-leak" not in aggregate.text
+    assert "secret" not in aggregate.text
+
 
 def test_save_refuses_tmp_symlink(tmp_path, monkeypatch):
     postmortems_dir = tmp_path / "postmortems"
