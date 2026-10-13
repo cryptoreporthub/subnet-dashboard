@@ -580,6 +580,8 @@ curl -fsS https://subnet-dashboard.fly.dev/metrics | head
 | `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker: pump/resolver + deferred Telegram on `essential`; **`full` wedges HTTP on shared VM** |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
 | `REFUSE_DERIVED_FOR_GRADING` | **off** | When on, resolver refuses TMC/Blockmachine derived `price_cache` candles for grading (native Gecko OHLCV only). Leave off until native OHLCV coverage is sufficient — committed cache is ~129 derived-sourced subnets today. |
+| `CHAIN_PRICE_FORWARD_RECORD` | **off** | Worker-only forward sampler (#1395): every ~5m records finalized-head subnet reserves + spot cross-check into `CHAIN_PRICE_DB_PATH` (`data/chain_prices.db`). Primary RPC: `FINNEY_RPC_URL` when set, else Blockmachine. |
+| `CHAIN_PRICE_DB_PATH` | `data/chain_prices.db` | SQLite WAL file for `chain_blocks` / `chain_price_samples` (separate from `data/store.db`). |
 
 ---
 
