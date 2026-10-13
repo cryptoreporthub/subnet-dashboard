@@ -197,6 +197,52 @@ def test_who_without_arg_shows_top_three_graded_callers(monkeypatch):
     assert "Dr.dre" not in who
 
 
+def test_register_bot_commands_calls_set_my_commands(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    calls = []
+
+    def fake_api(method, payload, **kwargs):
+        calls.append((method, payload))
+        return {"ok": True}
+
+    monkeypatch.setattr(summary_bot, "_telegram_api", fake_api)
+    summary_bot._COMMANDS_REGISTERED = False
+    assert summary_bot._register_bot_commands() is True
+    assert summary_bot._register_bot_commands() is True
+    assert len(calls) == 1
+    assert calls[0][0] == "setMyCommands"
+    commands = calls[0][1]["commands"]
+    command_names = [c["command"] for c in commands]
+    assert "gainers" in command_names
+    assert "summary" in command_names
+    assert "trending" in command_names
+
+
+def test_start_summary_bot_registers_commands_before_poll(monkeypatch):
+    import threading
+
+    monkeypatch.setenv("TELEGRAM_SUMMARY_BOT", "on")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    summary_bot._COMMANDS_REGISTERED = False
+    order = []
+    loop_ran = threading.Event()
+
+    def fake_register():
+        order.append("register")
+        return True
+
+    def fake_loop():
+        order.append("poll")
+        loop_ran.set()
+
+    monkeypatch.setattr(summary_bot, "_register_bot_commands", fake_register)
+    with patch.object(summary_bot, "_poll_loop", side_effect=fake_loop):
+        assert summary_bot.start_summary_bot() is True
+        assert loop_ran.wait(timeout=2)
+    summary_bot.stop_summary_bot()
+    assert order == ["register", "poll"]
+
+
 def test_send_message_disables_link_preview_for_desk_links(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
     captured = {}
