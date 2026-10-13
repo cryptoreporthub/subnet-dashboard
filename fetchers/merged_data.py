@@ -43,6 +43,40 @@ def _get_cached(key):
     return None
 
 
+def _get_stale_cached(key: str) -> Optional[Dict[str, Any]]:
+    """Read merged_cache row even past TTL — for fast Telegram replies."""
+    with db_conn(MERGED_DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute("SELECT data FROM merged_cache WHERE key = ?", (key,))
+        row = c.fetchone()
+    if row:
+        return json.loads(row[0])
+    return None
+
+
+def get_merged_subnet_rows_quick() -> List[Dict[str, Any]]:
+    """Non-blocking price rows for bot commands — never runs the full merge path.
+
+    ponytail: get_merged_subnet_data() can wedge >90s on cold Blockmachine/TaoStats;
+    the summary bot poll loop is single-threaded.
+    """
+    cached = _get_cached("all_merged")
+    if cached:
+        return list(cached.get("subnets") or [])
+    stale = _get_stale_cached("all_merged")
+    if stale:
+        return list(stale.get("subnets") or [])
+    try:
+        from fetchers.taomarketcap import get_all_subnets
+
+        rows = get_all_subnets() or []
+        if rows:
+            return rows
+    except Exception as exc:
+        logger.warning("quick merged rows: TaoMarketCap fallback failed: %s", exc)
+    return []
+
+
 def _set_cache(key, data):
     global _merged_by_netuid, _merged_index_at
     with db_conn(MERGED_DB_PATH) as conn:

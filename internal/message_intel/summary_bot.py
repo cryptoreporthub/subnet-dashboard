@@ -19,6 +19,23 @@ logger = logging.getLogger(__name__)
 
 _POLL_THREAD: Optional[threading.Thread] = None
 _STOP = threading.Event()
+_COMMANDS_REGISTERED = False
+_COMMANDS_REGISTER_LOCK = threading.Lock()
+
+# BotFather / menu autocomplete — keep in sync with handle_command + build_help_text.
+_BOT_MENU_COMMANDS: List[Dict[str, str]] = [
+    {"command": "start", "description": "Welcome and command list"},
+    {"command": "help", "description": "Show all commands"},
+    {"command": "summary", "description": "Market pulse or deep-dive one subnet"},
+    {"command": "trending", "description": "ChatterPower trending (24h or 1h)"},
+    {"command": "gainers", "description": "Top 5 subnet price gainers (24h)"},
+    {"command": "rank", "description": "Subnet trending position"},
+    {"command": "track", "description": "Pin a subnet to your watchlist"},
+    {"command": "alerts", "description": "Toggle watchlist push alerts on/off"},
+    {"command": "link", "description": "Connect My Desk with a link code"},
+    {"command": "who", "description": "30-day author reliability leaderboard"},
+    {"command": "subnetsummers", "description": "Full SubnetSummer write-ups"},
+]
 _RATE_LIMIT_SECONDS = 300
 _last_summary_at: Dict[int, float] = {}
 _last_command_at: Dict[tuple[str, int], float] = {}
@@ -70,6 +87,28 @@ def _desk_url() -> str:
 
 def _full_desk_url() -> str:
     return _desk_url()
+
+
+def _register_bot_commands() -> bool:
+    """Publish slash commands to Telegram (menu autocomplete). Idempotent per process."""
+    global _COMMANDS_REGISTERED
+    with _COMMANDS_REGISTER_LOCK:
+        if _COMMANDS_REGISTERED:
+            return True
+        resp = _telegram_api("setMyCommands", {"commands": _BOT_MENU_COMMANDS})
+        ok = bool(resp.get("ok"))
+        if ok:
+            logger.info(
+                "Telegram summary bot: registered %d bot commands (setMyCommands)",
+                len(_BOT_MENU_COMMANDS),
+            )
+            _COMMANDS_REGISTERED = True
+        else:
+            logger.info(
+                "Telegram summary bot: setMyCommands failed: %s",
+                resp.get("error") or resp,
+            )
+        return ok
 
 
 def _telegram_api(method: str, payload: Dict[str, Any], *, timeout: float = 35.0) -> Dict[str, Any]:
@@ -163,10 +202,10 @@ def build_help_text() -> str:
 
 def _format_gainers_reply(db=None) -> str:
     """Top 5 subnets by 24h price change — honest-empty when price data is down."""
-    from fetchers.merged_data import get_merged_subnet_data
+    from fetchers.merged_data import get_merged_subnet_rows_quick
 
     try:
-        rows = get_merged_subnet_data() or []
+        rows = get_merged_subnet_rows_quick() or []
     except Exception as exc:
         logger.warning("gainers fetch failed: %s", exc)
         rows = []
@@ -875,6 +914,8 @@ def _process_update(update: Dict[str, Any]) -> None:
         logger.debug("trend alert chat capture failed: %s", exc)
 
     cmd, _ = _parse_command_text(text)
+    if cmd == "/gainers":
+        logger.info("summary bot: handling /gainers chat_id=%s", chat_id)
     rate_key = (cmd or "unknown", chat_id)
     limited = _command_rate_limit(rate_key)
     if limited:
@@ -932,6 +973,7 @@ def start_summary_bot() -> bool:
     if _POLL_THREAD is not None and _POLL_THREAD.is_alive():
         return True
 
+    _register_bot_commands()
     _STOP.clear()
     _POLL_THREAD = threading.Thread(target=_poll_loop, daemon=True, name="telegram-summary-bot")
     _POLL_THREAD.start()
@@ -939,10 +981,12 @@ def start_summary_bot() -> bool:
 
 
 def stop_summary_bot() -> None:
-    global _POLL_THREAD
+    global _POLL_THREAD, _COMMANDS_REGISTERED
     _STOP.set()
     if _POLL_THREAD is not None:
         _POLL_THREAD.join(timeout=8)
         _POLL_THREAD = None
     _STOP.clear()
+    with _COMMANDS_REGISTER_LOCK:
+        _COMMANDS_REGISTERED = False
 
