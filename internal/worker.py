@@ -85,7 +85,11 @@ def _start_job_inventory_http() -> None:
 def main() -> None:
     import os
 
-    from internal.background_boot import start_background_workers, stop_background_workers
+    from internal.background_boot import (
+        schedule_summary_bot_worker_watchdog,
+        start_background_workers,
+        stop_background_workers,
+    )
     from internal.worker_heartbeat import touch_heartbeat
 
     signal.signal(signal.SIGTERM, _handle_signal)
@@ -105,6 +109,7 @@ def main() -> None:
         logger.warning("resolver semantics patch failed to apply: %s", exc)
 
     start_background_workers(heavy=heavy)
+    schedule_summary_bot_worker_watchdog()
     _start_job_inventory_http()
 
     # Loop stall guard (loop-stall-guard commit d03a3789): watch the pump desk

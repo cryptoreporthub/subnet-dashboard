@@ -213,6 +213,7 @@ def test_who_without_arg_shows_top_three_graded_callers(monkeypatch):
 
 def test_register_bot_commands_calls_set_my_commands(monkeypatch):
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    summary_bot._COMMANDS_REGISTERED = False
     calls = []
 
     def fake_api(method, payload, **kwargs):
@@ -220,7 +221,6 @@ def test_register_bot_commands_calls_set_my_commands(monkeypatch):
         return {"ok": True}
 
     monkeypatch.setattr(summary_bot, "_telegram_api", fake_api)
-    summary_bot._COMMANDS_REGISTERED = False
     assert summary_bot._register_bot_commands() is True
     assert summary_bot._register_bot_commands() is True
     assert len(calls) == 1
@@ -230,6 +230,7 @@ def test_register_bot_commands_calls_set_my_commands(monkeypatch):
     assert "gainers" in command_names
     assert "summary" in command_names
     assert "trending" in command_names
+    summary_bot._COMMANDS_REGISTERED = False
 
 
 def test_start_summary_bot_registers_commands_before_poll(monkeypatch):
