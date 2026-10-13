@@ -581,6 +581,116 @@ def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
     assert provider.get_snapshot().netuids == prior.netuids
 
 
+def test_aged_negative_retained_when_probe_rpc_error(universe_tmp, monkeypatch):
+    """RPC failures must not remove grace-eligible negatives or start removal clocks."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(105,),
+        rows=({"netuid": 105, "name": "SN105"},),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "105": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap", "blockmachine_probe"],
+                negative_since=old,
+            )
+        },
+    )
+
+    class _Client:
+        def get_alpha_price_probed(self, netuid):
+            if netuid == 105:
+                return None, "rpc_error"
+            return 1.0, "ok"
+
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=None,
+    )
+    built = builder.build(prior)
+    assert 105 in built.netuids
+    entry = built.validity_map["105"]
+    assert entry["validity"] == "negative"
+    assert entry.get("refresh_incomplete") is True
+    assert entry.get("negative_since") == old
+
+
+def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp):
+    """Incomplete per-netuid probe must not drop aged negatives."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(106,),
+        rows=({"netuid": 106, "name": "SN106"},),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "106": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap"],
+                negative_since=old,
+            )
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, True),
+        probe_fetch=lambda netuids, deadline: ({106: None}, False),
+    )
+    built = builder.build(prior)
+    assert 106 in built.netuids
+
+
+def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
+    """Complete no_price may remove aged negatives; rpc_error must not."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(201, 202),
+        rows=(
+            {"netuid": 201, "name": "SN201"},
+            {"netuid": 202, "name": "SN202"},
+        ),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "201": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap", "blockmachine_probe"],
+                negative_since=old,
+            ),
+            "202": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap", "blockmachine_probe"],
+                negative_since=old,
+            ),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=lambda netuids, deadline: ({201: False, 202: None}, True),
+    )
+    built = builder.build(prior)
+    assert 201 not in built.netuids
+    assert 202 in built.netuids
+    assert built.validity_map["202"].get("refresh_incomplete") is True
+
+
+def test_tmc_positive_without_price_retained(universe_tmp):
+    """Source-confirmed positive survives missing on-chain price."""
+    prior = _prior_snapshot([77])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({77}, {77: {"netuid": 77, "name": "SN77"}}, True),
+        probe_fetch=lambda netuids, deadline: ({77: None}, True),
+    )
+    built = builder.build(prior)
+    assert 77 in built.netuids
+    assert built.validity_map["77"]["validity"] == "positive"
+
+
 def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(universe_tmp):
     """Prod loop fix: degraded sources must not pin grace-eligible negatives forever."""
     old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()

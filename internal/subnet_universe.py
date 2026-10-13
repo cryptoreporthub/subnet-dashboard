@@ -134,8 +134,13 @@ def _default_probe_fetch(
                 complete = False
                 break
             try:
-                price = client.get_alpha_price(netuid)
-                observed[netuid] = bool(price and float(price) > 0)
+                price, outcome = client.get_alpha_price_probed(netuid)
+                if outcome == "rpc_error":
+                    observed[netuid] = None
+                elif outcome == "no_price":
+                    observed[netuid] = False
+                else:
+                    observed[netuid] = bool(price and float(price) > 0)
             except Exception:
                 observed[netuid] = None
                 complete = False
@@ -192,6 +197,20 @@ def _merge_sources(
             negative_since = _now_iso()
         return "negative", sources, False, negative_since, False
 
+    if probe_positive is False and tmc_positive is not True:
+        if not negative_since:
+            negative_since = _now_iso()
+        return "negative", sources, False, negative_since, False
+
+    if tmc_positive is False and probe_positive is None:
+        refresh_incomplete = True
+        prior_validity = str(prior.get("validity") or "positive")
+        if prior_validity == "negative":
+            return prior_validity, sources, bool(prior.get("disputed")), negative_since, True
+        if prior_validity in ("positive", "unobserved"):
+            return prior_validity, sources, bool(prior.get("disputed")), None, True
+        return "unobserved", sources, bool(prior.get("disputed")), None, True
+
     if tmc_positive is None or probe_positive is None:
         refresh_incomplete = True
         prior_validity = str(prior.get("validity") or "positive")
@@ -206,6 +225,8 @@ def _merge_sources(
 
 def _eligible_for_removal(entry: Dict[str, Any], now: datetime) -> bool:
     if str(entry.get("validity")) != "negative":
+        return False
+    if entry.get("refresh_incomplete"):
         return False
     negative_since = entry.get("negative_since")
     if not negative_since:

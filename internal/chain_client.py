@@ -255,14 +255,24 @@ class ChainClient:
     def degraded(self):
         return not self._healthy
 
-    def get_alpha_price(self, netuid):
+    def get_alpha_price_probed(self, netuid) -> Tuple[Optional[float], str]:
+        """Typed alpha price fetch for membership and live-batch consumers.
+
+        Returns (price, outcome) where outcome is ``ok``, ``no_price`` (successful
+        null/empty), or ``rpc_error`` (transport/JSON-RPC/parse failure).
+        """
         try:
             result = self._call("swap_currentAlphaPrice", [netuid])
-            if result is not None:
-                return float(result) / PRICE_SCALE
+            if result is None:
+                return None, "no_price"
+            return float(result) / PRICE_SCALE, "ok"
         except Exception as exc:
             logger.debug("swap_currentAlphaPrice failed for netuid %s: %s", netuid, exc)
-        return None
+            return None, "rpc_error"
+
+    def get_alpha_price(self, netuid):
+        price, _outcome = self.get_alpha_price_probed(netuid)
+        return price
 
     def get_all_netuids(self):
         if not self.is_healthy():
@@ -542,8 +552,10 @@ class ChainClient:
         def _one(netuid: int):
             """Return row + outcome; caller alone records outcomes (no shared mutable dict)."""
             try:
-                price = self.get_alpha_price(netuid)
-                if price is None:
+                price, outcome = self.get_alpha_price_probed(netuid)
+                if outcome == "rpc_error":
+                    return None, "rpc_error"
+                if outcome == "no_price" or price is None:
                     return None, "no_price"
                 row = {
                     "netuid": netuid,
