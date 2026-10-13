@@ -132,6 +132,45 @@ def test_metrics_endpoint_shows_coverage_after_disk_snapshot(tmp_path, monkeypat
     assert "subnet_score_snapshot_coverage_published" in body
 
 
+def test_integration_feed_only_extra_not_scored(tmp_path, monkeypatch):
+    """Deregistered/extra feed rows outside membership must not enter the scoring loop."""
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    snap = UniverseSnapshot(
+        netuids=(1, 2),
+        rows=({"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}),
+        resolved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
+            "2": _validity_entry(validity="positive", sources=["taomarketcap"]),
+        },
+    )
+    monkeypatch.setattr("internal.subnet_universe.get_snapshot", lambda: snap)
+    attempted: list[int] = []
+
+    def _day(sn, _ctx):
+        attempted.append(int(sn["netuid"]))
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [
+        {"netuid": 1, "name": "A"},
+        {"netuid": 2, "name": "B"},
+        {"netuid": 77, "name": "Feed-only"},
+    ]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+
+    out = snaps.write_full_universe_snapshot()
+    assert sorted(attempted) == [1, 2]
+    timing = (out.get("coverage") or {}).get("timing") or {}
+    assert timing.get("candidate_prep_seconds") is not None
+    assert timing.get("excluded_feed_only_count") == 1
+
+
 def test_integration_rank_cap_below_membership_is_not_complete(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))

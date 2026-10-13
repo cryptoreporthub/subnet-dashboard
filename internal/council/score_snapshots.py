@@ -184,6 +184,36 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
         }
 
 
+def _patch_score_snapshot_coverage_locked(
+    snap_path: str,
+    coverage_patch: Dict[str, Any],
+) -> Dict[str, Any]:
+    """One locked os.replace: merge coverage only; scored day/hour rows unchanged (#1361)."""
+    with _locked_score_snapshot(snap_path):
+        publish_started = time.monotonic()
+        current = load_score_snapshot(snap_path)
+        if not isinstance(current, dict):
+            publish_wall = time.monotonic() - publish_started
+            return {
+                "published": False,
+                "skipped_older": False,
+                "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+            }
+        merged_coverage = dict(current.get("coverage") or {})
+        merged_coverage.update(coverage_patch)
+        current = {**current, "coverage": merged_coverage}
+        tmp = snap_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(current, handle, indent=2)
+        os.replace(tmp, snap_path)
+        publish_wall = time.monotonic() - publish_started
+        return {
+            "published": False,
+            "skipped_older": False,
+            "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+        }
+
+
 def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
     snap = snapshot if snapshot is not None else load_score_snapshot()
     if not snap:
@@ -418,18 +448,54 @@ def write_full_universe_snapshot(
 ) -> Dict[str, Any]:
     """Load subnets, score, persist. Call only from background."""
     capture_started = time.monotonic()
+    prep_meta: Dict[str, Any] = {}
+    write_stage_timing: Dict[str, Any] = {}
+    receipt: Dict[str, Any] = {}
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
+        from internal.council.snapshot_coverage import (
+            load_membership_receipt,
+            membership_scoring_candidate_rows,
+        )
+
+        load_started = time.monotonic()
         if _registry_only_snapshot():
-            subnets, source = _get_subnets_hydrate()
+            feed_subnets, source = _get_subnets_hydrate()
         else:
-            subnets, source = _get_subnets_with_source(timeout=20)
-            if not subnets:
-                subnets, source = _get_subnets_hydrate()
+            feed_subnets, source = _get_subnets_with_source(timeout=20)
+            if not feed_subnets:
+                feed_subnets, source = _get_subnets_hydrate()
+        write_stage_timing["subnet_load_seconds"] = round(time.monotonic() - load_started, 6)
+
+        receipt = load_membership_receipt()
+        prep_started = time.monotonic()
+        membership_rows: List[Dict[str, Any]] = []
+        # Registry-only hydrate is the scoring input cap; universe rows backfill live feeds only.
+        if not _registry_only_snapshot():
+            try:
+                from internal.subnet_universe import get_snapshot
+
+                snap = get_snapshot()
+                membership_rows = list(snap.rows) if snap is not None else []
+            except Exception:
+                membership_rows = []
+        subnets, prep_meta = membership_scoring_candidate_rows(
+            list(receipt.get("expected_netuids") or []),
+            feed_subnets or [],
+            membership_rows=membership_rows,
+            receipt=receipt,
+        )
+        write_stage_timing["candidate_prep_seconds"] = round(time.monotonic() - prep_started, 6)
+        write_stage_timing["membership_expected_count"] = int(prep_meta.get("expected_count") or 0)
+        write_stage_timing["membership_admitted_count"] = int(prep_meta.get("admitted_count") or 0)
+        write_stage_timing["excluded_feed_only_count"] = int(
+            prep_meta.get("excluded_feed_only_count") or 0
+        )
+
         cap = _snapshot_subnet_cap()
         capped_out = 0
-        selection_policy = "full"
+        selection_policy = str(prep_meta.get("selection_basis") or "full")
         pre_cap_len = len(subnets or [])
         if cap > 0 and subnets and len(subnets) > cap:
             from server import _cap_subnets_for_scoring
@@ -437,12 +503,16 @@ def write_full_universe_snapshot(
             subnets = _cap_subnets_for_scoring(subnets, limit=cap)
             capped_out = max(0, pre_cap_len - len(subnets or []))
             selection_policy = "rank_cap"
+        ctx_started = time.monotonic()
         ctx = _market_context_with_weights(subnets or [])
+        write_stage_timing["market_context_seconds"] = round(time.monotonic() - ctx_started, 6)
         logger.info(
-            "score snapshot build started: source=%s registry_only=%s subnets=%d",
+            "score snapshot build started: source=%s registry_only=%s feed_rows=%d admitted=%d expected=%d",
             source,
             _registry_only_snapshot(),
+            len(feed_subnets or []),
             len(subnets or []),
+            write_stage_timing.get("membership_expected_count"),
         )
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
@@ -453,14 +523,12 @@ def write_full_universe_snapshot(
             coverage_capture_deadline_seconds,
             coverage_timing_for_disk,
             record_publish_wall_seconds,
-            load_membership_receipt,
             membership_scoring_expected,
             note_cycle,
             publish_metrics,
             tradable_netuid_set,
         )
 
-        receipt = load_membership_receipt()
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
         payload = build_full_universe_snapshot(
@@ -476,6 +544,7 @@ def write_full_universe_snapshot(
             "build_wall_seconds": round(build_wall, 6),
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
+        timing.update(write_stage_timing)
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
@@ -505,6 +574,13 @@ def write_full_universe_snapshot(
                 "coverage_error": str(exc),
                 "timing": timing,
             }
+        if prep_meta.get("membership_admission_allowed") is not None:
+            coverage["membership_admission_allowed"] = bool(
+                prep_meta.get("membership_admission_allowed")
+            )
+        gate_reason = prep_meta.get("admission_gate_reason")
+        if gate_reason:
+            coverage["membership_admission_gate_reason"] = str(gate_reason)
         if int(inputs.get("skipped_invalid") or 0):
             coverage["skipped_invalid"] = int(inputs["skipped_invalid"])
         capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
@@ -514,9 +590,42 @@ def write_full_universe_snapshot(
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
         disk_timing = coverage_timing_for_disk(timing)
         coverage["timing"] = disk_timing
-        publish_result = save_score_snapshot(
-            {**payload, "source": source, "coverage": coverage}
+        gated_empty = (
+            prep_meta.get("membership_admission_allowed") is False
+            and not (payload.get("day") or payload.get("hour"))
         )
+        existing_on_disk = load_score_snapshot(SCORE_SNAPSHOTS_PATH) if gated_empty else None
+        retain_prior = bool(
+            gated_empty
+            and existing_on_disk
+            and (existing_on_disk.get("day") or existing_on_disk.get("hour"))
+        )
+        if retain_prior:
+            coverage["capture_reason"] = "membership_gated_skip_publish"
+            coverage["published"] = False
+            coverage["complete"] = False
+            prior_timing = dict(
+                ((existing_on_disk or {}).get("coverage") or {}).get("timing") or {}
+            )
+            prior_timing.update(disk_timing)
+            coverage["timing"] = prior_timing
+            coverage_patch: Dict[str, Any] = {
+                "complete": False,
+                "published": False,
+                "membership_admission_allowed": False,
+                "capture_reason": "membership_gated_skip_publish",
+                "timing": prior_timing,
+            }
+            if gate_reason:
+                coverage_patch["membership_admission_gate_reason"] = str(gate_reason)
+            publish_result = _patch_score_snapshot_coverage_locked(
+                SCORE_SNAPSHOTS_PATH,
+                coverage_patch,
+            )
+        else:
+            publish_result = save_score_snapshot(
+                {**payload, "source": source, "coverage": coverage}
+            )
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
         publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
