@@ -132,7 +132,12 @@ def _default_probe_fetch(
     *,
     deadline: Optional[float] = None,
 ) -> Tuple[Dict[int, Optional[bool]], bool]:
-    """Map netuid -> True/False positive probe, None when unobserved."""
+    """Map netuid -> True/False (positive probe), or None when that netuid is unobserved.
+
+    Per-netuid ``None`` means ``no_price``, ``rpc_error``, or the netuid was not reached
+    before ``deadline`` — it does not by itself mark the probe pass incomplete.
+    The returned ``complete`` flag is False only on deadline truncation or fetch failure.
+    """
     observed: Dict[int, Optional[bool]] = {}
     complete = True
     try:
@@ -310,7 +315,6 @@ def _compute_membership(
             tmc_positive=tmc_val,
             probe_positive=probe_val,
         )
-        refresh_incomplete = refresh_incomplete or entry_incomplete
         entry = _validity_entry(
             validity=validity,
             sources=sources,

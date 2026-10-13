@@ -644,6 +644,53 @@ def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp
     assert 106 in built.netuids
 
 
+def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_tmp, monkeypatch):
+    """Per-netuid no_price must not OR into snapshot refresh_incomplete or block shrink."""
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = UniverseSnapshot(
+        netuids=(100, 130),
+        rows=(
+            {"netuid": 100, "name": "SN100"},
+            {"netuid": 130, "name": "SN130"},
+        ),
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={
+            "100": _validity_entry(validity="positive", sources=["taomarketcap", "blockmachine_probe"]),
+            "130": _validity_entry(
+                validity="negative",
+                sources=["taomarketcap", "blockmachine_probe"],
+                negative_since=old,
+            ),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (
+            {201},
+            {201: {"netuid": 201, "name": "SN201"}},
+            True,
+        ),
+        probe_fetch=lambda netuids, deadline: ({100: None, 130: False, 201: True}, True),
+    )
+    built = builder.build(prior)
+    assert built.refresh_incomplete is False
+    assert built.validity_map["100"].get("refresh_incomplete") is True
+    assert 201 in built.netuids
+    assert 130 not in built.netuids
+
+    monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
+    provider.replace_snapshot_for_tests(prior)
+    provider.set_builder(builder)
+    result = provider.refresh_once()
+    assert result.refresh_incomplete is False
+    assert 201 in result.netuids
+    assert 130 not in result.netuids
+    assert 100 in result.netuids
+
+
 def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
     """no_price and rpc_error must not remove aged negatives or advance removal clocks."""
     old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
