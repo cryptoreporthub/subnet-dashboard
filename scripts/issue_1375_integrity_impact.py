@@ -14,7 +14,10 @@ import os
 from typing import Any, Dict, Iterable, List, Tuple
 
 from internal.council.grading import PRICE_UNIT_RATIO_CEILING, is_price_unit_mismatch
-from internal.council.price_reference import is_derived_candle_cache_source
+from internal.council.price_reference import (
+    is_derived_candle_cache_source,
+    refuse_derived_for_grading_enabled,
+)
 
 DEFAULT_CACHE = os.path.join("data", "price_cache.json")
 DEFAULT_PREDICTIONS = os.path.join("data", "predictions.json")
@@ -33,6 +36,18 @@ def _legacy_price_unit_mismatch(reference_price: float, resolved_price: float) -
     if min(reference, resolved) >= 1:
         return False
     return ratio >= PRICE_UNIT_RATIO_CEILING
+
+
+def subnets_with_any_candles(cache: Dict[str, Any]) -> int:
+    """Cache blocks with at least one candle row (ignores derived-source policy)."""
+    count = 0
+    for block in cache.values():
+        if not isinstance(block, dict):
+            continue
+        candles = [c for c in (block.get("candles") or []) if isinstance(c, dict)]
+        if candles:
+            count += 1
+    return count
 
 
 def gradeable_subnet_counts(
@@ -106,13 +121,31 @@ def main() -> None:
 
     with open(args.cache, "r", encoding="utf-8") as fh:
         cache = json.load(fh)
-    with_candles = gradeable_subnet_counts(cache, refuse_derived=False)
-    flag_off = gradeable_subnet_counts(cache, refuse_derived=False)
-    flag_on = gradeable_subnet_counts(cache, refuse_derived=True)
-    print("gradeable_subnets_with_candles", with_candles)
-    print("gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_off", flag_off)
-    print("gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_on", flag_on)
-    print("gradeable_subnet_delta_flag_on", with_candles - flag_on)
+
+    any_candles = subnets_with_any_candles(cache)
+
+    os.environ.pop("REFUSE_DERIVED_FOR_GRADING", None)
+    refuse_off = refuse_derived_for_grading_enabled()
+    gradeable_flag_off = gradeable_subnet_counts(
+        cache, refuse_derived=refuse_off
+    )
+
+    os.environ["REFUSE_DERIVED_FOR_GRADING"] = "on"
+    refuse_on = refuse_derived_for_grading_enabled()
+    gradeable_flag_on = gradeable_subnet_counts(cache, refuse_derived=refuse_on)
+
+    print("subnets_with_any_candles", any_candles)
+    print(
+        "gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_off",
+        gradeable_flag_off,
+        "(env unset; refuse_derived=%s)" % refuse_off,
+    )
+    print(
+        "gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_on",
+        gradeable_flag_on,
+        "(REFUSE_DERIVED_FOR_GRADING=on; refuse_derived=%s)" % refuse_on,
+    )
+    print("gradeable_subnet_delta_flag_on", gradeable_flag_off - gradeable_flag_on)
 
     rows = list(_iter_resolved_rows(args.predictions))
     if not rows:

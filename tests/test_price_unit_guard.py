@@ -66,27 +66,38 @@ def test_unit_guard_export_rows_both_ge1_ratio20():
 def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
     """#1375 derived refusal is gated: default off (129), flag on collapses to 0.
 
+    Default-off 129 is intentional (Joshua-approved gated rollout per #1375); do not
+    flip REFUSE_DERIVED_FOR_GRADING default to on without explicit approval.
+
     Re-run: ``PYTHONPATH=. python scripts/issue_1375_integrity_impact.py``.
     """
     import json
     from pathlib import Path
 
-    from scripts.issue_1375_integrity_impact import gradeable_subnet_counts
+    from scripts.issue_1375_integrity_impact import (
+        gradeable_subnet_counts,
+        subnets_with_any_candles,
+    )
 
     cache_path = Path("data/price_cache.json")
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    with_candles = gradeable_subnet_counts(cache, refuse_derived=False)
+    with_candles = subnets_with_any_candles(cache)
     assert with_candles == 129
 
     monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
-    flag_off = gradeable_subnet_counts(cache, refuse_derived=False)
+    from internal.council.price_reference import refuse_derived_for_grading_enabled
+
+    assert not refuse_derived_for_grading_enabled()
+    flag_off = gradeable_subnet_counts(
+        cache, refuse_derived=refuse_derived_for_grading_enabled()
+    )
     assert flag_off == 129
 
     monkeypatch.setenv("REFUSE_DERIVED_FOR_GRADING", "on")
-    from internal.council.price_reference import refuse_derived_for_grading_enabled
-
     assert refuse_derived_for_grading_enabled()
-    flag_on = gradeable_subnet_counts(cache, refuse_derived=True)
+    flag_on = gradeable_subnet_counts(
+        cache, refuse_derived=refuse_derived_for_grading_enabled()
+    )
     assert flag_on == 0
 
 
