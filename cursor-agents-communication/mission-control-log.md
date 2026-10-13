@@ -1966,3 +1966,10 @@ Read with gh: top-level comments by cryptoreporthub at 08:19:57Z (#1340) and 08:
 - **PR:** [#1371](https://github.com/cryptoreporthub/subnet-dashboard/pull/1371) draft, **Fixes #1367**; no deploy.
 - **Tests:** `PYTHONPATH=. pytest tests/test_postmortems_security.py tests/test_endpoint_contract.py -q` → **161 passed**.
 
+## 2026-10-13 — Restless projectId sync (Joshua decision 6:26 AM PT)
+
+- **Decision:** Fly `RESTLESS_KEY` → Restless project **`4953800f-2332-42a1-b76a-5f8011483cd6`** (`npx restless key`).
+- **PR:** Draft [#1382](https://github.com/cryptoreporthub/subnet-dashboard/pull/1382) branch `cursor/restless-project-4953800f` @ **`a9003e52`** — `.restless/settings.json` `projectId` only (was `6cbf4085-2159-4bd7-a1a0-8c662ec0420c` on `main` @ `ce8afc47`).
+- **CI pin:** base `main` `ce8afc47`; local contract **148 passed** (config-only).
+- **Merge:** Joshua GO required; no deploy/secrets.
+
