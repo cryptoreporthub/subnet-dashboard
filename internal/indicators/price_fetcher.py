@@ -337,9 +337,9 @@ def fetch_ohlcv(
     """
     Fetch OHLCV candles for a subnet token.
 
-    Tries TaoMarketCap first when INDICATOR_USE_LIVE_PRICES=true, falls back to
-    GeckoTerminal for explicitly mapped pools, then to the Blockmachine RPC
-    alpha price. Returns [] when no live source succeeds unless allow_synthetic=True.
+    When INDICATOR_USE_LIVE_PRICES=true, tries GeckoTerminal for mapped pools
+    first, then TaoMarketCap, then Blockmachine RPC alpha price. Returns [] when
+    no live source succeeds unless allow_synthetic=True.
     """
     pairs = _load_price_pairs(pairs_path)
     sources = _price_sources_for_subnet(subnet_id, pairs, include_synthetic=allow_synthetic)

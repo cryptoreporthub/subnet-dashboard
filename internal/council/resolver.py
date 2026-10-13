@@ -29,7 +29,7 @@ from internal.council.grading import (
     classify_outcome_direction_only,
     compute_actual_pct,
     grade_prediction,
-    is_phantom_vwap_quarantine,
+    is_excluded_from_learning_eval,
     is_price_unit_mismatch,
     is_pump_desk_claim,
     is_pump_lead,
@@ -1028,7 +1028,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         and not is_pump_desk_claim(r)
         and not _is_shadow(r)
         and r.get("retirement_reason") != "price_unit_mismatch"
-        and not is_phantom_vwap_quarantine(r)
+        and not is_excluded_from_learning_eval(r)
     ]
     correct = sum(1 for r in gradable if r.get("correct") is True)
     wrong = sum(1 for r in gradable if r.get("correct") is False)
@@ -1040,7 +1040,7 @@ def _compute_stats(data: Dict[str, Any]) -> Dict[str, Any]:
         and _is_shadow(r)
         and not is_pump_desk_claim(r)
         and r.get("retirement_reason") != "price_unit_mismatch"
-        and not is_phantom_vwap_quarantine(r)
+        and not is_excluded_from_learning_eval(r)
     ]
     expired = sum(
         1

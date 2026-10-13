@@ -5,6 +5,7 @@ from internal.council.grading import (
     is_price_unit_mismatch,
 )
 from internal.council.resolver import _compute_stats, lookup_horizon_price, resolve_prediction
+from scripts.issue_1375_integrity_impact import _legacy_price_unit_mismatch
 
 
 def test_price_unit_guard_matches_observed_tao_usd_mismatch():
@@ -29,23 +30,6 @@ def test_price_unit_guard_flags_ref_at_or_above_one():
     assert is_price_unit_mismatch(10.0, 210.0)
 
 
-def _legacy_price_unit_mismatch(reference_price: float, resolved_price: float) -> bool:
-    """Pre-#1377 guard on main: skipped ratio>=20 when min(ref, resolved) >= 1."""
-    from internal.council.grading import PRICE_UNIT_RATIO_CEILING
-
-    try:
-        reference = float(reference_price)
-        resolved = float(resolved_price)
-    except (TypeError, ValueError):
-        return False
-    if reference <= 0 or resolved <= 0:
-        return False
-    ratio = max(reference, resolved) / min(reference, resolved)
-    if min(reference, resolved) >= 1:
-        return False
-    return ratio >= PRICE_UNIT_RATIO_CEILING
-
-
 # Minimal repro rows for learning-export guard impact (ratio>=20, both sides >= 1).
 _ISSUE_1375_BOTH_GE1_EXPORT_ROWS = (
     {"reference_price": 1.5, "resolved_price": 285.0},
@@ -64,10 +48,11 @@ def test_unit_guard_export_rows_both_ge1_ratio20():
 
 
 def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
-    """#1375 derived refusal is gated: default off (129), flag on collapses to 0.
+    """#1375 derived refusal is gated: default off matches cache; flag on collapses.
 
-    Default-off 129 is intentional (Joshua-approved gated rollout per #1375); do not
-    flip REFUSE_DERIVED_FOR_GRADING default to on without explicit approval.
+    Default-off gradeable count tracks subnets_with_any_candles (Joshua-approved
+    gated rollout per #1375); do not flip REFUSE_DERIVED_FOR_GRADING default to on
+    without explicit approval.
 
     Re-run: ``PYTHONPATH=. python scripts/issue_1375_integrity_impact.py``.
     """
@@ -82,7 +67,7 @@ def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
     cache_path = Path("data/price_cache.json")
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
     with_candles = subnets_with_any_candles(cache)
-    assert with_candles == 129
+    assert with_candles > 0
 
     monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
     from internal.council.price_reference import refuse_derived_for_grading_enabled
@@ -91,13 +76,14 @@ def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
     flag_off = gradeable_subnet_counts(
         cache, refuse_derived=refuse_derived_for_grading_enabled()
     )
-    assert flag_off == 129
+    assert flag_off == with_candles
 
     monkeypatch.setenv("REFUSE_DERIVED_FOR_GRADING", "on")
     assert refuse_derived_for_grading_enabled()
     flag_on = gradeable_subnet_counts(
         cache, refuse_derived=refuse_derived_for_grading_enabled()
     )
+    assert flag_on < flag_off
     assert flag_on == 0
 
 
@@ -170,6 +156,21 @@ def test_derived_candle_cache_allowed_when_refuse_flag_off(monkeypatch):
     status, price, _meta = price_at_resolve_at(1, resolve_at, cache=cache)
     assert status == "ok"
     assert price == 1.0
+
+
+def test_compute_stats_excludes_learning_eval_rows():
+    """Trust stats gradable must match learning/eval exclusion (unit + phantom)."""
+    row = {
+        "outcome": "hit",
+        "correct": True,
+        "reference_price": 1.5,
+        "resolved_price": 285.0,
+        "price_source": "vwap",
+        "created_at": "2026-08-10T12:00:00Z",
+    }
+    stats = _compute_stats({"predictions": [], "resolved": [row]})
+    assert stats["correct"] == 0
+    assert stats["wrong"] == 0
 
 
 def test_mismatched_resolution_is_ungradeable_without_learning_side_effects():

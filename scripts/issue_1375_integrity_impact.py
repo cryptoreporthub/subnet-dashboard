@@ -124,6 +124,7 @@ def main() -> None:
 
     any_candles = subnets_with_any_candles(cache)
 
+    prev_refuse = os.environ.get("REFUSE_DERIVED_FOR_GRADING")
     os.environ.pop("REFUSE_DERIVED_FOR_GRADING", None)
     refuse_off = refuse_derived_for_grading_enabled()
     gradeable_flag_off = gradeable_subnet_counts(
@@ -133,6 +134,11 @@ def main() -> None:
     os.environ["REFUSE_DERIVED_FOR_GRADING"] = "on"
     refuse_on = refuse_derived_for_grading_enabled()
     gradeable_flag_on = gradeable_subnet_counts(cache, refuse_derived=refuse_on)
+
+    if prev_refuse is None:
+        os.environ.pop("REFUSE_DERIVED_FOR_GRADING", None)
+    else:
+        os.environ["REFUSE_DERIVED_FOR_GRADING"] = prev_refuse
 
     print("subnets_with_any_candles", any_candles)
     print(
