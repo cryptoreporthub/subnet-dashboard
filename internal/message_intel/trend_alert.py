@@ -24,6 +24,7 @@ _seen_chats: Dict[int, float] = {}
 _seen_lock = threading.Lock()
 
 _ENABLED = frozenset({"1", "true", "yes", "on"})
+_chat_id_source_logged = False
 
 
 def trend_alert_enabled() -> bool:
@@ -35,16 +36,38 @@ def trend_alert_enabled() -> bool:
 
 
 def alert_chat_id() -> Optional[str]:
-    """Resolve the push target: env override -> last active seen chat -> ingest group."""
+    """Resolve the push target: env overrides -> last active seen chat -> ingest group."""
+    global _chat_id_source_logged
+
+    source: Optional[str] = None
+    value: Optional[str] = None
+
     raw = os.environ.get("TELEGRAM_TREND_ALERT_CHAT", "").strip()
     if raw:
-        return raw
-    with _seen_lock:
-        if _seen_chats:
-            chat_id = max(_seen_chats.items(), key=lambda kv: kv[1])[0]
-            return str(chat_id)
-    group = os.environ.get("TELEGRAM_GROUP", "officialsubnetsummer").strip()
-    return f"@{group.lstrip('@')}" if group else None
+        source, value = "TELEGRAM_TREND_ALERT_CHAT", raw
+    else:
+        raw = os.environ.get("TELEGRAM_ALERT_CHAT_ID", "").strip()
+        if raw:
+            source, value = "TELEGRAM_ALERT_CHAT_ID", raw
+        else:
+            raw = os.environ.get("TELEGRAM_GROUP_ID", "").strip()
+            if raw:
+                source, value = "TELEGRAM_GROUP_ID", raw
+            else:
+                with _seen_lock:
+                    if _seen_chats:
+                        chat_id = max(_seen_chats.items(), key=lambda kv: kv[1])[0]
+                        source, value = "seen_chat", str(chat_id)
+                if value is None:
+                    group = os.environ.get("TELEGRAM_GROUP", "officialsubnetsummer").strip()
+                    if group:
+                        source = "TELEGRAM_GROUP"
+                        value = f"@{group.lstrip('@')}"
+
+    if source and not _chat_id_source_logged:
+        logger.info("trend alert push target resolved from %s", source)
+        _chat_id_source_logged = True
+    return value
 
 
 def record_seen_chat(chat_id: int) -> None:

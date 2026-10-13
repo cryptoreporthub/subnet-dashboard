@@ -17,10 +17,12 @@ PREV_ROW = {"netuid": 41, "name": "OldNet", "mentions": 2, "chatter_power": 40.0
 def _reset(monkeypatch, tmp_path):
     trend_alert.stop_trend_alert_watcher()
     trend_alert._seen_chats.clear()
+    trend_alert._chat_id_source_logged = False
     monkeypatch.setattr(trend_alert, "STATE_PATH", str(tmp_path / "trend_state.json"))
     yield
     trend_alert.stop_trend_alert_watcher()
     trend_alert._seen_chats.clear()
+    trend_alert._chat_id_source_logged = False
 
 
 def _patch_ranking(rows):
@@ -64,7 +66,7 @@ def test_takeover_sends_alert_and_persists(monkeypatch):
     assert "New #1 Trending" in text
     assert "SN42 TestNet" in text
     assert "took over from SN41 OldNet" in text
-    assert "2 mentions" in text
+    assert "3 mentions" in text
     assert "https://example.test/subnetsummer" in text
     assert trend_alert._read_state()["last_top_netuid"] == 42
 
@@ -97,17 +99,51 @@ def test_min_mentions_gate(monkeypatch):
     assert trend_alert._read_state()["last_top_netuid"] == 41
 
 
-def test_alert_chat_id_precedence(monkeypatch):
+def test_alert_chat_id_precedence(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO)
+    trend_alert._chat_id_source_logged = False
+
     trend_alert._seen_chats.clear()
     trend_alert._seen_chats[-100200] = 1.0
     trend_alert._seen_chats[-100300] = 2.0
     assert trend_alert.alert_chat_id() == "-100300"
+    assert "resolved from seen_chat" in caplog.text
+
+    trend_alert._chat_id_source_logged = False
+    caplog.clear()
     monkeypatch.setenv("TELEGRAM_TREND_ALERT_CHAT", "-123")
+    monkeypatch.setenv("TELEGRAM_ALERT_CHAT_ID", "-456")
     assert trend_alert.alert_chat_id() == "-123"
+    assert "resolved from TELEGRAM_TREND_ALERT_CHAT" in caplog.text
+
+    trend_alert._chat_id_source_logged = False
+    caplog.clear()
     monkeypatch.delenv("TELEGRAM_TREND_ALERT_CHAT")
+    assert trend_alert.alert_chat_id() == "-456"
+    assert "resolved from TELEGRAM_ALERT_CHAT_ID" in caplog.text
+
+    trend_alert._chat_id_source_logged = False
+    caplog.clear()
+    monkeypatch.delenv("TELEGRAM_ALERT_CHAT_ID")
+    monkeypatch.setenv("TELEGRAM_GROUP_ID", "-100999")
+    trend_alert._seen_chats[-100300] = 2.0
+    assert trend_alert.alert_chat_id() == "-100999"
+    assert "resolved from TELEGRAM_GROUP_ID" in caplog.text
+
+    trend_alert._chat_id_source_logged = False
+    caplog.clear()
+    monkeypatch.delenv("TELEGRAM_GROUP_ID")
+    assert trend_alert.alert_chat_id() == "-100300"
+    assert "resolved from seen_chat" in caplog.text
+
+    trend_alert._chat_id_source_logged = False
+    caplog.clear()
     trend_alert._seen_chats.clear()
     monkeypatch.setenv("TELEGRAM_GROUP", "examplegroup")
     assert trend_alert.alert_chat_id() == "@examplegroup"
+    assert "resolved from TELEGRAM_GROUP" in caplog.text
 
 
 def test_record_seen_chat():
