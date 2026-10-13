@@ -10,7 +10,7 @@ import hashlib
 import json
 from typing import Any, Dict, List
 
-from internal.council.grading import is_pump_lead
+from internal.council.grading import is_excluded_from_learning_eval, is_pump_lead
 
 MIN_SAMPLE_FOR_TRUST = 5
 MIN_SAMPLE_FOR_ADAPT = 30
@@ -42,6 +42,8 @@ def _gradeable_pump_rows(resolved: List[Any]) -> List[Dict[str, Any]]:
         if row.get("sample_quality") == "reject":
             continue
         if row.get("correct") is None and row.get("actual_pct") is None:
+            continue
+        if is_excluded_from_learning_eval(row):
             continue
         out.append(row)
     return out

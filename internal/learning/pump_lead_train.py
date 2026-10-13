@@ -43,6 +43,10 @@ def _is_gradeable_train_row(row: Dict[str, Any]) -> bool:
         return False
     if row.get("correct") is None:
         return False
+    from internal.council.grading import is_excluded_from_learning_eval
+
+    if is_excluded_from_learning_eval(row):
+        return False
     return True
 
 

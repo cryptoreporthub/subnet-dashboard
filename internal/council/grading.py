@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+
+# Aug 7–17 2026 VWAP resolutions used TAO ref vs USD-scale candles (#1375).
+_PHANTOM_VWAP_QUARANTINE_START = datetime(2026, 8, 7, tzinfo=timezone.utc)
+_PHANTOM_VWAP_QUARANTINE_END = datetime(2026, 8, 18, tzinfo=timezone.utc)
 
 # SciWeave Phase 2 weights (phase-n-design.md §6)
 _DIRECTION_WEIGHT = 0.4
@@ -136,7 +141,7 @@ def _gradeable_resolved_count(rows: Optional[List[Dict[str, Any]]] = None) -> in
             continue
         if row.get("actual_pct") is None:
             continue
-        if is_price_unit_mismatch(row.get("reference_price"), row.get("resolved_price")):
+        if is_excluded_from_learning_eval(row):
             continue
         n += 1
     return n
@@ -191,6 +196,37 @@ def compute_actual_pct(reference_price: float, resolved_price: float) -> float:
 PRICE_UNIT_RATIO_CEILING = 20.0
 
 
+def _parse_row_timestamp(raw: Any) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        text = str(raw).replace("Z", "+00:00")
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def is_phantom_vwap_quarantine(row: Dict[str, Any]) -> bool:
+    """Historical VWAP grades in the contaminated window — exclude from learn/eval only."""
+    if str(row.get("price_source") or "").lower() != "vwap":
+        return False
+    created = _parse_row_timestamp(row.get("created_at") or row.get("resolved_at"))
+    if created is None:
+        return False
+    return _PHANTOM_VWAP_QUARANTINE_START <= created < _PHANTOM_VWAP_QUARANTINE_END
+
+
+def is_excluded_from_learning_eval(row: Dict[str, Any]) -> bool:
+    if is_phantom_vwap_quarantine(row):
+        return True
+    return is_price_unit_mismatch(
+        row.get("reference_price"), row.get("resolved_price")
+    )
+
+
 def is_price_unit_mismatch(reference_price: float, resolved_price: float) -> bool:
     """Reject TAO/alpha references compared with USD/alpha candles.
 
@@ -205,6 +241,4 @@ def is_price_unit_mismatch(reference_price: float, resolved_price: float) -> boo
     if reference <= 0 or resolved <= 0:
         return False
     ratio = max(reference, resolved) / min(reference, resolved)
-    if min(reference, resolved) >= 1:
-        return False
     return ratio >= PRICE_UNIT_RATIO_CEILING

@@ -35,6 +35,10 @@ def _gradeable_resolved(rows: List[Any]) -> List[Dict[str, Any]]:
             continue
         if row.get("actual_pct") is None:
             continue
+        from internal.council.grading import is_excluded_from_learning_eval
+
+        if is_excluded_from_learning_eval(row):
+            continue
         out.append(row)
     return out
 

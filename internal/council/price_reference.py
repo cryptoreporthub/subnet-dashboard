@@ -23,6 +23,22 @@ PREDICTIONS_PATH = os.path.join("data", "predictions.json")
 CANDLE_LOOKUP_MINUTES = 90
 MIN_CANDLES_FOR_GRADE = 1
 
+# TAO/USD × alpha multiplier series — not native subnet OHLCV (#1375).
+_DERIVED_CACHE_SOURCES = frozenset(
+    {
+        "taomarketcap",
+        "taomarketcap_derived",
+        "blockmachine",
+        "blockmachine_derived",
+    }
+)
+
+
+def is_derived_candle_cache_source(source: Any) -> bool:
+    if source is None:
+        return False
+    return str(source).lower() in _DERIVED_CACHE_SOURCES
+
 
 def _load_cache(path: Optional[str] = None) -> Dict[str, Any]:
     resolved = path or PRICE_CACHE_PATH
@@ -365,12 +381,35 @@ def price_at_resolve_at(
     return "ungradeable", 0.0, meta
 
 
+def _cache_block_for_netuid(cache: Dict[str, Any], netuid: Any) -> Optional[Dict[str, Any]]:
+    key = str(netuid)
+    block = cache.get(key)
+    if not isinstance(block, dict):
+        block = cache.get(netuid)
+    return block if isinstance(block, dict) else None
+
+
 def _resolve_at_inner(
     netuid: Any,
     resolve_at: datetime,
     cache: Dict[str, Any],
 ) -> Tuple[str, float, Dict[str, Any]]:
     """Original lookup body (unchanged). status: ok | ungradeable."""
+    block = _cache_block_for_netuid(cache, netuid)
+    cache_source = block.get("source") if block else None
+    if is_derived_candle_cache_source(cache_source):
+        return (
+            "ungradeable",
+            0.0,
+            {
+                "price_source": None,
+                "price_lag_seconds": None,
+                "candles_in_window": 0,
+                "ungradeable_reason": "derived_candle_source",
+                "cache_source": cache_source,
+            },
+        )
+
     candles = _candles_for_netuid(cache, netuid)
     window = _window_candles(candles, resolve_at)
     meta: Dict[str, Any] = {

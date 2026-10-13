@@ -264,6 +264,10 @@ def _gradeable_pump_row(row: Dict[str, Any]) -> bool:
         return False
     if row.get("correct") is None and row.get("actual_pct") is None:
         return False
+    from internal.council.grading import is_excluded_from_learning_eval
+
+    if is_excluded_from_learning_eval(row):
+        return False
     return True
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from typing import Any, Dict, List, Optional
 
+from internal.council.grading import is_excluded_from_learning_eval
 from internal.judges.grading import judge_nudge_correct, judge_nudge_magnitude_scale
 from internal.judges.weights import (
     DEFAULT_JUDGE_WEIGHTS,
@@ -28,6 +29,8 @@ def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if row.get("status") not in (None, "resolved"):
             continue
         if row.get("actual_pct") is None:
+            continue
+        if is_excluded_from_learning_eval(row):
             continue
         rows.append(row)
     return rows

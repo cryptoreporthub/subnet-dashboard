@@ -6,7 +6,7 @@ import json
 from typing import Any, Dict, List, Optional
 
 from internal.analytics.backtest_methodology import build_methodology_payload
-from internal.council.grading import direction_correct
+from internal.council.grading import direction_correct, is_excluded_from_learning_eval
 from internal.judges import echo_judge, oracle_judge, pulse_judge
 from internal.judges.grading import judge_threshold as _judge_threshold
 from internal.judges.portfolios import _compute_pnl
@@ -28,6 +28,8 @@ def _gradeable_rows(resolved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if row.get("status") not in (None, "resolved"):
             continue
         if row.get("actual_pct") is None:
+            continue
+        if is_excluded_from_learning_eval(row):
             continue
         rows.append(row)
     return rows

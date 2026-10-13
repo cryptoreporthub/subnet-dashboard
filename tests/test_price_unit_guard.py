@@ -21,7 +21,55 @@ def test_price_unit_guard_catches_both_sides_below_one():
 def test_price_unit_guard_allows_normal_move():
     assert not is_price_unit_mismatch(0.006, 0.007)
     assert not is_price_unit_mismatch(0.01939, 0.02217)
-    assert not is_price_unit_mismatch(10.0, 210.0)
+
+
+def test_price_unit_guard_flags_ref_at_or_above_one():
+    """Latent hole: ref>=1 with ~190x ratio must still mismatch (#1375)."""
+    assert is_price_unit_mismatch(1.5, 285.0)
+    assert is_price_unit_mismatch(10.0, 210.0)
+
+
+def test_phantom_vwap_quarantine_window():
+    from internal.council.grading import is_phantom_vwap_quarantine, is_excluded_from_learning_eval
+
+    row = {
+        "price_source": "vwap",
+        "created_at": "2026-08-10T12:00:00Z",
+        "reference_price": 0.003,
+        "resolved_price": 0.63,
+        "correct": True,
+    }
+    assert is_phantom_vwap_quarantine(row)
+    assert is_excluded_from_learning_eval(row)
+    after = {**row, "created_at": "2026-08-20T00:00:00Z"}
+    assert not is_phantom_vwap_quarantine(after)
+
+
+def test_derived_candle_cache_refused_for_grading():
+    from datetime import datetime, timezone
+
+    from internal.council.price_reference import price_at_resolve_at
+
+    resolve_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    cache = {
+        "1": {
+            "source": "taomarketcap_derived",
+            "candles": [
+                {
+                    "timestamp": resolve_at.isoformat(),
+                    "open": 1.0,
+                    "high": 1.0,
+                    "low": 1.0,
+                    "close": 1.0,
+                    "volume": 100.0,
+                }
+            ],
+        }
+    }
+    status, price, meta = price_at_resolve_at(1, resolve_at, cache=cache)
+    assert status == "ungradeable"
+    assert price == 0.0
+    assert meta.get("ungradeable_reason") == "derived_candle_source"
 
 
 def test_mismatched_resolution_is_ungradeable_without_learning_side_effects():

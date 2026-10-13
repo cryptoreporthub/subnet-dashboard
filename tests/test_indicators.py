@@ -56,9 +56,9 @@ def test_price_sources_include_geckoterminal_fallback():
         }
     }
     sources = _price_sources_for_subnet("5", pairs)
-    assert sources[0]["source"] == "taomarketcap"
-    assert sources[1]["source"] == "geckoterminal"
-    assert sources[1]["network"] == "bittensor"
+    assert sources[0]["source"] == "geckoterminal"
+    assert sources[0]["network"] == "bittensor"
+    assert sources[1]["source"] == "taomarketcap"
     assert sources[-1]["source"] == "blockmachine"
     assert not any(s["source"] == "synthetic" for s in sources)
 
