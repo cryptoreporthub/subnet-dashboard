@@ -102,6 +102,75 @@ def membership_scoring_expected(membership_netuids: List[int]) -> List[int]:
     return sorted({int(n) for n in membership_netuids if int(n) > 0})
 
 
+def membership_scoring_candidate_rows(
+    expected_netuids: List[int],
+    feed_rows: List[Dict[str, Any]],
+    *,
+    membership_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Admission list for snapshot scoring — membership IDs, not raw feed cardinality.
+
+    Positive membership netuids are admitted once when a tradable row exists in the
+    feed or universe snapshot. Feed-only IDs (including deregistered extras) are
+    excluded. Root (0) is never scored. When membership is empty, falls back to
+    tradable feed rows only (coverage stays incomplete via membership receipt).
+    """
+    from internal.subnets.tradable import (
+        is_tradable_subnet,
+        normalize_subnet_row,
+        subnet_netuid,
+        tradable_subnets,
+    )
+
+    expected = membership_scoring_expected(expected_netuids)
+    by_netuid: Dict[int, Dict[str, Any]] = {}
+    for sn in feed_rows or []:
+        row = normalize_subnet_row(sn)
+        if not is_tradable_subnet(row):
+            continue
+        by_netuid[int(row["netuid"])] = row
+    for sn in membership_rows or []:
+        row = normalize_subnet_row(sn)
+        if not is_tradable_subnet(row):
+            continue
+        nu = int(row["netuid"])
+        if nu not in by_netuid:
+            by_netuid[nu] = row
+
+    feed_tradable_ids = {subnet_netuid(r) for r in tradable_subnets(feed_rows or [])}
+    feed_tradable_ids = {int(n) for n in feed_tradable_ids if n is not None and int(n) > 0}
+    expected_set = set(expected)
+
+    if not expected:
+        fallback = tradable_subnets(feed_rows or [])
+        return fallback, {
+            "selection_basis": "feed_fallback",
+            "expected_count": 0,
+            "admitted_count": len(fallback),
+            "missing_netuids": [],
+            "excluded_feed_only_count": len(feed_tradable_ids),
+        }
+
+    candidates: List[Dict[str, Any]] = []
+    missing: List[int] = []
+    for netuid in expected:
+        row = by_netuid.get(netuid)
+        if row is None:
+            missing.append(netuid)
+            continue
+        candidates.append(row)
+
+    excluded_feed_only = sorted(feed_tradable_ids - expected_set)
+    return candidates, {
+        "selection_basis": "membership",
+        "expected_count": len(expected),
+        "admitted_count": len(candidates),
+        "missing_netuids": missing,
+        "excluded_feed_only_count": len(excluded_feed_only),
+        "excluded_feed_only_netuids": excluded_feed_only[:32],
+    }
+
+
 def tradable_netuid_set(tradable_rows: List[Dict[str, Any]]) -> Set[int]:
     return {
         n

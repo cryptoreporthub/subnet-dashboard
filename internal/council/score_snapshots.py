@@ -418,18 +418,51 @@ def write_full_universe_snapshot(
 ) -> Dict[str, Any]:
     """Load subnets, score, persist. Call only from background."""
     capture_started = time.monotonic()
+    prep_meta: Dict[str, Any] = {}
+    write_stage_timing: Dict[str, Any] = {}
+    receipt: Dict[str, Any] = {}
     try:
         from server import _get_subnets_hydrate, _get_subnets_with_source, _market_context_with_weights
 
+        from internal.council.snapshot_coverage import (
+            load_membership_receipt,
+            membership_scoring_candidate_rows,
+        )
+
+        load_started = time.monotonic()
         if _registry_only_snapshot():
-            subnets, source = _get_subnets_hydrate()
+            feed_subnets, source = _get_subnets_hydrate()
         else:
-            subnets, source = _get_subnets_with_source(timeout=20)
-            if not subnets:
-                subnets, source = _get_subnets_hydrate()
+            feed_subnets, source = _get_subnets_with_source(timeout=20)
+            if not feed_subnets:
+                feed_subnets, source = _get_subnets_hydrate()
+        write_stage_timing["subnet_load_seconds"] = round(time.monotonic() - load_started, 6)
+
+        receipt = load_membership_receipt()
+        prep_started = time.monotonic()
+        membership_rows: List[Dict[str, Any]] = []
+        try:
+            from internal.subnet_universe import get_snapshot
+
+            snap = get_snapshot()
+            membership_rows = list(snap.rows) if snap is not None else []
+        except Exception:
+            membership_rows = []
+        subnets, prep_meta = membership_scoring_candidate_rows(
+            list(receipt.get("expected_netuids") or []),
+            feed_subnets or [],
+            membership_rows=membership_rows,
+        )
+        write_stage_timing["candidate_prep_seconds"] = round(time.monotonic() - prep_started, 6)
+        write_stage_timing["membership_expected_count"] = int(prep_meta.get("expected_count") or 0)
+        write_stage_timing["membership_admitted_count"] = int(prep_meta.get("admitted_count") or 0)
+        write_stage_timing["excluded_feed_only_count"] = int(
+            prep_meta.get("excluded_feed_only_count") or 0
+        )
+
         cap = _snapshot_subnet_cap()
         capped_out = 0
-        selection_policy = "full"
+        selection_policy = str(prep_meta.get("selection_basis") or "full")
         pre_cap_len = len(subnets or [])
         if cap > 0 and subnets and len(subnets) > cap:
             from server import _cap_subnets_for_scoring
@@ -437,12 +470,16 @@ def write_full_universe_snapshot(
             subnets = _cap_subnets_for_scoring(subnets, limit=cap)
             capped_out = max(0, pre_cap_len - len(subnets or []))
             selection_policy = "rank_cap"
+        ctx_started = time.monotonic()
         ctx = _market_context_with_weights(subnets or [])
+        write_stage_timing["market_context_seconds"] = round(time.monotonic() - ctx_started, 6)
         logger.info(
-            "score snapshot build started: source=%s registry_only=%s subnets=%d",
+            "score snapshot build started: source=%s registry_only=%s subnets=%d admitted=%d expected=%d",
             source,
             _registry_only_snapshot(),
+            len(feed_subnets or []),
             len(subnets or []),
+            write_stage_timing.get("membership_expected_count"),
         )
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
@@ -453,14 +490,12 @@ def write_full_universe_snapshot(
             coverage_capture_deadline_seconds,
             coverage_timing_for_disk,
             record_publish_wall_seconds,
-            load_membership_receipt,
             membership_scoring_expected,
             note_cycle,
             publish_metrics,
             tradable_netuid_set,
         )
 
-        receipt = load_membership_receipt()
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
         payload = build_full_universe_snapshot(
@@ -476,6 +511,7 @@ def write_full_universe_snapshot(
             "build_wall_seconds": round(build_wall, 6),
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
+        timing.update(write_stage_timing)
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
