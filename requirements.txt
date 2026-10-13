@@ -13,3 +13,4 @@ Pillow==11.1.0
 telethon>=1.33.0,<2
 pytest
 py-spy==0.4.2
+restless-sdk==0.1.1
