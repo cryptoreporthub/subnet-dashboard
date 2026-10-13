@@ -219,7 +219,8 @@ def test_gated_build_does_not_replace_populated_snapshot(tmp_path, monkeypatch):
 
     first = snaps.write_full_universe_snapshot()
     assert first.get("published") is True
-    assert len(json.loads(path.read_text(encoding="utf-8")).get("day") or []) == 2
+    day_before = list(json.loads(path.read_text(encoding="utf-8")).get("day") or [])
+    assert len(day_before) == 2
 
     monkeypatch.setattr(
         "internal.subnet_universe.get_snapshot",
@@ -234,6 +235,49 @@ def test_gated_build_does_not_replace_populated_snapshot(tmp_path, monkeypatch):
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert len(saved.get("day") or []) == 2
     assert (gated.get("coverage") or {}).get("capture_reason") == "membership_gated_skip_publish"
+    saved_cov = saved.get("coverage") or {}
+    assert saved_cov.get("complete") is False
+    assert saved_cov.get("membership_admission_allowed") is False
+    assert saved_cov.get("membership_admission_gate_reason") == "cap_reached"
+    assert list(saved.get("day") or []) == day_before
+
+
+def test_gated_retain_patches_disk_coverage_not_rows(tmp_path, monkeypatch):
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+
+    def _day(sn, _ctx):
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(cap_reached=False, refresh_incomplete=False),
+    )
+
+    first = snaps.write_full_universe_snapshot()
+    assert first.get("published") is True
+    before = json.loads(path.read_text(encoding="utf-8"))
+    day_before = list(before.get("day") or [])
+    assert before.get("coverage", {}).get("complete") is not False
+
+    monkeypatch.setattr(
+        "internal.subnet_universe.get_snapshot",
+        lambda: _ok_membership_snapshot(cap_reached=True, refresh_incomplete=True),
+    )
+    gated = snaps.write_full_universe_snapshot()
+    after = json.loads(path.read_text(encoding="utf-8"))
+    assert gated.get("published") is False
+    assert list(after.get("day") or []) == day_before
+    cov_disk = after.get("coverage") or {}
+    assert cov_disk.get("complete") is False
+    assert cov_disk.get("membership_admission_gate_reason") == "cap_reached"
+    assert cov_disk.get("capture_reason") == "membership_gated_skip_publish"
 
 
 def test_coverage_assembly_error_still_publishes(tmp_path, monkeypatch):

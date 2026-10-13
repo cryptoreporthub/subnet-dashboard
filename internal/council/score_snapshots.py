@@ -184,6 +184,36 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
         }
 
 
+def _patch_score_snapshot_coverage_locked(
+    snap_path: str,
+    coverage_patch: Dict[str, Any],
+) -> Dict[str, Any]:
+    """One locked os.replace: merge coverage only; scored day/hour rows unchanged (#1361)."""
+    with _locked_score_snapshot(snap_path):
+        publish_started = time.monotonic()
+        current = load_score_snapshot(snap_path)
+        if not isinstance(current, dict):
+            publish_wall = time.monotonic() - publish_started
+            return {
+                "published": False,
+                "skipped_older": False,
+                "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+            }
+        merged_coverage = dict(current.get("coverage") or {})
+        merged_coverage.update(coverage_patch)
+        current = {**current, "coverage": merged_coverage}
+        tmp = snap_path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(current, handle, indent=2)
+        os.replace(tmp, snap_path)
+        publish_wall = time.monotonic() - publish_started
+        return {
+            "published": False,
+            "skipped_older": False,
+            "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+        }
+
+
 def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
     snap = snapshot if snapshot is not None else load_score_snapshot()
     if not snap:
@@ -572,11 +602,26 @@ def write_full_universe_snapshot(
         )
         if retain_prior:
             coverage["capture_reason"] = "membership_gated_skip_publish"
-            publish_result = {
+            coverage["published"] = False
+            coverage["complete"] = False
+            prior_timing = dict(
+                ((existing_on_disk or {}).get("coverage") or {}).get("timing") or {}
+            )
+            prior_timing.update(disk_timing)
+            coverage["timing"] = prior_timing
+            coverage_patch: Dict[str, Any] = {
+                "complete": False,
                 "published": False,
-                "skipped_older": False,
-                "timing": {},
+                "membership_admission_allowed": False,
+                "capture_reason": "membership_gated_skip_publish",
+                "timing": prior_timing,
             }
+            if gate_reason:
+                coverage_patch["membership_admission_gate_reason"] = str(gate_reason)
+            publish_result = _patch_score_snapshot_coverage_locked(
+                SCORE_SNAPSHOTS_PATH,
+                coverage_patch,
+            )
         else:
             publish_result = save_score_snapshot(
                 {**payload, "source": source, "coverage": coverage}
