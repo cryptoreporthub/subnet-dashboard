@@ -139,16 +139,29 @@ def _spot_prices(
     call: Callable[[str, list], Tuple[Optional[Any], RpcOutcome]],
     netuids: List[int],
     at_hash: str,
-) -> Tuple[Dict[int, float], RpcOutcome]:
+) -> Tuple[Dict[int, float], int]:
     spots: Dict[int, float] = {}
+    failures = 0
     for netuid in netuids:
         raw, outcome = call("swap_currentAlphaPrice", [netuid, at_hash])
         if outcome != "ok":
-            return spots, outcome
+            failures += 1
+            logger.warning(
+                "chain price spot cross-check failed netuid=%s outcome=%s",
+                netuid,
+                outcome,
+            )
+            continue
         if raw is None:
             continue
         spots[netuid] = float(raw) / PRICE_SCALE
-    return spots, "ok"
+    if failures:
+        logger.info(
+            "chain price spot cross-check: %d/%d netuids failed",
+            failures,
+            len(netuids),
+        )
+    return spots, failures
 
 
 def run_forward_sample(
@@ -209,15 +222,7 @@ def run_forward_sample(
         return {"outcome": "invalid", "error": "timestamp missing", "block": block}
 
     cross_netuids = _crosscheck_netuids(netuids, block)
-    spot_by_netuid, spot_outcome = _spot_prices(call, cross_netuids, block_hash)
-    if spot_outcome != "ok":
-        _bump_hard_failures(spot_outcome)
-        return {
-            "outcome": spot_outcome,
-            "block": block,
-            "block_hash": block_hash,
-            "ts_ms": ts_ms,
-        }
+    spot_by_netuid, spot_failures = _spot_prices(call, cross_netuids, block_hash)
 
     _, provider = cfg.primary_rpc_endpoint()
     rows, parse_outcome = _parse_storage_batch(
@@ -249,7 +254,7 @@ def run_forward_sample(
         price_db.prune_old_rows(path=db_path)
 
     _consecutive_hard_failures = 0
-    return {
+    result: TickResult = {
         "outcome": "ok",
         "provider": provider,
         "block": block,
@@ -258,6 +263,9 @@ def run_forward_sample(
         "n_subnets": len(netuids),
         "samples_written": samples_written,
     }
+    if spot_failures:
+        result["spot_crosscheck_failures"] = spot_failures
+    return result
 
 
 def _bump_hard_failures(outcome: TickOutcome | RpcOutcome | None) -> None:

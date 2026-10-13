@@ -33,4 +33,5 @@ class TickResult(TypedDict, total=False):
     ts_ms: int
     n_subnets: int
     samples_written: int
+    spot_crosscheck_failures: int
     error: str

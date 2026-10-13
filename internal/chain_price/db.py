@@ -83,6 +83,7 @@ def insert_sample_rows(rows: Iterable[Dict[str, Any]], path: Optional[str] = Non
     if not payload:
         return 0
     with db_conn(path or CHAIN_PRICE_DB_PATH) as conn:
+        before = conn.total_changes
         conn.executemany(
             """
             INSERT OR IGNORE INTO chain_price_samples
@@ -109,7 +110,7 @@ def insert_sample_rows(rows: Iterable[Dict[str, Any]], path: Optional[str] = Non
             ],
         )
         conn.commit()
-    return len(payload)
+        return conn.total_changes - before
 
 
 def prune_old_rows(path: Optional[str] = None) -> Dict[str, int]:

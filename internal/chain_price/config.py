@@ -12,7 +12,8 @@ SPOT_DIVERGENCE_MAX = 0.005
 SCHEMA_MISS_NULL_RATIO = 0.10
 MAX_CONSECUTIVE_HARD_FAILURES = 6
 RETENTION_DAYS = 45
-ROW_CAP = 600_000
+# Full 5m ticks for RETENTION_DAYS at ~128 subnets today; 256 slots = headroom without downsampling v1.
+ROW_CAP = RETENTION_DAYS * (86400 // TICK_INTERVAL_SECONDS) * 256
 
 
 def forward_record_enabled() -> bool:
