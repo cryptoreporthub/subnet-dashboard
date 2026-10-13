@@ -450,6 +450,16 @@ def _start_pick_audit_scheduler() -> None:
     defer_boot("pick-audit-scheduler", _run, delay=max(BOOT_DEFER_SECONDS + 50, 95))
 
 
+def _start_chain_price_forward_recorder() -> None:
+    def _run() -> None:
+        from internal.chain_price import start_forward_recorder
+
+        result = start_forward_recorder()
+        _log_scheduler_start("chain_price_forward", result)
+
+    defer_boot("chain-price-forward-recorder", _run, delay=max(BOOT_DEFER_SECONDS + 40, 90))
+
+
 def _start_pump_desk_snapshot_scheduler() -> None:
     """Periodic pump desk + learning health snapshot (replaces Ditto 15m fetch)."""
 
@@ -627,6 +637,15 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     if is_worker_mode() or heavy:
         _start_pump_desk_snapshot_scheduler()
 
+    if is_worker_mode():
+        try:
+            from internal.chain_price.config import forward_record_enabled
+
+            if forward_record_enabled():
+                _start_chain_price_forward_recorder()
+        except Exception as exc:
+            logger.warning("chain price forward recorder failed to start: %s", exc)
+
     # Optional full-universe jobs stay off the essential worker. They can hold
     # the GIL for long periods and compete with the worker's HTTP health port.
     if heavy:
@@ -757,6 +776,12 @@ def stop_background_workers() -> None:
         from internal.pump.desk_snapshot_scheduler import stop_pump_desk_snapshot_scheduler
 
         stop_pump_desk_snapshot_scheduler()
+    except Exception:
+        pass
+    try:
+        from internal.chain_price import stop_forward_recorder
+
+        stop_forward_recorder()
     except Exception:
         pass
     try:
