@@ -45,6 +45,14 @@ def test_fly_toml_message_intel_listener_auto():
     assert 'MESSAGE_INTEL_LISTENER = "off"' not in fly
 
 
+def test_fly_toml_telegram_gainers_and_stake_alerts_on():
+    """PR #1344 watchers must not stay code-default off on prod inline worker."""
+    fly = _fly_toml()
+    assert 'TELEGRAM_GAINERS_ALERT = "on"' in fly
+    assert 'TELEGRAM_STAKE_ALERT = "on"' in fly
+    assert 'TELEGRAM_SUMMARY_BOT = "on"' in fly
+
+
 def test_fly_toml_v1_inline_topology():
     """fly.toml is v1 canon: inline worker, volume on web, WORKER_SPLIT_V2=off."""
     fly = _fly_toml()
