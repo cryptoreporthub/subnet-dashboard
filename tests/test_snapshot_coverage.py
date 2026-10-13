@@ -139,6 +139,47 @@ def test_membership_expected_is_full_set_not_tradable_shrink():
     assert cov.scoring_expected_netuids([1, 2, 3], rows) == [1, 2, 3]
 
 
+def test_membership_scoring_empty_membership_admits_nothing():
+    feed = [{"netuid": 1, "name": "One"}, {"netuid": 99, "name": "Extra"}]
+    rows, meta = cov.membership_scoring_candidate_rows([], feed)
+    assert rows == []
+    assert meta["selection_basis"] == "membership_empty"
+    assert meta["admitted_count"] == 0
+
+
+def test_membership_scoring_gated_on_emergency_registry():
+    feed = [{"netuid": 1, "name": "One"}, {"netuid": 2, "name": "Two"}]
+    receipt = {
+        "fresh": True,
+        "universe_status": "emergency_registry",
+        "degraded": True,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+        "expected_netuids": [1, 2],
+    }
+    rows, meta = cov.membership_scoring_candidate_rows([1, 2], feed, receipt=receipt)
+    assert rows == []
+    assert meta["selection_basis"] == "membership_gated"
+    assert meta["admission_gate_reason"] == "emergency_registry"
+    assert meta["expected_count"] == 2
+    assert meta["membership_admission_allowed"] is False
+
+
+def test_membership_scoring_gated_on_stale_membership():
+    feed = [{"netuid": 1, "name": "One"}]
+    receipt = {
+        "fresh": False,
+        "universe_status": "ok",
+        "degraded": False,
+        "cap_reached": False,
+        "refresh_incomplete": False,
+        "expected_netuids": [1],
+    }
+    rows, meta = cov.membership_scoring_candidate_rows([1], feed, receipt=receipt)
+    assert rows == []
+    assert meta["admission_gate_reason"] == "stale_membership"
+
+
 def test_membership_scoring_candidates_exclude_feed_only_and_root():
     feed = [
         {"netuid": 0, "name": "Root"},

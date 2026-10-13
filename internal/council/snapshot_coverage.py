@@ -107,13 +107,15 @@ def membership_scoring_candidate_rows(
     feed_rows: List[Dict[str, Any]],
     *,
     membership_rows: Optional[List[Dict[str, Any]]] = None,
+    receipt: Optional[Dict[str, Any]] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Admission list for snapshot scoring — membership IDs, not raw feed cardinality.
 
     Positive membership netuids are admitted once when a tradable row exists in the
     feed or universe snapshot. Feed-only IDs (including deregistered extras) are
-    excluded. Root (0) is never scored. When membership is empty, falls back to
-    tradable feed rows only (coverage stays incomplete via membership receipt).
+    excluded. Root (0) is never scored. Stale/degraded/emergency membership admits
+    nothing (coverage denominator stays on the receipt). Empty membership admits
+    nothing — never tradable feed fallback.
     """
     from internal.subnets.tradable import (
         is_tradable_subnet,
@@ -141,14 +143,32 @@ def membership_scoring_candidate_rows(
     feed_tradable_ids = {int(n) for n in feed_tradable_ids if n is not None and int(n) > 0}
     expected_set = set(expected)
 
+    pin_from_receipt = membership_scoring_expected(
+        list((receipt or {}).get("expected_netuids") or expected_netuids)
+    )
+
+    if receipt is not None and not membership_allows_admission(receipt):
+        gate_reason = membership_admission_block_reason(receipt)
+        excluded_feed_only = sorted(feed_tradable_ids - set(pin_from_receipt))
+        return [], {
+            "selection_basis": "membership_gated",
+            "expected_count": len(pin_from_receipt),
+            "admitted_count": 0,
+            "missing_netuids": list(pin_from_receipt),
+            "excluded_feed_only_count": len(excluded_feed_only),
+            "excluded_feed_only_netuids": excluded_feed_only[:32],
+            "membership_admission_allowed": False,
+            "admission_gate_reason": gate_reason,
+        }
+
     if not expected:
-        fallback = tradable_subnets(feed_rows or [])
-        return fallback, {
-            "selection_basis": "feed_fallback",
+        return [], {
+            "selection_basis": "membership_empty",
             "expected_count": 0,
-            "admitted_count": len(fallback),
+            "admitted_count": 0,
             "missing_netuids": [],
             "excluded_feed_only_count": len(feed_tradable_ids),
+            "membership_admission_allowed": membership_allows_admission(receipt or {}),
         }
 
     candidates: List[Dict[str, Any]] = []
@@ -168,6 +188,7 @@ def membership_scoring_candidate_rows(
         "missing_netuids": missing,
         "excluded_feed_only_count": len(excluded_feed_only),
         "excluded_feed_only_netuids": excluded_feed_only[:32],
+        "membership_admission_allowed": True,
     }
 
 
@@ -247,7 +268,8 @@ def _horizon_block(
     }
 
 
-def membership_allows_complete(receipt: Dict[str, Any]) -> bool:
+def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
+    """Fail closed — score only from fresh, non-emergency, complete membership."""
     if not receipt.get("fresh"):
         return False
     status = str(receipt.get("universe_status") or "")
@@ -260,6 +282,29 @@ def membership_allows_complete(receipt: Dict[str, Any]) -> bool:
     if receipt.get("refresh_incomplete"):
         return False
     return True
+
+
+def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
+    if membership_allows_admission(receipt):
+        return None
+    if not receipt.get("fresh"):
+        return "stale_membership"
+    status = str(receipt.get("universe_status") or "")
+    if status == "emergency_registry":
+        return "emergency_registry"
+    if status == "unknown":
+        return "unknown_membership"
+    if receipt.get("degraded"):
+        return "degraded"
+    if receipt.get("cap_reached"):
+        return "cap_reached"
+    if receipt.get("refresh_incomplete"):
+        return "refresh_incomplete"
+    return "membership_not_admissible"
+
+
+def membership_allows_complete(receipt: Dict[str, Any]) -> bool:
+    return membership_allows_admission(receipt)
 
 
 def build_coverage_block(

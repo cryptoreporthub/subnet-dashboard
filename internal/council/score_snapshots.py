@@ -452,6 +452,7 @@ def write_full_universe_snapshot(
             list(receipt.get("expected_netuids") or []),
             feed_subnets or [],
             membership_rows=membership_rows,
+            receipt=receipt,
         )
         write_stage_timing["candidate_prep_seconds"] = round(time.monotonic() - prep_started, 6)
         write_stage_timing["membership_expected_count"] = int(prep_meta.get("expected_count") or 0)
@@ -474,7 +475,7 @@ def write_full_universe_snapshot(
         ctx = _market_context_with_weights(subnets or [])
         write_stage_timing["market_context_seconds"] = round(time.monotonic() - ctx_started, 6)
         logger.info(
-            "score snapshot build started: source=%s registry_only=%s subnets=%d admitted=%d expected=%d",
+            "score snapshot build started: source=%s registry_only=%s feed_rows=%d admitted=%d expected=%d",
             source,
             _registry_only_snapshot(),
             len(feed_subnets or []),
@@ -541,6 +542,13 @@ def write_full_universe_snapshot(
                 "coverage_error": str(exc),
                 "timing": timing,
             }
+        if prep_meta.get("membership_admission_allowed") is not None:
+            coverage["membership_admission_allowed"] = bool(
+                prep_meta.get("membership_admission_allowed")
+            )
+        gate_reason = prep_meta.get("admission_gate_reason")
+        if gate_reason:
+            coverage["membership_admission_gate_reason"] = str(gate_reason)
         if int(inputs.get("skipped_invalid") or 0):
             coverage["skipped_invalid"] = int(inputs["skipped_invalid"])
         capture_timed_out = not coverage_capture_deadline_seconds(capture_started)
