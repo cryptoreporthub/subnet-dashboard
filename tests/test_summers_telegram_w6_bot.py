@@ -301,7 +301,10 @@ def test_start_summary_bot_spawns_thread(monkeypatch):
     def fake_loop():
         loop_ran.set()
 
-    with patch.object(summary_bot, "_poll_loop", side_effect=fake_loop):
+    with (
+        patch.object(summary_bot, "_poll_loop", side_effect=fake_loop),
+        patch.object(summary_bot, "_register_bot_commands", return_value=True),
+    ):
         assert summary_bot.start_summary_bot() is True
         assert summary_bot.start_summary_bot() is True
         assert loop_ran.wait(timeout=2)
