@@ -42,6 +42,9 @@ primary_region = "sjc"
   MESSAGE_INTEL_LISTENER = "auto"
   # SS-TG W6: Bot API /summary in group — separate from Telethon user-session listener.
   TELEGRAM_SUMMARY_BOT = "on"
+  # PR #1344 push watchers (default off in code); require TELEGRAM_BOT_TOKEN secret.
+  TELEGRAM_GAINERS_ALERT = "on"
+  TELEGRAM_STAKE_ALERT = "on"
   RESOLVER_REFRESH_MINUTES = "15"
   # 2026-08-28: prod stall ~16:56Z — cycle_timeout_120s wedge recurring; bump cap.
   # 2026-09-07: 180s budget wedging again — B1b telemetry shows ~250s cycles incl. ~101s persist_summary_rmw; bump to 360 for cycle closure. CONTAINMENT ONLY — kill-switch: no further bumps, escalate to soul_map compaction.
