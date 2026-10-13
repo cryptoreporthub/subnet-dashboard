@@ -645,12 +645,18 @@ def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp
 
 
 def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_tmp, monkeypatch):
-    """Per-netuid no_price must not OR into snapshot refresh_incomplete or block shrink."""
+    """One refresh: confirmed-positive, TMC-absent no_price, new netuid; shrink aged negative.
+
+    Regression for PR #1378: per-netuid no_price must not set snapshot refresh_incomplete or
+    force prior-only membership when a new netuid is observed and an unrelated grace-eligible
+    negative is individually complete.
+    """
     old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
     prior = UniverseSnapshot(
-        netuids=(100, 130),
+        netuids=(100, 105, 130),
         rows=(
             {"netuid": 100, "name": "SN100"},
+            {"netuid": 105, "name": "SN105"},
             {"netuid": 130, "name": "SN130"},
         ),
         resolved_at=datetime.now(timezone.utc).isoformat(),
@@ -658,6 +664,7 @@ def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_t
         degraded=False,
         validity_map={
             "100": _validity_entry(validity="positive", sources=["taomarketcap", "blockmachine_probe"]),
+            "105": _validity_entry(validity="positive", sources=["taomarketcap", "blockmachine_probe"]),
             "130": _validity_entry(
                 validity="negative",
                 sources=["taomarketcap", "blockmachine_probe"],
@@ -667,16 +674,26 @@ def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_t
     )
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (
-            {201},
-            {201: {"netuid": 201, "name": "SN201"}},
+            {100, 201},
+            {
+                100: {"netuid": 100, "name": "SN100"},
+                201: {"netuid": 201, "name": "SN201"},
+            },
             True,
         ),
-        probe_fetch=lambda netuids, deadline: ({100: None, 130: False, 201: True}, True),
+        probe_fetch=lambda netuids, deadline: (
+            {100: True, 105: None, 130: False, 201: True},
+            True,
+        ),
     )
     built = builder.build(prior)
     assert built.refresh_incomplete is False
-    assert built.validity_map["100"].get("refresh_incomplete") is True
+    assert built.message != "Refresh incomplete — retained last-known-good universe"
+    assert built.netuids != prior.netuids
+    assert 100 in built.netuids
+    assert 105 in built.netuids
     assert 201 in built.netuids
+    assert built.validity_map["105"].get("refresh_incomplete") is True
     assert 130 not in built.netuids
 
     monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
@@ -686,9 +703,11 @@ def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_t
     provider.set_builder(builder)
     result = provider.refresh_once()
     assert result.refresh_incomplete is False
+    assert result.netuids != prior.netuids
     assert 201 in result.netuids
-    assert 130 not in result.netuids
+    assert 105 in result.netuids
     assert 100 in result.netuids
+    assert 130 not in result.netuids
 
 
 def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
