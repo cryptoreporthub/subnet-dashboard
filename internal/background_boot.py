@@ -293,8 +293,26 @@ def _maybe_start_message_intel() -> None:
     defer_boot("message-intel-listeners", _listeners, delay=listener_delay)
 
 
+def _summary_bot_defer_seconds() -> int:
+    from internal.run_mode import is_worker_mode
+
+    if is_worker_mode():
+        raw = os.environ.get("TELEGRAM_SUMMARY_BOT_DEFER_SECONDS", "15")
+        try:
+            return max(0, int(raw))
+        except ValueError:
+            return 15
+    return max(BOOT_DEFER_SECONDS + 15, 60)
+
+
 def _maybe_start_summary_bot() -> None:
     """SS-TG W6 — Bot API /summary (independent of Telethon MESSAGE_INTEL_LISTENER)."""
+    from internal.run_mode import is_worker_mode
+
+    if not is_worker_mode():
+        logger.info("Telegram summary bot skipped — worker-only (RUN_MODE=worker)")
+        return
+
     from internal.message_intel.summary_bot import summary_bot_enabled, start_summary_bot
 
     if not summary_bot_enabled():
@@ -305,7 +323,41 @@ def _maybe_start_summary_bot() -> None:
     def _run() -> None:
         start_summary_bot()
 
-    defer_boot("telegram-summary-bot", _run, delay=max(BOOT_DEFER_SECONDS + 15, 60))
+    defer_boot("telegram-summary-bot", _run, delay=_summary_bot_defer_seconds())
+
+
+def schedule_summary_bot_worker_watchdog() -> None:
+    """Log/retry if worker boot completes without a live summary-bot poll loop."""
+    from internal.run_mode import is_worker_mode
+
+    if not is_worker_mode():
+        return
+
+    def _run() -> None:
+        time.sleep(120)
+        from internal.message_intel.summary_bot import (
+            summary_bot_enabled,
+            summary_bot_running,
+            start_summary_bot,
+        )
+
+        if not summary_bot_enabled():
+            return
+        if not os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+            return
+        if summary_bot_running():
+            return
+        logger.warning(
+            "Telegram summary bot not polling 120s after worker boot; retrying start_summary_bot()"
+        )
+        start_summary_bot()
+        if not summary_bot_running():
+            logger.warning(
+                "Telegram summary bot still not polling after watchdog retry "
+                "(check TELEGRAM_BOT_TOKEN, 409 conflict, or getUpdates errors in logs)"
+            )
+
+    threading.Thread(target=_run, daemon=True, name="telegram-summary-bot-watchdog").start()
 
 
 def _maybe_start_trend_alert() -> None:

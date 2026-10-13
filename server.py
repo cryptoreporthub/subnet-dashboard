@@ -253,11 +253,16 @@ async def _lifespan(app: FastAPI):
                 return
 
             if background_boot_allowed():
-                from internal.background_boot import start_background_workers, stop_background_workers
+                from internal.background_boot import (
+                    schedule_summary_bot_worker_watchdog,
+                    start_background_workers,
+                    stop_background_workers,
+                )
                 from internal.worker_heartbeat import touch_heartbeat
 
                 heavy = worker_heavy_feeds_enabled()
                 start_background_workers(heavy=heavy)
+                schedule_summary_bot_worker_watchdog()
                 touch_heartbeat()
 
                 def _beat() -> None:

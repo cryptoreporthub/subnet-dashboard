@@ -941,7 +941,14 @@ def _poll_loop() -> None:
             timeout=35.0,
         )
         if not resp.get("ok"):
-            logger.warning("summary bot getUpdates failed: %s", resp.get("error") or resp)
+            err = resp.get("error") or resp
+            if resp.get("status") == 409 or "409" in str(err):
+                logger.warning(
+                    "summary bot getUpdates conflict (409) — another client may be polling: %s",
+                    err,
+                )
+            else:
+                logger.warning("summary bot getUpdates failed: %s", err)
             if _STOP.wait(5):
                 break
             continue

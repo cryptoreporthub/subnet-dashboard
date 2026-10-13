@@ -366,6 +366,48 @@ def test_worker_peer_split_v2_worker(monkeypatch, tmp_path):
     assert peer["alive"] is True
 
 
+def test_maybe_start_summary_bot_skips_on_web(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "web")
+    monkeypatch.setenv("TELEGRAM_SUMMARY_BOT", "on")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    deferred = []
+
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: deferred.append((name, delay)),
+    )
+
+    from internal.background_boot import _maybe_start_summary_bot
+
+    _maybe_start_summary_bot()
+    assert deferred == []
+
+
+def test_maybe_start_summary_bot_defers_on_worker(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("TELEGRAM_SUMMARY_BOT", "on")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "123:ABC")
+    deferred = []
+
+    monkeypatch.setattr(
+        "internal.background_boot.defer_boot",
+        lambda name, fn, delay=0: deferred.append((name, delay)),
+    )
+
+    from internal.background_boot import _maybe_start_summary_bot
+
+    _maybe_start_summary_bot()
+    assert deferred == [("telegram-summary-bot", 15)]
+
+
+def test_summary_bot_worker_defer_seconds_env_override(monkeypatch):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("TELEGRAM_SUMMARY_BOT_DEFER_SECONDS", "3")
+    from internal.background_boot import _summary_bot_defer_seconds
+
+    assert _summary_bot_defer_seconds() == 3
+
+
 def test_ops_readiness_worker_mode_field():
     from fastapi.testclient import TestClient
 
