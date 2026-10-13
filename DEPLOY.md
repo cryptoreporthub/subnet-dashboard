@@ -583,6 +583,16 @@ curl -fsS https://subnet-dashboard.fly.dev/metrics | head
 | `CHAIN_PRICE_FORWARD_RECORD` | **off** | Worker-only forward sampler (#1395): every ~5m records finalized-head subnet reserves + spot cross-check into `CHAIN_PRICE_DB_PATH` (`data/chain_prices.db`). Primary RPC: `FINNEY_RPC_URL` when set, else Blockmachine. |
 | `CHAIN_PRICE_DB_PATH` | `data/chain_prices.db` | SQLite WAL file for `chain_blocks` / `chain_price_samples` (separate from `data/store.db`). |
 
+#### Forward chain price recorder — prod volume check
+
+**Before enabling `CHAIN_PRICE_FORWARD_RECORD=1` in prod:** confirm Fly `data_volume` mount `/app/data` has at least **~300 MB free** (Claude #1398 review: ~250 MB steady state for 45d×128 subnets at 5min ticks; up to ~500 MB if 256-netuid cap binds; WAL may add overhead).
+
+```bash
+fly ssh console -a subnet-dashboard -C "df -h /app/data"
+```
+
+Do not enable the flag if space is tight — extend the volume or wait for downsampling ([#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395)).
+
 ---
 
 ## Version history
