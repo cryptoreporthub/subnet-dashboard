@@ -87,10 +87,15 @@ def _emergency_rows() -> List[Dict[str, Any]]:
         rows = registry_subnet_rows()
     except Exception:
         rows = _read_registry_rows()
-    if rows:
-        return rows
-    # ponytail: gitignored registry absent — synthetic 0..74 per emergency_registry docstring
-    return [{"netuid": n} for n in range(75)]
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        netuid = _netuid_of(row)
+        if netuid is None or netuid == 0:
+            continue
+        out.append(dict(row))
+    return out
 
 
 def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
@@ -143,7 +148,7 @@ def _default_probe_fetch(
                 if outcome == "rpc_error":
                     observed[netuid] = None
                 elif outcome == "no_price":
-                    observed[netuid] = False
+                    observed[netuid] = None
                 else:
                     observed[netuid] = bool(price and float(price) > 0)
             except Exception:
@@ -198,11 +203,6 @@ def _merge_sources(
         return "positive", sources, False, None, False
 
     if tmc_positive is False and probe_positive is False:
-        if not negative_since:
-            negative_since = _now_iso()
-        return "negative", sources, False, negative_since, False
-
-    if probe_positive is False and tmc_positive is not True:
         if not negative_since:
             negative_since = _now_iso()
         return "negative", sources, False, negative_since, False
@@ -473,12 +473,10 @@ class UniverseSnapshot:
     def emergency_registry(
         cls, message: str = "", *, reason: str = "unspecified"
     ) -> "UniverseSnapshot":
-        """Registry-only fallback universe (netuids 0..74).
+        """Registry-only fallback when committed registry rows exist.
 
-        Instrumented deliberately: this path silently narrows the universe and
-        previously emitted no metric and no log, which left the 2026-08-25
-        occurrence unattributable. Both the counter and the log are best-effort
-        -- instrumentation must never break universe resolution.
+        When registry is missing, returns an empty universe with
+        ``refresh_incomplete`` — never fabricates netuids 0..74.
         """
         try:
             from internal.metrics import UNIVERSE_EMERGENCY_TOTAL
@@ -492,7 +490,13 @@ class UniverseSnapshot:
             message or "registry-only rows",
         )
         rows = _emergency_rows()
-        netuids = tuple(sorted(_netuid_of(row) or 0 for row in rows if _netuid_of(row) is not None))
+        netuids = tuple(sorted(_netuid_of(row) for row in rows if _netuid_of(row) is not None))
+        incomplete = not netuids
+        default_message = (
+            "Registry missing — membership incomplete"
+            if incomplete
+            else "Registry emergency fallback — not the full approved universe"
+        )
         return cls(
             netuids=netuids,
             rows=tuple(dict(row) for row in rows),
@@ -500,8 +504,8 @@ class UniverseSnapshot:
             status="emergency_registry",
             degraded=True,
             validity_map={str(n): _validity_entry(validity="unobserved", sources=["registry"]) for n in netuids},
-            message=message
-            or "Registry emergency fallback — not the full approved universe",
+            refresh_incomplete=incomplete,
+            message=message or default_message,
         )
 
 

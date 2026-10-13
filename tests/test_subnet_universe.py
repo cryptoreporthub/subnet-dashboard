@@ -58,16 +58,17 @@ def _prior_snapshot(netuids: list[int]) -> UniverseSnapshot:
 def test_t1_empty_state_emergency_registry(universe_tmp):
   """Cold boot with no disk file serves emergency_registry.
 
-  Env: needs config/registry.json (gitignored). Empty checkout ⇒ len(netuids)==0.
-  See docs/pr-1041-env-setup-failures.md — not a #1041 metadata regression.
+  Missing gitignored registry ⇒ empty netuids, refresh_incomplete (no synthetic 0..74).
   """
   provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
   snap = provider.get_snapshot()
   assert snap.status == "emergency_registry"
   assert snap.degraded is True
-  assert len(snap.netuids) > 0
+  assert len(snap.netuids) == 0
+  assert snap.refresh_incomplete is True
   emergency = provider.get_lkg_or_emergency()
   assert emergency.status == "emergency_registry"
+  assert len(emergency.netuids) == 0
 
   built = SnapshotBuilder(
       tmc_fetch=lambda: ({1, 2, 3}, {1: {"netuid": 1}, 2: {"netuid": 2}, 3: {"netuid": 3}}, True),
@@ -319,28 +320,26 @@ def test_get_lkg_or_emergency_uses_provider_singleton(universe_tmp):
 
 
 def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
-    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok.
-
-    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
-    """
+    """No prior snapshot + empty successful TMC => emergency_registry, never zero-member ok."""
     built = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({}, True),
     ).build(None)
     assert built.status == "emergency_registry"
-    assert len(built.netuids) > 0
+    assert len(built.netuids) == 0
+    assert built.refresh_incomplete is True
     assert built.degraded is True
 
 
 def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monkeypatch):
-    """Provider on cold start must not publish zero-member ok snapshot.
-
-    Env: needs config/registry.json (gitignored). See docs/pr-1041-env-setup-failures.md.
-    """
+    """Provider on cold start must not publish zero-member ok snapshot."""
     monkeypatch.setattr("internal.subnet_universe._ci_or_test", lambda: False)
     monkeypatch.setenv("RUN_MODE", "worker")
     provider = SubnetUniverseProvider(persist_file=str(universe_tmp))
-    assert provider.get_snapshot().status == "emergency_registry"
+    snap = provider.get_snapshot()
+    assert snap.status == "emergency_registry"
+    assert len(snap.netuids) == 0
+    assert snap.refresh_incomplete is True
     provider.set_builder(
         SnapshotBuilder(
             tmc_fetch=lambda: (set(), {}, True),
@@ -348,7 +347,8 @@ def test_cold_start_empty_tmc_emergency_registry_via_provider(universe_tmp, monk
         )
     )
     result = provider.refresh_once()
-    assert len(result.netuids) > 0
+    assert len(result.netuids) == 0
+    assert result.refresh_incomplete is True
     assert result.degraded is True
     assert result.status != "ok"
 
@@ -369,7 +369,7 @@ def test_tmc_fetch_bypasses_live_subnet_clip(monkeypatch):
 
 def test_build_probes_full_range_when_tmc_complete():
     """TMC-complete refresh probes 0..MAX_NETUIDS-1 for subnets beyond TMC pagination."""
-    prior = UniverseSnapshot.emergency_registry()
+    prior = _prior_snapshot(list(range(75)))
     probed: list[int] = []
 
     def probe_fetch(netuids, deadline):
@@ -645,7 +645,7 @@ def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp
 
 
 def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
-    """Complete no_price may remove aged negatives; rpc_error must not."""
+    """no_price and rpc_error must not remove aged negatives or advance removal clocks."""
     old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
     prior = UniverseSnapshot(
         netuids=(201, 202),
@@ -671,12 +671,32 @@ def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
     )
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, False),
-        probe_fetch=lambda netuids, deadline: ({201: False, 202: None}, True),
+        probe_fetch=lambda netuids, deadline: ({201: None, 202: None}, True),
     )
     built = builder.build(prior)
-    assert 201 not in built.netuids
+    assert 201 in built.netuids
     assert 202 in built.netuids
+    assert built.validity_map["201"].get("refresh_incomplete") is True
     assert built.validity_map["202"].get("refresh_incomplete") is True
+
+
+def test_emergency_rows_empty_without_registry(monkeypatch):
+    """Missing registry must not fabricate netuids 0..74."""
+    monkeypatch.setattr("internal.subnet_universe._read_registry_rows", lambda: [])
+
+    import internal.subnets.feed as feed_mod
+
+    monkeypatch.setattr(
+        feed_mod,
+        "registry_subnet_rows",
+        lambda: (_ for _ in ()).throw(RuntimeError("no registry")),
+    )
+    from internal.subnet_universe import _emergency_rows
+
+    assert _emergency_rows() == []
+    snap = UniverseSnapshot.emergency_registry()
+    assert snap.netuids == ()
+    assert snap.refresh_incomplete is True
 
 
 def test_tmc_positive_without_price_retained(universe_tmp):
@@ -706,7 +726,7 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     provider.replace_snapshot_for_tests(prior)
     provider.set_builder(
         SnapshotBuilder(
-            tmc_fetch=lambda: ({100}, {100: {"netuid": 100, "name": "SN100"}}, False),
+            tmc_fetch=lambda: ({100}, {100: {"netuid": 100, "name": "SN100"}}, True),
             probe_fetch=lambda netuids, deadline: ({100: True, 130: False, 132: False}, False),
         )
     )
