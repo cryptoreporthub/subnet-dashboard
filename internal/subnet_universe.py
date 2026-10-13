@@ -80,12 +80,17 @@ def _registry_netuids() -> List[int]:
 
 
 def _emergency_rows() -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
     try:
         from internal.subnets.feed import registry_subnet_rows
 
-        return registry_subnet_rows()
+        rows = registry_subnet_rows()
     except Exception:
-        return _read_registry_rows()
+        rows = _read_registry_rows()
+    if rows:
+        return rows
+    # ponytail: gitignored registry absent — synthetic 0..74 per emergency_registry docstring
+    return [{"netuid": n} for n in range(75)]
 
 
 def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
