@@ -35,20 +35,21 @@ def _legacy_price_unit_mismatch(reference_price: float, resolved_price: float) -
     return ratio >= PRICE_UNIT_RATIO_CEILING
 
 
-def gradeable_subnet_counts(cache: Dict[str, Any]) -> Tuple[int, int]:
-    """Return (before_refusal, after_refusing_derived_sources)."""
-    before = 0
-    after = 0
+def gradeable_subnet_counts(
+    cache: Dict[str, Any], *, refuse_derived: bool
+) -> int:
+    """Subnets with non-empty candles that remain gradeable under *refuse_derived*."""
+    count = 0
     for block in cache.values():
         if not isinstance(block, dict):
             continue
         candles = [c for c in (block.get("candles") or []) if isinstance(c, dict)]
         if not candles:
             continue
-        before += 1
-        if not is_derived_candle_cache_source(block.get("source")):
-            after += 1
-    return before, after
+        if refuse_derived and is_derived_candle_cache_source(block.get("source")):
+            continue
+        count += 1
+    return count
 
 
 def _iter_resolved_rows(path: str) -> Iterable[Dict[str, Any]]:
@@ -105,10 +106,13 @@ def main() -> None:
 
     with open(args.cache, "r", encoding="utf-8") as fh:
         cache = json.load(fh)
-    before, after = gradeable_subnet_counts(cache)
-    print("gradeable_subnets_before_refusal", before)
-    print("gradeable_subnets_after_refusing_derived_tmc_bm", after)
-    print("gradeable_subnet_delta", before - after)
+    with_candles = gradeable_subnet_counts(cache, refuse_derived=False)
+    flag_off = gradeable_subnet_counts(cache, refuse_derived=False)
+    flag_on = gradeable_subnet_counts(cache, refuse_derived=True)
+    print("gradeable_subnets_with_candles", with_candles)
+    print("gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_off", flag_off)
+    print("gradeable_subnets_REFUSE_DERIVED_FOR_GRADING_on", flag_on)
+    print("gradeable_subnet_delta_flag_on", with_candles - flag_on)
 
     rows = list(_iter_resolved_rows(args.predictions))
     if not rows:

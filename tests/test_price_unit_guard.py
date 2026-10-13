@@ -63,33 +63,31 @@ def test_unit_guard_export_rows_both_ge1_ratio20():
     assert is_price_unit_mismatch(0.00311, 0.63078)
 
 
-def test_committed_price_cache_gradeable_subnet_collapse():
-    """Joshua must approve: refusing derived/TMC/BM in price_reference (#1375).
+def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
+    """#1375 derived refusal is gated: default off (129), flag on collapses to 0.
 
-    On committed ``data/price_cache.json`` (2026-10): 129 subnets had candles
-    before refusal; all 129 were ``taomarketcap`` (derived) → 0 gradeable after.
     Re-run: ``PYTHONPATH=. python scripts/issue_1375_integrity_impact.py``.
     """
     import json
     from pathlib import Path
 
-    from internal.council.price_reference import is_derived_candle_cache_source
+    from scripts.issue_1375_integrity_impact import gradeable_subnet_counts
 
     cache_path = Path("data/price_cache.json")
     cache = json.loads(cache_path.read_text(encoding="utf-8"))
-    before = after = 0
-    for block in cache.values():
-        if not isinstance(block, dict):
-            continue
-        candles = [c for c in (block.get("candles") or []) if isinstance(c, dict)]
-        if not candles:
-            continue
-        before += 1
-        if not is_derived_candle_cache_source(block.get("source")):
-            after += 1
-    assert before >= after
-    assert before - after == before  # current committed cache is entirely derived-sourced
-    assert after == 0
+    with_candles = gradeable_subnet_counts(cache, refuse_derived=False)
+    assert with_candles == 129
+
+    monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
+    flag_off = gradeable_subnet_counts(cache, refuse_derived=False)
+    assert flag_off == 129
+
+    monkeypatch.setenv("REFUSE_DERIVED_FOR_GRADING", "on")
+    from internal.council.price_reference import refuse_derived_for_grading_enabled
+
+    assert refuse_derived_for_grading_enabled()
+    flag_on = gradeable_subnet_counts(cache, refuse_derived=True)
+    assert flag_on == 0
 
 
 def test_phantom_vwap_quarantine_window():
@@ -108,11 +106,12 @@ def test_phantom_vwap_quarantine_window():
     assert not is_phantom_vwap_quarantine(after)
 
 
-def test_derived_candle_cache_refused_for_grading():
+def test_derived_candle_cache_refused_for_grading(monkeypatch):
     from datetime import datetime, timezone
 
     from internal.council.price_reference import price_at_resolve_at
 
+    monkeypatch.setenv("REFUSE_DERIVED_FOR_GRADING", "on")
     resolve_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
     cache = {
         "1": {
@@ -133,6 +132,33 @@ def test_derived_candle_cache_refused_for_grading():
     assert status == "ungradeable"
     assert price == 0.0
     assert meta.get("ungradeable_reason") == "derived_candle_source"
+
+
+def test_derived_candle_cache_allowed_when_refuse_flag_off(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.council.price_reference import price_at_resolve_at
+
+    monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
+    resolve_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    cache = {
+        "1": {
+            "source": "taomarketcap_derived",
+            "candles": [
+                {
+                    "timestamp": resolve_at.isoformat(),
+                    "open": 1.0,
+                    "high": 1.0,
+                    "low": 1.0,
+                    "close": 1.0,
+                    "volume": 100.0,
+                }
+            ],
+        }
+    }
+    status, price, _meta = price_at_resolve_at(1, resolve_at, cache=cache)
+    assert status == "ok"
+    assert price == 1.0
 
 
 def test_mismatched_resolution_is_ungradeable_without_learning_side_effects():

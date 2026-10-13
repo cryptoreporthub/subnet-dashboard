@@ -40,6 +40,16 @@ def is_derived_candle_cache_source(source: Any) -> bool:
     return str(source).lower() in _DERIVED_CACHE_SOURCES
 
 
+def refuse_derived_for_grading_enabled() -> bool:
+    """When true, TMC/BM derived candle blocks are ungradeable (#1375, gated rollout)."""
+    return os.environ.get("REFUSE_DERIVED_FOR_GRADING", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _load_cache(path: Optional[str] = None) -> Dict[str, Any]:
     resolved = path or PRICE_CACHE_PATH
     try:
@@ -397,7 +407,9 @@ def _resolve_at_inner(
     """Original lookup body (unchanged). status: ok | ungradeable."""
     block = _cache_block_for_netuid(cache, netuid)
     cache_source = block.get("source") if block else None
-    if is_derived_candle_cache_source(cache_source):
+    if refuse_derived_for_grading_enabled() and is_derived_candle_cache_source(
+        cache_source
+    ):
         return (
             "ungradeable",
             0.0,

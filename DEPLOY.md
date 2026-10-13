@@ -579,6 +579,7 @@ curl -fsS https://subnet-dashboard.fly.dev/metrics | head
 | `MESSAGE_INTEL_LISTENER` | **off** (fly.toml) | Telegram ingest at boot (`auto` when session on volume) |
 | `WORKER_HEAVY` | **essential** (fly.toml) | Inline worker: pump/resolver + deferred Telegram on `essential`; **`full` wedges HTTP on shared VM** |
 | `ALLOWED_ORIGINS` | fly.dev + cryptoreporthub.com | CORS allowlist |
+| `REFUSE_DERIVED_FOR_GRADING` | **off** | When on, resolver refuses TMC/Blockmachine derived `price_cache` candles for grading (native Gecko OHLCV only). Leave off until native OHLCV coverage is sufficient — committed cache is ~129 derived-sourced subnets today. |
 
 ---
 
