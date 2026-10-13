@@ -99,6 +99,10 @@ def _gradeable_row(row: Dict[str, Any]) -> bool:
 
     if not is_council_trust_row(row):
         return False
+    from internal.council.grading import is_excluded_from_learning_eval
+
+    if is_excluded_from_learning_eval(row):
+        return False
     return _normalize_expert(row) is not None
 
 

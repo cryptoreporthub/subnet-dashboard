@@ -190,8 +190,8 @@ def _load_predictions_blob(path: str) -> Dict[str, Any]:
 
 
 def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    from internal.council.grading import is_excluded_from_learning_eval
     from internal.council.grading import is_pump_desk_claim
-    from internal.council.grading import is_price_unit_mismatch
 
     rows = [
         row
@@ -200,9 +200,7 @@ def _replay_rows_from_blob(data: Dict[str, Any]) -> List[Dict[str, Any]]:
         and row.get("correct") is not None
         and row.get("outcome") not in _SKIP_OUTCOMES
         and not is_pump_desk_claim(row)
-        and not is_price_unit_mismatch(
-            row.get("reference_price"), row.get("resolved_price")
-        )
+        and not is_excluded_from_learning_eval(row)
     ]
     rows.sort(
         key=lambda row: str(row.get("resolved_at") or row.get("created_at") or "")
@@ -767,6 +765,8 @@ def _expert_hits_by_regime() -> Dict[str, Dict[str, List[bool]]]:
     try:
         from internal.learning.predictions_store import load_predictions
 
+        from internal.council.grading import is_excluded_from_learning_eval
+
         data = load_predictions()
         for pred in data.get("resolved") or []:
             if not isinstance(pred, dict):
@@ -775,6 +775,8 @@ def _expert_hits_by_regime() -> Dict[str, Dict[str, List[bool]]]:
                 continue
             correct = pred.get("correct")
             if correct is None:
+                continue
+            if is_excluded_from_learning_eval(pred):
                 continue
             raw = pred.get("expert")
             if not isinstance(raw, str) or not raw.strip():

@@ -361,10 +361,14 @@ def subnet_graded_snippet(netuid: Any) -> str:
     hits = 0
     misses = 0
     last: Optional[Dict[str, Any]] = None
+    from internal.council.grading import is_excluded_from_learning_eval
+
     for pred in data.get("resolved") or []:
         if not isinstance(pred, dict):
             continue
         if pred.get("outcome") in _SKIP_OUTCOMES:
+            continue
+        if is_excluded_from_learning_eval(pred):
             continue
         try:
             if int(pred.get("netuid")) != nu:

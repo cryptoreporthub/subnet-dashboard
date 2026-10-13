@@ -107,8 +107,12 @@ def judge_calibration_hit_rate(limit: int = 30) -> Dict[str, Any]:
     try:
         data = load_predictions()
         rows = [r for r in (data.get("resolved") or []) if isinstance(r, dict)]
+        from internal.council.grading import is_excluded_from_learning_eval
+
         for pred in rows[-int(limit) :]:
             if pred.get("outcome") in skip or pred.get("correct") is None:
+                continue
+            if is_excluded_from_learning_eval(pred):
                 continue
             scores = pred.get("judge_scores_at_creation")
             if not isinstance(scores, dict) or not scores:
@@ -142,12 +146,16 @@ def recent_direction_hit_rate(limit: int = 50) -> Dict[str, Any]:
     rows = []
     try:
         data = load_predictions()
+        from internal.council.grading import is_excluded_from_learning_eval
+
         for row in data.get("resolved") or []:
             if not isinstance(row, dict):
                 continue
             if row.get("outcome") in skip:
                 continue
             if row.get("actual_pct") is None:
+                continue
+            if is_excluded_from_learning_eval(row):
                 continue
             rows.append(row)
     except Exception:

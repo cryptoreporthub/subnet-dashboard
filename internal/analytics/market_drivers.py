@@ -112,6 +112,8 @@ def _gradeable_resolved() -> List[Dict[str, Any]]:
         data = load_predictions()
     except Exception:
         return []
+    from internal.council.grading import is_excluded_from_learning_eval
+
     skip = frozenset({"duplicate", "expired", "ungradeable"})
     rows: List[Dict[str, Any]] = []
     for pred in (data.get("resolved") or []):
@@ -120,6 +122,8 @@ def _gradeable_resolved() -> List[Dict[str, Any]]:
         if pred.get("outcome") in skip:
             continue
         if pred.get("actual_pct") is None:
+            continue
+        if is_excluded_from_learning_eval(pred):
             continue
         rows.append(pred)
     return rows

@@ -52,10 +52,14 @@ def _lane_predictions(lane_id: str) -> List[Dict[str, Any]]:
     try:
         from internal.learning.predictions_store import load_predictions
 
+        from internal.council.grading import is_excluded_from_learning_eval
+
         for pred in load_predictions().get("resolved") or []:
             if not isinstance(pred, dict):
                 continue
             if pred.get("correct") is None:
+                continue
+            if is_excluded_from_learning_eval(pred):
                 continue
             expert = _normalize_expert(pred)
             if expert != lane_id:

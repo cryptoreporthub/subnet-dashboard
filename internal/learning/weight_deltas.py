@@ -208,6 +208,7 @@ def _gradeable_resolved_rows():
     build_council_benchmark so the two never disagree about what counts.
     """
     try:
+        from internal.council.grading import is_excluded_from_learning_eval
         from internal.learning.predictions_store import load_predictions
 
         for pred in load_predictions().get("resolved") or []:
@@ -216,6 +217,8 @@ def _gradeable_resolved_rows():
             if pred.get("outcome") in _SKIP_GRADED_OUTCOMES:
                 continue
             if pred.get("correct") is None:
+                continue
+            if is_excluded_from_learning_eval(pred):
                 continue
             from internal.council.capture import BAND_HIT, BAND_MISS, capture_from_row
 

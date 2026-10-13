@@ -133,12 +133,9 @@ def _price_sources_for_subnet(
     """Return ordered list of price sources to attempt for a subnet."""
     info = pairs.get(str(subnet_id)) or pairs.get(subnet_id) or {}
     sources: List[Dict[str, Any]] = []
-
-    # Primary: TaoMarketCap. Default netuid to the subnet id if not mapped.
     netuid = info.get("taomarketcap_netuid", subnet_id)
-    sources.append({"source": "taomarketcap", "netuid": str(netuid)})
 
-    # Fallback: GeckoTerminal for explicitly mapped DEX pools.
+    # Native pool OHLCV first when mapped (#1375).
     gt = info.get("geckoterminal")
     if isinstance(gt, dict) and gt.get("network") and gt.get("pool"):
         sources.append(
@@ -149,7 +146,7 @@ def _price_sources_for_subnet(
             }
         )
 
-    # Fallback: Blockmachine JSON-RPC alpha price + TAO/USD history.
+    sources.append({"source": "taomarketcap", "netuid": str(netuid)})
     sources.append({"source": "blockmachine", "netuid": str(netuid)})
 
     if include_synthetic:
@@ -340,9 +337,9 @@ def fetch_ohlcv(
     """
     Fetch OHLCV candles for a subnet token.
 
-    Tries TaoMarketCap first when INDICATOR_USE_LIVE_PRICES=true, falls back to
-    GeckoTerminal for explicitly mapped pools, then to the Blockmachine RPC
-    alpha price. Returns [] when no live source succeeds unless allow_synthetic=True.
+    When INDICATOR_USE_LIVE_PRICES=true, tries GeckoTerminal for mapped pools
+    first, then TaoMarketCap, then Blockmachine RPC alpha price. Returns [] when
+    no live source succeeds unless allow_synthetic=True.
     """
     pairs = _load_price_pairs(pairs_path)
     sources = _price_sources_for_subnet(subnet_id, pairs, include_synthetic=allow_synthetic)
@@ -363,19 +360,19 @@ def fetch_ohlcv(
     if USE_LIVE_PRICES:
         for src in sources:
             try:
-                if src["source"] == "taomarketcap":
-                    candles = _fetch_tmc_subnet_candles(src["netuid"], days=days)
-                    source = "taomarketcap"
-                    break
                 if src["source"] == "geckoterminal":
                     candles = _fetch_geckoterminal_ohlcv(
                         src["network"], src["pool"], days=days
                     )
                     source = "geckoterminal"
                     break
+                if src["source"] == "taomarketcap":
+                    candles = _fetch_tmc_subnet_candles(src["netuid"], days=days)
+                    source = "taomarketcap_derived"
+                    break
                 if src["source"] == "blockmachine":
                     candles = _fetch_rpc_subnet_candles(src["netuid"], days=days)
-                    source = "blockmachine"
+                    source = "blockmachine_derived"
                     break
             except Exception as exc:
                 error = str(exc)

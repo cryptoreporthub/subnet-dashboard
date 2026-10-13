@@ -56,9 +56,9 @@ def test_price_sources_include_geckoterminal_fallback():
         }
     }
     sources = _price_sources_for_subnet("5", pairs)
-    assert sources[0]["source"] == "taomarketcap"
-    assert sources[1]["source"] == "geckoterminal"
-    assert sources[1]["network"] == "bittensor"
+    assert sources[0]["source"] == "geckoterminal"
+    assert sources[0]["network"] == "bittensor"
+    assert sources[1]["source"] == "taomarketcap"
     assert sources[-1]["source"] == "blockmachine"
     assert not any(s["source"] == "synthetic" for s in sources)
 
@@ -433,4 +433,4 @@ def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
     assert len(candles) == 2
     assert candles[0]["close"] == 52.5
     cache = json.load(open(cache_path))
-    assert cache["501"]["source"] == "blockmachine"
+    assert cache["501"]["source"] == "blockmachine_derived"
