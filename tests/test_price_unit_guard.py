@@ -29,6 +29,69 @@ def test_price_unit_guard_flags_ref_at_or_above_one():
     assert is_price_unit_mismatch(10.0, 210.0)
 
 
+def _legacy_price_unit_mismatch(reference_price: float, resolved_price: float) -> bool:
+    """Pre-#1377 guard on main: skipped ratio>=20 when min(ref, resolved) >= 1."""
+    from internal.council.grading import PRICE_UNIT_RATIO_CEILING
+
+    try:
+        reference = float(reference_price)
+        resolved = float(resolved_price)
+    except (TypeError, ValueError):
+        return False
+    if reference <= 0 or resolved <= 0:
+        return False
+    ratio = max(reference, resolved) / min(reference, resolved)
+    if min(reference, resolved) >= 1:
+        return False
+    return ratio >= PRICE_UNIT_RATIO_CEILING
+
+
+# Minimal repro rows for learning-export guard impact (ratio>=20, both sides >= 1).
+_ISSUE_1375_BOTH_GE1_EXPORT_ROWS = (
+    {"reference_price": 1.5, "resolved_price": 285.0},
+    {"reference_price": 10.0, "resolved_price": 210.0},
+)
+
+
+def test_unit_guard_export_rows_both_ge1_ratio20():
+    """Rows with both>=1 and ratio>=20: 2 in minimal repro; legacy guard exempted them."""
+    assert len(_ISSUE_1375_BOTH_GE1_EXPORT_ROWS) == 2
+    for row in _ISSUE_1375_BOTH_GE1_EXPORT_ROWS:
+        ref, res = row["reference_price"], row["resolved_price"]
+        assert not _legacy_price_unit_mismatch(ref, res)
+        assert is_price_unit_mismatch(ref, res)
+    assert is_price_unit_mismatch(0.00311, 0.63078)
+
+
+def test_committed_price_cache_gradeable_subnet_collapse():
+    """Joshua must approve: refusing derived/TMC/BM in price_reference (#1375).
+
+    On committed ``data/price_cache.json`` (2026-10): 129 subnets had candles
+    before refusal; all 129 were ``taomarketcap`` (derived) → 0 gradeable after.
+    Re-run: ``PYTHONPATH=. python scripts/issue_1375_integrity_impact.py``.
+    """
+    import json
+    from pathlib import Path
+
+    from internal.council.price_reference import is_derived_candle_cache_source
+
+    cache_path = Path("data/price_cache.json")
+    cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    before = after = 0
+    for block in cache.values():
+        if not isinstance(block, dict):
+            continue
+        candles = [c for c in (block.get("candles") or []) if isinstance(c, dict)]
+        if not candles:
+            continue
+        before += 1
+        if not is_derived_candle_cache_source(block.get("source")):
+            after += 1
+    assert before >= after
+    assert before - after == before  # current committed cache is entirely derived-sourced
+    assert after == 0
+
+
 def test_phantom_vwap_quarantine_window():
     from internal.council.grading import is_phantom_vwap_quarantine, is_excluded_from_learning_eval
 

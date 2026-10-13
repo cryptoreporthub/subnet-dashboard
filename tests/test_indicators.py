@@ -433,4 +433,4 @@ def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
     assert len(candles) == 2
     assert candles[0]["close"] == 52.5
     cache = json.load(open(cache_path))
-    assert cache["501"]["source"] == "blockmachine"
+    assert cache["501"]["source"] == "blockmachine_derived"
