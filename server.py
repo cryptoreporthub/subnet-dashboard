@@ -112,6 +112,11 @@ except Exception as _share_exc:  # pragma: no cover
     _SHARE_ROUTES = False
 
 try:
+    import restless as _restless_sdk
+except ImportError:  # pragma: no cover
+    _restless_sdk = None  # type: ignore[assignment,misc]
+
+try:
     from internal.cockpit import cockpit_router
 
     _COCKPIT_ROUTES = cockpit_router is not None
@@ -3420,6 +3425,33 @@ app = wrap_instant_bailout(
     homepage_cache_control=f"public, max-age={_CACHE_PATHS['/']}".encode("ascii"),
     homepage_is_warm=_homepage_shell_is_warm,
 )
+
+if _restless_sdk is not None:
+    try:
+        _restless_client = _restless_sdk.Restless(os.environ.get("RESTLESS_KEY"))
+
+        @_restless_client.setup
+        def _restless_capture(request):  # noqa: F811
+            # Public dashboard: no stable per-user id; omit owner per restless-sdk rules.
+            return {
+                "api_key": _restless_client.mask(request.header("authorization")),
+            }
+
+        _restless_inner_app = app
+        _restless_asgi = _restless_client.asgi(_restless_inner_app)
+
+        class _RestlessOutermostASGI:
+            """Outermost capture layer; delegate attrs (e.g. routes) to the FastAPI stack."""
+
+            async def __call__(self, scope, receive, send):
+                await _restless_asgi(scope, receive, send)
+
+            def __getattr__(self, name: str):
+                return getattr(_restless_inner_app, name)
+
+        app = _RestlessOutermostASGI()
+    except Exception as _restless_exc:  # pragma: no cover
+        logger.warning("Restless SDK unavailable: %s", _restless_exc)
 
 
 if __name__ == "__main__":

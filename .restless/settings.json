@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "apis": [
+    {
+      "name": "Subnet Dashboard",
+      "rootDir": "/workspace",
+      "oasFile": ".restless/openapi.json",
+      "oasSource": {
+        "kind": "agent"
+      },
+      "baseUrl": "https://subnet-dashboard.fly.dev",
+      "requestIdPrefix": "SDA",
+      "lastSyncedAt": "2026-10-13T07:36:39.190Z",
+      "id": "3fb92533-e094-46c3-981e-eafd07201096",
+      "projectId": "c6d18fc7-3148-4a6c-b792-a2f1923bd410"
+    }
+  ]
+}

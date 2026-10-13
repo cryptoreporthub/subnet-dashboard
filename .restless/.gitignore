@@ -1,0 +1,4 @@
+# Scratch files npx restless writes here. Everything else in
+# this directory is source - see README.md - and belongs in your commits.
+.oas-refresh/
+.oas-candidates.json
