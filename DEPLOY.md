@@ -259,7 +259,7 @@ See `cursor-agents-communication/fly-worker-split-v2-lock.md` and `split-v2-roll
 
 | Layer | Role |
 |-------|------|
-| **[Restless](https://www.restless.ai/)** (primary for builders) | Agent-oriented docs, MCP tools, live API logs, workbench, and recovery hints. Open [app.restless.ai](https://app.restless.ai), project **Subnet Dashboard** (`4953800f-2332-42a1-b76a-5f8011483cd6`), then use **Docs** / **MCP** from the dashboard (copy the public docs URL and MCP install snippet from there — they are project-specific). |
+| **[Restless docs](https://project-6cbf4085.restlessdocs.com)** (primary for builders) | Public API reference for **Subnet Dashboard** (project `6cbf4085-2159-4bd7-a1a0-8c662ec0420c`, 187 endpoints). MCP, live logs, and workbench: [app.restless.ai](https://app.restless.ai) → same project. |
 | **This repo** | Machine-readable contract: [`.restless/openapi.json`](.restless/openapi.json) (committed; also served at runtime from FastAPI `/openapi.json` on prod). Maintainer notes: [`.restless/README.md`](.restless/README.md). |
 
 Do not duplicate the full API reference in `DEPLOY.md`; link Restless for humans and agents, and the OpenAPI file for codegen and CI.
