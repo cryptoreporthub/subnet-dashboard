@@ -313,3 +313,9 @@
 - **(b) Lite 200 wall:** Docker @ `514d4253` spawn **0.039s**, child **~48MB**, **173** rows; dev repro **0.176s** spawn, **~111s** wall, **195** rows (real RPC). Lite RPC capped by **`LIVE_SUBNETS_BATCH_DEADLINE_SECONDS=85`** (`chain_client.py:578-594`) inside **90s** parent budget (`fly.toml:60`). Full **20 ~345s**; full **200** incomplete **2400s**.
 - **(c) Prod @ `5d840ba4`:** Live `/api/data-freshness` **sync_done ok**, **77** rows, not stale (`2026-10-11T18:36:56Z`). Axiom soak receipt has no live_subnets stall chain; wedge RCA documents pre-PR thread orphan at 90s — addressed by spawn kill on branch.
 - **Verdict:** **PASS** (no deploy). Artifact: agent store `internal/pr1357-freshness-90s-mc-modify.md`.
+
+## 2026-10-13 — Deploy #1384 Telegram gainers + stake alert env
+
+- **main:** `124c4c4f` (includes #1384 `4c467f12`); vehicle [#1385](https://github.com/cryptoreporthub/subnet-dashboard/pull/1385); Fly Deploy [run 38409452620](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38409452620) success.
+- **Prod:** `/health` OK; `/version` `124c4c4fb6f360aab71386e5b09875aa8261c00c`.
+- **Verify:** agent store `internal/telegram-1384-verify-2026-10-13.md` — stake watcher ticking (RPC 429); trend 403 bot not in channel; summary bot getUpdates 409. **PARTIAL** staking + daily gainers push; **FAIL** `/gainers` until bc-f059133e.
