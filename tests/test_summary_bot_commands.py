@@ -18,7 +18,7 @@ def test_gainers_command_ranks_top5(monkeypatch):
         {"netuid": i, "name": f"Sub{i}", "price": 1 + i / 10, "price_change_24h": chg}
         for i, chg in enumerate([1.0, 12.5, -3.0, 7.25, 0.5, 40.0, 2.0])
     ]
-    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_data", lambda: rows)
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_rows_quick", lambda: rows)
     out = summary_bot.handle_command("/gainers")
     assert "Top 5 gainers" in out
     # sorted desc, non-positive entries dropped, capped at 5
@@ -27,9 +27,23 @@ def test_gainers_command_ranks_top5(monkeypatch):
 
 
 def test_gainers_command_honest_empty(monkeypatch):
-    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_data", lambda: [])
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_rows_quick", lambda: [])
     out = summary_bot.handle_command("/gainers")
     assert "No 24h price-change data" in out
+
+
+def test_gainers_uses_quick_rows_not_full_merge(monkeypatch):
+    calls = []
+
+    def _boom():
+        calls.append("full")
+        raise AssertionError("full merge must not run on /gainers")
+
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_rows_quick", lambda: [{"netuid": 1, "name": "A", "price_change_24h": 3.0}])
+    monkeypatch.setattr("fetchers.merged_data.get_merged_subnet_data", _boom)
+    out = summary_bot.handle_command("/gainers")
+    assert calls == []
+    assert "3.00%" in out
 
 
 def test_summary_command_safe_when_disabled(monkeypatch):

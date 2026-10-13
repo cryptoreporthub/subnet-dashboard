@@ -202,10 +202,10 @@ def build_help_text() -> str:
 
 def _format_gainers_reply(db=None) -> str:
     """Top 5 subnets by 24h price change — honest-empty when price data is down."""
-    from fetchers.merged_data import get_merged_subnet_data
+    from fetchers.merged_data import get_merged_subnet_rows_quick
 
     try:
-        rows = get_merged_subnet_data() or []
+        rows = get_merged_subnet_rows_quick() or []
     except Exception as exc:
         logger.warning("gainers fetch failed: %s", exc)
         rows = []
@@ -914,6 +914,8 @@ def _process_update(update: Dict[str, Any]) -> None:
         logger.debug("trend alert chat capture failed: %s", exc)
 
     cmd, _ = _parse_command_text(text)
+    if cmd == "/gainers":
+        logger.info("summary bot: handling /gainers chat_id=%s", chat_id)
     rate_key = (cmd or "unknown", chat_id)
     limited = _command_rate_limit(rate_key)
     if limited:
