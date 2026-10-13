@@ -253,6 +253,27 @@ See `cursor-agents-communication/fly-worker-split-v2-lock.md` and `split-v2-roll
 
 ---
 
+## API consumers & AI agents (Restless)
+
+**Where documentation lives**
+
+| Layer | Role |
+|-------|------|
+| **[Restless docs](https://project-4953800f.restlessdocs.com)** (primary for builders) | Public API reference for **Subnet Dashboard** (project `4953800f-2332-42a1-b76a-5f8011483cd6`, 187 endpoints). MCP, live logs, and workbench: [app.restless.ai](https://app.restless.ai) → same project. |
+| **This repo** | Machine-readable contract: [`.restless/openapi.json`](.restless/openapi.json) (committed; also served at runtime from FastAPI `/openapi.json` on prod). Maintainer notes: [`.restless/README.md`](.restless/README.md). |
+
+Do not duplicate the full API reference in `DEPLOY.md`; link Restless for humans and agents, and the OpenAPI file for codegen and CI.
+
+**Production API base URL:** `https://subnet-dashboard.fly.dev` (same as Fly app `subnet-dashboard`). Custom domain, when live: `https://dashboard.cryptoreporthub.com` (see below).
+
+**Request correlation:** Successful responses include `x-request-id: SDA-…`. Use that id in Restless logs when debugging a call.
+
+**For Cursor / Claude / other MCP clients:** Connect Restless’s MCP server from the Restless project settings (not from this repo). Your agent can then search docs and inspect prod traffic without pasting HAR exports.
+
+**Maintainers (deploy only):** `RESTLESS_KEY` must be set on Fly (`fly secrets set RESTLESS_KEY=… -a subnet-dashboard`). After adding or changing routes, refresh the spec (`npx restless update --refresh` or export from `/openapi.json`) and commit `.restless/` if it changes. Never commit `.env` or print keys in chat.
+
+---
+
 ## Custom domain + CDN (O4 / P4)
 
 **Recommended hostname:** `dashboard.cryptoreporthub.com` → `subnet-dashboard.fly.dev`
