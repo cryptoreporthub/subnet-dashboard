@@ -441,13 +441,15 @@ def write_full_universe_snapshot(
         receipt = load_membership_receipt()
         prep_started = time.monotonic()
         membership_rows: List[Dict[str, Any]] = []
-        try:
-            from internal.subnet_universe import get_snapshot
+        # Registry-only hydrate is the scoring input cap; universe rows backfill live feeds only.
+        if not _registry_only_snapshot():
+            try:
+                from internal.subnet_universe import get_snapshot
 
-            snap = get_snapshot()
-            membership_rows = list(snap.rows) if snap is not None else []
-        except Exception:
-            membership_rows = []
+                snap = get_snapshot()
+                membership_rows = list(snap.rows) if snap is not None else []
+            except Exception:
+                membership_rows = []
         subnets, prep_meta = membership_scoring_candidate_rows(
             list(receipt.get("expected_netuids") or []),
             feed_subnets or [],
@@ -558,9 +560,27 @@ def write_full_universe_snapshot(
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
         disk_timing = coverage_timing_for_disk(timing)
         coverage["timing"] = disk_timing
-        publish_result = save_score_snapshot(
-            {**payload, "source": source, "coverage": coverage}
+        gated_empty = (
+            prep_meta.get("membership_admission_allowed") is False
+            and not (payload.get("day") or payload.get("hour"))
         )
+        existing_on_disk = load_score_snapshot(SCORE_SNAPSHOTS_PATH) if gated_empty else None
+        retain_prior = bool(
+            gated_empty
+            and existing_on_disk
+            and (existing_on_disk.get("day") or existing_on_disk.get("hour"))
+        )
+        if retain_prior:
+            coverage["capture_reason"] = "membership_gated_skip_publish"
+            publish_result = {
+                "published": False,
+                "skipped_older": False,
+                "timing": {},
+            }
+        else:
+            publish_result = save_score_snapshot(
+                {**payload, "source": source, "coverage": coverage}
+            )
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
         publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
