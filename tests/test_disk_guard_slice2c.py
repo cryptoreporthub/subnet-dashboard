@@ -105,6 +105,7 @@ def test_readiness_not_mounted_skips_issue(monkeypatch):
         "internal.disk_guard.data_dir_is_mounted_volume",
         lambda: False,
     )
+    monkeypatch.setattr("internal.disk_guard.local_volume_mount_expected", lambda: False)
     monkeypatch.setattr(
         "internal.disk_guard.data_volume_usage",
         lambda: _usage(free=1024),
@@ -114,6 +115,19 @@ def test_readiness_not_mounted_skips_issue(monkeypatch):
     report = build_readiness_report()
     assert report["data_volume"]["mounted"] is False
     assert "data_volume_low" not in report["issues"]
+    assert "data_volume_unavailable" not in report["issues"]
+
+
+def test_v1_expected_mount_missing_is_unavailable(monkeypatch):
+    monkeypatch.setattr("internal.disk_guard.data_dir_is_mounted_volume", lambda: False)
+    monkeypatch.setattr("internal.disk_guard.local_volume_mount_expected", lambda: True)
+    monkeypatch.setattr("internal.data_volume.needs_worker_volume_proxy", lambda: False)
+
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+    assert report["data_volume"]["status"] == "unavailable"
+    assert "data_volume_unavailable" in report["issues"]
 
 
 def test_split_v2_proxies_worker_low_volume(monkeypatch):
@@ -228,6 +242,40 @@ def test_missing_db_parent_no_ancestor_returns_db_unavailable():
     assert result["outcome"] == "db_unavailable"
 
 
+def test_existing_db_parent_probe_error_db_unavailable(tmp_path, monkeypatch):
+    db_path = tmp_path / "chain_prices.db"
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    class _Client:
+        def _call(self, method, params=None):
+            raise RuntimeError("should not reach RPC")
+
+    def _deny(_directory: str):
+        raise PermissionError("denied")
+
+    monkeypatch.setattr("internal.disk_guard.data_volume_usage_for_path", _deny)
+    with patch.object(cfg, "forward_record_enabled", return_value=True):
+        result = run_forward_sample(_Client(), db_path=str(db_path), write=True)
+    assert result["outcome"] == "db_unavailable"
+
+
+def test_chain_price_min_free_mb_zero_disables_disk_low(tmp_path, monkeypatch):
+    db_path = tmp_path / "chain_prices.db"
+    monkeypatch.setattr(cfg, "CHAIN_PRICE_MIN_FREE_MB", 0)
+    from internal.disk_guard import db_disk_guard_outcome
+
+    assert db_disk_guard_outcome(str(db_path), 0) is None
+
+
+def test_negative_min_free_mb_env_rejected(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.WARNING, logger="internal.chain_price.config")
+    monkeypatch.setenv("CHAIN_PRICE_MIN_FREE_MB", "-5")
+    assert cfg._non_negative_int_env("CHAIN_PRICE_MIN_FREE_MB", 200) == 200
+    assert "negative CHAIN_PRICE_MIN_FREE_MB" in caplog.text
+
+
 def test_recorder_disk_low_no_write_no_auto_cancel(tmp_path, monkeypatch):
     db_path = str(tmp_path / "chain_prices.db")
 
@@ -235,7 +283,10 @@ def test_recorder_disk_low_no_write_no_auto_cancel(tmp_path, monkeypatch):
         def _call(self, method, params=None):
             raise RuntimeError("should not reach RPC when disk_low")
 
-    monkeypatch.setattr("internal.chain_price.sampler.is_low", lambda _mb, **_: True)
+    monkeypatch.setattr(
+        "internal.disk_guard.db_disk_guard_outcome",
+        lambda *_a, **_k: "disk_low",
+    )
     with patch.object(cfg, "forward_record_enabled", return_value=True):
         import internal.chain_price.sampler as sampler_mod
 
@@ -255,7 +306,10 @@ def test_disk_low_scheduler_tick_does_not_stop_recorder(monkeypatch):
         "internal.chain_price.scheduler.stop_forward_recorder",
         lambda: stopped.append(1),
     )
-    monkeypatch.setattr("internal.chain_price.sampler.is_low", lambda _mb, **_: True)
+    monkeypatch.setattr(
+        "internal.disk_guard.db_disk_guard_outcome",
+        lambda *_a, **_k: "disk_low",
+    )
     with patch.object(cfg, "forward_record_enabled", return_value=True):
         from internal.chain_price.scheduler import _tick
 

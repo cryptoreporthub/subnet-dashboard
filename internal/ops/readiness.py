@@ -328,6 +328,8 @@ def build_readiness_report() -> Dict[str, Any]:
     )
     if data_volume.get("status") == "unavailable":
         issues.append("data_volume_unavailable")
+    elif data_volume.get("volume_expected") and data_volume.get("mounted") is False:
+        issues.append("data_volume_unavailable")
     elif data_volume.get("mounted") and data_volume.get("low"):
         issues.append("data_volume_low")
 

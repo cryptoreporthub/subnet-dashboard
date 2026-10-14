@@ -28,6 +28,10 @@ class DiskUsage(NamedTuple):
     total: int
 
 
+class DiskProbeError(Exception):
+    """Disk space could not be measured (permissions, I/O, etc.)."""
+
+
 def readiness_thresholds_mb() -> tuple[int, int]:
     """Issue/warn free-space floors aligned with chain price recorder guard."""
     low = int(CHAIN_PRICE_MIN_FREE_MB)
@@ -76,18 +80,50 @@ def _disk_measure_directory_for_path(path: str) -> Optional[str]:
     return nearest_existing_directory(path)
 
 
+def local_volume_mount_expected() -> bool:
+    """True when this process should have the Fly data_volume mounted (v1 inline / worker)."""
+    from internal.data_volume import needs_worker_volume_proxy
+    from internal.run_mode import inline_worker_expected, is_worker_mode, split_worker_v2_enabled
+
+    if needs_worker_volume_proxy():
+        return False
+    if os.environ.get("DATA_DIR_IS_VOLUME", "").strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    if split_worker_v2_enabled():
+        return is_worker_mode()
+    return inline_worker_expected()
+
+
+def db_disk_guard_outcome(db_file: str, min_free_mb: int) -> Optional[str]:
+    """``disk_low``, ``db_unavailable``, or None when safe to proceed."""
+    if db_parent_filesystem_missing(db_file):
+        return "db_unavailable"
+    measure_dir = _disk_measure_directory_for_path(db_file)
+    if measure_dir is None:
+        return "db_unavailable"
+    floor = int(min_free_mb) * 1024 * 1024
+    try:
+        free = data_volume_usage_for_path(measure_dir).free
+    except OSError:
+        return "db_unavailable"
+    if free < floor:
+        return "disk_low"
+    return None
+
+
 def is_low(min_free_mb: int, *, path: Optional[str] = None) -> bool:
+    """Return True when free space is below floor; raises DiskProbeError on probe I/O failure."""
     floor = int(min_free_mb) * 1024 * 1024
     if path:
-        measure_dir = _disk_measure_directory_for_path(path)
-        if measure_dir is None:
-            return False
-        try:
-            free = data_volume_usage_for_path(measure_dir).free
-        except OSError:
-            return False
-        return free < floor
-    return data_free_bytes() < floor
+        outcome = db_disk_guard_outcome(path, min_free_mb)
+        if outcome == "db_unavailable":
+            raise DiskProbeError(f"cannot measure disk for {path}")
+        return outcome == "disk_low"
+    try:
+        free = data_free_bytes()
+    except OSError as exc:
+        raise DiskProbeError(str(exc)) from exc
+    return free < floor
 
 
 def _flags_for_free_bytes(free_bytes: int, low_mb: int, warn_mb: int) -> tuple[bool, bool]:
@@ -123,8 +159,12 @@ def build_data_volume_readiness_local() -> Dict[str, Any]:
         ),
     }
     mounted = data_dir_is_mounted_volume()
+    volume_expected = local_volume_mount_expected()
     if not mounted:
-        return {**base, "mounted": False}
+        block: Dict[str, Any] = {**base, "mounted": False, "volume_expected": volume_expected}
+        if volume_expected:
+            block["status"] = "unavailable"
+        return block
 
     usage = data_volume_usage()
     low, warn = _flags_for_free_bytes(usage.free, low_mb, warn_mb)
@@ -136,6 +176,7 @@ def build_data_volume_readiness_local() -> Dict[str, Any]:
         "total_bytes": usage.total,
         "warn": warn,
         "low": low,
+        "volume_expected": volume_expected,
     }
 
 

@@ -31,11 +31,19 @@ def _int_env(name: str, default: int) -> int:
         return default
 
 
-CHAIN_PRICE_MIN_FREE_MB = _int_env("CHAIN_PRICE_MIN_FREE_MB", _DEFAULT_MIN_FREE_MB)
+def _non_negative_int_env(name: str, default: int) -> int:
+    value = _int_env(name, default)
+    if value < 0:
+        logger.warning("negative %s=%s; using default %s", name, value, default)
+        return default
+    return value
+
+
+CHAIN_PRICE_MIN_FREE_MB = _non_negative_int_env("CHAIN_PRICE_MIN_FREE_MB", _DEFAULT_MIN_FREE_MB)
 
 
 def chain_price_warn_extra_mb() -> int:
-    return _int_env("CHAIN_PRICE_WARN_EXTRA_MB", _DEFAULT_WARN_EXTRA_MB)
+    return _non_negative_int_env("CHAIN_PRICE_WARN_EXTRA_MB", _DEFAULT_WARN_EXTRA_MB)
 
 
 def forward_record_enabled() -> bool:

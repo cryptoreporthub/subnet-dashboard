@@ -12,7 +12,6 @@ from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
 from internal.chain_price.outcomes import RpcOutcome, TickOutcome, TickResult
 from internal.chain_price.rpc import rpc_call_fn
-from internal.disk_guard import is_low
 from internal.chain_price.storage_keys import (
     map_key_hex,
     netuid_from_networks_added_key,
@@ -182,12 +181,13 @@ def run_forward_sample(
         return {"outcome": "disabled"}
 
     db_file = db_path or cfg.CHAIN_PRICE_DB_PATH
-    from internal.disk_guard import db_parent_filesystem_missing
+    from internal.disk_guard import db_disk_guard_outcome
 
-    if db_parent_filesystem_missing(db_file):
-        logger.warning("chain price db unavailable: parent path missing on filesystem")
+    guard = db_disk_guard_outcome(db_file, cfg.CHAIN_PRICE_MIN_FREE_MB)
+    if guard == "db_unavailable":
+        logger.warning("chain price db unavailable: disk guard failed for %s", db_file)
         return {"outcome": "db_unavailable"}
-    if is_low(cfg.CHAIN_PRICE_MIN_FREE_MB, path=db_file):
+    if guard == "disk_low":
         _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB, db_file)
         try:
             from internal.metrics import CHAIN_PRICE_SKIPPED_TOTAL
