@@ -133,6 +133,7 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch)
 
     start_background_workers()
     assert "live-subnets-boot" not in scheduled
+    assert "tmp-reaper-hourly" in scheduled
     pump_snapshot.assert_called_once()
     for name in (
         "_warm_judges_cache",

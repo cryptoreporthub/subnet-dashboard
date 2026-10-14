@@ -8,7 +8,6 @@ Ensures data directory exists before file writes to prevent
 import json
 import logging
 import os
-import tempfile
 from typing import Any, Dict, Optional
 
 
@@ -42,18 +41,16 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     """
     Write JSON data to a file atomically with directory creation.
 
-    Creates parent directories if they don't exist, then writes
-    to a unique temp file (via mkstemp) and renames for atomicity.
-    Using mkstemp avoids race conditions when gunicorn workers share
-    a common .tmp filename.
+    Uses a predictable ``<path>.tmp`` sidecar so stale orphans are reaped by
+    ``internal.tmp_boot_reaper`` (avoids mkstemp ``tmp*.json`` leaks).
     """
     dir_name = os.path.dirname(path)
     if dir_name:
         os.makedirs(dir_name, exist_ok=True)
 
-    fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+    temp_path = f"{path}.tmp"
     try:
-        with os.fdopen(fd, "w") as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(temp_path, path)
     finally:

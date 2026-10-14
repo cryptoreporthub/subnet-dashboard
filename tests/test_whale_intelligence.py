@@ -1,6 +1,7 @@
 """Tests for the Whale Intelligence service."""
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -51,6 +52,17 @@ def _seed_rugger(svc: WhaleIntelligenceService, wallet: str, netuid: int = 18):
     for day in (1, 2):
         svc.record_event(wallet, netuid, "buy", 200.0, timestamp=f"2026-07-0{day}T08:00:00+00:00", entry_price=1.0)
         svc.record_event(wallet, netuid, "sell", 180.0, timestamp=f"2026-07-0{day}T14:00:00+00:00", exit_price=0.85)
+
+
+def test_save_data_uses_sidecar_tmp_not_mkstemp_json(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    _seed_alpha_whale(svc, "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY")
+
+    data_dir = Path(data).parent
+    assert not list(data_dir.glob("tmp*.json"))
+    assert Path(data).exists()
+    assert not Path(f"{data}.tmp").exists()
 
 
 def test_dimensions_defined():

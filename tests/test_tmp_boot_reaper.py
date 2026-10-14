@@ -33,6 +33,34 @@ def test_reap_removes_old_tmp_only(tmp_path, monkeypatch):
     assert keep.exists()
 
 
+def test_find_stale_legacy_mkstemp_json_orphan(tmp_path):
+    from internal.tmp_boot_reaper import find_stale_tmp_files
+
+    orphan = tmp_path / "tmpabcd1234.json"
+    orphan.write_text("{}", encoding="utf-8")
+    past = time.time() - 7200
+    os.utime(orphan, (past, past))
+    real = tmp_path / "whale_intelligence.json"
+    real.write_text("{}", encoding="utf-8")
+    os.utime(real, (past, past))
+
+    stale = find_stale_tmp_files(data_dir=str(tmp_path), min_age_seconds=3600)
+    assert str(orphan) in stale
+    assert str(real) not in stale
+
+
+def test_find_stale_legacy_mkstemp_tmp_orphan(tmp_path):
+    from internal.tmp_boot_reaper import find_stale_tmp_files
+
+    orphan = tmp_path / "tmpZZZZ9999.tmp"
+    orphan.write_text("{}", encoding="utf-8")
+    past = time.time() - 7200
+    os.utime(orphan, (past, past))
+
+    stale = find_stale_tmp_files(data_dir=str(tmp_path), min_age_seconds=3600)
+    assert str(orphan) in stale
+
+
 def test_maybe_reap_at_boot_skips_non_worker(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("RUN_MODE", "web")
