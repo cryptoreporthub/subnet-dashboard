@@ -313,3 +313,20 @@
 - **(b) Lite 200 wall:** Docker @ `514d4253` spawn **0.039s**, child **~48MB**, **173** rows; dev repro **0.176s** spawn, **~111s** wall, **195** rows (real RPC). Lite RPC capped by **`LIVE_SUBNETS_BATCH_DEADLINE_SECONDS=85`** (`chain_client.py:578-594`) inside **90s** parent budget (`fly.toml:60`). Full **20 ~345s**; full **200** incomplete **2400s**.
 - **(c) Prod @ `5d840ba4`:** Live `/api/data-freshness` **sync_done ok**, **77** rows, not stale (`2026-10-11T18:36:56Z`). Axiom soak receipt has no live_subnets stall chain; wedge RCA documents pre-PR thread orphan at 90s — addressed by spawn kill on branch.
 - **Verdict:** **PASS** (no deploy). Artifact: agent store `internal/pr1357-freshness-90s-mc-modify.md`.
+
+## 2026-10-14 — #1399 slice 1 merged (Joshua GO)
+
+- **PR #1401** squashed to **`main` `699d3b4c`** (source HEAD `1685554f`). Claude + Gemini PASS; smoke green pre-merge.
+- **Fly:** vehicle [#1404](https://github.com/cryptoreporthub/subnet-dashboard/pull/1404) merged; deploy run [38527974104](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38527974104) success; prod `/version` `4ed64ded` (app code = `699d3b4c` + vehicle doc); `/health` 200; boot reaper N — operator `flyctl logs`.
+
+## 2026-10-14 — #1403 slice 2c merged + deployed (Joshua GO)
+
+- **PR #1403** squash **`f330301a`**; vehicle [#1405](https://github.com/cryptoreporthub/subnet-dashboard/pull/1405); Fly [38535745397](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38535745397) success.
+- Prod `/version` **`e97facc8`**; `/health` 200; **`/api/ops/data-volume` 200** (`v1_inline`, mounted, ~825 MB free). Recorder flag unchanged.
+- **Held:** prod volume orphan delete (operator, >60m legacy pattern); slice **2a/2c/2d** until soak + explicit GO. Playbook: Project store `docs/1399-post-slice1-playbook.md`.
+
+## 2026-10-14 — #1395 Step 2 merged + deployed (Joshua GO)
+
+- **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
+- **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
+- **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
