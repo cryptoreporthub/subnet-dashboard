@@ -23,6 +23,12 @@ def test_backfill_dry_run_payload():
     out = run_backfill_dry_run(1_700_000_000_000, search="bracketed")
     assert out["outcome"] == "dry_run"
     assert out["search"] == "bracketed"
+    assert "PR-B" in out["resolve_block_at"]
+
+
+def test_backfill_dry_run_unknown_search_raises():
+    with pytest.raises(ValueError, match="unknown search"):
+        run_backfill_dry_run(1_700_000_000_000, search="bogus")
 
 
 def test_bracketed_resolves_case_that_exhausts_stepped():

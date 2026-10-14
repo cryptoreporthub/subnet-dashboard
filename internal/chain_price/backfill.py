@@ -6,6 +6,7 @@ import time
 from typing import List, Optional
 
 HOUR_MS = 3_600_000
+_SEARCH_MODES = frozenset({"stepped", "bracketed"})
 
 
 def plan_hourly_bucket_ts_ms(
@@ -33,9 +34,15 @@ def run_backfill_dry_run(
     *,
     search: str = "bracketed",
 ) -> dict:
-    """Smoke helper: report what a bucket would do without RPC or DB writes."""
+    """Smoke helper: report what a bucket would do without RPC or DB writes.
+
+    ``search`` is validated for CLI parity; ``resolve_block_at`` lands in PR-B.
+    """
+    if search not in _SEARCH_MODES:
+        raise ValueError(f"unknown search mode: {search!r}")
     return {
         "outcome": "dry_run",
         "bucket_ts_ms": bucket_ts_ms,
         "search": search,
+        "resolve_block_at": "PR-B (not called in this scaffold)",
     }

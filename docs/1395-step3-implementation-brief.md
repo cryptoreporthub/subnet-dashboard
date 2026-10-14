@@ -5,7 +5,7 @@
 ## Goal (Step 3 only)
 
 1. **Historical backfill** ≤ ~30d into `data/chain_prices.db`: hourly-aligned `chain_sampled` rows with the same provenance schema as Step 2 forward ticks (`block_hash`, `series_key`, `provider`, `quality`, `schema_version=2`).
-2. **Bracketed / anchored `resolve_block_at`**: Step 2 shipped a **fail-closed stepped** search (≤4 rounds, 12s tolerance) tuned for forward-recorder latency. Step 3 adds a **bracketed bisection** path with **anchors** (finalized head, `hint_block`, in-process block cache, optional `chain_blocks` DB rows) and a **higher round budget** for offline backfill — without weakening the default stepped path used by live sampling.
+2. **Bracketed / anchored `resolve_block_at`**: Step 2 shipped a **fail-closed stepped** search (≤4 rounds, 12s tolerance) tuned for forward-recorder latency. Step 3 adds a **bracketed bisection** path with **anchors** (finalized head, `hint_block`, in-process block cache, optional `chain_blocks` DB rows) and a **higher round budget** for offline backfill. Stepped and bracketed **share** `_BLOCK_CACHE` (outcomes unchanged vs cold stepped; see tests).
 3. **Gecko fallback** only when chain archive cannot serve a bucket (`archive_miss` / `unknown_block` on pinned storage): tag rows distinctly (`quality` / metadata) so Step 4 never treats them as `chain_sampled` truth.
 
 **Not in Step 3:** enable forward recorder in prod; wire `get_chain_bar` into grading; `REFUSE_DERIVED_FOR_GRADING=on` (Step 4 / Agent A).
@@ -17,7 +17,7 @@
 | Area | Location | Notes |
 |------|----------|--------|
 | Forward tick | `internal/chain_price/sampler.py` → `run_forward_sample` | `kind=forward`; membership via `get_member_netuids` (`NetworksAdded`) |
-| Block → time | `internal/chain_price/block_resolve.py` → `resolve_block_at` | Stepped correction; `_BLOCK_CACHE`; fails closed on unprobed hash |
+| Block → time | `internal/chain_price/block_resolve.py` → `resolve_block_at` | Stepped + bracketed; shared `_BLOCK_CACHE` + exact-hint shortcut; fails closed on unprobed hash |
 | Reader / fallback | `internal/chain_price/reader.py`, `config.rpc_provider_endpoints()` | Finney first when `FINNEY_RPC_URL` set, else BM; `provider_served` on writes |
 | Persistence | `internal/chain_price/db.py` | `chain_blocks` + `chain_price_samples`; retention 45d / row cap 600k |
 | Bars (read-only) | `internal/chain_price/bars.py` → `get_chain_bar` | Not wired to grading |
@@ -51,7 +51,7 @@
 **File:** `internal/chain_price/sampler.py` (or new `historical.py` if sampler grows)
 
 - Extract **`sample_at_block_hash(reader, block_hash, block_number, *, write, kind)`** from `run_forward_sample` body: membership → `state_queryStorageAt` reserves → spot cross-check on 2 netuids → `_parse_storage_batch` → `insert_*`.
-- `run_forward_sample` calls the helper with `pin_finalized_head()`; backfill calls it after `resolve_block_at(..., search="bracketed")`.
+- `run_forward_sample` calls the helper with `pin_finalized_head()`; **PR-B** backfill will call it after `resolve_block_at(..., search="bracketed")` (PR-A dry-run does not resolve blocks yet).
 
 **`chain_blocks.kind`:** add `backfill` (constant `_KIND_BACKFILL`); forward stays `forward`.
 
@@ -171,6 +171,6 @@ Implementation brief: repo `docs/1395-step3-implementation-brief.md`. Draft PR: 
 
 - [ ] One-shot backfill script can fill ≥7d hourly buckets on BM (or archival Finney) in dry-run + live smoke (`--max-buckets 3`) without 5xx.
 - [ ] Rows have `chain_sampled` provenance fields matching Step 2; `gecko_pool` only on documented fallback path.
-- [ ] Bracketed resolve passes synthetic convergence suite; stepped default unchanged.
+- [ ] Bracketed resolve passes synthetic convergence suite; stepped outcomes unchanged (stepped reads shared block cache).
 - [ ] CI: `tests/test_endpoint_contract.py` + new backfill/resolve tests green.
 - [ ] Joshua GO before prod data job or flag flips.

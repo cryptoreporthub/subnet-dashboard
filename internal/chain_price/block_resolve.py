@@ -197,6 +197,7 @@ def resolve_block_at(
 
     ``stepped`` (default): estimate-and-correct, ≤4 rounds — forward recorder latency path.
     ``bracketed``: anchored bisection with a higher round budget for historical backfill.
+    Both modes share ``_BLOCK_CACHE`` (probe cache + exact ``hint_block`` shortcut before RPC).
     """
     if search not in ("stepped", "bracketed"):
         raise ValueError(f"unknown search mode: {search!r}")
