@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from unittest.mock import patch
 
@@ -36,9 +37,19 @@ def test_is_low_respects_floor(monkeypatch):
     assert is_low(100) is False
 
 
-def test_is_low_missing_db_parent_is_not_disk_low(tmp_path):
+def test_is_low_missing_db_parent_uses_existing_ancestor(tmp_path, monkeypatch):
     db_file = tmp_path / "no" / "such" / "chain_prices.db"
-    assert is_low(200, path=str(db_file)) is False
+    assert not db_file.parent.exists()
+
+    def _low_on_root(directory: str):
+        if os.path.samefile(directory, str(tmp_path)):
+            return DiskUsage(free=10 * 1024 * 1024, used=0, total=1_000_000_000)
+        from internal.disk_guard import data_volume_usage_for_path
+
+        return data_volume_usage_for_path(directory)
+
+    monkeypatch.setattr("internal.disk_guard.data_volume_usage_for_path", _low_on_root)
+    assert is_low(200, path=str(db_file)) is True
 
 
 def test_is_low_uses_db_parent_directory(tmp_path):
@@ -135,6 +146,21 @@ def test_split_v2_proxies_worker_low_volume(monkeypatch):
     assert "data_volume_low" in report["issues"]
 
 
+def test_split_v2_worker_mounted_false_unavailable(monkeypatch):
+    monkeypatch.setattr("internal.data_volume.needs_worker_volume_proxy", lambda: True)
+
+    def _fetch(path: str, **_kwargs):
+        return {"owner": WORKER_VOLUME_OWNER, "mounted": False, "path": "/app/data"}
+
+    monkeypatch.setattr("internal.worker_proxy.fetch_worker_json_sync", _fetch)
+
+    from internal.ops.readiness import build_readiness_report
+
+    report = build_readiness_report()
+    assert report["data_volume"]["status"] == "unavailable"
+    assert "data_volume_unavailable" in report["issues"]
+
+
 def test_split_v2_misrouted_worker_reply_unavailable(monkeypatch):
     monkeypatch.setattr("internal.data_volume.needs_worker_volume_proxy", lambda: True)
 
@@ -163,16 +189,40 @@ def test_split_v2_worker_unavailable(monkeypatch):
     assert "data_volume_low" not in report["issues"]
 
 
-def test_missing_db_dir_returns_db_unavailable_not_disk_low():
-    db_path = "/tmp/subnet-dashboard-test-missing-db-dir/chain_prices.db"
+def test_missing_db_parent_disk_low_e2e_no_schema_write(tmp_path):
+    db_path = tmp_path / "nested" / "chain_prices.db"
+    assert not db_path.parent.exists()
+
+    class _Client:
+        def _call(self, method, params=None):
+            raise RuntimeError("should not reach RPC")
+
+    def _low_on_root(directory: str):
+        if os.path.samefile(directory, str(tmp_path)):
+            return DiskUsage(free=10 * 1024 * 1024, used=0, total=1_000_000_000)
+        from internal.disk_guard import data_volume_usage_for_path
+
+        return data_volume_usage_for_path(directory)
+
+    with patch.object(cfg, "forward_record_enabled", return_value=True), patch(
+        "internal.disk_guard.data_volume_usage_for_path",
+        _low_on_root,
+    ):
+        result = run_forward_sample(_Client(), db_path=str(db_path), write=True)
+    assert result["outcome"] == "disk_low"
+    assert not db_path.exists()
+
+
+def test_missing_db_parent_no_ancestor_returns_db_unavailable():
+    db_path = "/this/path/should/not/exist/at/all/chain_prices.db"
 
     class _Client:
         def _call(self, method, params=None):
             raise RuntimeError("should not reach RPC")
 
     with patch.object(cfg, "forward_record_enabled", return_value=True), patch(
-        "internal.chain_price.db.ensure_schema",
-        side_effect=OSError(2, "No such file or directory"),
+        "internal.disk_guard.nearest_existing_directory",
+        return_value=None,
     ):
         result = run_forward_sample(_Client(), db_path=db_path, write=True)
     assert result["outcome"] == "db_unavailable"
@@ -258,7 +308,10 @@ def test_metrics_clear_stale_values_on_probe_failure(monkeypatch):
     assert DATA_VOLUME_FREE_BYTES._value.get() == 999
     assert DATA_VOLUME_METRICS_OK._value.get() == 1
 
-    monkeypatch.setattr("internal.disk_guard._probe_disk_usage_for_metrics", lambda: None)
+    def _raise_connection() -> DiskUsage:
+        raise ConnectionError("worker down")
+
+    monkeypatch.setattr("internal.disk_guard._probe_disk_usage_for_metrics", _raise_connection)
     refresh_data_volume_metrics_cache_sync()
     refresh_from_state()
     assert DATA_VOLUME_FREE_BYTES._value.get() == DATA_VOLUME_BYTES_UNAVAILABLE

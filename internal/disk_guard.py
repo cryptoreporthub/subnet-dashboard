@@ -48,12 +48,42 @@ def data_free_bytes() -> int:
     return data_volume_usage().free
 
 
+def nearest_existing_directory(path: str) -> Optional[str]:
+    """Walk parents until an existing directory is found (for DB path disk checks)."""
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    candidate = directory
+    while True:
+        if os.path.isdir(candidate):
+            return candidate
+        parent = os.path.dirname(candidate)
+        if parent == candidate:
+            return None
+        candidate = parent
+
+
+def db_parent_filesystem_missing(db_file: str) -> bool:
+    """True when the DB parent chain has no existing directory to measure or create on."""
+    parent = os.path.dirname(os.path.abspath(db_file)) or "."
+    if os.path.isdir(parent):
+        return False
+    return nearest_existing_directory(db_file) is None
+
+
+def _disk_measure_directory_for_path(path: str) -> Optional[str]:
+    parent = os.path.dirname(os.path.abspath(path)) or "."
+    if os.path.isdir(parent):
+        return parent
+    return nearest_existing_directory(path)
+
+
 def is_low(min_free_mb: int, *, path: Optional[str] = None) -> bool:
     floor = int(min_free_mb) * 1024 * 1024
     if path:
-        directory = os.path.dirname(os.path.abspath(path)) or "."
+        measure_dir = _disk_measure_directory_for_path(path)
+        if measure_dir is None:
+            return False
         try:
-            free = data_volume_usage_for_path(directory).free
+            free = data_volume_usage_for_path(measure_dir).free
         except OSError:
             return False
         return free < floor
@@ -118,6 +148,8 @@ def _fetch_worker_data_volume() -> Optional[Dict[str, Any]]:
     if remote.get("status") == "unavailable":
         return None
     if remote.get("owner") != WORKER_VOLUME_OWNER:
+        return None
+    if not remote.get("mounted"):
         return None
     return remote
 
@@ -189,7 +221,10 @@ def _probe_disk_usage_for_metrics() -> Optional[DiskUsage]:
 def refresh_data_volume_metrics_cache_sync() -> None:
     """Refresh cached volume bytes (sync; for background thread or tests)."""
     global _METRICS_CACHE, _METRICS_CACHE_AT
-    usage = _probe_disk_usage_for_metrics()
+    try:
+        usage = _probe_disk_usage_for_metrics()
+    except Exception:
+        usage = None
     with _METRICS_CACHE_LOCK:
         _METRICS_CACHE = usage
         _METRICS_CACHE_AT = time.monotonic()

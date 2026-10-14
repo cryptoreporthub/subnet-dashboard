@@ -182,6 +182,11 @@ def run_forward_sample(
         return {"outcome": "disabled"}
 
     db_file = db_path or cfg.CHAIN_PRICE_DB_PATH
+    from internal.disk_guard import db_parent_filesystem_missing
+
+    if db_parent_filesystem_missing(db_file):
+        logger.warning("chain price db unavailable: parent path missing on filesystem")
+        return {"outcome": "db_unavailable"}
     if is_low(cfg.CHAIN_PRICE_MIN_FREE_MB, path=db_file):
         _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB, db_file)
         try:
