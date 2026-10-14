@@ -313,6 +313,22 @@ def build_readiness_report() -> Dict[str, Any]:
         issues=issues,
         meta=section_meta,
     )
+
+    def _data_volume_section() -> Dict[str, Any]:
+        from internal.disk_guard import build_data_volume_readiness
+
+        return build_data_volume_readiness()
+
+    data_volume = _run_readiness_section(
+        "data_volume",
+        _data_volume_section,
+        default={"mounted": False},
+        issues=issues,
+        meta=section_meta,
+    )
+    if data_volume.get("mounted") and data_volume.get("low"):
+        issues.append("data_volume_low")
+
     if loop_health.get("status") == "stalled":
         issues.append("learning_loop_stalled")
     elif loop_health.get("ledger", {}).get("gap"):
@@ -456,6 +472,7 @@ def build_readiness_report() -> Dict[str, Any]:
         ),
         "taostats": {"configured": taostats},
         "daily_pick": daily,
+        "data_volume": data_volume,
         "next_levers": _next_levers(issues, taostats),
         "evidence_sources": freshness_sources,
         **readiness_contract,

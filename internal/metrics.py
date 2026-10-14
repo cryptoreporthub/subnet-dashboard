@@ -122,6 +122,24 @@ READINESS_BUILD_FAILURES = Counter(
 )
 READINESS_REPORT_AGE_UNAVAILABLE = -1.0
 
+DATA_VOLUME_FREE_BYTES = Gauge(
+    "data_volume_free_bytes",
+    "Free bytes on DATA_DIR volume",
+)
+DATA_VOLUME_USED_BYTES = Gauge(
+    "data_volume_used_bytes",
+    "Used bytes on DATA_DIR volume",
+)
+DATA_VOLUME_TOTAL_BYTES = Gauge(
+    "data_volume_total_bytes",
+    "Total bytes on DATA_DIR volume",
+)
+CHAIN_PRICE_SKIPPED_TOTAL = Counter(
+    "chain_price_skipped_total",
+    "Chain price forward recorder ticks skipped without sampling",
+    ["reason"],
+)
+
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
     if value is None:
@@ -206,6 +224,16 @@ def refresh_from_state() -> None:
         READINESS_REPORT_AGE_SECONDS.set(
             age if age is not None else READINESS_REPORT_AGE_UNAVAILABLE
         )
+    except Exception:
+        pass
+
+    try:
+        from internal.disk_guard import data_volume_usage
+
+        usage = data_volume_usage()
+        DATA_VOLUME_FREE_BYTES.set(usage.free)
+        DATA_VOLUME_USED_BYTES.set(usage.used)
+        DATA_VOLUME_TOTAL_BYTES.set(usage.total)
     except Exception:
         pass
 

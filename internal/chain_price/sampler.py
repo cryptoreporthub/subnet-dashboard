@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.chain_client import PRICE_SCALE, _decode_scale_u64, _hex_to_bytes
@@ -10,6 +11,7 @@ from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
 from internal.chain_price.outcomes import RpcOutcome, TickOutcome, TickResult
 from internal.chain_price.rpc import rpc_call_fn
+from internal.disk_guard import data_free_bytes, is_low
 from internal.chain_price.storage_keys import (
     map_key_hex,
     netuid_from_networks_added_key,
@@ -22,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _KIND_FORWARD = "forward"
 _consecutive_hard_failures = 0
+_disk_low_last_log = 0.0
+_DISK_LOW_LOG_INTERVAL_SECONDS = 600.0
 
 
 def _bucket_ts_ms(ts_ms: int) -> int:
@@ -176,6 +180,16 @@ def run_forward_sample(
     if not cfg.forward_record_enabled():
         return {"outcome": "disabled"}
 
+    if is_low(cfg.CHAIN_PRICE_MIN_FREE_MB):
+        _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB)
+        try:
+            from internal.metrics import CHAIN_PRICE_SKIPPED_TOTAL
+
+            CHAIN_PRICE_SKIPPED_TOTAL.labels(reason="disk_low").inc()
+        except Exception:
+            pass
+        return {"outcome": "disk_low"}
+
     price_db.ensure_schema(db_path)
     call = rpc_call_fn(client)
 
@@ -266,6 +280,19 @@ def run_forward_sample(
     if spot_failures:
         result["spot_crosscheck_failures"] = spot_failures
     return result
+
+
+def _log_disk_low_skip(min_free_mb: int) -> None:
+    global _disk_low_last_log
+    now = time.time()
+    if now - _disk_low_last_log < _DISK_LOW_LOG_INTERVAL_SECONDS:
+        return
+    _disk_low_last_log = now
+    logger.warning(
+        "chain price forward sample skipped: disk_low free_bytes=%s min_free_mb=%s",
+        data_free_bytes(),
+        min_free_mb,
+    )
 
 
 def _bump_hard_failures(outcome: TickOutcome | RpcOutcome | None) -> None:
