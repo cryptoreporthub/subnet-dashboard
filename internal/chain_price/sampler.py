@@ -196,7 +196,7 @@ def run_forward_sample(
         price_db.ensure_schema(db_path)
     except OSError as exc:
         logger.warning("chain price db unavailable: %s", exc)
-        return {"outcome": "invalid", "error": "db_unavailable"}
+        return {"outcome": "db_unavailable"}
     call = rpc_call_fn(client)
 
     block_hash, outcome = call("chain_getFinalizedHead", [])

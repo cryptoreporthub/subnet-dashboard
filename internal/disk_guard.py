@@ -55,7 +55,7 @@ def is_low(min_free_mb: int, *, path: Optional[str] = None) -> bool:
         try:
             free = data_volume_usage_for_path(directory).free
         except OSError:
-            return True
+            return False
         return free < floor
     return data_free_bytes() < floor
 

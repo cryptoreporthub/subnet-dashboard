@@ -36,6 +36,11 @@ def test_is_low_respects_floor(monkeypatch):
     assert is_low(100) is False
 
 
+def test_is_low_missing_db_parent_is_not_disk_low(tmp_path):
+    db_file = tmp_path / "no" / "such" / "chain_prices.db"
+    assert is_low(200, path=str(db_file)) is False
+
+
 def test_is_low_uses_db_parent_directory(tmp_path):
     db_file = tmp_path / "nested" / "chain_prices.db"
     db_file.parent.mkdir()
@@ -156,6 +161,21 @@ def test_split_v2_worker_unavailable(monkeypatch):
     assert report["data_volume"]["status"] == "unavailable"
     assert "data_volume_unavailable" in report["issues"]
     assert "data_volume_low" not in report["issues"]
+
+
+def test_missing_db_dir_returns_db_unavailable_not_disk_low():
+    db_path = "/tmp/subnet-dashboard-test-missing-db-dir/chain_prices.db"
+
+    class _Client:
+        def _call(self, method, params=None):
+            raise RuntimeError("should not reach RPC")
+
+    with patch.object(cfg, "forward_record_enabled", return_value=True), patch(
+        "internal.chain_price.db.ensure_schema",
+        side_effect=OSError(2, "No such file or directory"),
+    ):
+        result = run_forward_sample(_Client(), db_path=db_path, write=True)
+    assert result["outcome"] == "db_unavailable"
 
 
 def test_recorder_disk_low_no_write_no_auto_cancel(tmp_path, monkeypatch):
