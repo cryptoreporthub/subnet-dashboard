@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import sqlite3
+from unittest.mock import patch
+
 import pytest
 
-from internal.chain_price.backfill import plan_hourly_bucket_ts_ms, run_backfill_dry_run
+from internal.chain_price.backfill import backfill_bucket, plan_hourly_bucket_ts_ms, run_backfill_dry_run
 from internal.chain_price.block_resolve import clear_block_cache, resolve_block_at
+from internal.chain_price.reader import ChainReader
 from tests.test_block_resolve_convergence_1406 import HEAD, WINDOW, _SyntheticChain
+from tests.test_chain_price_step2 import PINNED_HASH, fixture_client
 
 # Claude review grid: 16 seeds × 2 jitters × 1_200 targets (step 417) = 38_400 cases.
 _SYNTHETIC_SWEEP_STEP = 417
@@ -23,7 +28,33 @@ def test_backfill_dry_run_payload():
     out = run_backfill_dry_run(1_700_000_000_000, search="bracketed")
     assert out["outcome"] == "dry_run"
     assert out["search"] == "bracketed"
-    assert "PR-B" in out["resolve_block_at"]
+    assert "note" in out
+
+
+def test_backfill_bucket_writes_and_idempotent(fixture_client, tmp_path):
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        first = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+        second = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+
+    assert first["outcome"] == "ok"
+    assert first["samples_written"] > 0
+    assert second["outcome"] == "skipped"
+    assert second["samples_written"] == 0
+
+    conn = sqlite3.connect(db_path)
+    kind = conn.execute("SELECT kind FROM chain_blocks LIMIT 1").fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
+    conn.close()
+    assert kind == "backfill"
+    assert count == first["samples_written"]
 
 
 def test_backfill_dry_run_unknown_search_raises():

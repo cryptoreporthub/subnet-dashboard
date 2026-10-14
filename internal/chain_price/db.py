@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -91,6 +92,50 @@ def ensure_schema(path: Optional[str] = None) -> str:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
     return db_path
+
+
+def load_anchor_blocks(
+    ts_ms: int,
+    window_ms: int,
+    path: Optional[str] = None,
+) -> List[int]:
+    """``chain_blocks`` rows near ``ts_ms`` for bracketed resolve seeding."""
+    low = ts_ms - window_ms
+    high = ts_ms + window_ms
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return []
+    with db_conn(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT block FROM chain_blocks
+            WHERE ts_ms BETWEEN ? AND ?
+            ORDER BY ts_ms
+            """,
+            (low, high),
+        )
+        return [int(row[0]) for row in cur.fetchall()]
+
+
+def hourly_bucket_has_chain_sample(
+    bucket_ts_ms: int,
+    path: Optional[str] = None,
+) -> bool:
+    """True when a non-disputed ``chain_sampled`` row exists for the UTC hour."""
+    end_ms = bucket_ts_ms + 3_600_000
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return False
+    with db_conn(db_path) as conn:
+        cur = conn.execute(
+            """
+            SELECT 1 FROM chain_price_samples
+            WHERE quality = 'chain_sampled' AND ts_ms >= ? AND ts_ms < ?
+            LIMIT 1
+            """,
+            (bucket_ts_ms, end_ms),
+        )
+        return cur.fetchone() is not None
 
 
 def insert_block_row(
