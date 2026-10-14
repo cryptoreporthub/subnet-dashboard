@@ -154,14 +154,23 @@ def reap_stale_tmp_files(
     return len(removed), removed
 
 
-def maybe_reap_at_machine_start() -> None:
-    """Once per container start (fly entrypoint), before web/worker can write."""
+def run_machine_start_reap(*, dry_run: bool = False) -> Tuple[int, List[str]]:
+    """Entrypoint / CLI machine-start reap (honors TMP_BOOT_REAP + volume probe)."""
     flag = os.environ.get("TMP_BOOT_REAP", "on").strip().lower()
     if flag in ("0", "false", "no", "off"):
-        return
+        return 0, []
     if not _volume_mount_verified():
-        return
-    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS, at_boot=True)
+        return 0, []
+    return reap_stale_tmp_files(
+        dry_run=dry_run,
+        min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS,
+        at_boot=True,
+    )
+
+
+def maybe_reap_at_machine_start() -> None:
+    """Once per container start (fly entrypoint), before web/worker can write."""
+    run_machine_start_reap()
 
 
 def maybe_reap_at_boot() -> None:

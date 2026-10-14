@@ -154,6 +154,56 @@ def test_maybe_reap_at_boot_skips_inline_worker(monkeypatch, tmp_path):
     assert orphan.exists()
 
 
+def test_tmp_boot_reap_once_script_runs_from_repo_root(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env["DATA_DIR"] = str(tmp_path)
+    env["TMP_BOOT_REAP_DRY"] = "1"
+    env["DATA_DIR_IS_VOLUME"] = "on"
+    result = subprocess.run(
+        [sys.executable, "scripts/tmp_boot_reap_once.py"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "count=" in result.stdout
+
+
+def test_tmp_boot_reap_once_honors_off_flag(tmp_path):
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[1]
+    orphan = tmp_path / "tmpabcd1234.json"
+    orphan.write_text("{}", encoding="utf-8")
+    past = time.time() - 7200
+    os.utime(orphan, (past, past))
+    env = os.environ.copy()
+    env.pop("PYTHONPATH", None)
+    env["DATA_DIR"] = str(tmp_path)
+    env["TMP_BOOT_REAP"] = "off"
+    env["DATA_DIR_IS_VOLUME"] = "on"
+    result = subprocess.run(
+        [sys.executable, "scripts/tmp_boot_reap_once.py"],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert orphan.exists()
+
+
 def test_maybe_reap_at_boot_skips_non_worker(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("RUN_MODE", "web")

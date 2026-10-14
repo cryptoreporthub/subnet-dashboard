@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import time
 from pathlib import Path
 from unittest.mock import patch
 
@@ -37,7 +38,11 @@ def test_safe_write_json_survives_reap_while_dump_blocked(tmp_path, monkeypatch)
     t = threading.Thread(target=writer)
     t.start()
     assert dump_started.wait(timeout=5)
-    reap_stale_tmp_files(min_age_seconds=3600, at_boot=True)
+    sidecars = list(tmp_path.glob("alerts.json.*.*.tmp"))
+    assert len(sidecars) == 1
+    past = time.time() - 7200
+    os.utime(sidecars[0], (past, past))
+    reap_stale_tmp_files(min_age_seconds=0, at_boot=True)
     gate.set()
     t.join(timeout=5)
     assert not errors
@@ -68,5 +73,16 @@ def test_safe_write_json_concurrent_writers_do_not_share_temp(tmp_path):
     assert set(payload.keys()) == {"a"} or set(payload.keys()) == {"b"}
     assert payload[list(payload.keys())[0]] in ("A" * 64, "B" * 64)
     assert not list(tmp_path.glob("tmp*.json"))
-    pid_sidecars = list(tmp_path.glob("whale_intelligence.json.*.tmp"))
-    assert pid_sidecars == []
+    assert list(tmp_path.glob("whale_intelligence.json.*.*.tmp")) == []
+
+
+def test_safe_write_json_dead_pid_sidecar_reaped(tmp_path, monkeypatch):
+    from internal.tmp_boot_reaper import reap_stale_tmp_files
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    dead_pid = 999999
+    sidecar = tmp_path / f"alerts.json.{dead_pid}.deadbeef.tmp"
+    sidecar.write_text("{}", encoding="utf-8")
+    count, _ = reap_stale_tmp_files(min_age_seconds=0, at_boot=True)
+    assert count >= 1
+    assert not sidecar.exists()
