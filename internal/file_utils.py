@@ -5,7 +5,6 @@ Ensures data directory exists before file writes to prevent
 "No such file or directory" errors on Fly.io and similar platforms.
 """
 
-import fcntl
 import json
 import logging
 import os
@@ -43,8 +42,8 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     """
     Write JSON data to a file atomically with directory creation.
 
-    Each writer gets a unique mkstemp file named after the target (``*.tmp``)
-    so concurrent writers do not share one temp path; stale temps are reaped by
+    Each writer gets a pid-tagged mkstemp sidecar ``<basename>.<pid>.<rand>.tmp``
+    so the reaper can skip live owners; stale temps are reaped by
     ``internal.tmp_boot_reaper``. Never use mkstemp with suffix ``.json`` alone.
     """
     dir_name = os.path.dirname(path)
@@ -53,19 +52,13 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
 
     fd, temp_path = tempfile.mkstemp(
         dir=dir_name or ".",
-        prefix=f"{os.path.basename(path)}.",
+        prefix=f"{os.path.basename(path)}.{os.getpid()}.",
         suffix=".tmp",
     )
-    fcntl.flock(fd, fcntl.LOCK_EX)
     try:
-        f = os.fdopen(fd, "w", encoding="utf-8")
-        try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-            f.flush()
-            os.fsync(f.fileno())
-            os.replace(temp_path, path)
-        finally:
-            f.close()
+        os.replace(temp_path, path)
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)

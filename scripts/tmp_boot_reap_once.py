@@ -10,7 +10,11 @@ def main() -> int:
     dry = os.environ.get("TMP_BOOT_REAP_DRY", "").strip().lower() in ("1", "true", "yes", "on")
     from internal.tmp_boot_reaper import reap_stale_tmp_files
 
-    count, paths = reap_stale_tmp_files(dry_run=dry)
+    count, paths = reap_stale_tmp_files(
+        dry_run=dry,
+        min_age_seconds=60,
+        at_boot=True,
+    )
     print(f"count={count} dry_run={dry}")
     for path in paths[:50]:
         print(path)

@@ -6,53 +6,40 @@ import json
 import os
 import threading
 from pathlib import Path
+from unittest.mock import patch
 
 from internal.file_utils import safe_write_json
 
 
-def test_safe_write_json_survives_reap_while_locked(tmp_path, monkeypatch):
-    import fcntl
-    import time
-
+def test_safe_write_json_survives_reap_while_dump_blocked(tmp_path, monkeypatch):
     from internal.tmp_boot_reaper import reap_stale_tmp_files
 
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
     target = tmp_path / "alerts.json"
-    barrier = threading.Barrier(2)
+    gate = threading.Event()
+    dump_started = threading.Event()
+    real_dump = json.dump
+
+    def slow_dump(*args, **kwargs):
+        dump_started.set()
+        assert gate.wait(timeout=5)
+        return real_dump(*args, **kwargs)
+
     errors: list[BaseException] = []
 
     def writer() -> None:
         try:
-            barrier.wait()
-            fd, temp_path = __import__("tempfile").mkstemp(
-                dir=str(tmp_path),
-                prefix="alerts.json.",
-                suffix=".tmp",
-            )
-            fcntl.flock(fd, fcntl.LOCK_EX)
-            f = os.fdopen(fd, "w", encoding="utf-8")
-            f.write('{"held": true}')
-            f.flush()
-            barrier.wait()
-            time.sleep(0.05)
-            os.replace(temp_path, str(target))
-            f.close()
+            with patch("internal.file_utils.json.dump", slow_dump):
+                safe_write_json(str(target), {"x": 1})
         except BaseException as exc:
             errors.append(exc)
 
-    def reaper() -> None:
-        barrier.wait()
-        past = time.time() - 120
-        for path in tmp_path.glob("*.tmp"):
-            os.utime(path, (past, past))
-        reap_stale_tmp_files(min_age_seconds=60)
-        barrier.wait()
-
-    t_w = threading.Thread(target=writer)
-    t_r = threading.Thread(target=reaper)
-    t_w.start()
-    t_r.start()
-    t_w.join()
-    t_r.join()
+    t = threading.Thread(target=writer)
+    t.start()
+    assert dump_started.wait(timeout=5)
+    reap_stale_tmp_files(min_age_seconds=3600, at_boot=True)
+    gate.set()
+    t.join(timeout=5)
     assert not errors
     assert target.exists()
 
@@ -81,4 +68,5 @@ def test_safe_write_json_concurrent_writers_do_not_share_temp(tmp_path):
     assert set(payload.keys()) == {"a"} or set(payload.keys()) == {"b"}
     assert payload[list(payload.keys())[0]] in ("A" * 64, "B" * 64)
     assert not list(tmp_path.glob("tmp*.json"))
-    assert list(tmp_path.glob("whale_intelligence.json.*.tmp")) == []
+    pid_sidecars = list(tmp_path.glob("whale_intelligence.json.*.tmp"))
+    assert pid_sidecars == []

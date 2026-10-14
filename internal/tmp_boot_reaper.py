@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import logging
 import os
 import re
@@ -11,11 +10,13 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Grace at worker boot so concurrent startup writers are not unlinked mid-write.
 _BOOT_REAP_MIN_AGE_SECONDS = 60
+_PID_REUSE_CAP_SECONDS = 6 * 3600
 
 # mkstemp(prefix="tmp") orphans: tmp + 8 of [a-z0-9_] + .json or .tmp (legacy whale writer).
 _LEGACY_ORPHAN_RE = re.compile(r"^tmp[a-z0-9_]{8}\.(?:json|tmp)$")
+# safe_write_json: <basename>.<pid>.<random>.tmp
+_PID_SIDECAR_RE = re.compile(r"^(.+)\.(\d+)\.[a-z0-9_]+\.tmp$", re.IGNORECASE)
 
 
 def _data_dir() -> str:
@@ -45,37 +46,66 @@ def _volume_mount_verified() -> bool:
         return False
 
 
-def _temp_file_in_use(path: str) -> bool:
-    """True when another process holds an exclusive flock on the temp file."""
+def _process_alive(pid: int) -> bool:
     try:
-        fd = os.open(path, os.O_RDWR)
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
     except OSError:
         return True
-    try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            fcntl.flock(fd, fcntl.LOCK_UN)
-        except BlockingIOError:
-            return True
-    finally:
-        os.close(fd)
-    return False
 
 
 def _is_reap_candidate(filename: str) -> bool:
     if _LEGACY_ORPHAN_RE.match(filename):
+        return True
+    if _PID_SIDECAR_RE.match(filename):
         return True
     if filename.endswith(".tmp"):
         return True
     return False
 
 
-def find_stale_tmp_files(*, data_dir: str | None = None, min_age_seconds: int | None = None) -> List[str]:
-    """Return paths to stale temp/orphan files older than min_age under data_dir."""
+def _should_reap(
+    filename: str,
+    mtime: float,
+    *,
+    now: float,
+    min_age_seconds: int,
+    at_boot: bool,
+) -> bool:
+    age = now - mtime
+    pid_match = _PID_SIDECAR_RE.match(filename)
+    if pid_match:
+        pid = int(pid_match.group(2))
+        if not _process_alive(pid):
+            return True
+        if age >= _PID_REUSE_CAP_SECONDS:
+            return True
+        return False
+    if _LEGACY_ORPHAN_RE.match(filename):
+        return age >= min_age_seconds
+    if filename.endswith(".tmp"):
+        if at_boot:
+            return False
+        return age >= min_age_seconds
+    return False
+
+
+def find_stale_tmp_files(
+    *,
+    data_dir: str | None = None,
+    min_age_seconds: int | None = None,
+    at_boot: bool = False,
+) -> List[str]:
+    """Return paths to stale temp/orphan files under data_dir."""
     root = data_dir or _data_dir()
     if not os.path.isdir(root):
         return []
-    cutoff = time.time() - (min_age_seconds if min_age_seconds is not None else _min_age_seconds())
+    floor = min_age_seconds if min_age_seconds is not None else _min_age_seconds()
+    now = time.time()
     stale: List[str] = []
     for dirpath, _dirnames, filenames in os.walk(root):
         for name in filenames:
@@ -83,18 +113,22 @@ def find_stale_tmp_files(*, data_dir: str | None = None, min_age_seconds: int | 
                 continue
             path = os.path.join(dirpath, name)
             try:
-                if os.path.getmtime(path) <= cutoff:
-                    stale.append(path)
+                mtime = os.path.getmtime(path)
             except OSError:
                 continue
+            if _should_reap(name, mtime, now=now, min_age_seconds=floor, at_boot=at_boot):
+                stale.append(path)
     return stale
 
 
 def reap_stale_tmp_files(
-    *, dry_run: bool = False, min_age_seconds: int | None = None
+    *,
+    dry_run: bool = False,
+    min_age_seconds: int | None = None,
+    at_boot: bool = False,
 ) -> Tuple[int, List[str]]:
     """Delete stale temp/orphan files; return (removed_count, paths)."""
-    paths = find_stale_tmp_files(min_age_seconds=min_age_seconds)
+    paths = find_stale_tmp_files(min_age_seconds=min_age_seconds, at_boot=at_boot)
     removed: List[str] = []
     total_bytes = 0
     for path in paths:
@@ -104,9 +138,6 @@ def reap_stale_tmp_files(
             pass
         if dry_run:
             removed.append(path)
-            continue
-        if _temp_file_in_use(path):
-            logger.debug("tmp boot reaper: skip in-use temp %s", path)
             continue
         try:
             os.unlink(path)
@@ -130,7 +161,7 @@ def maybe_reap_at_machine_start() -> None:
         return
     if not _volume_mount_verified():
         return
-    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS)
+    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS, at_boot=True)
 
 
 def maybe_reap_at_boot() -> None:
@@ -146,7 +177,7 @@ def maybe_reap_at_boot() -> None:
         return
     if not _volume_mount_verified():
         return
-    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS)
+    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS, at_boot=True)
 
 
 def maybe_reap_scheduled() -> None:
@@ -160,4 +191,4 @@ def maybe_reap_scheduled() -> None:
         return
     if not _volume_mount_verified():
         return
-    reap_stale_tmp_files()
+    reap_stale_tmp_files(at_boot=False)
