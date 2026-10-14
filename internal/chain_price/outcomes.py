@@ -13,6 +13,8 @@ TickOutcome = Literal[
     "rpc_error",
     "schema_miss",
     "disabled",
+    "disk_low",
+    "db_unavailable",
 ]
 
 RpcOutcome = Literal[

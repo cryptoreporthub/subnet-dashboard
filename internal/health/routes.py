@@ -140,6 +140,14 @@ async def api_ops_volume_stat():
     return build_volume_stat()
 
 
+@health_router.get("/api/ops/data-volume")
+async def api_ops_data_volume():
+    """Local DATA_DIR free space (worker truth in split_v2; v1 inline web mount)."""
+    from internal.disk_guard import build_data_volume_readiness_local
+
+    return build_data_volume_readiness_local()
+
+
 @health_router.get("/api/ops/desearch-spend")
 async def api_desearch_spend(recent: int = 25):
     """Rolling DeSearch API spend from X-Desearch-* response headers."""

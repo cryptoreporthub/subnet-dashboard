@@ -64,6 +64,20 @@ _supervise_inline_worker() {
   ) &
 }
 
+# One-shot orphan cleanup before web/inline-worker share the volume (worker-only
+# restarts must not reap — see maybe_reap_at_boot inline_worker_expected gate).
+case "${ENABLE_INLINE_WORKER:-1}" in
+  0|false|no|off) ;;
+  *)
+    case "${WORKER_SPLIT_V2:-0}" in
+      1|true|yes|on) ;;
+      *)
+        python scripts/tmp_boot_reap_once.py || echo "WARN: tmp boot reaper skipped at entrypoint"
+        ;;
+    esac
+    ;;
+esac
+
 _start_inline_worker
 _supervise_inline_worker
 exec python scripts/run_web_with_guard.py

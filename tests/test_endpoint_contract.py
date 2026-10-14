@@ -43,6 +43,7 @@ CONTRACT = [
     ("GET", "/api/ops/live", None),
     ("GET", "/api/ops/worker-peer", None),
     ("GET", "/api/ops/evidence", None),
+    ("GET", "/api/ops/data-volume", None),
     ("GET", "/api/ops/desearch-spend", None),
     ("GET", "/api/subnet-integrations", None),
     ("GET", "/api/subnet-integrations/signals", None),

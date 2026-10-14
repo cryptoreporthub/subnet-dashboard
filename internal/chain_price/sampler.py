@@ -1,19 +1,22 @@
-"""Forward chain price sampler tick (#1395 Step 0)."""
+"""Forward chain price sampler tick (#1395 Step 0/2)."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import os
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 from internal.chain_client import PRICE_SCALE, _decode_scale_u64, _hex_to_bytes
 from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
+from internal.chain_price.bars import series_key
+from internal.chain_price.membership import get_member_netuids
 from internal.chain_price.outcomes import RpcOutcome, TickOutcome, TickResult
-from internal.chain_price.rpc import rpc_call_fn
+from internal.chain_price.reader import ChainReader
+from internal.chain_rpc_errors import storage_block_matches
 from internal.chain_price.storage_keys import (
     map_key_hex,
-    netuid_from_networks_added_key,
-    networks_added_prefix_hex,
     reserve_query_keys,
     timestamp_now_key_hex,
 )
@@ -21,7 +24,9 @@ from internal.chain_price.storage_keys import (
 logger = logging.getLogger(__name__)
 
 _KIND_FORWARD = "forward"
-_consecutive_hard_failures = 0
+_consecutive_schema_miss = 0
+_disk_low_last_log = 0.0
+_DISK_LOW_LOG_INTERVAL_SECONDS = 600.0
 
 
 def _bucket_ts_ms(ts_ms: int) -> int:
@@ -38,6 +43,11 @@ def _parse_block_number(header: Dict[str, Any]) -> Optional[int]:
     return int(num)
 
 
+def _returned_block_matches(entry: Any, block_hash: str) -> bool:
+    """Fail closed: a storage read must report the pinned block or nothing is persisted."""
+    return storage_block_matches(entry, block_hash)
+
+
 def _decode_u64_storage(raw: Any) -> Optional[int]:
     if raw is None or raw == "0x" or raw == "0x00":
         return None
@@ -47,34 +57,11 @@ def _decode_u64_storage(raw: Any) -> Optional[int]:
         return None
 
 
-def _fetch_networks_added(
-    call: Callable[[str, list], Tuple[Optional[Any], RpcOutcome]],
-    at_hash: str,
-) -> Tuple[List[int], RpcOutcome]:
-    prefix = networks_added_prefix_hex()
-    netuids: List[int] = []
-    start: Optional[str] = None
-    while True:
-        params = [prefix, 200, start, at_hash]
-        page, outcome = call("state_getKeysPaged", params)
-        if outcome != "ok":
-            return netuids, outcome
-        if not page:
-            break
-        for key in page:
-            netuid = netuid_from_networks_added_key(key)
-            if netuid != 0:
-                netuids.append(netuid)
-        if len(page) < 200:
-            break
-        start = page[-1]
-    return sorted(set(netuids)), "ok"
-
-
 def _parse_storage_batch(
     changes: List[List[Any]],
     netuids: List[int],
     block: int,
+    block_hash: str,
     provider: str,
     ts_ms: int,
     spot_by_netuid: Dict[int, float],
@@ -94,8 +81,7 @@ def _parse_storage_batch(
             null_count += 1
             continue
         price_tao = tao_raw / alpha_raw
-        spot_raw = spot_by_netuid.get(netuid)
-        spot_price_tao = spot_raw
+        spot_price_tao = spot_by_netuid.get(netuid)
         quality = "chain_sampled"
         if spot_price_tao is not None and price_tao > 0:
             rel = abs(spot_price_tao / price_tao - 1.0)
@@ -105,6 +91,7 @@ def _parse_storage_batch(
             {
                 "netuid": netuid,
                 "block": block,
+                "block_hash": block_hash,
                 "provider": provider,
                 "ts_ms": ts_ms,
                 "registered_at": registered_at,
@@ -115,6 +102,7 @@ def _parse_storage_batch(
                 "unit": "tao",
                 "quality": quality,
                 "schema_version": cfg.SCHEMA_VERSION,
+                "series_key": series_key(netuid, registered_at),
             }
         )
 
@@ -136,7 +124,7 @@ def _crosscheck_netuids(netuids: List[int], block: int) -> List[int]:
 
 
 def _spot_prices(
-    call: Callable[[str, list], Tuple[Optional[Any], RpcOutcome]],
+    call,
     netuids: List[int],
     at_hash: str,
 ) -> Tuple[Dict[int, float], int]:
@@ -165,49 +153,86 @@ def _spot_prices(
 
 
 def run_forward_sample(
-    client: Any,
+    client_or_reader: Any,
     *,
     db_path: Optional[str] = None,
     write: bool = True,
 ) -> TickResult:
     """Sample finalized head and persist chain prices when outcome is ``ok``."""
-    global _consecutive_hard_failures
+    global _consecutive_schema_miss
 
     if not cfg.forward_record_enabled():
         return {"outcome": "disabled"}
 
-    price_db.ensure_schema(db_path)
-    call = rpc_call_fn(client)
+    reader = client_or_reader if isinstance(client_or_reader, ChainReader) else None
+    if reader is None:
+        reader = ChainReader([(cfg.primary_rpc_endpoint()[1], client_or_reader)])
 
-    block_hash, outcome = call("chain_getFinalizedHead", [])
+    db_file = db_path or cfg.CHAIN_PRICE_DB_PATH
+    from internal.disk_guard import db_disk_guard_outcome
+
+    guard = db_disk_guard_outcome(db_file, cfg.CHAIN_PRICE_MIN_FREE_MB)
+    if guard == "db_unavailable":
+        logger.warning("chain price db unavailable: disk guard failed for %s", db_file)
+        return {"outcome": "db_unavailable"}
+    if guard == "disk_low":
+        _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB, db_file)
+        try:
+            from internal.metrics import CHAIN_PRICE_SKIPPED_TOTAL
+
+            CHAIN_PRICE_SKIPPED_TOTAL.labels(reason="disk_low").inc()
+        except Exception:
+            pass
+        return {"outcome": "disk_low"}
+
+    try:
+        price_db.ensure_schema(db_path)
+    except OSError as exc:
+        logger.warning("chain price db unavailable: %s", exc)
+        return {"outcome": "db_unavailable"}
+
+    call = reader.call_fn()
+    block_hash, outcome = reader.pin_finalized_head()
     if outcome != "ok" or not block_hash:
-        _bump_hard_failures(outcome)
+        _bump_schema_miss(outcome)
         return {"outcome": outcome or "rpc_error"}
 
     header, outcome = call("chain_getHeader", [block_hash])
     if outcome != "ok" or not isinstance(header, dict):
-        _bump_hard_failures(outcome)
+        _bump_schema_miss(outcome)
         return {"outcome": outcome or "rpc_error"}
 
     block = _parse_block_number(header)
     if block is None:
-        _bump_hard_failures("invalid")
+        _bump_schema_miss("invalid")
         return {"outcome": "invalid", "error": "missing block number"}
 
-    netuids, outcome = _fetch_networks_added(call, block_hash)
+    netuids, outcome = get_member_netuids(call, block_hash)
     if outcome != "ok":
-        _bump_hard_failures(outcome)
+        _bump_schema_miss(outcome)
         return {"outcome": outcome, "block": block, "block_hash": block_hash}
 
     query_keys = reserve_query_keys(netuids)
     batch, outcome = call("state_queryStorageAt", [query_keys, block_hash])
     if outcome != "ok" or not batch:
-        _bump_hard_failures(outcome)
+        _bump_schema_miss(outcome)
         return {"outcome": outcome or "rpc_error", "block": block, "block_hash": block_hash}
 
-    changes = batch[0].get("changes") if isinstance(batch[0], dict) else None
+    # Capture before the spot cross-check: that read may fail over to another provider.
+    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
+    entry = batch[0] if isinstance(batch[0], dict) else {}
+    if not _returned_block_matches(entry, block_hash):
+        _bump_schema_miss("invalid")
+        return {
+            "outcome": "invalid",
+            "error": "pinned block mismatch",
+            "block": block,
+            "block_hash": block_hash,
+        }
+
+    changes = entry.get("changes")
     if not changes:
-        _bump_hard_failures("absent")
+        _bump_schema_miss("absent")
         return {"outcome": "absent", "block": block, "block_hash": block_hash}
 
     ts_raw = None
@@ -218,18 +243,18 @@ def run_forward_sample(
             break
     ts_ms = _decode_u64_storage(ts_raw)
     if ts_ms is None:
-        _bump_hard_failures("invalid")
+        _bump_schema_miss("invalid")
         return {"outcome": "invalid", "error": "timestamp missing", "block": block}
 
     cross_netuids = _crosscheck_netuids(netuids, block)
     spot_by_netuid, spot_failures = _spot_prices(call, cross_netuids, block_hash)
 
-    _, provider = cfg.primary_rpc_endpoint()
+    provider = storage_provider
     rows, parse_outcome = _parse_storage_batch(
-        changes, netuids, block, provider, ts_ms, spot_by_netuid
+        changes, netuids, block, block_hash, provider, ts_ms, spot_by_netuid
     )
     if parse_outcome != "ok":
-        _bump_hard_failures(parse_outcome)
+        _bump_schema_miss(parse_outcome)
         return {
             "outcome": parse_outcome,
             "block": block,
@@ -253,10 +278,11 @@ def run_forward_sample(
         samples_written = price_db.insert_sample_rows(rows, path=db_path)
         price_db.prune_old_rows(path=db_path)
 
-    _consecutive_hard_failures = 0
+    _consecutive_schema_miss = 0
     result: TickResult = {
         "outcome": "ok",
         "provider": provider,
+        "provider_served": provider,
         "block": block,
         "block_hash": block_hash,
         "ts_ms": ts_ms,
@@ -268,21 +294,41 @@ def run_forward_sample(
     return result
 
 
-def _bump_hard_failures(outcome: TickOutcome | RpcOutcome | None) -> None:
-    global _consecutive_hard_failures
-    if outcome in ("rate_limited", "schema_miss"):
-        _consecutive_hard_failures += 1
-        if _consecutive_hard_failures >= cfg.MAX_CONSECUTIVE_HARD_FAILURES:
+def _log_disk_low_skip(min_free_mb: int, db_file: str) -> None:
+    global _disk_low_last_log
+    now = time.time()
+    if now - _disk_low_last_log < _DISK_LOW_LOG_INTERVAL_SECONDS:
+        return
+    _disk_low_last_log = now
+    from internal.disk_guard import data_volume_usage_for_path
+
+    directory = os.path.dirname(os.path.abspath(db_file)) or "."
+    try:
+        free = data_volume_usage_for_path(directory).free
+    except OSError:
+        free = -1
+    logger.warning(
+        "chain price forward sample skipped: disk_low free_bytes=%s min_free_mb=%s db_dir=%s",
+        free,
+        min_free_mb,
+        directory,
+    )
+
+
+def _bump_schema_miss(outcome: TickOutcome | RpcOutcome | None) -> None:
+    global _consecutive_schema_miss
+    if outcome == "schema_miss":
+        _consecutive_schema_miss += 1
+        if _consecutive_schema_miss >= cfg.MAX_CONSECUTIVE_SCHEMA_MISS:
             logger.error(
-                "chain price recorder: %d consecutive %s — cancel scheduler",
-                _consecutive_hard_failures,
-                outcome,
+                "chain price recorder: %d consecutive schema_miss — cancel scheduler",
+                _consecutive_schema_miss,
             )
             from internal.chain_price.scheduler import stop_forward_recorder
 
             stop_forward_recorder()
-    else:
-        _consecutive_hard_failures = 0
+    elif outcome not in ("rate_limited",):
+        _consecutive_schema_miss = 0
 
 
 def sample_sn64_from_block(
@@ -292,14 +338,18 @@ def sample_sn64_from_block(
     block_number: int = 9060887,
 ) -> Dict[str, Any]:
     """Offline helper: parse SN64 sample fields at a pinned block (fixture tests)."""
-    call = rpc_call_fn(client)
-    netuids, outcome = _fetch_networks_added(call, block_hash)
+    reader = ChainReader([(cfg.primary_rpc_endpoint()[1], client)])
+    call = reader.call_fn()
+    netuids, outcome = get_member_netuids(call, block_hash)
     if outcome != "ok" or 64 not in netuids:
         raise AssertionError(f"networks added failed: {outcome}")
     query_keys = reserve_query_keys(netuids)
     batch, outcome = call("state_queryStorageAt", [query_keys, block_hash])
     if outcome != "ok" or not batch:
         raise AssertionError(f"storage batch failed: {outcome}")
+    if not _returned_block_matches(batch[0], block_hash):
+        raise AssertionError("pinned block mismatch")
+    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
     changes = batch[0]["changes"]
     ts_ms = _decode_u64_storage(
         next(val for key, val in changes if key == timestamp_now_key_hex())
@@ -308,12 +358,12 @@ def sample_sn64_from_block(
     if spot_outcome != "ok":
         raise AssertionError(spot_outcome)
     spot_price_tao = float(spot_raw) / PRICE_SCALE
-    _, provider = cfg.primary_rpc_endpoint()
     rows, parse_outcome = _parse_storage_batch(
         changes,
         netuids,
         block_number,
-        provider,
+        block_hash,
+        storage_provider,
         ts_ms or 0,
         {64: spot_price_tao},
     )

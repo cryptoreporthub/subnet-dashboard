@@ -122,6 +122,30 @@ READINESS_BUILD_FAILURES = Counter(
 )
 READINESS_REPORT_AGE_UNAVAILABLE = -1.0
 
+DATA_VOLUME_FREE_BYTES = Gauge(
+    "data_volume_free_bytes",
+    "Free bytes on DATA_DIR volume",
+)
+DATA_VOLUME_USED_BYTES = Gauge(
+    "data_volume_used_bytes",
+    "Used bytes on DATA_DIR volume",
+)
+DATA_VOLUME_TOTAL_BYTES = Gauge(
+    "data_volume_total_bytes",
+    "Total bytes on DATA_DIR volume",
+)
+DATA_VOLUME_METRICS_OK = Gauge(
+    "data_volume_metrics_ok",
+    "1 when data_volume byte gauges were refreshed successfully",
+)
+# ponytail: sentinel when usage probe failed (do not leave last scrape values).
+DATA_VOLUME_BYTES_UNAVAILABLE = -1.0
+CHAIN_PRICE_SKIPPED_TOTAL = Counter(
+    "chain_price_skipped_total",
+    "Chain price forward recorder ticks skipped without sampling",
+    ["reason"],
+)
+
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
     if value is None:
@@ -208,6 +232,26 @@ def refresh_from_state() -> None:
         )
     except Exception:
         pass
+
+    try:
+        from internal.disk_guard import disk_usage_for_metrics
+
+        usage = disk_usage_for_metrics()
+        if usage is None:
+            DATA_VOLUME_FREE_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+            DATA_VOLUME_USED_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+            DATA_VOLUME_TOTAL_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+            DATA_VOLUME_METRICS_OK.set(0)
+        else:
+            DATA_VOLUME_FREE_BYTES.set(usage.free)
+            DATA_VOLUME_USED_BYTES.set(usage.used)
+            DATA_VOLUME_TOTAL_BYTES.set(usage.total)
+            DATA_VOLUME_METRICS_OK.set(1)
+    except Exception:
+        DATA_VOLUME_FREE_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+        DATA_VOLUME_USED_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+        DATA_VOLUME_TOTAL_BYTES.set(DATA_VOLUME_BYTES_UNAVAILABLE)
+        DATA_VOLUME_METRICS_OK.set(0)
 
 
 def _set_score_snapshot_age_gauge(age: Optional[float]) -> None:

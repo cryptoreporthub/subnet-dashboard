@@ -18,7 +18,6 @@ from __future__ import annotations
 import json
 import os
 import statistics
-import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -164,20 +163,10 @@ class WhaleIntelligenceService:
         }
 
     def _save_data(self) -> None:
+        from internal.file_utils import safe_write_json
+
         self.data["updated_at"] = _now_iso()
-        os.makedirs(os.path.dirname(self.data_path) or ".", exist_ok=True)
-        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(self.data_path) or ".", suffix=".json")
-        try:
-            with os.fdopen(fd, "w") as f:
-                json.dump(self.data, f, indent=2)
-            os.replace(tmp, self.data_path)
-        except Exception:
-            try:
-                os.unlink(tmp)
-            except Exception:
-                pass
-            with open(self.data_path, "w") as f:
-                json.dump(self.data, f, indent=2)
+        safe_write_json(self.data_path, self.data)
 
     def _position_key(self, wallet: str, netuid: int) -> str:
         return f"{wallet}:{netuid}"
