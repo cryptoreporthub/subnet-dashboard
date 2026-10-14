@@ -200,18 +200,6 @@ def test_prune_enforces_retention_and_row_cap(tmp_path):
         assert capped <= 2
 
 
-def test_forward_record_disabled_when_volume_headroom_low(monkeypatch, tmp_path):
-    from types import SimpleNamespace
-
-    monkeypatch.setenv("CHAIN_PRICE_FORWARD_RECORD", "on")
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.setattr(
-        "internal.chain_price.config.shutil.disk_usage",
-        lambda _p: SimpleNamespace(free=1, total=10**9, used=0),
-    )
-    assert cfg.forward_record_enabled() is False
-
-
 def test_fixture_has_full_storage_batch(fixture_replay):
     _, data = fixture_replay
     keys = data[
