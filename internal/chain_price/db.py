@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 # Free pages returned per hourly run. Bounded so one run stays short; a backlog drains over runs.
 VACUUM_PAGES_PER_RUN = 2000
+# Keep in sync with block_resolve._TOLERANCE_MS.
+_BUCKET_SLACK_MS = 12_000
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS chain_blocks (
@@ -117,23 +119,58 @@ def load_anchor_blocks(
         return [int(row[0]) for row in cur.fetchall()]
 
 
+def has_row_cap_headroom(path: Optional[str] = None) -> bool:
+    """False when the sample table is already at ``ROW_CAP`` (fail closed before new writes)."""
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return True
+    with db_conn(db_path) as conn:
+        total = int(conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0])
+    return total < ROW_CAP
+
+
 def hourly_bucket_has_chain_sample(
     bucket_ts_ms: int,
     path: Optional[str] = None,
 ) -> bool:
-    """True when a non-disputed ``chain_sampled`` row exists for the UTC hour."""
-    end_ms = bucket_ts_ms + 3_600_000
+    """True when the hourly bucket is complete and safe to skip on retry.
+
+    Prefer ``chain_blocks.bucket_ts`` with full subnet coverage; fall back to a slack
+    window on sample ``ts_ms`` for blocks accepted slightly before the hour.
+    """
     db_path = path or CHAIN_PRICE_DB_PATH
     if not os.path.exists(db_path):
         return False
     with db_conn(db_path) as conn:
+        row = conn.execute(
+            """
+            SELECT block, n_subnets FROM chain_blocks
+            WHERE bucket_ts = ? AND kind = 'backfill'
+            LIMIT 1
+            """,
+            (bucket_ts_ms,),
+        ).fetchone()
+        if row:
+            block, n_subnets = int(row[0]), int(row[1])
+            count = int(
+                conn.execute(
+                    """
+                    SELECT COUNT(*) FROM chain_price_samples
+                    WHERE block = ? AND quality = 'chain_sampled'
+                    """,
+                    (block,),
+                ).fetchone()[0]
+            )
+            return count >= n_subnets
+        start_ms = bucket_ts_ms - _BUCKET_SLACK_MS
+        end_ms = start_ms + 3_600_000
         cur = conn.execute(
             """
             SELECT 1 FROM chain_price_samples
             WHERE quality = 'chain_sampled' AND ts_ms >= ? AND ts_ms < ?
             LIMIT 1
             """,
-            (bucket_ts_ms, end_ms),
+            (start_ms, end_ms),
         )
         return cur.fetchone() is not None
 

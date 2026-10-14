@@ -7,6 +7,7 @@ import os
 import time
 from typing import List, Optional
 
+from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
 from internal.chain_price.block_resolve import resolve_block_at
 from internal.chain_price.reader import ChainReader
@@ -28,14 +29,24 @@ def backfill_sleep_seconds() -> float:
         return _DEFAULT_SLEEP_S
 
 
+def validate_backfill_days(days: int) -> int:
+    """Return ``days`` when within the hard horizon; otherwise raise ``ValueError``."""
+    if days < 1:
+        raise ValueError("days must be >= 1")
+    if days > cfg.BACKFILL_MAX_DAYS:
+        raise ValueError(
+            f"backfill days={days} exceeds hard cap BACKFILL_MAX_DAYS={cfg.BACKFILL_MAX_DAYS}"
+        )
+    return days
+
+
 def plan_hourly_bucket_ts_ms(
     end_ms: Optional[int] = None,
     *,
     days: int = 30,
 ) -> List[int]:
     """UTC hour bucket starts from ``end_ms`` (default now), going back ``days`` inclusive."""
-    if days < 1:
-        return []
+    validate_backfill_days(days)
     if end_ms is None:
         end_ms = int(time.time() * 1000)
     end_hour = (end_ms // HOUR_MS) * HOUR_MS
@@ -46,6 +57,10 @@ def plan_hourly_bucket_ts_ms(
         buckets.append(t)
         t += HOUR_MS
     return buckets
+
+
+def _db_path_for_guard(db_path: Optional[str]) -> str:
+    return db_path or cfg.CHAIN_PRICE_DB_PATH
 
 
 def backfill_bucket(
@@ -67,15 +82,7 @@ def backfill_bucket(
             "error": "Gecko pool fallback requires #1397 (currency=token); not enabled",
         }
 
-    db_file = db_path
-    try:
-        price_db.ensure_schema(db_path)
-    except OSError as exc:
-        return {
-            "outcome": "db_unavailable",
-            "bucket_ts_ms": bucket_ts_ms,
-            "error": str(exc),
-        }
+    db_file = _db_path_for_guard(db_path)
 
     if price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path):
         return {
@@ -84,6 +91,37 @@ def backfill_bucket(
             "bucket_ts_ms": bucket_ts_ms,
             "samples_written": 0,
         }
+
+    if not dry_run:
+        from internal.disk_guard import db_disk_guard_outcome
+
+        guard = db_disk_guard_outcome(db_file, cfg.CHAIN_PRICE_MIN_FREE_MB)
+        if guard == "db_unavailable":
+            return {
+                "outcome": "db_unavailable",
+                "bucket_ts_ms": bucket_ts_ms,
+                "error": "disk guard could not measure free space",
+            }
+        if guard == "disk_low":
+            return {
+                "outcome": "disk_low",
+                "bucket_ts_ms": bucket_ts_ms,
+                "samples_written": 0,
+            }
+        if not price_db.has_row_cap_headroom(path=db_path):
+            return {
+                "outcome": "row_cap_exceeded",
+                "bucket_ts_ms": bucket_ts_ms,
+                "samples_written": 0,
+            }
+        try:
+            price_db.ensure_schema(db_path)
+        except OSError as exc:
+            return {
+                "outcome": "db_unavailable",
+                "bucket_ts_ms": bucket_ts_ms,
+                "error": str(exc),
+            }
 
     anchors = price_db.load_anchor_blocks(bucket_ts_ms, HOUR_MS, path=db_path)
     hint = anchors[-1] if anchors else None

@@ -18,6 +18,7 @@ from internal.chain_price.backfill import (
     backfill_sleep_seconds,
     plan_hourly_bucket_ts_ms,
     run_backfill_dry_run,
+    validate_backfill_days,
 )
 from internal.chain_price.config import rpc_provider_clients
 from internal.chain_price.reader import ChainReader
@@ -41,6 +42,11 @@ def main(argv: list[str] | None = None) -> int:
         help="resolve_block_at search mode for buckets",
     )
     args = parser.parse_args(argv)
+
+    try:
+        validate_backfill_days(args.days)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     end_ms = args.end_ts if args.end_ts > 0 else None
     buckets = plan_hourly_bucket_ts_ms(end_ms, days=args.days)

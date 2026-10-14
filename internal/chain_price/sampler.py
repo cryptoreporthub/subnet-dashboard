@@ -241,8 +241,7 @@ def sample_at_block_hash(
             path=db_path,
         )
         samples_written = price_db.insert_sample_rows(rows, path=db_path)
-        if kind == _KIND_FORWARD:
-            price_db.prune_old_rows(path=db_path)
+        price_db.prune_old_rows(path=db_path)
 
     if bump_schema_miss_on_error:
         global _consecutive_schema_miss
