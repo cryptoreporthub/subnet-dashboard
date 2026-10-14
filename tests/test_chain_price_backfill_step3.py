@@ -37,12 +37,16 @@ def test_bracketed_resolves_case_that_exhausts_stepped():
     assert abs(bracketed[0] - target) <= 1
 
 
+# Claude review grid: 16 seeds × 2 jitters × 1_200 targets (step 417) = 38_400 cases.
+_SYNTHETIC_SWEEP_STEP = 417
+
+
 def test_bracketed_ok_whenever_stepped_ok_on_synthetic_sweep():
-    """Default bracketed budget must not fail where stepped succeeds (Claude #1411)."""
+    """Default bracketed budget must not fail where stepped succeeds (Claude #1411, 38_400 grid)."""
     for seed in range(16):
         for jitter in (1000, 3000):
             chain = _SyntheticChain(seed=seed, jitter=jitter)
-            for target in range(HEAD - WINDOW, HEAD, 512):
+            for target in range(HEAD - WINDOW, HEAD, _SYNTHETIC_SWEEP_STEP):
                 ts_ms = chain.ts[target] + 2_000
                 clear_block_cache()
                 stepped = resolve_block_at(chain, ts_ms, search="stepped")
