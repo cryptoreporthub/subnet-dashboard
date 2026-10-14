@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
+import time
 from typing import Any, Dict, NamedTuple, Optional
 
+from internal.chain_price.config import CHAIN_PRICE_MIN_FREE_MB, chain_price_warn_extra_mb
 from internal.data_volume import data_dir_is_mounted_volume, resolved_data_dir
 
-# Warn band above recorder floor (200→300 MB at defaults; scales with CHAIN_PRICE_MIN_FREE_MB).
-_WARN_EXTRA_MB = int(os.environ.get("CHAIN_PRICE_WARN_EXTRA_MB", "100"))
+WORKER_VOLUME_OWNER = "worker_local"
+WEB_VOLUME_OWNER = "web_local"
+PROXY_VOLUME_OWNER = "worker_proxy"
+
+_METRICS_CACHE_LOCK = threading.Lock()
+_METRICS_CACHE: Optional[DiskUsage] = None
+_METRICS_CACHE_AT = 0.0
+_METRICS_REFRESH_INFLIGHT = False
+_METRICS_CACHE_TTL_SECONDS = float(os.environ.get("DATA_VOLUME_METRICS_CACHE_SECONDS", "30"))
 
 
 class DiskUsage(NamedTuple):
@@ -20,30 +30,45 @@ class DiskUsage(NamedTuple):
 
 def readiness_thresholds_mb() -> tuple[int, int]:
     """Issue/warn free-space floors aligned with chain price recorder guard."""
-    from internal.chain_price import config as chain_cfg
+    low = int(CHAIN_PRICE_MIN_FREE_MB)
+    return low, low + chain_price_warn_extra_mb()
 
-    low = int(chain_cfg.CHAIN_PRICE_MIN_FREE_MB)
-    return low, low + _WARN_EXTRA_MB
+
+def data_volume_usage_for_path(directory: str) -> DiskUsage:
+    usage = shutil.disk_usage(directory)
+    return DiskUsage(free=usage.free, used=usage.used, total=usage.total)
 
 
 def data_volume_usage() -> DiskUsage:
     """Bytes free/used/total for resolved DATA_DIR on this process."""
-    usage = shutil.disk_usage(resolved_data_dir())
-    return DiskUsage(free=usage.free, used=usage.used, total=usage.total)
+    return data_volume_usage_for_path(resolved_data_dir())
 
 
 def data_free_bytes() -> int:
     return data_volume_usage().free
 
 
-def is_low(min_free_mb: int) -> bool:
+def is_low(min_free_mb: int, *, path: Optional[str] = None) -> bool:
     floor = int(min_free_mb) * 1024 * 1024
+    if path:
+        directory = os.path.dirname(os.path.abspath(path)) or "."
+        try:
+            free = data_volume_usage_for_path(directory).free
+        except OSError:
+            return True
+        return free < floor
     return data_free_bytes() < floor
 
 
 def _flags_for_free_bytes(free_bytes: int, low_mb: int, warn_mb: int) -> tuple[bool, bool]:
     free_mb = free_bytes / (1024 * 1024)
     return free_mb < low_mb, free_mb < warn_mb
+
+
+def _local_volume_owner() -> str:
+    from internal.run_mode import is_worker_mode
+
+    return WORKER_VOLUME_OWNER if is_worker_mode() else WEB_VOLUME_OWNER
 
 
 def build_data_volume_readiness_local() -> Dict[str, Any]:
@@ -60,7 +85,7 @@ def build_data_volume_readiness_local() -> Dict[str, Any]:
         "path": path,
         "min_free_mb": low_mb,
         "warn_free_mb": warn_mb,
-        "owner": "local",
+        "owner": _local_volume_owner(),
         "topology": topology,
         "topology_note": (
             "Prod canon is v1 inline (one web machine, volume on web). "
@@ -92,6 +117,8 @@ def _fetch_worker_data_volume() -> Optional[Dict[str, Any]]:
         return None
     if remote.get("status") == "unavailable":
         return None
+    if remote.get("owner") != WORKER_VOLUME_OWNER:
+        return None
     return remote
 
 
@@ -108,7 +135,7 @@ def build_data_volume_readiness() -> Dict[str, Any]:
     except Exception as exc:
         return {
             "status": "unavailable",
-            "owner": "worker_proxy",
+            "owner": PROXY_VOLUME_OWNER,
             "mounted": None,
             "path": resolved_data_dir(),
             "min_free_mb": low_mb,
@@ -120,7 +147,7 @@ def build_data_volume_readiness() -> Dict[str, Any]:
     if not remote:
         return {
             "status": "unavailable",
-            "owner": "worker_proxy",
+            "owner": PROXY_VOLUME_OWNER,
             "mounted": None,
             "path": resolved_data_dir(),
             "min_free_mb": low_mb,
@@ -129,20 +156,20 @@ def build_data_volume_readiness() -> Dict[str, Any]:
         }
 
     block = dict(remote)
-    block["owner"] = "worker_proxy"
+    block["owner"] = PROXY_VOLUME_OWNER
     block["topology"] = "split_v2_web_proxy"
     block.setdefault("min_free_mb", low_mb)
     block.setdefault("warn_free_mb", warn_mb)
     return block
 
 
-def disk_usage_for_metrics() -> Optional[DiskUsage]:
-    """Bytes for Prometheus; proxies worker volume in split_v2 when configured."""
+def _probe_disk_usage_for_metrics() -> Optional[DiskUsage]:
+    """Blocking probe (worker HTTP or local mount). Run off the event loop only."""
     from internal.data_volume import needs_worker_volume_proxy
 
     if needs_worker_volume_proxy():
-        block = build_data_volume_readiness()
-        if block.get("status") == "unavailable" or not block.get("mounted"):
+        block = _fetch_worker_data_volume()
+        if not block or not block.get("mounted"):
             return None
         free_b = block.get("free_bytes")
         used_b = block.get("used_bytes")
@@ -151,7 +178,46 @@ def disk_usage_for_metrics() -> Optional[DiskUsage]:
             return None
         return DiskUsage(free=int(free_b), used=int(used_b), total=int(total_b))
 
+    if not data_dir_is_mounted_volume():
+        return None
     try:
         return data_volume_usage()
     except OSError:
         return None
+
+
+def refresh_data_volume_metrics_cache_sync() -> None:
+    """Refresh cached volume bytes (sync; for background thread or tests)."""
+    global _METRICS_CACHE, _METRICS_CACHE_AT
+    usage = _probe_disk_usage_for_metrics()
+    with _METRICS_CACHE_LOCK:
+        _METRICS_CACHE = usage
+        _METRICS_CACHE_AT = time.monotonic()
+
+
+def _schedule_metrics_cache_refresh() -> None:
+    global _METRICS_REFRESH_INFLIGHT
+    now = time.monotonic()
+    with _METRICS_CACHE_LOCK:
+        if (now - _METRICS_CACHE_AT) < _METRICS_CACHE_TTL_SECONDS:
+            return
+        if _METRICS_REFRESH_INFLIGHT:
+            return
+        _METRICS_REFRESH_INFLIGHT = True
+
+    def _run() -> None:
+        global _METRICS_REFRESH_INFLIGHT
+        try:
+            refresh_data_volume_metrics_cache_sync()
+        finally:
+            with _METRICS_CACHE_LOCK:
+                _METRICS_REFRESH_INFLIGHT = False
+
+    threading.Thread(target=_run, daemon=True, name="data-volume-metrics").start()
+
+
+def disk_usage_for_metrics() -> Optional[DiskUsage]:
+    """Last cached volume bytes for Prometheus (never blocks on worker HTTP)."""
+    _schedule_metrics_cache_refresh()
+    with _METRICS_CACHE_LOCK:
+        return _METRICS_CACHE

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -11,7 +12,7 @@ from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
 from internal.chain_price.outcomes import RpcOutcome, TickOutcome, TickResult
 from internal.chain_price.rpc import rpc_call_fn
-from internal.disk_guard import data_free_bytes, is_low
+from internal.disk_guard import is_low
 from internal.chain_price.storage_keys import (
     map_key_hex,
     netuid_from_networks_added_key,
@@ -180,8 +181,9 @@ def run_forward_sample(
     if not cfg.forward_record_enabled():
         return {"outcome": "disabled"}
 
-    if is_low(cfg.CHAIN_PRICE_MIN_FREE_MB):
-        _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB)
+    db_file = db_path or cfg.CHAIN_PRICE_DB_PATH
+    if is_low(cfg.CHAIN_PRICE_MIN_FREE_MB, path=db_file):
+        _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB, db_file)
         try:
             from internal.metrics import CHAIN_PRICE_SKIPPED_TOTAL
 
@@ -190,7 +192,11 @@ def run_forward_sample(
             pass
         return {"outcome": "disk_low"}
 
-    price_db.ensure_schema(db_path)
+    try:
+        price_db.ensure_schema(db_path)
+    except OSError as exc:
+        logger.warning("chain price db unavailable: %s", exc)
+        return {"outcome": "invalid", "error": "db_unavailable"}
     call = rpc_call_fn(client)
 
     block_hash, outcome = call("chain_getFinalizedHead", [])
@@ -282,16 +288,24 @@ def run_forward_sample(
     return result
 
 
-def _log_disk_low_skip(min_free_mb: int) -> None:
+def _log_disk_low_skip(min_free_mb: int, db_file: str) -> None:
     global _disk_low_last_log
     now = time.time()
     if now - _disk_low_last_log < _DISK_LOW_LOG_INTERVAL_SECONDS:
         return
     _disk_low_last_log = now
+    from internal.disk_guard import data_volume_usage_for_path
+
+    directory = os.path.dirname(os.path.abspath(db_file)) or "."
+    try:
+        free = data_volume_usage_for_path(directory).free
+    except OSError:
+        free = -1
     logger.warning(
-        "chain price forward sample skipped: disk_low free_bytes=%s min_free_mb=%s",
-        data_free_bytes(),
+        "chain price forward sample skipped: disk_low free_bytes=%s min_free_mb=%s db_dir=%s",
+        free,
         min_free_mb,
+        directory,
     )
 
 
