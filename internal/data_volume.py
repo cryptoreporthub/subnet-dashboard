@@ -10,6 +10,11 @@ def _data_dir() -> str:
     return os.environ.get("DATA_DIR", "data")
 
 
+def resolved_data_dir() -> str:
+    """Realpath of DATA_DIR (Fly: /app/data volume mount)."""
+    return os.path.realpath(_data_dir())
+
+
 def data_dir_is_mounted_volume() -> bool:
     """True when DATA_DIR is a real mount (Fly volume), not ephemeral container FS."""
     root = os.path.realpath(_data_dir())

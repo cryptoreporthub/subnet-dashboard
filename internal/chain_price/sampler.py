@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.chain_client import PRICE_SCALE, _decode_scale_u64, _hex_to_bytes
@@ -22,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _KIND_FORWARD = "forward"
 _consecutive_hard_failures = 0
+_disk_low_last_log = 0.0
+_DISK_LOW_LOG_INTERVAL_SECONDS = 600.0
 
 
 def _bucket_ts_ms(ts_ms: int) -> int:
@@ -176,7 +180,28 @@ def run_forward_sample(
     if not cfg.forward_record_enabled():
         return {"outcome": "disabled"}
 
-    price_db.ensure_schema(db_path)
+    db_file = db_path or cfg.CHAIN_PRICE_DB_PATH
+    from internal.disk_guard import db_disk_guard_outcome
+
+    guard = db_disk_guard_outcome(db_file, cfg.CHAIN_PRICE_MIN_FREE_MB)
+    if guard == "db_unavailable":
+        logger.warning("chain price db unavailable: disk guard failed for %s", db_file)
+        return {"outcome": "db_unavailable"}
+    if guard == "disk_low":
+        _log_disk_low_skip(cfg.CHAIN_PRICE_MIN_FREE_MB, db_file)
+        try:
+            from internal.metrics import CHAIN_PRICE_SKIPPED_TOTAL
+
+            CHAIN_PRICE_SKIPPED_TOTAL.labels(reason="disk_low").inc()
+        except Exception:
+            pass
+        return {"outcome": "disk_low"}
+
+    try:
+        price_db.ensure_schema(db_path)
+    except OSError as exc:
+        logger.warning("chain price db unavailable: %s", exc)
+        return {"outcome": "db_unavailable"}
     call = rpc_call_fn(client)
 
     block_hash, outcome = call("chain_getFinalizedHead", [])
@@ -266,6 +291,27 @@ def run_forward_sample(
     if spot_failures:
         result["spot_crosscheck_failures"] = spot_failures
     return result
+
+
+def _log_disk_low_skip(min_free_mb: int, db_file: str) -> None:
+    global _disk_low_last_log
+    now = time.time()
+    if now - _disk_low_last_log < _DISK_LOW_LOG_INTERVAL_SECONDS:
+        return
+    _disk_low_last_log = now
+    from internal.disk_guard import data_volume_usage_for_path
+
+    directory = os.path.dirname(os.path.abspath(db_file)) or "."
+    try:
+        free = data_volume_usage_for_path(directory).free
+    except OSError:
+        free = -1
+    logger.warning(
+        "chain price forward sample skipped: disk_low free_bytes=%s min_free_mb=%s db_dir=%s",
+        free,
+        min_free_mb,
+        directory,
+    )
 
 
 def _bump_hard_failures(outcome: TickOutcome | RpcOutcome | None) -> None:

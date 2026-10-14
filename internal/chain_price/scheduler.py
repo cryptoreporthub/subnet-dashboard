@@ -25,13 +25,16 @@ def _tick() -> None:
     from internal.chain_price.sampler import run_forward_sample
 
     result = run_forward_sample(client)
-    if result.get("outcome") == "ok":
+    outcome = result.get("outcome")
+    if outcome == "ok":
         logger.info(
             "chain price forward sample ok block=%s provider=%s samples=%s",
             result.get("block"),
             result.get("provider", provider),
             result.get("samples_written"),
         )
+    elif outcome == "disk_low":
+        logger.debug("chain price forward sample skipped: disk_low")
     else:
         logger.warning("chain price forward sample: %s", result)
 
