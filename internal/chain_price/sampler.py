@@ -14,6 +14,7 @@ from internal.chain_price.bars import series_key
 from internal.chain_price.membership import get_member_netuids
 from internal.chain_price.outcomes import RpcOutcome, TickOutcome, TickResult
 from internal.chain_price.reader import ChainReader
+from internal.chain_rpc_errors import storage_block_matches
 from internal.chain_price.storage_keys import (
     map_key_hex,
     reserve_query_keys,
@@ -40,6 +41,11 @@ def _parse_block_number(header: Dict[str, Any]) -> Optional[int]:
     if isinstance(num, str):
         return int(num, 16)
     return int(num)
+
+
+def _returned_block_matches(entry: Any, block_hash: str) -> bool:
+    """Fail closed: a storage read must report the pinned block or nothing is persisted."""
+    return storage_block_matches(entry, block_hash)
 
 
 def _decode_u64_storage(raw: Any) -> Optional[int]:
@@ -212,19 +218,17 @@ def run_forward_sample(
         _bump_schema_miss(outcome)
         return {"outcome": outcome or "rpc_error", "block": block, "block_hash": block_hash}
 
+    # Capture before the spot cross-check: that read may fail over to another provider.
+    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
     entry = batch[0] if isinstance(batch[0], dict) else {}
-    returned_block = entry.get("block")
-    if returned_block:
-        from internal.chain_client import _normalize_block_hash
-
-        if _normalize_block_hash(str(returned_block)) != _normalize_block_hash(block_hash):
-            _bump_schema_miss("invalid")
-            return {
-                "outcome": "invalid",
-                "error": "pinned block mismatch",
-                "block": block,
-                "block_hash": block_hash,
-            }
+    if not _returned_block_matches(entry, block_hash):
+        _bump_schema_miss("invalid")
+        return {
+            "outcome": "invalid",
+            "error": "pinned block mismatch",
+            "block": block,
+            "block_hash": block_hash,
+        }
 
     changes = entry.get("changes")
     if not changes:
@@ -245,7 +249,7 @@ def run_forward_sample(
     cross_netuids = _crosscheck_netuids(netuids, block)
     spot_by_netuid, spot_failures = _spot_prices(call, cross_netuids, block_hash)
 
-    provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
+    provider = storage_provider
     rows, parse_outcome = _parse_storage_batch(
         changes, netuids, block, block_hash, provider, ts_ms, spot_by_netuid
     )
@@ -343,6 +347,9 @@ def sample_sn64_from_block(
     batch, outcome = call("state_queryStorageAt", [query_keys, block_hash])
     if outcome != "ok" or not batch:
         raise AssertionError(f"storage batch failed: {outcome}")
+    if not _returned_block_matches(batch[0], block_hash):
+        raise AssertionError("pinned block mismatch")
+    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
     changes = batch[0]["changes"]
     ts_ms = _decode_u64_storage(
         next(val for key, val in changes if key == timestamp_now_key_hex())
@@ -351,13 +358,12 @@ def sample_sn64_from_block(
     if spot_outcome != "ok":
         raise AssertionError(spot_outcome)
     spot_price_tao = float(spot_raw) / PRICE_SCALE
-    provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
     rows, parse_outcome = _parse_storage_batch(
         changes,
         netuids,
         block_number,
         block_hash,
-        provider,
+        storage_provider,
         ts_ms or 0,
         {64: spot_price_tao},
     )

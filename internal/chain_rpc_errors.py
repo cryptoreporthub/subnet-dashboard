@@ -61,3 +61,17 @@ def classify_http_status(status_code: int) -> RpcErrorKind:
     if status_code >= 500:
         return "rpc_error"
     return "rpc_error"
+
+
+def normalize_block_hash(block_hash: str) -> str:
+    return block_hash.lower().removeprefix("0x")
+
+
+def storage_block_matches(entry: Any, block_hash: str) -> bool:
+    """Fail closed: a pinned storage read must echo the requested block hash."""
+    if not isinstance(entry, dict):
+        return False
+    returned = entry.get("block")
+    if not returned:
+        return False
+    return normalize_block_hash(str(returned)) == normalize_block_hash(block_hash)

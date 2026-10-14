@@ -37,8 +37,11 @@ class ChainReader:
         return out
 
     def _mark_rate_limited(self, label: str) -> None:
-        prev = self._cooldown_seconds.get(label, _COOLDOWN_INITIAL_SECONDS)
-        self._cooldown_seconds[label] = min(prev * 2.0, _COOLDOWN_MAX_SECONDS)
+        prev = self._cooldown_seconds.get(label)
+        if prev is None:
+            self._cooldown_seconds[label] = _COOLDOWN_INITIAL_SECONDS
+        else:
+            self._cooldown_seconds[label] = min(prev * 2.0, _COOLDOWN_MAX_SECONDS)
         self._cooldown_until[label] = time.time() + self._cooldown_seconds[label]
         logger.warning(
             "chain reader provider %s rate limited; cooldown %.0fs",

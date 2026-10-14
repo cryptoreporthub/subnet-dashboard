@@ -28,6 +28,8 @@ from internal.chain_rpc_errors import (
     PinnedBlockMismatch,
     classify_http_status,
     classify_jsonrpc_error,
+    normalize_block_hash,
+    storage_block_matches,
 )
 
 logger = logging.getLogger(__name__)
@@ -199,7 +201,7 @@ def _encode_netuid_arg(netuid):
 
 
 def _normalize_block_hash(block_hash: str) -> str:
-    return block_hash.lower().removeprefix("0x")
+    return normalize_block_hash(block_hash)
 
 
 class ChainClient:
@@ -282,6 +284,14 @@ class ChainClient:
                         time.sleep(sleep_for)
                         continue
                     raise last_error
+                # 408 (request timeout) is transient and falls through to the retry path below.
+                if 400 <= response.status_code < 500 and response.status_code != 408:
+                    # Other client errors are not transient; raise without retrying.
+                    raise ChainRpcError(
+                        classify_http_status(response.status_code),
+                        f"HTTP {response.status_code}",
+                        code=response.status_code,
+                    )
                 response.raise_for_status()
                 data = response.json()
                 if "error" in data:
@@ -349,8 +359,10 @@ class ChainClient:
         entry = batch[0]
         if not isinstance(entry, dict):
             raise ChainRpcError("invalid", "invalid queryStorageAt entry")
-        got = entry.get("block")
-        if got and _normalize_block_hash(str(got)) != _normalize_block_hash(at_hash):
+        if not storage_block_matches(entry, at_hash):
+            got = entry.get("block")
+            if not got:
+                raise ChainRpcError("invalid", "queryStorageAt entry missing block")
             raise PinnedBlockMismatch(at_hash, str(got))
         return batch
 

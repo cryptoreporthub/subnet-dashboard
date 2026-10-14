@@ -11,6 +11,7 @@ from internal.chain_price.storage_keys import (
 )
 
 from internal.chain_client import _hex_to_bytes
+from internal.chain_rpc_errors import storage_block_matches
 
 
 def decode_networks_added_bool(raw: Any) -> bool:
@@ -51,6 +52,9 @@ def get_member_netuids(
     batch, outcome = call("state_queryStorageAt", [keys, at_hash])
     if outcome != "ok" or not batch:
         return [], outcome
+    # Fail closed: the netuid list is derived from this response, so it must echo at_hash.
+    if not storage_block_matches(batch[0], at_hash):
+        return [], "invalid"
     changes = batch[0].get("changes") if isinstance(batch[0], dict) else None
     if not changes:
         return [], "absent"

@@ -114,3 +114,80 @@ def test_query_storage_at_accepts_matching_block():
     ):
         batch = client.query_storage_at(["0x01"], hash_)
     assert batch[0]["changes"][0][1] == "0x02"
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404])
+def test_call_typed_4xx_raises_without_retry(status):
+    client = _client_no_volume()
+    client.retries = 3
+    resp = MagicMock()
+    resp.status_code = status
+    # Real requests semantics: raise_for_status() raises on 4xx, so a retry would show up as extra calls.
+    resp.raise_for_status = MagicMock(side_effect=requests.HTTPError(f"HTTP {status}"))
+    with patch("internal.chain_client.requests.post", return_value=resp) as post:
+        with pytest.raises(ChainRpcError) as exc:
+            client._call_typed("chain_getBlockHash", [])
+    assert post.call_count == 1
+    assert exc.value.kind == "rpc_error"
+    assert exc.value.code == status
+
+
+def test_call_typed_408_is_retried():
+    client = _client_no_volume()
+    client.retries = 2
+    client.backoff = [0.0]
+    timeout = MagicMock()
+    timeout.status_code = 408
+    timeout.raise_for_status = MagicMock(side_effect=requests.HTTPError("408"))
+    good = MagicMock()
+    good.status_code = 200
+    good.json.return_value = {"result": "0x01"}
+    good.raise_for_status = MagicMock()
+    with patch("internal.chain_client.requests.post", side_effect=[timeout, good]) as post:
+        assert client._call_typed("chain_getBlockHash", []) == "0x01"
+    assert post.call_count == 2
+
+
+def test_query_storage_at_rejects_missing_block():
+    client = _client_no_volume()
+    with patch.object(
+        client,
+        "_call_typed",
+        return_value=[{"changes": [["0x01", "0x02"]]}],
+    ):
+        with pytest.raises(ChainRpcError) as exc:
+            client.query_storage_at(["0x01"], "0xabc")
+    assert exc.value.kind == "invalid"
+    assert not isinstance(exc.value, PinnedBlockMismatch)
+
+
+def test_storage_block_matches_fails_closed():
+    from internal.chain_rpc_errors import storage_block_matches
+
+    assert storage_block_matches({"block": "0xABC", "changes": []}, "abc")
+    assert not storage_block_matches({"changes": []}, "0xabc")
+    assert not storage_block_matches({"block": "", "changes": []}, "0xabc")
+    assert not storage_block_matches(None, "0xabc")
+    assert not storage_block_matches({"block": "0xdef"}, "0xabc")
+
+
+def test_membership_rejects_missing_block():
+    from internal.chain_price.membership import get_member_netuids
+
+    def call(method, params):
+        if method == "state_getKeysPaged":
+            return ["0x" + "11" * 40], "ok"
+        return [{"changes": [["0x" + "11" * 40, "0x01"]]}], "ok"
+
+    assert get_member_netuids(call, "0xabc") == ([], "invalid")
+
+
+def test_membership_rejects_block_mismatch():
+    from internal.chain_price.membership import get_member_netuids
+
+    def call(method, params):
+        if method == "state_getKeysPaged":
+            return ["0x" + "11" * 40], "ok"
+        return [{"block": "0xdef", "changes": [["0x" + "11" * 40, "0x01"]]}], "ok"
+
+    assert get_member_netuids(call, "0xabc") == ([], "invalid")

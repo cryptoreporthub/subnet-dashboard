@@ -75,7 +75,9 @@ def rpc_provider_endpoints() -> list[tuple[str, str]]:
     blockmachine = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip(
         "/"
     )
-    out.append((blockmachine, "blockmachine"))
+    # Skip a duplicate so one failing endpoint is not retried as a "fallback" to itself.
+    if not any(url == blockmachine for url, _ in out):
+        out.append((blockmachine, "blockmachine"))
     return out
 
 

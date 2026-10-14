@@ -180,12 +180,17 @@ def test_get_chain_bar_staleness_selector(tmp_path):
     assert max_staleness_seconds(3600) == 450
 
 
-def test_status_distinguishes_network_and_provider(monkeypatch):
+def test_status_distinguishes_network_and_provider():
+    import internal.integrations.status as st
+
     clear_status_cache()
-    monkeypatch.delenv("BITTENSOR_RPC_URL", raising=False)
-    with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "chain RPC ok")):
-        with patch("internal.integrations.status._http_probe", return_value=(True, 200, "ok")):
-            payload = build_integrations_status(force=True)
+    # The RPC URL is read at import time, so pin the module constant rather than the env.
+    with patch.object(st, "_BITTENSOR_RPC", st._BLOCKMACHINE_RPC), patch.object(
+        st, "_BITTENSOR_NETWORK", "finney"
+    ):
+        with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "chain RPC ok")):
+            with patch("internal.integrations.status._http_probe", return_value=(True, 200, "ok")):
+                payload = build_integrations_status(force=True)
     finney = next(r for r in payload["integrations"] if r["slug"] == "bittensor")
     assert "via Blockmachine" in finney["detail"]
     assert "Finney mainnet" in finney["detail"]

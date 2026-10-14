@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
@@ -62,6 +63,8 @@ def _utc_now_iso() -> str:
 def _migrate_columns(conn) -> None:
     cur = conn.execute("PRAGMA table_info(chain_price_samples)")
     cols = {row[1] for row in cur.fetchall()}
+    if not cols:  # table not created yet; the schema script creates it at the current version
+        return
     if "block_hash" not in cols:
         conn.execute("ALTER TABLE chain_price_samples ADD COLUMN block_hash TEXT")
     if "series_key" not in cols:
@@ -71,9 +74,18 @@ def _migrate_columns(conn) -> None:
 def ensure_schema(path: Optional[str] = None) -> str:
     db_path = ensure_db_dir(path or CHAIN_PRICE_DB_PATH)
     with db_conn(db_path) as conn:
-        conn.executescript(_SCHEMA_SQL)
+        # auto_vacuum only takes effect before the first table is created, or after a VACUUM
+        # rewrites an existing file. Set it first, then VACUUM once if the file was created before.
+        if conn.execute("PRAGMA auto_vacuum").fetchone()[0] != 2:
+            conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+            try:
+                conn.execute("VACUUM")
+            except sqlite3.OperationalError as exc:
+                # Not fatal: the file keeps its old auto_vacuum mode and retention still runs.
+                logger.warning("chain price db VACUUM skipped: %s", exc)
+        # Migrate before the schema script: its indexes reference v2 columns that a v1 file lacks.
         _migrate_columns(conn)
-        conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+        conn.executescript(_SCHEMA_SQL)
         conn.commit()
     return db_path
 
@@ -234,19 +246,22 @@ def run_hourly_prune_job(path: Optional[str] = None) -> Dict[str, int]:
     with db_conn(db_path) as conn:
         cur = conn.execute("DELETE FROM chain_price_samples WHERE ts_ms < ?", (age_cutoff,))
         deleted_samples += cur.rowcount
-        conn.execute(
+        # Keep one row per series per hour, preferring non-disputed rows. Partition by the full
+        # series identity: a netuid/provider/hour key alone merged separate registrations.
+        cur = conn.execute(
             """
-            DELETE FROM chain_price_samples
-            WHERE ts_ms >= ? AND ts_ms < ?
-              AND rowid NOT IN (
-                SELECT MIN(rowid) FROM chain_price_samples
-                WHERE ts_ms >= ? AND ts_ms < ?
-                GROUP BY netuid, provider, (ts_ms / 3600000)
-              )
+            DELETE FROM chain_price_samples WHERE rowid IN (
+              SELECT rowid FROM (
+                SELECT rowid, ROW_NUMBER() OVER (
+                  PARTITION BY netuid, provider, series_key, registered_at, (ts_ms / 3600000)
+                  ORDER BY CASE WHEN quality = 'disputed' THEN 1 ELSE 0 END, ts_ms, rowid
+                ) AS rn
+                FROM chain_price_samples WHERE ts_ms >= ? AND ts_ms < ?
+              ) WHERE rn > 1)
             """,
-            (age_cutoff, full_cutoff, age_cutoff, full_cutoff),
+            (age_cutoff, full_cutoff),
         )
-        deleted_samples += conn.total_changes
+        deleted_samples += cur.rowcount
         cur = conn.execute(
             """
             DELETE FROM chain_blocks
