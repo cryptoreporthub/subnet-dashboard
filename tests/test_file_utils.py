@@ -3,10 +3,58 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 
 from internal.file_utils import safe_write_json
+
+
+def test_safe_write_json_survives_reap_while_locked(tmp_path, monkeypatch):
+    import fcntl
+    import time
+
+    from internal.tmp_boot_reaper import reap_stale_tmp_files
+
+    target = tmp_path / "alerts.json"
+    barrier = threading.Barrier(2)
+    errors: list[BaseException] = []
+
+    def writer() -> None:
+        try:
+            barrier.wait()
+            fd, temp_path = __import__("tempfile").mkstemp(
+                dir=str(tmp_path),
+                prefix="alerts.json.",
+                suffix=".tmp",
+            )
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            f = os.fdopen(fd, "w", encoding="utf-8")
+            f.write('{"held": true}')
+            f.flush()
+            barrier.wait()
+            time.sleep(0.05)
+            os.replace(temp_path, str(target))
+            f.close()
+        except BaseException as exc:
+            errors.append(exc)
+
+    def reaper() -> None:
+        barrier.wait()
+        past = time.time() - 120
+        for path in tmp_path.glob("*.tmp"):
+            os.utime(path, (past, past))
+        reap_stale_tmp_files(min_age_seconds=60)
+        barrier.wait()
+
+    t_w = threading.Thread(target=writer)
+    t_r = threading.Thread(target=reaper)
+    t_w.start()
+    t_r.start()
+    t_w.join()
+    t_r.join()
+    assert not errors
+    assert target.exists()
 
 
 def test_safe_write_json_concurrent_writers_do_not_share_temp(tmp_path):

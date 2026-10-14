@@ -5,6 +5,7 @@ Ensures data directory exists before file writes to prevent
 "No such file or directory" errors on Fly.io and similar platforms.
 """
 
+import fcntl
 import json
 import logging
 import os
@@ -55,10 +56,16 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
         prefix=f"{os.path.basename(path)}.",
         suffix=".tmp",
     )
+    fcntl.flock(fd, fcntl.LOCK_EX)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f = os.fdopen(fd, "w", encoding="utf-8")
+        try:
             json.dump(data, f, indent=2)
-        os.replace(temp_path, path)
+            f.flush()
+            os.fsync(f.fileno())
+            os.replace(temp_path, path)
+        finally:
+            f.close()
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)

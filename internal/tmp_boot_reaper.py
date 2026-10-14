@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import logging
 import os
 import re
@@ -31,6 +32,34 @@ def _min_age_seconds() -> int:
         return max(60, int(raw))
     except ValueError:
         return 3600
+
+
+def _volume_mount_verified() -> bool:
+    """Fail closed: do not reap without a positive mounted-volume signal."""
+    try:
+        from internal.data_volume import data_dir_is_mounted_volume
+
+        return data_dir_is_mounted_volume()
+    except Exception as exc:
+        logger.warning("tmp boot reaper: volume check failed, skipping: %s", exc)
+        return False
+
+
+def _temp_file_in_use(path: str) -> bool:
+    """True when another process holds an exclusive flock on the temp file."""
+    try:
+        fd = os.open(path, os.O_RDWR)
+    except OSError:
+        return True
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except BlockingIOError:
+            return True
+    finally:
+        os.close(fd)
+    return False
 
 
 def _is_reap_candidate(filename: str) -> bool:
@@ -76,6 +105,9 @@ def reap_stale_tmp_files(
         if dry_run:
             removed.append(path)
             continue
+        if _temp_file_in_use(path):
+            logger.debug("tmp boot reaper: skip in-use temp %s", path)
+            continue
         try:
             os.unlink(path)
             removed.append(path)
@@ -91,22 +123,29 @@ def reap_stale_tmp_files(
     return len(removed), removed
 
 
-def maybe_reap_at_boot() -> None:
-    """Run once on worker boot when enabled (default on worker with volume)."""
+def maybe_reap_at_machine_start() -> None:
+    """Once per container start (fly entrypoint), before web/worker can write."""
     flag = os.environ.get("TMP_BOOT_REAP", "on").strip().lower()
     if flag in ("0", "false", "no", "off"):
         return
-    from internal.run_mode import is_worker_mode
+    if not _volume_mount_verified():
+        return
+    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS)
+
+
+def maybe_reap_at_boot() -> None:
+    """Run on dedicated worker boot only (inline worker defers to machine-start reap)."""
+    flag = os.environ.get("TMP_BOOT_REAP", "on").strip().lower()
+    if flag in ("0", "false", "no", "off"):
+        return
+    from internal.run_mode import inline_worker_expected, is_worker_mode
 
     if not is_worker_mode():
         return
-    try:
-        from internal.data_volume import data_dir_is_mounted_volume
-
-        if not data_dir_is_mounted_volume():
-            return
-    except Exception:
-        pass
+    if inline_worker_expected():
+        return
+    if not _volume_mount_verified():
+        return
     reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS)
 
 
@@ -119,11 +158,6 @@ def maybe_reap_scheduled() -> None:
 
     if not is_worker_mode():
         return
-    try:
-        from internal.data_volume import data_dir_is_mounted_volume
-
-        if not data_dir_is_mounted_volume():
-            return
-    except Exception:
-        pass
+    if not _volume_mount_verified():
+        return
     reap_stale_tmp_files()
