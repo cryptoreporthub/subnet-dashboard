@@ -48,6 +48,10 @@ jobs:
           python -c "import json; json.load(open('.cursor/mcp.json'))"
       - name: Compile server entrypoint
         run: python -m py_compile server.py
+      - name: Restless OpenAPI spec sync
+        env:
+          DISABLE_BACKGROUND_SCANS: "1"
+        run: python scripts/restless_openapi.py --check
       - name: Endpoint contract + server + learning loop tests
         env:
           DISABLE_BACKGROUND_SCANS: "1"
