@@ -89,7 +89,7 @@ def _resolve_stepped(
 
     for _round in range(max_rounds):
         block, block_hash, block_ts, outcome = _probe_block_ts(
-            call, reader, block, low, high, use_cache=False
+            call, reader, block, low, high, use_cache=True
         )
         if outcome != "ok" or block_ts is None or block_hash is None:
             return None, None, outcome
@@ -201,7 +201,7 @@ def resolve_block_at(
     if search not in ("stepped", "bracketed"):
         raise ValueError(f"unknown search mode: {search!r}")
 
-    if search == "bracketed" and hint_block is not None and hint_block in _BLOCK_CACHE:
+    if hint_block is not None and hint_block in _BLOCK_CACHE:
         h, t = _BLOCK_CACHE[hint_block]
         if abs(t - ts_ms) <= _TOLERANCE_MS:
             return hint_block, h, "ok"

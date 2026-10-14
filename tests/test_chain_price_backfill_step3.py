@@ -57,6 +57,31 @@ def test_bracketed_ok_whenever_stepped_ok_on_synthetic_sweep():
                 assert bracketed[2] == "ok", (seed, jitter, target)
 
 
+def test_stepped_warm_exact_hint_returns_pair_with_zero_reader_calls():
+    """Repeat same ts+hint on default stepped path must hit exact-hint cache (Replit #1411 P2)."""
+    chain = _SyntheticChain(seed=7, jitter=1000)
+    target = HEAD - 123_456
+    ts_ms = chain.ts[target] + 2_000
+    hint = target
+
+    clear_block_cache()
+    warm = resolve_block_at(chain, ts_ms, hint_block=hint)
+    assert warm[2] == "ok"
+    assert abs(warm[0] - target) <= 1
+
+    calls = {"n": 0}
+    orig_call = chain.call
+
+    def counted_call(method, params):
+        calls["n"] += 1
+        return orig_call(method, params)
+
+    chain.call = counted_call
+    repeat = resolve_block_at(chain, ts_ms, hint_block=hint)
+    assert repeat == warm
+    assert calls["n"] == 0
+
+
 def test_stepped_unchanged_when_block_cache_warm_from_bracketed():
     chain = _SyntheticChain(seed=7, jitter=1000)
     target_a, target_b = HEAD - 50_000, HEAD - 120_000
