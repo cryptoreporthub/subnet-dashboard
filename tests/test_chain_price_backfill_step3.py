@@ -8,6 +8,9 @@ from internal.chain_price.backfill import plan_hourly_bucket_ts_ms, run_backfill
 from internal.chain_price.block_resolve import clear_block_cache, resolve_block_at
 from tests.test_block_resolve_convergence_1406 import HEAD, WINDOW, _SyntheticChain
 
+# Claude review grid: 16 seeds × 2 jitters × 1_200 targets (step 417) = 38_400 cases.
+_SYNTHETIC_SWEEP_STEP = 417
+
 
 def test_plan_hourly_bucket_count_30d():
     end = 1_700_000_000_000
@@ -24,8 +27,6 @@ def test_backfill_dry_run_payload():
 
 def test_bracketed_resolves_case_that_exhausts_stepped():
     """seed=6 / jitter=3000 exhausts stepped search in one synthetic case."""
-    from tests.test_block_resolve_convergence_1406 import _SyntheticChain
-
     clear_block_cache()
     chain = _SyntheticChain(seed=6, jitter=3000)
     target = 9_081_136
@@ -37,12 +38,9 @@ def test_bracketed_resolves_case_that_exhausts_stepped():
     assert abs(bracketed[0] - target) <= 1
 
 
-# Claude review grid: 16 seeds × 2 jitters × 1_200 targets (step 417) = 38_400 cases.
-_SYNTHETIC_SWEEP_STEP = 417
-
-
 def test_bracketed_ok_whenever_stepped_ok_on_synthetic_sweep():
     """Default bracketed budget must not fail where stepped succeeds (Claude #1411, 38_400 grid)."""
+    failures = []
     for seed in range(16):
         for jitter in (1000, 3000):
             chain = _SyntheticChain(seed=seed, jitter=jitter)
@@ -54,7 +52,9 @@ def test_bracketed_ok_whenever_stepped_ok_on_synthetic_sweep():
                     continue
                 clear_block_cache()
                 bracketed = resolve_block_at(chain, ts_ms, search="bracketed")
-                assert bracketed[2] == "ok", (seed, jitter, target)
+                if bracketed[2] != "ok":
+                    failures.append((seed, jitter, target))
+    assert failures == []
 
 
 def test_stepped_warm_exact_hint_returns_pair_with_zero_reader_calls():

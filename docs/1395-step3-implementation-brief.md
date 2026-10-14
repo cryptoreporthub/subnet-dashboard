@@ -10,6 +10,7 @@
 
 **Not in Step 3:** enable forward recorder in prod; wire `get_chain_bar` into grading; `REFUSE_DERIVED_FOR_GRADING=on` (Step 4 / Agent A).
 
+---
 
 ## Step 2 foundation (do not re-litigate)
 
@@ -23,6 +24,7 @@
 
 **Live evidence (Step 2 review, still relevant):** public Finney HTTPS **discards state** at ~30d fixture block; BM retains. Backfill must **fail over** on `archive_miss` per provider, not silently use head.
 
+---
 
 ## Scope — files to add or change
 
@@ -32,7 +34,7 @@
 
 - Add parameters (names illustrative; keep backward-compatible defaults):
   - `search: Literal["stepped", "bracketed"] = "stepped"` — stepped = current behavior.
-  - `max_rounds: int | None` — default `_MAX_ROUNDS` (4) for stepped; **16–20** for bracketed backfill.
+  - `max_rounds: int | None` — default `_MAX_ROUNDS` (4) for stepped; **24** (PR #1411) for bracketed backfill.
   - `anchor_blocks: Optional[Iterable[int]]` — extra probes seeded before bisection (`hint_block`, cached blocks, DB anchors).
 - **Bracketed algorithm (sketch):**
   1. Probe finalized **head** → upper anchor `(high, ts_high)`.
@@ -42,7 +44,7 @@
   5. Timestamp reads still go through `ChainReader` / `_block_ts_via_reader` so provider fallback matches storage reads.
 - **Optional:** `load_anchors_from_db(ts_ms, window_ms, db_path)` in `db.py` — `SELECT block, block_hash, ts_ms FROM chain_blocks WHERE ts_ms BETWEEN ? AND ? ORDER BY ts_ms` (cheap; forward ticks populate over time).
 
-**Tests:** extend `tests/test_block_resolve_convergence_1406.py` with `search="bracketed", max_rounds=18` — same convergence cases; add one case that **stepped** exhausts at 4 rounds but **bracketed** succeeds (seed from step2 review: `seed=6, jitter=3000` target).
+**Tests:** extend `tests/test_block_resolve_convergence_1406.py` with `search="bracketed", max_rounds=24` — same convergence cases; add one case that **stepped** exhausts at 4 rounds but **bracketed** succeeds (seed from step2 review: `seed=6, jitter=3000` target).
 
 ### B. Historical sample at pinned block (shared with forward)
 
@@ -87,6 +89,7 @@ Step 2 sampler **already** uses `NetworksAdded` for forward/backfill membership.
 
 Coordinate: no change to `get_subnet_price_rows_batch` (#1363).
 
+---
 
 ## Tests (minimum)
 
@@ -99,6 +102,7 @@ Coordinate: no change to `get_subnet_price_rows_batch` (#1363).
 
 Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one historical bucket; optional second fixture block for spec change depth (Step 2 review item — add when bracketed backfill touches old runtime).
 
+---
 
 ## Falsifiers (must fail loudly)
 
@@ -109,6 +113,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 5. **Gecko fallback** without `currency=token` (should be impossible after #1397).
 6. **Prod flag:** merging Step 3 does not set `CHAIN_PRICE_FORWARD_RECORD=on` in `fly.toml` / deploy docs.
 
+---
 
 ## Out of scope
 
@@ -118,6 +123,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 - Shrinking `ROW_CAP` / retention without disk sizing sign-off (Step 2 review: ~243 MB for 45d forward; backfill may require **ROW_CAP** bump or shorter `--days` — document in PR, do not silently truncate).
 - Full Gecko 48h re-validation gate (Step 4); bracketed resolve is a prerequisite re-run, not this PR’s acceptance.
 
+---
 
 ## Suggested PR slices
 
@@ -125,6 +131,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 2. **PR-B:** `sample_at_block_hash` refactor + real writes + gecko fallback (after #1397).
 3. **PR-C (ops):** one-shot runbook in `DEPLOY.md` — Fly `fly machine run` with volume mount, not web boot.
 
+---
 
 ## Recommended merge order vs #1396 / #1397
 
@@ -137,6 +144,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 
 Step 2 (#1406) is **merged**; do not reopen unless bracketed change breaks stepped default (guard with explicit `search=` tests).
 
+---
 
 ## Draft GitHub comment for #1395 (do not post unless Joshua says “post comment”)
 
@@ -154,9 +162,10 @@ Step 2 (#1406) is **merged**; do not reopen unless bracketed change breaks stepp
 
 **Merge order:** #1397 → (parallel #1396) → Step 3 PR-A → Step 3 PR-B with Gecko fallback.
 
-Implementation brief: project store `docs/1395-step3-implementation-brief.md`. Draft PR: https://github.com/cryptoreporthub/subnet-dashboard/pull/1411
+Implementation brief: repo `docs/1395-step3-implementation-brief.md`. Draft PR: https://github.com/cryptoreporthub/subnet-dashboard/pull/1411
 ```
 
+---
 
 ## Acceptance (Step 3 complete — all slices)
 
