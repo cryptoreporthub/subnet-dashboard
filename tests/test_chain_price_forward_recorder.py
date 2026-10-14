@@ -44,8 +44,31 @@ def fixture_replay():
             raise RuntimeError(f"missing fixture for {key}")
         return data[key]
 
+    from internal.chain_client import _normalize_block_hash
+    from internal.chain_rpc_errors import PinnedBlockMismatch
+
     client = ChainClient.__new__(ChainClient)
-    client._call = lambda method, params=None: _call(client, method, params)  # type: ignore[method-assign]
+    client.endpoint = "fixture"
+    client.timeout = 1
+    client.retries = 0
+    client.backoff = [0]
+
+    def _typed(method, params=None):
+        return _call(client, method, params or [])
+
+    def _query_storage_at(keys, at_hash):
+        batch = _typed("state_queryStorageAt", [keys, at_hash])
+        if not batch:
+            raise RuntimeError("empty queryStorageAt")
+        entry = batch[0]
+        got = entry.get("block")
+        if got and _normalize_block_hash(str(got)) != _normalize_block_hash(at_hash):
+            raise PinnedBlockMismatch(at_hash, str(got))
+        return batch
+
+    client._call = _typed  # type: ignore[method-assign]
+    client._call_typed = _typed  # type: ignore[method-assign]
+    client.query_storage_at = _query_storage_at  # type: ignore[method-assign]
     return client, data
 
 
@@ -128,6 +151,7 @@ def test_spot_crosscheck_failure_still_persists(fixture_replay, tmp_path):
         return real_call(method, params)
 
     client._call = _call  # type: ignore[method-assign]
+    client._call_typed = _call  # type: ignore[method-assign]
 
     with patch.object(cfg, "forward_record_enabled", return_value=True):
         result = run_forward_sample(client, db_path=db_path, write=True)
@@ -166,7 +190,7 @@ def test_prune_enforces_retention_and_row_cap(tmp_path):
         for i in range(3)
     ]
     assert price_db.insert_sample_rows(rows, path=db_path) == 3
-    stats = price_db.prune_old_rows(path=db_path)
+    stats = price_db.run_hourly_prune_job(path=db_path)
     assert stats["deleted_samples"] >= 1
     conn = sqlite3.connect(db_path)
     remaining = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
