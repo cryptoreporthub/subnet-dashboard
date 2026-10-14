@@ -23,6 +23,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+from internal.chain_rpc_errors import (
+    ChainRpcError,
+    PinnedBlockMismatch,
+    classify_http_status,
+    classify_jsonrpc_error,
+    normalize_block_hash,
+    storage_block_matches,
+)
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_RPC_URL = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io")
@@ -191,16 +200,28 @@ def _encode_netuid_arg(netuid):
     return "0x" + struct.pack("<H", netuid).hex()
 
 
+def _normalize_block_hash(block_hash: str) -> str:
+    return normalize_block_hash(block_hash)
+
+
 class ChainClient:
-    def __init__(self, endpoint=DEFAULT_RPC_URL, timeout=DEFAULT_TIMEOUT,
-                 retries=DEFAULT_RETRIES, backoff=None):
+    def __init__(
+        self,
+        endpoint=DEFAULT_RPC_URL,
+        timeout=DEFAULT_TIMEOUT,
+        retries=DEFAULT_RETRIES,
+        backoff=None,
+        *,
+        init_volume_db: bool = True,
+    ):
         self.endpoint = endpoint.rstrip("/")
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff or DEFAULT_BACKOFF
         self._last_health_check = 0.0
         self._healthy = True
-        _init_volume_db()
+        if init_volume_db:
+            _init_volume_db()
 
     def _call(self, method, params=None):
         params = params or []
@@ -231,6 +252,146 @@ class ChainClient:
                 if attempt < self.retries:
                     time.sleep(sleep_for)
         raise last_error or RuntimeError(f"RPC call to {method} failed")
+
+    def _call_typed(self, method, params=None):
+        """JSON-RPC with classified errors; retries only network / HTTP 5xx (not 429)."""
+        params = params or []
+        payload = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": int(time.time() * 1000) % 2147483647,
+        }
+        last_error: Optional[BaseException] = None
+        for attempt in range(self.retries + 1):
+            try:
+                response = requests.post(
+                    self.endpoint,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                    timeout=self.timeout,
+                )
+                if response.status_code == 429:
+                    raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+                if response.status_code >= 500:
+                    last_error = ChainRpcError(
+                        classify_http_status(response.status_code),
+                        f"HTTP {response.status_code}",
+                        code=response.status_code,
+                    )
+                    sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
+                    if attempt < self.retries:
+                        time.sleep(sleep_for)
+                        continue
+                    raise last_error
+                # 408 (request timeout) is transient and falls through to the retry path below.
+                if 400 <= response.status_code < 500 and response.status_code != 408:
+                    # Other client errors are not transient; raise without retrying.
+                    raise ChainRpcError(
+                        classify_http_status(response.status_code),
+                        f"HTTP {response.status_code}",
+                        code=response.status_code,
+                    )
+                response.raise_for_status()
+                data = response.json()
+                if "error" in data:
+                    kind = classify_jsonrpc_error(data["error"])
+                    err = data["error"]
+                    code = err.get("code") if isinstance(err, dict) else None
+                    raise ChainRpcError(
+                        kind,
+                        str(err.get("message") if isinstance(err, dict) else err),
+                        code=code,
+                    )
+                return data.get("result")
+            except ChainRpcError:
+                raise
+            except requests.RequestException as exc:
+                last_error = exc
+                sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
+                logger.debug("typed RPC %s attempt %d failed: %s", method, attempt, exc)
+                if attempt < self.retries:
+                    time.sleep(sleep_for)
+            except Exception as exc:
+                last_error = exc
+                sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
+                if attempt < self.retries:
+                    time.sleep(sleep_for)
+        if isinstance(last_error, ChainRpcError):
+            raise last_error
+        raise ChainRpcError("rpc_error", str(last_error or f"RPC call to {method} failed"))
+
+    def get_block_hash(self, number: Optional[int] = None) -> str:
+        params = [number] if number is not None else []
+        result = self._call_typed("chain_getBlockHash", params)
+        if not result:
+            raise ChainRpcError("invalid", "empty block hash")
+        return str(result)
+
+    def get_block_header(self, block_hash: str) -> Dict[str, Any]:
+        header = self._call_typed("chain_getHeader", [block_hash])
+        if not isinstance(header, dict):
+            raise ChainRpcError("invalid", "missing header")
+        return header
+
+    def get_block_ts_ms(self, block_hash: str) -> Optional[int]:
+        from internal.chain_price.storage_keys import timestamp_now_key_hex
+
+        batch = self.query_storage_at([timestamp_now_key_hex()], block_hash)
+        if not batch:
+            return None
+        changes = batch[0].get("changes") if isinstance(batch[0], dict) else None
+        if not changes:
+            return None
+        key = timestamp_now_key_hex()
+        for row in changes:
+            if row and row[0] == key:
+                raw = row[1]
+                if raw is None or raw == "0x":
+                    return None
+                return _decode_scale_u64(_hex_to_bytes(raw))
+        return None
+
+    def query_storage_at(self, keys: List[str], at_hash: str) -> List[Dict[str, Any]]:
+        batch = self._call_typed("state_queryStorageAt", [keys, at_hash])
+        if not batch:
+            raise ChainRpcError("invalid", "empty queryStorageAt")
+        entry = batch[0]
+        if not isinstance(entry, dict):
+            raise ChainRpcError("invalid", "invalid queryStorageAt entry")
+        if not storage_block_matches(entry, at_hash):
+            got = entry.get("block")
+            if not got:
+                raise ChainRpcError("invalid", "queryStorageAt entry missing block")
+            raise PinnedBlockMismatch(at_hash, str(got))
+        return batch
+
+    def get_keys_paged(
+        self,
+        prefix: str,
+        count: int,
+        start: Optional[str],
+        at_hash: str,
+    ) -> List[str]:
+        result = self._call_typed("state_getKeysPaged", [prefix, count, start, at_hash])
+        if result is None:
+            return []
+        return list(result)
+
+    def get_alpha_price_at(self, netuid: int, at_hash: str) -> Tuple[Optional[float], str]:
+        try:
+            raw = self._call_typed("swap_currentAlphaPrice", [netuid, at_hash])
+            if raw is None:
+                return None, "no_price"
+            return float(raw) / PRICE_SCALE, "ok"
+        except ChainRpcError as exc:
+            if exc.kind == "archive_miss":
+                return None, "archive_miss"
+            if exc.kind == "unknown_block":
+                return None, "invalid"
+            if exc.kind == "rate_limited":
+                return None, "rate_limited"
+            return None, "rpc_error"
 
     def _call_quiet(self, method, params=None):
         try:

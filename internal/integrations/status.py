@@ -142,20 +142,31 @@ def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
         return False, str(exc)[:120]
 
 
+def _bittensor_rpc_transport_label(endpoint: str) -> str:
+    ep = endpoint.rstrip("/").lower()
+    if ep == _BLOCKMACHINE_RPC.lower() or "blockmachine" in ep:
+        return "via Blockmachine"
+    if "finney" in ep or "opentensor" in ep:
+        return "via Finney RPC"
+    return "via configured RPC"
+
+
 def _probe_bittensor() -> Dict[str, Any]:
     network = _BITTENSOR_NETWORK
     label = "Finney mainnet" if network == "finney" else f"Bittensor {network}"
-    healthy, detail = _rpc_chain_healthy(_BITTENSOR_RPC)
+    healthy, rpc_detail = _rpc_chain_healthy(_BITTENSOR_RPC)
+    transport = _bittensor_rpc_transport_label(_BITTENSOR_RPC)
     if healthy:
-        detail = f"{label} · chain RPC ok"
+        detail = f"{label} · {transport} · chain RPC ok"
     else:
-        detail = f"{label} unreachable · {detail}"
+        detail = f"{label} unreachable · {transport} · {rpc_detail}"
     return {
         "reachable": healthy,
         "connected": healthy,
         "detail": detail,
         "has_credential": True,
         "chain": network,
+        "rpc_transport": transport,
     }
 
 

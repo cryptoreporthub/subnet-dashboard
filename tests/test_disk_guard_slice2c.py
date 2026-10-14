@@ -290,11 +290,11 @@ def test_recorder_disk_low_no_write_no_auto_cancel(tmp_path, monkeypatch):
     with patch.object(cfg, "forward_record_enabled", return_value=True):
         import internal.chain_price.sampler as sampler_mod
 
-        sampler_mod._consecutive_hard_failures = 0
+        sampler_mod._consecutive_schema_miss = 0
         for _ in range(8):
             result = run_forward_sample(_BrokenClient(), db_path=db_path, write=True)
             assert result["outcome"] == "disk_low"
-        assert sampler_mod._consecutive_hard_failures == 0
+        assert sampler_mod._consecutive_schema_miss == 0
 
     assert not __import__("os").path.isfile(db_path)
 

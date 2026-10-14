@@ -1,22 +1,24 @@
-"""Environment flags for the forward chain price recorder (#1395 Step 0)."""
+"""Environment flags for the forward chain price recorder (#1395)."""
 
 from __future__ import annotations
 
 import logging
 import os
 
+from internal.chain_client import ChainClient
+
 logger = logging.getLogger(__name__)
 
 CHAIN_PRICE_DB_PATH = os.environ.get("CHAIN_PRICE_DB_PATH", "data/chain_prices.db")
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 TICK_INTERVAL_SECONDS = 300
 TICK_ANCHOR_OFFSET_SECONDS = 30
 SPOT_DIVERGENCE_MAX = 0.005
 SCHEMA_MISS_NULL_RATIO = 0.10
-MAX_CONSECUTIVE_HARD_FAILURES = 6
+MAX_CONSECUTIVE_SCHEMA_MISS = 6
+RETENTION_FULL_DAYS = 7
 RETENTION_DAYS = 45
-# Full 5m ticks for RETENTION_DAYS at ~128 subnets today; 256 slots = headroom without downsampling v1.
-ROW_CAP = RETENTION_DAYS * (86400 // TICK_INTERVAL_SECONDS) * 256
+ROW_CAP = 600_000
 
 _DEFAULT_MIN_FREE_MB = 200
 _DEFAULT_WARN_EXTRA_MB = 100
@@ -41,6 +43,9 @@ def _non_negative_int_env(name: str, default: int) -> int:
 
 CHAIN_PRICE_MIN_FREE_MB = _non_negative_int_env("CHAIN_PRICE_MIN_FREE_MB", _DEFAULT_MIN_FREE_MB)
 
+# Back-compat alias for tests referencing MAX_CONSECUTIVE_HARD_FAILURES
+MAX_CONSECUTIVE_HARD_FAILURES = MAX_CONSECUTIVE_SCHEMA_MISS
+
 
 def chain_price_warn_extra_mb() -> int:
     return _non_negative_int_env("CHAIN_PRICE_WARN_EXTRA_MB", _DEFAULT_WARN_EXTRA_MB)
@@ -56,11 +61,28 @@ def forward_record_enabled() -> bool:
 
 
 def primary_rpc_endpoint() -> tuple[str, str]:
-    """Return (url, provider_label)."""
+    """Return (url, provider_label) for the preferred endpoint."""
+    providers = rpc_provider_endpoints()
+    return providers[0]
+
+
+def rpc_provider_endpoints() -> list[tuple[str, str]]:
+    """Finney first when configured, then Blockmachine."""
+    out: list[tuple[str, str]] = []
     finney = os.environ.get("FINNEY_RPC_URL", "").strip()
     if finney:
-        return finney.rstrip("/"), "finney"
+        out.append((finney.rstrip("/"), "finney"))
     blockmachine = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip(
         "/"
     )
-    return blockmachine, "blockmachine"
+    # Skip a duplicate so one failing endpoint is not retried as a "fallback" to itself.
+    if not any(url == blockmachine for url, _ in out):
+        out.append((blockmachine, "blockmachine"))
+    return out
+
+
+def rpc_provider_clients() -> list[tuple[str, ChainClient]]:
+    return [
+        (label, ChainClient(endpoint=url, init_volume_db=False))
+        for url, label in rpc_provider_endpoints()
+    ]

@@ -1,0 +1,6 @@
+{
+  "archive_4003": {"code": 4003, "message": "Client error: UnknownBlock: State already discarded"},
+  "archive_code_1": {"code": 1, "message": "Unable to get current alpha price: UnknownBlock(\"State already discarded\")"},
+  "unknown_4001": {"code": 4001, "message": "UnknownBlock: Header was not found"},
+  "rate_limit": {"code": 429, "message": "Too Many Requests"}
+}
