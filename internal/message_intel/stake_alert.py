@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -26,6 +27,10 @@ _RAO = 1_000_000_000
 _ALERT_THREAD: Optional[threading.Thread] = None
 _ALERT_STOP = threading.Event()
 STATE_PATH = os.environ.get("STAKE_ALERT_STATE_PATH", "data/stake_alert_state.json")
+_KEYS_PAGE_SIZE = 200
+_BATCH_RETRIES = 3
+_DEFAULT_SCAN_DEADLINE_SECONDS = 120.0
+_DEFAULT_STALE_SECONDS = 600.0
 
 _STAKE_MAPS = ("Alpha", "AlphaV2")
 
@@ -206,14 +211,84 @@ def _chain_rpc(client: Any, method: str, params: list) -> Any:
     return result
 
 
-def moving_price(client: Any, netuid: int) -> Optional[float]:
+def _scan_deadline_seconds() -> float:
+    try:
+        return float(os.environ.get("STAKE_ALERT_SCAN_DEADLINE_SECONDS", str(_DEFAULT_SCAN_DEADLINE_SECONDS)))
+    except ValueError:
+        return _DEFAULT_SCAN_DEADLINE_SECONDS
+
+
+def _stale_threshold_seconds() -> float:
+    try:
+        return float(os.environ.get("STAKE_ALERT_STALE_SECONDS", str(_DEFAULT_STALE_SECONDS)))
+    except ValueError:
+        return _DEFAULT_STALE_SECONDS
+
+
+def _parse_block_number(header: Dict[str, Any]) -> Optional[int]:
+    num = header.get("number")
+    if num is None:
+        return None
+    if isinstance(num, str):
+        return int(num, 16)
+    return int(num)
+
+
+def finalized_head(client: Any) -> Tuple[str, int]:
+    """Finalized block hash and number for a consistent storage snapshot."""
+    block_hash = _chain_rpc(client, "chain_getFinalizedHead", [])
+    if not block_hash:
+        raise StakeScanIncomplete("chain_getFinalizedHead empty")
+    header = _chain_rpc(client, "chain_getHeader", [block_hash])
+    if not isinstance(header, dict):
+        raise StakeScanIncomplete("chain_getHeader failed")
+    block = _parse_block_number(header)
+    if block is None:
+        raise StakeScanIncomplete("missing block number")
+    return str(block_hash), block
+
+
+def _storage_batch_values(client: Any, keys: List[str], at_hash: str) -> Dict[str, Optional[str]]:
+    if not keys:
+        return {}
+    batch = _chain_rpc(client, "state_queryStorageAt", [keys, at_hash])
+    if not batch or not isinstance(batch, list) or not isinstance(batch[0], dict):
+        raise StakeScanIncomplete("state_queryStorageAt failed")
+    changes = batch[0].get("changes") or []
+    by_key: Dict[str, Optional[str]] = {row[0]: row[1] for row in changes if row}
+    return {k: by_key.get(k) for k in keys}
+
+
+def _storage_batch_values_retry(
+    client: Any,
+    keys: List[str],
+    at_hash: str,
+    *,
+    deadline: Optional[float] = None,
+) -> Dict[str, Optional[str]]:
+    last: Optional[StakeScanIncomplete] = None
+    for attempt in range(_BATCH_RETRIES):
+        if deadline is not None and time.monotonic() > deadline:
+            raise StakeScanIncomplete("scan deadline exceeded")
+        try:
+            return _storage_batch_values(client, keys, at_hash)
+        except StakeScanIncomplete as exc:
+            last = exc
+            time.sleep(0.25 * (attempt + 1))
+    raise last or StakeScanIncomplete("state_queryStorageAt failed")
+
+
+def moving_price(client: Any, netuid: int, *, at_hash: Optional[str] = None) -> Optional[float]:
     """TAO-per-alpha price (SubtensorModule::SubnetMovingPrice, I96F32)."""
     key = "0x" + (
         twox128(b"SubtensorModule")
         + twox128(b"SubnetMovingPrice")
         + netuid.to_bytes(2, "little")
     ).hex()
-    raw = client._call_quiet("state_getStorageAt", [key, None])
+    if at_hash:
+        raw = _storage_batch_values(client, [key], at_hash).get(key)
+    else:
+        raw = client._call_quiet("state_getStorageAt", [key, None])
     if not raw:
         return None
     bits = bytes.fromhex(raw[2:] if raw.startswith("0x") else raw)
@@ -222,27 +297,69 @@ def moving_price(client: Any, netuid: int) -> Optional[float]:
     return int.from_bytes(bits, "little", signed=True) / 2**32
 
 
-def scan_hotkey_stakes(client: Any, hotkey_pub: bytes) -> Dict[str, int]:
-    """Scan both Alpha stake maps for one hotkey.
+def spot_price(client: Any, netuid: int, *, at_hash: str) -> Optional[float]:
+    """Spot TAO/alpha from SubnetTAO / SubnetAlphaIn at a pinned block."""
+    from internal.chain_client import _decode_scale_u64, _hex_to_bytes
+    from internal.chain_price.storage_keys import map_key_hex
+
+    tao_key = map_key_hex(b"SubnetTAO", netuid)
+    alpha_key = map_key_hex(b"SubnetAlphaIn", netuid)
+    by_key = _storage_batch_values(client, [tao_key, alpha_key], at_hash)
+
+    def _u64(raw: Optional[str]) -> Optional[int]:
+        if raw is None or raw == "0x" or raw == "0x00":
+            return None
+        try:
+            return _decode_scale_u64(_hex_to_bytes(raw))
+        except (TypeError, ValueError):
+            return None
+
+    tao_raw = _u64(by_key.get(tao_key))
+    alpha_raw = _u64(by_key.get(alpha_key))
+    if tao_raw is None or alpha_raw is None or alpha_raw == 0:
+        return None
+    return tao_raw / alpha_raw
+
+
+def scan_hotkey_stakes(
+    client: Any,
+    hotkey_pub: bytes,
+    *,
+    at_hash: Optional[str] = None,
+    deadline: Optional[float] = None,
+) -> Dict[str, int]:
+    """Scan both Alpha stake maps for one hotkey at a pinned finalized head.
 
     Keys are ``<map>:<coldkey_hex>:<netuid>`` mapped to shares in rao units.
     """
+    if at_hash is None:
+        at_hash, _block = finalized_head(client)
+    if deadline is None:
+        deadline = time.monotonic() + _scan_deadline_seconds()
+
     out: Dict[str, int] = {}
     for map_name in _STAKE_MAPS:
         prefix = alpha_storage_prefix(map_name, hotkey_pub)
         prefix_hex = f"0x{prefix.hex()}"
         start: Optional[str] = None
         while True:
-            keys = _chain_rpc(client, "state_getKeysPaged", [prefix_hex, 200, start, None])
+            if time.monotonic() > deadline:
+                raise StakeScanIncomplete("scan deadline exceeded")
+            keys = _chain_rpc(
+                client,
+                "state_getKeysPaged",
+                [prefix_hex, _KEYS_PAGE_SIZE, start, at_hash],
+            )
             if not keys:
                 break
+            values = _storage_batch_values_retry(client, keys, at_hash, deadline=deadline)
             for k in keys:
                 body = bytes.fromhex(k[2:])
                 ck, netuid = _decode_alpha_key(body, len(prefix))
-                rao = _decode_value(_chain_rpc(client, "state_getStorageAt", [k, None]))
+                rao = _decode_value(values.get(k))
                 if rao:
                     out[f"{map_name}:{ck}:{netuid}"] = rao
-            if len(keys) < 200:
+            if len(keys) < _KEYS_PAGE_SIZE:
                 break
             start = keys[-1]
     return out
@@ -342,6 +459,106 @@ def _read_state() -> Dict[str, Any]:
         return {}
 
 
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_utc_iso(ts: Optional[str]) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+
+
+def stake_alert_last_ok_age_seconds(state: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """Seconds since last successful stake scan (None when never ok or watcher disabled)."""
+    data = state if state is not None else _read_state()
+    last_ok = _parse_utc_iso(data.get("last_ok_at"))
+    if last_ok is None:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - last_ok).total_seconds())
+
+
+def build_stake_alert_ops_summary() -> Dict[str, Any]:
+    """Read-only watchdog view for readiness / metrics (no RPC)."""
+    enabled = stake_alert_enabled()
+    state = _read_state()
+    age = stake_alert_last_ok_age_seconds(state)
+    stale_threshold = _stale_threshold_seconds()
+    stale = enabled and age is not None and age > stale_threshold
+    return {
+        "enabled": enabled,
+        "last_ok_at": state.get("last_ok_at"),
+        "last_ok_block": state.get("last_ok_block"),
+        "last_ok_age_seconds": age,
+        "consecutive_failures": int(state.get("consecutive_failures") or 0),
+        "last_skip_reason": state.get("last_skip_reason"),
+        "stale": stale,
+        "stale_threshold_seconds": stale_threshold,
+    }
+
+
+def _log_skip_once(state: Dict[str, Any], reason: str, detail: str = "") -> None:
+    prev = state.get("last_skip_reason")
+    if prev == reason:
+        return
+    msg = f"stake alert skip: {reason}"
+    if detail:
+        msg = f"{msg} ({detail})"
+    logger.warning(msg)
+
+
+def _maybe_ops_telegram(state: Dict[str, Any], *, recovered: bool) -> None:
+    target = alert_chat_id()
+    if not target:
+        return
+    from internal.message_intel.summary_bot import send_message
+
+    chat: Any = int(target) if str(target).lstrip("-").isdigit() else target
+    if recovered:
+        if not state.get("ops_stale_notified"):
+            return
+        text = "✅ <b>Stake alert watcher recovered</b> — scans are healthy again."
+        state["ops_stale_notified"] = False
+    else:
+        if state.get("ops_stale_notified"):
+            return
+        age = stake_alert_last_ok_age_seconds(state)
+        mins = int((age or 0) // 60)
+        reason = state.get("last_skip_reason") or "unknown"
+        text = (
+            f"⚠️ <b>Stake alert watcher stale</b> — no successful scan for ~{mins} min.\n"
+            f"Last skip: <code>{reason}</code>"
+        )
+        state["ops_stale_notified"] = True
+    send_message(chat, text, link_preview=False)
+
+
+def _record_skip(state: Dict[str, Any], reason: str, *, detail: str = "") -> Dict[str, Any]:
+    _log_skip_once(state, reason, detail)
+    state["last_skip_reason"] = reason
+    state["consecutive_failures"] = int(state.get("consecutive_failures") or 0) + 1
+    age = stake_alert_last_ok_age_seconds(state)
+    if stake_alert_enabled() and age is not None and age > _stale_threshold_seconds():
+        _maybe_ops_telegram(state, recovered=False)
+    return state
+
+
+def _record_ok(state: Dict[str, Any], block: int) -> Dict[str, Any]:
+    was_stale = bool(state.get("ops_stale_notified"))
+    state["last_ok_at"] = _utcnow_iso()
+    state["last_ok_block"] = block
+    state["consecutive_failures"] = 0
+    state["last_skip_reason"] = None
+    if was_stale:
+        _maybe_ops_telegram(state, recovered=True)
+    return state
+
+
 def _write_state(data: Dict[str, Any]) -> None:
     try:
         path = Path(STATE_PATH)
@@ -370,7 +587,12 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         from internal.chain_client import get_default_client
 
         client = get_default_client()
+
+    state = _read_state()
+
     if not client.is_healthy():
+        state = _record_skip(state, "unhealthy_rpc")
+        _write_state(state)
         return None
 
     try:
@@ -380,26 +602,51 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         return None
 
     try:
-        current = scan_hotkey_stakes(client, hotkey_pub)
+        at_hash, block = finalized_head(client)
     except StakeScanIncomplete as exc:
-        logger.warning("stake alert scan incomplete: %s", exc)
+        state = _record_skip(state, "finalized_head", detail=str(exc))
+        _write_state(state)
         return None
 
+    deadline = time.monotonic() + _scan_deadline_seconds()
+    try:
+        current = scan_hotkey_stakes(client, hotkey_pub, at_hash=at_hash, deadline=deadline)
+    except StakeScanIncomplete as exc:
+        state = _record_skip(state, "incomplete_scan", detail=str(exc))
+        _write_state(state)
+        return None
+
+    state = _record_ok(state, block)
+
     prices: Dict[int, Optional[float]] = {}
+    price_sources: Dict[int, str] = {}
 
     def price_lookup(netuid: int) -> Optional[float]:
         if netuid not in prices:
             try:
-                prices[netuid] = moving_price(client, netuid)
+                moving = moving_price(client, netuid, at_hash=at_hash)
+                if moving is not None and moving > 0:
+                    prices[netuid] = moving
+                    price_sources[netuid] = "moving"
+                else:
+                    spot = spot_price(client, netuid, at_hash=at_hash)
+                    prices[netuid] = spot
+                    price_sources[netuid] = "spot" if spot else "missing"
+                    if spot is not None:
+                        logger.info("stake alert: SN%d price from spot (moving unavailable)", netuid)
+                    else:
+                        _log_skip_once(state, f"missing_price_sn{netuid}")
+                        logger.warning("stake alert: missing price SN%d", netuid)
             except Exception as exc:
                 logger.warning("stake alert: price read SN%d failed: %s", netuid, exc)
                 prices[netuid] = None
+                price_sources[netuid] = "error"
         return prices[netuid]
 
-    state = _read_state()
     hotkey_hex = hotkey_pub.hex()
     if state.get("hotkey") != hotkey_hex:
-        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        state.update({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        _write_state(state)
         logger.info(
             "stake alert baseline recorded for hotkey (%d entries)",
             len(current),
@@ -408,17 +655,20 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
 
     baseline = state.get("baseline") or {}
     if not state.get("initialized"):
-        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        state.update({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        _write_state(state)
         logger.info("stake alert baseline recorded (%d entries)", len(current))
         return {"baseline": True, "entries": len(current)}
 
     alerts, new_baseline = compute_alerts(current, baseline, threshold_rao, price_lookup)
     if not alerts:
         if new_baseline != baseline:
-            _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+            state.update({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+            _write_state(state)
+        else:
+            _write_state(state)
         return None
 
-    block = client.get_current_block()
     message = format_stake_message(alerts, block)
     target = alert_chat_id()
     sent = False
@@ -429,11 +679,14 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         resp = send_message(chat, message, link_preview=False)
         sent = bool(resp.get("ok"))
         if not sent:
+            state = _record_skip(state, "send_failure", detail=str(resp.get("error") or resp))
+            _write_state(state)
             logger.warning("stake alert send failed: %s", resp.get("error") or resp)
     if not sent:
         return {"alerts": len(alerts), "sent": False, "target": target}
 
-    _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+    state.update({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+    _write_state(state)
     return {"alerts": len(alerts), "sent": True, "target": target}
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 import pytest
 
@@ -124,16 +125,32 @@ def test_format_digest_for_two_alerts():
 class _FakeClient:
     """Serves fabricated Alpha keys/values without touching the network."""
 
-    def __init__(self, keys_with_values):
+    def __init__(self, keys_with_values, *, finalized_hash: str = "0x" + "aa" * 32):
         self.kv = keys_with_values
+        self.finalized_hash = finalized_hash
+        self.paged_at_hashes: list = []
+        self.query_at_hashes: list = []
 
     def _call(self, method, params):
         return self._call_quiet(method, params)
 
     def _call_quiet(self, method, params):
+        if method == "chain_getFinalizedHead":
+            return self.finalized_hash
+        if method == "chain_getHeader":
+            return {"number": "0x7b"}
         if method == "state_getKeysPaged":
+            self.paged_at_hashes.append(params[3])
             prefix = params[0]
-            return [k for k in self.kv if k.startswith(prefix)]
+            keys = sorted(k for k in self.kv if k.startswith(prefix))
+            start = params[2]
+            if start:
+                keys = [k for k in keys if k > start]
+            return keys[: params[1]]
+        if method == "state_queryStorageAt":
+            self.query_at_hashes.append(params[1])
+            keys = params[0]
+            return [{"changes": [[k, self.kv.get(k)] for k in keys]}]
         if method == "state_getStorageAt":
             return self.kv.get(params[0])
         return None
@@ -180,9 +197,60 @@ class _FailingStorageClient(_FakeClient):
         self.fail_key = fail_key
 
     def _call(self, method, params):
-        if method == "state_getStorageAt" and params[0] == self.fail_key:
+        if method == "state_queryStorageAt" and self.fail_key in params[0]:
             raise RuntimeError("storage read failed")
         return super()._call(method, params)
+
+
+class _FailingQueryOnPageClient(_FakeClient):
+    """Fails state_queryStorageAt only on the Nth batch (0-based)."""
+
+    def __init__(self, keys_with_values, fail_batch: int):
+        super().__init__(keys_with_values)
+        self.fail_batch = fail_batch
+        self._query_batches = 0
+
+    def _call(self, method, params):
+        if method == "state_queryStorageAt":
+            if self._query_batches == self.fail_batch:
+                self._query_batches += 1
+                raise RuntimeError("batch RPC down")
+            self._query_batches += 1
+        return super()._call(method, params)
+
+
+def test_scan_hotkey_stakes_pins_finalized_hash_on_all_reads():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", pub)
+        + sa._blake2_concat(ck)
+        + (3).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+    client = _FakeClient({key: u64f64}, finalized_hash="0x" + "bb" * 32)
+    sa.scan_hotkey_stakes(client, pub)
+    pin = "0x" + "bb" * 32
+    assert client.paged_at_hashes and all(h == pin for h in client.paged_at_hashes)
+    assert client.query_at_hashes and all(h == pin for h in client.query_at_hashes)
+
+
+def test_scan_hotkey_stakes_batch_retry_keeps_first_page():
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    keys = {}
+    for i in range(201):
+        full = (
+            sa.alpha_storage_prefix("Alpha", pub)
+            + sa._blake2_concat(ck)
+            + i.to_bytes(2, "little")
+        )
+        keys["0x" + full.hex()] = u64f64
+    client = _FailingQueryOnPageClient(keys, fail_batch=1)
+    out = sa.scan_hotkey_stakes(client, pub, at_hash="0x" + "cc" * 32, deadline=time.monotonic() + 30)
+    assert len(out) == 201
 
 
 def test_scan_hotkey_stakes_reads_both_maps():
@@ -362,6 +430,48 @@ def test_compute_alerts_retries_after_price_becomes_available():
     prices[7] = 0.1
     alerts, base = sa.compute_alerts({key: 800 * sa._RAO}, base, threshold, price_lookup=lookup)
     assert len(alerts) == 1
+
+
+def test_spot_price_fallback_when_moving_missing():
+    from internal.chain_price.storage_keys import map_key_hex
+
+    netuid = 44
+    tao_key = map_key_hex(b"SubnetTAO", netuid)
+    alpha_key = map_key_hex(b"SubnetAlphaIn", netuid)
+    # SCALE compact u64: 16 / 4 → spot 4.0
+    tao_val = "0x40"
+    alpha_val = "0x10"
+    client = _FakeClient({tao_key: tao_val, alpha_key: alpha_val})
+    assert sa.spot_price(client, netuid, at_hash=client.finalized_hash) == 4.0
+
+
+def test_watchdog_stale_and_recovery(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    monkeypatch.setattr(sa, "_stale_threshold_seconds", lambda: 60.0)
+    monkeypatch.setenv("TELEGRAM_STAKE_ALERT", "on")
+    monkeypatch.setattr("internal.run_mode.stage2_hop_mode", lambda: False)
+    old = sa._utcnow_iso()
+    state_file.write_text(
+        json.dumps(
+            {
+                "initialized": True,
+                "baseline": {},
+                "hotkey": sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY).hex(),
+                "last_ok_at": old,
+            }
+        ),
+        encoding="utf-8",
+    )
+    from datetime import datetime, timedelta, timezone
+
+    stale_ts = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat().replace("+00:00", "Z")
+    state = json.loads(state_file.read_text(encoding="utf-8"))
+    state["last_ok_at"] = stale_ts
+    state_file.write_text(json.dumps(state), encoding="utf-8")
+    summary = sa.build_stake_alert_ops_summary()
+    assert summary["stale"] is True
+    assert summary["last_ok_age_seconds"] >= 60
 
 
 def test_check_stake_alerts_hotkey_change_reinits_without_alert(tmp_path, monkeypatch):

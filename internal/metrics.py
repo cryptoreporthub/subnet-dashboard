@@ -122,6 +122,11 @@ READINESS_BUILD_FAILURES = Counter(
 )
 READINESS_REPORT_AGE_UNAVAILABLE = -1.0
 
+STAKE_ALERT_LAST_OK_AGE_SECONDS = Gauge(
+    "stake_alert_last_ok_age_seconds",
+    "Seconds since the validator stake alert watcher last completed a scan (-1 when unknown)",
+)
+
 DATA_VOLUME_FREE_BYTES = Gauge(
     "data_volume_free_bytes",
     "Free bytes on DATA_DIR volume",
@@ -230,6 +235,18 @@ def refresh_from_state() -> None:
         READINESS_REPORT_AGE_SECONDS.set(
             age if age is not None else READINESS_REPORT_AGE_UNAVAILABLE
         )
+    except Exception:
+        pass
+
+    try:
+        from internal.message_intel.stake_alert import build_stake_alert_ops_summary
+
+        stake = build_stake_alert_ops_summary()
+        age = stake.get("last_ok_age_seconds")
+        if age is None:
+            STAKE_ALERT_LAST_OK_AGE_SECONDS.set(-1.0)
+        else:
+            STAKE_ALERT_LAST_OK_AGE_SECONDS.set(float(age))
     except Exception:
         pass
 
