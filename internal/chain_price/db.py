@@ -18,6 +18,9 @@ from internal.store.db import db_conn, ensure_db_dir
 
 logger = logging.getLogger(__name__)
 
+# Free pages returned per hourly run. Bounded so one run stays short; a backlog drains over runs.
+VACUUM_PAGES_PER_RUN = 2000
+
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS chain_blocks (
     provider TEXT NOT NULL,
@@ -271,8 +274,23 @@ def run_hourly_prune_job(path: Optional[str] = None) -> Dict[str, int]:
             (age_cutoff,),
         )
         deleted_blocks += cur.rowcount
-        conn.execute("PRAGMA incremental_vacuum")
         conn.commit()
     stats = prune_old_rows(path=db_path)
     deleted_samples += stats["deleted_samples"]
+    with db_conn(db_path) as conn:
+        incremental_vacuum(conn, VACUUM_PAGES_PER_RUN)
     return {"deleted_samples": deleted_samples, "deleted_blocks": deleted_blocks}
+
+
+def incremental_vacuum(conn: sqlite3.Connection, pages: int) -> int:
+    """Return up to ``pages`` free pages to the OS. Returns the count actually reclaimed.
+
+    ``PRAGMA incremental_vacuum(N)`` only executes when its rows are fetched; an unfetched
+    PRAGMA steps once. The page bound keeps one hourly run from holding the write lock for long.
+    """
+    if conn.execute("PRAGMA auto_vacuum").fetchone()[0] != 2:
+        return 0
+    before = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+    conn.execute(f"PRAGMA incremental_vacuum({int(pages)})").fetchall()
+    after = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+    return max(0, before - after)

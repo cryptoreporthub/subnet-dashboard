@@ -10,6 +10,7 @@ from internal.chain_client import ChainClient
 from internal.chain_price import config as cfg
 from internal.chain_price.outcomes import RpcOutcome
 from internal.chain_price.rpc import classify_rpc_error, rpc_call
+from internal.chain_rpc_errors import storage_block_matches
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,18 @@ class ChainReader:
         )
 
     def _should_fallback(self, outcome: RpcOutcome) -> bool:
-        return outcome in ("rpc_error", "archive_miss", "rate_limited")
+        # Any invalid answer (bad echo, unknown block, pin mismatch) is one provider's answer,
+        # so the next provider gets a try. The fail-closed echo check still gates each result.
+        return outcome in ("rpc_error", "archive_miss", "rate_limited", "invalid")
+
+    @staticmethod
+    def _echo_mismatch(method: str, params: list, result: Any) -> bool:
+        """A pinned state read must echo the block hash it was asked for."""
+        if method != "state_queryStorageAt" or not isinstance(params, list) or len(params) < 2:
+            return False
+        if not isinstance(params[1], str) or not isinstance(result, list) or not result:
+            return False
+        return not storage_block_matches(result[0], params[1])
 
     def call(self, method: str, params: list) -> Tuple[Optional[Any], RpcOutcome]:
         providers = self._available_providers()
@@ -59,9 +71,13 @@ class ChainReader:
         last_outcome: RpcOutcome = "rpc_error"
         for idx, (label, client) in enumerate(providers):
             result, outcome = rpc_call(client, method, params)
+            if outcome == "ok" and self._echo_mismatch(method, params, result):
+                outcome = "invalid"
             if outcome == "rate_limited":
                 self._mark_rate_limited(label)
             if outcome == "ok":
+                # A successful answer ends the escalation: the next limit starts at the initial cooldown.
+                self._cooldown_seconds.pop(label, None)
                 self.provider_served = label
                 return result, outcome
             last_outcome = outcome

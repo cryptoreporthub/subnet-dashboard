@@ -70,7 +70,10 @@ def fixture_client():
 def test_decode_networks_added_bool():
     assert decode_networks_added_bool("0x01") is True
     assert decode_networks_added_bool("0x00") is False
-    assert decode_networks_added_bool(None) is False
+    # Absent or malformed values are not "false": the caller must fail closed on None.
+    assert decode_networks_added_bool(None) is None
+    assert decode_networks_added_bool("0x") is None
+    assert decode_networks_added_bool("0x02") is None
 
 
 def test_block_mismatch_does_not_write(fixture_client, tmp_path):
