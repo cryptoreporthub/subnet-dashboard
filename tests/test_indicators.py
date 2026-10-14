@@ -108,6 +108,8 @@ def test_fetch_tmc_subnet_candles_scales_by_alpha_price(monkeypatch):
 def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
     import requests
 
+    captured = {}
+
     class FakeResp:
         def raise_for_status(self):
             pass
@@ -124,11 +126,51 @@ def test_fetch_geckoterminal_ohlcv_parses_response(monkeypatch):
                 }
             }
 
-    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: FakeResp())
+    def fake_get(url, params=None, **kwargs):
+        captured["params"] = params
+        return FakeResp()
+
+    monkeypatch.setattr(requests, "get", fake_get)
     candles = _fetch_geckoterminal_ohlcv("bittensor", "0-5", days=1)
     assert len(candles) == 2
     assert candles[0]["open"] == 1.0
     assert candles[0]["close"] == 1.5
+    assert captured["params"] == {"limit": 24, "currency": "token"}
+
+
+def test_fetch_geckoterminal_ohlcv_requests_token_not_usd_default(monkeypatch):
+    """#1397: default Gecko OHLCV is USD; subnet grading expects TAO (token)."""
+    import requests
+
+    usd_close = 18.99
+    tao_close = 0.0682
+
+    def fake_get(url, params=None, **kwargs):
+        currency = (params or {}).get("currency")
+        close = tao_close if currency == "token" else usd_close
+
+        class Resp:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return {
+                    "data": {
+                        "attributes": {
+                            "ohlcv_list": [
+                                [1704067200, close, close, close, close, 1.0],
+                                [1704070800, close, close, close, close, 1.0],
+                            ]
+                        }
+                    }
+                }
+
+        return Resp()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    candles = _fetch_geckoterminal_ohlcv("bittensor", "0-64", days=1)
+    assert candles[-1]["close"] == tao_close
+    assert candles[-1]["close"] != usd_close
 
 def test_fetch_ohlcv_uses_cache(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", False)
@@ -211,6 +253,7 @@ def test_fetch_ohlcv_tiered_fallback_to_geckoterminal(monkeypatch, tmp_path):
     assert len(candles) == 2
     cache = json.load(open(cache_path))
     assert cache["1"]["source"] == "geckoterminal"
+    assert cache["1"]["unit"] == "tao"
 
 def test_rsi_returns_neutral_for_balanced_prices():
     # Oscillating series with comparable gains/losses keeps RSI near 50.

@@ -269,9 +269,9 @@ def _fetch_geckoterminal_ohlcv(
     days: int = DEFAULT_DAYS,
     timeout: int = LIVE_PRICE_TIMEOUT,
 ) -> List[Dict[str, Any]]:
-    """Fetch hourly OHLCV from a GeckoTerminal pool."""
+    """Fetch hourly OHLCV from a GeckoTerminal pool (alpha price in TAO)."""
     url = f"{GECKO_TERMINAL_API}/networks/{network}/pools/{pool}/ohlcv/hour"
-    params = {"limit": days * 24}
+    params = {"limit": days * 24, "currency": "token"}
     response = requests.get(url, params=params, timeout=timeout)
     response.raise_for_status()
     data = response.json()
@@ -386,13 +386,15 @@ def fetch_ohlcv(
         source = "unavailable"
 
     if use_cache:
-        entry = {
+        entry: Dict[str, Any] = {
             "source": source,
             "cached_at": now,
             "fetched_at": _now_iso(),
             "error": error,
             "candles": candles,
         }
+        if source == "geckoterminal":
+            entry["unit"] = "tao"
         try:
             with _locked_price_cache(cache_path):
                 latest = _load_json(cache_path)
