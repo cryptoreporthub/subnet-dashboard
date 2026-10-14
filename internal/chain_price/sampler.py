@@ -230,6 +230,15 @@ def sample_at_block_hash(
     bucket_ts = bucket_ts_override if bucket_ts_override is not None else _bucket_ts_ms(ts_ms)
     samples_written = 0
     if write:
+        if not price_db.can_accept_sample_batch(len(rows), path=db_path):
+            return {
+                "outcome": "row_cap_exceeded",
+                "block": block,
+                "block_hash": block_hash,
+                "ts_ms": ts_ms,
+                "n_subnets": len(netuids),
+                "samples_written": 0,
+            }
         price_db.insert_block_row(
             provider=provider,
             block=block,
@@ -242,6 +251,17 @@ def sample_at_block_hash(
         )
         samples_written = price_db.insert_sample_rows(rows, path=db_path)
         price_db.prune_old_rows(path=db_path)
+        if kind == _KIND_BACKFILL and bucket_ts_override is not None:
+            if not price_db.hourly_bucket_has_chain_sample(bucket_ts_override, path=db_path):
+                return {
+                    "outcome": "row_cap_exceeded",
+                    "block": block,
+                    "block_hash": block_hash,
+                    "ts_ms": ts_ms,
+                    "n_subnets": len(netuids),
+                    "samples_written": samples_written,
+                    "error": "bucket incomplete after prune",
+                }
 
     if bump_schema_miss_on_error:
         global _consecutive_schema_miss

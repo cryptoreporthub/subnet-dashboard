@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 # Free pages returned per hourly run. Bounded so one run stays short; a backlog drains over runs.
 VACUUM_PAGES_PER_RUN = 2000
-# Keep in sync with block_resolve._TOLERANCE_MS.
-_BUCKET_SLACK_MS = 12_000
 
 _SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS chain_blocks (
@@ -77,6 +75,31 @@ def _migrate_columns(conn) -> None:
         conn.execute("ALTER TABLE chain_price_samples ADD COLUMN series_key TEXT")
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def count_chain_price_samples(path: Optional[str] = None) -> int:
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return 0
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_price_samples"):
+            return 0
+        return int(conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0])
+
+
+def can_accept_sample_batch(batch_size: int, path: Optional[str] = None) -> bool:
+    """True when ``batch_size`` new rows fit without post-insert prune evicting overflow."""
+    if batch_size < 0:
+        return False
+    return count_chain_price_samples(path) + batch_size <= ROW_CAP
+
+
 def ensure_schema(path: Optional[str] = None) -> str:
     db_path = ensure_db_dir(path or CHAIN_PRICE_DB_PATH)
     with db_conn(db_path) as conn:
@@ -120,28 +143,36 @@ def load_anchor_blocks(
 
 
 def has_row_cap_headroom(path: Optional[str] = None) -> bool:
-    """False when the sample table is already at ``ROW_CAP`` (fail closed before new writes)."""
-    db_path = path or CHAIN_PRICE_DB_PATH
-    if not os.path.exists(db_path):
-        return True
-    with db_conn(db_path) as conn:
-        total = int(conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0])
-    return total < ROW_CAP
+    """False when even a single-row insert would require post-write prune (fail closed)."""
+    return can_accept_sample_batch(1, path=path)
+
+
+def _backfill_bucket_distinct_netuid_count(
+    conn: sqlite3.Connection,
+    block: int,
+) -> int:
+    return int(
+        conn.execute(
+            """
+            SELECT COUNT(DISTINCT netuid) FROM chain_price_samples
+            WHERE block = ? AND quality = 'chain_sampled'
+            """,
+            (block,),
+        ).fetchone()[0]
+    )
 
 
 def hourly_bucket_has_chain_sample(
     bucket_ts_ms: int,
     path: Optional[str] = None,
 ) -> bool:
-    """True when the hourly bucket is complete and safe to skip on retry.
-
-    Prefer ``chain_blocks.bucket_ts`` with full subnet coverage; fall back to a slack
-    window on sample ``ts_ms`` for blocks accepted slightly before the hour.
-    """
+    """True when a backfill ``chain_blocks`` marker exists with full distinct netuid coverage."""
     db_path = path or CHAIN_PRICE_DB_PATH
     if not os.path.exists(db_path):
         return False
     with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_blocks"):
+            return False
         row = conn.execute(
             """
             SELECT block, n_subnets FROM chain_blocks
@@ -150,29 +181,11 @@ def hourly_bucket_has_chain_sample(
             """,
             (bucket_ts_ms,),
         ).fetchone()
-        if row:
-            block, n_subnets = int(row[0]), int(row[1])
-            count = int(
-                conn.execute(
-                    """
-                    SELECT COUNT(*) FROM chain_price_samples
-                    WHERE block = ? AND quality = 'chain_sampled'
-                    """,
-                    (block,),
-                ).fetchone()[0]
-            )
-            return count >= n_subnets
-        start_ms = bucket_ts_ms - _BUCKET_SLACK_MS
-        end_ms = start_ms + 3_600_000
-        cur = conn.execute(
-            """
-            SELECT 1 FROM chain_price_samples
-            WHERE quality = 'chain_sampled' AND ts_ms >= ? AND ts_ms < ?
-            LIMIT 1
-            """,
-            (start_ms, end_ms),
-        )
-        return cur.fetchone() is not None
+        if not row:
+            return False
+        block, n_subnets = int(row[0]), int(row[1])
+        distinct_netuids = _backfill_bucket_distinct_netuid_count(conn, block)
+        return distinct_netuids >= n_subnets
 
 
 def insert_block_row(

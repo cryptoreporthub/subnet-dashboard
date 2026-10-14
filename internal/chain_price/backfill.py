@@ -84,14 +84,6 @@ def backfill_bucket(
 
     db_file = _db_path_for_guard(db_path)
 
-    if price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path):
-        return {
-            "outcome": "skipped",
-            "reason": "hourly_chain_sampled_exists",
-            "bucket_ts_ms": bucket_ts_ms,
-            "samples_written": 0,
-        }
-
     if not dry_run:
         from internal.disk_guard import db_disk_guard_outcome
 
@@ -108,12 +100,6 @@ def backfill_bucket(
                 "bucket_ts_ms": bucket_ts_ms,
                 "samples_written": 0,
             }
-        if not price_db.has_row_cap_headroom(path=db_path):
-            return {
-                "outcome": "row_cap_exceeded",
-                "bucket_ts_ms": bucket_ts_ms,
-                "samples_written": 0,
-            }
         try:
             price_db.ensure_schema(db_path)
         except OSError as exc:
@@ -122,6 +108,21 @@ def backfill_bucket(
                 "bucket_ts_ms": bucket_ts_ms,
                 "error": str(exc),
             }
+
+    if price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path):
+        return {
+            "outcome": "skipped",
+            "reason": "hourly_chain_sampled_exists",
+            "bucket_ts_ms": bucket_ts_ms,
+            "samples_written": 0,
+        }
+
+    if not dry_run and not price_db.has_row_cap_headroom(path=db_path):
+        return {
+            "outcome": "row_cap_exceeded",
+            "bucket_ts_ms": bucket_ts_ms,
+            "samples_written": 0,
+        }
 
     anchors = price_db.load_anchor_blocks(bucket_ts_ms, HOUR_MS, path=db_path)
     hint = anchors[-1] if anchors else None
