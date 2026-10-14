@@ -62,7 +62,7 @@ def test_save_data_uses_sidecar_tmp_not_mkstemp_json(whale_paths):
     data_dir = Path(data).parent
     assert not list(data_dir.glob("tmp*.json"))
     assert Path(data).exists()
-    assert not Path(f"{data}.tmp").exists()
+    assert not list(data_dir.glob(f"{Path(data).name}.*.tmp"))
 
 
 def test_dimensions_defined():

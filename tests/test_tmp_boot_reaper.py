@@ -49,16 +49,45 @@ def test_find_stale_legacy_mkstemp_json_orphan(tmp_path):
     assert str(real) not in stale
 
 
-def test_find_stale_legacy_mkstemp_tmp_orphan(tmp_path):
+def test_find_stale_legacy_mkstemp_json_orphan_with_underscore(tmp_path):
     from internal.tmp_boot_reaper import find_stale_tmp_files
 
-    orphan = tmp_path / "tmpZZZZ9999.tmp"
+    orphan = tmp_path / "tmp9x2ly7_l.json"
     orphan.write_text("{}", encoding="utf-8")
     past = time.time() - 7200
     os.utime(orphan, (past, past))
 
     stale = find_stale_tmp_files(data_dir=str(tmp_path), min_age_seconds=3600)
     assert str(orphan) in stale
+
+
+def test_find_stale_legacy_mkstemp_tmp_orphan(tmp_path):
+    from internal.tmp_boot_reaper import find_stale_tmp_files
+
+    orphan = tmp_path / "tmpzzzz9999.tmp"
+    orphan.write_text("{}", encoding="utf-8")
+    past = time.time() - 7200
+    os.utime(orphan, (past, past))
+
+    stale = find_stale_tmp_files(data_dir=str(tmp_path), min_age_seconds=3600)
+    assert str(orphan) in stale
+
+
+def test_maybe_reap_at_boot_reaps_fresh_orphans(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("TMP_BOOT_REAP", "on")
+    monkeypatch.setattr(
+        "internal.data_volume.data_dir_is_mounted_volume",
+        lambda: True,
+    )
+    fresh = tmp_path / "stale.json.tmp"
+    fresh.write_text("x", encoding="utf-8")
+
+    from internal.tmp_boot_reaper import maybe_reap_at_boot
+
+    maybe_reap_at_boot()
+    assert not fresh.exists()
 
 
 def test_maybe_reap_at_boot_skips_non_worker(monkeypatch, tmp_path):

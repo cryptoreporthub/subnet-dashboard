@@ -10,8 +10,8 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# mkstemp(prefix="tmp") orphans: tmp + 8 alnum + .json or .tmp (legacy whale_intelligence writer).
-_LEGACY_ORPHAN_RE = re.compile(r"^tmp[a-zA-Z0-9]{8}\.(?:json|tmp)$")
+# mkstemp(prefix="tmp") orphans: tmp + 8 of [a-z0-9_] + .json or .tmp (legacy whale writer).
+_LEGACY_ORPHAN_RE = re.compile(r"^tmp[a-z0-9_]{8}\.(?:json|tmp)$")
 
 
 def _data_dir() -> str:
@@ -58,9 +58,11 @@ def find_stale_tmp_files(*, data_dir: str | None = None, min_age_seconds: int | 
     return stale
 
 
-def reap_stale_tmp_files(*, dry_run: bool = False) -> Tuple[int, List[str]]:
+def reap_stale_tmp_files(
+    *, dry_run: bool = False, min_age_seconds: int | None = None
+) -> Tuple[int, List[str]]:
     """Delete stale temp/orphan files; return (removed_count, paths)."""
-    paths = find_stale_tmp_files()
+    paths = find_stale_tmp_files(min_age_seconds=min_age_seconds)
     removed: List[str] = []
     total_bytes = 0
     for path in paths:
@@ -102,7 +104,7 @@ def maybe_reap_at_boot() -> None:
             return
     except Exception:
         pass
-    reap_stale_tmp_files()
+    reap_stale_tmp_files(min_age_seconds=0)
 
 
 def maybe_reap_scheduled() -> None:
