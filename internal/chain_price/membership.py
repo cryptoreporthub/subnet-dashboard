@@ -10,7 +10,6 @@ from internal.chain_price.storage_keys import (
     networks_added_prefix_hex,
 )
 
-from internal.chain_client import _hex_to_bytes
 from internal.chain_rpc_errors import storage_block_matches
 
 
@@ -55,10 +54,19 @@ def get_member_netuids(
     if not batch or not storage_block_matches(batch[0], at_hash):
         return [], "invalid"
     changes = batch[0].get("changes") if isinstance(batch[0], dict) else None
-    if not changes:
-        # Keys were enumerated at at_hash, so an empty value set is a malformed response, not absence.
+    # Keys were enumerated at at_hash, so an empty value set is a malformed response, not absence.
+    if not isinstance(changes, list) or not changes:
         return [], "invalid"
-    by_key: Dict[str, Any] = {str(row[0]).lower(): row[1] for row in changes if row}
+    expected = {key.lower() for key in keys}
+    by_key: Dict[str, Any] = {}
+    for row in changes:
+        if not isinstance(row, (list, tuple)) or len(row) != 2 or not isinstance(row[0], str):
+            return [], "invalid"
+        key = row[0].lower()
+        # A duplicate or unrequested key means the response is not a one-to-one answer to the enumeration.
+        if key in by_key or key not in expected:
+            return [], "invalid"
+        by_key[key] = row[1]
     netuids: List[int] = []
     for key in keys:
         # Every enumerated key needs a decodable bool; a missing or malformed value is never "false".

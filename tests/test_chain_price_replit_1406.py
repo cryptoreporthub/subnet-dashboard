@@ -116,6 +116,54 @@ def test_membership_empty_changes_fails_closed():
     assert _membership(_Replay(data, mutate=_changes(_clear))) == ([], "invalid")
 
 
+def test_membership_conflicting_duplicate_key_fails_closed():
+    data = _load_fixture()
+
+    def _dup(changes):
+        # Same key as the first row, opposite bool: a silent last-write-wins would flip membership.
+        changes.append([changes[0][0], "0x00" if changes[0][1] == "0x01" else "0x01"])
+
+    assert _membership(_Replay(data, mutate=_changes(_dup))) == ([], "invalid")
+
+
+def test_membership_identical_duplicate_key_fails_closed():
+    data = _load_fixture()
+
+    def _dup(changes):
+        changes.append(list(changes[0]))
+
+    assert _membership(_Replay(data, mutate=_changes(_dup))) == ([], "invalid")
+
+
+def test_membership_short_row_fails_closed():
+    data = _load_fixture()
+
+    def _short(changes):
+        changes[0] = [changes[0][0]]
+
+    assert _membership(_Replay(data, mutate=_changes(_short))) == ([], "invalid")
+
+
+def test_membership_unrequested_key_fails_closed():
+    data = _load_fixture()
+
+    def _extra(changes):
+        changes.append(["0x" + "00" * 32, "0x01"])
+
+    assert _membership(_Replay(data, mutate=_changes(_extra))) == ([], "invalid")
+
+
+def test_membership_non_list_changes_fails_closed():
+    data = _load_fixture()
+
+    def _mutate(method, value):
+        if method == "state_queryStorageAt":
+            value[0]["changes"] = "0x01"
+        return value
+
+    assert _membership(_Replay(data, mutate=_mutate)) == ([], "invalid")
+
+
 # Item 2: an invalid answer from the primary must reach the fallback. The hash echo still gates it.
 
 
