@@ -128,7 +128,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 ## Suggested PR slices
 
 1. **PR-A (this kickoff):** bracketed `resolve_block_at` + `backfill.py` plan/dry-run + `scripts/backfill_chain_prices.py` + tests (no live RPC in CI).
-2. **PR-B:** `sample_at_block_hash` refactor + real writes + gecko fallback (after #1397).
+2. **PR-B:** `sample_at_block_hash` refactor + real writes + gecko fallback (after #1397). **Status:** in progress (`cursor/1395-step3-prb-sample-backfill-6203`) — writes + `resolve_block_at` wired; Gecko deferred until #1397 merges.
 3. **PR-C (ops):** one-shot runbook in `DEPLOY.md` — Fly `fly machine run` with volume mount, not web boot.
 
 ---
