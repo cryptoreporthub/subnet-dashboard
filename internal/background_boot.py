@@ -210,6 +210,31 @@ def _start_whale_warm_scheduler() -> None:
     defer_boot("whale-warm-scheduler", _run, delay=max(BOOT_DEFER_SECONDS, 5))
 
 
+def _start_tmp_reaper_scheduler() -> None:
+    from internal.run_mode import is_worker_mode
+
+    if not is_worker_mode():
+        return
+
+    def _tick() -> None:
+        from internal.tmp_boot_reaper import maybe_reap_scheduled
+
+        maybe_reap_scheduled()
+
+    def _run() -> None:
+        from internal.job_scheduler import schedule_interval_seconds
+
+        schedule_interval_seconds(
+            "tmp-boot-reaper",
+            _tick,
+            3600,
+            start_delay_seconds=max(BOOT_DEFER_SECONDS + 30, 60),
+        )
+        logger.info("tmp boot reaper scheduled every 3600s (worker)")
+
+    defer_boot("tmp-reaper-hourly", _run, delay=max(BOOT_DEFER_SECONDS, 5))
+
+
 def _start_pick_schedulers() -> None:
     """Phase 1 — traffic-independent daily + hour pick creation (essential)."""
 
@@ -624,6 +649,7 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     _start_pump_ladder()
     _start_resolver()
     _start_whale_warm_scheduler()
+    _start_tmp_reaper_scheduler()
     _start_pick_schedulers()
     _maybe_start_message_intel()
     _maybe_start_summary_bot()

@@ -101,9 +101,11 @@ def test_start_background_workers_essential_skips_live_subnets(monkeypatch):
     bootstrap.assert_not_called()
 
 
-def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch):
+def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch, tmp_path):
     monkeypatch.setenv("RUN_MODE", "worker")
     monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
     scheduled = []
     pump_snapshot = MagicMock()
 
@@ -133,6 +135,7 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch)
 
     start_background_workers()
     assert "live-subnets-boot" not in scheduled
+    assert "tmp-reaper-hourly" in scheduled
     pump_snapshot.assert_called_once()
     for name in (
         "_warm_judges_cache",

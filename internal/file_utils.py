@@ -42,18 +42,21 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     """
     Write JSON data to a file atomically with directory creation.
 
-    Creates parent directories if they don't exist, then writes
-    to a unique temp file (via mkstemp) and renames for atomicity.
-    Using mkstemp avoids race conditions when gunicorn workers share
-    a common .tmp filename.
+    Each writer gets a pid-tagged mkstemp sidecar ``<basename>.<pid>.<rand>.tmp``
+    so the reaper can skip live owners; stale temps are reaped by
+    ``internal.tmp_boot_reaper``. Never use mkstemp with suffix ``.json`` alone.
     """
     dir_name = os.path.dirname(path)
     if dir_name:
         os.makedirs(dir_name, exist_ok=True)
 
-    fd, temp_path = tempfile.mkstemp(dir=dir_name or ".", suffix=".tmp")
+    fd, temp_path = tempfile.mkstemp(
+        dir=dir_name or ".",
+        prefix=f"{os.path.basename(path)}.{os.getpid()}.",
+        suffix=".tmp",
+    )
     try:
-        with os.fdopen(fd, "w") as f:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
         os.replace(temp_path, path)
     finally:
