@@ -11,7 +11,8 @@ from internal.chain_price.reader import ChainReader
 logger = logging.getLogger(__name__)
 
 _MAX_ROUNDS = 4
-_MAX_ROUNDS_BRACKETED = 18
+# Stepped ok ⇒ bracketed ok on the synthetic 38.4k sweep needs >18 bisection rounds (Claude #1411).
+_MAX_ROUNDS_BRACKETED = 24
 _TOLERANCE_MS = 12_000
 _NOMINAL_BLOCK_MS = 12_000
 _BLOCK_CACHE: Dict[int, Tuple[str, int]] = {}
@@ -51,9 +52,11 @@ def _probe_block_ts(
     block: int,
     low: int,
     high: int,
+    *,
+    use_cache: bool = False,
 ) -> Tuple[Optional[int], Optional[str], Optional[int], RpcOutcome]:
     block = max(low, min(high, block))
-    if block in _BLOCK_CACHE:
+    if use_cache and block in _BLOCK_CACHE:
         block_hash, block_ts = _BLOCK_CACHE[block]
         return block, block_hash, block_ts, "ok"
     block_hash, outcome = call("chain_getBlockHash", [block])
@@ -65,7 +68,8 @@ def _probe_block_ts(
     block_ts, ts_outcome = _block_ts_via_reader(reader, block_hash)
     if ts_outcome != "ok" or block_ts is None:
         return None, None, None, ts_outcome
-    _BLOCK_CACHE[block] = (block_hash, block_ts)
+    if use_cache:
+        _BLOCK_CACHE[block] = (block_hash, block_ts)
     return block, block_hash, block_ts, "ok"
 
 
@@ -84,7 +88,9 @@ def _resolve_stepped(
     block_hash: Optional[str] = None
 
     for _round in range(max_rounds):
-        block, block_hash, block_ts, outcome = _probe_block_ts(call, reader, block, low, high)
+        block, block_hash, block_ts, outcome = _probe_block_ts(
+            call, reader, block, low, high, use_cache=False
+        )
         if outcome != "ok" or block_ts is None or block_hash is None:
             return None, None, outcome
         delta = block_ts - ts_ms
@@ -130,7 +136,9 @@ def _resolve_bracketed(
 ) -> Tuple[Optional[int], Optional[str], RpcOutcome]:
     probed_ts: Dict[int, int] = {}
 
-    block_n, block_hash, head_ts, outcome = _probe_block_ts(call, reader, high, low, high)
+    block_n, block_hash, head_ts, outcome = _probe_block_ts(
+        call, reader, high, low, high, use_cache=True
+    )
     if outcome != "ok" or head_ts is None or block_hash is None:
         return None, None, outcome
     probed_ts[block_n] = head_ts
@@ -146,7 +154,9 @@ def _resolve_bracketed(
     seeds.extend(anchor_blocks)
 
     for block in seeds:
-        block_n, block_hash, block_ts, outcome = _probe_block_ts(call, reader, block, low, high)
+        block_n, block_hash, block_ts, outcome = _probe_block_ts(
+            call, reader, block, low, high, use_cache=True
+        )
         if outcome != "ok" or block_ts is None or block_hash is None:
             return None, None, outcome
         probed_ts[block_n] = block_ts
@@ -161,7 +171,9 @@ def _resolve_bracketed(
         if high_b <= low_b:
             break
         mid = (low_b + high_b) // 2
-        block_n, block_hash, block_ts, outcome = _probe_block_ts(call, reader, mid, low, high)
+        block_n, block_hash, block_ts, outcome = _probe_block_ts(
+            call, reader, mid, low, high, use_cache=True
+        )
         if outcome != "ok" or block_ts is None or block_hash is None:
             return None, None, outcome
         probed_ts[block_n] = block_ts
@@ -186,7 +198,10 @@ def resolve_block_at(
     ``stepped`` (default): estimate-and-correct, ≤4 rounds — forward recorder latency path.
     ``bracketed``: anchored bisection with a higher round budget for historical backfill.
     """
-    if hint_block is not None and hint_block in _BLOCK_CACHE:
+    if search not in ("stepped", "bracketed"):
+        raise ValueError(f"unknown search mode: {search!r}")
+
+    if search == "bracketed" and hint_block is not None and hint_block in _BLOCK_CACHE:
         h, t = _BLOCK_CACHE[hint_block]
         if abs(t - ts_ms) <= _TOLERANCE_MS:
             return hint_block, h, "ok"

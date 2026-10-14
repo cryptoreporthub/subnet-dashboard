@@ -2,20 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import time
 from typing import List, Optional
 
 HOUR_MS = 3_600_000
-_DEFAULT_SLEEP_S = 1.5
-
-
-def backfill_sleep_seconds() -> float:
-    raw = os.environ.get("CHAIN_PRICE_BACKFILL_SLEEP_S", str(_DEFAULT_SLEEP_S))
-    try:
-        return max(0.0, float(raw))
-    except ValueError:
-        return _DEFAULT_SLEEP_S
 
 
 def plan_hourly_bucket_ts_ms(
