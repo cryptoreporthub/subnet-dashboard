@@ -10,6 +10,9 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
+# Grace at worker boot so concurrent startup writers are not unlinked mid-write.
+_BOOT_REAP_MIN_AGE_SECONDS = 60
+
 # mkstemp(prefix="tmp") orphans: tmp + 8 of [a-z0-9_] + .json or .tmp (legacy whale writer).
 _LEGACY_ORPHAN_RE = re.compile(r"^tmp[a-z0-9_]{8}\.(?:json|tmp)$")
 
@@ -104,7 +107,7 @@ def maybe_reap_at_boot() -> None:
             return
     except Exception:
         pass
-    reap_stale_tmp_files(min_age_seconds=0)
+    reap_stale_tmp_files(min_age_seconds=_BOOT_REAP_MIN_AGE_SECONDS)
 
 
 def maybe_reap_scheduled() -> None:
