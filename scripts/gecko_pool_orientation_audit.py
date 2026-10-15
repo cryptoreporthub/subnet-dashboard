@@ -6,6 +6,8 @@ For each geckoterminal mapping, GET
 and compare base/quote token ids to subnet alpha (bittensor_{netuid}) and TAO
 (bittensor_0).
 
+Requests are paced at <=28/min (margin under GeckoTerminal's ~30/min cap).
+
 Orientation classes:
   alpha_base_tao_quote — base_is_alpha should be true (alpha-in-TAO via currency=token, token=base)
   tao_base_alpha_quote   — base_is_alpha should be false (token=quote)
@@ -24,7 +26,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import requests
 
@@ -34,10 +36,58 @@ PAIRS_PATH = ROOT / "config" / "price_pairs.json"
 ARTIFACT_JSON = ROOT / "docs" / "gecko-pool-orientation-audit.json"
 ARTIFACT_MD = ROOT / "docs" / "gecko-pool-orientation-audit.md"
 TAO_TOKEN_ID = "bittensor_0"
+# Margin under GeckoTerminal ~30 req/min public cap.
+MAX_CALLS_PER_MINUTE = 28
+MIN_REQUEST_INTERVAL_S = 60.0 / MAX_CALLS_PER_MINUTE
+DEFAULT_429_FALLBACK_S = 30.0
+MAX_429_FALLBACK_S = 120.0
 
 
 def _alpha_token_id(netuid: str) -> str:
     return f"bittensor_{netuid}"
+
+
+def _parse_retry_after(resp: requests.Response) -> Optional[float]:
+    raw = resp.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return max(float(raw.strip()), 0.0)
+    except ValueError:
+        return None
+
+
+def _retry_delay_seconds(resp: requests.Response, attempt: int) -> float:
+    """Honor Retry-After on 429; bounded exponential fallback when absent."""
+    parsed = _parse_retry_after(resp)
+    if parsed is not None:
+        return parsed
+    return min(DEFAULT_429_FALLBACK_S * (2 ** attempt), MAX_429_FALLBACK_S)
+
+
+class _RequestPacer:
+    """Enforce minimum spacing between Gecko API calls."""
+
+    def __init__(
+        self,
+        min_interval_s: float = MIN_REQUEST_INTERVAL_S,
+        *,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._min_interval_s = min_interval_s
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._last_at: Optional[float] = None
+
+    def wait_turn(self) -> None:
+        now = self._monotonic()
+        if self._last_at is not None:
+            elapsed = now - self._last_at
+            remaining = self._min_interval_s - elapsed
+            if remaining > 0:
+                self._sleep(remaining)
+        self._last_at = self._monotonic()
 
 
 def _fetch_pool(
@@ -46,24 +96,37 @@ def _fetch_pool(
     timeout: int = 30,
     *,
     max_attempts: int = 6,
+    pacer: Optional[_RequestPacer] = None,
+    sleep: Optional[Callable[[float], None]] = None,
+    get: Optional[Callable[..., requests.Response]] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    if sleep is None:
+        sleep = time.sleep
+    if get is None:
+        get = requests.get
     url = f"{GECKO_API}/networks/{network}/pools/{pool}"
     params = {"include": "base_token,quote_token"}
     last_err: Optional[str] = None
     for attempt in range(max_attempts):
+        if pacer is not None:
+            pacer.wait_turn()
         try:
-            resp = requests.get(url, params=params, timeout=timeout)
+            resp = get(url, params=params, timeout=timeout)
             if resp.status_code == 404:
                 return None, "http_404"
             if resp.status_code == 429:
-                last_err = "http_429"
-                time.sleep(min(2.0 ** attempt, 30.0))
+                last_err = "http_429_exhausted"
+                delay = _retry_delay_seconds(resp, attempt)
+                sleep(delay)
                 continue
             resp.raise_for_status()
             return resp.json(), None
+        except requests.HTTPError as exc:
+            last_err = str(exc)
+            break
         except Exception as exc:
             last_err = str(exc)
-            time.sleep(min(2.0 ** attempt, 30.0))
+            break
     return None, last_err or "fetch_failed"
 
 
@@ -94,8 +157,20 @@ def _expected_base_is_alpha(orientation: str) -> Optional[bool]:
     return None
 
 
-def audit_pairs(pairs: Dict[str, Any], *, pause_s: float = 0.35) -> Dict[str, Any]:
+def audit_pairs(
+    pairs: Dict[str, Any],
+    *,
+    pacer: Optional[_RequestPacer] = None,
+    sleep: Optional[Callable[[float], None]] = None,
+    get: Optional[Callable[..., requests.Response]] = None,
+) -> Dict[str, Any]:
+    if sleep is None:
+        sleep = time.sleep
+    if get is None:
+        get = requests.get
     rows: List[Dict[str, Any]] = []
+    pacer = pacer or _RequestPacer(sleep=sleep)
+
     def _sort_key(netuid: str) -> Tuple[int, str]:
         return (int(netuid), netuid) if str(netuid).isdigit() else (10**9, str(netuid))
 
@@ -107,8 +182,9 @@ def audit_pairs(pairs: Dict[str, Any], *, pause_s: float = 0.35) -> Dict[str, An
             continue
         network = str(gt.get("network") or "")
         pool = str(gt.get("pool") or "")
-        payload, err = _fetch_pool(network, pool)
-        time.sleep(pause_s)
+        payload, err = _fetch_pool(
+            network, pool, pacer=pacer, sleep=sleep, get=get
+        )
         row: Dict[str, Any] = {
             "netuid": netuid,
             "network": network,
@@ -188,7 +264,7 @@ def write_artifacts(report: Dict[str, Any]) -> None:
         f"- **TAO-base / alpha-quote:** {report.get('tao_base_alpha_quote_count')}",
         f"- **Unknown or error:** {report.get('unknown_or_error_count')}",
         "",
-        "Regenerate:",
+        "Regenerate (paced <=28 Gecko calls/min):",
         "",
         "```bash",
         "PYTHONPATH=. python scripts/gecko_pool_orientation_audit.py",
@@ -236,6 +312,9 @@ def main() -> int:
             file=sys.stderr,
         )
     if args.apply:
+        if report.get("unknown_or_error_count"):
+            print("Refusing --apply while audit has errors", file=sys.stderr)
+            return 1
         n = apply_audit(pairs, report)
         args.pairs_path.write_text(json.dumps(pairs, indent=2) + "\n", encoding="utf-8")
         print(f"Applied {n} change(s) to {args.pairs_path}")
