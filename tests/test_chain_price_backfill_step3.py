@@ -218,6 +218,23 @@ def test_hourly_bucket_skip_requires_distinct_netuids_not_duplicate_providers(tm
     assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
 
 
+def test_schemaless_file_has_no_complete_bucket_and_no_anchors(tmp_path):
+    from internal.chain_price import db as price_db
+
+    bucket_ts_ms = 1_700_000_000_000
+    empty_path = str(tmp_path / "empty.db")
+    (tmp_path / "empty.db").write_bytes(b"")
+    assert price_db.load_anchor_blocks(bucket_ts_ms, 3_600_000, path=empty_path) == []
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=empty_path)
+
+    # A file with only an unrelated table: both chain tables are absent.
+    other_path = str(tmp_path / "other.db")
+    with sqlite3.connect(other_path) as conn:
+        conn.execute("CREATE TABLE unrelated (x INTEGER)")
+    assert price_db.load_anchor_blocks(bucket_ts_ms, 3_600_000, path=other_path) == []
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=other_path)
+
+
 def test_disputed_only_netuid_does_not_complete_backfill_bucket(tmp_path):
     from internal.chain_price import db as price_db
 

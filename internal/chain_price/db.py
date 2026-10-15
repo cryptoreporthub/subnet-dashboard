@@ -131,6 +131,8 @@ def load_anchor_blocks(
     if not os.path.exists(db_path):
         return []
     with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_blocks"):
+            return []
         cur = conn.execute(
             """
             SELECT block FROM chain_blocks
@@ -171,7 +173,9 @@ def hourly_bucket_has_chain_sample(
     if not os.path.exists(db_path):
         return False
     with db_conn(db_path) as conn:
-        if not _table_exists(conn, "chain_blocks"):
+        if not _table_exists(conn, "chain_blocks") or not _table_exists(
+            conn, "chain_price_samples"
+        ):
             return False
         row = conn.execute(
             """
