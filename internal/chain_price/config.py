@@ -19,6 +19,10 @@ MAX_CONSECUTIVE_SCHEMA_MISS = 6
 RETENTION_FULL_DAYS = 7
 RETENTION_DAYS = 45
 ROW_CAP = 600_000
+# Hard operator horizon for historical backfill (CLI cannot exceed without code change).
+BACKFILL_MAX_DAYS = 30
+# Resolver-only RPC calls per bracketed bucket (synthetic sweep max 65 in CI regression; head fetch included).
+BRACKETED_RESOLVE_RPC_BUDGET_PER_BUCKET = 65
 
 _DEFAULT_MIN_FREE_MB = 200
 _DEFAULT_WARN_EXTRA_MB = 100

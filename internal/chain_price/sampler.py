@@ -24,6 +24,7 @@ from internal.chain_price.storage_keys import (
 logger = logging.getLogger(__name__)
 
 _KIND_FORWARD = "forward"
+_KIND_BACKFILL = "backfill"
 _consecutive_schema_miss = 0
 _disk_low_last_log = 0.0
 _DISK_LOW_LOG_INTERVAL_SECONDS = 600.0
@@ -152,6 +153,136 @@ def _spot_prices(
     return spots, failures
 
 
+def sample_at_block_hash(
+    reader: ChainReader,
+    block_hash: str,
+    block: int,
+    *,
+    write: bool = True,
+    kind: str = _KIND_FORWARD,
+    db_path: Optional[str] = None,
+    bucket_ts_override: Optional[int] = None,
+    bump_schema_miss_on_error: bool = True,
+) -> TickResult:
+    """Membership → reserves → spot cross-check → optional persist at a pinned block."""
+    call = reader.call_fn()
+    netuids, outcome = get_member_netuids(call, block_hash)
+    if outcome != "ok":
+        if bump_schema_miss_on_error:
+            _bump_schema_miss(outcome)
+        return {"outcome": outcome, "block": block, "block_hash": block_hash}
+
+    query_keys = reserve_query_keys(netuids)
+    batch, outcome = call("state_queryStorageAt", [query_keys, block_hash])
+    if outcome != "ok" or not batch:
+        if bump_schema_miss_on_error:
+            _bump_schema_miss(outcome)
+        return {"outcome": outcome or "rpc_error", "block": block, "block_hash": block_hash}
+
+    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
+    entry = batch[0] if isinstance(batch[0], dict) else {}
+    if not _returned_block_matches(entry, block_hash):
+        if bump_schema_miss_on_error:
+            _bump_schema_miss("invalid")
+        return {
+            "outcome": "invalid",
+            "error": "pinned block mismatch",
+            "block": block,
+            "block_hash": block_hash,
+        }
+
+    changes = entry.get("changes")
+    if not changes:
+        if bump_schema_miss_on_error:
+            _bump_schema_miss("absent")
+        return {"outcome": "absent", "block": block, "block_hash": block_hash}
+
+    ts_raw = None
+    ts_key = timestamp_now_key_hex()
+    for key, value in changes:
+        if key == ts_key:
+            ts_raw = value
+            break
+    ts_ms = _decode_u64_storage(ts_raw)
+    if ts_ms is None:
+        if bump_schema_miss_on_error:
+            _bump_schema_miss("invalid")
+        return {"outcome": "invalid", "error": "timestamp missing", "block": block}
+
+    cross_netuids = _crosscheck_netuids(netuids, block)
+    spot_by_netuid, spot_failures = _spot_prices(call, cross_netuids, block_hash)
+
+    provider = storage_provider
+    rows, parse_outcome = _parse_storage_batch(
+        changes, netuids, block, block_hash, provider, ts_ms, spot_by_netuid
+    )
+    if parse_outcome != "ok":
+        if bump_schema_miss_on_error:
+            _bump_schema_miss(parse_outcome)
+        return {
+            "outcome": parse_outcome,
+            "block": block,
+            "block_hash": block_hash,
+            "ts_ms": ts_ms,
+            "n_subnets": len(netuids),
+        }
+
+    bucket_ts = bucket_ts_override if bucket_ts_override is not None else _bucket_ts_ms(ts_ms)
+    samples_written = 0
+    if write:
+        # Count only keys this batch adds: a rerun over stored rows inserts nothing new.
+        new_rows = price_db.count_new_sample_rows(rows, path=db_path)
+        if not price_db.can_accept_sample_batch(new_rows, path=db_path):
+            return {
+                "outcome": "row_cap_exceeded",
+                "block": block,
+                "block_hash": block_hash,
+                "ts_ms": ts_ms,
+                "n_subnets": len(netuids),
+                "samples_written": 0,
+            }
+        price_db.insert_block_row(
+            provider=provider,
+            block=block,
+            block_hash=block_hash,
+            ts_ms=ts_ms,
+            bucket_ts=bucket_ts,
+            kind=kind,
+            n_subnets=len(netuids),
+            path=db_path,
+        )
+        samples_written = price_db.insert_sample_rows(rows, path=db_path)
+        price_db.prune_old_rows(path=db_path)
+        if kind == _KIND_BACKFILL and bucket_ts_override is not None:
+            if not price_db.hourly_bucket_has_chain_sample(bucket_ts_override, path=db_path):
+                return {
+                    "outcome": "bucket_incomplete",
+                    "block": block,
+                    "block_hash": block_hash,
+                    "ts_ms": ts_ms,
+                    "n_subnets": len(netuids),
+                    "samples_written": samples_written,
+                    "error": "bucket incomplete: not every netuid has a chain_sampled row",
+                }
+
+    if bump_schema_miss_on_error:
+        global _consecutive_schema_miss
+        _consecutive_schema_miss = 0
+    result: TickResult = {
+        "outcome": "ok",
+        "provider": provider,
+        "provider_served": provider,
+        "block": block,
+        "block_hash": block_hash,
+        "ts_ms": ts_ms,
+        "n_subnets": len(netuids),
+        "samples_written": samples_written,
+    }
+    if spot_failures:
+        result["spot_crosscheck_failures"] = spot_failures
+    return result
+
+
 def run_forward_sample(
     client_or_reader: Any,
     *,
@@ -207,91 +338,15 @@ def run_forward_sample(
         _bump_schema_miss("invalid")
         return {"outcome": "invalid", "error": "missing block number"}
 
-    netuids, outcome = get_member_netuids(call, block_hash)
-    if outcome != "ok":
-        _bump_schema_miss(outcome)
-        return {"outcome": outcome, "block": block, "block_hash": block_hash}
-
-    query_keys = reserve_query_keys(netuids)
-    batch, outcome = call("state_queryStorageAt", [query_keys, block_hash])
-    if outcome != "ok" or not batch:
-        _bump_schema_miss(outcome)
-        return {"outcome": outcome or "rpc_error", "block": block, "block_hash": block_hash}
-
-    # Capture before the spot cross-check: that read may fail over to another provider.
-    storage_provider = reader.provider_served or cfg.primary_rpc_endpoint()[1]
-    entry = batch[0] if isinstance(batch[0], dict) else {}
-    if not _returned_block_matches(entry, block_hash):
-        _bump_schema_miss("invalid")
-        return {
-            "outcome": "invalid",
-            "error": "pinned block mismatch",
-            "block": block,
-            "block_hash": block_hash,
-        }
-
-    changes = entry.get("changes")
-    if not changes:
-        _bump_schema_miss("absent")
-        return {"outcome": "absent", "block": block, "block_hash": block_hash}
-
-    ts_raw = None
-    ts_key = timestamp_now_key_hex()
-    for key, value in changes:
-        if key == ts_key:
-            ts_raw = value
-            break
-    ts_ms = _decode_u64_storage(ts_raw)
-    if ts_ms is None:
-        _bump_schema_miss("invalid")
-        return {"outcome": "invalid", "error": "timestamp missing", "block": block}
-
-    cross_netuids = _crosscheck_netuids(netuids, block)
-    spot_by_netuid, spot_failures = _spot_prices(call, cross_netuids, block_hash)
-
-    provider = storage_provider
-    rows, parse_outcome = _parse_storage_batch(
-        changes, netuids, block, block_hash, provider, ts_ms, spot_by_netuid
+    return sample_at_block_hash(
+        reader,
+        block_hash,
+        block,
+        write=write,
+        kind=_KIND_FORWARD,
+        db_path=db_path,
+        bump_schema_miss_on_error=True,
     )
-    if parse_outcome != "ok":
-        _bump_schema_miss(parse_outcome)
-        return {
-            "outcome": parse_outcome,
-            "block": block,
-            "block_hash": block_hash,
-            "ts_ms": ts_ms,
-            "n_subnets": len(netuids),
-        }
-
-    samples_written = 0
-    if write:
-        price_db.insert_block_row(
-            provider=provider,
-            block=block,
-            block_hash=block_hash,
-            ts_ms=ts_ms,
-            bucket_ts=_bucket_ts_ms(ts_ms),
-            kind=_KIND_FORWARD,
-            n_subnets=len(netuids),
-            path=db_path,
-        )
-        samples_written = price_db.insert_sample_rows(rows, path=db_path)
-        price_db.prune_old_rows(path=db_path)
-
-    _consecutive_schema_miss = 0
-    result: TickResult = {
-        "outcome": "ok",
-        "provider": provider,
-        "provider_served": provider,
-        "block": block,
-        "block_hash": block_hash,
-        "ts_ms": ts_ms,
-        "n_subnets": len(netuids),
-        "samples_written": samples_written,
-    }
-    if spot_failures:
-        result["spot_crosscheck_failures"] = spot_failures
-    return result
 
 
 def _log_disk_low_skip(min_free_mb: int, db_file: str) -> None:

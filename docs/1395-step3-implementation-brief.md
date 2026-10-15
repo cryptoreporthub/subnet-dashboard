@@ -62,7 +62,8 @@
 - `plan_hourly_bucket_ts_ms(end_ms, days=30) -> list[int]` — UTC hour buckets (align with Step 1 Gecko comparison: hourly).
 - `backfill_bucket(reader, bucket_ts_ms, *, db_path, dry_run, gecko_fallback)` → per-bucket result dict (`outcome`, `block`, `samples_written`, `fallback: gecko_pool | None`).
 - **Idempotency:** rely on `INSERT OR IGNORE` PKs; skip bucket when a non-disputed `chain_sampled` row exists for that hour (query by `ts_ms` window or `chain_blocks.bucket_ts`).
-- **Rate budget (from Step 1):** default **≥1.5s sleep** between buckets; env `CHAIN_PRICE_BACKFILL_SLEEP_S`; cap burst RPC (~5–8 calls/bucket × ~720 buckets ≈ 3.6k–5.8k calls — run once on Fly machine or operator laptop, not in web process).
+- **Rate budget:** default **≥1.5s sleep** between buckets (`CHAIN_PRICE_BACKFILL_SLEEP_S`). **Bracketed `resolve_block_at` alone** is ~25–44 RPC calls/bucket on the synthetic 500k-window sweep (1–3s block jitter; max observed **59**). Full buckets add membership + storage + spot reads on top. CI enforces `BRACKETED_RESOLVE_RPC_BUDGET_PER_BUCKET` (65) via `test_bracketed_resolve_rpc_budget_regression`. Run backfill once on a Fly machine or operator laptop, not in the web process.
+- **Disk / cap:** backfill uses the same `db_disk_guard_outcome` floor as forward sampling, enforces `ROW_CAP` headroom before writes, and runs `prune_old_rows` after backfill inserts. **`BACKFILL_MAX_DAYS=30`** is a hard CLI cap (`validate_backfill_days`).
 - **Membership:** always `get_member_netuids` at pinned hash — **never** admit netuids from price probe alone (#1396).
 
 **New:** `scripts/backfill_chain_prices.py`
@@ -128,7 +129,7 @@ Offline fixture: extend or reuse `tests/fixtures/chain/bm_9060887.json` for one 
 ## Suggested PR slices
 
 1. **PR-A (this kickoff):** bracketed `resolve_block_at` + `backfill.py` plan/dry-run + `scripts/backfill_chain_prices.py` + tests (no live RPC in CI).
-2. **PR-B:** `sample_at_block_hash` refactor + real writes + gecko fallback (after #1397).
+2. **PR-B:** `sample_at_block_hash` refactor + real writes + gecko fallback (after #1397). **Status:** in progress (`cursor/1395-step3-prb-sample-backfill-6203`) — writes + `resolve_block_at` wired; Gecko deferred until #1397 merges.
 3. **PR-C (ops):** one-shot runbook in `DEPLOY.md` — Fly `fly machine run` with volume mount, not web boot.
 
 ---

@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+import sqlite3
+from unittest.mock import patch
+
 import pytest
 
-from internal.chain_price.backfill import plan_hourly_bucket_ts_ms, run_backfill_dry_run
+from internal.chain_price import config as chain_cfg
+from internal.chain_price.backfill import (
+    backfill_bucket,
+    plan_hourly_bucket_ts_ms,
+    run_backfill_dry_run,
+    validate_backfill_days,
+)
 from internal.chain_price.block_resolve import clear_block_cache, resolve_block_at
+from internal.chain_price.reader import ChainReader
 from tests.test_block_resolve_convergence_1406 import HEAD, WINDOW, _SyntheticChain
+from tests.test_chain_price_step2 import PINNED_HASH, fixture_client
 
 # Claude review grid: 16 seeds × 2 jitters × 1_200 targets (step 417) = 38_400 cases.
 _SYNTHETIC_SWEEP_STEP = 417
@@ -23,12 +34,461 @@ def test_backfill_dry_run_payload():
     out = run_backfill_dry_run(1_700_000_000_000, search="bracketed")
     assert out["outcome"] == "dry_run"
     assert out["search"] == "bracketed"
-    assert "PR-B" in out["resolve_block_at"]
+    assert "note" in out
+
+
+def test_backfill_rerun_skips_when_block_ts_precedes_bucket(fixture_client, tmp_path):
+    """A block stamped up to 12s before the hour is accepted for that bucket and must still be skipped on rerun."""
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    block_ts_ms = 1_789_328_964_000
+    bucket_ts_ms = block_ts_ms + 5_000  # sample ts lands 5s before bucket start
+
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        first = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+        second = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+
+    conn = sqlite3.connect(db_path)
+    count = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
+    conn.close()
+    assert first["outcome"] == "ok"
+    assert first["samples_written"] > 0
+    assert second["outcome"] == "skipped"
+    assert count == first["samples_written"]
+
+
+def test_backfill_bucket_writes_and_idempotent(fixture_client, tmp_path):
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        first = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+        second = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+
+    assert first["outcome"] == "ok"
+    assert first["samples_written"] > 0
+    assert second["outcome"] == "skipped"
+    assert second["samples_written"] == 0
+
+    conn = sqlite3.connect(db_path)
+    kind = conn.execute("SELECT kind FROM chain_blocks LIMIT 1").fetchone()[0]
+    count = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
+    conn.close()
+    assert kind == "backfill"
+    assert count == first["samples_written"]
 
 
 def test_backfill_dry_run_unknown_search_raises():
     with pytest.raises(ValueError, match="unknown search"):
         run_backfill_dry_run(1_700_000_000_000, search="bogus")
+
+
+def test_backfill_function_dry_run_does_not_create_db(fixture_client, tmp_path):
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, dry_run=True, search="bracketed")
+    assert out["outcome"] == "dry_run"
+    assert not (tmp_path / "chain_prices.db").exists()
+
+
+def test_validate_backfill_days_hard_cap():
+    validate_backfill_days(chain_cfg.BACKFILL_MAX_DAYS)
+    with pytest.raises(ValueError, match="exceeds hard cap"):
+        validate_backfill_days(chain_cfg.BACKFILL_MAX_DAYS + 1)
+
+
+def test_backfill_disk_guard_blocks_writes(fixture_client, tmp_path):
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    with patch(
+        "internal.disk_guard.db_disk_guard_outcome",
+        return_value="disk_low",
+    ):
+        out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+    assert out["outcome"] == "disk_low"
+    assert not (tmp_path / "chain_prices.db").exists()
+
+
+def test_row_cap_near_full_batch_rejected_not_false_ok(fixture_client, tmp_path):
+    """ROW_CAP=3 with two rows: a full subnet batch must fail closed, not ok after prune."""
+    from internal.chain_price import db as price_db
+
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    filler = [
+        {
+            "netuid": i,
+            "block": 1,
+            "provider": "blockmachine",
+            "ts_ms": 1_600_000_000_000 + i,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": None,
+            "unit": "tao",
+            "quality": "chain_sampled",
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        }
+        for i in range(2)
+    ]
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    with patch.object(price_db, "ROW_CAP", 3):
+        price_db.insert_sample_rows(filler, path=db_path)
+        with patch(
+            "internal.chain_price.backfill.resolve_block_at",
+            return_value=(9_060_887, PINNED_HASH, "ok"),
+        ):
+            out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+    assert out["outcome"] == "row_cap_exceeded"
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0] == 2
+    assert conn.execute("SELECT COUNT(*) FROM chain_blocks").fetchone()[0] == 0
+    conn.close()
+
+
+def test_hourly_bucket_skip_requires_distinct_netuids_not_duplicate_providers(tmp_path):
+    from internal.chain_price import db as price_db
+
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = 1_700_000_000_000
+    block = 42
+    n_subnets = 3
+    price_db.insert_block_row(
+        provider="a",
+        block=block,
+        block_hash="0xabc",
+        ts_ms=bucket_ts_ms,
+        bucket_ts=bucket_ts_ms,
+        kind="backfill",
+        n_subnets=n_subnets,
+        path=db_path,
+    )
+    rows = [
+        {
+            "netuid": 1,
+            "block": block,
+            "provider": "p1",
+            "ts_ms": bucket_ts_ms,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": None,
+            "unit": "tao",
+            "quality": "chain_sampled",
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        },
+        {
+            "netuid": 1,
+            "block": block,
+            "provider": "p2",
+            "ts_ms": bucket_ts_ms,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": None,
+            "unit": "tao",
+            "quality": "chain_sampled",
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        },
+    ]
+    price_db.insert_sample_rows(rows, path=db_path)
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+
+def test_schemaless_file_has_no_complete_bucket_and_no_anchors(tmp_path):
+    from internal.chain_price import db as price_db
+
+    bucket_ts_ms = 1_700_000_000_000
+    empty_path = str(tmp_path / "empty.db")
+    (tmp_path / "empty.db").write_bytes(b"")
+    assert price_db.load_anchor_blocks(bucket_ts_ms, 3_600_000, path=empty_path) == []
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=empty_path)
+
+    # A file with only an unrelated table: both chain tables are absent.
+    other_path = str(tmp_path / "other.db")
+    with sqlite3.connect(other_path) as conn:
+        conn.execute("CREATE TABLE unrelated (x INTEGER)")
+    assert price_db.load_anchor_blocks(bucket_ts_ms, 3_600_000, path=other_path) == []
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=other_path)
+
+
+def test_disputed_only_netuid_does_not_complete_backfill_bucket(tmp_path):
+    from internal.chain_price import db as price_db
+
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = 1_700_000_000_000
+    block = 42
+    price_db.insert_block_row(
+        provider="a",
+        block=block,
+        block_hash="0xabc",
+        ts_ms=bucket_ts_ms,
+        bucket_ts=bucket_ts_ms,
+        kind="backfill",
+        n_subnets=2,
+        path=db_path,
+    )
+
+    def _row(netuid: int, quality: str, provider: str = "p1") -> dict:
+        return {
+            "netuid": netuid,
+            "block": block,
+            "provider": provider,
+            "ts_ms": bucket_ts_ms,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": 2.0,
+            "unit": "tao",
+            "quality": quality,
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        }
+
+    price_db.insert_sample_rows([_row(1, "chain_sampled"), _row(2, "disputed")], path=db_path)
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+    # PK is (netuid, block, provider): a second provider's chain_sampled row is a distinct row.
+    price_db.insert_sample_rows([_row(2, "chain_sampled", provider="p2")], path=db_path)
+    assert price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+
+@pytest.mark.parametrize("partial_first", [True, False])
+def test_bucket_with_partial_and_complete_markers_is_skipped(tmp_path, partial_first):
+    """Block 42 is partial, block 43 is complete. Either insertion order must read as complete."""
+    from internal.chain_price import db as price_db
+
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = 1_700_000_000_000
+    partial = {"block": 42, "netuids": [1]}
+    complete = {"block": 43, "netuids": [1, 2]}
+    specs = [partial, complete] if partial_first else [complete, partial]
+
+    for spec in specs:
+        price_db.insert_block_row(
+            provider="a",
+            block=spec["block"],
+            block_hash=f"0x{spec['block']:x}",
+            ts_ms=bucket_ts_ms,
+            bucket_ts=bucket_ts_ms,
+            kind="backfill",
+            n_subnets=2,
+            path=db_path,
+        )
+        price_db.insert_sample_rows(
+            [
+                {
+                    "netuid": netuid,
+                    "block": spec["block"],
+                    "provider": "p1",
+                    "ts_ms": bucket_ts_ms,
+                    "registered_at": 1,
+                    "tao_reserve_raw": 1,
+                    "alpha_reserve_raw": 1,
+                    "price_tao": 1.0,
+                    "spot_price_tao": None,
+                    "unit": "tao",
+                    "quality": "chain_sampled",
+                    "schema_version": chain_cfg.SCHEMA_VERSION,
+                }
+                for netuid in spec["netuids"]
+            ],
+            path=db_path,
+        )
+
+    assert price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+
+def test_partial_bucket_completes_on_rerun_within_delta_capacity(fixture_client, tmp_path):
+    """Run 1 stops one row short of full coverage. Run 2 adds only the missing key, so it fits a
+    cap of n rows that a full-batch count (n stored + n incoming) would reject."""
+    from internal.chain_price import db as price_db
+    from internal.chain_price import sampler
+
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    real_parse = sampler._parse_storage_batch
+    dropped: list[int] = []
+
+    def _drop_first_row(*args, **kwargs):
+        rows, outcome = real_parse(*args, **kwargs)
+        if not dropped and rows:
+            dropped.append(rows[0]["netuid"])
+            rows = rows[1:]
+        return rows, outcome
+
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ), patch.object(sampler, "_parse_storage_batch", side_effect=_drop_first_row):
+        with patch.object(price_db, "ROW_CAP", 10**6):
+            first = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+        n_subnets = first["n_subnets"]
+        with patch.object(price_db, "ROW_CAP", n_subnets):
+            second = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+            third = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+
+    assert dropped
+    assert first["outcome"] == "bucket_incomplete"
+    assert first["samples_written"] == n_subnets - 1
+    assert second["outcome"] == "ok"
+    assert second["samples_written"] == 1
+    assert third["outcome"] == "skipped"
+
+    conn = sqlite3.connect(db_path)
+    count = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
+    conn.close()
+    assert count == n_subnets
+
+
+def test_neighboring_hour_forward_sample_does_not_skip_backfill_bucket(fixture_client, tmp_path):
+    from internal.chain_price import db as price_db
+
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    neighbor_ts = bucket_ts_ms - 3_600_000
+    price_db.insert_block_row(
+        provider="blockmachine",
+        block=9_060_000,
+        block_hash="0xneighbor",
+        ts_ms=neighbor_ts,
+        bucket_ts=neighbor_ts,
+        kind="forward",
+        n_subnets=128,
+        path=db_path,
+    )
+    price_db.insert_sample_rows(
+        [
+            {
+                "netuid": 1,
+                "block": 9_060_000,
+                "provider": "blockmachine",
+                "ts_ms": neighbor_ts,
+                "registered_at": 1,
+                "tao_reserve_raw": 1,
+                "alpha_reserve_raw": 1,
+                "price_tao": 1.0,
+                "spot_price_tao": None,
+                "unit": "tao",
+                "quality": "chain_sampled",
+                "schema_version": chain_cfg.SCHEMA_VERSION,
+            }
+        ],
+        path=db_path,
+    )
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+    reader = ChainReader([("blockmachine", client)])
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+    assert out["outcome"] == "ok"
+
+
+def test_backfill_zero_byte_db_does_not_crash_on_skip_check(fixture_client, tmp_path):
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    (tmp_path / "chain_prices.db").write_bytes(b"")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ):
+        out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+    assert out["outcome"] == "ok"
+
+
+def test_backfill_row_cap_blocks_writes(fixture_client, tmp_path):
+    from internal.chain_price import db as price_db
+
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    rows = [
+        {
+            "netuid": i,
+            "block": 1,
+            "provider": "blockmachine",
+            "ts_ms": 1_700_000_000_000 + i,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": None,
+            "unit": "tao",
+            "quality": "chain_sampled",
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        }
+        for i in range(2)
+    ]
+    with patch.object(price_db, "ROW_CAP", 2):
+        price_db.insert_sample_rows(rows, path=db_path)
+        reader = ChainReader([("blockmachine", client)])
+        bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+        with patch(
+            "internal.chain_price.backfill.resolve_block_at",
+            return_value=(9_060_887, PINNED_HASH, "ok"),
+        ):
+            out = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+    assert out["outcome"] == "row_cap_exceeded"
+    conn = sqlite3.connect(db_path)
+    assert conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0] == 2
+    conn.close()
+
+
+def test_bracketed_resolve_rpc_budget_regression():
+    """Resolver-only RPC calls per bucket must stay within the documented synthetic ceiling."""
+    max_calls = 0
+    step = 417
+    for seed in range(16):
+        for jitter in (1000, 3000):
+            chain = _SyntheticChain(seed=seed, jitter=jitter)
+            orig_call = chain.call
+
+            for target in range(HEAD - WINDOW, HEAD, step):
+                calls = {"n": 0}
+
+                def counted_call(method, params):
+                    calls["n"] += 1
+                    return orig_call(method, params)
+
+                chain.call = counted_call
+                clear_block_cache()
+                resolve_block_at(chain, chain.ts[target] + 2_000, search="bracketed")
+                chain.call = orig_call
+                max_calls = max(max_calls, calls["n"])
+    assert max_calls <= chain_cfg.BRACKETED_RESOLVE_RPC_BUDGET_PER_BUCKET
 
 
 def test_bracketed_resolves_case_that_exhausts_stepped():

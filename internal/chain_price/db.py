@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sqlite3
 import time
 from datetime import datetime, timezone
@@ -74,6 +75,52 @@ def _migrate_columns(conn) -> None:
         conn.execute("ALTER TABLE chain_price_samples ADD COLUMN series_key TEXT")
 
 
+def _table_exists(conn: sqlite3.Connection, name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+        (name,),
+    ).fetchone()
+    return row is not None
+
+
+def count_chain_price_samples(path: Optional[str] = None) -> int:
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return 0
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_price_samples"):
+            return 0
+        return int(conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0])
+
+
+def can_accept_sample_batch(batch_size: int, path: Optional[str] = None) -> bool:
+    """True when ``batch_size`` new rows fit without post-insert prune evicting overflow."""
+    if batch_size < 0:
+        return False
+    return count_chain_price_samples(path) + batch_size <= ROW_CAP
+
+
+def count_new_sample_rows(rows: List[dict], path: Optional[str] = None) -> int:
+    """Rows whose (netuid, block, provider) key is not stored yet; ``INSERT OR IGNORE`` skips the rest."""
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not rows:
+        return 0
+    if not os.path.exists(db_path):
+        return len(rows)
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_price_samples"):
+            return len(rows)
+        existing = 0
+        for row in rows:
+            hit = conn.execute(
+                "SELECT 1 FROM chain_price_samples WHERE netuid = ? AND block = ? AND provider = ?",
+                (row["netuid"], row["block"], row["provider"]),
+            ).fetchone()
+            if hit:
+                existing += 1
+    return len(rows) - existing
+
+
 def ensure_schema(path: Optional[str] = None) -> str:
     db_path = ensure_db_dir(path or CHAIN_PRICE_DB_PATH)
     with db_conn(db_path) as conn:
@@ -91,6 +138,79 @@ def ensure_schema(path: Optional[str] = None) -> str:
         conn.executescript(_SCHEMA_SQL)
         conn.commit()
     return db_path
+
+
+def load_anchor_blocks(
+    ts_ms: int,
+    window_ms: int,
+    path: Optional[str] = None,
+) -> List[int]:
+    """``chain_blocks`` rows near ``ts_ms`` for bracketed resolve seeding."""
+    low = ts_ms - window_ms
+    high = ts_ms + window_ms
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return []
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_blocks"):
+            return []
+        cur = conn.execute(
+            """
+            SELECT block FROM chain_blocks
+            WHERE ts_ms BETWEEN ? AND ?
+            ORDER BY ts_ms
+            """,
+            (low, high),
+        )
+        return [int(row[0]) for row in cur.fetchall()]
+
+
+def has_row_cap_headroom(path: Optional[str] = None) -> bool:
+    """False when even a single-row insert would require post-write prune (fail closed)."""
+    return can_accept_sample_batch(1, path=path)
+
+
+def _backfill_bucket_distinct_netuid_count(
+    conn: sqlite3.Connection,
+    block: int,
+) -> int:
+    return int(
+        conn.execute(
+            """
+            SELECT COUNT(DISTINCT netuid) FROM chain_price_samples
+            WHERE block = ? AND quality = 'chain_sampled'
+            """,
+            (block,),
+        ).fetchone()[0]
+    )
+
+
+def hourly_bucket_has_chain_sample(
+    bucket_ts_ms: int,
+    path: Optional[str] = None,
+) -> bool:
+    """True when a backfill ``chain_blocks`` marker exists with full distinct netuid coverage."""
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not os.path.exists(db_path):
+        return False
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_blocks") or not _table_exists(
+            conn, "chain_price_samples"
+        ):
+            return False
+        markers = conn.execute(
+            """
+            SELECT block, n_subnets FROM chain_blocks
+            WHERE bucket_ts = ? AND kind = 'backfill'
+            """,
+            (bucket_ts_ms,),
+        ).fetchall()
+        # A bucket can hold several backfill markers (a partial block, then a complete one);
+        # any marker with full distinct netuid coverage completes it.
+        return any(
+            _backfill_bucket_distinct_netuid_count(conn, int(block)) >= int(n_subnets)
+            for block, n_subnets in markers
+        )
 
 
 def insert_block_row(
