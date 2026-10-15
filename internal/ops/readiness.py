@@ -326,6 +326,21 @@ def build_readiness_report() -> Dict[str, Any]:
         issues=issues,
         meta=section_meta,
     )
+
+    def _stake_alert_section() -> Dict[str, Any]:
+        from internal.message_intel.stake_alert import build_stake_alert_ops_summary
+
+        return build_stake_alert_ops_summary()
+
+    stake_alert = _run_readiness_section(
+        "stake_alert",
+        _stake_alert_section,
+        default={"enabled": False},
+        issues=issues,
+        meta=section_meta,
+    )
+    if stake_alert.get("enabled") and stake_alert.get("stale"):
+        issues.append("stake_alert_watcher_stale")
     if data_volume.get("status") == "unavailable":
         issues.append("data_volume_unavailable")
     elif data_volume.get("volume_expected") and data_volume.get("mounted") is False:
@@ -477,6 +492,7 @@ def build_readiness_report() -> Dict[str, Any]:
         "taostats": {"configured": taostats},
         "daily_pick": daily,
         "data_volume": data_volume,
+        "stake_alert": stake_alert,
         "next_levers": _next_levers(issues, taostats),
         "evidence_sources": freshness_sources,
         **readiness_contract,

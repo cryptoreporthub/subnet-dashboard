@@ -17,9 +17,17 @@ RpcErrorKind = Literal[
 class ChainRpcError(Exception):
     """Structured RPC failure for ``ChainClient._call_typed``."""
 
-    def __init__(self, kind: RpcErrorKind, message: str = "", *, code: Optional[int] = None):
+    def __init__(
+        self,
+        kind: RpcErrorKind,
+        message: str = "",
+        *,
+        code: Optional[int] = None,
+        retry_after: Optional[float] = None,
+    ):
         self.kind = kind
         self.code = code
+        self.retry_after = retry_after
         super().__init__(message or kind)
 
 

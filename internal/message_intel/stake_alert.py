@@ -14,9 +14,15 @@ import json
 import logging
 import os
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
+
+import requests
+
+from internal.chain_price.rpc import classify_rpc_error
+from internal.chain_rpc_errors import ChainRpcError
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +32,13 @@ _RAO = 1_000_000_000
 _ALERT_THREAD: Optional[threading.Thread] = None
 _ALERT_STOP = threading.Event()
 STATE_PATH = os.environ.get("STAKE_ALERT_STATE_PATH", "data/stake_alert_state.json")
+_KEYS_PAGE_SIZE = 200
+_BATCH_RETRIES = 3
+_DEFAULT_SCAN_DEADLINE_SECONDS = 120.0
+_DEFAULT_STALE_SECONDS = 600.0
+_DEFAULT_STALE_FAILURES = 3
+
+_T = TypeVar("_T")
 
 _STAKE_MAPS = ("Alpha", "AlphaV2")
 
@@ -190,30 +203,189 @@ def _decode_value(raw: Optional[str]) -> int:
 class StakeScanIncomplete(Exception):
     """Any RPC read failed mid-scan; baseline must not be updated."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        rate_limited: bool = False,
+        retry_after: Optional[float] = None,
+    ):
+        self.rate_limited = rate_limited
+        self.retry_after = retry_after
+        super().__init__(message)
+
+
+def _http_retry_after(exc: BaseException) -> Optional[float]:
+    if isinstance(exc, ChainRpcError) and exc.retry_after is not None:
+        return exc.retry_after
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        raw = exc.response.headers.get("Retry-After")
+        if raw:
+            try:
+                return max(0.0, float(raw))
+            except ValueError:
+                pass
+    cause = exc.__cause__
+    if cause is not None and cause is not exc:
+        nested = _http_retry_after(cause)
+        if nested is not None:
+            return nested
+    return None
+
+
+def _stake_scan_incomplete(method: str, exc: BaseException) -> StakeScanIncomplete:
+    rate_limited = classify_rpc_error(exc) == "rate_limited"
+    return StakeScanIncomplete(
+        f"{method} failed: {exc}",
+        rate_limited=rate_limited,
+        retry_after=_http_retry_after(exc),
+    )
+
 
 def _chain_rpc(client: Any, method: str, params: list) -> Any:
-    """RPC helper: failures abort the stake scan (never confuse with empty data)."""
-    call = getattr(client, "_call", None)
-    if call is not None:
-        try:
-            result = call(method, params)
-        except Exception as exc:
-            raise StakeScanIncomplete(f"{method} failed: {exc}") from exc
-    else:
-        result = client._call_quiet(method, params)
+    """Single JSON-RPC attempt (``_call_typed`` — no nested 429 retries)."""
+    typed = getattr(client, "_call_typed", None)
+    if typed is None:
+        raise StakeScanIncomplete(f"{method} failed: client missing _call_typed")
+    try:
+        result = typed(method, params)
+    except Exception as exc:
+        raise _stake_scan_incomplete(method, exc) from exc
     if method == "state_getKeysPaged" and (result is None or not isinstance(result, list)):
         raise StakeScanIncomplete(f"{method} failed")
     return result
 
 
-def moving_price(client: Any, netuid: int) -> Optional[float]:
+def _chain_rpc_retry(
+    client: Any,
+    method: str,
+    params: list,
+    *,
+    deadline: Optional[float] = None,
+) -> Any:
+    return _stake_rpc_retry(deadline, lambda: _chain_rpc(client, method, params))
+
+
+def _scan_deadline_seconds() -> float:
+    try:
+        return float(os.environ.get("STAKE_ALERT_SCAN_DEADLINE_SECONDS", str(_DEFAULT_SCAN_DEADLINE_SECONDS)))
+    except ValueError:
+        return _DEFAULT_SCAN_DEADLINE_SECONDS
+
+
+def _stale_threshold_seconds() -> float:
+    try:
+        return float(os.environ.get("STAKE_ALERT_STALE_SECONDS", str(_DEFAULT_STALE_SECONDS)))
+    except ValueError:
+        return _DEFAULT_STALE_SECONDS
+
+
+def _stale_failure_count() -> int:
+    try:
+        return max(1, int(os.environ.get("STAKE_ALERT_STALE_FAILURES", str(_DEFAULT_STALE_FAILURES))))
+    except ValueError:
+        return _DEFAULT_STALE_FAILURES
+
+
+def _parse_block_number(header: Dict[str, Any]) -> Optional[int]:
+    num = header.get("number")
+    if num is None:
+        return None
+    if isinstance(num, str):
+        return int(num, 16)
+    return int(num)
+
+
+def finalized_head(client: Any, *, deadline: Optional[float] = None) -> Tuple[str, int]:
+    """Finalized block hash and number for a consistent storage snapshot."""
+    block_hash = _chain_rpc_retry(client, "chain_getFinalizedHead", [], deadline=deadline)
+    if not block_hash:
+        raise StakeScanIncomplete("chain_getFinalizedHead empty")
+    header = _chain_rpc_retry(client, "chain_getHeader", [block_hash], deadline=deadline)
+    if not isinstance(header, dict):
+        raise StakeScanIncomplete("chain_getHeader failed")
+    block = _parse_block_number(header)
+    if block is None:
+        raise StakeScanIncomplete("missing block number")
+    return str(block_hash), block
+
+
+def _storage_batch_values(client: Any, keys: List[str], at_hash: str) -> Dict[str, Optional[str]]:
+    if not keys:
+        return {}
+    batch = _chain_rpc(client, "state_queryStorageAt", [keys, at_hash])
+    if not batch or not isinstance(batch, list) or not isinstance(batch[0], dict):
+        raise StakeScanIncomplete("state_queryStorageAt failed")
+    changes = batch[0].get("changes") or []
+    by_key: Dict[str, Optional[str]] = {row[0]: row[1] for row in changes if row}
+    return {k: by_key.get(k) for k in keys}
+
+
+def _batch_retry_sleep(attempt: int, exc: StakeScanIncomplete) -> float:
+    if exc.rate_limited:
+        base = min(60.0, 1.0 * (2 ** min(attempt - 1, 6)))
+        if exc.retry_after is not None:
+            waited = exc.retry_after if exc.retry_after > 0 else base
+            return min(120.0, waited)
+        return base
+    return 0.25 * attempt
+
+
+def _stake_rpc_retry(deadline: Optional[float], operation: Callable[[], _T]) -> _T:
+    last: Optional[StakeScanIncomplete] = None
+    attempt = 0
+    while True:
+        if deadline is not None and time.monotonic() > deadline:
+            raise StakeScanIncomplete("scan deadline exceeded")
+        try:
+            return operation()
+        except StakeScanIncomplete as exc:
+            last = exc
+            attempt += 1
+            if exc.rate_limited:
+                if attempt > _BATCH_RETRIES:
+                    break
+            elif attempt >= _BATCH_RETRIES:
+                break
+            sleep_for = _batch_retry_sleep(attempt, exc)
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if sleep_for > remaining:
+                    raise StakeScanIncomplete("scan deadline exceeded") from exc
+            time.sleep(sleep_for)
+    raise last or StakeScanIncomplete("stake alert RPC failed")
+
+
+def _storage_batch_values_retry(
+    client: Any,
+    keys: List[str],
+    at_hash: str,
+    *,
+    deadline: Optional[float] = None,
+) -> Dict[str, Optional[str]]:
+    return _stake_rpc_retry(
+        deadline,
+        lambda: _storage_batch_values(client, keys, at_hash),
+    )
+
+
+def moving_price(
+    client: Any,
+    netuid: int,
+    *,
+    at_hash: Optional[str] = None,
+    deadline: Optional[float] = None,
+) -> Optional[float]:
     """TAO-per-alpha price (SubtensorModule::SubnetMovingPrice, I96F32)."""
     key = "0x" + (
         twox128(b"SubtensorModule")
         + twox128(b"SubnetMovingPrice")
         + netuid.to_bytes(2, "little")
     ).hex()
-    raw = client._call_quiet("state_getStorageAt", [key, None])
+    if at_hash:
+        raw = _storage_batch_values_retry(client, [key], at_hash, deadline=deadline).get(key)
+    else:
+        raw = client._call_quiet("state_getStorageAt", [key, None])
     if not raw:
         return None
     bits = bytes.fromhex(raw[2:] if raw.startswith("0x") else raw)
@@ -222,27 +394,76 @@ def moving_price(client: Any, netuid: int) -> Optional[float]:
     return int.from_bytes(bits, "little", signed=True) / 2**32
 
 
-def scan_hotkey_stakes(client: Any, hotkey_pub: bytes) -> Dict[str, int]:
-    """Scan both Alpha stake maps for one hotkey.
+def spot_price(
+    client: Any,
+    netuid: int,
+    *,
+    at_hash: str,
+    deadline: Optional[float] = None,
+) -> Optional[float]:
+    """Spot TAO/alpha from SubnetTAO / SubnetAlphaIn at a pinned block."""
+    from internal.chain_client import _decode_scale_u64, _hex_to_bytes
+    from internal.chain_price.storage_keys import map_key_hex
+
+    tao_key = map_key_hex(b"SubnetTAO", netuid)
+    alpha_key = map_key_hex(b"SubnetAlphaIn", netuid)
+    by_key = _storage_batch_values_retry(client, [tao_key, alpha_key], at_hash, deadline=deadline)
+
+    def _u64(raw: Optional[str]) -> Optional[int]:
+        if raw is None or raw == "0x" or raw == "0x00":
+            return None
+        try:
+            return _decode_scale_u64(_hex_to_bytes(raw))
+        except (TypeError, ValueError):
+            return None
+
+    tao_raw = _u64(by_key.get(tao_key))
+    alpha_raw = _u64(by_key.get(alpha_key))
+    if tao_raw is None or alpha_raw is None or alpha_raw == 0:
+        return None
+    return tao_raw / alpha_raw
+
+
+def scan_hotkey_stakes(
+    client: Any,
+    hotkey_pub: bytes,
+    *,
+    at_hash: Optional[str] = None,
+    deadline: Optional[float] = None,
+) -> Dict[str, int]:
+    """Scan both Alpha stake maps for one hotkey at a pinned finalized head.
 
     Keys are ``<map>:<coldkey_hex>:<netuid>`` mapped to shares in rao units.
     """
+    if deadline is None:
+        deadline = time.monotonic() + _scan_deadline_seconds()
+    if at_hash is None:
+        at_hash, _block = finalized_head(client, deadline=deadline)
+
     out: Dict[str, int] = {}
     for map_name in _STAKE_MAPS:
         prefix = alpha_storage_prefix(map_name, hotkey_pub)
         prefix_hex = f"0x{prefix.hex()}"
         start: Optional[str] = None
         while True:
-            keys = _chain_rpc(client, "state_getKeysPaged", [prefix_hex, 200, start, None])
+            if time.monotonic() > deadline:
+                raise StakeScanIncomplete("scan deadline exceeded")
+            keys = _chain_rpc_retry(
+                client,
+                "state_getKeysPaged",
+                [prefix_hex, _KEYS_PAGE_SIZE, start, at_hash],
+                deadline=deadline,
+            )
             if not keys:
                 break
+            values = _storage_batch_values_retry(client, keys, at_hash, deadline=deadline)
             for k in keys:
                 body = bytes.fromhex(k[2:])
                 ck, netuid = _decode_alpha_key(body, len(prefix))
-                rao = _decode_value(_chain_rpc(client, "state_getStorageAt", [k, None]))
+                rao = _decode_value(values.get(k))
                 if rao:
                     out[f"{map_name}:{ck}:{netuid}"] = rao
-            if len(keys) < 200:
+            if len(keys) < _KEYS_PAGE_SIZE:
                 break
             start = keys[-1]
     return out
@@ -342,6 +563,152 @@ def _read_state() -> Dict[str, Any]:
         return {}
 
 
+def _utcnow_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _parse_utc_iso(ts: Optional[str]) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+
+
+def stake_alert_last_ok_age_seconds(state: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """Seconds since last successful stake scan (None when never ok or watcher disabled)."""
+    data = state if state is not None else _read_state()
+    last_ok = _parse_utc_iso(data.get("last_ok_at"))
+    if last_ok is None:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - last_ok).total_seconds())
+
+
+def stake_alert_failure_age_seconds(state: Optional[Dict[str, Any]] = None) -> Optional[float]:
+    """Seconds since the first recorded failure in the current outage (legacy watchdog)."""
+    data = state if state is not None else _read_state()
+    first_at = _parse_utc_iso(data.get("first_failure_at"))
+    if first_at is None:
+        return None
+    return max(0.0, (datetime.now(timezone.utc) - first_at).total_seconds())
+
+
+def stake_alert_watchdog_stale(state: Optional[Dict[str, Any]] = None, *, enabled: Optional[bool] = None) -> bool:
+    """Whether the stake watcher should be treated as stale for ops/readiness."""
+    data = state if state is not None else _read_state()
+    if enabled is None:
+        enabled = stake_alert_enabled()
+    if not enabled:
+        return False
+    threshold = _stale_threshold_seconds()
+    age = stake_alert_last_ok_age_seconds(data)
+    if age is not None and age > threshold:
+        return True
+    if data.get("last_ok_at"):
+        return False
+    failures = int(data.get("consecutive_failures") or 0)
+    if failures < _stale_failure_count():
+        return False
+    failure_age = stake_alert_failure_age_seconds(data)
+    if failure_age is None:
+        return True
+    return failure_age > threshold
+
+
+def build_stake_alert_ops_summary() -> Dict[str, Any]:
+    """Read-only watchdog view for readiness / metrics (no RPC)."""
+    enabled = stake_alert_enabled()
+    state = _read_state()
+    age = stake_alert_last_ok_age_seconds(state)
+    failure_age = stake_alert_failure_age_seconds(state)
+    stale_threshold = _stale_threshold_seconds()
+    stale = stake_alert_watchdog_stale(state, enabled=enabled)
+    effective_age = age if age is not None else failure_age
+    return {
+        "enabled": enabled,
+        "last_ok_at": state.get("last_ok_at"),
+        "last_ok_block": state.get("last_ok_block"),
+        "last_ok_age_seconds": effective_age,
+        "failure_age_seconds": failure_age,
+        "consecutive_failures": int(state.get("consecutive_failures") or 0),
+        "first_failure_at": state.get("first_failure_at"),
+        "last_skip_reason": state.get("last_skip_reason"),
+        "stale": stale,
+        "stale_threshold_seconds": stale_threshold,
+    }
+
+
+def _log_skip_once(state: Dict[str, Any], reason: str, detail: str = "") -> None:
+    prev = state.get("last_skip_reason")
+    if prev == reason:
+        return
+    msg = f"stake alert skip: {reason}"
+    if detail:
+        msg = f"{msg} ({detail})"
+    logger.warning(msg)
+
+
+def _maybe_ops_telegram(state: Dict[str, Any], *, recovered: bool) -> None:
+    target = alert_chat_id()
+    if not target:
+        return
+    from internal.message_intel.summary_bot import send_message
+
+    chat: Any = int(target) if str(target).lstrip("-").isdigit() else target
+    if recovered:
+        if not state.get("ops_stale_notified"):
+            return
+        text = "✅ <b>Stake alert watcher recovered</b> — scans are healthy again."
+        state["ops_stale_notified"] = False
+    else:
+        if state.get("ops_stale_notified"):
+            return
+        age = stake_alert_last_ok_age_seconds(state)
+        if age is None:
+            age = stake_alert_failure_age_seconds(state)
+        mins = int((age or 0) // 60)
+        reason = state.get("last_skip_reason") or "unknown"
+        text = (
+            f"⚠️ <b>Stake alert watcher stale</b> — no successful scan for ~{mins} min.\n"
+            f"Last skip: <code>{reason}</code>"
+        )
+        state["ops_stale_notified"] = True
+    try:
+        send_message(chat, text, link_preview=False)
+    except Exception as exc:
+        logger.warning("stake alert ops telegram failed: %s", exc)
+        if recovered:
+            state["ops_stale_notified"] = True
+        else:
+            state["ops_stale_notified"] = False
+
+
+def _record_skip(state: Dict[str, Any], reason: str, *, detail: str = "") -> Dict[str, Any]:
+    _log_skip_once(state, reason, detail)
+    state["last_skip_reason"] = reason
+    state["consecutive_failures"] = int(state.get("consecutive_failures") or 0) + 1
+    if not state.get("first_failure_at"):
+        state["first_failure_at"] = _utcnow_iso()
+    if stake_alert_watchdog_stale(state):
+        _maybe_ops_telegram(state, recovered=False)
+    return state
+
+
+def _record_ok(state: Dict[str, Any], block: int) -> Dict[str, Any]:
+    was_stale = bool(state.get("ops_stale_notified"))
+    state["last_ok_at"] = _utcnow_iso()
+    state["last_ok_block"] = block
+    state["consecutive_failures"] = 0
+    state["last_skip_reason"] = None
+    state.pop("first_failure_at", None)
+    if was_stale:
+        _maybe_ops_telegram(state, recovered=True)
+    return state
+
+
 def _write_state(data: Dict[str, Any]) -> None:
     try:
         path = Path(STATE_PATH)
@@ -370,7 +737,12 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         from internal.chain_client import get_default_client
 
         client = get_default_client()
+
+    state = _read_state()
+
     if not client.is_healthy():
+        state = _record_skip(state, "unhealthy_rpc")
+        _write_state(state)
         return None
 
     try:
@@ -379,27 +751,52 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         logger.error("stake alert: bad STAKE_ALERT_HOTKEY: %s", exc)
         return None
 
+    deadline = time.monotonic() + _scan_deadline_seconds()
     try:
-        current = scan_hotkey_stakes(client, hotkey_pub)
+        at_hash, block = finalized_head(client, deadline=deadline)
     except StakeScanIncomplete as exc:
-        logger.warning("stake alert scan incomplete: %s", exc)
+        state = _record_skip(state, "finalized_head", detail=str(exc))
+        _write_state(state)
         return None
 
+    try:
+        current = scan_hotkey_stakes(client, hotkey_pub, at_hash=at_hash, deadline=deadline)
+    except StakeScanIncomplete as exc:
+        state = _record_skip(state, "incomplete_scan", detail=str(exc))
+        _write_state(state)
+        return None
+
+    state = _record_ok(state, block)
+
     prices: Dict[int, Optional[float]] = {}
+    price_sources: Dict[int, str] = {}
 
     def price_lookup(netuid: int) -> Optional[float]:
         if netuid not in prices:
             try:
-                prices[netuid] = moving_price(client, netuid)
+                moving = moving_price(client, netuid, at_hash=at_hash, deadline=deadline)
+                if moving is not None and moving > 0:
+                    prices[netuid] = moving
+                    price_sources[netuid] = "moving"
+                else:
+                    spot = spot_price(client, netuid, at_hash=at_hash, deadline=deadline)
+                    prices[netuid] = spot
+                    price_sources[netuid] = "spot" if spot else "missing"
+                    if spot is not None:
+                        logger.info("stake alert: SN%d price from spot (moving unavailable)", netuid)
+                    else:
+                        _log_skip_once(state, f"missing_price_sn{netuid}")
+                        logger.warning("stake alert: missing price SN%d", netuid)
             except Exception as exc:
                 logger.warning("stake alert: price read SN%d failed: %s", netuid, exc)
                 prices[netuid] = None
+                price_sources[netuid] = "error"
         return prices[netuid]
 
-    state = _read_state()
     hotkey_hex = hotkey_pub.hex()
     if state.get("hotkey") != hotkey_hex:
-        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        state.update({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        _write_state(state)
         logger.info(
             "stake alert baseline recorded for hotkey (%d entries)",
             len(current),
@@ -408,17 +805,20 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
 
     baseline = state.get("baseline") or {}
     if not state.get("initialized"):
-        _write_state({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        state.update({"initialized": True, "baseline": current, "hotkey": hotkey_hex})
+        _write_state(state)
         logger.info("stake alert baseline recorded (%d entries)", len(current))
         return {"baseline": True, "entries": len(current)}
 
     alerts, new_baseline = compute_alerts(current, baseline, threshold_rao, price_lookup)
     if not alerts:
         if new_baseline != baseline:
-            _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+            state.update({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+            _write_state(state)
+        else:
+            _write_state(state)
         return None
 
-    block = client.get_current_block()
     message = format_stake_message(alerts, block)
     target = alert_chat_id()
     sent = False
@@ -429,11 +829,14 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         resp = send_message(chat, message, link_preview=False)
         sent = bool(resp.get("ok"))
         if not sent:
+            state = _record_skip(state, "send_failure", detail=str(resp.get("error") or resp))
+            _write_state(state)
             logger.warning("stake alert send failed: %s", resp.get("error") or resp)
     if not sent:
         return {"alerts": len(alerts), "sent": False, "target": target}
 
-    _write_state({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+    state.update({"initialized": True, "baseline": new_baseline, "hotkey": hotkey_hex})
+    _write_state(state)
     return {"alerts": len(alerts), "sent": True, "target": target}
 
 
@@ -456,7 +859,8 @@ def _alert_loop() -> None:
             check_stake_alerts()
         except Exception as exc:
             logger.warning("stake alert tick failed: %s", exc)
-        _ALERT_STOP.wait(interval)
+        if _ALERT_STOP.wait(interval):
+            break
 
 
 def start_stake_alert_watcher() -> bool:
