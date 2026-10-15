@@ -87,6 +87,19 @@ def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
     assert flag_on == 0
 
 
+def test_gradeable_count_rejects_untagged_gecko_block(monkeypatch):
+    """Legacy untagged geckoterminal candles must not count as gradeable."""
+    from scripts.issue_1375_integrity_impact import gradeable_subnet_counts
+
+    monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
+    candles = [{"t": i, "c": 80.0 + i} for i in range(30)]
+    cache = {
+        "1": {"source": "geckoterminal", "candles": candles},
+        "2": {"source": "geckoterminal", "unit": "tao", "candles": candles},
+    }
+    assert gradeable_subnet_counts(cache, refuse_derived=False) == 1
+
+
 def test_phantom_vwap_quarantine_window():
     from internal.council.grading import is_phantom_vwap_quarantine, is_excluded_from_learning_eval
 

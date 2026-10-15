@@ -140,6 +140,29 @@ def test_429_exhaustion_marks_unknown_and_nonzero_exit():
     assert row["error"] == "http_429_exhausted"
 
 
+def test_non_http_exception_is_not_retried():
+    """Connection-level errors stop after one attempt (no retry, no sleep)."""
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    def fake_get(url, params=None, timeout=30):
+        calls.append(1)
+        raise requests.ConnectionError("connection reset")
+
+    payload, err = _fetch_pool(
+        "bittensor",
+        "0-1",
+        max_attempts=6,
+        pacer=None,
+        sleep=sleeps.append,
+        get=fake_get,
+    )
+    assert payload is None
+    assert err == "connection reset"
+    assert len(calls) == 1
+    assert sleeps == []
+
+
 def test_main_exits_nonzero_on_audit_errors(tmp_path, monkeypatch):
     pairs_path = tmp_path / "price_pairs.json"
     pairs_path.write_text(

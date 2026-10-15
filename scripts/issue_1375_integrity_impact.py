@@ -18,6 +18,7 @@ from internal.council.price_reference import (
     is_derived_candle_cache_source,
     refuse_derived_for_grading_enabled,
 )
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 DEFAULT_CACHE = os.path.join("data", "price_cache.json")
 DEFAULT_PREDICTIONS = os.path.join("data", "predictions.json")
@@ -60,6 +61,8 @@ def gradeable_subnet_counts(
             continue
         candles = [c for c in (block.get("candles") or []) if isinstance(c, dict)]
         if not candles:
+            continue
+        if not gecko_cache_entry_usable(block):
             continue
         if refuse_derived and is_derived_candle_cache_source(block.get("source")):
             continue
