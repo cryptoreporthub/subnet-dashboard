@@ -502,6 +502,31 @@ def test_nested_transaction_flock_release_once(whale_paths):
     assert len(releases) == 1
 
 
+def test_transaction_acquire_failure_resets_depth(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    acquire_attempts: list[int] = []
+
+    def failing_acquire() -> None:
+        acquire_attempts.append(1)
+        raise OSError("flock blocked")
+
+    with patch.object(svc, "_flock_acquire", side_effect=failing_acquire):
+        with pytest.raises(OSError, match="flock blocked"):
+            with svc.transaction():
+                pass
+    assert svc._transaction_depth == 0
+    assert len(acquire_attempts) == 1
+
+    acquire_attempts.clear()
+    with patch.object(svc, "_flock_acquire", side_effect=failing_acquire):
+        with pytest.raises(OSError, match="flock blocked"):
+            with svc.transaction():
+                pass
+    assert svc._transaction_depth == 0
+    assert len(acquire_attempts) == 1
+
+
 def test_two_process_same_path_no_lost_updates(whale_paths):
     config, data = whale_paths
     ctx = mp.get_context("spawn")

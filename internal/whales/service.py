@@ -302,19 +302,24 @@ class WhaleIntelligenceService:
         """Cross-process writer: flock + reload if another process committed."""
         with self._lock:
             outer = self._transaction_depth == 0
-            self._transaction_depth += 1
-            if outer:
-                self._flock_acquire()
-                self._reload_if_stale()
+            entered = False
             try:
+                if outer:
+                    self._flock_acquire()
+                    self._reload_if_stale()
+                self._transaction_depth += 1
+                entered = True
                 yield self
             finally:
-                self._transaction_depth -= 1
-                if outer:
-                    if self._batch_depth == 0 and self._dirty:
-                        self._prune_events_retention()
-                        self._save_data()
-                        self._dirty = False
+                if entered:
+                    self._transaction_depth -= 1
+                    if outer:
+                        if self._batch_depth == 0 and self._dirty:
+                            self._prune_events_retention()
+                            self._save_data()
+                            self._dirty = False
+                        self._flock_release()
+                elif outer:
                     self._flock_release()
 
     @contextmanager
