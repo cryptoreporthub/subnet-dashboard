@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from internal.file_utils import safe_write_json
 
 
@@ -86,3 +88,38 @@ def test_safe_write_json_dead_pid_sidecar_reaped(tmp_path, monkeypatch):
     count, _ = reap_stale_tmp_files(min_age_seconds=0, at_boot=True)
     assert count >= 1
     assert not sidecar.exists()
+
+
+def test_safe_write_json_fsyncs_temp_before_replace_then_directory(tmp_path, monkeypatch):
+    events: list[str] = []
+    real_fsync = os.fsync
+    real_replace = os.replace
+
+    def record_fsync(fd):
+        events.append("fsync")
+        return real_fsync(fd)
+
+    def record_replace(src, dst):
+        events.append("replace")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", record_fsync)
+    monkeypatch.setattr(os, "replace", record_replace)
+    target = tmp_path / "state.json"
+    safe_write_json(str(target), {"x": 1})
+    assert events == ["fsync", "replace", "fsync"]
+    assert json.loads(target.read_text(encoding="utf-8")) == {"x": 1}
+
+
+def test_safe_write_json_fsync_failure_keeps_previous_file(tmp_path, monkeypatch):
+    target = tmp_path / "state.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+
+    def failing_fsync(fd):
+        raise OSError("EIO")
+
+    monkeypatch.setattr(os, "fsync", failing_fsync)
+    with pytest.raises(OSError):
+        safe_write_json(str(target), {"new": 1})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"old": True}
+    assert list(tmp_path.glob("state.json.*.*.tmp")) == []
