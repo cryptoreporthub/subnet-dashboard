@@ -12,6 +12,7 @@ TickOutcome = Literal[
     "rate_limited",
     "rpc_error",
     "schema_miss",
+    "bucket_incomplete",
     "disabled",
     "disk_low",
     "db_unavailable",

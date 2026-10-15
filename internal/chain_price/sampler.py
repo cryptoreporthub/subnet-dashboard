@@ -230,7 +230,9 @@ def sample_at_block_hash(
     bucket_ts = bucket_ts_override if bucket_ts_override is not None else _bucket_ts_ms(ts_ms)
     samples_written = 0
     if write:
-        if not price_db.can_accept_sample_batch(len(rows), path=db_path):
+        # Count only keys this batch adds: a rerun over stored rows inserts nothing new.
+        new_rows = price_db.count_new_sample_rows(rows, path=db_path)
+        if not price_db.can_accept_sample_batch(new_rows, path=db_path):
             return {
                 "outcome": "row_cap_exceeded",
                 "block": block,
@@ -254,13 +256,13 @@ def sample_at_block_hash(
         if kind == _KIND_BACKFILL and bucket_ts_override is not None:
             if not price_db.hourly_bucket_has_chain_sample(bucket_ts_override, path=db_path):
                 return {
-                    "outcome": "row_cap_exceeded",
+                    "outcome": "bucket_incomplete",
                     "block": block,
                     "block_hash": block_hash,
                     "ts_ms": ts_ms,
                     "n_subnets": len(netuids),
                     "samples_written": samples_written,
-                    "error": "bucket incomplete after prune",
+                    "error": "bucket incomplete: not every netuid has a chain_sampled row",
                 }
 
     if bump_schema_miss_on_error:

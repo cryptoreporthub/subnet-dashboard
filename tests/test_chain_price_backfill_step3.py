@@ -277,6 +277,97 @@ def test_disputed_only_netuid_does_not_complete_backfill_bucket(tmp_path):
     assert price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
 
 
+@pytest.mark.parametrize("partial_first", [True, False])
+def test_bucket_with_partial_and_complete_markers_is_skipped(tmp_path, partial_first):
+    """Block 42 is partial, block 43 is complete. Either insertion order must read as complete."""
+    from internal.chain_price import db as price_db
+
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = 1_700_000_000_000
+    partial = {"block": 42, "netuids": [1]}
+    complete = {"block": 43, "netuids": [1, 2]}
+    specs = [partial, complete] if partial_first else [complete, partial]
+
+    for spec in specs:
+        price_db.insert_block_row(
+            provider="a",
+            block=spec["block"],
+            block_hash=f"0x{spec['block']:x}",
+            ts_ms=bucket_ts_ms,
+            bucket_ts=bucket_ts_ms,
+            kind="backfill",
+            n_subnets=2,
+            path=db_path,
+        )
+        price_db.insert_sample_rows(
+            [
+                {
+                    "netuid": netuid,
+                    "block": spec["block"],
+                    "provider": "p1",
+                    "ts_ms": bucket_ts_ms,
+                    "registered_at": 1,
+                    "tao_reserve_raw": 1,
+                    "alpha_reserve_raw": 1,
+                    "price_tao": 1.0,
+                    "spot_price_tao": None,
+                    "unit": "tao",
+                    "quality": "chain_sampled",
+                    "schema_version": chain_cfg.SCHEMA_VERSION,
+                }
+                for netuid in spec["netuids"]
+            ],
+            path=db_path,
+        )
+
+    assert price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+
+def test_partial_bucket_completes_on_rerun_within_delta_capacity(fixture_client, tmp_path):
+    """Run 1 stops one row short of full coverage. Run 2 adds only the missing key, so it fits a
+    cap of n rows that a full-batch count (n stored + n incoming) would reject."""
+    from internal.chain_price import db as price_db
+    from internal.chain_price import sampler
+
+    client, _ = fixture_client
+    db_path = str(tmp_path / "chain_prices.db")
+    reader = ChainReader([("blockmachine", client)])
+    bucket_ts_ms = (1_789_328_964_000 // 3_600_000) * 3_600_000
+    real_parse = sampler._parse_storage_batch
+    dropped: list[int] = []
+
+    def _drop_first_row(*args, **kwargs):
+        rows, outcome = real_parse(*args, **kwargs)
+        if not dropped and rows:
+            dropped.append(rows[0]["netuid"])
+            rows = rows[1:]
+        return rows, outcome
+
+    with patch(
+        "internal.chain_price.backfill.resolve_block_at",
+        return_value=(9_060_887, PINNED_HASH, "ok"),
+    ), patch.object(sampler, "_parse_storage_batch", side_effect=_drop_first_row):
+        with patch.object(price_db, "ROW_CAP", 10**6):
+            first = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+        n_subnets = first["n_subnets"]
+        with patch.object(price_db, "ROW_CAP", n_subnets):
+            second = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+            third = backfill_bucket(reader, bucket_ts_ms, db_path=db_path, search="bracketed")
+
+    assert dropped
+    assert first["outcome"] == "bucket_incomplete"
+    assert first["samples_written"] == n_subnets - 1
+    assert second["outcome"] == "ok"
+    assert second["samples_written"] == 1
+    assert third["outcome"] == "skipped"
+
+    conn = sqlite3.connect(db_path)
+    count = conn.execute("SELECT COUNT(*) FROM chain_price_samples").fetchone()[0]
+    conn.close()
+    assert count == n_subnets
+
+
 def test_neighboring_hour_forward_sample_does_not_skip_backfill_bucket(fixture_client, tmp_path):
     from internal.chain_price import db as price_db
 

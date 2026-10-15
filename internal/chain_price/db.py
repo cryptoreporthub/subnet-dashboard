@@ -100,6 +100,27 @@ def can_accept_sample_batch(batch_size: int, path: Optional[str] = None) -> bool
     return count_chain_price_samples(path) + batch_size <= ROW_CAP
 
 
+def count_new_sample_rows(rows: List[dict], path: Optional[str] = None) -> int:
+    """Rows whose (netuid, block, provider) key is not stored yet; ``INSERT OR IGNORE`` skips the rest."""
+    db_path = path or CHAIN_PRICE_DB_PATH
+    if not rows:
+        return 0
+    if not os.path.exists(db_path):
+        return len(rows)
+    with db_conn(db_path) as conn:
+        if not _table_exists(conn, "chain_price_samples"):
+            return len(rows)
+        existing = 0
+        for row in rows:
+            hit = conn.execute(
+                "SELECT 1 FROM chain_price_samples WHERE netuid = ? AND block = ? AND provider = ?",
+                (row["netuid"], row["block"], row["provider"]),
+            ).fetchone()
+            if hit:
+                existing += 1
+    return len(rows) - existing
+
+
 def ensure_schema(path: Optional[str] = None) -> str:
     db_path = ensure_db_dir(path or CHAIN_PRICE_DB_PATH)
     with db_conn(db_path) as conn:
@@ -177,19 +198,19 @@ def hourly_bucket_has_chain_sample(
             conn, "chain_price_samples"
         ):
             return False
-        row = conn.execute(
+        markers = conn.execute(
             """
             SELECT block, n_subnets FROM chain_blocks
             WHERE bucket_ts = ? AND kind = 'backfill'
-            LIMIT 1
             """,
             (bucket_ts_ms,),
-        ).fetchone()
-        if not row:
-            return False
-        block, n_subnets = int(row[0]), int(row[1])
-        distinct_netuids = _backfill_bucket_distinct_netuid_count(conn, block)
-        return distinct_netuids >= n_subnets
+        ).fetchall()
+        # A bucket can hold several backfill markers (a partial block, then a complete one);
+        # any marker with full distinct netuid coverage completes it.
+        return any(
+            _backfill_bucket_distinct_netuid_count(conn, int(block)) >= int(n_subnets)
+            for block, n_subnets in markers
+        )
 
 
 def insert_block_row(
