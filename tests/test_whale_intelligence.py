@@ -412,8 +412,6 @@ def test_record_event_naive_iso_timestamp_with_retention(whale_paths, monkeypatc
 
     from fastapi.testclient import TestClient
 
-    import internal.whales.routes as whale_routes
-
     config, data = whale_paths
     monkeypatch.setenv("WHALE_EVENT_RETENTION_DAYS", "90")
     svc = WhaleIntelligenceService(config_path=config, data_path=data)
@@ -431,8 +429,13 @@ def test_record_event_naive_iso_timestamp_with_retention(whale_paths, monkeypatc
     assert ignored["status"] == "ignored"
     assert ignored["reason"] == "older_than_retention"
 
-    whale_routes._service = WhaleIntelligenceService(config_path=config, data_path=data)
-    from server import app
+    from fastapi import FastAPI
+
+    from internal.whales.routes import whales_router
+
+    monkeypatch.setattr("internal.whales.routes.get_whale_service", lambda: svc)
+    app = FastAPI()
+    app.include_router(whales_router)
 
     with TestClient(app) as client:
         resp = client.post(
@@ -447,7 +450,9 @@ def test_record_event_naive_iso_timestamp_with_retention(whale_paths, monkeypatc
             },
         )
     assert resp.status_code == 200
-    assert resp.json().get("status") in ("recorded", "ignored")
+    assert resp.json().get("status") == "recorded"
+    stored = json.loads(Path(data).read_text())
+    assert any(e.get("tx_hash") == "naive-api" for e in stored.get("events", []))
 
 
 def test_old_event_reingest_ignored_after_retention_prune(whale_paths, monkeypatch):
