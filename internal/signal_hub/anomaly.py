@@ -6,6 +6,8 @@ import math
 import os
 from typing import Any, Dict, List, Optional
 
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
+
 ZSCORE_THRESHOLD = float(os.environ.get("HUB_ZSCORE_THRESHOLD", "2.0"))
 ROC_PCT = float(os.environ.get("HUB_ROC_PCT", "5.0"))
 ROC_WINDOW = int(os.environ.get("HUB_ROC_WINDOW", "6"))
@@ -58,6 +60,8 @@ def volume_spike_ratio(volumes: List[float]) -> Optional[float]:
 def _candles_for_netuid(cache: Dict[str, Any], netuid: Any) -> Dict[str, List[float]]:
     raw = cache.get(str(netuid)) or cache.get(int(netuid) if str(netuid).isdigit() else netuid)
     if not isinstance(raw, dict):
+        return {"closes": [], "volumes": []}
+    if not gecko_cache_entry_usable(raw):
         return {"closes": [], "volumes": []}
     closes: List[float] = []
     volumes: List[float] = []

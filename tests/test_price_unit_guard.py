@@ -87,6 +87,19 @@ def test_committed_price_cache_gradeable_subnet_collapse(monkeypatch):
     assert flag_on == 0
 
 
+def test_gradeable_count_rejects_untagged_gecko_block(monkeypatch):
+    """Legacy untagged geckoterminal candles must not count as gradeable."""
+    from scripts.issue_1375_integrity_impact import gradeable_subnet_counts
+
+    monkeypatch.delenv("REFUSE_DERIVED_FOR_GRADING", raising=False)
+    candles = [{"t": i, "c": 80.0 + i} for i in range(30)]
+    cache = {
+        "1": {"source": "geckoterminal", "candles": candles},
+        "2": {"source": "geckoterminal", "unit": "tao", "candles": candles},
+    }
+    assert gradeable_subnet_counts(cache, refuse_derived=False) == 1
+
+
 def test_phantom_vwap_quarantine_window():
     from internal.council.grading import is_phantom_vwap_quarantine, is_excluded_from_learning_eval
 
@@ -101,6 +114,78 @@ def test_phantom_vwap_quarantine_window():
     assert is_excluded_from_learning_eval(row)
     after = {**row, "created_at": "2026-08-20T00:00:00Z"}
     assert not is_phantom_vwap_quarantine(after)
+
+
+def test_price_reference_rejects_untagged_geckoterminal_cache():
+    from datetime import datetime, timezone
+
+    from internal.council.price_reference import price_at_resolve_at
+
+    resolve_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    usd_close = 80.0
+    cache = {
+        "1": {
+            "source": "geckoterminal",
+            "candles": [
+                {
+                    "timestamp": resolve_at.isoformat(),
+                    "open": usd_close,
+                    "high": usd_close,
+                    "low": usd_close,
+                    "close": usd_close,
+                    "volume": 100.0,
+                }
+            ],
+        }
+    }
+    status, price, _meta = price_at_resolve_at(1, resolve_at, cache=cache)
+    assert status == "ungradeable"
+    assert price == 0.0
+
+
+def test_state_vector_hydration_rejects_unusable_gecko_after_lazy_fill(monkeypatch):
+    """fetch_ohlcv may return candles while cache row lacks unit=tao; do not serve."""
+    from internal.council import state_vector
+
+    bad_candles = [
+        {
+            "timestamp": "2026-10-01T12:00:00+00:00",
+            "open": 80.0,
+            "high": 80.0,
+            "low": 80.0,
+            "close": 80.0,
+            "volume": 1.0,
+        }
+    ]
+    legacy = {"source": "geckoterminal", "candles": bad_candles}
+
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {"1": legacy})
+    monkeypatch.setattr(
+        state_vector, "_lazy_fill_price_candles", lambda _n: bad_candles
+    )
+    hist = state_vector._get_price_history(1, {}, allow_hydration=True)
+    assert hist["closes"] == []
+
+
+def test_state_vector_rejects_untagged_geckoterminal_cache(monkeypatch):
+    from internal.council import state_vector
+
+    legacy = {
+        "source": "geckoterminal",
+        "candles": [
+            {
+                "timestamp": "2026-10-01T12:00:00+00:00",
+                "open": 80.0,
+                "high": 80.0,
+                "low": 80.0,
+                "close": 80.0,
+                "volume": 1.0,
+            }
+        ],
+    }
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {"1": legacy})
+    hist = state_vector._get_price_history(1, {}, allow_hydration=False)
+    assert hist["closes"] == []
 
 
 def test_derived_candle_cache_refused_for_grading(monkeypatch):

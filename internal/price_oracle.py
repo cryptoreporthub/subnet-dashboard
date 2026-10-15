@@ -11,6 +11,7 @@ import os
 from typing import Any, Dict, Optional, Union
 
 from internal.file_utils import safe_read_json
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PRICE_CACHE_PATH = os.environ.get(
@@ -20,6 +21,8 @@ PRICE_CACHE_PATH = os.environ.get(
 
 def _extract_price(entry: Dict[str, Any]) -> Optional[float]:
     """Extract the most recent close price from a cache entry."""
+    if not gecko_cache_entry_usable(entry):
+        return None
     candles = entry.get("candles") or []
     if candles:
         last = candles[-1]
