@@ -70,3 +70,8 @@ data/pick_scheduler_state.json
 data/pump_calibration.json
 config/registry.json
 config/watchlist.json
+
+# Runtime artifacts written by the app/tests (locks, score cache, latency log)
+data/*.lock
+data/pick_score_cache.json
+data/pick_score_latency.jsonl
