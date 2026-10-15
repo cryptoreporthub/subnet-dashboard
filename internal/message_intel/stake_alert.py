@@ -19,6 +19,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import requests
+
+from internal.chain_price.rpc import classify_rpc_error
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_HOTKEY = "5EAdPk767CtE8HhjhjAUNtLzd8vNm9Nm6fq9h3PGSL2VpYDc"
@@ -195,6 +199,42 @@ def _decode_value(raw: Optional[str]) -> int:
 class StakeScanIncomplete(Exception):
     """Any RPC read failed mid-scan; baseline must not be updated."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        rate_limited: bool = False,
+        retry_after: Optional[float] = None,
+    ):
+        self.rate_limited = rate_limited
+        self.retry_after = retry_after
+        super().__init__(message)
+
+
+def _http_retry_after(exc: BaseException) -> Optional[float]:
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        raw = exc.response.headers.get("Retry-After")
+        if raw:
+            try:
+                return max(0.0, float(raw))
+            except ValueError:
+                pass
+    cause = exc.__cause__
+    if cause is not None and cause is not exc:
+        nested = _http_retry_after(cause)
+        if nested is not None:
+            return nested
+    return None
+
+
+def _stake_scan_incomplete(method: str, exc: BaseException) -> StakeScanIncomplete:
+    rate_limited = classify_rpc_error(exc) == "rate_limited"
+    return StakeScanIncomplete(
+        f"{method} failed: {exc}",
+        rate_limited=rate_limited,
+        retry_after=_http_retry_after(exc),
+    )
+
 
 def _chain_rpc(client: Any, method: str, params: list) -> Any:
     """RPC helper: failures abort the stake scan (never confuse with empty data)."""
@@ -203,7 +243,7 @@ def _chain_rpc(client: Any, method: str, params: list) -> Any:
         try:
             result = call(method, params)
         except Exception as exc:
-            raise StakeScanIncomplete(f"{method} failed: {exc}") from exc
+            raise _stake_scan_incomplete(method, exc) from exc
     else:
         result = client._call_quiet(method, params)
     if method == "state_getKeysPaged" and (result is None or not isinstance(result, list)):
@@ -259,6 +299,14 @@ def _storage_batch_values(client: Any, keys: List[str], at_hash: str) -> Dict[st
     return {k: by_key.get(k) for k in keys}
 
 
+def _batch_retry_sleep(attempt: int, exc: StakeScanIncomplete) -> float:
+    if exc.rate_limited:
+        if exc.retry_after is not None:
+            return min(120.0, exc.retry_after)
+        return min(60.0, 1.0 * (2 ** min(attempt - 1, 6)))
+    return 0.25 * attempt
+
+
 def _storage_batch_values_retry(
     client: Any,
     keys: List[str],
@@ -267,14 +315,26 @@ def _storage_batch_values_retry(
     deadline: Optional[float] = None,
 ) -> Dict[str, Optional[str]]:
     last: Optional[StakeScanIncomplete] = None
-    for attempt in range(_BATCH_RETRIES):
+    attempt = 0
+    while True:
         if deadline is not None and time.monotonic() > deadline:
             raise StakeScanIncomplete("scan deadline exceeded")
         try:
             return _storage_batch_values(client, keys, at_hash)
         except StakeScanIncomplete as exc:
             last = exc
-            time.sleep(0.25 * (attempt + 1))
+            attempt += 1
+            if exc.rate_limited:
+                if deadline is None and attempt > _BATCH_RETRIES:
+                    break
+            elif attempt >= _BATCH_RETRIES:
+                break
+            sleep_for = _batch_retry_sleep(attempt, exc)
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if sleep_for > remaining:
+                    raise StakeScanIncomplete("scan deadline exceeded") from exc
+            time.sleep(sleep_for)
     raise last or StakeScanIncomplete("state_queryStorageAt failed")
 
 

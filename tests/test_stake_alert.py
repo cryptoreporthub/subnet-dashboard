@@ -6,7 +6,9 @@ import json
 import time
 
 import pytest
+import requests
 
+from internal.chain_rpc_errors import ChainRpcError
 from internal.message_intel import stake_alert as sa
 
 
@@ -219,6 +221,31 @@ class _FailingQueryOnPageClient(_FakeClient):
         return super()._call(method, params)
 
 
+class _RateLimitQueryClient(_FakeClient):
+    """Fails state_queryStorageAt with rate-limit errors until attempts exhausted."""
+
+    def __init__(self, keys_with_values, *, fail_times: int, retry_after: float | None = None):
+        super().__init__(keys_with_values)
+        self.fail_times = fail_times
+        self.retry_after = retry_after
+        self._query_calls = 0
+
+    def _call(self, method, params):
+        if method == "state_queryStorageAt" and self._query_calls < self.fail_times:
+            self._query_calls += 1
+            err = ChainRpcError("rate_limited", "HTTP 429", code=429)
+            if self.retry_after is not None:
+                resp = requests.Response()
+                resp.status_code = 429
+                resp.headers["Retry-After"] = str(self.retry_after)
+                http_err = requests.HTTPError(response=resp)
+                raise http_err from err
+            raise err
+        if method == "state_queryStorageAt":
+            self._query_calls += 1
+        return super()._call(method, params)
+
+
 def test_scan_hotkey_stakes_pins_finalized_hash_on_all_reads():
     pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
     ck = bytes(range(32))
@@ -251,6 +278,24 @@ def test_scan_hotkey_stakes_batch_retry_keeps_first_page():
     client = _FailingQueryOnPageClient(keys, fail_batch=1)
     out = sa.scan_hotkey_stakes(client, pub, at_hash="0x" + "cc" * 32, deadline=time.monotonic() + 30)
     assert len(out) == 201
+
+
+def test_scan_hotkey_stakes_batch_retry_rate_limit_backoff(monkeypatch):
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", pub)
+        + sa._blake2_concat(ck)
+        + (0).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+    client = _RateLimitQueryClient({key: u64f64}, fail_times=2, retry_after=7.5)
+    sleeps: list[float] = []
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    out = sa.scan_hotkey_stakes(client, pub, at_hash="0x" + "dd" * 32, deadline=time.monotonic() + 60)
+    assert out == {f"Alpha:{ck.hex()}:0": 5 * sa._RAO}
+    assert sleeps == [7.5, 7.5]
 
 
 def test_scan_hotkey_stakes_reads_both_maps():
