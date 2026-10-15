@@ -109,9 +109,9 @@ def ensure_whale_ledger_warm(
 
     try:
         from internal.whales.scanner import scan_netuids
-        from internal.whales.service import WhaleIntelligenceService
+        from internal.whales.service import get_whale_service
 
-        svc = WhaleIntelligenceService()
+        svc = get_whale_service()
         candidates = list(netuids)
         if not candidates:
             # Ladder may be empty mid-refresh — still try a few liquid names.

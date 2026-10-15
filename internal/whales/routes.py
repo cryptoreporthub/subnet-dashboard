@@ -10,18 +10,13 @@ from pydantic import BaseModel, Field
 from internal.rate_limit import limit_or_noop, strict_limit
 from internal.whales.enrichment_badge import whale_flow_badge
 from internal.whales.scanner import scan_netuids, scan_subnet_delegations
-from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService
+from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService, get_whale_service
 
 whales_router = APIRouter(tags=["whales"])
 
-_service: Optional[WhaleIntelligenceService] = None
-
 
 def _get_service() -> WhaleIntelligenceService:
-    global _service
-    if _service is None:
-        _service = WhaleIntelligenceService()
-    return _service
+    return get_whale_service()
 
 
 class WhaleEventIn(BaseModel):
@@ -131,21 +126,23 @@ async def whales_flow_signals(hours: int = Query(24, ge=1, le=168), limit: int =
 
 @whales_router.post("/api/whales/events")
 async def whales_record_event(event: WhaleEventIn):
-    return _get_service().record_event(
-        wallet=event.wallet,
-        netuid=event.netuid,
-        side=event.side,
-        amount_tao=event.amount_tao,
-        timestamp=event.timestamp,
-        source=event.source,
-        tx_hash=event.tx_hash,
-        subnet_name=event.subnet_name,
-        entry_price=event.entry_price,
-        exit_price=event.exit_price,
-        market_cap_rank=event.market_cap_rank,
-        total_stake_tao=event.total_stake_tao,
-        price_change_after_hours=event.price_change_after_hours,
-    )
+    svc = _get_service()
+    with svc.transaction():
+        return svc.record_event(
+            wallet=event.wallet,
+            netuid=event.netuid,
+            side=event.side,
+            amount_tao=event.amount_tao,
+            timestamp=event.timestamp,
+            source=event.source,
+            tx_hash=event.tx_hash,
+            subnet_name=event.subnet_name,
+            entry_price=event.entry_price,
+            exit_price=event.exit_price,
+            market_cap_rank=event.market_cap_rank,
+            total_stake_tao=event.total_stake_tao,
+            price_change_after_hours=event.price_change_after_hours,
+        )
 
 
 @whales_router.post("/api/whales/scan")

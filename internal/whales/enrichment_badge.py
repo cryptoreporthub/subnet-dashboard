@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from internal.whales.service import WhaleIntelligenceService
+from internal.whales.service import WhaleIntelligenceService, get_whale_service
 
 _BADGE_KIND = "whale_flow"
 _DEFAULT_LABEL = "Smart money"
@@ -89,7 +89,7 @@ def whale_flow_badge(
     service: Optional[WhaleIntelligenceService] = None,
 ) -> Dict[str, Any]:
     """Whale-flow badge for a subnet — live signal or explicit empty."""
-    svc = service or WhaleIntelligenceService()
+    svc = service or get_whale_service()
     payload = flow if flow is not None else svc.get_subnet_flow(int(netuid))
     if "netuid" not in payload:
         payload = {**payload, "netuid": int(netuid)}

@@ -1,11 +1,14 @@
 """Tests for the Whale Intelligence service."""
 
 import json
+import threading
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from internal.whales.service import WhaleIntelligenceService, TRACKING_DIMENSIONS
+from internal.whales.scanner import scan_subnet_delegations
 
 
 @pytest.fixture
@@ -314,3 +317,169 @@ def test_day_move_highlights_falls_back_to_7d(whale_paths):
     assert out["hours"] == 168.0
     assert out["biggest_tao"]["amount_tao"] == 900.0
     assert out["chips"]
+
+
+def test_batch_defers_single_save(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    saves = []
+    with patch.object(svc, "_save_data", side_effect=lambda: saves.append(1)):
+        with svc.batch():
+            for i in range(5):
+                svc.record_event(
+                    f"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQ{i}",
+                    1,
+                    "buy",
+                    100.0,
+                    timestamp=f"2026-07-01T08:00:{i:02d}+00:00",
+                    tx_hash=f"hash-{i}",
+                )
+    assert len(saves) == 1
+
+
+def test_idempotent_replay_by_tx_hash(whale_paths):
+    from datetime import datetime, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    ts = datetime.now(timezone.utc).isoformat()
+    kwargs = {
+        "wallet": wallet,
+        "netuid": 3,
+        "side": "buy",
+        "amount_tao": 120.0,
+        "timestamp": ts,
+        "tx_hash": "same-tx",
+    }
+    first = svc.record_event(**kwargs)
+    second = svc.record_event(**kwargs)
+    assert first["status"] == "recorded"
+    assert second["status"] == "ignored"
+    assert second["reason"] == "duplicate"
+    assert len(svc.data["events"]) == 1
+    assert len(svc.data["closed_trades"]) == 0
+
+
+def test_retention_prunes_old_events_only(whale_paths, monkeypatch):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    monkeypatch.setenv("WHALE_EVENT_RETENTION_DAYS", "30")
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    svc.data["events"] = [
+        {
+            "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            "netuid": 1,
+            "side": "buy",
+            "amount_tao": 50.0,
+            "timestamp": (now - timedelta(days=120)).isoformat(),
+        },
+        {
+            "wallet": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+            "netuid": 2,
+            "side": "buy",
+            "amount_tao": 60.0,
+            "timestamp": (now - timedelta(days=2)).isoformat(),
+            "tx_hash": "keep-me",
+        },
+    ]
+    svc.data["profiles"] = {"keeper": {"wallet": "keeper", "closed_trades": 1}}
+    svc._rebuild_event_keys()
+    svc._prune_events_retention()
+    assert len(svc.data["events"]) == 1
+    assert svc.data["events"][0]["tx_hash"] == "keep-me"
+    assert svc.data["profiles"]["keeper"]["closed_trades"] == 1
+
+
+def test_compact_json_write(whale_paths, monkeypatch):
+    config, data = whale_paths
+    monkeypatch.setenv("WHALE_JSON_COMPACT", "on")
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    svc.record_event(
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        1,
+        "buy",
+        10.0,
+        tx_hash="compact-1",
+    )
+    raw = Path(data).read_text()
+    assert "\n  " not in raw
+    loaded = json.loads(raw)
+    assert loaded["events"]
+
+
+def test_loads_legacy_indented_file(whale_paths, monkeypatch):
+    config, data = whale_paths
+    payload = {
+        "updated_at": "2026-07-01T00:00:00+00:00",
+        "events": [
+            {
+                "wallet": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+                "netuid": 9,
+                "side": "buy",
+                "amount_tao": 25.0,
+                "timestamp": "2026-07-01T08:00:00+00:00",
+            }
+        ],
+        "open_positions": {},
+        "profiles": {},
+        "closed_trades": [],
+    }
+    Path(data).write_text(json.dumps(payload, indent=2))
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    assert len(svc.data["events"]) == 1
+
+
+def test_singleton_threads_keep_all_events(whale_paths, tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    base = datetime.now(timezone.utc)
+
+    def worker(start: int):
+        for i in range(10):
+            svc.record_event(
+                f"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQ{start + i}",
+                1,
+                "buy",
+                50.0,
+                timestamp=(base + timedelta(seconds=start + i)).isoformat(),
+                tx_hash=f"t-{start}-{i}",
+            )
+
+    threads = [threading.Thread(target=worker, args=(n * 10,)) for n in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(svc.data["events"]) == 20
+
+
+def test_scan_subnet_batch_one_save(whale_paths, monkeypatch):
+    from datetime import datetime, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    ts = datetime.now(timezone.utc).isoformat()
+    rows = [
+        {
+            "coldkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+            "amount": "20000000000",
+            "direction": "stake",
+            "timestamp": ts,
+            "tx_hash": f"row-{i}",
+        }
+        for i in range(3)
+    ]
+    monkeypatch.setattr(
+        "internal.whales.scanner._fetch_delegation_rows",
+        lambda netuid: rows,
+    )
+    saves = []
+    with patch.object(svc, "_save_data", side_effect=lambda: saves.append(1)):
+        scan_subnet_delegations(7, service=svc)
+    assert len(saves) == 1
+    assert len(svc.data["events"]) == 3
