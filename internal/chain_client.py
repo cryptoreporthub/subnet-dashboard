@@ -272,7 +272,19 @@ class ChainClient:
                     timeout=self.timeout,
                 )
                 if response.status_code == 429:
-                    raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+                    retry_after: Optional[float] = None
+                    raw = response.headers.get("Retry-After")
+                    if raw:
+                        try:
+                            retry_after = max(0.0, float(raw))
+                        except ValueError:
+                            retry_after = None
+                    raise ChainRpcError(
+                        "rate_limited",
+                        "HTTP 429",
+                        code=429,
+                        retry_after=retry_after,
+                    )
                 if response.status_code >= 500:
                     last_error = ChainRpcError(
                         classify_http_status(response.status_code),
