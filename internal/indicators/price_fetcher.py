@@ -97,8 +97,9 @@ def gecko_ohlcv_guarantees_alpha_in_tao(gt: Dict[str, Any]) -> bool:
       - base_is_alpha: true|false (alpha is pool base token)
       - price_token: \"base\"|\"quote\" (Gecko ``token`` selector; default base)
 
-    ``base_is_alpha`` must be set explicitly in price_pairs.json; unknown orientation
-    fails closed (no unit=tao stamp, gecko tier skipped).
+    ``base_is_alpha`` must be set explicitly in price_pairs.json (see
+    ``scripts/gecko_pool_orientation_audit.py`` + ``docs/gecko-pool-orientation-audit.json``);
+    unknown orientation fails closed (no unit=tao stamp, gecko tier skipped).
     """
     if not isinstance(gt, dict) or not gt.get("network") or not gt.get("pool"):
         return False

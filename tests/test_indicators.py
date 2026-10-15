@@ -67,6 +67,40 @@ def test_price_sources_include_geckoterminal_fallback():
     assert not any(s["source"] == "synthetic" for s in sources)
 
 
+def test_gecko_orientation_audit_artifact_covers_all_mappings():
+    """Committed audit must match every geckoterminal block in price_pairs.json."""
+    from pathlib import Path
+
+    pairs = json.load(open("config/price_pairs.json"))
+    audit = json.load(open("docs/gecko-pool-orientation-audit.json"))
+    gecko_netuids = sorted(
+        k
+        for k, v in pairs.items()
+        if isinstance(v, dict) and isinstance(v.get("geckoterminal"), dict)
+    )
+    rows = audit.get("rows") or []
+    assert audit.get("gecko_mapping_count") == len(gecko_netuids) == 100
+    assert len(rows) == 100
+    assert audit.get("unknown_or_error_count") == 0
+    by_netuid = {str(r["netuid"]): r for r in rows}
+    assert set(by_netuid) == set(gecko_netuids)
+    for uid in gecko_netuids:
+        assert by_netuid[uid]["orientation"] == "alpha_base_tao_quote"
+        assert pairs[uid]["geckoterminal"].get("base_is_alpha") is True
+
+
+def test_unaudited_gecko_mapping_skips_gecko_tier():
+    """Pools without explicit audited orientation must not use the gecko tier."""
+    pairs = {
+        "5": {
+            "symbol": "KAON",
+            "geckoterminal": {"network": "bittensor", "pool": "0-5"},
+        }
+    }
+    sources = _price_sources_for_subnet("5", pairs)
+    assert not any(s["source"] == "geckoterminal" for s in sources)
+
+
 def test_price_sources_skip_gecko_without_explicit_orientation():
     pairs = {
         "5": {
