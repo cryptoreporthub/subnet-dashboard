@@ -199,8 +199,9 @@ def scan_subnet_delegations(
     rows = _fetch_delegation_rows(netuid)
     if _nested_batch:
         return _ingest_delegation_rows(netuid, service, meta, rows)
-    with service.batch():
-        return _ingest_delegation_rows(netuid, service, meta, rows)
+    with service.transaction():
+        with service.batch():
+            return _ingest_delegation_rows(netuid, service, meta, rows)
 
 
 def scan_netuids(
@@ -210,23 +211,27 @@ def scan_netuids(
 ) -> Dict[str, Any]:
     service = service or get_whale_service()
     subnet_meta_by_id = subnet_meta_by_id or {}
-    per_subnet = []
+    per_subnet: List[Dict[str, Any]] = []
     total_ingested = 0
+
+    prepared: List[Tuple[int, List[Dict[str, Any]], Dict[str, Any]]] = []
+    for netuid in netuids:
+        try:
+            rows = _fetch_delegation_rows(netuid)
+            prepared.append((netuid, rows, subnet_meta_by_id.get(netuid, {})))
+        except Exception as exc:
+            logger.warning("whale scan fetch failed netuid=%s: %s", netuid, exc)
+            per_subnet.append({"netuid": netuid, "error": str(exc)})
 
     with service.transaction():
         with service.batch():
-            for netuid in netuids:
+            for netuid, rows, meta in prepared:
                 try:
-                    result = scan_subnet_delegations(
-                        netuid,
-                        service=service,
-                        subnet_meta=subnet_meta_by_id.get(netuid, {}),
-                        _nested_batch=True,
-                    )
+                    result = _ingest_delegation_rows(netuid, service, meta, rows)
                     per_subnet.append(result)
                     total_ingested += int(result.get("ingested", 0))
                 except Exception as exc:
-                    logger.warning("whale scan failed netuid=%s: %s", netuid, exc)
+                    logger.warning("whale scan ingest failed netuid=%s: %s", netuid, exc)
                     per_subnet.append({"netuid": netuid, "error": str(exc)})
 
     return {

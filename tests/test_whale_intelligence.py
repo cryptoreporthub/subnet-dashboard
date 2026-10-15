@@ -1,6 +1,7 @@
 """Tests for the Whale Intelligence service."""
 
 import json
+import multiprocessing as mp
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -9,6 +10,18 @@ import pytest
 
 from internal.whales.service import WhaleIntelligenceService, TRACKING_DIMENSIONS
 from internal.whales.scanner import scan_subnet_delegations
+
+
+def _mp_record_whale_events(config_path: str, data_path: str, prefix: str) -> None:
+    svc = WhaleIntelligenceService(config_path=config_path, data_path=data_path)
+    for i in range(10):
+        svc.record_event(
+            f"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQ{i}",
+            1,
+            "buy",
+            50.0,
+            tx_hash=f"{prefix}-{i}",
+        )
 
 
 @pytest.fixture
@@ -456,6 +469,53 @@ def test_singleton_threads_keep_all_events(whale_paths, tmp_path):
     for t in threads:
         t.join()
     assert len(svc.data["events"]) == 20
+
+
+def test_nested_transaction_flock_release_once(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    acquires: list[int] = []
+    releases: list[int] = []
+
+    real_acquire = svc._flock_acquire
+    real_release = svc._flock_release
+
+    def counting_acquire() -> None:
+        acquires.append(1)
+        real_acquire()
+
+    def counting_release() -> None:
+        releases.append(1)
+        real_release()
+
+    with patch.object(svc, "_flock_acquire", side_effect=counting_acquire):
+        with patch.object(svc, "_flock_release", side_effect=counting_release):
+            with svc.transaction():
+                svc.record_event(
+                    "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+                    1,
+                    "buy",
+                    100.0,
+                    tx_hash="nested-route-tx",
+                )
+    assert len(acquires) == 1
+    assert len(releases) == 1
+
+
+def test_two_process_same_path_no_lost_updates(whale_paths):
+    config, data = whale_paths
+    ctx = mp.get_context("spawn")
+    workers = [
+        ctx.Process(target=_mp_record_whale_events, args=(config, data, "a")),
+        ctx.Process(target=_mp_record_whale_events, args=(config, data, "b")),
+    ]
+    for proc in workers:
+        proc.start()
+    for proc in workers:
+        proc.join()
+    assert all(proc.exitcode == 0 for proc in workers)
+    loaded = json.loads(Path(data).read_text())
+    assert len(loaded["events"]) == 20
 
 
 def test_scan_subnet_batch_one_save(whale_paths, monkeypatch):

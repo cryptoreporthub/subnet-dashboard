@@ -125,29 +125,28 @@ async def whales_flow_signals(hours: int = Query(24, ge=1, le=168), limit: int =
 
 
 @whales_router.post("/api/whales/events")
-async def whales_record_event(event: WhaleEventIn):
+def whales_record_event(event: WhaleEventIn):
     svc = _get_service()
-    with svc.transaction():
-        return svc.record_event(
-            wallet=event.wallet,
-            netuid=event.netuid,
-            side=event.side,
-            amount_tao=event.amount_tao,
-            timestamp=event.timestamp,
-            source=event.source,
-            tx_hash=event.tx_hash,
-            subnet_name=event.subnet_name,
-            entry_price=event.entry_price,
-            exit_price=event.exit_price,
-            market_cap_rank=event.market_cap_rank,
-            total_stake_tao=event.total_stake_tao,
-            price_change_after_hours=event.price_change_after_hours,
-        )
+    return svc.record_event(
+        wallet=event.wallet,
+        netuid=event.netuid,
+        side=event.side,
+        amount_tao=event.amount_tao,
+        timestamp=event.timestamp,
+        source=event.source,
+        tx_hash=event.tx_hash,
+        subnet_name=event.subnet_name,
+        entry_price=event.entry_price,
+        exit_price=event.exit_price,
+        market_cap_rank=event.market_cap_rank,
+        total_stake_tao=event.total_stake_tao,
+        price_change_after_hours=event.price_change_after_hours,
+    )
 
 
 @whales_router.post("/api/whales/scan")
 @limit_or_noop(strict_limit(), override_defaults=True)
-async def whales_scan(
+def whales_scan(
     request: Request,
     netuids: Optional[List[int]] = Body(default=None),
     top_n: int = Body(default=20),

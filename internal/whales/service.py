@@ -73,7 +73,7 @@ def _event_key(
     if tx_hash:
         return f"tx:{tx_hash}"
     raw = f"{wallet}|{netuid}|{side}|{amount_tao}|{timestamp}"
-    return "h:" + hashlib.sha1(raw.encode("utf-8")).hexdigest()
+    return "h:" + hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
 def _event_key_from_row(event: Dict[str, Any]) -> str:
@@ -191,6 +191,7 @@ class WhaleIntelligenceService:
         self.data_path = data_path or os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
         self._lock = threading.RLock()
         self._batch_depth = 0
+        self._transaction_depth = 0
         self._dirty = False
         self._data_mtime_ns: Optional[int] = None
         self._data_size: Optional[int] = None
@@ -300,16 +301,21 @@ class WhaleIntelligenceService:
     def transaction(self) -> Iterator["WhaleIntelligenceService"]:
         """Cross-process writer: flock + reload if another process committed."""
         with self._lock:
-            self._flock_acquire()
-            try:
+            outer = self._transaction_depth == 0
+            self._transaction_depth += 1
+            if outer:
+                self._flock_acquire()
                 self._reload_if_stale()
+            try:
                 yield self
             finally:
-                if self._batch_depth == 0 and self._dirty:
-                    self._prune_events_retention()
-                    self._save_data()
-                    self._dirty = False
-                self._flock_release()
+                self._transaction_depth -= 1
+                if outer:
+                    if self._batch_depth == 0 and self._dirty:
+                        self._prune_events_retention()
+                        self._save_data()
+                        self._dirty = False
+                    self._flock_release()
 
     @contextmanager
     def batch(self) -> Iterator[None]:
@@ -405,7 +411,7 @@ class WhaleIntelligenceService:
         min_notional: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Record a buy/sell event and update wallet intelligence."""
-        with self._lock:
+        with self.transaction():
             return self._record_event_impl(
                 wallet=wallet,
                 netuid=netuid,
@@ -675,7 +681,7 @@ class WhaleIntelligenceService:
 
     def log_subnet_owner(self, wallet: str, netuid: int) -> None:
         """Upsert owner wallet profile with last-owned subnet tracking."""
-        with self._lock:
+        with self.transaction():
             self._log_subnet_owner_impl(wallet, netuid)
 
     def _log_subnet_owner_impl(self, wallet: str, netuid: int) -> None:
@@ -714,13 +720,14 @@ class WhaleIntelligenceService:
 
     def log_subnet_owners(self, pairs: List[Tuple[str, int]]) -> None:
         """Batch owner upserts for pump-style scans (one save when nested in batch())."""
-        with self.batch():
-            for wallet, netuid in pairs:
-                self.log_subnet_owner(wallet, netuid)
+        with self.transaction():
+            with self.batch():
+                for wallet, netuid in pairs:
+                    self._log_subnet_owner_impl(wallet, netuid)
 
     def record_rug_alert(self, wallet: str, netuid: int) -> int:
         """Increment rug_count on owner profile; simple per-evaluation bump."""
-        with self._lock:
+        with self.transaction():
             return self._record_rug_alert_impl(wallet, netuid)
 
     def _record_rug_alert_impl(self, wallet: str, netuid: int) -> int:
