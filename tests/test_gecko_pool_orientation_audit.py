@@ -11,7 +11,9 @@ import requests
 
 from scripts.gecko_pool_orientation_audit import (
     MAX_CALLS_PER_MINUTE,
+    MAX_NETWORK_ATTEMPTS,
     MIN_REQUEST_INTERVAL_S,
+    NETWORK_RETRY_BACKOFF_S,
     _fetch_pool,
     _parse_retry_after,
     _RequestPacer,
@@ -140,25 +142,76 @@ def test_429_exhaustion_marks_unknown_and_nonzero_exit():
     assert row["error"] == "http_429_exhausted"
 
 
-def test_non_http_exception_is_not_retried():
-    """Connection-level errors stop after one attempt (no retry, no sleep)."""
+def test_connection_error_recovers_on_second_attempt():
     calls: list[int] = []
     sleeps: list[float] = []
 
     def fake_get(url, params=None, timeout=30):
         calls.append(1)
-        raise requests.ConnectionError("connection reset")
+        if len(calls) == 1:
+            raise requests.ConnectionError("connection reset")
+        return _FakeResp(200, payload={"data": {}})
 
     payload, err = _fetch_pool(
-        "bittensor",
-        "0-1",
-        max_attempts=6,
-        pacer=None,
-        sleep=sleeps.append,
-        get=fake_get,
+        "bittensor", "0-1", max_attempts=6, pacer=None, sleep=sleeps.append, get=fake_get
+    )
+    assert err is None
+    assert payload == {"data": {}}
+    assert len(calls) == 2
+    assert sleeps == [NETWORK_RETRY_BACKOFF_S]
+
+
+def test_timeout_exhaustion_is_bounded_with_no_trailing_sleep():
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    def fake_get(url, params=None, timeout=30):
+        calls.append(1)
+        raise requests.Timeout("read timed out")
+
+    payload, err = _fetch_pool(
+        "bittensor", "0-1", max_attempts=6, pacer=None, sleep=sleeps.append, get=fake_get
     )
     assert payload is None
-    assert err == "connection reset"
+    assert err == "read timed out"
+    assert len(calls) == MAX_NETWORK_ATTEMPTS == 3
+    assert sleeps == [NETWORK_RETRY_BACKOFF_S, NETWORK_RETRY_BACKOFF_S * 2]
+
+
+def test_http_error_is_single_attempt():
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    def fake_get(url, params=None, timeout=30):
+        calls.append(1)
+        return _FakeResp(500)
+
+    payload, err = _fetch_pool(
+        "bittensor", "0-1", max_attempts=6, pacer=None, sleep=sleeps.append, get=fake_get
+    )
+    assert payload is None
+    assert err is not None and "500" in err
+    assert len(calls) == 1
+    assert sleeps == []
+
+
+def test_parse_error_is_single_attempt():
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    class _BadJson(_FakeResp):
+        def json(self):
+            raise ValueError("not json")
+
+    def fake_get(url, params=None, timeout=30):
+        calls.append(1)
+        return _BadJson(200)
+
+    payload, err = _fetch_pool(
+        "bittensor", "0-1", max_attempts=6, pacer=None, sleep=sleeps.append, get=fake_get
+    )
+    assert payload is None
+    assert err == "not json"
     assert len(calls) == 1
     assert sleeps == []
 

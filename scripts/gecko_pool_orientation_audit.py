@@ -41,6 +41,10 @@ MAX_CALLS_PER_MINUTE = 28
 MIN_REQUEST_INTERVAL_S = 60.0 / MAX_CALLS_PER_MINUTE
 DEFAULT_429_FALLBACK_S = 30.0
 MAX_429_FALLBACK_S = 120.0
+# Transient transport failures only; HTTP 4xx/5xx and parse errors stay single-attempt.
+TRANSIENT_NETWORK_ERRORS = (requests.ConnectionError, requests.Timeout)
+MAX_NETWORK_ATTEMPTS = 3
+NETWORK_RETRY_BACKOFF_S = 2.0
 
 
 def _alpha_token_id(netuid: str) -> str:
@@ -107,6 +111,7 @@ def _fetch_pool(
     url = f"{GECKO_API}/networks/{network}/pools/{pool}"
     params = {"include": "base_token,quote_token"}
     last_err: Optional[str] = None
+    network_failures = 0
     for attempt in range(max_attempts):
         if pacer is not None:
             pacer.wait_turn()
@@ -124,6 +129,12 @@ def _fetch_pool(
         except requests.HTTPError as exc:
             last_err = str(exc)
             break
+        except TRANSIENT_NETWORK_ERRORS as exc:
+            last_err = str(exc)
+            network_failures += 1
+            if network_failures >= MAX_NETWORK_ATTEMPTS:
+                break
+            sleep(NETWORK_RETRY_BACKOFF_S * (2 ** (network_failures - 1)))
         except Exception as exc:
             last_err = str(exc)
             break
