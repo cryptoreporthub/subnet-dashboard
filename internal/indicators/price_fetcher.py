@@ -97,8 +97,8 @@ def gecko_ohlcv_guarantees_alpha_in_tao(gt: Dict[str, Any]) -> bool:
       - base_is_alpha: true|false (alpha is pool base token)
       - price_token: \"base\"|\"quote\" (Gecko ``token`` selector; default base)
 
-    Bittensor subnet-tokens pools omitting base_is_alpha are treated as alpha-base
-    (audited 2026-10-15: pools 0-1, 0-5, 0-64 on api.geckoterminal.com).
+    ``base_is_alpha`` must be set explicitly in price_pairs.json; unknown orientation
+    fails closed (no unit=tao stamp, gecko tier skipped).
     """
     if not isinstance(gt, dict) or not gt.get("network") or not gt.get("pool"):
         return False
@@ -109,8 +109,6 @@ def gecko_ohlcv_guarantees_alpha_in_tao(gt: Dict[str, Any]) -> bool:
     if base_is_alpha is False:
         return price_token == "quote"
     if base_is_alpha is True:
-        return price_token == "base"
-    if str(gt.get("network")) == "bittensor":
         return price_token == "base"
     return False
 
@@ -172,14 +170,15 @@ def _price_sources_for_subnet(
     # Native pool OHLCV first when mapped (#1375).
     gt = info.get("geckoterminal")
     if isinstance(gt, dict) and gt.get("network") and gt.get("pool"):
-        sources.append(
-            {
-                "source": "geckoterminal",
-                "network": str(gt["network"]),
-                "pool": str(gt["pool"]),
-                "gecko_cfg": gt,
-            }
-        )
+        if gecko_ohlcv_guarantees_alpha_in_tao(gt):
+            sources.append(
+                {
+                    "source": "geckoterminal",
+                    "network": str(gt["network"]),
+                    "pool": str(gt["pool"]),
+                    "gecko_cfg": gt,
+                }
+            )
 
     sources.append({"source": "taomarketcap", "netuid": str(netuid)})
     sources.append({"source": "blockmachine", "netuid": str(netuid)})

@@ -52,7 +52,11 @@ def test_price_sources_include_geckoterminal_fallback():
     pairs = {
         "5": {
             "symbol": "KAON",
-            "geckoterminal": {"network": "bittensor", "pool": "0-5"},
+            "geckoterminal": {
+                "network": "bittensor",
+                "pool": "0-5",
+                "base_is_alpha": True,
+            },
         }
     }
     sources = _price_sources_for_subnet("5", pairs)
@@ -61,6 +65,19 @@ def test_price_sources_include_geckoterminal_fallback():
     assert sources[1]["source"] == "taomarketcap"
     assert sources[-1]["source"] == "blockmachine"
     assert not any(s["source"] == "synthetic" for s in sources)
+
+
+def test_price_sources_skip_gecko_without_explicit_orientation():
+    pairs = {
+        "5": {
+            "symbol": "KAON",
+            "geckoterminal": {"network": "bittensor", "pool": "0-5"},
+        }
+    }
+    sources = _price_sources_for_subnet("5", pairs)
+    assert not any(s["source"] == "geckoterminal" for s in sources)
+    assert sources[0]["source"] == "taomarketcap"
+
 
 def test_synthetic_candles_are_deterministic():
     a = _synthetic_candles("subnet-7", days=2)
@@ -208,7 +225,11 @@ def test_fetch_ohlcv_tiered_fallback_to_geckoterminal(monkeypatch, tmp_path):
         {
             "1": {
                 "symbol": "SN1",
-                "geckoterminal": {"network": "bittensor", "pool": "0-1"},
+                "geckoterminal": {
+                    "network": "bittensor",
+                    "pool": "0-1",
+                    "base_is_alpha": True,
+                },
             }
         },
         open(pairs_path, "w"),
@@ -344,9 +365,11 @@ def test_indicator_engine_run_cycle(tmp_path):
     assert "per_subnet" in state
     assert "1" in state["per_subnet"]
 
-def test_indicator_scheduler_run_once(tmp_path):
+def test_indicator_scheduler_run_once(tmp_path, monkeypatch):
     reg = tmp_path / "registry.json"
     soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
     pairs = tmp_path / "price_pairs.json"
     json.dump(
         {"1": {"emission": 2.0, "social_mentions": 2000, "is_overvalued": False, "status": "active"}},
@@ -364,15 +387,25 @@ def test_indicator_scheduler_run_once(tmp_path):
     assert result["subnets_processed"] == 1
 
     state = scheduler.state()
-    assert state["running"] is False
     assert state["consecutive_failures"] == 0
+    assert not scheduler._is_registered()
 
-def test_scheduler_start_stop_are_idempotent(monkeypatch):
+def test_scheduler_start_stop_are_idempotent(monkeypatch, tmp_path):
     import internal.indicators.indicator_scheduler as isched
 
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}")
+    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(isched, "schedule_in_seconds", lambda *a: None)
-    isched._scheduler = None
-    res1 = isched.start_indicator_scheduler(refresh_minutes=60, immediate=False)
+    isched.stop_indicator_scheduler()
+    import internal.liveness as liv
+
+    monkeypatch.setattr(liv, "read_soul_map", lambda path=None: {})
+    with liv._REG_LOCK:
+        liv._REGISTRY.pop("indicator_scheduler", None)
+    res1 = isched.start_indicator_scheduler(
+        refresh_minutes=60, immediate=False, soul_map_path=str(soul)
+    )
     assert res1["started"] is True
     res2 = isched.start_indicator_scheduler(refresh_minutes=60, immediate=False)
     assert res2["started"] is False
@@ -426,6 +459,9 @@ def test_gecko_ohlcv_guarantees_alpha_in_tao_orientations():
     tao_base = {"network": "bittensor", "pool": "x", "base_is_alpha": False}
     assert not gecko_ohlcv_guarantees_alpha_in_tao({**tao_base, "price_token": "base"})
     assert gecko_ohlcv_guarantees_alpha_in_tao({**tao_base, "price_token": "quote"})
+
+    unknown = {"network": "bittensor", "pool": "0-99"}
+    assert not gecko_ohlcv_guarantees_alpha_in_tao(unknown)
 
 
 def test_fetch_geckoterminal_ohlcv_price_token_param(monkeypatch):
@@ -520,7 +556,11 @@ def test_fetch_ohlcv_refetches_untagged_geckoterminal_cache(monkeypatch, tmp_pat
                 "source": "geckoterminal",
                 "network": "bittensor",
                 "pool": "0-1",
-                "gecko_cfg": {"network": "bittensor", "pool": "0-1"},
+                "gecko_cfg": {
+                    "network": "bittensor",
+                    "pool": "0-1",
+                    "base_is_alpha": True,
+                },
             }
         ],
     )

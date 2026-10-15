@@ -130,6 +130,30 @@ def test_price_reference_rejects_untagged_geckoterminal_cache():
     assert price == 0.0
 
 
+def test_state_vector_hydration_rejects_unusable_gecko_after_lazy_fill(monkeypatch):
+    """fetch_ohlcv may return candles while cache row lacks unit=tao; do not serve."""
+    from internal.council import state_vector
+
+    bad_candles = [
+        {
+            "timestamp": "2026-10-01T12:00:00+00:00",
+            "open": 80.0,
+            "high": 80.0,
+            "low": 80.0,
+            "close": 80.0,
+            "volume": 1.0,
+        }
+    ]
+    legacy = {"source": "geckoterminal", "candles": bad_candles}
+
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {"1": legacy})
+    monkeypatch.setattr(
+        state_vector, "_lazy_fill_price_candles", lambda _n: bad_candles
+    )
+    hist = state_vector._get_price_history(1, {}, allow_hydration=True)
+    assert hist["closes"] == []
+
+
 def test_state_vector_rejects_untagged_geckoterminal_cache(monkeypatch):
     from internal.council import state_vector
 

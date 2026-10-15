@@ -160,8 +160,10 @@ def _get_price_history(
         raw = cache.get(str(netuid_key)) or (
             cache.get(netuid_key) if isinstance(netuid_key, int) else None
         )
-        source = (raw or {}).get("source", "lazy_fill")
-        return _history_from_candles(candles, source)
+        if not isinstance(raw, dict) or not gecko_cache_entry_usable(raw):
+            return _empty_price_history()
+        source = raw.get("source", "lazy_fill")
+        return _history_from_candles(raw.get("candles") or candles, source)
 
     return _empty_price_history()
 
