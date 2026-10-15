@@ -416,6 +416,98 @@ def test_fetch_ohlcv_empty_without_synthetic(tmp_path, monkeypatch):
     assert cache["1"]["source"] == "unavailable"
 
 
+def test_gecko_ohlcv_guarantees_alpha_in_tao_orientations():
+    from internal.indicators.price_fetcher import gecko_ohlcv_guarantees_alpha_in_tao
+
+    alpha_base = {"network": "bittensor", "pool": "0-1", "base_is_alpha": True}
+    assert gecko_ohlcv_guarantees_alpha_in_tao(alpha_base)
+    assert gecko_ohlcv_guarantees_alpha_in_tao({**alpha_base, "price_token": "base"})
+
+    tao_base = {"network": "bittensor", "pool": "x", "base_is_alpha": False}
+    assert not gecko_ohlcv_guarantees_alpha_in_tao({**tao_base, "price_token": "base"})
+    assert gecko_ohlcv_guarantees_alpha_in_tao({**tao_base, "price_token": "quote"})
+
+
+def test_fetch_geckoterminal_ohlcv_price_token_param(monkeypatch):
+    import requests
+
+    captured = {}
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {
+                "data": {
+                    "attributes": {
+                        "ohlcv_list": [
+                            [1704067200, 1.0, 1.0, 1.0, 1.0, 1.0],
+                            [1704070800, 1.0, 1.0, 1.0, 1.0, 1.0],
+                        ]
+                    }
+                }
+            }
+
+    def fake_get(url, params=None, **kwargs):
+        captured["params"] = params
+        return FakeResp()
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    _fetch_geckoterminal_ohlcv(
+        "bittensor",
+        "0-1",
+        days=1,
+        gecko_cfg={"price_token": "quote", "base_is_alpha": False},
+    )
+    assert captured["params"] == {"limit": 24, "currency": "token", "token": "quote"}
+
+
+def test_fetch_ohlcv_legacy_gecko_refetch_failure_is_unavailable(monkeypatch, tmp_path):
+    import time
+
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", True)
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._fetch_geckoterminal_ohlcv",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("gecko down")),
+    )
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._price_sources_for_subnet",
+        lambda *a, **k: [{"source": "geckoterminal", "network": "bittensor", "pool": "0-1", "gecko_cfg": {}}],
+    )
+    cache_path = tmp_path / "price_cache.json"
+    pairs_path = tmp_path / "price_pairs.json"
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
+    json.dump(
+        {
+            "1": {
+                "source": "geckoterminal",
+                "cached_at": time.time(),
+                "candles": [
+                    {
+                        "timestamp": "2026-10-14T00:00:00+00:00",
+                        "open": 80.0,
+                        "high": 80.0,
+                        "low": 80.0,
+                        "close": 80.0,
+                        "volume": 1.0,
+                    }
+                ],
+            }
+        },
+        open(cache_path, "w"),
+    )
+    candles = fetch_ohlcv(
+        "1",
+        days=2,
+        use_cache=True,
+        cache_path=str(cache_path),
+        pairs_path=str(pairs_path),
+    )
+    assert candles == []
+    assert json.load(open(cache_path))["1"]["source"] == "unavailable"
+
+
 def test_fetch_ohlcv_refetches_untagged_geckoterminal_cache(monkeypatch, tmp_path):
     """Legacy untagged GeckoTerminal entries are USD closes: refetch, don't serve."""
     import time
@@ -423,7 +515,14 @@ def test_fetch_ohlcv_refetches_untagged_geckoterminal_cache(monkeypatch, tmp_pat
     monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", True)
     monkeypatch.setattr(
         "internal.indicators.price_fetcher._price_sources_for_subnet",
-        lambda *a, **k: [{"source": "geckoterminal", "network": "bittensor", "pool": "0-1"}],
+        lambda *a, **k: [
+            {
+                "source": "geckoterminal",
+                "network": "bittensor",
+                "pool": "0-1",
+                "gecko_cfg": {"network": "bittensor", "pool": "0-1"},
+            }
+        ],
     )
     calls = []
     fresh = [

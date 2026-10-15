@@ -12,6 +12,8 @@ import uuid as _uuid
 from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 from typing import Any, Dict, List, Optional
 
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
+
 
 # ---------------------------------------------------------------------------
 # Paths & constants
@@ -142,9 +144,12 @@ def _get_price_history(
         source = raw.get("source", "cached")
         if source == "synthetic":
             return _empty_price_history()
-        hist = _history_from_candles(raw.get("candles") or [], source)
-        if hist["closes"]:
-            return hist
+        if not gecko_cache_entry_usable(raw):
+            raw = None
+        if raw:
+            hist = _history_from_candles(raw.get("candles") or [], source)
+            if hist["closes"]:
+                return hist
 
     if not allow_hydration:
         return _empty_price_history()

@@ -43,6 +43,7 @@ from internal.council.price_reference import (
 )
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import load_weights, nudge_impact_strength, nudge_signal_weight, save_weights
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 try:
     from internal.judges.tracker import on_prediction_resolved
@@ -259,7 +260,7 @@ def fetch_prices(subnets: Optional[List[Dict[str, Any]]] = None) -> Dict[Any, fl
     if len(prices) < 2:
         cache = _load_json(PRICE_CACHE_PATH, {})
         for uid, raw in cache.items():
-            if isinstance(raw, dict) and raw.get("candles"):
+            if isinstance(raw, dict) and gecko_cache_entry_usable(raw) and raw.get("candles"):
                 candles = raw["candles"]
                 if candles:
                     try:

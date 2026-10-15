@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
+
 logger = logging.getLogger(__name__)
 
 PRICE_CACHE_PATH = os.path.join("data", "price_cache.json")
@@ -96,6 +98,13 @@ def _candles_for_netuid(cache: Dict[str, Any], netuid: Any) -> List[Dict[str, An
             "subnet will be un-gradeable until the cache is refreshed",
             netuid,
             key,
+            netuid,
+        )
+        return []
+    if not gecko_cache_entry_usable(block):
+        logger.warning(
+            "price_cache block for netuid %r rejected: legacy or untagged geckoterminal "
+            "(unit must be tao)",
             netuid,
         )
         return []
@@ -237,6 +246,14 @@ def audit_cache_coverage(
             missing.append(uid_str)
             logger.warning(
                 "audit_cache_coverage: netuid %s has no entry in price_cache — it is un-gradeable",
+                uid_str,
+            )
+            continue
+        if not gecko_cache_entry_usable(block):
+            empty.append(uid_str)
+            logger.warning(
+                "audit_cache_coverage: netuid %s has untagged geckoterminal cache — "
+                "it is un-gradeable until refetched",
                 uid_str,
             )
             continue

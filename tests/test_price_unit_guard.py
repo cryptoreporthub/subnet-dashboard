@@ -103,6 +103,54 @@ def test_phantom_vwap_quarantine_window():
     assert not is_phantom_vwap_quarantine(after)
 
 
+def test_price_reference_rejects_untagged_geckoterminal_cache():
+    from datetime import datetime, timezone
+
+    from internal.council.price_reference import price_at_resolve_at
+
+    resolve_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
+    usd_close = 80.0
+    cache = {
+        "1": {
+            "source": "geckoterminal",
+            "candles": [
+                {
+                    "timestamp": resolve_at.isoformat(),
+                    "open": usd_close,
+                    "high": usd_close,
+                    "low": usd_close,
+                    "close": usd_close,
+                    "volume": 100.0,
+                }
+            ],
+        }
+    }
+    status, price, _meta = price_at_resolve_at(1, resolve_at, cache=cache)
+    assert status == "ungradeable"
+    assert price == 0.0
+
+
+def test_state_vector_rejects_untagged_geckoterminal_cache(monkeypatch):
+    from internal.council import state_vector
+
+    legacy = {
+        "source": "geckoterminal",
+        "candles": [
+            {
+                "timestamp": "2026-10-01T12:00:00+00:00",
+                "open": 80.0,
+                "high": 80.0,
+                "low": 80.0,
+                "close": 80.0,
+                "volume": 1.0,
+            }
+        ],
+    }
+    monkeypatch.setattr(state_vector, "_load_price_cache", lambda: {"1": legacy})
+    hist = state_vector._get_price_history(1, {}, allow_hydration=False)
+    assert hist["closes"] == []
+
+
 def test_derived_candle_cache_refused_for_grading(monkeypatch):
     from datetime import datetime, timezone
 

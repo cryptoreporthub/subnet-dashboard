@@ -16,6 +16,7 @@ from internal.analytics.phase_b_hooks import refresh_agent_b_trails
 from internal.analytics.pump_summary import summarize_pump
 from internal.analytics.scenario_state import load_scenario_snapshot
 from internal.analytics.scenario_summary import summarize_scenario
+from internal.indicators.price_fetcher import gecko_cache_entry_usable
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,8 @@ def _spark_closes_for_subnet(sn: Dict[str, Any], *, cache_only: bool = False) ->
             if not raw or not isinstance(raw, dict):
                 return []
             if raw.get("source") == "synthetic":
+                return []
+            if not gecko_cache_entry_usable(raw):
                 return []
             hist = _history_from_candles(raw.get("candles") or [], raw.get("source", "cached"))
             closes = hist.get("closes") or []

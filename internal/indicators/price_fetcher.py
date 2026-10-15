@@ -81,6 +81,40 @@ def _entry_ttl_seconds(entry: Dict[str, Any]) -> int:
     return CACHE_TTL_SECONDS
 
 
+def gecko_cache_entry_usable(entry: Any) -> bool:
+    """GeckoTerminal cache rows must carry unit=tao; legacy USD rows are never valid."""
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("source") != "geckoterminal":
+        return True
+    return entry.get("unit") == "tao"
+
+
+def gecko_ohlcv_guarantees_alpha_in_tao(gt: Dict[str, Any]) -> bool:
+    """True when Gecko OHLCV params yield subnet alpha priced in TAO (not USD).
+
+    config/price_pairs.json geckoterminal block may set:
+      - base_is_alpha: true|false (alpha is pool base token)
+      - price_token: \"base\"|\"quote\" (Gecko ``token`` selector; default base)
+
+    Bittensor subnet-tokens pools omitting base_is_alpha are treated as alpha-base
+    (audited 2026-10-15: pools 0-1, 0-5, 0-64 on api.geckoterminal.com).
+    """
+    if not isinstance(gt, dict) or not gt.get("network") or not gt.get("pool"):
+        return False
+    price_token = str(gt.get("price_token") or "base").strip().lower()
+    if price_token not in ("base", "quote"):
+        return False
+    base_is_alpha = gt.get("base_is_alpha")
+    if base_is_alpha is False:
+        return price_token == "quote"
+    if base_is_alpha is True:
+        return price_token == "base"
+    if str(gt.get("network")) == "bittensor":
+        return price_token == "base"
+    return False
+
+
 @contextmanager
 def _locked_price_cache(cache_path: str, timeout_seconds: float = 5.0) -> Iterator[None]:
     """Cross-process lock for the price-cache read-merge-replace only.
@@ -143,6 +177,7 @@ def _price_sources_for_subnet(
                 "source": "geckoterminal",
                 "network": str(gt["network"]),
                 "pool": str(gt["pool"]),
+                "gecko_cfg": gt,
             }
         )
 
@@ -268,10 +303,16 @@ def _fetch_geckoterminal_ohlcv(
     pool: str,
     days: int = DEFAULT_DAYS,
     timeout: int = LIVE_PRICE_TIMEOUT,
+    *,
+    gecko_cfg: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """Fetch hourly OHLCV from a GeckoTerminal pool (alpha price in TAO)."""
+    """Fetch hourly OHLCV from a GeckoTerminal pool (alpha price in TAO when configured)."""
     url = f"{GECKO_TERMINAL_API}/networks/{network}/pools/{pool}/ohlcv/hour"
-    params = {"limit": days * 24, "currency": "token"}
+    gt = gecko_cfg if isinstance(gecko_cfg, dict) else {}
+    params: Dict[str, Any] = {"limit": days * 24, "currency": "token"}
+    price_token = gt.get("price_token")
+    if price_token in ("base", "quote"):
+        params["token"] = str(price_token)
     response = requests.get(url, params=params, timeout=timeout)
     response.raise_for_status()
     data = response.json()
@@ -351,7 +392,7 @@ def fetch_ohlcv(
         if cached and cached.get("source") == "synthetic" and not allow_synthetic:
             cached = None
         # Legacy GeckoTerminal entries (no unit tag) hold USD closes; refetch in TAO.
-        if cached and cached.get("source") == "geckoterminal" and cached.get("unit") != "tao":
+        if cached and not gecko_cache_entry_usable(cached):
             cached = None
         if cached and (now - cached.get("cached_at", 0)) < _entry_ttl_seconds(cached):
             return cached.get("candles", [])
@@ -359,13 +400,18 @@ def fetch_ohlcv(
     candles: List[Dict[str, Any]] = []
     source = "unknown"
     error: Optional[str] = None
+    gecko_cfg_used: Dict[str, Any] = {}
 
     if USE_LIVE_PRICES:
         for src in sources:
             try:
                 if src["source"] == "geckoterminal":
+                    gecko_cfg_used = src.get("gecko_cfg") or {}
                     candles = _fetch_geckoterminal_ohlcv(
-                        src["network"], src["pool"], days=days
+                        src["network"],
+                        src["pool"],
+                        days=days,
+                        gecko_cfg=gecko_cfg_used,
                     )
                     source = "geckoterminal"
                     break
@@ -396,7 +442,9 @@ def fetch_ohlcv(
             "error": error,
             "candles": candles,
         }
-        if source == "geckoterminal":
+        if source == "geckoterminal" and gecko_ohlcv_guarantees_alpha_in_tao(
+            gecko_cfg_used
+        ):
             entry["unit"] = "tao"
         try:
             with _locked_price_cache(cache_path):
