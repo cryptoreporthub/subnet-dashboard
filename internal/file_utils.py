@@ -38,13 +38,28 @@ def ensure_data_dir() -> str:
     return DATA_DIR
 
 
+def _fsync_dir(dir_name: str) -> None:
+    """Persist a rename by fsyncing its directory (POSIX; no-op on Windows)."""
+    if os.name == "nt":
+        return
+    dfd = os.open(dir_name, os.O_RDONLY)
+    try:
+        os.fsync(dfd)
+    finally:
+        os.close(dfd)
+
+
 def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     """
-    Write JSON data to a file atomically with directory creation.
+    Write JSON data to a file atomically and durably, with directory creation.
 
     Each writer gets a pid-tagged mkstemp sidecar ``<basename>.<pid>.<rand>.tmp``
     so the reaper can skip live owners; stale temps are reaped by
     ``internal.tmp_boot_reaper``. Never use mkstemp with suffix ``.json`` alone.
+
+    The temp file is fsynced before ``os.replace`` so a crash cannot leave the
+    target pointing at empty or partial content, and the directory is fsynced
+    after so the rename itself survives power loss.
     """
     dir_name = os.path.dirname(path)
     if dir_name:
@@ -58,7 +73,10 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(temp_path, path)
+        _fsync_dir(dir_name or ".")
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
