@@ -25,7 +25,8 @@ def _mp_record_whale_events(config_path: str, data_path: str, prefix: str) -> No
 
 
 @pytest.fixture
-def whale_paths(tmp_path):
+def whale_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv("WHALE_EVENT_RETENTION_DAYS", "0")
     config = tmp_path / "whales.json"
     data = tmp_path / "intel.json"
     config.write_text(
@@ -404,6 +405,57 @@ def test_retention_prunes_old_events_only(whale_paths, monkeypatch):
     assert len(svc.data["events"]) == 1
     assert svc.data["events"][0]["tx_hash"] == "keep-me"
     assert svc.data["profiles"]["keeper"]["closed_trades"] == 1
+
+
+def test_old_event_reingest_ignored_after_retention_prune(whale_paths, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    monkeypatch.setenv("WHALE_EVENT_RETENTION_DAYS", "30")
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    now = datetime.now(timezone.utc)
+    recent_ts = (now - timedelta(days=1)).isoformat()
+    old_ts = (now - timedelta(days=120)).isoformat()
+
+    svc.record_event(wallet, 7, "buy", 100.0, timestamp=recent_ts, tx_hash="recent-open")
+    pos_key = f"{wallet}:7"
+    assert pos_key in svc.data["open_positions"]
+
+    svc._prune_events_retention()
+    assert len(svc.data["events"]) == 1
+    svc._event_keys.clear()
+
+    replay = svc.record_event(
+        wallet,
+        7,
+        "sell",
+        100.0,
+        timestamp=old_ts,
+        tx_hash="stale-scanner-row",
+    )
+    assert replay["status"] == "ignored"
+    assert replay["reason"] == "older_than_retention"
+    assert pos_key in svc.data["open_positions"]
+    assert len(svc.data["events"]) == 1
+
+
+def test_transaction_releases_flock_when_save_fails(whale_paths):
+    config, data = whale_paths
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    releases: list[int] = []
+    real_release = svc._flock_release
+
+    def counting_release() -> None:
+        releases.append(1)
+        real_release()
+
+    with patch.object(svc, "_save_data", side_effect=OSError("disk full")):
+        with patch.object(svc, "_flock_release", side_effect=counting_release):
+            with pytest.raises(OSError, match="disk full"):
+                with svc.transaction():
+                    svc._dirty = True
+    assert len(releases) == 1
 
 
 def test_compact_json_write(whale_paths, monkeypatch):

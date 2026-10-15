@@ -314,11 +314,13 @@ class WhaleIntelligenceService:
                 if entered:
                     self._transaction_depth -= 1
                     if outer:
-                        if self._batch_depth == 0 and self._dirty:
-                            self._prune_events_retention()
-                            self._save_data()
-                            self._dirty = False
-                        self._flock_release()
+                        try:
+                            if self._batch_depth == 0 and self._dirty:
+                                self._prune_events_retention()
+                                self._save_data()
+                                self._dirty = False
+                        finally:
+                            self._flock_release()
                 elif outer:
                     self._flock_release()
 
@@ -343,11 +345,16 @@ class WhaleIntelligenceService:
             self._save_data()
             self._dirty = False
 
-    def _prune_events_retention(self) -> None:
+    def _event_retention_cutoff(self) -> Optional[datetime]:
         days = _env_int("WHALE_EVENT_RETENTION_DAYS", 90)
         if days <= 0:
+            return None
+        return datetime.now(timezone.utc) - timedelta(days=days)
+
+    def _prune_events_retention(self) -> None:
+        cutoff = self._event_retention_cutoff()
+        if cutoff is None:
             return
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         events = self.data.get("events") or []
         kept: List[Dict[str, Any]] = []
         kept_keys: set[str] = set()
@@ -466,6 +473,15 @@ class WhaleIntelligenceService:
             raise ValueError("wallet is required")
 
         ts = timestamp or _now_iso()
+        retention_cutoff = self._event_retention_cutoff()
+        if retention_cutoff is not None:
+            event_ts = _parse_iso(ts)
+            if event_ts is not None and event_ts < retention_cutoff:
+                return {
+                    "status": "ignored",
+                    "reason": "older_than_retention",
+                    "timestamp": ts,
+                }
         try:
             floor = float(min_notional) if min_notional is not None else float(
                 self.config.get("min_tao_notional", 50.0)
