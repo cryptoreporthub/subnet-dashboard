@@ -218,6 +218,48 @@ def test_hourly_bucket_skip_requires_distinct_netuids_not_duplicate_providers(tm
     assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
 
 
+def test_disputed_only_netuid_does_not_complete_backfill_bucket(tmp_path):
+    from internal.chain_price import db as price_db
+
+    db_path = str(tmp_path / "chain_prices.db")
+    price_db.ensure_schema(db_path)
+    bucket_ts_ms = 1_700_000_000_000
+    block = 42
+    price_db.insert_block_row(
+        provider="a",
+        block=block,
+        block_hash="0xabc",
+        ts_ms=bucket_ts_ms,
+        bucket_ts=bucket_ts_ms,
+        kind="backfill",
+        n_subnets=2,
+        path=db_path,
+    )
+
+    def _row(netuid: int, quality: str, provider: str = "p1") -> dict:
+        return {
+            "netuid": netuid,
+            "block": block,
+            "provider": provider,
+            "ts_ms": bucket_ts_ms,
+            "registered_at": 1,
+            "tao_reserve_raw": 1,
+            "alpha_reserve_raw": 1,
+            "price_tao": 1.0,
+            "spot_price_tao": 2.0,
+            "unit": "tao",
+            "quality": quality,
+            "schema_version": chain_cfg.SCHEMA_VERSION,
+        }
+
+    price_db.insert_sample_rows([_row(1, "chain_sampled"), _row(2, "disputed")], path=db_path)
+    assert not price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+    # PK is (netuid, block, provider): a second provider's chain_sampled row is a distinct row.
+    price_db.insert_sample_rows([_row(2, "chain_sampled", provider="p2")], path=db_path)
+    assert price_db.hourly_bucket_has_chain_sample(bucket_ts_ms, path=db_path)
+
+
 def test_neighboring_hour_forward_sample_does_not_skip_backfill_bucket(fixture_client, tmp_path):
     from internal.chain_price import db as price_db
 
