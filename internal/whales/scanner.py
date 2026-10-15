@@ -7,7 +7,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from internal.indicators.taostats_client import get_subnet_delegation_flow
-from internal.whales.service import WhaleIntelligenceService
+from internal.whales.service import WhaleIntelligenceService, get_whale_service
 
 logger = logging.getLogger(__name__)
 
@@ -132,15 +132,12 @@ def _fetch_delegation_rows(netuid: int) -> List[Dict[str, Any]]:
         return []
 
 
-def scan_subnet_delegations(
+def _ingest_delegation_rows(
     netuid: int,
-    service: Optional[WhaleIntelligenceService] = None,
-    subnet_meta: Optional[Dict[str, Any]] = None,
+    service: WhaleIntelligenceService,
+    meta: Dict[str, Any],
+    rows: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    service = service or WhaleIntelligenceService()
-    meta = subnet_meta or {}
-    rows = _fetch_delegation_rows(netuid)
-
     ingested = 0
     skipped = 0
 
@@ -190,28 +187,52 @@ def scan_subnet_delegations(
     }
 
 
+def scan_subnet_delegations(
+    netuid: int,
+    service: Optional[WhaleIntelligenceService] = None,
+    subnet_meta: Optional[Dict[str, Any]] = None,
+    *,
+    _nested_batch: bool = False,
+) -> Dict[str, Any]:
+    service = service or get_whale_service()
+    meta = subnet_meta or {}
+    rows = _fetch_delegation_rows(netuid)
+    if _nested_batch:
+        return _ingest_delegation_rows(netuid, service, meta, rows)
+    with service.transaction():
+        with service.batch():
+            return _ingest_delegation_rows(netuid, service, meta, rows)
+
+
 def scan_netuids(
     netuids: List[int],
     subnet_meta_by_id: Optional[Dict[int, Dict[str, Any]]] = None,
     service: Optional[WhaleIntelligenceService] = None,
 ) -> Dict[str, Any]:
-    service = service or WhaleIntelligenceService()
+    service = service or get_whale_service()
     subnet_meta_by_id = subnet_meta_by_id or {}
-    per_subnet = []
+    per_subnet: List[Dict[str, Any]] = []
     total_ingested = 0
 
+    prepared: List[Tuple[int, List[Dict[str, Any]], Dict[str, Any]]] = []
     for netuid in netuids:
         try:
-            result = scan_subnet_delegations(
-                netuid,
-                service=service,
-                subnet_meta=subnet_meta_by_id.get(netuid, {}),
-            )
-            per_subnet.append(result)
-            total_ingested += int(result.get("ingested", 0))
+            rows = _fetch_delegation_rows(netuid)
+            prepared.append((netuid, rows, subnet_meta_by_id.get(netuid, {})))
         except Exception as exc:
-            logger.warning("whale scan failed netuid=%s: %s", netuid, exc)
+            logger.warning("whale scan fetch failed netuid=%s: %s", netuid, exc)
             per_subnet.append({"netuid": netuid, "error": str(exc)})
+
+    with service.transaction():
+        with service.batch():
+            for netuid, rows, meta in prepared:
+                try:
+                    result = _ingest_delegation_rows(netuid, service, meta, rows)
+                    per_subnet.append(result)
+                    total_ingested += int(result.get("ingested", 0))
+                except Exception as exc:
+                    logger.warning("whale scan ingest failed netuid=%s: %s", netuid, exc)
+                    per_subnet.append({"netuid": netuid, "error": str(exc)})
 
     return {
         "status": "success",

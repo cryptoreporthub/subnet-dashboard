@@ -28,6 +28,20 @@ def test_netuids_missing_recent_filters_covered():
     assert missing == [2, 97]
 
 
+def test_netuids_missing_recent_naive_iso_timestamp():
+    """Naive ledger timestamps must compare safely against UTC cutoff (warm path)."""
+    now = datetime.now(timezone.utc)
+    events = [
+        {
+            "netuid": 6,
+            "timestamp": (now - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%S"),
+            "amount_tao": 100,
+        },
+    ]
+    missing = _netuids_missing_recent(events, [6, 97], hours=24.0)
+    assert missing == [97]
+
+
 def test_ensure_warm_skips_without_taostats(monkeypatch):
     import fetchers.taostats_client as ts
 

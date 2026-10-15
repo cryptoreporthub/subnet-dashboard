@@ -15,13 +15,24 @@ All dimensions share one event ledger and per-wallet profile store.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
 import statistics
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 from internal.whales.classifiers import classify_wallet, score_dimensions
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover — non-Unix dev hosts
+    fcntl = None  # type: ignore[assignment]
+
+_logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
 DEFAULT_DATA_PATH = os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
@@ -36,6 +47,56 @@ TRACKING_DIMENSIONS = [
 ]
 
 
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _json_compact_enabled() -> bool:
+    raw = (os.environ.get("WHALE_JSON_COMPACT") or "on").strip().lower()
+    return raw not in ("0", "off", "false", "no")
+
+
+def _event_key(
+    wallet: str,
+    netuid: int,
+    side: str,
+    amount_tao: float,
+    timestamp: str,
+    tx_hash: Optional[str],
+) -> str:
+    if tx_hash:
+        return f"tx:{tx_hash}"
+    raw = f"{wallet}|{netuid}|{side}|{amount_tao}|{timestamp}"
+    return "h:" + hashlib.sha1(raw.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def _event_key_from_row(event: Dict[str, Any]) -> str:
+    return _event_key(
+        str(event.get("wallet") or ""),
+        int(event.get("netuid", -1)),
+        str(event.get("side") or ""),
+        float(event.get("amount_tao") or 0),
+        str(event.get("timestamp") or ""),
+        event.get("tx_hash"),
+    )
+
+
+def get_whale_service(
+    config_path: Optional[str] = None,
+    data_path: Optional[str] = None,
+) -> "WhaleIntelligenceService":
+    """Process singleton for default prod paths; explicit paths for tests."""
+    if config_path is not None or data_path is not None:
+        return WhaleIntelligenceService(config_path=config_path, data_path=data_path)
+    return WhaleIntelligenceService()
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -44,7 +105,10 @@ def _parse_iso(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
     except Exception:
         return None
 
@@ -102,15 +166,45 @@ def _slip_day_chip(row: Dict[str, Any]) -> str:
 class WhaleIntelligenceService:
     """Central whale tracking service with multi-dimensional leaderboards."""
 
+    _singleton: Optional["WhaleIntelligenceService"] = None
+    _singleton_lock = threading.Lock()
+
+    def __new__(
+        cls,
+        config_path: Optional[str] = None,
+        data_path: Optional[str] = None,
+    ):
+        if config_path is not None or data_path is not None:
+            return super().__new__(cls)
+        with cls._singleton_lock:
+            if cls._singleton is None:
+                cls._singleton = super().__new__(cls)
+            return cls._singleton
+
     def __init__(
         self,
         config_path: Optional[str] = None,
         data_path: Optional[str] = None,
     ):
+        custom_paths = config_path is not None or data_path is not None
+        if not custom_paths and getattr(self, "_whale_service_ready", False):
+            return
+
         self.config_path = config_path or os.environ.get("WHALES_CONFIG_PATH", "config/whales.json")
         self.data_path = data_path or os.environ.get("WHALES_DATA_PATH", "data/whale_intelligence.json")
+        self._lock = threading.RLock()
+        self._batch_depth = 0
+        self._transaction_depth = 0
+        self._dirty = False
+        self._data_mtime_ns: Optional[int] = None
+        self._data_size: Optional[int] = None
+        self._flock_fd: Optional[int] = None
+        self._event_keys: set[str] = set()
         self.config = self._load_config()
         self.data = self._load_data()
+        self._refresh_disk_meta()
+        self._rebuild_event_keys()
+        self._whale_service_ready = True
 
     def _load_config(self) -> Dict[str, Any]:
         defaults = {
@@ -162,11 +256,153 @@ class WhaleIntelligenceService:
             "closed_trades": [],
         }
 
+    def _refresh_disk_meta(self) -> None:
+        try:
+            st = os.stat(self.data_path)
+            self._data_mtime_ns = st.st_mtime_ns
+            self._data_size = st.st_size
+        except OSError:
+            self._data_mtime_ns = None
+            self._data_size = None
+
+    def _rebuild_event_keys(self) -> None:
+        self._event_keys = {_event_key_from_row(ev) for ev in self.data.get("events") or []}
+
+    def _reload_if_stale(self) -> None:
+        try:
+            st = os.stat(self.data_path)
+        except OSError:
+            return
+        if self._data_mtime_ns == st.st_mtime_ns and self._data_size == st.st_size:
+            return
+        self.data = self._load_data()
+        self._refresh_disk_meta()
+        self._rebuild_event_keys()
+
+    def _lock_path(self) -> str:
+        return f"{self.data_path}.lock"
+
+    def _flock_acquire(self) -> None:
+        if fcntl is None:
+            return
+        if self._flock_fd is not None:
+            return
+        fd = os.open(self._lock_path(), os.O_CREAT | os.O_RDWR, 0o644)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        self._flock_fd = fd
+
+    def _flock_release(self) -> None:
+        if fcntl is None or self._flock_fd is None:
+            return
+        try:
+            fcntl.flock(self._flock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(self._flock_fd)
+            self._flock_fd = None
+
+    @contextmanager
+    def transaction(self) -> Iterator["WhaleIntelligenceService"]:
+        """Cross-process writer: flock + reload if another process committed."""
+        with self._lock:
+            outer = self._transaction_depth == 0
+            entered = False
+            try:
+                if outer:
+                    self._flock_acquire()
+                    self._reload_if_stale()
+                self._transaction_depth += 1
+                entered = True
+                yield self
+            finally:
+                if entered:
+                    self._transaction_depth -= 1
+                    if outer:
+                        try:
+                            if self._batch_depth == 0 and self._dirty:
+                                self._prune_events_retention()
+                                self._save_data()
+                                self._dirty = False
+                        finally:
+                            self._flock_release()
+                elif outer:
+                    self._flock_release()
+
+    @contextmanager
+    def batch(self) -> Iterator[None]:
+        """Defer disk flush until the outermost batch exits (one save)."""
+        with self._lock:
+            self._batch_depth += 1
+            try:
+                yield
+            finally:
+                self._batch_depth -= 1
+                if self._batch_depth == 0 and self._dirty:
+                    self._prune_events_retention()
+                    self._save_data()
+                    self._dirty = False
+
+    def _mark_dirty(self) -> None:
+        self._dirty = True
+        if self._batch_depth == 0:
+            self._prune_events_retention()
+            self._save_data()
+            self._dirty = False
+
+    def _event_retention_cutoff(self) -> Optional[datetime]:
+        days = _env_int("WHALE_EVENT_RETENTION_DAYS", 90)
+        if days <= 0:
+            return None
+        return datetime.now(timezone.utc) - timedelta(days=days)
+
+    def _prune_events_retention(self) -> None:
+        cutoff = self._event_retention_cutoff()
+        if cutoff is None:
+            return
+        events = self.data.get("events") or []
+        kept: List[Dict[str, Any]] = []
+        kept_keys: set[str] = set()
+        for ev in events:
+            ts = _parse_iso(ev.get("timestamp"))
+            if ts and ts < cutoff:
+                continue
+            kept.append(ev)
+            kept_keys.add(_event_key_from_row(ev))
+        if len(kept) == len(events):
+            return
+        self.data["events"] = kept
+        self._event_keys = kept_keys
+
     def _save_data(self) -> None:
         from internal.file_utils import safe_write_json
 
         self.data["updated_at"] = _now_iso()
-        safe_write_json(self.data_path, self.data)
+        if _json_compact_enabled():
+            self._save_data_compact()
+        else:
+            safe_write_json(self.data_path, self.data)
+        self._refresh_disk_meta()
+
+    def _save_data_compact(self) -> None:
+        import tempfile
+
+        from internal.file_utils import ensure_data_dir
+
+        ensure_data_dir()
+        dir_name = os.path.dirname(self.data_path)
+        if dir_name:
+            os.makedirs(dir_name, exist_ok=True)
+        fd, temp_path = tempfile.mkstemp(
+            dir=dir_name or ".",
+            prefix=f"{os.path.basename(self.data_path)}.{os.getpid()}.",
+            suffix=".tmp",
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.data, f, separators=(",", ":"))
+            os.replace(temp_path, self.data_path)
+        finally:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
 
     def _position_key(self, wallet: str, netuid: int) -> str:
         return f"{wallet}:{netuid}"
@@ -190,6 +426,43 @@ class WhaleIntelligenceService:
         min_notional: Optional[float] = None,
     ) -> Dict[str, Any]:
         """Record a buy/sell event and update wallet intelligence."""
+        with self.transaction():
+            return self._record_event_impl(
+                wallet=wallet,
+                netuid=netuid,
+                side=side,
+                amount_tao=amount_tao,
+                timestamp=timestamp,
+                source=source,
+                tx_hash=tx_hash,
+                subnet_name=subnet_name,
+                entry_price=entry_price,
+                exit_price=exit_price,
+                market_cap_rank=market_cap_rank,
+                total_stake_tao=total_stake_tao,
+                price_change_after_hours=price_change_after_hours,
+                slippage_pct=slippage_pct,
+                min_notional=min_notional,
+            )
+
+    def _record_event_impl(
+        self,
+        wallet: str,
+        netuid: int,
+        side: str,
+        amount_tao: float,
+        timestamp: Optional[str] = None,
+        source: str = "manual",
+        tx_hash: Optional[str] = None,
+        subnet_name: Optional[str] = None,
+        entry_price: Optional[float] = None,
+        exit_price: Optional[float] = None,
+        market_cap_rank: Optional[int] = None,
+        total_stake_tao: Optional[float] = None,
+        price_change_after_hours: Optional[float] = None,
+        slippage_pct: Optional[float] = None,
+        min_notional: Optional[float] = None,
+    ) -> Dict[str, Any]:
         side_norm = side.strip().lower()
         if side_norm in ("stake",):
             side_norm = "buy"
@@ -203,6 +476,15 @@ class WhaleIntelligenceService:
             raise ValueError("wallet is required")
 
         ts = timestamp or _now_iso()
+        retention_cutoff = self._event_retention_cutoff()
+        if retention_cutoff is not None:
+            event_ts = _parse_iso(ts)
+            if event_ts is not None and event_ts < retention_cutoff:
+                return {
+                    "status": "ignored",
+                    "reason": "older_than_retention",
+                    "timestamp": ts,
+                }
         try:
             floor = float(min_notional) if min_notional is not None else float(
                 self.config.get("min_tao_notional", 50.0)
@@ -211,6 +493,12 @@ class WhaleIntelligenceService:
             floor = float(self.config.get("min_tao_notional", 50.0))
         if amount_tao < floor:
             return {"status": "ignored", "reason": "below_min_notional", "amount_tao": amount_tao}
+
+        ev_key = _event_key(
+            wallet, int(netuid), side_norm, round(float(amount_tao), 4), ts, tx_hash
+        )
+        if ev_key in self._event_keys:
+            return {"status": "ignored", "reason": "duplicate", "event_key": ev_key}
 
         event = {
             "wallet": wallet,
@@ -229,6 +517,7 @@ class WhaleIntelligenceService:
             "slippage_pct": round(float(slippage_pct), 4) if slippage_pct is not None else None,
         }
         self.data.setdefault("events", []).append(event)
+        self._event_keys.add(ev_key)
 
         closed_trade = None
         pos_key = self._position_key(wallet, netuid)
@@ -275,7 +564,7 @@ class WhaleIntelligenceService:
                 self.data.setdefault("closed_trades", []).append(closed_trade)
                 self._update_profile(wallet, closed_trade)
 
-        self._save_data()
+        self._mark_dirty()
         return {
             "status": "recorded",
             "event": event,
@@ -416,9 +705,14 @@ class WhaleIntelligenceService:
 
     def log_subnet_owner(self, wallet: str, netuid: int) -> None:
         """Upsert owner wallet profile with last-owned subnet tracking."""
+        with self.transaction():
+            self._log_subnet_owner_impl(wallet, netuid)
+
+    def _log_subnet_owner_impl(self, wallet: str, netuid: int) -> None:
         wallet = (wallet or "").strip()
         if not wallet:
             return
+        touch_seconds = _env_int("WHALE_PROFILE_TOUCH_SECONDS", 3600)
         profiles: Dict[str, Any] = self.data.setdefault("profiles", {})
         profile = profiles.setdefault(
             wallet,
@@ -431,15 +725,36 @@ class WhaleIntelligenceService:
             },
         )
         nu = int(netuid)
-        profile["last_owner_netuid"] = nu
         owner_netuids = profile.setdefault("owner_netuids", [])
-        if nu not in owner_netuids:
+        already = nu in owner_netuids
+        last_seen = _parse_iso(profile.get("last_seen"))
+        now = datetime.now(timezone.utc)
+        touch_due = (
+            last_seen is None
+            or (now - last_seen).total_seconds() >= float(touch_seconds)
+        )
+        if already and not touch_due:
+            return
+
+        profile["last_owner_netuid"] = nu
+        if not already:
             owner_netuids.append(nu)
         profile["last_seen"] = _now_iso()
-        self._save_data()
+        self._mark_dirty()
+
+    def log_subnet_owners(self, pairs: List[Tuple[str, int]]) -> None:
+        """Batch owner upserts for pump-style scans (one save when nested in batch())."""
+        with self.transaction():
+            with self.batch():
+                for wallet, netuid in pairs:
+                    self._log_subnet_owner_impl(wallet, netuid)
 
     def record_rug_alert(self, wallet: str, netuid: int) -> int:
         """Increment rug_count on owner profile; simple per-evaluation bump."""
+        with self.transaction():
+            return self._record_rug_alert_impl(wallet, netuid)
+
+    def _record_rug_alert_impl(self, wallet: str, netuid: int) -> int:
         wallet = (wallet or "").strip()
         if not wallet:
             return 0
@@ -455,7 +770,7 @@ class WhaleIntelligenceService:
         )
         profile["rug_count"] = int(profile.get("rug_count") or 0) + 1
         profile["last_seen"] = _now_iso()
-        self._save_data()
+        self._mark_dirty()
         return int(profile["rug_count"])
 
     def get_rug_count(self, wallet: str) -> int:

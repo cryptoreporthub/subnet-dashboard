@@ -14,19 +14,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Sequence
 
+from internal.whales.service import _parse_iso
+
 logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _last_warm_attempt = 0.0
-
-
-def _parse_iso(value: Optional[str]) -> Optional[datetime]:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except Exception:
-        return None
 
 
 def _netuids_missing_recent(
@@ -109,9 +102,9 @@ def ensure_whale_ledger_warm(
 
     try:
         from internal.whales.scanner import scan_netuids
-        from internal.whales.service import WhaleIntelligenceService
+        from internal.whales.service import get_whale_service
 
-        svc = WhaleIntelligenceService()
+        svc = get_whale_service()
         candidates = list(netuids)
         if not candidates:
             # Ladder may be empty mid-refresh — still try a few liquid names.

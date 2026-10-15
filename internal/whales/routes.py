@@ -10,18 +10,13 @@ from pydantic import BaseModel, Field
 from internal.rate_limit import limit_or_noop, strict_limit
 from internal.whales.enrichment_badge import whale_flow_badge
 from internal.whales.scanner import scan_netuids, scan_subnet_delegations
-from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService
+from internal.whales.service import TRACKING_DIMENSIONS, WhaleIntelligenceService, get_whale_service
 
 whales_router = APIRouter(tags=["whales"])
 
-_service: Optional[WhaleIntelligenceService] = None
-
 
 def _get_service() -> WhaleIntelligenceService:
-    global _service
-    if _service is None:
-        _service = WhaleIntelligenceService()
-    return _service
+    return get_whale_service()
 
 
 class WhaleEventIn(BaseModel):
@@ -130,8 +125,9 @@ async def whales_flow_signals(hours: int = Query(24, ge=1, le=168), limit: int =
 
 
 @whales_router.post("/api/whales/events")
-async def whales_record_event(event: WhaleEventIn):
-    return _get_service().record_event(
+def whales_record_event(event: WhaleEventIn):
+    svc = _get_service()
+    return svc.record_event(
         wallet=event.wallet,
         netuid=event.netuid,
         side=event.side,
@@ -150,7 +146,7 @@ async def whales_record_event(event: WhaleEventIn):
 
 @whales_router.post("/api/whales/scan")
 @limit_or_noop(strict_limit(), override_defaults=True)
-async def whales_scan(
+def whales_scan(
     request: Request,
     netuids: Optional[List[int]] = Body(default=None),
     top_n: int = Body(default=20),
