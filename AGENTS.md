@@ -112,6 +112,18 @@ and a phantom dangling pointer, all three caught only by re-reading at a pinned 
   slice-by-slice into `server.py` (or app-internal routers imported by it), each
   with its routes added to the contract test.
 
+### PR / issue review (Claude)
+Use the `pr-review` subagent (`.claude/agents/pr-review.md`) before posting any verdict.
+Lessons that are now rules (each cost time when skipped):
+- Check PR state (merged? head moved?) and read **all** comments first; a verdict on a merged PR is post-merge and must say so.
+- Pin every verdict to the full head SHA and re-fetch the head right before posting.
+- Run the endpoint contract test early and twice; a hang or flaky exit is a finding (it exposed a non-reentrant `_SIMIVISION_LOCK` self-deadlock late).
+- Baseline failures on `origin/main` before calling them regressions.
+- Trace sibling paths that bypass a fix (the lazy-hydration cache bypass was only found by tracing, not by the tests).
+- Compare audit artifacts to the config they describe; never quote counts or file names not seen in tool output; always list what could not be verified.
+- Do not commit `data/` runtime files; no push without a named branch.
+(The "subagents are mechanical only" rule above is scoped to the epistemic campaign; `pr-review` is the analytical reviewer for PR work.)
+
 ### Deploy (Fly.io)
 - `.github/workflows/fly.yml` deploys on push to `main`: a Deploy Guard (static
   checks + the endpoint-contract test) gates `flyctl deploy --remote-only --no-cache --yes`.
