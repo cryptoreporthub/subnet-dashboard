@@ -340,6 +340,21 @@ def test_scan_hotkey_stakes_batch_retry_rate_limit_backoff(monkeypatch):
     assert sleeps == [7.5, 7.5]
 
 
+def test_stake_rpc_retry_zero_retry_after_bounded_calls_and_sleep(monkeypatch):
+    calls: list[int] = []
+    sleeps: list[float] = []
+
+    def op():
+        calls.append(1)
+        raise sa.StakeScanIncomplete("rate_limited", rate_limited=True, retry_after=0.0)
+
+    monkeypatch.setattr(time, "sleep", lambda s: sleeps.append(s))
+    with pytest.raises(sa.StakeScanIncomplete):
+        sa._stake_rpc_retry(time.monotonic() + 30.0, op)
+    assert len(calls) == sa._BATCH_RETRIES + 1
+    assert sleeps and all(s > 0 for s in sleeps)
+
+
 def test_scan_hotkey_stakes_reads_both_maps():
     pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
     ck = bytes(range(32))

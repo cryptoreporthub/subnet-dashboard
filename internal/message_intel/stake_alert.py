@@ -323,9 +323,11 @@ def _storage_batch_values(client: Any, keys: List[str], at_hash: str) -> Dict[st
 
 def _batch_retry_sleep(attempt: int, exc: StakeScanIncomplete) -> float:
     if exc.rate_limited:
+        base = min(60.0, 1.0 * (2 ** min(attempt - 1, 6)))
         if exc.retry_after is not None:
-            return min(120.0, exc.retry_after)
-        return min(60.0, 1.0 * (2 ** min(attempt - 1, 6)))
+            waited = exc.retry_after if exc.retry_after > 0 else base
+            return min(120.0, waited)
+        return base
     return 0.25 * attempt
 
 
@@ -341,7 +343,7 @@ def _stake_rpc_retry(deadline: Optional[float], operation: Callable[[], _T]) -> 
             last = exc
             attempt += 1
             if exc.rate_limited:
-                if deadline is None and attempt > _BATCH_RETRIES:
+                if attempt > _BATCH_RETRIES:
                     break
             elif attempt >= _BATCH_RETRIES:
                 break
