@@ -350,6 +350,9 @@ def fetch_ohlcv(
         cached = _load_json(cache_path).get(cache_key)
         if cached and cached.get("source") == "synthetic" and not allow_synthetic:
             cached = None
+        # Legacy GeckoTerminal entries (no unit tag) hold USD closes; refetch in TAO.
+        if cached and cached.get("source") == "geckoterminal" and cached.get("unit") != "tao":
+            cached = None
         if cached and (now - cached.get("cached_at", 0)) < _entry_ttl_seconds(cached):
             return cached.get("candles", [])
 

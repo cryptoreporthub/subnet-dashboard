@@ -416,6 +416,44 @@ def test_fetch_ohlcv_empty_without_synthetic(tmp_path, monkeypatch):
     assert cache["1"]["source"] == "unavailable"
 
 
+def test_fetch_ohlcv_refetches_untagged_geckoterminal_cache(monkeypatch, tmp_path):
+    """Legacy untagged GeckoTerminal entries are USD closes: refetch, don't serve."""
+    import time
+
+    monkeypatch.setattr("internal.indicators.price_fetcher.USE_LIVE_PRICES", True)
+    monkeypatch.setattr(
+        "internal.indicators.price_fetcher._price_sources_for_subnet",
+        lambda *a, **k: [{"source": "geckoterminal", "network": "bittensor", "pool": "0-1"}],
+    )
+    calls = []
+    fresh = [
+        {"timestamp": "2026-10-15T00:00:00+00:00", "open": 0.27, "high": 0.27, "low": 0.27, "close": 0.27, "volume": 1.0}
+    ]
+
+    def fake_gecko(network, pool, days=2, **kwargs):
+        calls.append(pool)
+        return fresh
+
+    monkeypatch.setattr("internal.indicators.price_fetcher._fetch_geckoterminal_ohlcv", fake_gecko)
+    cache_path = tmp_path / "price_cache.json"
+    pairs_path = tmp_path / "price_pairs.json"
+    json.dump({"1": {"symbol": "SN1"}}, open(pairs_path, "w"))
+    usd_candle = {"timestamp": "2026-10-14T00:00:00+00:00", "open": 80.0, "high": 80.0, "low": 80.0, "close": 80.0, "volume": 1.0}
+    json.dump(
+        {"1": {"source": "geckoterminal", "cached_at": time.time(), "candles": [usd_candle]}},
+        open(cache_path, "w"),
+    )
+    kwargs = dict(days=2, use_cache=True, cache_path=str(cache_path), pairs_path=str(pairs_path))
+
+    assert fetch_ohlcv("1", **kwargs) == fresh
+    assert calls == ["0-1"]
+    assert json.load(open(cache_path))["1"]["unit"] == "tao"
+
+    # A TAO-tagged entry within TTL is served from cache without refetching.
+    assert fetch_ohlcv("1", **kwargs) == fresh
+    assert calls == ["0-1"]
+
+
 def test_fetch_ohlcv_tiered_fallback_to_blockmachine(monkeypatch, tmp_path):
     class FakeClient:
         degraded = False
