@@ -407,6 +407,49 @@ def test_retention_prunes_old_events_only(whale_paths, monkeypatch):
     assert svc.data["profiles"]["keeper"]["closed_trades"] == 1
 
 
+def test_record_event_naive_iso_timestamp_with_retention(whale_paths, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    from fastapi.testclient import TestClient
+
+    import internal.whales.routes as whale_routes
+
+    config, data = whale_paths
+    monkeypatch.setenv("WHALE_EVENT_RETENTION_DAYS", "90")
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    wallet = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    recent_naive = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    out = svc.record_event(
+        wallet, 1, "buy", 100.0, timestamp=recent_naive, tx_hash="naive-recent"
+    )
+    assert out["status"] == "recorded"
+
+    old_naive = (datetime.now(timezone.utc) - timedelta(days=120)).strftime("%Y-%m-%dT%H:%M:%S")
+    ignored = svc.record_event(
+        wallet, 1, "sell", 100.0, timestamp=old_naive, tx_hash="naive-stale"
+    )
+    assert ignored["status"] == "ignored"
+    assert ignored["reason"] == "older_than_retention"
+
+    whale_routes._service = WhaleIntelligenceService(config_path=config, data_path=data)
+    from server import app
+
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/whales/events",
+            json={
+                "wallet": wallet,
+                "netuid": 2,
+                "side": "buy",
+                "amount_tao": 100.0,
+                "timestamp": recent_naive,
+                "tx_hash": "naive-api",
+            },
+        )
+    assert resp.status_code == 200
+    assert resp.json().get("status") in ("recorded", "ignored")
+
+
 def test_old_event_reingest_ignored_after_retention_prune(whale_paths, monkeypatch):
     from datetime import datetime, timedelta, timezone
 
