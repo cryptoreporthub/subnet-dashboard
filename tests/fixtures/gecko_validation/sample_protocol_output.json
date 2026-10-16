@@ -1,8 +1,8 @@
 {
   "protocol": "gecko_step4_validation",
   "version": 1,
-  "git_sha": "fdd990081418d7471c20bb93f2f334f4355dc307",
-  "generated_at": "2026-10-16T08:14:55.526296+00:00",
+  "git_sha": "115554a2395bc8dc54be5235944c200273ff5ac1",
+  "generated_at": "2026-10-16T08:15:30.471626+00:00",
   "mode": "fixture",
   "window_hours": 48,
   "currency": "token",
