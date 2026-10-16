@@ -677,7 +677,7 @@ def test_sparse_insufficient_coverage_unit_mismatch_not_pass():
         ],
     )
     report = evaluate_gecko_validation(good + [sparse_bad])
-    assert report["verdict"] != "PASS"
+    assert report["verdict"] == "INCONCLUSIVE"
     assert report["unit_mismatch_below_floor"] == [{"netuid": 99, "matched_hours": 24}]
     assert any(
         e["netuid"] == 99 and e["reason"] == "insufficient_coverage"
