@@ -221,17 +221,24 @@ def test_existing_db_is_converted_to_incremental_auto_vacuum(tmp_path):
 
 
 def test_first_rate_limit_cooldown_is_sixty_seconds():
-    from internal.chain_client import ChainClient, _RL_LOCK, _RL_STEP, _RL_UNTIL
+    from unittest.mock import patch
 
+    from internal.chain_client import ChainClient, _RL_LOCK, _RL_STEP, _RL_UNTIL, rate_limited_until
+
+    clock = [100.0]
     client = ChainClient("https://finney.example", init_volume_db=False)
     reader = ChainReader([("finney", client)])
+    ep = client.endpoint
     with _RL_LOCK:
         _RL_UNTIL.clear()
         _RL_STEP.clear()
-    reader._mark_rate_limited("finney", client)
-    assert _RL_STEP[client.endpoint] == 120.0
-    reader._mark_rate_limited("finney", client)
-    assert _RL_STEP[client.endpoint] == 240.0
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        reader._mark_rate_limited("finney", client)
+        assert rate_limited_until(ep) - clock[0] == 60.0
+        assert _RL_STEP[ep] == 120.0
+        reader._mark_rate_limited("finney", client)
+        assert _RL_STEP[ep] == 120.0
+        assert rate_limited_until(ep) - clock[0] == 60.0
 
 
 # Motivating live case: Finney answers swap_currentAlphaPrice at a pinned block with

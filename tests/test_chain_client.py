@@ -94,17 +94,65 @@ def test_traffic_resumes_after_cooldown_expires(clear_endpoint_rate_limits):
             assert post.call_count == 1
 
 
+def test_burst_note_rate_limit_single_escalation(clear_endpoint_rate_limits):
+    from internal.chain_client import _RL_LOCK, _RL_STEP, _RL_UNTIL, note_rate_limit
+
+    ep = "https://burst.example"
+    clock = [0.0]
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        for _ in range(5):
+            note_rate_limit(ep)
+    norm = ep.rstrip("/")
+    assert _RL_STEP[norm] == 120.0
+    assert _RL_UNTIL[norm] == 60.0
+
+
+def test_shorter_retry_after_does_not_shorten_active_cooldown(clear_endpoint_rate_limits):
+    from internal.chain_client import note_rate_limit, rate_limited_until
+
+    ep = "https://x.example"
+    clock = [0.0]
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        note_rate_limit(ep, 600.0)
+        until_long = rate_limited_until(ep)
+        note_rate_limit(ep, 5.0)
+        assert rate_limited_until(ep) == until_long
+
+
+def test_reader_retry_after_600_with_real_client(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, rate_limited_until
+    from internal.chain_price.reader import ChainReader
+
+    client = ChainClient("https://finney.example", init_volume_db=False, retries=0)
+    reader = ChainReader([("finney", client)])
+    clock = [1000.0]
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": "600"}
+    mono = lambda: clock[0]
+    with patch("internal.chain_client.time.monotonic", side_effect=mono), patch(
+        "internal.chain_price.reader.time.monotonic", side_effect=mono
+    ):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            _, outcome = reader.call("chain_getFinalizedHead", [])
+        assert outcome == "rate_limited"
+        assert rate_limited_until(client.endpoint) - clock[0] >= 600.0
+
+
 def test_chain_rpc_requests_total_increments(clear_endpoint_rate_limits):
     from internal.chain_client import ChainClient
     from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
     client = ChainClient("https://rpc.metrics.example", init_volume_db=False, retries=0)
-    endpoint = client.endpoint
+    endpoint = "rpc.metrics.example"
     before_ok = CHAIN_RPC_REQUESTS_TOTAL.labels(
         endpoint=endpoint, method="chain_getBlockHash", outcome="ok"
     )._value.get()
     before_rl = CHAIN_RPC_REQUESTS_TOTAL.labels(
         endpoint=endpoint, method="chain_getBlockHash", outcome="rate_limited"
+    )._value.get()
+    before_skip = CHAIN_RPC_REQUESTS_TOTAL.labels(
+        endpoint=endpoint, method="chain_getBlockHash", outcome="cooldown_skip"
     )._value.get()
     good = MagicMock()
     good.status_code = 200
@@ -132,7 +180,13 @@ def test_chain_rpc_requests_total_increments(clear_endpoint_rate_limits):
         CHAIN_RPC_REQUESTS_TOTAL.labels(
             endpoint=endpoint, method="chain_getBlockHash", outcome="rate_limited"
         )._value.get()
-        == before_rl + 2
+        == before_rl + 1
+    )
+    assert (
+        CHAIN_RPC_REQUESTS_TOTAL.labels(
+            endpoint=endpoint, method="chain_getBlockHash", outcome="cooldown_skip"
+        )._value.get()
+        == before_skip + 1
     )
 
 

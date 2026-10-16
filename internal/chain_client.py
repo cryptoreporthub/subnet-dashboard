@@ -21,6 +21,7 @@ import struct
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
 
@@ -69,13 +70,17 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
     """Record a 429; returns cooldown duration in seconds."""
     ep = _normalize_endpoint(endpoint)
     with _RL_LOCK:
+        now = time.monotonic()
+        until = _RL_UNTIL.get(ep, 0.0)
         if retry_after is not None:
             duration = min(max(0.0, float(retry_after)), _RL_MAX_SECONDS)
+        elif now < until:
+            return until - now
         else:
             step = _RL_STEP.get(ep, _RL_DEFAULT_SECONDS)
             duration = min(step, _RL_MAX_SECONDS)
             _RL_STEP[ep] = min(step * 2.0, _RL_MAX_SECONDS)
-        _RL_UNTIL[ep] = time.monotonic() + duration
+        _RL_UNTIL[ep] = max(until, now + duration)
         return duration
 
 
@@ -89,9 +94,14 @@ def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
         return None
 
 
+def _metric_endpoint(endpoint: str) -> str:
+    parsed = urlparse(_normalize_endpoint(endpoint))
+    return parsed.hostname or _normalize_endpoint(endpoint)
+
+
 def _record_chain_rpc(endpoint: str, method: str, outcome: str) -> None:
     CHAIN_RPC_REQUESTS_TOTAL.labels(
-        endpoint=_normalize_endpoint(endpoint),
+        endpoint=_metric_endpoint(endpoint),
         method=method,
         outcome=outcome,
     ).inc()
@@ -293,7 +303,7 @@ class ChainClient:
         for attempt in range(self.retries + 1):
             try:
                 if time.monotonic() < rate_limited_until(self.endpoint):
-                    _record_chain_rpc(self.endpoint, method, "rate_limited")
+                    _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
                 response = requests.post(
                     self.endpoint,
@@ -340,7 +350,7 @@ class ChainClient:
         for attempt in range(self.retries + 1):
             try:
                 if time.monotonic() < rate_limited_until(self.endpoint):
-                    _record_chain_rpc(self.endpoint, method, "rate_limited")
+                    _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
                 response = requests.post(
                     self.endpoint,
