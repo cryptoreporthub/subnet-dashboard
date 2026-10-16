@@ -288,15 +288,6 @@ def transition_subnet(
     _append_score_trail(entry, score)
     entry["score_layer"] = classification.get("score_layer") or score_layer_for_phase(new_phase)
     entry["updated_at"] = _now_z()
-    try:
-        from internal.learning.pump_alert import _resolve_owner_wallet
-        from internal.whales.service import WhaleIntelligenceService
-
-        owner = _resolve_owner_wallet(int(netuid), signals)
-        if owner:
-            WhaleIntelligenceService().log_subnet_owner(owner, int(netuid))
-    except Exception as exc:
-        logger.debug("subnet owner log skipped SN%s: %s", netuid, exc)
     entry["signal_snapshot"] = classification.get("signals")
     subnets[key] = entry
 
@@ -405,8 +396,11 @@ def _scan_all_subnets_locked(
 
     # ponytail: transition loop off lock — GET /api/pump-alerts load_state() must not
     # wedge behind a full ~129-subnet scan holding _lock (Fly health 503 wedge).
+    from internal.learning.pump_alert import _resolve_owner_wallet
+
     transitions: List[Dict[str, Any]] = []
     signal_netuids: List[int] = []
+    owner_pairs: List[Tuple[str, int]] = []
     for row in rows:
         nu = _netuid_int(row.get("netuid") if isinstance(row, dict) else None)
         if nu is not None:
@@ -414,6 +408,21 @@ def _scan_all_subnets_locked(
         event, changed = transition_subnet(data, row)
         if changed and event:
             transitions.append(event)
+        if nu is not None and isinstance(row, dict):
+            try:
+                owner = _resolve_owner_wallet(nu, row)
+                if owner:
+                    owner_pairs.append((owner, nu))
+            except Exception as exc:
+                logger.debug("subnet owner resolve skipped SN%s: %s", nu, exc)
+
+    if owner_pairs:
+        try:
+            from internal.whales.service import WhaleIntelligenceService
+
+            WhaleIntelligenceService().log_subnet_owners(owner_pairs)
+        except Exception as exc:
+            logger.debug("subnet owner batch log skipped: %s", exc)
 
     data.setdefault("meta", {})
     data["meta"]["last_scan_at"] = _now_z()

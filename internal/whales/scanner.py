@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from internal.indicators.taostats_client import get_subnet_delegation_flow
 from internal.whales.service import WhaleIntelligenceService, get_whale_service
