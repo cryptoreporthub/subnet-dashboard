@@ -1,0 +1,289 @@
+{
+  "subnets": [
+    {
+      "netuid": 1,
+      "pool": "0-1",
+      "matched_hours_data": []
+    },
+    {
+      "netuid": 2,
+      "pool": "0-2",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        }
+      ]
+    },
+    {
+      "netuid": 3,
+      "pool": "0-3",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        }
+      ]
+    },
+    {
+      "netuid": 4,
+      "pool": "0-4",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        }
+      ]
+    },
+    {
+      "netuid": 5,
+      "pool": "0-5",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        }
+      ]
+    },
+    {
+      "netuid": 6,
+      "pool": "0-6",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        }
+      ]
+    },
+    {
+      "netuid": 7,
+      "pool": "0-7",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        },
+        {
+          "gecko_close": 0.0305,
+          "chain_price_tao": 0.030500305000000002
+        }
+      ]
+    },
+    {
+      "netuid": 8,
+      "pool": "0-8",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        },
+        {
+          "gecko_close": 0.0305,
+          "chain_price_tao": 0.030500305000000002
+        },
+        {
+          "gecko_close": 0.0306,
+          "chain_price_tao": 0.030600306
+        }
+      ]
+    },
+    {
+      "netuid": 9,
+      "pool": "0-9",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        },
+        {
+          "gecko_close": 0.0305,
+          "chain_price_tao": 0.030500305000000002
+        },
+        {
+          "gecko_close": 0.0306,
+          "chain_price_tao": 0.030600306
+        },
+        {
+          "gecko_close": 0.030699999999999998,
+          "chain_price_tao": 0.030700307
+        }
+      ]
+    },
+    {
+      "netuid": 10,
+      "pool": "0-10",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        },
+        {
+          "gecko_close": 0.0305,
+          "chain_price_tao": 0.030500305000000002
+        },
+        {
+          "gecko_close": 0.0306,
+          "chain_price_tao": 0.030600306
+        },
+        {
+          "gecko_close": 0.030699999999999998,
+          "chain_price_tao": 0.030700307
+        },
+        {
+          "gecko_close": 0.030799999999999998,
+          "chain_price_tao": 0.030800308
+        }
+      ]
+    },
+    {
+      "netuid": 11,
+      "pool": "0-11",
+      "matched_hours_data": [
+        {
+          "gecko_close": 0.03,
+          "chain_price_tao": 0.0300003
+        },
+        {
+          "gecko_close": 0.0301,
+          "chain_price_tao": 0.030100301
+        },
+        {
+          "gecko_close": 0.030199999999999998,
+          "chain_price_tao": 0.030200302
+        },
+        {
+          "gecko_close": 0.0303,
+          "chain_price_tao": 0.030300303000000004
+        },
+        {
+          "gecko_close": 0.0304,
+          "chain_price_tao": 0.030400304000000003
+        },
+        {
+          "gecko_close": 0.0305,
+          "chain_price_tao": 0.030500305000000002
+        },
+        {
+          "gecko_close": 0.0306,
+          "chain_price_tao": 0.030600306
+        },
+        {
+          "gecko_close": 0.030699999999999998,
+          "chain_price_tao": 0.030700307
+        },
+        {
+          "gecko_close": 0.030799999999999998,
+          "chain_price_tao": 0.030800308
+        },
+        {
+          "gecko_close": 0.0309,
+          "chain_price_tao": 0.030900309
+        }
+      ]
+    }
+  ]
+}
