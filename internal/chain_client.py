@@ -18,10 +18,16 @@ import logging
 import os
 import sqlite3
 import struct
+import threading
 import time
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urlparse
 
 import requests
+
+from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
 from internal.chain_rpc_errors import (
     ChainRpcError,
@@ -43,6 +49,75 @@ PRICE_SCALE = float(os.environ.get("BITTENSOR_PRICE_SCALE", "1e9"))
 MAX_NETUIDS = 200
 BATCH_DELAY = 0.15
 VOLUME_DB_PATH = os.environ.get("VOLUME_DB_PATH", "data/volume_cache.db")
+
+_RL_UNTIL: Dict[str, float] = {}
+_RL_STEP: Dict[str, float] = {}
+_RL_LOCK = threading.Lock()
+_RL_DEFAULT_SECONDS = 60.0
+_RL_MAX_SECONDS = 3600.0
+
+
+def _normalize_endpoint(endpoint: str) -> str:
+    return endpoint.rstrip("/")
+
+
+def rate_limited_until(endpoint: str) -> float:
+    """Monotonic deadline for endpoint-wide RPC cooldown (0 if none)."""
+    ep = _normalize_endpoint(endpoint)
+    with _RL_LOCK:
+        return _RL_UNTIL.get(ep, 0.0)
+
+
+def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float:
+    """Record a 429; returns cooldown duration in seconds."""
+    ep = _normalize_endpoint(endpoint)
+    with _RL_LOCK:
+        now = time.monotonic()
+        until = _RL_UNTIL.get(ep, 0.0)
+        if retry_after is not None:
+            duration = min(max(0.0, float(retry_after)), _RL_MAX_SECONDS)
+        elif now < until:
+            return until - now
+        else:
+            step = _RL_STEP.get(ep, _RL_DEFAULT_SECONDS)
+            duration = min(step, _RL_MAX_SECONDS)
+            _RL_STEP[ep] = min(step * 2.0, _RL_MAX_SECONDS)
+        _RL_UNTIL[ep] = max(until, now + duration)
+        return duration
+
+
+def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
+    raw = (response.headers.get("Retry-After") or "").strip()
+    if not raw:
+        return None
+    if raw.isdigit():
+        return float(raw)
+    try:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, when.timestamp() - time.time())
+
+
+def _metric_endpoint(endpoint: str) -> str:
+    parsed = urlparse(_normalize_endpoint(endpoint))
+    return parsed.hostname or _normalize_endpoint(endpoint)
+
+
+def _record_chain_rpc(endpoint: str, method: str, outcome: str) -> None:
+    CHAIN_RPC_REQUESTS_TOTAL.labels(
+        endpoint=_metric_endpoint(endpoint),
+        method=method,
+        outcome=outcome,
+    ).inc()
+
+
+def _clear_rate_limit_step(endpoint: str) -> None:
+    ep = _normalize_endpoint(endpoint)
+    with _RL_LOCK:
+        _RL_STEP.pop(ep, None)
 
 
 def _init_volume_db():
@@ -234,19 +309,35 @@ class ChainClient:
         last_error = None
         for attempt in range(self.retries + 1):
             try:
+                if time.monotonic() < rate_limited_until(self.endpoint):
+                    _record_chain_rpc(self.endpoint, method, "cooldown_skip")
+                    raise ChainRpcError("rate_limited", "cooldown")
                 response = requests.post(
                     self.endpoint,
                     json=payload,
                     headers={"Content-Type": "application/json"},
                     timeout=self.timeout,
                 )
+                if response.status_code == 429:
+                    note_rate_limit(self.endpoint, _parse_retry_after_header(response))
+                    _record_chain_rpc(self.endpoint, method, "rate_limited")
+                    raise ChainRpcError("rate_limited", "HTTP 429", code=429)
                 response.raise_for_status()
                 data = response.json()
                 if "error" in data:
+                    _record_chain_rpc(self.endpoint, method, "error")
                     raise RuntimeError(data["error"])
+                _record_chain_rpc(self.endpoint, method, "ok")
+                _clear_rate_limit_step(self.endpoint)
                 return data.get("result")
+            except ChainRpcError as exc:
+                if exc.kind == "rate_limited":
+                    raise
+                last_error = exc
+                _record_chain_rpc(self.endpoint, method, "error")
             except Exception as exc:
                 last_error = exc
+                _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
@@ -265,6 +356,9 @@ class ChainClient:
         last_error: Optional[BaseException] = None
         for attempt in range(self.retries + 1):
             try:
+                if time.monotonic() < rate_limited_until(self.endpoint):
+                    _record_chain_rpc(self.endpoint, method, "cooldown_skip")
+                    raise ChainRpcError("rate_limited", "cooldown")
                 response = requests.post(
                     self.endpoint,
                     json=payload,
@@ -272,13 +366,9 @@ class ChainClient:
                     timeout=self.timeout,
                 )
                 if response.status_code == 429:
-                    retry_after: Optional[float] = None
-                    raw = response.headers.get("Retry-After")
-                    if raw:
-                        try:
-                            retry_after = max(0.0, float(raw))
-                        except ValueError:
-                            retry_after = None
+                    retry_after = _parse_retry_after_header(response)
+                    note_rate_limit(self.endpoint, retry_after)
+                    _record_chain_rpc(self.endpoint, method, "rate_limited")
                     raise ChainRpcError(
                         "rate_limited",
                         "HTTP 429",
@@ -286,6 +376,7 @@ class ChainClient:
                         retry_after=retry_after,
                     )
                 if response.status_code >= 500:
+                    _record_chain_rpc(self.endpoint, method, "error")
                     last_error = ChainRpcError(
                         classify_http_status(response.status_code),
                         f"HTTP {response.status_code}",
@@ -299,6 +390,7 @@ class ChainClient:
                 # 408 (request timeout) is transient and falls through to the retry path below.
                 if 400 <= response.status_code < 500 and response.status_code != 408:
                     # Other client errors are not transient; raise without retrying.
+                    _record_chain_rpc(self.endpoint, method, "error")
                     raise ChainRpcError(
                         classify_http_status(response.status_code),
                         f"HTTP {response.status_code}",
@@ -310,22 +402,27 @@ class ChainClient:
                     kind = classify_jsonrpc_error(data["error"])
                     err = data["error"]
                     code = err.get("code") if isinstance(err, dict) else None
+                    _record_chain_rpc(self.endpoint, method, "error")
                     raise ChainRpcError(
                         kind,
                         str(err.get("message") if isinstance(err, dict) else err),
                         code=code,
                     )
+                _record_chain_rpc(self.endpoint, method, "ok")
+                _clear_rate_limit_step(self.endpoint)
                 return data.get("result")
             except ChainRpcError:
                 raise
             except requests.RequestException as exc:
                 last_error = exc
+                _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("typed RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
                     time.sleep(sleep_for)
             except Exception as exc:
                 last_error = exc
+                _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 if attempt < self.retries:
                     time.sleep(sleep_for)
