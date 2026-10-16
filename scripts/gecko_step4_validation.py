@@ -39,13 +39,19 @@ from internal.chain_price.gecko_validation import (
 )
 from internal.chain_price.reader import ChainReader
 from internal.chain_price.storage_keys import map_key_hex
-from internal.chain_client import _decode_scale_u64, _hex_to_bytes
+from internal.chain_client import (
+    _decode_scale_u64,
+    _hex_to_bytes,
+    _parse_retry_after_header,
+    note_rate_limit,
+)
 from internal.indicators.price_fetcher import gecko_ohlcv_guarantees_alpha_in_tao
 
 GECKO_API = "https://api.geckoterminal.com/api/v2"
 PAIRS_PATH = _ROOT / "config" / "price_pairs.json"
-DEFAULT_OUTPUT = _ROOT / "tests" / "fixtures" / "gecko_validation" / "sample_protocol_output.json"
+DEFAULT_OUTPUT = Path("/tmp/gecko_step4_validation_report.json")
 GECKO_MIN_INTERVAL_S = 60.0 / 28.0
+GECKO_429_MAX_CONSECUTIVE = 3
 
 
 def _git_sha() -> str:
@@ -89,10 +95,18 @@ def _gecko_params(gt: Dict[str, Any], limit_hours: int) -> Dict[str, Any]:
 
 def _fetch_gecko_ohlcv(network: str, pool: str, gt: Dict[str, Any], limit_hours: int) -> List[Any]:
     url = f"{GECKO_API}/networks/{network}/pools/{pool}/ohlcv/hour"
-    resp = requests.get(url, params=_gecko_params(gt, limit_hours), timeout=30)
-    if resp.status_code == 429:
-        raise RuntimeError("gecko_http_429")
-    resp.raise_for_status()
+    consecutive_429 = 0
+    while True:
+        resp = requests.get(url, params=_gecko_params(gt, limit_hours), timeout=30)
+        if resp.status_code == 429:
+            consecutive_429 += 1
+            if consecutive_429 >= GECKO_429_MAX_CONSECUTIVE:
+                raise RuntimeError("gecko_http_429")
+            wait_s = note_rate_limit(GECKO_API, _parse_retry_after_header(resp))
+            time.sleep(max(wait_s, GECKO_MIN_INTERVAL_S))
+            continue
+        resp.raise_for_status()
+        break
     body = resp.json()
     data = body.get("data") if isinstance(body, dict) else None
     attrs = data.get("attributes") if isinstance(data, dict) else None
@@ -149,12 +163,20 @@ def _live_probe_subnets(
             results.append(sub)
             continue
 
+        now_ts = int(time.time())
+        sorted_ohlcv = sorted(
+            (row for row in ohlcv if isinstance(row, (list, tuple)) and len(row) >= 5),
+            key=lambda row: int(row[0]),
+        )
+        completed = [
+            row
+            for row in sorted_ohlcv
+            if int(row[0]) + 3600 <= now_ts
+        ]
         matched: List[MatchedHour] = []
-        for item in ohlcv[-window_hours:]:
-            if not isinstance(item, (list, tuple)) or len(item) < 5:
-                continue
+        for item in completed[-window_hours:]:
             ts, _o, _h, _l, close, *_rest = item
-            target_ms = int(ts) * 1000
+            target_ms = (int(ts) + 3600) * 1000
             block, block_hash, outcome = resolve_block_at(
                 reader, target_ms, search="bracketed"
             )
@@ -237,7 +259,12 @@ def main(argv: List[str] | None = None) -> int:
         json.dump(report, f, indent=2)
         f.write("\n")
     print(json.dumps({"verdict": report["verdict"], "output": str(args.output)}, indent=2))
-    return 0 if report["verdict"] == "PASS" else 1
+    verdict = report["verdict"]
+    if verdict == "PASS":
+        return 0
+    if verdict == "FAIL":
+        return 1
+    return 2
 
 
 if __name__ == "__main__":

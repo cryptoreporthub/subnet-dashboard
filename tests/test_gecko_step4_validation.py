@@ -14,7 +14,8 @@ from internal.chain_price.gecko_validation import (
     subnet_metrics,
     subnets_from_serializable,
 )
-from scripts.gecko_step4_validation import _gecko_params, main
+from scripts import gecko_step4_validation as step4_script
+from scripts.gecko_step4_validation import _gecko_params, _live_probe_subnets, main
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "gecko_validation"
 
@@ -96,6 +97,77 @@ def test_script_writes_report_from_fixture(tmp_path: Path):
     assert payload["currency"] == "token"
     assert payload["verdict"] == "PASS"
     assert payload["git_sha"]
+
+
+def _aligned_matched(n: int = 30, base: float = 0.01) -> list[MatchedHour]:
+    return [
+        MatchedHour(gecko_close=base + i * 0.0001, chain_price_tao=(base + i * 0.0001) * 1.00001)
+        for i in range(n)
+    ]
+
+
+def test_unit_mismatch_subnet_fails_even_with_large_pool():
+    good = [SubnetValidationInput(netuid=i, matched=_aligned_matched()) for i in range(19)]
+    bad = SubnetValidationInput(
+        netuid=99,
+        matched=[
+            MatchedHour(gecko_close=0.006 + i * 0.0001, chain_price_tao=1.3 + i * 0.02)
+            for i in range(30)
+        ],
+    )
+    report = evaluate_gecko_validation(good + [bad])
+    assert report["verdict"] == "FAIL"
+    fail99 = next(f for f in report["failing_subnets"] if f["netuid"] == 99)
+    assert "price_unit_mismatch" in fail99["reasons"]
+
+
+def test_flat_series_excluded_undefined_return_corr():
+    good = [SubnetValidationInput(netuid=i, matched=_aligned_matched()) for i in range(7)]
+    flat = SubnetValidationInput(
+        netuid=88,
+        matched=[MatchedHour(gecko_close=0.01, chain_price_tao=0.01) for _ in range(30)],
+    )
+    report = evaluate_gecko_validation(good + [flat])
+    assert report["verdict"] == "INCONCLUSIVE"
+    assert report["aggregate"]["qualifying_subnet_count"] == 7
+    assert any(
+        e["netuid"] == 88 and e["reason"] == "undefined_return_corr"
+        for e in report["excluded_subnets"]
+    )
+
+
+def test_live_probe_uses_close_timestamp_and_skips_in_progress(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    recorded: list[int] = []
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        recorded.append(target_ms)
+        return (1, "0xabc", "ok")
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return 0.01
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao", fake_reserve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [
+            [now_ts, 0, 0, 0, 1.0],
+            [now_ts - 7200, 0, 0, 0, 0.99],
+            [now_ts - 3600, 0, 0, 0, 0.995],
+        ],
+    )
+
+    class _Reader:
+        pass
+
+    mapped = [(64, "bittensor", "pool", {"base_is_alpha": True})]
+    subs = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs) == 1
+    assert len(subs[0].matched) == 2
+    assert recorded == [(now_ts - 3600) * 1000, now_ts * 1000]
 
 
 def test_committed_sample_output_is_pass_verdict():

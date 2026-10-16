@@ -11,6 +11,8 @@ import statistics
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
+from internal.council.grading import is_price_unit_mismatch
+
 Verdict = Literal["PASS", "FAIL", "INCONCLUSIVE"]
 
 DEFAULT_MIN_MATCHED_HOURS = 24
@@ -58,7 +60,7 @@ def _hourly_log_returns(closes: Sequence[float]) -> List[float]:
     out: List[float] = []
     for i in range(1, len(closes)):
         prev, cur = closes[i - 1], closes[i]
-        if prev <= 0 or cur <= 0:
+        if not (math.isfinite(prev) and math.isfinite(cur)) or prev <= 0 or cur <= 0:
             continue
         out.append(math.log(cur / prev))
     return out
@@ -71,7 +73,7 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
     chain_closes: List[float] = []
     for row in matched:
         g, c = row.gecko_close, row.chain_price_tao
-        if g <= 0 or c <= 0:
+        if not (math.isfinite(g) and math.isfinite(c)) or g <= 0 or c <= 0:
             continue
         rel_diffs.append(abs(c - g) / g)
         gecko_closes.append(g)
@@ -85,6 +87,17 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
         "rel_diffs": rel_diffs,
         "hourly_log_return_corr": corr,
     }
+
+
+def subnet_unit_mismatch(matched: Sequence[MatchedHour]) -> bool:
+    """True if any aligned hour fails the council price-unit guard."""
+    for row in matched:
+        g, c = row.gecko_close, row.chain_price_tao
+        if not (math.isfinite(g) and math.isfinite(c)):
+            continue
+        if is_price_unit_mismatch(g, c):
+            return True
+    return False
 
 
 def _p95(values: Sequence[float]) -> Optional[float]:
@@ -106,8 +119,10 @@ def evaluate_gecko_validation(
     th = thresholds or ValidationThresholds()
     per_subnet_out: List[Dict[str, Any]] = []
     excluded: List[Dict[str, Any]] = []
+    failing_subnets: List[Dict[str, Any]] = []
     qualifying_rel: List[float] = []
     qualifying_corrs: List[float] = []
+    qualifying_count = 0
 
     for sub in subnets:
         row: Dict[str, Any] = {"netuid": sub.netuid, "pool": sub.pool}
@@ -118,14 +133,15 @@ def evaluate_gecko_validation(
             excluded.append({"netuid": sub.netuid, "matched_hours": 0, "reason": sub.error})
             continue
         metrics = subnet_metrics(sub.matched)
+        unit_bad = subnet_unit_mismatch(sub.matched)
+        median_rd = statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
         row.update(
             {
                 "matched_hours": metrics["matched_hours"],
-                "median_rel_diff": (
-                    statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
-                ),
+                "median_rel_diff": median_rd,
                 "p95_rel_diff": _p95(metrics["rel_diffs"]),
                 "hourly_log_return_corr": metrics["hourly_log_return_corr"],
+                "price_unit_mismatch": unit_bad,
             }
         )
         per_subnet_out.append(row)
@@ -139,16 +155,26 @@ def evaluate_gecko_validation(
                 }
             )
             continue
-        qualifying_rel.extend(metrics["rel_diffs"])
         corr = metrics["hourly_log_return_corr"]
-        if corr is not None:
-            qualifying_corrs.append(corr)
-
-    qualifying_count = sum(
-        1
-        for s in per_subnet_out
-        if not s.get("error") and int(s.get("matched_hours") or 0) >= min_matched_hours
-    )
+        if corr is None:
+            excluded.append(
+                {
+                    "netuid": sub.netuid,
+                    "matched_hours": mh,
+                    "reason": "undefined_return_corr",
+                }
+            )
+            continue
+        qualifying_count += 1
+        qualifying_rel.extend(metrics["rel_diffs"])
+        qualifying_corrs.append(corr)
+        fail_reasons: List[str] = []
+        if unit_bad:
+            fail_reasons.append("price_unit_mismatch")
+        if median_rd is not None and median_rd > th.median_rel_diff_max:
+            fail_reasons.append("median_rel_diff_exceeds_max")
+        if fail_reasons:
+            failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
 
     aggregate: Dict[str, Any] = {
         "qualifying_subnet_count": qualifying_count,
@@ -170,14 +196,16 @@ def evaluate_gecko_validation(
             aggregate["mean_hourly_log_return_corr"] >= th.mean_hourly_return_corr_min
         )
 
+    threshold_checks["per_subnet_median_and_unit"] = len(failing_subnets) == 0
+
     if qualifying_count < min_qualifying_subnets:
         verdict: Verdict = "INCONCLUSIVE"
     elif not qualifying_rel or not qualifying_corrs:
         verdict = "INCONCLUSIVE"
-    elif all(threshold_checks.values()):
-        verdict = "PASS"
-    else:
+    elif failing_subnets or not all(threshold_checks.values()):
         verdict = "FAIL"
+    else:
+        verdict = "PASS"
 
     return {
         "verdict": verdict,
@@ -193,6 +221,7 @@ def evaluate_gecko_validation(
         "aggregate": aggregate,
         "threshold_checks": threshold_checks,
         "excluded_subnets": excluded,
+        "failing_subnets": failing_subnets,
         "per_subnet": per_subnet_out,
     }
 
