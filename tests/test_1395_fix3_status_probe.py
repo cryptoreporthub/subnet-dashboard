@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from unittest.mock import patch
 
 import internal.integrations.status as st
-from internal.chain_client import ChainClient, _RL_LOCK, _RL_STEP, _RL_UNTIL, note_rate_limit
+import requests
+from fastapi.testclient import TestClient
+from internal.chain_client import ChainClient, _RL_LOCK, _RL_STEP, _RL_UNTIL, _metric_endpoint, note_rate_limit
 from internal.chain_price.reader import ChainReader, reset_shared_reader
 from internal.chain_price.scheduler import recorder_state
 from internal.integrations.status import build_integrations_status, clear_status_cache
+from server import app
+
+_REVIEW_SECRET = "FAKE_REVIEW_KEY_1427"
+_KEYED_RPC = f"http://127.0.0.1:1/rpc?api_key={_REVIEW_SECRET}"
 
 
 def setup_function():
@@ -72,6 +80,37 @@ def test_status_single_rpc_post_concurrent_slow_shared_url(monkeypatch):
                 with patch.object(st, "_http_probe", return_value=(True, 200, "ok")):
                     build_integrations_status(force=True)
     assert len(calls) == 1
+
+
+def test_metric_endpoint_never_returns_raw_untrusted_url():
+    assert _metric_endpoint(_KEYED_RPC) == "127.0.0.1"
+    assert _REVIEW_SECRET not in _metric_endpoint(_KEYED_RPC)
+    assert _metric_endpoint("/rpc?api_key=leak") == "unknown"
+    assert "api_key" not in _metric_endpoint(":///path?api_key=leak")
+
+
+def test_subnet_integrations_never_leaks_rpc_credentials(monkeypatch, caplog):
+    monkeypatch.setenv("BITTENSOR_RPC_URL", _KEYED_RPC)
+    monkeypatch.delenv("FINNEY_RPC_URL", raising=False)
+
+    def _fail_post(*_args, **_kwargs):
+        raise requests.exceptions.ConnectionError(
+            f"Connection refused for {_KEYED_RPC}"
+        )
+
+    with caplog.at_level(logging.DEBUG, logger="internal.integrations.status"):
+        with patch.object(st._get_probe_session(), "post", side_effect=_fail_post):
+            with patch.object(st, "_http_probe", return_value=(True, 200, "ok")):
+                with TestClient(app) as client:
+                    resp = client.get("/api/subnet-integrations")
+    assert resp.status_code == 200
+    raw = json.dumps(resp.json())
+    assert _REVIEW_SECRET not in raw
+    assert _KEYED_RPC not in raw
+    for record in caplog.records:
+        msg = record.getMessage()
+        assert _REVIEW_SECRET not in msg
+        assert _KEYED_RPC not in msg
 
 
 def test_recorder_state_reports_provider_cooldown_after_rate_limit():

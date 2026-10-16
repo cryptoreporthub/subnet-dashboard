@@ -13,6 +13,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from internal.chain_client import _metric_endpoint
 from internal.chain_price import config as chain_price_cfg
 from internal.integrations.desearch_spend import get_spend_summary, record_desearch_response
 from internal.integrations.taonsquare import catalog_summary, recommend_candidates
@@ -136,8 +137,18 @@ def _clear_rpc_health_memo() -> None:
         _rpc_health_memo.clear()
 
 
+def _rpc_probe_failure_category(exc: BaseException) -> str:
+    name = type(exc).__name__
+    if "Timeout" in name:
+        return "timeout"
+    if "Connection" in name:
+        return "connection failed"
+    return "request failed"
+
+
 def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
     """JSON-RPC chain_getBlockHash — shared health check for Bittensor nodes."""
+    endpoint_id = _metric_endpoint(endpoint)
     try:
         resp = _get_probe_session().post(
             endpoint,
@@ -149,11 +160,13 @@ def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
         data = resp.json()
         if data.get("result"):
             return True, "chain RPC ok"
-        err = data.get("error") or {}
-        return False, str(err.get("message") or err or "no result")[:120]
+        if data.get("error"):
+            return False, "rpc error"
+        return False, "no result"
     except Exception as exc:
-        logger.debug("rpc probe %s failed: %s", endpoint, exc)
-        return False, str(exc)[:120]
+        category = _rpc_probe_failure_category(exc)
+        logger.debug("rpc probe %s failed: %s", endpoint_id, category)
+        return False, category
 
 
 def _rpc_chain_healthy_deduped(endpoint: str) -> tuple[bool, str]:
