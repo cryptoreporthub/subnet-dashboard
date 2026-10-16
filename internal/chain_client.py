@@ -87,6 +87,7 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
 
 
 def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
+    """RFC 9110 Retry-After: delay-seconds or HTTP-date → seconds to wait."""
     raw = (response.headers.get("Retry-After") or "").strip()
     if not raw:
         return None

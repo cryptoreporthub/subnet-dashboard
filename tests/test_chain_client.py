@@ -1,4 +1,6 @@
 import time
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -117,6 +119,108 @@ def test_shorter_retry_after_does_not_shorten_active_cooldown(clear_endpoint_rat
         until_long = rate_limited_until(ep)
         note_rate_limit(ep, 5.0)
         assert rate_limited_until(ep) == until_long
+
+
+def test_parse_retry_after_header_delay_seconds_and_junk(clear_endpoint_rate_limits):
+    from internal.chain_client import _parse_retry_after_header
+
+    resp = MagicMock()
+    resp.headers = {"Retry-After": "120"}
+    assert _parse_retry_after_header(resp) == 120.0
+    resp.headers = {"Retry-After": "not-a-date"}
+    assert _parse_retry_after_header(resp) is None
+    resp.headers = {"Retry-After": "-5"}
+    assert _parse_retry_after_header(resp) is None
+
+
+def test_parse_retry_after_header_http_date_naive_future(clear_endpoint_rate_limits):
+    from internal.chain_client import _parse_retry_after_header
+
+    wall = datetime(2026, 10, 16, 12, 0, 0, tzinfo=timezone.utc)
+    future = wall + timedelta(seconds=600)
+    naive = future.strftime("%a, %d %b %Y %H:%M:%S")
+    resp = MagicMock()
+    resp.headers = {"Retry-After": naive}
+    with patch("internal.chain_client.time.time", return_value=wall.timestamp()):
+        assert _parse_retry_after_header(resp) == 600.0
+
+
+def test_parse_retry_after_header_http_date_past_is_zero(clear_endpoint_rate_limits):
+    from internal.chain_client import _parse_retry_after_header
+
+    wall = datetime(2026, 10, 16, 12, 0, 0, tzinfo=timezone.utc)
+    past = wall - timedelta(minutes=10)
+    resp = MagicMock()
+    resp.headers = {"Retry-After": format_datetime(past, usegmt=True)}
+    with patch("internal.chain_client.time.time", return_value=wall.timestamp()):
+        assert _parse_retry_after_header(resp) == 0.0
+
+
+def test_reader_retry_after_http_date_future(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, rate_limited_until
+    from internal.chain_price.reader import ChainReader
+
+    client = ChainClient("https://finney.example", init_volume_db=False, retries=0)
+    reader = ChainReader([("finney", client)])
+    wall_ts = 1_700_000_000.0
+    wall = datetime.fromtimestamp(wall_ts, tz=timezone.utc)
+    future = wall + timedelta(seconds=600)
+    header = format_datetime(future, usegmt=True)
+    mono = [5000.0]
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": header}
+    with patch("internal.chain_client.time.time", return_value=wall_ts), patch(
+        "internal.chain_client.time.monotonic", side_effect=lambda: mono[0]
+    ), patch("internal.chain_price.reader.time.monotonic", side_effect=lambda: mono[0]):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            _, outcome = reader.call("chain_getFinalizedHead", [])
+        assert outcome == "rate_limited"
+        assert rate_limited_until(client.endpoint) - mono[0] >= 599.0
+
+
+def test_reader_retry_after_http_date_past_no_negative_cooldown(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, rate_limited_until
+    from internal.chain_price.reader import ChainReader
+
+    client = ChainClient("https://finney.example", init_volume_db=False, retries=0)
+    reader = ChainReader([("finney", client)])
+    wall_ts = 1_700_000_000.0
+    wall = datetime.fromtimestamp(wall_ts, tz=timezone.utc)
+    past = wall - timedelta(minutes=10)
+    mono = [8000.0]
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": format_datetime(past, usegmt=True)}
+    with patch("internal.chain_client.time.time", return_value=wall_ts), patch(
+        "internal.chain_client.time.monotonic", side_effect=lambda: mono[0]
+    ), patch("internal.chain_price.reader.time.monotonic", side_effect=lambda: mono[0]):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            _, outcome = reader.call("chain_getFinalizedHead", [])
+        assert outcome == "rate_limited"
+        remaining = rate_limited_until(client.endpoint) - mono[0]
+        assert remaining >= 0.0
+        assert remaining == 60.0
+
+
+def test_reader_retry_after_zero_explicit_contract(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, rate_limited_until
+    from internal.chain_price.reader import ChainReader
+
+    client = ChainClient("https://finney.example", init_volume_db=False, retries=0)
+    reader = ChainReader([("finney", client)])
+    mono = [100.0]
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": "0"}
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: mono[0]), patch(
+        "internal.chain_price.reader.time.monotonic", side_effect=lambda: mono[0]
+    ):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            _, outcome = reader.call("chain_getFinalizedHead", [])
+        assert outcome == "rate_limited"
+        # Explicit zero: no extended deadline; reader re-note may apply default ladder.
+        assert rate_limited_until(client.endpoint) <= mono[0] + 60.0
 
 
 def test_reader_retry_after_600_with_real_client(clear_endpoint_rate_limits):
