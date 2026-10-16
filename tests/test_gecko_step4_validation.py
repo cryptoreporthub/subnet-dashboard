@@ -285,8 +285,12 @@ SAMPLE_PER_SUBNET_KEYS = frozenset(
         "pool",
         "matched_hours",
         "n_return_pairs",
-        "return_pair_gap_skips",
+        "return_pair_dt_over_3600_count",
+        "return_pair_dt_max_seconds",
+        "matched_hour_span_hours",
+        "return_pair_dt_exact_3600_count",
         "duplicate_hour_unix_dropped",
+        "data_integrity_error",
         "median_rel_diff",
         "p95_rel_diff",
         "hourly_log_return_corr",
@@ -460,6 +464,19 @@ def test_gapped_timestamps_scale_returns_not_naive_pairing():
     assert _pearson(scaled_g, scaled_c) != _pearson(naive_g, naive_c)
     metrics = subnet_metrics(matched)
     assert metrics["hourly_log_return_corr"] == _pearson(scaled_g, scaled_c)
+    assert metrics["return_pair_dt_over_3600_count"] == 1
+    assert metrics["return_pair_dt_max_seconds"] == 2 * ALIGNED_HOUR_SECONDS
+    assert metrics["return_pair_dt_exact_3600_count"] == 2
+    assert metrics["matched_hour_span_hours"] == pytest.approx(4.0)
+
+
+def test_subnet_metrics_gap_diagnostics_on_aligned_series():
+    matched = _stamped_aligned_matched(24)
+    metrics = subnet_metrics(matched)
+    assert metrics["return_pair_dt_over_3600_count"] == 0
+    assert metrics["return_pair_dt_max_seconds"] == ALIGNED_HOUR_SECONDS
+    assert metrics["return_pair_dt_exact_3600_count"] == 23
+    assert metrics["matched_hour_span_hours"] == pytest.approx(23.0)
 
 
 def test_subnet_metrics_sorts_unsorted_timestamps_before_returns():

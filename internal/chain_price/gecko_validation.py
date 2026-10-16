@@ -99,6 +99,30 @@ def _prepare_matched_hours(
     return ordered, dup_dropped, None
 
 
+def _return_pair_dt_diagnostics(hour_unix: Sequence[int]) -> Dict[str, Any]:
+    """Per-subnet timestamp-gap stats for scaled hourly returns (operator diagnostics)."""
+    if len(hour_unix) < 2:
+        return {
+            "return_pair_dt_over_3600_count": 0,
+            "return_pair_dt_max_seconds": 0,
+            "matched_hour_span_hours": 0.0,
+            "return_pair_dt_exact_3600_count": 0,
+        }
+    dts: List[int] = []
+    for i in range(1, len(hour_unix)):
+        dt = int(hour_unix[i]) - int(hour_unix[i - 1])
+        if dt > 0:
+            dts.append(dt)
+    span_seconds = int(hour_unix[-1]) - int(hour_unix[0])
+    span_hours = span_seconds / ALIGNED_HOUR_SECONDS if span_seconds > 0 else 0.0
+    return {
+        "return_pair_dt_over_3600_count": sum(1 for dt in dts if dt > ALIGNED_HOUR_SECONDS),
+        "return_pair_dt_max_seconds": max(dts) if dts else 0,
+        "matched_hour_span_hours": span_hours,
+        "return_pair_dt_exact_3600_count": sum(1 for dt in dts if dt == ALIGNED_HOUR_SECONDS),
+    }
+
+
 def _hourly_log_returns_scaled(
     closes: Sequence[float], hour_unix: Sequence[int]
 ) -> List[float]:
@@ -127,14 +151,15 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
     """Per-subnet stats from aligned Gecko close vs chain reserve price."""
     ordered, duplicate_hour_unix_dropped, integrity_error = _prepare_matched_hours(matched)
     if integrity_error:
+        gap_diag = _return_pair_dt_diagnostics([])
         return {
             "matched_hours": 0,
             "n_return_pairs": 0,
-            "return_pair_gap_skips": 0,
             "duplicate_hour_unix_dropped": duplicate_hour_unix_dropped,
             "rel_diffs": [],
             "hourly_log_return_corr": None,
             "data_integrity_error": integrity_error,
+            **gap_diag,
         }
     rel_diffs: List[float] = []
     gecko_closes: List[float] = []
@@ -154,24 +179,23 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
             synthetic += ALIGNED_HOUR_SECONDS
         else:
             hour_unix.append(int(row.hour_unix))
-    adjacent_pairs = max(0, len(gecko_closes) - 1)
     rets_g = _hourly_log_returns_scaled(gecko_closes, hour_unix)
     rets_c = _hourly_log_returns_scaled(chain_closes, hour_unix)
     n_return_pairs = min(len(rets_g), len(rets_c))
-    return_pair_gap_skips = adjacent_pairs - n_return_pairs
     corr = (
         _pearson(rets_g[:n_return_pairs], rets_c[:n_return_pairs])
         if n_return_pairs >= 3
         else None
     )
+    gap_diag = _return_pair_dt_diagnostics(hour_unix)
     return {
         "matched_hours": len(rel_diffs),
         "n_return_pairs": n_return_pairs,
-        "return_pair_gap_skips": return_pair_gap_skips,
         "duplicate_hour_unix_dropped": duplicate_hour_unix_dropped,
         "rel_diffs": rel_diffs,
         "hourly_log_return_corr": corr,
         "data_integrity_error": None,
+        **gap_diag,
     }
 
 
@@ -238,10 +262,10 @@ def evaluate_gecko_validation(
         corr = metrics["hourly_log_return_corr"]
         mh = metrics["matched_hours"]
         n_return_pairs = metrics["n_return_pairs"]
-        min_return_pairs = min_matched_hours - 1
         meets_hour_floor = mh >= min_matched_hours
-        meets_return_pair_floor = n_return_pairs >= min_return_pairs
-        at_floor = meets_hour_floor and meets_return_pair_floor
+        # ponytail: with elapsed-time scaling every valid adjacent pair yields a return;
+        # the only pair gate is min_matched_hours (distinct aligned bars).
+        at_floor = meets_hour_floor
         corr_warn = (
             at_floor
             and corr is not None
@@ -251,7 +275,10 @@ def evaluate_gecko_validation(
             {
                 "matched_hours": mh,
                 "n_return_pairs": n_return_pairs,
-                "return_pair_gap_skips": metrics["return_pair_gap_skips"],
+                "return_pair_dt_over_3600_count": metrics["return_pair_dt_over_3600_count"],
+                "return_pair_dt_max_seconds": metrics["return_pair_dt_max_seconds"],
+                "matched_hour_span_hours": metrics["matched_hour_span_hours"],
+                "return_pair_dt_exact_3600_count": metrics["return_pair_dt_exact_3600_count"],
                 "duplicate_hour_unix_dropped": metrics["duplicate_hour_unix_dropped"],
                 "data_integrity_error": integrity_error,
                 "median_rel_diff": median_rd,
@@ -300,16 +327,6 @@ def evaluate_gecko_validation(
                     "matched_hours": mh,
                     "n_return_pairs": n_return_pairs,
                     "reason": f"below_floor_{min_matched_hours}h",
-                }
-            )
-            continue
-        if not meets_return_pair_floor:
-            excluded.append(
-                {
-                    "netuid": sub.netuid,
-                    "matched_hours": mh,
-                    "n_return_pairs": n_return_pairs,
-                    "reason": "insufficient_return_pairs",
                 }
             )
             continue
