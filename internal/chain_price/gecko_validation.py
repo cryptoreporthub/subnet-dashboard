@@ -23,6 +23,8 @@ DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN = 0.9
 # Report-only WARN threshold (#1395 comment 6215696142); does not affect PASS/FAIL.
 DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_WARN_MIN = 0.7
 ALIGNED_HOUR_SECONDS = 3600
+# ponytail: relative tolerance for same-hour duplicate rows; upgrade path = config threshold.
+_DUPLICATE_HOUR_PRICE_AGREE_REL_EPS = 1e-9
 
 
 @dataclass(frozen=True)
@@ -63,10 +65,26 @@ def _pearson(xs: Sequence[float], ys: Sequence[float]) -> Optional[float]:
     return num / den
 
 
-def _prepare_matched_hours(matched: Sequence[MatchedHour]) -> tuple[List[MatchedHour], int]:
-    """Sort by ``hour_unix`` ascending; duplicate timestamps keep the **last** row."""
+def _matched_hour_prices_agree(a: MatchedHour, b: MatchedHour) -> bool:
+    for v1, v2 in ((a.gecko_close, b.gecko_close), (a.chain_price_tao, b.chain_price_tao)):
+        if not (math.isfinite(v1) and math.isfinite(v2)):
+            return False
+        scale = max(abs(v1), abs(v2), 1e-30)
+        if abs(v1 - v2) / scale > _DUPLICATE_HOUR_PRICE_AGREE_REL_EPS:
+            return False
+    return True
+
+
+def _prepare_matched_hours(
+    matched: Sequence[MatchedHour],
+) -> tuple[List[MatchedHour], int, Optional[str]]:
+    """Order rows for metrics: all stamped → sort/dedupe; all unstamped → input order."""
     stamped = [(i, row) for i, row in enumerate(matched) if row.hour_unix is not None]
     unstamped = [(i, row) for i, row in enumerate(matched) if row.hour_unix is None]
+    if stamped and unstamped:
+        return [], 0, "mixed_hour_unix"
+    if not stamped:
+        return [row for _, row in sorted(unstamped, key=lambda t: t[0])], 0, None
     stamped.sort(key=lambda t: (int(t[1].hour_unix), t[0]))
     by_ts: Dict[int, MatchedHour] = {}
     dup_dropped = 0
@@ -74,10 +92,11 @@ def _prepare_matched_hours(matched: Sequence[MatchedHour]) -> tuple[List[Matched
         ts = int(row.hour_unix)
         if ts in by_ts:
             dup_dropped += 1
+            if not _matched_hour_prices_agree(by_ts[ts], row):
+                return [], dup_dropped, "conflicting_duplicate_hour_unix"
         by_ts[ts] = row
     ordered = [by_ts[ts] for ts in sorted(by_ts)]
-    ordered.extend(row for _, row in sorted(unstamped, key=lambda t: t[0]))
-    return ordered, dup_dropped
+    return ordered, dup_dropped, None
 
 
 def _hourly_log_returns_scaled(
@@ -106,11 +125,22 @@ def _hourly_log_returns_scaled(
 
 def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
     """Per-subnet stats from aligned Gecko close vs chain reserve price."""
-    ordered, duplicate_hour_unix_dropped = _prepare_matched_hours(matched)
+    ordered, duplicate_hour_unix_dropped, integrity_error = _prepare_matched_hours(matched)
+    if integrity_error:
+        return {
+            "matched_hours": 0,
+            "n_return_pairs": 0,
+            "return_pair_gap_skips": 0,
+            "duplicate_hour_unix_dropped": duplicate_hour_unix_dropped,
+            "rel_diffs": [],
+            "hourly_log_return_corr": None,
+            "data_integrity_error": integrity_error,
+        }
     rel_diffs: List[float] = []
     gecko_closes: List[float] = []
     chain_closes: List[float] = []
     hour_unix: List[int] = []
+    all_unstamped = ordered and ordered[0].hour_unix is None
     synthetic = 0
     for row in ordered:
         g, c = row.gecko_close, row.chain_price_tao
@@ -119,11 +149,11 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
         rel_diffs.append(abs(c - g) / g)
         gecko_closes.append(g)
         chain_closes.append(c)
-        if row.hour_unix is not None:
-            hour_unix.append(int(row.hour_unix))
-        else:
+        if all_unstamped:
             hour_unix.append(synthetic)
             synthetic += ALIGNED_HOUR_SECONDS
+        else:
+            hour_unix.append(int(row.hour_unix))
     adjacent_pairs = max(0, len(gecko_closes) - 1)
     rets_g = _hourly_log_returns_scaled(gecko_closes, hour_unix)
     rets_c = _hourly_log_returns_scaled(chain_closes, hour_unix)
@@ -141,6 +171,7 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
         "duplicate_hour_unix_dropped": duplicate_hour_unix_dropped,
         "rel_diffs": rel_diffs,
         "hourly_log_return_corr": corr,
+        "data_integrity_error": None,
     }
 
 
@@ -197,6 +228,7 @@ def evaluate_gecko_validation(
             excluded.append({"netuid": sub.netuid, "matched_hours": 0, "reason": sub.error})
             continue
         metrics = subnet_metrics(sub.matched)
+        integrity_error = metrics.get("data_integrity_error")
         unit_bad = subnet_unit_mismatch(sub.matched)
         median_rd = statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
         corr = metrics["hourly_log_return_corr"]
@@ -217,6 +249,7 @@ def evaluate_gecko_validation(
                 "n_return_pairs": n_return_pairs,
                 "return_pair_gap_skips": metrics["return_pair_gap_skips"],
                 "duplicate_hour_unix_dropped": metrics["duplicate_hour_unix_dropped"],
+                "data_integrity_error": integrity_error,
                 "median_rel_diff": median_rd,
                 "p95_rel_diff": _p95(metrics["rel_diffs"]),
                 "hourly_log_return_corr": corr,
@@ -224,6 +257,17 @@ def evaluate_gecko_validation(
                 "price_unit_mismatch": unit_bad,
             }
         )
+        if integrity_error:
+            per_subnet_out.append(row)
+            excluded.append(
+                {
+                    "netuid": sub.netuid,
+                    "matched_hours": mh,
+                    "n_return_pairs": n_return_pairs,
+                    "reason": integrity_error,
+                }
+            )
+            continue
         if corr_warn:
             warnings.append(
                 {
