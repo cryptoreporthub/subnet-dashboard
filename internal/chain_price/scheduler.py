@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any, Dict, Optional
 
-from internal.chain_client import rate_limited_until
+from internal.chain_client import _metric_endpoint, rate_limited_until
 from internal.chain_price import config as cfg
 from internal.chain_price.reader import get_shared_reader, reset_shared_reader
 from internal.job_scheduler import cancel_job, schedule_interval_seconds
@@ -108,17 +108,17 @@ def recorder_state() -> Dict[str, Any]:
     reader = get_shared_reader()
     now = time.monotonic()
     providers: list[Dict[str, Any]] = []
-    for label, client in reader._providers:
-        endpoint = getattr(client, "endpoint", None)
+    for label, endpoint in reader.provider_states():
         cooldown_remaining_s = 0.0
         if endpoint:
             until = rate_limited_until(endpoint)
             if until > now:
                 cooldown_remaining_s = until - now
+        hostname = _metric_endpoint(endpoint) if endpoint else None
         providers.append(
             {
                 "label": label,
-                "endpoint": endpoint,
+                "hostname": hostname,
                 "cooldown_remaining_s": round(cooldown_remaining_s, 1),
             }
         )

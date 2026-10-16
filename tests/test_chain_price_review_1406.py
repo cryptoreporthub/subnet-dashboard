@@ -169,7 +169,7 @@ def _status_row(rpc_url: str, network: str = "finney") -> dict:
     from internal.integrations import status as st
 
     st.clear_status_cache()
-    with patch.object(st, "_BITTENSOR_RPC", rpc_url), patch.object(
+    with patch.object(st, "_bittensor_rpc_url", return_value=rpc_url), patch.object(
         st, "_BITTENSOR_NETWORK", network
     ), patch.object(st, "_rpc_chain_healthy", return_value=(True, "chain RPC ok")), patch.object(
         st, "_http_probe", return_value=(True, 200, "ok")

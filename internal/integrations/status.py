@@ -10,7 +10,7 @@ import logging
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from internal.chain_price import config as chain_price_cfg
@@ -27,7 +27,7 @@ _cache: Dict[str, Any] = {"at": 0.0, "payload": None}
 _probe_http = None
 _BLOCKMACHINE_RPC = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip("/")
 _BITTENSOR_NETWORK = os.environ.get("BITTENSOR_NETWORK", "finney").strip().lower() or "finney"
-_rpc_health_memo: Dict[str, Tuple[bool, str]] = {}
+_rpc_health_memo: Dict[str, Future] = {}
 _rpc_health_memo_lock = threading.Lock()
 
 
@@ -35,14 +35,7 @@ def _bittensor_rpc_url() -> str:
     override = os.environ.get("BITTENSOR_RPC_URL")
     if override:
         return override.strip().rstrip("/")
-    if os.environ.get("FINNEY_RPC_URL", "").strip():
-        return chain_price_cfg.rpc_provider_endpoints()[0][0]
-    return _BITTENSOR_RPC
-
-
-_BITTENSOR_RPC = (
-    os.environ.get("BITTENSOR_RPC_URL") or chain_price_cfg.rpc_provider_endpoints()[0][0]
-).rstrip("/")
+    return chain_price_cfg.rpc_provider_endpoints()[0][0]
 
 # ponytail: static catalog; add rows here when a new subnet ships.
 INTEGRATIONS: List[Dict[str, Any]] = [
@@ -164,16 +157,20 @@ def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
 
 
 def _rpc_chain_healthy_deduped(endpoint: str) -> tuple[bool, str]:
-    """One HTTP POST per endpoint per status build (bittensor + blockmachine may share URL)."""
+    """Single-flight: one HTTP POST per endpoint per status build."""
     key = endpoint.rstrip("/").lower()
     with _rpc_health_memo_lock:
-        cached = _rpc_health_memo.get(key)
-    if cached is not None:
-        return cached
-    result = _rpc_chain_healthy(endpoint)
-    with _rpc_health_memo_lock:
-        _rpc_health_memo.setdefault(key, result)
-    return result
+        fut = _rpc_health_memo.get(key)
+        owner = fut is None
+        if owner:
+            fut = Future()
+            _rpc_health_memo[key] = fut
+    if owner:
+        try:
+            fut.set_result(_rpc_chain_healthy(endpoint))
+        except Exception as exc:
+            fut.set_exception(exc)
+    return fut.result(timeout=_PROBE_TIMEOUT + _CONNECT_TIMEOUT + 1)
 
 
 def _bittensor_rpc_transport_label(endpoint: str) -> str:

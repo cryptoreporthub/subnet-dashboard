@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import patch
 
 import internal.integrations.status as st
@@ -46,11 +47,31 @@ def test_status_single_rpc_post_when_bittensor_and_blockmachine_share_url(monkey
         return True, "chain RPC ok"
 
     with patch.object(st, "_BLOCKMACHINE_RPC", bm):
-        with patch.object(st, "_BITTENSOR_RPC", bm):
+        with patch.object(st, "_bittensor_rpc_url", return_value=bm):
             with patch.object(st, "_rpc_chain_healthy", side_effect=_count):
                 with patch.object(st, "_http_probe", return_value=(True, 200, "ok")):
                     build_integrations_status(force=True)
     assert calls.count(bm) == 1
+
+
+def test_status_single_rpc_post_concurrent_slow_shared_url(monkeypatch):
+    """Must single-flight: parallel probes cannot each POST before memo is set."""
+    bm = "https://rpc.blockmachine.io"
+    monkeypatch.delenv("FINNEY_RPC_URL", raising=False)
+    monkeypatch.delenv("BITTENSOR_RPC_URL", raising=False)
+    calls: list[str] = []
+
+    def _slow(endpoint: str):
+        calls.append(endpoint.rstrip("/"))
+        time.sleep(0.3)
+        return True, "chain RPC ok"
+
+    with patch.object(st, "_BLOCKMACHINE_RPC", bm):
+        with patch.object(st, "_bittensor_rpc_url", return_value=bm):
+            with patch.object(st, "_rpc_chain_healthy", side_effect=_slow):
+                with patch.object(st, "_http_probe", return_value=(True, 200, "ok")):
+                    build_integrations_status(force=True)
+    assert len(calls) == 1
 
 
 def test_recorder_state_reports_provider_cooldown_after_rate_limit():
