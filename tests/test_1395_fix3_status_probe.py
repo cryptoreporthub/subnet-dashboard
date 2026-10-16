@@ -89,21 +89,24 @@ def test_metric_endpoint_never_returns_raw_untrusted_url():
     assert "api_key" not in _metric_endpoint(":///path?api_key=leak")
     assert _metric_endpoint(None) == "unknown"
     assert _metric_endpoint("http://[bad?k=leak") == "unknown"
+    assert _metric_endpoint("http://[::1/bracket") == "unknown"
 
 
 def test_rpc_chain_healthy_bad_url_returns_tuple_not_raise():
     ok, detail = st._rpc_chain_healthy("http://[bad?k=leak")
     assert ok is False
     assert isinstance(detail, str)
+    assert "http://" not in detail
 
 
 def test_recorder_state_bad_finney_rpc_url_hostname_unknown(monkeypatch):
-    monkeypatch.setenv("FINNEY_RPC_URL", "http://[bad?k=leak")
+    monkeypatch.setenv("FINNEY_RPC_URL", "http://[::1/bracket?api_key=leak")
+    monkeypatch.delenv("BITTENSOR_RPC_URL", raising=False)
     reset_shared_reader()
     state = recorder_state()
-    assert state["providers"]
-    assert all(p.get("hostname") != "http://[bad?k=leak" for p in state["providers"])
-    assert any(p.get("hostname") == "unknown" for p in state["providers"])
+    finney = next(p for p in state["providers"] if p["label"] == "finney")
+    assert finney["hostname"] == "unknown"
+    assert "api_key" not in str(state)
 
 
 def test_subnet_integrations_never_leaks_rpc_credentials(monkeypatch, caplog):
