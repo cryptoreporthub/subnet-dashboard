@@ -123,3 +123,27 @@ def test_safe_write_json_fsync_failure_keeps_previous_file(tmp_path, monkeypatch
         safe_write_json(str(target), {"new": 1})
     assert json.loads(target.read_text(encoding="utf-8")) == {"old": True}
     assert list(tmp_path.glob("state.json.*.*.tmp")) == []
+
+
+def test_safe_write_json_dir_fsync_failure_still_commits(tmp_path, monkeypatch):
+    target = tmp_path / "state.json"
+    real_fsync = os.fsync
+    calls = 0
+
+    def fsync_maybe_fail(fd):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("dir EIO")
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fsync_maybe_fail)
+    safe_write_json(str(target), {"new": 1})
+    assert json.loads(target.read_text(encoding="utf-8")) == {"new": 1}
+    assert calls == 2
+
+
+def test_safe_write_json_compact_separators(tmp_path):
+    target = tmp_path / "state.json"
+    safe_write_json(str(target), {"a": 1}, indent=None, separators=(",", ":"))
+    assert target.read_text(encoding="utf-8") == '{"a":1}'

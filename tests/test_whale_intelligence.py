@@ -2,6 +2,7 @@
 
 import json
 import multiprocessing as mp
+import os
 import threading
 from pathlib import Path
 from unittest.mock import patch
@@ -80,6 +81,32 @@ def test_save_data_uses_sidecar_tmp_not_mkstemp_json(whale_paths):
     assert not list(data_dir.glob("tmp*.json"))
     assert Path(data).exists()
     assert not list(data_dir.glob(f"{Path(data).name}.*.*.tmp"))
+
+
+def test_save_data_compact_path_fsyncs(whale_paths, monkeypatch):
+    """Default WHALE_JSON_COMPACT uses safe_write_json (temp + dir fsync)."""
+    config, data = whale_paths
+    monkeypatch.setenv("WHALE_JSON_COMPACT", "on")
+    svc = WhaleIntelligenceService(config_path=config, data_path=data)
+    fsync_calls = 0
+    real_fsync = os.fsync
+
+    def count_fsync(fd):
+        nonlocal fsync_calls
+        fsync_calls += 1
+        return real_fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", count_fsync)
+    svc.record_event(
+        "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+        1,
+        "buy",
+        100.0,
+        tx_hash="fsync-test-1",
+    )
+    assert fsync_calls >= 2
+    raw = Path(data).read_text(encoding="utf-8")
+    assert "\n" not in raw or raw.count("\n") <= 1
 
 
 def test_dimensions_defined():
