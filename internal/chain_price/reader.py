@@ -118,6 +118,13 @@ class ChainReader:
             return self._providers[0][1]
         return None
 
+    def provider_states(self) -> List[Tuple[str, Optional[str]]]:
+        """Configured providers as (label, endpoint) for ops visibility."""
+        return [
+            (label, getattr(client, "endpoint", None))
+            for label, client in self._providers
+        ]
+
 
 _reader_singleton: Optional[ChainReader] = None
 

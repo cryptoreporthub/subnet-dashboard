@@ -101,9 +101,21 @@ def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
     return max(0.0, when.timestamp() - time.time())
 
 
-def _metric_endpoint(endpoint: str) -> str:
-    parsed = urlparse(_normalize_endpoint(endpoint))
-    return parsed.hostname or _normalize_endpoint(endpoint)
+def _metric_endpoint(endpoint: str | None) -> str:
+    """Hostname-only label for metrics/logs; never returns query/path secrets."""
+    if not endpoint:
+        return "unknown"
+    try:
+        parsed = urlparse(_normalize_endpoint(endpoint))
+    except ValueError:
+        return "unknown"
+    if parsed.hostname:
+        return parsed.hostname
+    if parsed.netloc and "@" not in parsed.netloc:
+        host = parsed.netloc.split(":")[0]
+        if host:
+            return host
+    return "unknown"
 
 
 def _record_chain_rpc(endpoint: str, method: str, outcome: str) -> None:

@@ -190,7 +190,7 @@ def test_status_distinguishes_network_and_provider():
 
     clear_status_cache()
     # The RPC URL is read at import time, so pin the module constant rather than the env.
-    with patch.object(st, "_BITTENSOR_RPC", st._BLOCKMACHINE_RPC), patch.object(
+    with patch.object(st, "_bittensor_rpc_url", return_value=st._BLOCKMACHINE_RPC), patch.object(
         st, "_BITTENSOR_NETWORK", "finney"
     ):
         with patch("internal.integrations.status._rpc_chain_healthy", return_value=(True, "chain RPC ok")):
