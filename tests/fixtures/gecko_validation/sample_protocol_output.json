@@ -13,7 +13,8 @@
     "thresholds": {
       "median_rel_diff_max": 0.01,
       "p95_rel_diff_max": 0.03,
-      "mean_hourly_log_return_corr_min": 0.9
+      "mean_hourly_log_return_corr_min": 0.9,
+      "per_subnet_hourly_log_return_corr_min": 0.7
     }
   },
   "aggregate": {
@@ -29,7 +30,8 @@
     "median_rel_diff_le_max": true,
     "p95_rel_diff_le_max": true,
     "mean_hourly_log_return_corr_ge_min": true,
-    "per_subnet_median_and_unit": true
+    "per_subnet_median_and_unit": true,
+    "per_subnet_hourly_log_return_corr_ge_min": true
   },
   "excluded_subnets": [],
   "failing_subnets": [],

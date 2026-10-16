@@ -20,6 +20,8 @@ DEFAULT_MIN_QUALIFYING_SUBNETS = 8
 DEFAULT_MEDIAN_REL_DIFF_MAX = 0.01
 DEFAULT_P95_REL_DIFF_MAX = 0.03
 DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN = 0.9
+# Joshua-approved starting floor for per-subnet hourly log-return correlation (#1395).
+DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_MIN = 0.7
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class ValidationThresholds:
     median_rel_diff_max: float = DEFAULT_MEDIAN_REL_DIFF_MAX
     p95_rel_diff_max: float = DEFAULT_P95_REL_DIFF_MAX
     mean_hourly_return_corr_min: float = DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN
+    per_subnet_hourly_log_return_corr_min: float = DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_MIN
 
 
 @dataclass
@@ -186,6 +189,8 @@ def evaluate_gecko_validation(
             if fail_reasons:
                 failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
+        if corr < th.per_subnet_hourly_log_return_corr_min:
+            fail_reasons.append("hourly_log_return_corr_below_min")
         if fail_reasons:
             failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
@@ -214,6 +219,10 @@ def evaluate_gecko_validation(
         )
 
     threshold_checks["per_subnet_median_and_unit"] = len(failing_subnets) == 0
+    threshold_checks["per_subnet_hourly_log_return_corr_ge_min"] = not any(
+        "hourly_log_return_corr_below_min" in row.get("reasons", [])
+        for row in failing_subnets
+    )
 
     at_floor_unit_mismatch = any(
         "price_unit_mismatch" in row.get("reasons", []) for row in failing_subnets
@@ -245,6 +254,7 @@ def evaluate_gecko_validation(
                 "median_rel_diff_max": th.median_rel_diff_max,
                 "p95_rel_diff_max": th.p95_rel_diff_max,
                 "mean_hourly_log_return_corr_min": th.mean_hourly_return_corr_min,
+                "per_subnet_hourly_log_return_corr_min": th.per_subnet_hourly_log_return_corr_min,
             },
         },
         "aggregate": aggregate,
