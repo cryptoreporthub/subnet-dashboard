@@ -1,8 +1,8 @@
 {
   "protocol": "gecko_step4_validation",
   "version": 1,
-  "git_sha": "e8715ddd584d3ca799f4da2ee25b60b2b7e7ef6c",
-  "generated_at": "2026-10-16T06:50:25.352956+00:00",
+  "git_sha": "fdd990081418d7471c20bb93f2f334f4355dc307",
+  "generated_at": "2026-10-16T08:14:55.526296+00:00",
   "mode": "fixture",
   "window_hours": 48,
   "currency": "token",
@@ -28,9 +28,12 @@
   "threshold_checks": {
     "median_rel_diff_le_max": true,
     "p95_rel_diff_le_max": true,
-    "mean_hourly_log_return_corr_ge_min": true
+    "mean_hourly_log_return_corr_ge_min": true,
+    "per_subnet_median_and_unit": true
   },
   "excluded_subnets": [],
+  "failing_subnets": [],
+  "unit_mismatch_below_floor": [],
   "per_subnet": [
     {
       "netuid": 1,
@@ -38,7 +41,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000062947e-05,
       "p95_rel_diff": 1.0000000000120066e-05,
-      "hourly_log_return_corr": 1.0
+      "hourly_log_return_corr": 1.0,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 2,
@@ -46,7 +50,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000064033e-05,
       "p95_rel_diff": 1.000000000011543e-05,
-      "hourly_log_return_corr": 0.9999999999999999
+      "hourly_log_return_corr": 0.9999999999999999,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 3,
@@ -54,7 +59,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.000000000006039e-05,
       "p95_rel_diff": 1.000000000011164e-05,
-      "hourly_log_return_corr": 1.0000000000000002
+      "hourly_log_return_corr": 1.0000000000000002,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 4,
@@ -62,7 +68,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000064926e-05,
       "p95_rel_diff": 1.0000000000123781e-05,
-      "hourly_log_return_corr": 1.0000000000000002
+      "hourly_log_return_corr": 1.0000000000000002,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 5,
@@ -70,7 +77,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.000000000005697e-05,
       "p95_rel_diff": 1.0000000000137976e-05,
-      "hourly_log_return_corr": 1.0
+      "hourly_log_return_corr": 1.0,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 6,
@@ -78,7 +86,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000066993e-05,
       "p95_rel_diff": 1.0000000000145794e-05,
-      "hourly_log_return_corr": 0.9999999999999998
+      "hourly_log_return_corr": 0.9999999999999998,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 7,
@@ -86,7 +95,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000052854e-05,
       "p95_rel_diff": 1.0000000000141106e-05,
-      "hourly_log_return_corr": 1.0
+      "hourly_log_return_corr": 1.0,
+      "price_unit_mismatch": false
     },
     {
       "netuid": 8,
@@ -94,7 +104,8 @@
       "matched_hours": 30,
       "median_rel_diff": 1.0000000000067445e-05,
       "p95_rel_diff": 1.0000000000133358e-05,
-      "hourly_log_return_corr": 1.0
+      "hourly_log_return_corr": 1.0,
+      "price_unit_mismatch": false
     }
   ]
 }

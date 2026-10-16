@@ -120,6 +120,7 @@ def evaluate_gecko_validation(
     per_subnet_out: List[Dict[str, Any]] = []
     excluded: List[Dict[str, Any]] = []
     failing_subnets: List[Dict[str, Any]] = []
+    unit_mismatch_below_floor: List[Dict[str, Any]] = []
     qualifying_rel: List[float] = []
     qualifying_corrs: List[float] = []
     qualifying_count = 0
@@ -147,6 +148,10 @@ def evaluate_gecko_validation(
         per_subnet_out.append(row)
         mh = metrics["matched_hours"]
         if mh < min_matched_hours:
+            if unit_bad:
+                unit_mismatch_below_floor.append(
+                    {"netuid": sub.netuid, "matched_hours": mh}
+                )
             excluded.append(
                 {
                     "netuid": sub.netuid,
@@ -164,10 +169,11 @@ def evaluate_gecko_validation(
                     "reason": "undefined_return_corr",
                 }
             )
+            if unit_bad:
+                failing_subnets.append(
+                    {"netuid": sub.netuid, "reasons": ["price_unit_mismatch"]}
+                )
             continue
-        qualifying_count += 1
-        qualifying_rel.extend(metrics["rel_diffs"])
-        qualifying_corrs.append(corr)
         fail_reasons: List[str] = []
         if unit_bad:
             fail_reasons.append("price_unit_mismatch")
@@ -175,6 +181,10 @@ def evaluate_gecko_validation(
             fail_reasons.append("median_rel_diff_exceeds_max")
         if fail_reasons:
             failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
+            continue
+        qualifying_count += 1
+        qualifying_rel.extend(metrics["rel_diffs"])
+        qualifying_corrs.append(corr)
 
     aggregate: Dict[str, Any] = {
         "qualifying_subnet_count": qualifying_count,
@@ -198,8 +208,19 @@ def evaluate_gecko_validation(
 
     threshold_checks["per_subnet_median_and_unit"] = len(failing_subnets) == 0
 
-    if qualifying_count < min_qualifying_subnets:
-        verdict: Verdict = "INCONCLUSIVE"
+    at_floor_unit_mismatch = any(
+        "price_unit_mismatch" in row.get("reasons", []) for row in failing_subnets
+    )
+    floor_evaluated = qualifying_count + len(failing_subnets)
+    if at_floor_unit_mismatch:
+        verdict: Verdict = "FAIL"
+    elif unit_mismatch_below_floor:
+        verdict = "INCONCLUSIVE"
+    elif qualifying_count < min_qualifying_subnets:
+        if failing_subnets and floor_evaluated >= min_qualifying_subnets:
+            verdict = "FAIL"
+        else:
+            verdict = "INCONCLUSIVE"
     elif not qualifying_rel or not qualifying_corrs:
         verdict = "INCONCLUSIVE"
     elif failing_subnets or not all(threshold_checks.values()):
@@ -222,6 +243,7 @@ def evaluate_gecko_validation(
         "threshold_checks": threshold_checks,
         "excluded_subnets": excluded,
         "failing_subnets": failing_subnets,
+        "unit_mismatch_below_floor": unit_mismatch_below_floor,
         "per_subnet": per_subnet_out,
     }
 
