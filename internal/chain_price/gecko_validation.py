@@ -265,7 +265,9 @@ def evaluate_gecko_validation(
         mh = metrics["matched_hours"]
         n_return_pairs = metrics["n_return_pairs"]
         span_h = metrics["matched_hour_span_hours"]
-        coverage = (mh / span_h) if span_h > 0 else 0.0
+        # Inclusive span: N aligned hours over contiguous stamps span (N-1) hours;
+        # divide by span_h + 1 so 24 contiguous hours → coverage 1.0, not ~1.043.
+        coverage = (mh / (span_h + 1.0)) if span_h >= 0 and mh > 0 else 0.0
         meets_hour_floor = mh >= min_matched_hours
         meets_coverage = span_h > 0 and coverage >= min_coverage_ratio
         # ponytail: with elapsed-time scaling every valid adjacent pair yields a return;
@@ -337,6 +339,10 @@ def evaluate_gecko_validation(
             )
             continue
         if not meets_coverage:
+            if unit_bad:
+                unit_mismatch_below_floor.append(
+                    {"netuid": sub.netuid, "matched_hours": mh}
+                )
             excluded.append(
                 {
                     "netuid": sub.netuid,

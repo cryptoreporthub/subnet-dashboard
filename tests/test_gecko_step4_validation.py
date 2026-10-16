@@ -636,7 +636,9 @@ def test_insufficient_coverage_excludes_sparse_24_over_60h_span():
     metrics = subnet_metrics(matched)
     assert metrics["matched_hours"] == 24
     assert metrics["matched_hour_span_hours"] == pytest.approx(60.0)
-    assert metrics["matched_hours"] / metrics["matched_hour_span_hours"] == pytest.approx(0.4)
+    assert metrics["matched_hours"] / (metrics["matched_hour_span_hours"] + 1) == pytest.approx(
+        24 / 61, rel=1e-6
+    )
     report = evaluate_gecko_validation([SubnetValidationInput(netuid=1, matched=matched)])
     assert report["verdict"] == "INCONCLUSIVE"
     assert report["aggregate"]["qualifying_subnet_count"] == 0
@@ -650,10 +652,37 @@ def test_insufficient_coverage_excludes_sparse_24_over_60h_span():
 def test_healthy_coverage_still_qualifies():
     matched = _stamped_aligned_matched(24)
     metrics = subnet_metrics(matched)
-    assert metrics["matched_hours"] / metrics["matched_hour_span_hours"] > 0.5
+    assert metrics["matched_hours"] / (metrics["matched_hour_span_hours"] + 1) > 0.5
     report = evaluate_gecko_validation(_good_subnets(8))
     assert report["verdict"] == "PASS"
     assert report["aggregate"]["qualifying_subnet_count"] == 8
+
+
+def test_sparse_insufficient_coverage_unit_mismatch_not_pass():
+    """Grok MODIFY 6222726055: coverage exclusion must not hide price_unit_mismatch."""
+    good = [
+        SubnetValidationInput(netuid=i, matched=_stamped_aligned_matched(24))
+        for i in range(8)
+    ]
+    sparse_rows = _sparse_span_matched(24, 60.0)
+    sparse_bad = SubnetValidationInput(
+        netuid=99,
+        matched=[
+            MatchedHour(
+                gecko_close=row.gecko_close,
+                chain_price_tao=10.0 + i * 0.1,
+                hour_unix=row.hour_unix,
+            )
+            for i, row in enumerate(sparse_rows)
+        ],
+    )
+    report = evaluate_gecko_validation(good + [sparse_bad])
+    assert report["verdict"] != "PASS"
+    assert report["unit_mismatch_below_floor"] == [{"netuid": 99, "matched_hours": 24}]
+    assert any(
+        e["netuid"] == 99 and e["reason"] == "insufficient_coverage"
+        for e in report["excluded_subnets"]
+    )
 
 
 def test_insufficient_coverage_loses_quorum_inconclusive():
