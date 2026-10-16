@@ -161,7 +161,14 @@ def evaluate_gecko_validation(
             )
             continue
         corr = metrics["hourly_log_return_corr"]
+        fail_reasons: List[str] = []
+        if unit_bad:
+            fail_reasons.append("price_unit_mismatch")
+        if median_rd is not None and median_rd > th.median_rel_diff_max:
+            fail_reasons.append("median_rel_diff_exceeds_max")
         if corr is None:
+            # Correlation is undefined (flat series), so the subnet cannot count toward
+            # the quorum, but a price disagreement seen at or above the floor still fails.
             excluded.append(
                 {
                     "netuid": sub.netuid,
@@ -169,16 +176,9 @@ def evaluate_gecko_validation(
                     "reason": "undefined_return_corr",
                 }
             )
-            if unit_bad:
-                failing_subnets.append(
-                    {"netuid": sub.netuid, "reasons": ["price_unit_mismatch"]}
-                )
+            if fail_reasons:
+                failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
-        fail_reasons: List[str] = []
-        if unit_bad:
-            fail_reasons.append("price_unit_mismatch")
-        if median_rd is not None and median_rd > th.median_rel_diff_max:
-            fail_reasons.append("median_rel_diff_exceeds_max")
         if fail_reasons:
             failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
@@ -214,13 +214,14 @@ def evaluate_gecko_validation(
     floor_evaluated = qualifying_count + len(failing_subnets)
     if at_floor_unit_mismatch:
         verdict: Verdict = "FAIL"
+    elif failing_subnets and floor_evaluated >= min_qualifying_subnets:
+        # A definite failure on enough evaluated subnets must not be downgraded by a
+        # below-floor warning.
+        verdict = "FAIL"
     elif unit_mismatch_below_floor:
         verdict = "INCONCLUSIVE"
     elif qualifying_count < min_qualifying_subnets:
-        if failing_subnets and floor_evaluated >= min_qualifying_subnets:
-            verdict = "FAIL"
-        else:
-            verdict = "INCONCLUSIVE"
+        verdict = "INCONCLUSIVE"
     elif not qualifying_rel or not qualifying_corrs:
         verdict = "INCONCLUSIVE"
     elif failing_subnets or not all(threshold_checks.values()):

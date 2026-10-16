@@ -304,3 +304,73 @@ def test_committed_sample_output_is_pass_verdict():
     for row in payload["per_subnet"]:
         assert SAMPLE_PER_SUBNET_KEYS <= frozenset(row)
         assert row["price_unit_mismatch"] is False
+
+
+def _good_subnets(n: int, start: int = 0) -> list[SubnetValidationInput]:
+    return [SubnetValidationInput(netuid=start + i, matched=_aligned_matched()) for i in range(n)]
+
+
+def _flat(netuid: int, gecko: float, chain: float, n: int = 30) -> SubnetValidationInput:
+    return SubnetValidationInput(
+        netuid=netuid,
+        matched=[MatchedHour(gecko_close=gecko, chain_price_tao=chain) for _ in range(n)],
+    )
+
+
+def _scaled(netuid: int, factor: float, n: int = 30) -> SubnetValidationInput:
+    return SubnetValidationInput(
+        netuid=netuid,
+        matched=[
+            MatchedHour(gecko_close=m.gecko_close, chain_price_tao=m.chain_price_tao * factor)
+            for m in _aligned_matched(n)
+        ],
+    )
+
+
+def test_flat_series_with_large_median_error_fails_not_silently_excluded():
+    report = evaluate_gecko_validation(_good_subnets(8) + [_flat(99, 0.010, 0.015)])
+    assert report["verdict"] == "FAIL"
+    fail99 = next(f for f in report["failing_subnets"] if f["netuid"] == 99)
+    assert fail99["reasons"] == ["median_rel_diff_exceeds_max"]
+    assert any(
+        e["netuid"] == 99 and e["reason"] == "undefined_return_corr"
+        for e in report["excluded_subnets"]
+    )
+
+
+def test_gecko_flat_chain_moving_three_percent_off_fails():
+    bad = SubnetValidationInput(
+        netuid=99,
+        matched=[
+            MatchedHour(gecko_close=0.07, chain_price_tao=0.07 * 1.03 * (1 + i * 0.0001))
+            for i in range(30)
+        ],
+    )
+    report = evaluate_gecko_validation(_good_subnets(8) + [bad])
+    assert report["verdict"] == "FAIL"
+    assert any(f["netuid"] == 99 for f in report["failing_subnets"])
+
+
+def test_flat_series_with_agreeing_prices_is_excluded_but_does_not_fail():
+    report = evaluate_gecko_validation(_good_subnets(8) + [_flat(99, 0.07, 0.07)])
+    assert report["verdict"] == "PASS"
+    assert report["failing_subnets"] == []
+    assert any(
+        e["netuid"] == 99 and e["reason"] == "undefined_return_corr"
+        for e in report["excluded_subnets"]
+    )
+
+
+def test_below_floor_unit_mismatch_does_not_mask_a_definite_fail():
+    subnets = _good_subnets(8) + [_scaled(90, 1.03), _flat(91, 0.01, 10.0, n=20)]
+    report = evaluate_gecko_validation(subnets)
+    assert report["verdict"] == "FAIL"
+    assert [f["netuid"] for f in report["failing_subnets"]] == [90]
+    assert report["unit_mismatch_below_floor"] == [{"netuid": 91, "matched_hours": 20}]
+
+
+def test_flat_median_failure_counts_toward_fail_quorum_but_too_few_stays_inconclusive():
+    seven = evaluate_gecko_validation(_good_subnets(7) + [_flat(99, 0.010, 0.015)])
+    assert seven["verdict"] == "FAIL"  # 7 qualifying + 1 evaluated failure = 8 evaluated
+    five = evaluate_gecko_validation(_good_subnets(5) + [_flat(99, 0.010, 0.015)])
+    assert five["verdict"] == "INCONCLUSIVE"  # only 6 evaluated
