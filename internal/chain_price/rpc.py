@@ -50,6 +50,12 @@ def _rate_limit_http_status(exc: BaseException) -> Optional[int]:
         code = exc.code
         if isinstance(code, int):
             return code
+        return None
+    # chain_client raises ChainRpcError(code=429) for 429, so this raw HTTPError
+    # branch is only reached by callers that pass a bare requests client through.
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        if exc.response.status_code == 429:
+            return 429
     return None
 
 

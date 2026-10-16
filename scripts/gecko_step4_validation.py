@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import subprocess
 import sys
@@ -184,6 +185,19 @@ def _live_probe_meta(reader: ChainReader) -> Dict[str, Any]:
     }
 
 
+def _parse_gecko_row(row: Any) -> Optional[Tuple[int, float]]:
+    if not isinstance(row, (list, tuple)) or len(row) < 5:
+        return None
+    try:
+        ts = int(row[0])
+        close = float(row[4])
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(close):
+        return None
+    return ts, close
+
+
 def _live_probe_subnets(
     mapped: List[Tuple[int, str, str, Dict[str, Any]]],
     *,
@@ -226,20 +240,19 @@ def _live_probe_subnets(
             continue
 
         now_ts = int(time.time())
-        sorted_ohlcv = sorted(
-            (row for row in ohlcv if isinstance(row, (list, tuple)) and len(row) >= 5),
-            key=lambda row: int(row[0]),
-        )
-        completed = [
-            row
-            for row in sorted_ohlcv
-            if int(row[0]) + 3600 <= now_ts
-        ]
+        parsed: List[Tuple[int, float]] = []
+        for row in ohlcv:
+            point = _parse_gecko_row(row)
+            if point is None:
+                _bump_stage_count(stage_counts, "gecko_validation", "malformed_row")
+            else:
+                parsed.append(point)
+        parsed.sort(key=lambda point: point[0])
+        completed = [point for point in parsed if point[0] + 3600 <= now_ts]
         matched: List[MatchedHour] = []
-        for item in completed[-window_hours:]:
+        for ts, close in completed[-window_hours:]:
             hours_candidate += 1
-            ts, _o, _h, _l, close, *_rest = item
-            target_ms = (int(ts) + 3600) * 1000
+            target_ms = (ts + 3600) * 1000
             block, block_hash, outcome = resolve_block_at(
                 reader, target_ms, search="bracketed"
             )
@@ -256,14 +269,14 @@ def _live_probe_subnets(
             if chain_px is None:
                 _bump_stage_count(stage_counts, "reserve_read", "missing_reserve_decode")
                 continue
-            if float(close) <= 0:
+            if close <= 0:
                 _bump_stage_count(stage_counts, "gecko_validation", "nonpositive_close")
                 continue
             matched.append(
                 MatchedHour(
-                    gecko_close=float(close),
+                    gecko_close=close,
                     chain_price_tao=chain_px,
-                    hour_unix=int(ts),
+                    hour_unix=ts,
                 )
             )
             time.sleep(0.05)

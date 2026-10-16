@@ -938,7 +938,8 @@ def test_live_probe_per_subnet_provider_served_after_reserve_before_close_check(
     def fake_resolve(_reader, target_ms, search="bracketed"):
         return 1, "0xabc", "ok"
 
-    def fake_reserve(_reader, _netuid, _block_hash):
+    def fake_reserve(reader, _netuid, _block_hash):
+        reader.provider_served = "finney"
         return 0.01, "ok"
 
     monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
@@ -950,7 +951,7 @@ def test_live_probe_per_subnet_provider_served_after_reserve_before_close_check(
     )
 
     class _Reader:
-        provider_served = "finney"
+        provider_served = None
         fallback_count = 0
         rate_limit_events = []
 
@@ -1006,6 +1007,74 @@ def test_live_probe_per_subnet_provider_served_not_stale_from_prior_subnet(monke
     assert meta["per_subnet"][1]["provider_served"] is None
 
 
+def test_live_probe_nonpositive_close_counted_in_aggregate(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", lambda *_a: (0.01, "ok"))
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.0]],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert len(subs[0].matched) == 0
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"gecko_validation:nonpositive_close": 1}
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_validation:nonpositive_close") == 1
+
+
+def test_live_probe_skips_malformed_gecko_rows(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", lambda *_a: (0.01, "ok"))
+    malformed = [
+        "garbage",
+        [1, 2],
+        ["bad-ts", 0, 0, 0, 0.01],
+        [float("inf"), 0, 0, 0, 0.01],
+        [now_ts - 7200, 0, 0, 0, "not-a-number"],
+        [now_ts - 5400, 0, 0, 0, None],
+        [now_ts - 3600, 0, 0, 0, float("nan")],
+    ]
+    valid = [now_ts - 10800, 0, 0, 0, 0.01]
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [*malformed, valid],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert subs[0].error is None
+    assert [m.hour_unix for m in subs[0].matched] == [now_ts - 10800]
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"gecko_validation:malformed_row": 7}
+
+
 def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
     from internal.chain_client import ChainRpcError
     from internal.chain_price.rpc import rpc_call
@@ -1019,6 +1088,47 @@ def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
     assert result is None
     assert outcome == "rate_limited"
     assert getattr(client, "_last_rate_limit_http_status", None) is None
+
+
+def test_rpc_call_clears_stale_rate_limit_status_on_next_call():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def __init__(self):
+            self.attempts = 0
+
+        def _call_typed(self, method, params=None):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+            raise RuntimeError("boom")
+
+    client = _Client()
+    _, first = rpc_call(client, "chain_getBlockHash", [])
+    assert first == "rate_limited"
+    assert client._last_rate_limit_http_status == 429
+    _, second = rpc_call(client, "chain_getBlockHash", [])
+    assert second == "rpc_error"
+    assert not hasattr(client, "_last_rate_limit_http_status")
+
+
+def test_rpc_call_raw_http_429_records_http_status():
+    import requests
+    from internal.chain_price.rpc import rpc_call
+
+    resp = requests.Response()
+    resp.status_code = 429
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise requests.HTTPError("429 Client Error: Too Many Requests", response=resp)
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert client._last_rate_limit_http_status == 429
 
 
 def test_reader_rate_limit_event_includes_http_status():
