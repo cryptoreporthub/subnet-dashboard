@@ -9,13 +9,14 @@ import json
 import logging
 import os
 import tempfile
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 
 DATA_DIR = os.environ.get("DATA_DIR", "data")
 
 _logger = logging.getLogger(__name__)
 _data_dir_created_logged = False
+_fsync_dir_warned = False
 
 
 def ensure_data_dir() -> str:
@@ -38,13 +39,44 @@ def ensure_data_dir() -> str:
     return DATA_DIR
 
 
-def safe_write_json(path: str, data: Dict[str, Any]) -> None:
+def _fsync_dir(dir_name: str) -> None:
+    """Persist a rename by fsyncing its directory (POSIX; no-op on Windows).
+
+    Best-effort after a successful replace: data is already committed; callers
+    should not treat a directory fsync failure as a failed write.
     """
-    Write JSON data to a file atomically with directory creation.
+    global _fsync_dir_warned
+    if os.name == "nt":
+        return
+    try:
+        dfd = os.open(dir_name, os.O_RDONLY)
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
+    except OSError as exc:
+        if not _fsync_dir_warned:
+            _logger.warning("Could not fsync directory %s: %s", dir_name, exc)
+            _fsync_dir_warned = True
+
+
+def safe_write_json(
+    path: str,
+    data: Dict[str, Any],
+    *,
+    indent: Optional[int] = 2,
+    separators: Optional[Tuple[str, str]] = None,
+) -> None:
+    """
+    Write JSON data to a file atomically and durably, with directory creation.
 
     Each writer gets a pid-tagged mkstemp sidecar ``<basename>.<pid>.<rand>.tmp``
     so the reaper can skip live owners; stale temps are reaped by
     ``internal.tmp_boot_reaper``. Never use mkstemp with suffix ``.json`` alone.
+
+    The temp file is fsynced before ``os.replace`` so a crash cannot leave the
+    target pointing at empty or partial content, and the directory is fsynced
+    after so the rename itself survives power loss.
     """
     dir_name = os.path.dirname(path)
     if dir_name:
@@ -57,8 +89,16 @@ def safe_write_json(path: str, data: Dict[str, Any]) -> None:
     )
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+            dump_kw: Dict[str, Any] = {}
+            if separators is not None:
+                dump_kw["separators"] = separators
+            if indent is not None:
+                dump_kw["indent"] = indent
+            json.dump(data, f, **dump_kw)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(temp_path, path)
+        _fsync_dir(dir_name or ".")
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)

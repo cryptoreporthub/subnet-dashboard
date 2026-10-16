@@ -377,32 +377,15 @@ class WhaleIntelligenceService:
 
         self.data["updated_at"] = _now_iso()
         if _json_compact_enabled():
-            self._save_data_compact()
+            safe_write_json(
+                self.data_path,
+                self.data,
+                indent=None,
+                separators=(",", ":"),
+            )
         else:
             safe_write_json(self.data_path, self.data)
         self._refresh_disk_meta()
-
-    def _save_data_compact(self) -> None:
-        import tempfile
-
-        from internal.file_utils import ensure_data_dir
-
-        ensure_data_dir()
-        dir_name = os.path.dirname(self.data_path)
-        if dir_name:
-            os.makedirs(dir_name, exist_ok=True)
-        fd, temp_path = tempfile.mkstemp(
-            dir=dir_name or ".",
-            prefix=f"{os.path.basename(self.data_path)}.{os.getpid()}.",
-            suffix=".tmp",
-        )
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(self.data, f, separators=(",", ":"))
-            os.replace(temp_path, self.data_path)
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
 
     def _position_key(self, wallet: str, netuid: int) -> str:
         return f"{wallet}:{netuid}"
