@@ -290,6 +290,7 @@ SAMPLE_PER_SUBNET_KEYS = frozenset(
         "matched_hour_span_hours",
         "return_pair_dt_exact_3600_count",
         "duplicate_hour_unix_dropped",
+        "coverage",
         "data_integrity_error",
         "median_rel_diff",
         "p95_rel_diff",
@@ -613,6 +614,61 @@ def _conflicting_duplicate_stamped_30h(base_ts: int = 1_700_000_000) -> list[Mat
         )
     )
     return rows
+
+
+def _sparse_span_matched(
+    n_rows: int = 24,
+    span_hours: float = 60.0,
+    base_ts: int = 1_700_000_000,
+) -> list[MatchedHour]:
+    """Stamped rows from first to last timestamp spanning span_hours."""
+    span_seconds = int(span_hours * ALIGNED_HOUR_SECONDS)
+    rows: list[MatchedHour] = []
+    for i in range(n_rows):
+        ts = base_ts + int(i * span_seconds / (n_rows - 1))
+        g = 0.01 + i * 0.0001
+        rows.append(MatchedHour(gecko_close=g, chain_price_tao=g * 1.00001, hour_unix=ts))
+    return rows
+
+
+def test_insufficient_coverage_excludes_sparse_24_over_60h_span():
+    matched = _sparse_span_matched(24, 60.0)
+    metrics = subnet_metrics(matched)
+    assert metrics["matched_hours"] == 24
+    assert metrics["matched_hour_span_hours"] == pytest.approx(60.0)
+    assert metrics["matched_hours"] / metrics["matched_hour_span_hours"] == pytest.approx(0.4)
+    report = evaluate_gecko_validation([SubnetValidationInput(netuid=1, matched=matched)])
+    assert report["verdict"] == "INCONCLUSIVE"
+    assert report["aggregate"]["qualifying_subnet_count"] == 0
+    assert any(
+        e["netuid"] == 1 and e["reason"] == "insufficient_coverage"
+        for e in report["excluded_subnets"]
+    )
+    assert report["failing_subnets"] == []
+
+
+def test_healthy_coverage_still_qualifies():
+    matched = _stamped_aligned_matched(24)
+    metrics = subnet_metrics(matched)
+    assert metrics["matched_hours"] / metrics["matched_hour_span_hours"] > 0.5
+    report = evaluate_gecko_validation(_good_subnets(8))
+    assert report["verdict"] == "PASS"
+    assert report["aggregate"]["qualifying_subnet_count"] == 8
+
+
+def test_insufficient_coverage_loses_quorum_inconclusive():
+    good = [
+        SubnetValidationInput(netuid=i, matched=_stamped_aligned_matched(24))
+        for i in range(7)
+    ]
+    sparse = SubnetValidationInput(netuid=88, matched=_sparse_span_matched(24, 60.0))
+    report = evaluate_gecko_validation(good + [sparse])
+    assert report["verdict"] == "INCONCLUSIVE"
+    assert report["aggregate"]["qualifying_subnet_count"] == 7
+    assert any(
+        e["netuid"] == 88 and e["reason"] == "insufficient_coverage"
+        for e in report["excluded_subnets"]
+    )
 
 
 def test_conflicting_duplicate_among_eight_clean_fails_gate():

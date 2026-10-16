@@ -22,6 +22,7 @@ DEFAULT_P95_REL_DIFF_MAX = 0.03
 DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN = 0.9
 # Report-only WARN threshold (#1395 comment 6215696142); does not affect PASS/FAIL.
 DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_WARN_MIN = 0.7
+DEFAULT_MIN_COVERAGE_RATIO = 0.5
 ALIGNED_HOUR_SECONDS = 3600
 # ponytail: relative tolerance for same-hour duplicate rows; upgrade path = config threshold.
 _DUPLICATE_HOUR_PRICE_AGREE_REL_EPS = 1e-9
@@ -230,6 +231,7 @@ def evaluate_gecko_validation(
     *,
     min_matched_hours: int = DEFAULT_MIN_MATCHED_HOURS,
     min_qualifying_subnets: int = DEFAULT_MIN_QUALIFYING_SUBNETS,
+    min_coverage_ratio: float = DEFAULT_MIN_COVERAGE_RATIO,
     thresholds: ValidationThresholds | None = None,
 ) -> Dict[str, Any]:
     """Return a report dict including verdict PASS / FAIL / INCONCLUSIVE."""
@@ -262,10 +264,13 @@ def evaluate_gecko_validation(
         corr = metrics["hourly_log_return_corr"]
         mh = metrics["matched_hours"]
         n_return_pairs = metrics["n_return_pairs"]
+        span_h = metrics["matched_hour_span_hours"]
+        coverage = (mh / span_h) if span_h > 0 else 0.0
         meets_hour_floor = mh >= min_matched_hours
+        meets_coverage = span_h > 0 and coverage >= min_coverage_ratio
         # ponytail: with elapsed-time scaling every valid adjacent pair yields a return;
         # the only pair gate is min_matched_hours (distinct aligned bars).
-        at_floor = meets_hour_floor
+        at_floor = meets_hour_floor and meets_coverage
         corr_warn = (
             at_floor
             and corr is not None
@@ -277,9 +282,10 @@ def evaluate_gecko_validation(
                 "n_return_pairs": n_return_pairs,
                 "return_pair_dt_over_3600_count": metrics["return_pair_dt_over_3600_count"],
                 "return_pair_dt_max_seconds": metrics["return_pair_dt_max_seconds"],
-                "matched_hour_span_hours": metrics["matched_hour_span_hours"],
+                "matched_hour_span_hours": span_h,
                 "return_pair_dt_exact_3600_count": metrics["return_pair_dt_exact_3600_count"],
                 "duplicate_hour_unix_dropped": metrics["duplicate_hour_unix_dropped"],
+                "coverage": coverage,
                 "data_integrity_error": integrity_error,
                 "median_rel_diff": median_rd,
                 "p95_rel_diff": _p95(metrics["rel_diffs"]),
@@ -327,6 +333,16 @@ def evaluate_gecko_validation(
                     "matched_hours": mh,
                     "n_return_pairs": n_return_pairs,
                     "reason": f"below_floor_{min_matched_hours}h",
+                }
+            )
+            continue
+        if not meets_coverage:
+            excluded.append(
+                {
+                    "netuid": sub.netuid,
+                    "matched_hours": mh,
+                    "n_return_pairs": n_return_pairs,
+                    "reason": "insufficient_coverage",
                 }
             )
             continue
@@ -403,6 +419,7 @@ def evaluate_gecko_validation(
         "parameters": {
             "min_matched_hours_per_subnet": min_matched_hours,
             "min_qualifying_subnets": min_qualifying_subnets,
+            "min_coverage_ratio": min_coverage_ratio,
             "thresholds": {
                 "median_rel_diff_max": th.median_rel_diff_max,
                 "p95_rel_diff_max": th.p95_rel_diff_max,
