@@ -130,6 +130,10 @@ def _bump_stage_count(stage_counts: Dict[str, int], stage: str, outcome: str) ->
     stage_counts[key] = stage_counts.get(key, 0) + 1
 
 
+def _gecko_fetch_error_label(exc: BaseException) -> str:
+    return f"gecko_fetch:{type(exc).__name__}"
+
+
 def _merge_stage_counts(into: Dict[str, int], part: Dict[str, int]) -> None:
     for key, count in part.items():
         into[key] = into.get(key, 0) + count
@@ -191,13 +195,14 @@ def _live_probe_subnets(
             ohlcv = _fetch_gecko_ohlcv(network, pool, gt, window_hours)
             last_gecko = time.monotonic()
         except Exception as exc:
-            sub.error = str(exc)[:160]
-            _bump_stage_count(stage_counts, "gecko_fetch", sub.error.split("(")[0][:48] or "error")
+            fetch_label = _gecko_fetch_error_label(exc)
+            sub.error = fetch_label
+            _bump_stage_count(stage_counts, "gecko_fetch", type(exc).__name__)
             per_subnet_diag.append(
                 {
                     "netuid": netuid,
                     "pool": pool,
-                    "gecko_error": sub.error,
+                    "gecko_error": fetch_label,
                     "stage_outcome_counts": stage_counts,
                     "hours_candidate": 0,
                     "hours_matched": 0,

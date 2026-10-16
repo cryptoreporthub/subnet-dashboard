@@ -46,8 +46,10 @@ def classify_rpc_error(exc: BaseException) -> RpcOutcome:
 
 
 def _rate_limit_http_status(exc: BaseException) -> Optional[int]:
-    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited" and exc.code is not None:
-        return int(exc.code)
+    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
+        code = exc.code
+        if isinstance(code, int):
+            return code
     return None
 
 
@@ -57,6 +59,8 @@ def rpc_call(
     params: Optional[list] = None,
 ) -> Tuple[Optional[Any], RpcOutcome]:
     params = params or []
+    if hasattr(client, "_last_rate_limit_http_status"):
+        delattr(client, "_last_rate_limit_http_status")
     if method == "state_queryStorageAt" and len(params) >= 2:
         try:
             result = client.query_storage_at(params[0], params[1])

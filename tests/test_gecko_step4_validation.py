@@ -830,12 +830,72 @@ def test_live_probe_gecko_error_visible_in_meta(monkeypatch):
         window_hours=24,
         reader=_Reader(),
     )
-    assert subs[0].error
+    assert subs[0].error == "gecko_fetch:RuntimeError"
     row = meta["per_subnet"][0]
-    assert row["gecko_error"]
-    assert "gecko_fetch:" in "".join(meta["aggregate_stage_outcome_counts"])
+    assert row["gecko_error"] == "gecko_fetch:RuntimeError"
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:RuntimeError") == 1
     report = evaluate_gecko_validation(subs)
     assert report["verdict"] == "INCONCLUSIVE"
+
+
+def test_live_probe_gecko_http_error_omits_urls_from_diagnostics(monkeypatch):
+    import requests
+
+    resp = requests.Response()
+    resp.status_code = 404
+    resp.url = "https://api.geckoterminal.com/api/v2/networks/foo/pools/bar/ohlcv/hour"
+    err = requests.HTTPError(
+        f"404 Client Error: Not Found for url: {resp.url}",
+        response=resp,
+    )
+
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: (_ for _ in ()).throw(err),
+    )
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(2, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=24,
+        reader=_Reader(),
+    )
+    row = meta["per_subnet"][0]
+    diag_blob = json.dumps(
+        {
+            "subnet_error": subs[0].error,
+            "gecko_error": row["gecko_error"],
+            "stage_outcome_counts": row["stage_outcome_counts"],
+            "aggregate_stage_outcome_counts": meta["aggregate_stage_outcome_counts"],
+        }
+    ).lower()
+    assert "geckoterminal" not in diag_blob
+    assert "for url" not in diag_blob
+    assert subs[0].error == "gecko_fetch:HTTPError"
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:HTTPError") == 1
+
+
+def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "HTTP 429 too many requests", code="abc")
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert getattr(client, "_last_rate_limit_http_status", None) is None
 
 
 def test_reader_rate_limit_event_includes_http_status():
