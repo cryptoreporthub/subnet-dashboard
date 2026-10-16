@@ -9,9 +9,11 @@ from pathlib import Path
 import pytest
 
 from internal.chain_price.gecko_validation import (
+    ALIGNED_HOUR_SECONDS,
     MatchedHour,
     SubnetValidationInput,
-    ValidationThresholds,
+    _hourly_log_returns_scaled,
+    _pearson,
     evaluate_gecko_validation,
     subnet_metrics,
     subnets_from_serializable,
@@ -269,6 +271,7 @@ SAMPLE_REPORT_TOP_KEYS = frozenset(
         "parameters",
         "aggregate",
         "threshold_checks",
+        "warnings",
         "excluded_subnets",
         "failing_subnets",
         "unit_mismatch_below_floor",
@@ -284,6 +287,7 @@ SAMPLE_PER_SUBNET_KEYS = frozenset(
         "median_rel_diff",
         "p95_rel_diff",
         "hourly_log_return_corr",
+        "corr_below_warn_threshold",
         "price_unit_mismatch",
     }
 )
@@ -390,11 +394,7 @@ def test_pooled_p95_nearest_rank_fails_when_five_percent_exceed_limit():
         factor = 1.0001 if i < 14 else 1.04
         mixed_hours.append(MatchedHour(gecko_close=g, chain_price_tao=g * factor))
     mixed = SubnetValidationInput(netuid=99, matched=mixed_hours)
-    # Step-change rel_diff spikes break hourly return corr; isolate pooled p95 rank here.
-    report = evaluate_gecko_validation(
-        good + [mixed],
-        thresholds=ValidationThresholds(per_subnet_hourly_log_return_corr_min=-1.0),
-    )
+    report = evaluate_gecko_validation(good + [mixed])
     assert report["aggregate"]["n_price_points"] == 192
     assert report["aggregate"]["p95_rel_diff"] == pytest.approx(0.04, rel=1e-6)
     assert report["threshold_checks"]["p95_rel_diff_le_max"] is False
@@ -412,27 +412,48 @@ def _low_corr_matched(n: int = 30, base: float = 0.01) -> list[MatchedHour]:
     ]
 
 
-def test_low_per_subnet_corr_fails_despite_high_cohort_mean():
-    """Nine aligned subnets + one anti-correlated: mean corr can stay ≥0.9 but gate FAILs."""
-    good = [SubnetValidationInput(netuid=i, matched=_aligned_matched()) for i in range(9)]
+def test_low_per_subnet_corr_warns_without_failing_verdict():
+    """Low corr subnet warns only; cohort mean may still PASS when enough peers are tight."""
+    good = [SubnetValidationInput(netuid=i, matched=_aligned_matched()) for i in range(19)]
     bad = SubnetValidationInput(netuid=99, matched=_low_corr_matched())
     report = evaluate_gecko_validation(good + [bad])
-    assert report["verdict"] == "FAIL"
-    assert report["aggregate"]["qualifying_subnet_count"] == 9
-    assert report["aggregate"]["mean_hourly_log_return_corr"] >= 0.9
-    assert report["threshold_checks"]["per_subnet_hourly_log_return_corr_ge_min"] is False
-    fail99 = next(f for f in report["failing_subnets"] if f["netuid"] == 99)
-    assert "hourly_log_return_corr_below_min" in fail99["reasons"]
+    assert report["verdict"] == "PASS"
+    assert report["aggregate"]["qualifying_subnet_count"] == 20
+    row99 = next(r for r in report["per_subnet"] if r["netuid"] == 99)
+    assert row99["corr_below_warn_threshold"] is True
+    assert any(w["netuid"] == 99 for w in report["warnings"])
+    assert report["failing_subnets"] == []
     assert (
-        report["parameters"]["thresholds"]["per_subnet_hourly_log_return_corr_min"] == 0.7
+        report["parameters"]["thresholds"]["per_subnet_hourly_log_return_corr_warn_min"] == 0.7
     )
 
 
-def test_per_subnet_corr_floor_pass_when_all_meet_min():
+def test_per_subnet_corr_warn_false_when_all_meet_warn_min():
     report = evaluate_gecko_validation(_good_subnets(8))
     assert report["verdict"] == "PASS"
-    assert report["threshold_checks"]["per_subnet_hourly_log_return_corr_ge_min"] is True
+    assert report["warnings"] == []
     for row in report["per_subnet"]:
-        corr = row.get("hourly_log_return_corr")
-        if corr is not None and row["matched_hours"] >= 24:
-            assert corr >= 0.7
+        assert row["corr_below_warn_threshold"] is False
+
+
+def test_gapped_timestamps_scale_returns_not_naive_pairing():
+    """A 2h gap must halve the per-hour rate; naive adjacent pairing would overstate it."""
+    base_ts = 1_700_000_000
+    matched = [
+        MatchedHour(100.0, 100.0, hour_unix=base_ts),
+        MatchedHour(121.0, 118.0, hour_unix=base_ts + 2 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(133.1, 130.0, hour_unix=base_ts + 3 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(140.0, 136.0, hour_unix=base_ts + 4 * ALIGNED_HOUR_SECONDS),
+    ]
+    closes_g = [m.gecko_close for m in matched]
+    closes_c = [m.chain_price_tao for m in matched]
+    stamps = [int(m.hour_unix) for m in matched]
+    scaled_g = _hourly_log_returns_scaled(closes_g, stamps)
+    naive_g = [math.log(closes_g[i] / closes_g[i - 1]) for i in range(1, len(closes_g))]
+    assert scaled_g != naive_g
+    assert scaled_g[0] == pytest.approx(math.log(121 / 100) * 0.5, rel=1e-9)
+    scaled_c = _hourly_log_returns_scaled(closes_c, stamps)
+    naive_c = [math.log(closes_c[i] / closes_c[i - 1]) for i in range(1, len(closes_c))]
+    assert _pearson(scaled_g, scaled_c) != _pearson(naive_g, naive_c)
+    metrics = subnet_metrics(matched)
+    assert metrics["hourly_log_return_corr"] == _pearson(scaled_g, scaled_c)

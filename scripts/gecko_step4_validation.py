@@ -185,7 +185,13 @@ def _live_probe_subnets(
             chain_px = _reserve_price_tao(reader, netuid, block_hash)
             if chain_px is None or float(close) <= 0:
                 continue
-            matched.append(MatchedHour(gecko_close=float(close), chain_price_tao=chain_px))
+            matched.append(
+                MatchedHour(
+                    gecko_close=float(close),
+                    chain_price_tao=chain_px,
+                    hour_unix=int(ts),
+                )
+            )
             time.sleep(0.05)
         sub.matched = matched
         results.append(sub)

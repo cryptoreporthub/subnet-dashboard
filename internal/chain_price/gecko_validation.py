@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import statistics
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Literal, Optional, Sequence
 
 from internal.council.grading import is_price_unit_mismatch
 
@@ -20,8 +20,9 @@ DEFAULT_MIN_QUALIFYING_SUBNETS = 8
 DEFAULT_MEDIAN_REL_DIFF_MAX = 0.01
 DEFAULT_P95_REL_DIFF_MAX = 0.03
 DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN = 0.9
-# Joshua-approved starting floor for per-subnet hourly log-return correlation (#1395).
-DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_MIN = 0.7
+# Report-only WARN threshold (#1395 comment 6215696142); does not affect PASS/FAIL.
+DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_WARN_MIN = 0.7
+ALIGNED_HOUR_SECONDS = 3600
 
 
 @dataclass(frozen=True)
@@ -29,13 +30,16 @@ class ValidationThresholds:
     median_rel_diff_max: float = DEFAULT_MEDIAN_REL_DIFF_MAX
     p95_rel_diff_max: float = DEFAULT_P95_REL_DIFF_MAX
     mean_hourly_return_corr_min: float = DEFAULT_MEAN_HOURLY_RETURN_CORR_MIN
-    per_subnet_hourly_log_return_corr_min: float = DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_MIN
+    per_subnet_hourly_log_return_corr_warn_min: float = (
+        DEFAULT_PER_SUBNET_HOURLY_LOG_RETURN_CORR_WARN_MIN
+    )
 
 
 @dataclass
 class MatchedHour:
     gecko_close: float
     chain_price_tao: float
+    hour_unix: Optional[int] = None
 
 
 @dataclass
@@ -59,13 +63,27 @@ def _pearson(xs: Sequence[float], ys: Sequence[float]) -> Optional[float]:
     return num / den
 
 
-def _hourly_log_returns(closes: Sequence[float]) -> List[float]:
+def _hourly_log_returns_scaled(
+    closes: Sequence[float], hour_unix: Sequence[int]
+) -> List[float]:
+    """Hourly log returns with elapsed-time scaling (#1395 gap fix).
+
+    Each consecutive pair uses dt = hour_unix[i] - hour_unix[i-1]. The raw log move
+    log(close[i]/close[i-1]) is multiplied by (ALIGNED_HOUR_SECONDS / dt) so a move
+    over 7200s counts as half the per-hour rate. When dt is exactly 3600s this
+    matches naive adjacent-hour pairing.
+    """
+    if len(closes) != len(hour_unix):
+        return []
     out: List[float] = []
     for i in range(1, len(closes)):
         prev, cur = closes[i - 1], closes[i]
+        dt = int(hour_unix[i]) - int(hour_unix[i - 1])
+        if dt <= 0:
+            continue
         if not (math.isfinite(prev) and math.isfinite(cur)) or prev <= 0 or cur <= 0:
             continue
-        out.append(math.log(cur / prev))
+        out.append(math.log(cur / prev) * (ALIGNED_HOUR_SECONDS / dt))
     return out
 
 
@@ -74,6 +92,8 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
     rel_diffs: List[float] = []
     gecko_closes: List[float] = []
     chain_closes: List[float] = []
+    hour_unix: List[int] = []
+    synthetic = 0
     for row in matched:
         g, c = row.gecko_close, row.chain_price_tao
         if not (math.isfinite(g) and math.isfinite(c)) or g <= 0 or c <= 0:
@@ -81,8 +101,13 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
         rel_diffs.append(abs(c - g) / g)
         gecko_closes.append(g)
         chain_closes.append(c)
-    rets_g = _hourly_log_returns(gecko_closes)
-    rets_c = _hourly_log_returns(chain_closes)
+        if row.hour_unix is not None:
+            hour_unix.append(int(row.hour_unix))
+        else:
+            hour_unix.append(synthetic)
+            synthetic += ALIGNED_HOUR_SECONDS
+    rets_g = _hourly_log_returns_scaled(gecko_closes, hour_unix)
+    rets_c = _hourly_log_returns_scaled(chain_closes, hour_unix)
     n = min(len(rets_g), len(rets_c))
     corr = _pearson(rets_g[:n], rets_c[:n]) if n >= 3 else None
     return {
@@ -134,6 +159,7 @@ def evaluate_gecko_validation(
     qualifying_rel: List[float] = []
     qualifying_corrs: List[float] = []
     qualifying_count = 0
+    warnings: List[Dict[str, Any]] = []
 
     for sub in subnets:
         row: Dict[str, Any] = {"netuid": sub.netuid, "pool": sub.pool}
@@ -146,15 +172,30 @@ def evaluate_gecko_validation(
         metrics = subnet_metrics(sub.matched)
         unit_bad = subnet_unit_mismatch(sub.matched)
         median_rd = statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
+        corr = metrics["hourly_log_return_corr"]
+        corr_warn = (
+            corr is not None
+            and corr < th.per_subnet_hourly_log_return_corr_warn_min
+        )
         row.update(
             {
                 "matched_hours": metrics["matched_hours"],
                 "median_rel_diff": median_rd,
                 "p95_rel_diff": _p95(metrics["rel_diffs"]),
-                "hourly_log_return_corr": metrics["hourly_log_return_corr"],
+                "hourly_log_return_corr": corr,
+                "corr_below_warn_threshold": corr_warn,
                 "price_unit_mismatch": unit_bad,
             }
         )
+        if corr_warn:
+            warnings.append(
+                {
+                    "netuid": sub.netuid,
+                    "kind": "hourly_log_return_corr_below_warn",
+                    "hourly_log_return_corr": corr,
+                    "warn_min": th.per_subnet_hourly_log_return_corr_warn_min,
+                }
+            )
         per_subnet_out.append(row)
         mh = metrics["matched_hours"]
         if mh < min_matched_hours:
@@ -170,7 +211,6 @@ def evaluate_gecko_validation(
                 }
             )
             continue
-        corr = metrics["hourly_log_return_corr"]
         fail_reasons: List[str] = []
         if unit_bad:
             fail_reasons.append("price_unit_mismatch")
@@ -189,8 +229,6 @@ def evaluate_gecko_validation(
             if fail_reasons:
                 failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
-        if corr < th.per_subnet_hourly_log_return_corr_min:
-            fail_reasons.append("hourly_log_return_corr_below_min")
         if fail_reasons:
             failing_subnets.append({"netuid": sub.netuid, "reasons": fail_reasons})
             continue
@@ -219,10 +257,6 @@ def evaluate_gecko_validation(
         )
 
     threshold_checks["per_subnet_median_and_unit"] = len(failing_subnets) == 0
-    threshold_checks["per_subnet_hourly_log_return_corr_ge_min"] = not any(
-        "hourly_log_return_corr_below_min" in row.get("reasons", [])
-        for row in failing_subnets
-    )
 
     at_floor_unit_mismatch = any(
         "price_unit_mismatch" in row.get("reasons", []) for row in failing_subnets
@@ -254,11 +288,14 @@ def evaluate_gecko_validation(
                 "median_rel_diff_max": th.median_rel_diff_max,
                 "p95_rel_diff_max": th.p95_rel_diff_max,
                 "mean_hourly_log_return_corr_min": th.mean_hourly_return_corr_min,
-                "per_subnet_hourly_log_return_corr_min": th.per_subnet_hourly_log_return_corr_min,
+                "per_subnet_hourly_log_return_corr_warn_min": (
+                    th.per_subnet_hourly_log_return_corr_warn_min
+                ),
             },
         },
         "aggregate": aggregate,
         "threshold_checks": threshold_checks,
+        "warnings": warnings,
         "excluded_subnets": excluded,
         "failing_subnets": failing_subnets,
         "unit_mismatch_below_floor": unit_mismatch_below_floor,
@@ -273,14 +310,25 @@ def subnets_from_serializable(rows: Sequence[Dict[str, Any]]) -> List[SubnetVali
         matched: List[MatchedHour] = []
         for pt in row.get("matched_hours_data") or row.get("matched") or []:
             if isinstance(pt, dict):
+                ts = pt.get("hour_unix")
+                if ts is None:
+                    ts = pt.get("ts_unix") or pt.get("timestamp")
                 matched.append(
                     MatchedHour(
                         gecko_close=float(pt["gecko_close"]),
                         chain_price_tao=float(pt["chain_price_tao"]),
+                        hour_unix=int(ts) if ts is not None else None,
                     )
                 )
             elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
-                matched.append(MatchedHour(gecko_close=float(pt[0]), chain_price_tao=float(pt[1])))
+                hour_u = int(pt[2]) if len(pt) >= 3 else None
+                matched.append(
+                    MatchedHour(
+                        gecko_close=float(pt[0]),
+                        chain_price_tao=float(pt[1]),
+                        hour_unix=hour_u,
+                    )
+                )
         out.append(
             SubnetValidationInput(
                 netuid=int(row["netuid"]),

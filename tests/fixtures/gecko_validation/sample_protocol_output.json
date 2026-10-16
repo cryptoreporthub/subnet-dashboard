@@ -14,7 +14,7 @@
       "median_rel_diff_max": 0.01,
       "p95_rel_diff_max": 0.03,
       "mean_hourly_log_return_corr_min": 0.9,
-      "per_subnet_hourly_log_return_corr_min": 0.7
+      "per_subnet_hourly_log_return_corr_warn_min": 0.7
     }
   },
   "aggregate": {
@@ -30,9 +30,9 @@
     "median_rel_diff_le_max": true,
     "p95_rel_diff_le_max": true,
     "mean_hourly_log_return_corr_ge_min": true,
-    "per_subnet_median_and_unit": true,
-    "per_subnet_hourly_log_return_corr_ge_min": true
+    "per_subnet_median_and_unit": true
   },
+  "warnings": [],
   "excluded_subnets": [],
   "failing_subnets": [],
   "unit_mismatch_below_floor": [],
@@ -44,6 +44,7 @@
       "median_rel_diff": 1.0000000000062947e-05,
       "p95_rel_diff": 1.0000000000120066e-05,
       "hourly_log_return_corr": 1.0,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -53,6 +54,7 @@
       "median_rel_diff": 1.0000000000064033e-05,
       "p95_rel_diff": 1.000000000011543e-05,
       "hourly_log_return_corr": 0.9999999999999999,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -62,6 +64,7 @@
       "median_rel_diff": 1.000000000006039e-05,
       "p95_rel_diff": 1.000000000011164e-05,
       "hourly_log_return_corr": 1.0000000000000002,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -71,6 +74,7 @@
       "median_rel_diff": 1.0000000000064926e-05,
       "p95_rel_diff": 1.0000000000123781e-05,
       "hourly_log_return_corr": 1.0000000000000002,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -80,6 +84,7 @@
       "median_rel_diff": 1.000000000005697e-05,
       "p95_rel_diff": 1.0000000000137976e-05,
       "hourly_log_return_corr": 1.0,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -89,6 +94,7 @@
       "median_rel_diff": 1.0000000000066993e-05,
       "p95_rel_diff": 1.0000000000145794e-05,
       "hourly_log_return_corr": 0.9999999999999998,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -98,6 +104,7 @@
       "median_rel_diff": 1.0000000000052854e-05,
       "p95_rel_diff": 1.0000000000141106e-05,
       "hourly_log_return_corr": 1.0,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     },
     {
@@ -107,6 +114,7 @@
       "median_rel_diff": 1.0000000000067445e-05,
       "p95_rel_diff": 1.0000000000133358e-05,
       "hourly_log_return_corr": 1.0,
+      "corr_below_warn_threshold": false,
       "price_unit_mismatch": false
     }
   ]
