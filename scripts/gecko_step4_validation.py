@@ -264,7 +264,14 @@ def main(argv: List[str] | None = None) -> int:
     with args.output.open("w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
         f.write("\n")
-    print(json.dumps({"verdict": report["verdict"], "output": str(args.output)}, indent=2))
+    warn_rows = report.get("warnings") or []
+    summary: Dict[str, Any] = {
+        "verdict": report["verdict"],
+        "output": str(args.output),
+        "warnings_count": len(warn_rows),
+        "warning_netuids": sorted({w["netuid"] for w in warn_rows}),
+    }
+    print(json.dumps(summary, indent=2))
     verdict = report["verdict"]
     if verdict == "PASS":
         return 0

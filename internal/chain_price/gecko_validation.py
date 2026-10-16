@@ -63,6 +63,23 @@ def _pearson(xs: Sequence[float], ys: Sequence[float]) -> Optional[float]:
     return num / den
 
 
+def _prepare_matched_hours(matched: Sequence[MatchedHour]) -> tuple[List[MatchedHour], int]:
+    """Sort by ``hour_unix`` ascending; duplicate timestamps keep the **last** row."""
+    stamped = [(i, row) for i, row in enumerate(matched) if row.hour_unix is not None]
+    unstamped = [(i, row) for i, row in enumerate(matched) if row.hour_unix is None]
+    stamped.sort(key=lambda t: (int(t[1].hour_unix), t[0]))
+    by_ts: Dict[int, MatchedHour] = {}
+    dup_dropped = 0
+    for _, row in stamped:
+        ts = int(row.hour_unix)
+        if ts in by_ts:
+            dup_dropped += 1
+        by_ts[ts] = row
+    ordered = [by_ts[ts] for ts in sorted(by_ts)]
+    ordered.extend(row for _, row in sorted(unstamped, key=lambda t: t[0]))
+    return ordered, dup_dropped
+
+
 def _hourly_log_returns_scaled(
     closes: Sequence[float], hour_unix: Sequence[int]
 ) -> List[float]:
@@ -89,12 +106,13 @@ def _hourly_log_returns_scaled(
 
 def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
     """Per-subnet stats from aligned Gecko close vs chain reserve price."""
+    ordered, duplicate_hour_unix_dropped = _prepare_matched_hours(matched)
     rel_diffs: List[float] = []
     gecko_closes: List[float] = []
     chain_closes: List[float] = []
     hour_unix: List[int] = []
     synthetic = 0
-    for row in matched:
+    for row in ordered:
         g, c = row.gecko_close, row.chain_price_tao
         if not (math.isfinite(g) and math.isfinite(c)) or g <= 0 or c <= 0:
             continue
@@ -106,12 +124,21 @@ def subnet_metrics(matched: Sequence[MatchedHour]) -> Dict[str, Any]:
         else:
             hour_unix.append(synthetic)
             synthetic += ALIGNED_HOUR_SECONDS
+    adjacent_pairs = max(0, len(gecko_closes) - 1)
     rets_g = _hourly_log_returns_scaled(gecko_closes, hour_unix)
     rets_c = _hourly_log_returns_scaled(chain_closes, hour_unix)
-    n = min(len(rets_g), len(rets_c))
-    corr = _pearson(rets_g[:n], rets_c[:n]) if n >= 3 else None
+    n_return_pairs = min(len(rets_g), len(rets_c))
+    return_pair_gap_skips = adjacent_pairs - n_return_pairs
+    corr = (
+        _pearson(rets_g[:n_return_pairs], rets_c[:n_return_pairs])
+        if n_return_pairs >= 3
+        else None
+    )
     return {
         "matched_hours": len(rel_diffs),
+        "n_return_pairs": n_return_pairs,
+        "return_pair_gap_skips": return_pair_gap_skips,
+        "duplicate_hour_unix_dropped": duplicate_hour_unix_dropped,
         "rel_diffs": rel_diffs,
         "hourly_log_return_corr": corr,
     }
@@ -173,13 +200,23 @@ def evaluate_gecko_validation(
         unit_bad = subnet_unit_mismatch(sub.matched)
         median_rd = statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
         corr = metrics["hourly_log_return_corr"]
+        mh = metrics["matched_hours"]
+        n_return_pairs = metrics["n_return_pairs"]
+        min_return_pairs = min_matched_hours - 1
+        meets_hour_floor = mh >= min_matched_hours
+        meets_return_pair_floor = n_return_pairs >= min_return_pairs
+        at_floor = meets_hour_floor and meets_return_pair_floor
         corr_warn = (
-            corr is not None
+            at_floor
+            and corr is not None
             and corr < th.per_subnet_hourly_log_return_corr_warn_min
         )
         row.update(
             {
-                "matched_hours": metrics["matched_hours"],
+                "matched_hours": mh,
+                "n_return_pairs": n_return_pairs,
+                "return_pair_gap_skips": metrics["return_pair_gap_skips"],
+                "duplicate_hour_unix_dropped": metrics["duplicate_hour_unix_dropped"],
                 "median_rel_diff": median_rd,
                 "p95_rel_diff": _p95(metrics["rel_diffs"]),
                 "hourly_log_return_corr": corr,
@@ -197,8 +234,7 @@ def evaluate_gecko_validation(
                 }
             )
         per_subnet_out.append(row)
-        mh = metrics["matched_hours"]
-        if mh < min_matched_hours:
+        if not meets_hour_floor:
             if unit_bad:
                 unit_mismatch_below_floor.append(
                     {"netuid": sub.netuid, "matched_hours": mh}
@@ -207,7 +243,18 @@ def evaluate_gecko_validation(
                 {
                     "netuid": sub.netuid,
                     "matched_hours": mh,
+                    "n_return_pairs": n_return_pairs,
                     "reason": f"below_floor_{min_matched_hours}h",
+                }
+            )
+            continue
+        if not meets_return_pair_floor:
+            excluded.append(
+                {
+                    "netuid": sub.netuid,
+                    "matched_hours": mh,
+                    "n_return_pairs": n_return_pairs,
+                    "reason": "insufficient_return_pairs",
                 }
             )
             continue

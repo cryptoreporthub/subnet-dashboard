@@ -284,6 +284,9 @@ SAMPLE_PER_SUBNET_KEYS = frozenset(
         "netuid",
         "pool",
         "matched_hours",
+        "n_return_pairs",
+        "return_pair_gap_skips",
+        "duplicate_hour_unix_dropped",
         "median_rel_diff",
         "p95_rel_diff",
         "hourly_log_return_corr",
@@ -457,3 +460,81 @@ def test_gapped_timestamps_scale_returns_not_naive_pairing():
     assert _pearson(scaled_g, scaled_c) != _pearson(naive_g, naive_c)
     metrics = subnet_metrics(matched)
     assert metrics["hourly_log_return_corr"] == _pearson(scaled_g, scaled_c)
+
+
+def test_subnet_metrics_sorts_unsorted_timestamps_before_returns():
+    """Unsorted input must not pair adjacent list rows (review repro)."""
+    base_ts = 1_700_000_000
+    chronological = [
+        MatchedHour(100.0, 100.0, hour_unix=base_ts),
+        MatchedHour(121.0, 118.0, hour_unix=base_ts + 2 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(133.1, 130.0, hour_unix=base_ts + 3 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(140.0, 136.0, hour_unix=base_ts + 4 * ALIGNED_HOUR_SECONDS),
+    ]
+    shuffled = list(reversed(chronological))
+    assert subnet_metrics(shuffled)["hourly_log_return_corr"] == subnet_metrics(chronological)[
+        "hourly_log_return_corr"
+    ]
+
+
+def test_subnet_metrics_dedupes_hour_unix_keeps_last():
+    base_ts = 1_700_000_000
+    rows = [
+        MatchedHour(10.0, 10.0, hour_unix=base_ts),
+        MatchedHour(20.0, 20.0, hour_unix=base_ts + ALIGNED_HOUR_SECONDS),
+        MatchedHour(99.0, 99.0, hour_unix=base_ts),  # duplicate ts — last wins
+        MatchedHour(30.0, 30.0, hour_unix=base_ts + 2 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(40.0, 40.0, hour_unix=base_ts + 3 * ALIGNED_HOUR_SECONDS),
+        MatchedHour(50.0, 50.0, hour_unix=base_ts + 4 * ALIGNED_HOUR_SECONDS),
+    ]
+    metrics = subnet_metrics(rows)
+    assert metrics["duplicate_hour_unix_dropped"] == 1
+    assert metrics["matched_hours"] == 5
+    assert metrics["n_return_pairs"] == 4
+
+
+def test_duplicate_hour_unix_deduped_below_hour_floor():
+    """Raw row count must not bypass the floor when duplicates collapse hours."""
+    ts = 1_700_000_000
+    single_ts = [
+        MatchedHour(
+            gecko_close=0.01 + i * 0.0001,
+            chain_price_tao=0.01 + i * 0.0001,
+            hour_unix=ts,
+        )
+        for i in range(24)
+    ]
+    report = evaluate_gecko_validation(
+        _good_subnets(8) + [SubnetValidationInput(netuid=77, matched=single_ts)]
+    )
+    assert report["aggregate"]["qualifying_subnet_count"] == 8
+    assert any(
+        e["netuid"] == 77 and e["reason"] == "below_floor_24h"
+        for e in report["excluded_subnets"]
+    )
+    row77 = next(r for r in report["per_subnet"] if r["netuid"] == 77)
+    assert row77["matched_hours"] == 1
+    assert row77["duplicate_hour_unix_dropped"] == 23
+
+
+def test_insufficient_return_pairs_despite_matched_hour_count():
+    """Stamped hours + synthetic tail can skip pairs; row count alone must not qualify."""
+    base = 1_700_000_000
+    stamped = [
+        MatchedHour(0.01 + i * 0.0001, 0.01 + i * 0.0001, hour_unix=base + i * ALIGNED_HOUR_SECONDS)
+        for i in range(5)
+    ]
+    tail = [MatchedHour(0.015, 0.015)]
+    report = evaluate_gecko_validation(
+        [SubnetValidationInput(netuid=1, matched=stamped + tail)],
+        min_matched_hours=6,
+        min_qualifying_subnets=1,
+    )
+    row = report["per_subnet"][0]
+    assert row["matched_hours"] == 6
+    assert row["n_return_pairs"] == 4
+    assert row["return_pair_gap_skips"] == 1
+    assert any(
+        e["netuid"] == 1 and e["reason"] == "insufficient_return_pairs"
+        for e in report["excluded_subnets"]
+    )
