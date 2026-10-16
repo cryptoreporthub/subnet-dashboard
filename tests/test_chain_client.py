@@ -139,6 +139,61 @@ def test_reader_retry_after_600_with_real_client(clear_endpoint_rate_limits):
         assert rate_limited_until(client.endpoint) - clock[0] >= 600.0
 
 
+def test_parse_retry_after_http_date_future(clear_endpoint_rate_limits):
+    from datetime import datetime, timezone
+
+    from internal.chain_client import _parse_retry_after_header
+
+    wall = 1_700_000_000.0
+    future = datetime.fromtimestamp(wall + 600, tz=timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT"
+    )
+    resp = MagicMock()
+    resp.headers = {"Retry-After": future}
+    with patch("internal.chain_client.time.time", return_value=wall):
+        assert _parse_retry_after_header(resp) == 600.0
+
+
+def test_parse_retry_after_http_date_past(clear_endpoint_rate_limits):
+    from datetime import datetime, timezone
+
+    from internal.chain_client import _parse_retry_after_header
+
+    wall = 1_700_000_000.0
+    past = datetime.fromtimestamp(wall - 120, tz=timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT"
+    )
+    resp = MagicMock()
+    resp.headers = {"Retry-After": past}
+    with patch("internal.chain_client.time.time", return_value=wall):
+        assert _parse_retry_after_header(resp) == 0.0
+
+
+def test_reader_retry_after_http_date_with_real_client(clear_endpoint_rate_limits):
+    from datetime import datetime, timezone
+
+    from internal.chain_client import ChainClient, rate_limited_until
+    from internal.chain_price.reader import ChainReader
+
+    client = ChainClient("https://finney-date.example", init_volume_db=False, retries=0)
+    reader = ChainReader([("finney", client)])
+    wall = 1_700_000_000.0
+    mono = 5000.0
+    future = datetime.fromtimestamp(wall + 600, tz=timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT"
+    )
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": future}
+    with patch("internal.chain_client.time.time", return_value=wall), patch(
+        "internal.chain_client.time.monotonic", return_value=mono
+    ), patch("internal.chain_price.reader.time.monotonic", return_value=mono):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            _, outcome = reader.call("chain_getFinalizedHead", [])
+        assert outcome == "rate_limited"
+        assert rate_limited_until(client.endpoint) - mono >= 600.0
+
+
 def test_chain_rpc_requests_total_increments(clear_endpoint_rate_limits):
     from internal.chain_client import ChainClient
     from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL

@@ -20,6 +20,8 @@ import sqlite3
 import struct
 import threading
 import time
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -85,13 +87,18 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
 
 
 def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
-    raw = response.headers.get("Retry-After")
+    raw = (response.headers.get("Retry-After") or "").strip()
     if not raw:
         return None
+    if raw.isdigit():
+        return float(raw)
     try:
-        return max(0.0, float(raw))
-    except ValueError:
+        when = parsedate_to_datetime(raw)
+    except (TypeError, ValueError, OverflowError):
         return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, when.timestamp() - time.time())
 
 
 def _metric_endpoint(endpoint: str) -> str:
