@@ -52,6 +52,7 @@ PAIRS_PATH = _ROOT / "config" / "price_pairs.json"
 DEFAULT_OUTPUT = Path("/tmp/gecko_step4_validation_report.json")
 GECKO_MIN_INTERVAL_S = 60.0 / 28.0
 GECKO_429_MAX_CONSECUTIVE = 3
+_GECKO_FETCH_RUNTIME_CODES = frozenset({"gecko_http_429", "unexpected_gecko_shape"})
 
 
 def _git_sha() -> str:
@@ -131,7 +132,17 @@ def _bump_stage_count(stage_counts: Dict[str, int], stage: str, outcome: str) ->
 
 
 def _gecko_fetch_error_label(exc: BaseException) -> str:
+    if isinstance(exc, RuntimeError):
+        code = str(exc)
+        if code in _GECKO_FETCH_RUNTIME_CODES:
+            return f"gecko_fetch:{code}"
+        return "gecko_fetch:runtime_error"
     return f"gecko_fetch:{type(exc).__name__}"
+
+
+def _gecko_fetch_stage_outcome(exc: BaseException) -> str:
+    label = _gecko_fetch_error_label(exc)
+    return label.split(":", 1)[1]
 
 
 def _merge_stage_counts(into: Dict[str, int], part: Dict[str, int]) -> None:
@@ -187,6 +198,7 @@ def _live_probe_subnets(
     for netuid, network, pool, gt in mapped:
         sub = SubnetValidationInput(netuid=netuid, pool=pool)
         stage_counts: Dict[str, int] = {}
+        subnet_provider_served: Optional[str] = None
         hours_candidate = 0
         try:
             elapsed = time.monotonic() - last_gecko
@@ -197,7 +209,7 @@ def _live_probe_subnets(
         except Exception as exc:
             fetch_label = _gecko_fetch_error_label(exc)
             sub.error = fetch_label
-            _bump_stage_count(stage_counts, "gecko_fetch", type(exc).__name__)
+            _bump_stage_count(stage_counts, "gecko_fetch", _gecko_fetch_stage_outcome(exc))
             per_subnet_diag.append(
                 {
                     "netuid": netuid,
@@ -206,7 +218,7 @@ def _live_probe_subnets(
                     "stage_outcome_counts": stage_counts,
                     "hours_candidate": 0,
                     "hours_matched": 0,
-                    "provider_served": reader.provider_served,
+                    "provider_served": subnet_provider_served,
                 }
             )
             _merge_stage_counts(aggregate_stage_counts, stage_counts)
@@ -240,12 +252,11 @@ def _live_probe_subnets(
             if reserve_outcome != "ok":
                 _bump_stage_count(stage_counts, "reserve_read", reserve_outcome)
                 continue
-            if chain_px is None or float(close) <= 0:
-                _bump_stage_count(
-                    stage_counts,
-                    "reserve_read",
-                    "nonpositive_gecko_close" if float(close) <= 0 else "missing_reserve_decode",
-                )
+            if chain_px is None:
+                _bump_stage_count(stage_counts, "reserve_read", "missing_reserve_decode")
+                continue
+            if float(close) <= 0:
+                _bump_stage_count(stage_counts, "gecko_validation", "nonpositive_close")
                 continue
             matched.append(
                 MatchedHour(
@@ -254,6 +265,7 @@ def _live_probe_subnets(
                     hour_unix=int(ts),
                 )
             )
+            subnet_provider_served = reader.provider_served
             time.sleep(0.05)
         sub.matched = matched
         per_subnet_diag.append(
@@ -264,7 +276,7 @@ def _live_probe_subnets(
                 "stage_outcome_counts": stage_counts,
                 "hours_candidate": hours_candidate,
                 "hours_matched": len(matched),
-                "provider_served": reader.provider_served,
+                "provider_served": subnet_provider_served,
             }
         )
         _merge_stage_counts(aggregate_stage_counts, stage_counts)

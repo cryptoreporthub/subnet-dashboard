@@ -19,7 +19,12 @@ from internal.chain_price.gecko_validation import (
     subnets_from_serializable,
 )
 from scripts import gecko_step4_validation as step4_script
-from scripts.gecko_step4_validation import _gecko_params, _live_probe_subnets, main
+from scripts.gecko_step4_validation import (
+    _gecko_fetch_error_label,
+    _gecko_params,
+    _live_probe_subnets,
+    main,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "gecko_validation"
 
@@ -830,10 +835,10 @@ def test_live_probe_gecko_error_visible_in_meta(monkeypatch):
         window_hours=24,
         reader=_Reader(),
     )
-    assert subs[0].error == "gecko_fetch:RuntimeError"
+    assert subs[0].error == "gecko_fetch:gecko_http_429"
     row = meta["per_subnet"][0]
-    assert row["gecko_error"] == "gecko_fetch:RuntimeError"
-    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:RuntimeError") == 1
+    assert row["gecko_error"] == "gecko_fetch:gecko_http_429"
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:gecko_http_429") == 1
     report = evaluate_gecko_validation(subs)
     assert report["verdict"] == "INCONCLUSIVE"
 
@@ -881,6 +886,88 @@ def test_live_probe_gecko_http_error_omits_urls_from_diagnostics(monkeypatch):
     assert "for url" not in diag_blob
     assert subs[0].error == "gecko_fetch:HTTPError"
     assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:HTTPError") == 1
+
+
+def test_gecko_fetch_error_label_distinguishes_runtime_codes():
+    assert _gecko_fetch_error_label(RuntimeError("gecko_http_429")) == "gecko_fetch:gecko_http_429"
+    assert (
+        _gecko_fetch_error_label(RuntimeError("unexpected_gecko_shape"))
+        == "gecko_fetch:unexpected_gecko_shape"
+    )
+
+
+def test_live_probe_gecko_fetch_stage_keys_differ_for_429_and_shape(monkeypatch):
+    outcomes = iter(
+        [
+            RuntimeError("gecko_http_429"),
+            RuntimeError("unexpected_gecko_shape"),
+        ]
+    )
+
+    def fake_fetch(*_a, **_k):
+        raise next(outcomes)
+
+    monkeypatch.setattr(step4_script, "_fetch_gecko_ohlcv", fake_fetch)
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    mapped = [
+        (1, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (2, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=24, reader=_Reader())
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("gecko_fetch:gecko_http_429") == 1
+    assert counts.get("gecko_fetch:unexpected_gecko_shape") == 1
+    assert counts.get("gecko_fetch:RuntimeError") is None
+    assert subs[0].error == "gecko_fetch:gecko_http_429"
+    assert subs[1].error == "gecko_fetch:unexpected_gecko_shape"
+
+
+def test_live_probe_per_subnet_provider_served_not_stale_from_prior_subnet(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    probe_netuid = {"current": 1}
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    def fake_fetch(_network, pool, _gt, _limit):
+        probe_netuid["current"] = 1 if pool == "pool-a" else 2
+        return [[now_ts - 3600, 0, 0, 0, 1.0]]
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        if probe_netuid["current"] == 2:
+            return None, None, "rate_limited"
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return 0.01, "ok"
+
+    monkeypatch.setattr(step4_script, "_fetch_gecko_ohlcv", fake_fetch)
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+
+    mapped = [
+        (1, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (2, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs[0].matched) == 1
+    assert len(subs[1].matched) == 0
+    assert meta["per_subnet"][0]["provider_served"] == "finney"
+    assert meta["per_subnet"][1]["provider_served"] is None
 
 
 def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
