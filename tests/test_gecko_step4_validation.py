@@ -556,8 +556,10 @@ def test_mixed_hour_unix_among_stamped_blocks_pass_verdict():
     )
     bad = SubnetValidationInput(netuid=88, matched=stamped)
     report = evaluate_gecko_validation(good + [bad])
-    assert report["verdict"] != "PASS"
+    assert report["verdict"] == "FAIL"
     assert report["aggregate"]["qualifying_subnet_count"] == 7
+    fail88 = next(f for f in report["failing_subnets"] if f["netuid"] == 88)
+    assert fail88["reasons"] == ["data_integrity_error:mixed_hour_unix"]
     row88 = next(r for r in report["per_subnet"] if r["netuid"] == 88)
     assert row88["data_integrity_error"] == "mixed_hour_unix"
     assert any(
@@ -581,3 +583,33 @@ def test_conflicting_duplicate_hour_unix_data_integrity():
         e["netuid"] == 1 and e["reason"] == "conflicting_duplicate_hour_unix"
         for e in report["excluded_subnets"]
     )
+
+
+def _conflicting_duplicate_stamped_30h(base_ts: int = 1_700_000_000) -> list[MatchedHour]:
+    """30 stamped hours with one conflicting duplicate at base_ts."""
+    rows = _stamped_aligned_matched(30, base_ts=base_ts)
+    rows.append(
+        MatchedHour(
+            gecko_close=99.0,
+            chain_price_tao=99.0,
+            hour_unix=base_ts + 5 * ALIGNED_HOUR_SECONDS,
+        )
+    )
+    return rows
+
+
+def test_conflicting_duplicate_among_eight_clean_fails_gate():
+    """Grok MODIFY 6217674797: integrity error must FAIL, not PASS with 8 clean peers."""
+    good = [
+        SubnetValidationInput(netuid=i, matched=_stamped_aligned_matched(30))
+        for i in range(8)
+    ]
+    bad = SubnetValidationInput(netuid=88, matched=_conflicting_duplicate_stamped_30h())
+    report = evaluate_gecko_validation(good + [bad])
+    assert report["verdict"] == "FAIL"
+    assert report["aggregate"]["qualifying_subnet_count"] == 8
+    fail88 = next(f for f in report["failing_subnets"] if f["netuid"] == 88)
+    assert fail88["reasons"] == ["data_integrity_error:conflicting_duplicate_hour_unix"]
+    ex88 = next(e for e in report["excluded_subnets"] if e["netuid"] == 88)
+    assert ex88["matched_hours"] == 31
+    assert ex88["reason"] == "conflicting_duplicate_hour_unix"

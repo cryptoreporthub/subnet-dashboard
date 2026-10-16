@@ -229,7 +229,11 @@ def evaluate_gecko_validation(
             continue
         metrics = subnet_metrics(sub.matched)
         integrity_error = metrics.get("data_integrity_error")
-        unit_bad = subnet_unit_mismatch(sub.matched)
+        if integrity_error:
+            unit_bad = False
+        else:
+            ordered_for_unit, _, _ = _prepare_matched_hours(sub.matched)
+            unit_bad = subnet_unit_mismatch(ordered_for_unit)
         median_rd = statistics.median(metrics["rel_diffs"]) if metrics["rel_diffs"] else None
         corr = metrics["hourly_log_return_corr"]
         mh = metrics["matched_hours"]
@@ -259,12 +263,19 @@ def evaluate_gecko_validation(
         )
         if integrity_error:
             per_subnet_out.append(row)
+            raw_matched_hours = len(sub.matched)
             excluded.append(
                 {
                     "netuid": sub.netuid,
-                    "matched_hours": mh,
+                    "matched_hours": raw_matched_hours,
                     "n_return_pairs": n_return_pairs,
                     "reason": integrity_error,
+                }
+            )
+            failing_subnets.append(
+                {
+                    "netuid": sub.netuid,
+                    "reasons": [f"data_integrity_error:{integrity_error}"],
                 }
             )
             continue
