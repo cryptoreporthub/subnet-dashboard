@@ -374,3 +374,22 @@ def test_flat_median_failure_counts_toward_fail_quorum_but_too_few_stays_inconcl
     assert seven["verdict"] == "FAIL"  # 7 qualifying + 1 evaluated failure = 8 evaluated
     five = evaluate_gecko_validation(_good_subnets(5) + [_flat(99, 0.010, 0.015)])
     assert five["verdict"] == "INCONCLUSIVE"  # only 6 evaluated
+
+
+def test_pooled_p95_nearest_rank_fails_when_five_percent_exceed_limit():
+    """192 pooled points: int(0.95*n)-1 false-PASSes; ceil(0.95*n)-1 must FAIL."""
+    good = [
+        SubnetValidationInput(netuid=i, matched=_aligned_matched(24))
+        for i in range(7)
+    ]
+    mixed_hours: list[MatchedHour] = []
+    for i in range(24):
+        g = 0.01 + i * 0.0001
+        factor = 1.0001 if i < 14 else 1.04
+        mixed_hours.append(MatchedHour(gecko_close=g, chain_price_tao=g * factor))
+    mixed = SubnetValidationInput(netuid=99, matched=mixed_hours)
+    report = evaluate_gecko_validation(good + [mixed])
+    assert report["aggregate"]["n_price_points"] == 192
+    assert report["aggregate"]["p95_rel_diff"] == pytest.approx(0.04, rel=1e-6)
+    assert report["threshold_checks"]["p95_rel_diff_le_max"] is False
+    assert report["verdict"] == "FAIL"

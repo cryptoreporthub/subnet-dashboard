@@ -101,10 +101,17 @@ def subnet_unit_mismatch(matched: Sequence[MatchedHour]) -> bool:
 
 
 def _p95(values: Sequence[float]) -> Optional[float]:
+    """Nearest-rank 95th percentile (NIST R-8 style, 1-based rank).
+
+    For n sorted values, p95 is the value at rank ceil(0.95 * n), i.e. index
+    ceil(0.95 * n) - 1. Using int(0.95 * n) - 1 is one rank too low when 0.95*n
+    is not an integer (e.g. n=192 → rank 183, not 182).
+    """
     if not values:
         return None
     ordered = sorted(values)
-    idx = max(0, int(0.95 * len(ordered)) - 1)
+    n = len(ordered)
+    idx = max(0, math.ceil(0.95 * n) - 1)
     return ordered[idx]
 
 
