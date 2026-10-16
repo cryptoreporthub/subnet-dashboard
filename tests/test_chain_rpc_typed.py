@@ -13,6 +13,19 @@ from internal.chain_client import ChainClient, PinnedBlockMismatch
 from internal.chain_rpc_errors import ChainRpcError
 
 
+@pytest.fixture(autouse=True)
+def _clear_endpoint_rate_limits():
+    from internal.chain_client import _RL_LOCK, _RL_STEP, _RL_UNTIL
+
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+    yield
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+
+
 def _client_no_volume():
     return ChainClient("https://rpc.example", init_volume_db=False)
 

@@ -1,4 +1,139 @@
 import time
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from internal.chain_rpc_errors import ChainRpcError
+
+
+@pytest.fixture
+def clear_endpoint_rate_limits():
+    from internal.chain_client import _RL_LOCK, _RL_STEP, _RL_UNTIL
+
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+    yield
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+
+
+def test_shared_endpoint_cooldown_blocks_second_client(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient
+
+    endpoint = "https://rpc.shared.example"
+    first = ChainClient(endpoint, init_volume_db=False, retries=0)
+    second = ChainClient(endpoint, init_volume_db=False, retries=0)
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {}
+    with patch("internal.chain_client.requests.post", return_value=resp) as post:
+        with pytest.raises(ChainRpcError) as exc:
+            first._call_typed("chain_getBlockHash", [])
+        assert exc.value.kind == "rate_limited"
+        assert post.call_count == 1
+        with pytest.raises(ChainRpcError) as exc2:
+            second._call_typed("chain_getBlockHash", [])
+        assert str(exc2.value) == "cooldown"
+        assert post.call_count == 1
+
+
+def test_endpoint_cooldown_does_not_block_other_endpoints(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient
+
+    a = ChainClient("https://rpc.a.example", init_volume_db=False, retries=0)
+    b = ChainClient("https://rpc.b.example", init_volume_db=False, retries=0)
+    bad = MagicMock()
+    bad.status_code = 429
+    bad.headers = {}
+    good = MagicMock()
+    good.status_code = 200
+    good.json.return_value = {"result": "0x01"}
+    good.raise_for_status = MagicMock()
+    with patch("internal.chain_client.requests.post", side_effect=[bad, good]) as post:
+        with pytest.raises(ChainRpcError):
+            a._call_typed("chain_getBlockHash", [])
+        assert b._call_typed("chain_getBlockHash", []) == "0x01"
+        assert post.call_count == 2
+
+
+def test_retry_after_honored_on_429(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, rate_limited_until
+
+    client = ChainClient("https://rpc.retry.example", init_volume_db=False, retries=0)
+    clock = [100.0]
+    resp = MagicMock()
+    resp.status_code = 429
+    resp.headers = {"Retry-After": "120"}
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        with patch("internal.chain_client.requests.post", return_value=resp):
+            with pytest.raises(ChainRpcError):
+                client._call_typed("chain_getBlockHash", [])
+        assert rate_limited_until(client.endpoint) == 220.0
+
+
+def test_traffic_resumes_after_cooldown_expires(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient, note_rate_limit
+
+    client = ChainClient("https://rpc.resume.example", init_volume_db=False, retries=0)
+    clock = [0.0]
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        note_rate_limit(client.endpoint, 5.0)
+        clock[0] = 4.9
+        with pytest.raises(ChainRpcError) as exc:
+            client._call_typed("chain_getBlockHash", [])
+        assert str(exc.value) == "cooldown"
+        clock[0] = 5.1
+        good = MagicMock()
+        good.status_code = 200
+        good.json.return_value = {"result": "0xab"}
+        good.raise_for_status = MagicMock()
+        with patch("internal.chain_client.requests.post", return_value=good) as post:
+            assert client._call_typed("chain_getBlockHash", []) == "0xab"
+            assert post.call_count == 1
+
+
+def test_chain_rpc_requests_total_increments(clear_endpoint_rate_limits):
+    from internal.chain_client import ChainClient
+    from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
+
+    client = ChainClient("https://rpc.metrics.example", init_volume_db=False, retries=0)
+    endpoint = client.endpoint
+    before_ok = CHAIN_RPC_REQUESTS_TOTAL.labels(
+        endpoint=endpoint, method="chain_getBlockHash", outcome="ok"
+    )._value.get()
+    before_rl = CHAIN_RPC_REQUESTS_TOTAL.labels(
+        endpoint=endpoint, method="chain_getBlockHash", outcome="rate_limited"
+    )._value.get()
+    good = MagicMock()
+    good.status_code = 200
+    good.json.return_value = {"result": "0x01"}
+    good.raise_for_status = MagicMock()
+    clock = [50.0]
+    with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
+        with patch("internal.chain_client.requests.post", return_value=good):
+            client._call_typed("chain_getBlockHash", [])
+        assert (
+            CHAIN_RPC_REQUESTS_TOTAL.labels(
+                endpoint=endpoint, method="chain_getBlockHash", outcome="ok"
+            )._value.get()
+            == before_ok + 1
+        )
+        resp429 = MagicMock()
+        resp429.status_code = 429
+        resp429.headers = {}
+        with patch("internal.chain_client.requests.post", return_value=resp429):
+            with pytest.raises(ChainRpcError):
+                client._call_typed("chain_getBlockHash", [])
+        with pytest.raises(ChainRpcError):
+            client._call_typed("chain_getBlockHash", [])
+    assert (
+        CHAIN_RPC_REQUESTS_TOTAL.labels(
+            endpoint=endpoint, method="chain_getBlockHash", outcome="rate_limited"
+        )._value.get()
+        == before_rl + 2
+    )
 
 
 def test_price_batch_deadline_returns_completed_rows(monkeypatch):

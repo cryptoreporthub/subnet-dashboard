@@ -199,6 +199,8 @@ def test_bad_fallback_also_mismatched_fails_closed():
 class _Scripted:
     """Each call pops the next item: an exception is raised, anything else is returned."""
 
+    endpoint = "https://finney.example"
+
     def __init__(self, script):
         self._script = list(script)
 
@@ -216,34 +218,50 @@ class _Scripted:
 
 
 def test_cooldown_resets_after_success():
+    from internal.chain_client import _RL_LOCK, _RL_STEP, _RL_UNTIL, rate_limited_until
+
     clock = [1000.0]
     finney = _Scripted(
         [
-            ChainRpcError("rate_limited", "429"),  # 1000s: cooldown 600s, until 1600
-            "0x01",  # 1700s: after expiry, success clears the ladder
-            ChainRpcError("rate_limited", "429"),  # 1700s: next limit starts at 600s again
+            ChainRpcError("rate_limited", "429"),  # 1000: cooldown 60s, until 1060
+            "0x01",  # 1700: after expiry, success clears the ladder
+            ChainRpcError("rate_limited", "429"),  # 1700: next limit starts at 60s again
         ]
     )
     reader = ChainReader([("finney", finney)])
-    with patch("internal.chain_price.reader.time.time", side_effect=lambda: clock[0]):
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+    mono = lambda: clock[0]
+    with patch("internal.chain_client.time.monotonic", side_effect=mono), patch(
+        "internal.chain_price.reader.time.monotonic", side_effect=mono
+    ):
         assert reader.call("chain_getFinalizedHead", []) == (None, "rate_limited")
-        assert reader._cooldown_until["finney"] == 1600.0
+        assert rate_limited_until(finney.endpoint) == 1060.0
         clock[0] = 1700.0
         assert reader.call("chain_getFinalizedHead", []) == ("0x01", "ok")
         assert reader.call("chain_getFinalizedHead", []) == (None, "rate_limited")
-    assert reader._cooldown_seconds["finney"] == 600.0
-    assert reader._cooldown_until["finney"] == 2300.0
+    assert _RL_STEP.get(finney.endpoint) == 120.0
+    assert rate_limited_until(finney.endpoint) == 1760.0
 
 
 def test_cooldown_still_escalates_without_success():
+    from internal.chain_client import _RL_LOCK, _RL_STEP, _RL_UNTIL
+
     clock = [1000.0]
     finney = _Scripted([ChainRpcError("rate_limited", "429")] * 2)
     reader = ChainReader([("finney", finney)])
-    with patch("internal.chain_price.reader.time.time", side_effect=lambda: clock[0]):
+    with _RL_LOCK:
+        _RL_UNTIL.clear()
+        _RL_STEP.clear()
+    mono = lambda: clock[0]
+    with patch("internal.chain_client.time.monotonic", side_effect=mono), patch(
+        "internal.chain_price.reader.time.monotonic", side_effect=mono
+    ):
         reader.call("chain_getFinalizedHead", [])
         clock[0] = 1700.0
         reader.call("chain_getFinalizedHead", [])
-    assert reader._cooldown_seconds["finney"] == 1200.0
+    assert _RL_STEP[finney.endpoint] == 240.0
 
 
 # Item 4: incremental vacuum must actually free pages, bounded per call.

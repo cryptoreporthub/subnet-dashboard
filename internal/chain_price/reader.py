@@ -6,7 +6,12 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from internal.chain_client import ChainClient
+from internal.chain_client import (
+    ChainClient,
+    _clear_rate_limit_step,
+    note_rate_limit,
+    rate_limited_until,
+)
 from internal.chain_price import config as cfg
 from internal.chain_price.outcomes import RpcOutcome
 from internal.chain_price.rpc import classify_rpc_error, rpc_call
@@ -14,40 +19,35 @@ from internal.chain_rpc_errors import storage_block_matches
 
 logger = logging.getLogger(__name__)
 
-_COOLDOWN_INITIAL_SECONDS = 600.0
-_COOLDOWN_MAX_SECONDS = 3600.0
-
 
 class ChainReader:
     """Ordered RPC providers; pin each tick to one block hash."""
 
     def __init__(self, clients: Optional[List[Tuple[str, ChainClient]]] = None):
         self._providers: List[Tuple[str, ChainClient]] = clients or cfg.rpc_provider_clients()
-        self._cooldown_until: Dict[str, float] = {}
-        self._cooldown_seconds: Dict[str, float] = {}
         self._pinned_hash: Optional[str] = None
         self.provider_served: Optional[str] = None
 
     def _available_providers(self) -> List[Tuple[str, ChainClient]]:
-        now = time.time()
+        now = time.monotonic()
         out: List[Tuple[str, ChainClient]] = []
         for label, client in self._providers:
-            until = self._cooldown_until.get(label, 0.0)
-            if now >= until:
-                out.append((label, client))
+            endpoint = getattr(client, "endpoint", None)
+            if endpoint and rate_limited_until(endpoint) > now:
+                continue
+            out.append((label, client))
         return out
 
-    def _mark_rate_limited(self, label: str) -> None:
-        prev = self._cooldown_seconds.get(label)
-        if prev is None:
-            self._cooldown_seconds[label] = _COOLDOWN_INITIAL_SECONDS
-        else:
-            self._cooldown_seconds[label] = min(prev * 2.0, _COOLDOWN_MAX_SECONDS)
-        self._cooldown_until[label] = time.time() + self._cooldown_seconds[label]
+    def _mark_rate_limited(self, label: str, client: ChainClient) -> None:
+        endpoint = getattr(client, "endpoint", None)
+        if not endpoint:
+            logger.warning("chain reader provider %s rate limited (no endpoint)", label)
+            return
+        duration = note_rate_limit(endpoint)
         logger.warning(
-            "chain reader provider %s rate limited; cooldown %.0fs",
+            "chain reader provider %s rate limited; endpoint cooldown %.0fs",
             label,
-            self._cooldown_seconds[label],
+            duration,
         )
 
     def _should_fallback(self, outcome: RpcOutcome) -> bool:
@@ -74,10 +74,11 @@ class ChainReader:
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"
             if outcome == "rate_limited":
-                self._mark_rate_limited(label)
+                self._mark_rate_limited(label, client)
             if outcome == "ok":
-                # A successful answer ends the escalation: the next limit starts at the initial cooldown.
-                self._cooldown_seconds.pop(label, None)
+                endpoint = getattr(client, "endpoint", None)
+                if endpoint:
+                    _clear_rate_limit_step(endpoint)
                 self.provider_served = label
                 return result, outcome
             last_outcome = outcome

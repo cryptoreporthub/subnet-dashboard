@@ -131,6 +131,8 @@ def test_rate_limit_cooldown_skips_provider():
     from internal.chain_rpc_errors import ChainRpcError
 
     class _RateClient:
+        endpoint = "https://finney.example"
+
         def __init__(self):
             self.calls = 0
 
@@ -146,10 +148,10 @@ def test_rate_limit_cooldown_skips_provider():
 
     finney = _RateClient()
     bm = _RateClient()
+    bm.endpoint = "https://blockmachine.example"
     reader = ChainReader([("finney", finney), ("blockmachine", bm)])
-    reader._mark_rate_limited("finney")
-    with patch("internal.chain_price.reader.time.time", return_value=time.time()):
-        providers = reader._available_providers()
+    reader._mark_rate_limited("finney", finney)
+    providers = reader._available_providers()
     assert all(label != "finney" for label, _ in providers)
 
 

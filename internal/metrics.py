@@ -150,6 +150,11 @@ CHAIN_PRICE_SKIPPED_TOTAL = Counter(
     "Chain price forward recorder ticks skipped without sampling",
     ["reason"],
 )
+CHAIN_RPC_REQUESTS_TOTAL = Counter(
+    "chain_rpc_requests_total",
+    "Chain JSON-RPC requests by endpoint, method, and outcome",
+    ["endpoint", "method", "outcome"],
+)
 
 
 def _set_optional(gauge: Gauge, value: Optional[float], labels: Optional[Dict[str, str]] = None) -> None:
