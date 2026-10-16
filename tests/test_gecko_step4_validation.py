@@ -930,6 +930,42 @@ def test_live_probe_gecko_fetch_stage_keys_differ_for_429_and_shape(monkeypatch)
     assert subs[1].error == "gecko_fetch:unexpected_gecko_shape"
 
 
+def test_live_probe_per_subnet_provider_served_after_reserve_before_close_check(monkeypatch):
+    """Replit/Claude MODIFY: finney must appear when reserve ok but close <= 0."""
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return 0.01, "ok"
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.0]],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert len(subs[0].matched) == 0
+    assert meta["per_subnet"][0]["provider_served"] == "finney"
+
+
 def test_live_probe_per_subnet_provider_served_not_stale_from_prior_subnet(monkeypatch):
     now_ts = 1_700_000_000
     monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))

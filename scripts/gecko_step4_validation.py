@@ -252,6 +252,7 @@ def _live_probe_subnets(
             if reserve_outcome != "ok":
                 _bump_stage_count(stage_counts, "reserve_read", reserve_outcome)
                 continue
+            subnet_provider_served = reader.provider_served
             if chain_px is None:
                 _bump_stage_count(stage_counts, "reserve_read", "missing_reserve_decode")
                 continue
@@ -265,7 +266,6 @@ def _live_probe_subnets(
                     hour_unix=int(ts),
                 )
             )
-            subnet_provider_served = reader.provider_served
             time.sleep(0.05)
         sub.matched = matched
         per_subnet_diag.append(
