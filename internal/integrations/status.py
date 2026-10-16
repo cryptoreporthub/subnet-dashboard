@@ -13,6 +13,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from internal.chain_price import config as chain_price_cfg
 from internal.integrations.desearch_spend import get_spend_summary, record_desearch_response
 from internal.integrations.taonsquare import catalog_summary, recommend_candidates
 
@@ -25,8 +26,23 @@ _cache_lock = threading.Lock()
 _cache: Dict[str, Any] = {"at": 0.0, "payload": None}
 _probe_http = None
 _BLOCKMACHINE_RPC = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").rstrip("/")
-_BITTENSOR_RPC = os.environ.get("BITTENSOR_RPC_URL", _BLOCKMACHINE_RPC).rstrip("/")
 _BITTENSOR_NETWORK = os.environ.get("BITTENSOR_NETWORK", "finney").strip().lower() or "finney"
+_rpc_health_memo: Dict[str, Tuple[bool, str]] = {}
+_rpc_health_memo_lock = threading.Lock()
+
+
+def _bittensor_rpc_url() -> str:
+    override = os.environ.get("BITTENSOR_RPC_URL")
+    if override:
+        return override.strip().rstrip("/")
+    if os.environ.get("FINNEY_RPC_URL", "").strip():
+        return chain_price_cfg.rpc_provider_endpoints()[0][0]
+    return _BITTENSOR_RPC
+
+
+_BITTENSOR_RPC = (
+    os.environ.get("BITTENSOR_RPC_URL") or chain_price_cfg.rpc_provider_endpoints()[0][0]
+).rstrip("/")
 
 # ponytail: static catalog; add rows here when a new subnet ships.
 INTEGRATIONS: List[Dict[str, Any]] = [
@@ -122,6 +138,11 @@ def _http_probe(
         return False, 0, str(exc)[:240]
 
 
+def _clear_rpc_health_memo() -> None:
+    with _rpc_health_memo_lock:
+        _rpc_health_memo.clear()
+
+
 def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
     """JSON-RPC chain_getBlockHash — shared health check for Bittensor nodes."""
     try:
@@ -142,6 +163,19 @@ def _rpc_chain_healthy(endpoint: str) -> tuple[bool, str]:
         return False, str(exc)[:120]
 
 
+def _rpc_chain_healthy_deduped(endpoint: str) -> tuple[bool, str]:
+    """One HTTP POST per endpoint per status build (bittensor + blockmachine may share URL)."""
+    key = endpoint.rstrip("/").lower()
+    with _rpc_health_memo_lock:
+        cached = _rpc_health_memo.get(key)
+    if cached is not None:
+        return cached
+    result = _rpc_chain_healthy(endpoint)
+    with _rpc_health_memo_lock:
+        _rpc_health_memo.setdefault(key, result)
+    return result
+
+
 def _bittensor_rpc_transport_label(endpoint: str) -> str:
     ep = endpoint.rstrip("/").lower()
     if ep == _BLOCKMACHINE_RPC.lower() or "blockmachine" in ep:
@@ -154,8 +188,9 @@ def _bittensor_rpc_transport_label(endpoint: str) -> str:
 def _probe_bittensor() -> Dict[str, Any]:
     network = _BITTENSOR_NETWORK
     label = "Finney mainnet" if network == "finney" else f"Bittensor {network}"
-    healthy, rpc_detail = _rpc_chain_healthy(_BITTENSOR_RPC)
-    transport = _bittensor_rpc_transport_label(_BITTENSOR_RPC)
+    rpc_url = _bittensor_rpc_url()
+    healthy, rpc_detail = _rpc_chain_healthy_deduped(rpc_url)
+    transport = _bittensor_rpc_transport_label(rpc_url)
     if healthy:
         detail = f"{label} · {transport} · chain RPC ok"
     else:
@@ -171,7 +206,7 @@ def _probe_bittensor() -> Dict[str, Any]:
 
 
 def _probe_blockmachine() -> Dict[str, Any]:
-    healthy, detail = _rpc_chain_healthy(_BLOCKMACHINE_RPC)
+    healthy, detail = _rpc_chain_healthy_deduped(_BLOCKMACHINE_RPC)
     if healthy:
         detail = f"{detail} · SN19 live feed"
     else:
@@ -358,6 +393,7 @@ _PROBERS = {
 
 def clear_status_cache() -> None:
     """Reset probe cache (tests / forced refresh)."""
+    _clear_rpc_health_memo()
     with _cache_lock:
         _cache["at"] = 0.0
         _cache["payload"] = None
@@ -384,6 +420,7 @@ def build_integrations_status(*, force: bool = False) -> Dict[str, Any]:
     connected_n = 0
     primary_netuids: Set[int] = set()
     probe_results: Dict[str, Dict[str, Any]] = {}
+    _clear_rpc_health_memo()
 
     def _run(slug: str) -> Tuple[str, Dict[str, Any]]:
         return slug, _PROBERS[slug]()
