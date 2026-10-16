@@ -234,10 +234,10 @@ def test_live_probe_uses_close_timestamp_and_skips_in_progress(monkeypatch):
         return (1, "0xabc", "ok")
 
     def fake_reserve(_reader, _netuid, _block_hash):
-        return 0.01
+        return 0.01, "ok"
 
     monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
-    monkeypatch.setattr(step4_script, "_reserve_price_tao", fake_reserve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
     monkeypatch.setattr(
         step4_script,
         "_fetch_gecko_ohlcv",
@@ -249,12 +249,18 @@ def test_live_probe_uses_close_timestamp_and_skips_in_progress(monkeypatch):
     )
 
     class _Reader:
-        pass
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
 
     mapped = [(64, "bittensor", "pool", {"base_is_alpha": True})]
-    subs = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    subs, probe_meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
     assert len(subs) == 1
     assert len(subs[0].matched) == 2
+    assert "per_subnet" in probe_meta
     assert recorded == [(now_ts - 3600) * 1000, now_ts * 1000]
 
 
@@ -730,6 +736,124 @@ def test_insufficient_coverage_loses_quorum_inconclusive():
         e["netuid"] == 88 and e["reason"] == "insufficient_coverage"
         for e in report["excluded_subnets"]
     )
+
+
+def test_live_probe_records_resolve_failures(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    outcomes = iter(["rate_limited", "archive_miss"])
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        outcome = next(outcomes)
+        return None, None, outcome
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 1.0], [now_ts - 7200, 0, 0, 0, 0.99]],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 2
+        rate_limit_events = [{"provider": "finney", "http_status": 429}]
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    mapped = [(64, "bittensor", "pool", {"base_is_alpha": True})]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs[0].matched) == 0
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("resolve_block_at:rate_limited") == 1
+    assert counts.get("resolve_block_at:archive_miss") == 1
+    assert meta["provider_fallback_count"] == 2
+    assert meta["rate_limit_events"][0]["http_status"] == 429
+    report = evaluate_gecko_validation(subs)
+    assert report["verdict"] != "PASS"
+
+
+def test_live_probe_records_reserve_read_failures(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return None, "missing_storage"
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 1.0], [now_ts - 7200, 0, 0, 0, 0.99]],
+    )
+
+    class _Reader:
+        provider_served = "blockmachine"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("reserve_read:missing_storage") == 2
+    assert evaluate_gecko_validation(subs)["verdict"] != "PASS"
+
+
+def test_live_probe_gecko_error_visible_in_meta(monkeypatch):
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("gecko_http_429")),
+    )
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(2, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=24,
+        reader=_Reader(),
+    )
+    assert subs[0].error
+    row = meta["per_subnet"][0]
+    assert row["gecko_error"]
+    assert "gecko_fetch:" in "".join(meta["aggregate_stage_outcome_counts"])
+    report = evaluate_gecko_validation(subs)
+    assert report["verdict"] == "INCONCLUSIVE"
+
+
+def test_reader_rate_limit_event_includes_http_status():
+    from internal.chain_client import ChainClient, ChainRpcError
+    from internal.chain_price.reader import ChainReader
+
+    class _Scripted(ChainClient):
+        def __init__(self):
+            super().__init__("https://example.invalid/rpc", init_volume_db=False)
+
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+
+    reader = ChainReader([("finney", _Scripted())])
+    result, outcome = reader.call("chain_getFinalizedHead", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert reader.rate_limit_events == [{"provider": "finney", "http_status": 429}]
 
 
 def test_conflicting_duplicate_among_eight_clean_fails_gate():

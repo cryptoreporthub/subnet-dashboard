@@ -45,6 +45,12 @@ def classify_rpc_error(exc: BaseException) -> RpcOutcome:
     return "rpc_error"
 
 
+def _rate_limit_http_status(exc: BaseException) -> Optional[int]:
+    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited" and exc.code is not None:
+        return int(exc.code)
+    return None
+
+
 def rpc_call(
     client: Any,
     method: str,
@@ -57,6 +63,9 @@ def rpc_call(
             return result, "ok"
         except Exception as exc:
             outcome = classify_rpc_error(exc)
+            http_status = _rate_limit_http_status(exc)
+            if http_status is not None:
+                setattr(client, "_last_rate_limit_http_status", http_status)
             logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
             return None, outcome
     if hasattr(client, "_call_typed"):
@@ -65,6 +74,9 @@ def rpc_call(
             return result, "ok"
         except Exception as exc:
             outcome = classify_rpc_error(exc)
+            http_status = _rate_limit_http_status(exc)
+            if http_status is not None:
+                setattr(client, "_last_rate_limit_http_status", http_status)
             logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
             return None, outcome
     try:
@@ -72,6 +84,9 @@ def rpc_call(
         return result, "ok"
     except Exception as exc:
         outcome = classify_rpc_error(exc)
+        http_status = _rate_limit_http_status(exc)
+        if http_status is not None:
+            setattr(client, "_last_rate_limit_http_status", http_status)
         logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
         return None, outcome
 
