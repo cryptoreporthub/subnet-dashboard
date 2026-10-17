@@ -269,7 +269,11 @@ def evaluate_gecko_validation(
         # divide by span_h + 1 so 24 contiguous hours → coverage 1.0, not ~1.043.
         coverage = (mh / (span_h + 1.0)) if span_h >= 0 and mh > 0 else 0.0
         meets_hour_floor = mh >= min_matched_hours
-        meets_coverage = span_h > 0 and coverage >= min_coverage_ratio
+        # ponytail: 24×5m stamps inflate coverage (~8.2); require wall span ≥ mh−1 hours.
+        meets_hour_span = mh < 2 or span_h + 1e-9 >= float(mh - 1)
+        meets_coverage = (
+            span_h > 0 and meets_hour_span and coverage >= min_coverage_ratio
+        )
         # ponytail: with elapsed-time scaling every valid adjacent pair yields a return;
         # the only pair gate is min_matched_hours (distinct aligned bars).
         at_floor = meets_hour_floor and meets_coverage
@@ -343,12 +347,17 @@ def evaluate_gecko_validation(
                 unit_mismatch_below_floor.append(
                     {"netuid": sub.netuid, "matched_hours": mh}
                 )
+            cov_reason = (
+                "sub_hourly_cadence"
+                if meets_hour_floor and span_h > 0 and not meets_hour_span
+                else "insufficient_coverage"
+            )
             excluded.append(
                 {
                     "netuid": sub.netuid,
                     "matched_hours": mh,
                     "n_return_pairs": n_return_pairs,
-                    "reason": "insufficient_coverage",
+                    "reason": cov_reason,
                 }
             )
             continue

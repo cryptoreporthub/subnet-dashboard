@@ -318,6 +318,38 @@ def test_committed_sample_output_is_pass_verdict():
     for row in payload["per_subnet"]:
         assert SAMPLE_PER_SUBNET_KEYS <= frozenset(row)
         assert row["price_unit_mismatch"] is False
+        span_h = row["matched_hour_span_hours"]
+        mh = row["matched_hours"]
+        expected_cov = mh / (span_h + 1.0) if mh > 0 else 0.0
+        assert row["coverage"] == pytest.approx(expected_cov, rel=1e-9)
+
+
+def _five_minute_stamped_matched(n: int = 24, base_ts: int = 1_700_000_000) -> list[MatchedHour]:
+    """Replit #1431 post-merge: 24 rows every 5m must not satisfy the 24h floor."""
+    step = 300
+    return [
+        MatchedHour(
+            gecko_close=0.01 + i * 0.0001,
+            chain_price_tao=(0.01 + i * 0.0001) * 1.00001,
+            hour_unix=base_ts + i * step,
+        )
+        for i in range(n)
+    ]
+
+
+def test_sub_hourly_cadence_cannot_pass_hour_floor():
+    matched = _five_minute_stamped_matched(24)
+    metrics = subnet_metrics(matched)
+    assert metrics["matched_hours"] == 24
+    assert metrics["matched_hour_span_hours"] == pytest.approx(23 * 300 / ALIGNED_HOUR_SECONDS)
+    assert metrics["matched_hours"] / (metrics["matched_hour_span_hours"] + 1) > 1.0
+    eight = [SubnetValidationInput(netuid=i, matched=matched) for i in range(8)]
+    report = evaluate_gecko_validation(eight)
+    assert report["verdict"] == "INCONCLUSIVE"
+    assert report["aggregate"]["qualifying_subnet_count"] == 0
+    assert all(
+        e["reason"] == "sub_hourly_cadence" for e in report["excluded_subnets"]
+    )
 
 
 def _good_subnets(n: int, start: int = 0) -> list[SubnetValidationInput]:
