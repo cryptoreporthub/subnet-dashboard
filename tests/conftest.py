@@ -57,6 +57,25 @@ def _reset_rate_limiter_state():
 
 
 @pytest.fixture(autouse=True)
+def _reset_resolver_liveness_cache():
+    """loop_health keeps a 5s process-wide snapshot of resolver liveness. A TestClient
+    lifespan fills it, and the next test then reads that tick instead of its own soul map."""
+    def _reset():
+        try:
+            from internal.learning import loop_health
+
+            with loop_health._RESOLVER_LIVENESS_CACHE_LOCK:
+                loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
+                loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
+        except Exception:
+            pass
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_readiness_cache():
     """Prevent readiness cache/refresher state leaking between tests."""
     try:
