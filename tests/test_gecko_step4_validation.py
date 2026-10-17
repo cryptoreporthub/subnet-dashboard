@@ -863,6 +863,55 @@ def test_reserve_price_duplicate_keys_fail_closed(bad_row):
     assert outcome == "malformed_row"
 
 
+def test_reserve_price_uppercase_keys_accepted():
+    k_tao = map_key_hex(b"SubnetTAO", 64).upper()
+    k_alpha = map_key_hex(b"SubnetAlphaIn", 64).upper()
+
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": [[k_tao, "0x0a"], [k_alpha, "0x0a"]]}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert outcome == "ok"
+    assert price == 1.0
+
+
+def test_reserve_price_case_variant_conflicting_duplicate_malformed():
+    k_tao = map_key_hex(b"SubnetTAO", 64)
+    k_alpha = map_key_hex(b"SubnetAlphaIn", 64)
+    changes = [
+        [k_tao, "0x0a"],
+        [k_tao.upper(), "0x14"],
+        [k_alpha, "0x0a"],
+    ]
+
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": changes}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+def test_reserve_price_unrequested_key_malformed():
+    k_tao = map_key_hex(b"SubnetTAO", 64)
+    k_alpha = map_key_hex(b"SubnetAlphaIn", 64)
+    changes = [
+        [k_tao, "0x0a"],
+        [k_alpha, "0x0a"],
+        ["0xdeadbeef", "0x01"],
+    ]
+
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": changes}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
 @pytest.mark.parametrize(
     "batch, expected",
     [
