@@ -266,31 +266,28 @@ def score_subnet(
         pulse_degraded = True
         pulse_error = str(exc)
 
-    numeric_scores = [
-        float(s) for s in (oracle_score, echo_score, pulse_score) if s is not None
-    ]
     weights_degraded = False
     try:
-        from internal.judges.weights import normalized_judge_weights
+        from internal.judges.weights import consensus_judge_weights
 
-        jw = normalized_judge_weights()
+        jw = consensus_judge_weights()
     except Exception:
         from internal.judges.weights import DEFAULT_JUDGE_WEIGHTS
 
         jw = dict(DEFAULT_JUDGE_WEIGHTS)
         weights_degraded = True
 
-    usable = {
-        "oracle": oracle_score is not None,
-        "echo": echo_score is not None,
-        "pulse": pulse_score is not None,
+    scores = {"oracle": oracle_score, "echo": echo_score, "pulse": pulse_score}
+    confidences = {
+        "oracle": oracle_confidence,
+        "echo": echo_confidence,
+        "pulse": pulse_confidence,
     }
-    if all(usable.values()):
-        consensus_score = (
-            float(oracle_score) * jw["oracle"]
-            + float(echo_score) * jw["echo"]
-            + float(pulse_score) * jw["pulse"]
-        )
+    # A zero-weight judge neither blends into the score nor vetoes the verdict.
+    members = [k for k in scores if jw[k] > 0]
+    numeric_scores = [float(scores[k]) for k in members if scores[k] is not None]
+    if members and all(scores[k] is not None for k in members):
+        consensus_score = sum(float(scores[k]) * jw[k] for k in members)
         stddev = statistics.stdev(numeric_scores) if len(numeric_scores) > 1 else 0.0
         agreement = max(0.0, min(1.0, 1.0 - stddev / 0.5))
         if all(s > 0.65 for s in numeric_scores):
@@ -300,11 +297,7 @@ def score_subnet(
         else:
             verdict = "neutral"
         contested = agreement < 0.5
-        consensus_confidence = (
-            float(oracle_confidence or 0) * jw["oracle"]
-            + float(echo_confidence or 0) * jw["echo"]
-            + float(pulse_confidence or 0) * jw["pulse"]
-        )
+        consensus_confidence = sum(float(confidences[k] or 0) * jw[k] for k in members)
         consensus_block: Dict[str, Any] = {
             "score": round(consensus_score, 4),
             "agreement": round(agreement, 4),

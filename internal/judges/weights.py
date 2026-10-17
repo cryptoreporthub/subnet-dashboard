@@ -114,3 +114,32 @@ def normalized_judge_weights(path: Optional[str] = None) -> Dict[str, float]:
     if not total or total <= 0:
         return dict(DEFAULT_JUDGE_WEIGHTS)
     return {k: v / total for k, v in weights.items()}
+
+
+# Judges kept out of the consensus blend, verdict and agreement. Echo is excluded
+# by the 2026-10-12 "Judge Layer Rebuild Decisions" (reversible): its score
+# predicts returns worse than chance (AUC 0.40, 95% CI 0.34-0.47). The judge is
+# still scored, graded and nudged, so it can earn its way back. Set
+# JUDGE_CONSENSUS_EXCLUDE to a comma list to change it; empty re-enables all.
+DEFAULT_CONSENSUS_EXCLUDED = "echo"
+
+
+def consensus_excluded_judges() -> frozenset:
+    raw = os.environ.get("JUDGE_CONSENSUS_EXCLUDE", DEFAULT_CONSENSUS_EXCLUDED)
+    return frozenset(
+        n for n in (p.strip().lower() for p in raw.split(",")) if n in DEFAULT_JUDGE_WEIGHTS
+    )
+
+
+def consensus_judge_weights(path: Optional[str] = None) -> Dict[str, float]:
+    """Learned weights with excluded judges at 0, renormalised to sum to 1."""
+    excluded = consensus_excluded_judges()
+    learned = normalized_judge_weights(path)
+    masked = {k: (0.0 if k in excluded else v) for k, v in learned.items()}
+    total = sum(masked.values())
+    if total <= 0:
+        masked = {k: (0.0 if k in excluded else v) for k, v in DEFAULT_JUDGE_WEIGHTS.items()}
+        total = sum(masked.values())
+    if total <= 0:
+        return dict(DEFAULT_JUDGE_WEIGHTS)
+    return {k: v / total for k, v in masked.items()}
