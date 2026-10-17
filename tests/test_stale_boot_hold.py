@@ -35,6 +35,7 @@ def test_stale_boot_hold_regenerates_with_hydrated_subnets(monkeypatch, tmp_path
             "subnet": {"netuid": 42, "name": "Mid"},
             "final_confidence": 0.52,
             "action": "long",
+            "audit": {"approved": True, "concerns": []},
         }
 
     monkeypatch.setattr(daily_pick_engine, "select_daily_pick", _fake_select)
