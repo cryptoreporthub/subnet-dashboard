@@ -43,7 +43,7 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 | F11 | Red-team floor resurrects a blocked candidate: multiplier 0.0 then `_apply_multiplier` returns `max(0.88, m*f)`. Latent today because `tradable_subnets()` filters first | `red_team.py`, `daily_pick.py:~124`, `hourly_pick.py:60` | V |
 | F12 | `approved` and the missing-field gate depend on string prefixes | `red_team.py` (`startswith`), `daily_pick_engine.py:185` | V |
 | F13 | Score adjustments are each capped (memory +/-5 pts, telegram <=5, pump blend <=25%, recovery haircut, value/flow/size tilts) but have no total budget; the calibration they were fitted on was n~60 | `memory_scoring.py:7-8`, `message_intel/calibration.py:166`, `pump_overlay.py:18`, `state_vector.py`, `red_team.py` docstring | V |
-| F14 | Prod publish gate is 0.40 (`fly.toml:104`); the code default is 0.50, so any environment without the fly env (local, tests, the local UI pill "AUDIT GATE 50%") shows and applies a different gate than prod. (`AGENTS.md` does not state a gate value; the 0.50 figure I earlier attributed to it came from the pasted report.) | `fly.toml:104`, `tribunal_hero.html:63` | V |
+| F14 | Prod publish gate is 0.40 (`fly.toml:104`); the code default is 0.50 (`publish_gate.py`). **Correction (2026-10-17):** I earlier claimed the UI label disagrees with prod. It does not: the label is built from the same effective environment, and prod's homepage renders "40% audit gate". The 50% I saw came from my local environment (no fly env). `AGENTS.md` states no gate value. | `fly.toml:104`, `tribunal_hero.html:63`, prod homepage | V |
 
 ### 2.3 Weights
 | # | Finding | Evidence | Status |
