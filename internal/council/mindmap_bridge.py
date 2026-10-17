@@ -40,6 +40,29 @@ class MindmapBridge:
             self.soul_map_state = {}
             self.feedback_logs = []
 
+    def _append_locked(self, section: Optional[str], key: str, entry: Dict[str, Any], limit: int) -> None:
+        """Append one row inside the soul-map lock, against fresh disk state.
+
+        ``_save_to_disk`` replaces whole subtrees from this instance's init-time copy, so a
+        request-scoped bridge would drop concurrent writers' updates (pump ladder, last picks).
+        """
+        def _mutate(blob: Dict[str, Any]) -> None:
+            container = blob
+            if section is not None:
+                container = blob.get(section)
+                if not isinstance(container, dict):
+                    container = {}
+                    blob[section] = container
+            rows = container.get(key)
+            rows = rows if isinstance(rows, list) else []
+            rows.append(entry)
+            container[key] = rows[-limit:]
+
+        try:
+            write_soul_map(_mutate, self.persistence_path)
+        except Exception:
+            pass
+
     def _save_to_disk(self):
         dir_name = os.path.dirname(self.persistence_path)
         if dir_name and not os.path.exists(dir_name):
@@ -64,7 +87,7 @@ class MindmapBridge:
         trail.append(entry)
         if len(trail) > 200:
             self.soul_map_state["learning_trail"] = trail[-200:]
-        self._save_to_disk()
+        self._append_locked("soul_map_state", "learning_trail", entry, 200)
 
     def get_brain_recommendations(self, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -200,5 +223,5 @@ class MindmapBridge:
         self.feedback_logs.append(feedback)
         if len(self.feedback_logs) > FEEDBACK_LOGS_MAX:
             self.feedback_logs = self.feedback_logs[-FEEDBACK_LOGS_MAX:]
-        self._save_to_disk()
+        self._append_locked(None, "feedback_logs", feedback, FEEDBACK_LOGS_MAX)
         return feedback

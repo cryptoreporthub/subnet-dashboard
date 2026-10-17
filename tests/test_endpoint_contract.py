@@ -139,15 +139,6 @@ CONTRACT = [
     ("GET", "/api/indicators-convergence", None),
     ("GET", "/api/indicators/scheduler", None),
     # Learning loop write APIs (slice 6)
-    (
-        "POST",
-        "/api/feedback",
-        {
-            "subnet_id": 1,
-            "recommendation": "quant",
-            "actual_performance": {"correct_prediction": True},
-        },
-    ),
     ("POST", "/api/learning/trigger", None),
     ("POST", "/api/learning/rebalance-weights", None),
     ("POST", "/api/learning/backfill-expert-attribution", None),

@@ -2331,7 +2331,7 @@ def get_recommendations():
 @app.post("/api/mindmap/feedback")
 @limit_or_noop(strict_limit(), override_defaults=True)
 async def post_feedback(request: Request):
-    """Close the mindmap feedback path into learning + soul-map alignment logs."""
+    """Record user feedback as unverified trail and alignment logs. Never changes weights or scoring."""
     try:
         payload = await request.json()
     except Exception:
@@ -2340,21 +2340,6 @@ async def post_feedback(request: Request):
         return {"status": "error", "detail": "JSON body required"}
 
     result: Dict[str, Any] = {"status": "received", "feedback": payload}
-
-    subnet_id = payload.get("subnet_id")
-    recommendation = payload.get("recommendation")
-    actual_performance = payload.get("actual_performance")
-    if subnet_id and recommendation:
-        try:
-            from datastore.learning_engine import LearningEngine
-
-            engine = LearningEngine()
-            result["learning"] = engine.record_feedback(
-                int(subnet_id), str(recommendation), actual_performance or {}
-            )
-        except Exception as exc:
-            logger.warning("mindmap→learning feedback failed: %s", exc)
-            result["learning_error"] = str(exc)
 
     daily_output = payload.get("daily_output") or payload.get("selector_output")
     if isinstance(daily_output, dict) and daily_output.get("decisions"):
@@ -2369,7 +2354,7 @@ async def post_feedback(request: Request):
             result["alignment_error"] = str(exc)
 
     note = payload.get("note") or payload.get("message")
-    if note and not (subnet_id and recommendation):
+    if note:
         try:
             from internal.council.mindmap_bridge import MindmapBridge
 

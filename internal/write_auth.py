@@ -21,7 +21,6 @@ _PUBLIC_WRITE_EXACT = frozenset(
     {
         "/api/simivision/chat",
         "/api/investigate/ask",
-        "/api/feedback",
         "/api/mindmap/feedback",
     }
 )
