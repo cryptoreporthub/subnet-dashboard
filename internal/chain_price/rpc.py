@@ -60,8 +60,10 @@ def rpc_call(
     params: Optional[list] = None,
 ) -> Tuple[Optional[Any], RpcOutcome]:
     params = params or []
-    if hasattr(client, "_last_rate_limit_http_status"):
+    try:
         delattr(client, "_last_rate_limit_http_status")
+    except AttributeError:
+        pass
     if method == "state_queryStorageAt" and len(params) >= 2:
         try:
             result = client.query_storage_at(params[0], params[1])
