@@ -863,6 +863,45 @@ def test_reserve_price_duplicate_keys_fail_closed(bad_row):
     assert outcome == "malformed_row"
 
 
+def test_reserve_price_uppercase_keys_match_requested_keys():
+    keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
+
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": [[keys[0].upper(), "0x0a"], [keys[1].upper(), "0x14"]]}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert outcome == "ok"
+    assert price == pytest.approx(0.5)
+
+
+def test_reserve_price_case_variant_duplicate_fails_closed():
+    keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
+
+    class _Reader:
+        def call(self, method, params):
+            rows = [[keys[0].upper(), "0x0a"], [keys[0].lower(), "0x14"], [keys[1], "0x14"]]
+            return [{"changes": rows}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+def test_reserve_price_unrequested_key_fails_closed():
+    keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
+    stray = map_key_hex(b"SubnetTAO", 65)
+
+    class _Reader:
+        def call(self, method, params):
+            rows = [[keys[0], "0x0a"], [keys[1], "0x14"], [stray, "0x14"]]
+            return [{"changes": rows}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
 @pytest.mark.parametrize(
     "batch, expected",
     [
