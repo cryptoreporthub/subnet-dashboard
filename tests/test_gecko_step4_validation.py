@@ -19,10 +19,12 @@ from internal.chain_price.gecko_validation import (
     subnets_from_serializable,
 )
 from scripts import gecko_step4_validation as step4_script
+from internal.chain_price.storage_keys import map_key_hex
 from scripts.gecko_step4_validation import (
     _gecko_fetch_error_label,
     _gecko_params,
     _live_probe_subnets,
+    _reserve_price_tao_with_outcome,
     main,
 )
 
@@ -813,6 +815,63 @@ def test_live_probe_records_reserve_read_failures(monkeypatch):
     counts = meta["aggregate_stage_outcome_counts"]
     assert counts.get("reserve_read:missing_storage") == 2
     assert evaluate_gecko_validation(subs)["verdict"] != "PASS"
+
+
+def test_reserve_price_malformed_changes_short_row():
+    keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
+
+    class _Reader:
+        def call(self, method, params):
+            assert method == "state_queryStorageAt"
+            return [{"changes": [[keys[0]]]}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+def test_live_probe_malformed_reserve_row_continues_other_subnets(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.01]],
+    )
+
+    def _good_changes(netuid: int) -> list:
+        k_tao = map_key_hex(b"SubnetTAO", netuid)
+        k_alpha = map_key_hex(b"SubnetAlphaIn", netuid)
+        return [[k_tao, "0x0a"], [k_alpha, "0x0a"]]
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+        def call(self, method, params):
+            if method != "state_queryStorageAt":
+                return None, "rpc_error"
+            keys = params[0]
+            netuid = 64 if keys[0] == map_key_hex(b"SubnetTAO", 64) else 65
+            if netuid == 64:
+                return [{"changes": [[keys[0]]]}], "ok"
+            return [{"changes": _good_changes(65)}], "ok"
+
+    mapped = [
+        (64, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (65, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs) == 2
+    assert len(subs[0].matched) == 0
+    assert len(subs[1].matched) == 1
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"reserve_read:malformed_row": 1}
+    assert meta["aggregate_stage_outcome_counts"].get("reserve_read:malformed_row") == 1
 
 
 def test_live_probe_gecko_error_visible_in_meta(monkeypatch):

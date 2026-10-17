@@ -164,7 +164,15 @@ def _reserve_price_tao_with_outcome(
     changes = entry.get("changes")
     if not changes:
         return None, "missing_storage"
-    by_key = {row[0]: row[1] for row in changes if row}
+    if not isinstance(changes, list):
+        return None, "malformed_row"
+    by_key: Dict[str, Any] = {}
+    for row in changes:
+        if not row:
+            continue
+        if not isinstance(row, (list, tuple)) or len(row) < 2:
+            return None, "malformed_row"
+        by_key[row[0]] = row[1]
     tao_raw = _decode_u64_storage(by_key.get(keys[0]))
     alpha_raw = _decode_u64_storage(by_key.get(keys[1]))
     if not tao_raw or not alpha_raw:
