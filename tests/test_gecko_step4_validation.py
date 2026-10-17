@@ -1090,6 +1090,21 @@ def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
     assert getattr(client, "_last_rate_limit_http_status", None) is None
 
 
+def test_rpc_call_jsonrpc_code_429_does_not_record_http_status():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "too many requests", code=429)
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert getattr(client, "_last_rate_limit_http_status", None) is None
+
+
 def test_rpc_call_clears_stale_rate_limit_status_on_next_call():
     from internal.chain_client import ChainRpcError
     from internal.chain_price.rpc import rpc_call
@@ -1101,7 +1116,9 @@ def test_rpc_call_clears_stale_rate_limit_status_on_next_call():
         def _call_typed(self, method, params=None):
             self.attempts += 1
             if self.attempts == 1:
-                raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+                raise ChainRpcError(
+                    "rate_limited", "HTTP 429", code=429, http_status=429
+                )
             raise RuntimeError("boom")
 
     client = _Client()
@@ -1131,16 +1148,40 @@ def test_rpc_call_raw_http_429_records_http_status():
     assert client._last_rate_limit_http_status == 429
 
 
+def test_reader_rate_limit_event_jsonrpc_code_429_not_http_status():
+    from internal.chain_client import ChainClient, ChainRpcError
+    from internal.chain_price.reader import ChainReader
+
+    class _Scripted(ChainClient):
+        def __init__(self):
+            super().__init__(
+                "https://example.invalid/rpc-jsonrpc-429", init_volume_db=False
+            )
+
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "too many requests", code=429)
+
+    reader = ChainReader([("finney", _Scripted())])
+    result, outcome = reader.call("chain_getFinalizedHead", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert reader.rate_limit_events == [{"provider": "finney", "http_status": None}]
+
+
 def test_reader_rate_limit_event_includes_http_status():
     from internal.chain_client import ChainClient, ChainRpcError
     from internal.chain_price.reader import ChainReader
 
     class _Scripted(ChainClient):
         def __init__(self):
-            super().__init__("https://example.invalid/rpc", init_volume_db=False)
+            super().__init__(
+                "https://example.invalid/rpc-http-429", init_volume_db=False
+            )
 
         def _call_typed(self, method, params=None):
-            raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+            raise ChainRpcError(
+                "rate_limited", "HTTP 429", code=429, http_status=429
+            )
 
     reader = ChainReader([("finney", _Scripted())])
     result, outcome = reader.call("chain_getFinalizedHead", [])

@@ -24,10 +24,12 @@ class ChainRpcError(Exception):
         *,
         code: Optional[int] = None,
         retry_after: Optional[float] = None,
+        http_status: Optional[int] = None,
     ):
         self.kind = kind
         self.code = code
         self.retry_after = retry_after
+        self.http_status = http_status
         super().__init__(message or kind)
 
 

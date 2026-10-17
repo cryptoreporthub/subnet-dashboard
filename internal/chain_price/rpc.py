@@ -47,12 +47,7 @@ def classify_rpc_error(exc: BaseException) -> RpcOutcome:
 
 def _rate_limit_http_status(exc: BaseException) -> Optional[int]:
     if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
-        code = exc.code
-        if isinstance(code, int):
-            return code
-        return None
-    # chain_client raises ChainRpcError(code=429) for 429, so this raw HTTPError
-    # branch is only reached by callers that pass a bare requests client through.
+        return exc.http_status
     if isinstance(exc, requests.HTTPError) and exc.response is not None:
         if exc.response.status_code == 429:
             return 429
