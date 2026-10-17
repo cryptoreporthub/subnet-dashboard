@@ -14,7 +14,8 @@ Rule applied to every fix below: **root cause or nothing.** A fix that detects, 
 3. **The weights are not a function of the ledger.** They are an accumulator of +/- nudges with an asymmetric step (+0.02 / -0.03, break-even hit rate 60%, measured 44-47%), two of four experts receive no learning at all, and replay and live use different row filters.
 4. **The judges are not independent.** Oracle and echo endorse 100% of rows, so their grade equals the council's grade by construction. Oracle/pulse scores correlate at 0.64.
 5. **There is a public, unauthenticated weight writer** (`POST /api/feedback`). The repo is public, so this is documented to the internet. Fix first.
-6. **Architecture:** keep FastAPI and the slice routers. The defects are in the measurement and learning layers, in swallowed router imports, in `server.py` acting as a shared kernel (21 reverse imports), and in runtime state living in git.
+6. **Scoring caps (the 20/24/40/75 hard caps):** prod's own snapshot reports `count 40, complete false, capped_out 125` of 165 admitted subnets (24% scored); FX11 deletes the caps rather than raising them. Measured prod cost is about 1.3 s per subnet while the same scoring runs in ~3 ms locally, so the cap is compensating for an unexplained I/O or contention cost, not for compute.
+7. **Architecture:** keep FastAPI and the slice routers. The defects are in the measurement and learning layers, in swallowed router imports, in `server.py` acting as a shared kernel (21 reverse imports), and in runtime state living in git.
 
 ---
 
@@ -77,7 +78,7 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 ### 2.6 Security and operations
 | # | Finding | Evidence | Status |
 |---|---|---|---|
-| F33 | `POST /api/feedback` is on the public-write allowlist, takes a client-supplied `correct_prediction`, and calls `nudge_expert`; no frontend caller (tests only) | `write_auth.py:22-27`, `learning_engine.py:57-90`, `routes.py:41` | V |
+| F33 | `POST /api/feedback` is on the public-write allowlist, takes a client-supplied `correct_prediction`, and calls `nudge_expert`; no frontend caller (tests only). **Reachable and unauthenticated on prod:** an empty-body POST returned HTTP 400 "Missing subnet_id or recommendation" (handler reached; a protected route would have returned 401). Only `{}` was sent, so nothing changed | `write_auth.py:22-27`, `learning_engine.py:57-90`, `routes.py:41`, prod probe | V |
 | F34 | `WRITE_API_TOKEN` **is** set in prod: an unauthenticated POST to an unknown path returns 401 `write_api_token_required`. Other write routes (`/api/learning/rebalance-weights`, `/api/learning/trigger`, `/api/scenario-memory`) are therefore token-protected | non-mutating probe | V |
 | F35 | `/api/mindmap/feedback` is allowlisted but no route exists | grep | V |
 | F36 | `CALIBRATION_AUTO_RETRAIN` is off in both fly tomls; capture grading mode is off in prod (trail `band`/`capture` null) | `fly.toml:87`, prod trail | V |
@@ -103,7 +104,7 @@ The council scores a capped slice of the subnets, not every active subnet. Count
 | F45 | `cap_subnets_for_scoring` ranks by the **previous** snapshot and slices (`scoring_cap.py:101-108`), so eligibility depends on a prior capped result: names that were scored stay selected, unscored names stay deprioritised (also the user's own handoff finding 4) | `scoring_cap.py` | V |
 | F46 | The published-pick sample is narrow: 34 distinct netuids over 60 days, netuid 105 = 52 rows, 61 = 44 rows (consistent with F44/F45; cause not isolated) | ledger | M |
 | F47 | The handoff (pin `9535c3c2`) said snapshot coverage is `len(rows)` and failures are swallowed. Current main already tracks `day_attempted/day_succeeded/hour_attempted/hour_succeeded` per netuid (`score_snapshots.py:305-357`); the handoff finding is partly stale. Whether a snapshot can still be reported complete when some netuids failed was not re-verified | `score_snapshots.py` | V (lists exist), U (completeness semantics) |
-| F48 | Per-subnet scoring cost on prod is unknown: the local latency log (24 rows, median 1 ms) has no network and is not representative | `data/pick_score_latency.jsonl` | U |
+| F48 | Prod snapshot cycle (2026-10-17 07:20Z, `/api/learning/health` `score_snapshot`): `count 40`, `complete false`, `capped_out 125`, `selection_policy rank_cap`, membership expected 165 / admitted 165 (taomarketcap), `day_scoring_seconds 51.7`, slowest netuids 1.31-1.45 s, i.e. about 1.3 s per subnet, near-uniform. Locally the same `score_subnet_for_day` takes ~3 ms with a prod-size ledger (first call 1.8 s to load it), so the prod cost is not scoring math. Likely per-subnet I/O or contention (unverified); full-active serial scoring of 165 would be about 215 s | prod health, local profile | V (numbers), U (cause) |
 | F49 | `tradable_subnets()` removes root/invalid IDs and dedupes by netuid; it does not establish *active* membership | `internal/subnets/tradable.py:43-51` | V |
 
 ### 2.8 Architecture
@@ -173,6 +174,7 @@ Each fix names the structure that makes the defect unrepresentable and the test 
 - Only the batch estimator (FX2) writes weights. `LearningEngine.record_feedback` stops calling `nudge_expert`; `/api/feedback` becomes an append-only unverified-opinion log that is never an estimator input (or is removed).
 - Remove the dead `/api/mindmap/feedback` allowlist entry.
 - Acceptance: a test enumerates every callable that writes `soul_map` weights and asserts the set is `{estimator}`; an unauthenticated POST to `/api/feedback` leaves weights unchanged.
+- Tests that change with the fix (updated, never skipped): `tests/test_living_brain.py:131` currently asserts `record_feedback` emits a `reason=feedback` weight change. The `/api/feedback` CONTRACT row (`test_endpoint_contract.py:144`) and `test_audit_remediation.py:192` stay valid because the route stays.
 
 ### FX7 (RC7): typed audit
 - `Concern` becomes a typed value (code, severity, `blocking: bool`); `approved = not any(c.blocking)`; a blocked candidate is a state, not a multiplier of 0.0.
@@ -257,7 +259,8 @@ Sources: Ditto memories (2026-09-26 evaluation, 2026-10-15 integration note); `d
 2. Origin of quant = 2.0: it pre-dates the earliest ledger row (Aug 5) and is already present on 2026-10-06. The code docstring (`signal_expert.py:115-123`, commit `713a4a50`, 2026-08-09) says legacy misattribution inflated it to the cap; I did not reproduce that, and git history of committed data/docs holds no earlier value.
 3. Whether `/api/feedback` was abused before the last ~2 days (no available history).
 4. Per-subnet scoring cost, memory headroom and effective env values on prod (no flyctl/token here; `fly.toml` and public endpoints only), and the current authoritative active-subnet count.
-5. Whether a snapshot can report complete coverage when some netuids failed (F47).
+5. Whether a snapshot can report complete coverage when some netuids failed (F47). Prod currently reports `complete: false` for a 40-of-165 cycle, which is the honest direction; the failure-case semantics were not tested.
+5b. Why scoring costs ~1.3 s per subnet on prod versus ~3 ms locally (F48): no prod profiler access.
 6. Decision Models: price figures, limits, latency, schema, comparability to Jev.
 7. Prod secrets, machine state, logs.
 
@@ -281,7 +284,12 @@ Promotion rule for any model or weight change: out-of-time validation on the FX1
 
 ---
 
-## 9. Reproduction
+## 9. Deployed revision and reproduction
+
+- Prod `/version`: `fbb13f4c83ec567cb98c3b1490e6ff9e0dc0acd4` (checked 2026-10-17). That commit is main `e620ee4` plus one docs file (`docs/.../2026-10-17-e620ee4b-live-probe-1434.md`); `git diff e620ee4 fbb13f4` touches nothing under `internal/`, `datastore/`, `server.py` or config. **The code I read is the code prod runs.**
+- Prod-verified: `/api/feedback` reachable and unauthenticated (400 on `{}`); write-auth active elsewhere (401 on unknown-path POST); snapshot status via `/api/learning/health`.
+
+## 9b. Reproduction
 
 - Public read-only endpoints used: `/api/predictions/resolved`, `/api/learning/stats`, `/api/weights`, `/api/learning-metrics`, `/api/mindmap/trail`, `/api/learning/health`.
 - Clean-row filter: `|actual_pct| <= 50` and `created_at` outside 2026-08-07..2026-08-18, population `council_published` / `council_shadow`; weights replay via `internal.council.weights.replay_weights_from_predictions` on a local copy of the ledger.
