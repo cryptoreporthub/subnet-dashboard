@@ -337,3 +337,12 @@
 - **Security:** `POST /api/feedback` is public-write and nudges expert weights; repo is public. Fix first (FX6).
 - **Corrections to earlier notes:** Sep 26 Ditto plan said judge weights "cannot diverge"; they have diverged (not toward skill). Confidence-drop claim retracted (not significant).
 - **Scoring caps (20/24/40/75):** inventory in report section 2.7, removal design FX11; per the cap-audit handoff, no cap/deadline change or deploy without separate approval.
+
+## 2026-10-17 — Fix branches pushed (Claude Code session)
+
+- **13 branches on origin, none merged, no PR, no deploy.** Heads: fx6-single-weight-writer `cfa08ceb`, bound-public-inputs `6920a2f8`, persist-adjustment-breakdown `51bfe9f5`, hoist-telegram-calibration `2ff2603d`, typed-audit-publish-gate `1092cba9`, scoring-stage-timings `84cd0435`, echo-zero-consensus-weight `61ce5d3a`, resolver-hit-rate-published-only `63436276`, gate-pump-online-weights `6b9c61cf`, ab-settle-stale-exit `adb6255d`, test-rate-limit-isolation `adf9c5a4`, fix-phase-h-hero-stance-test `74cf48e4`, port-cursor-config (this branch).
+- **Status doc:** `docs/learning-loop/STATUS-2026-10-17.md`.
+- **Open, unverified:** the test that writes `pump_ladder` failure state into the real `data/soul_map.json`; the other 11 `test_phase_h_ui.py` failures (probable cold-cache cause, inferred); `test_price_fetcher_concurrency` 30s-expiry test; `test_prod_stability` mindmap health-latency test failed once in the full run (passes alone).
+- **Final full run, 12 branches (tree `9fcca204`):** 146 failed, 3329 passed, 5 skipped; 35 main failures fixed, 1 new timing-bound failure; polluter still active.
+- **Owner decisions:** rotate the Chutes key; how prod reaches main; merge order; `/api/feedback` removal; SQLite stance vs the Oct 12 table-free decision; Telegram adjuster keep or drop.
+- Ditto: `4f39f97e`, `0599adf8`, `7f02e308`.
