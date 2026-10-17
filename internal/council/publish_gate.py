@@ -30,6 +30,24 @@ def publish_gate_label() -> str:
     return f"{publish_gate_percent()}% audit gate"
 
 
+def audit_publish_guard(audit: Any) -> Dict[str, Any]:
+    """Block publication when the red-team audit did not approve the candidate.
+
+    Fails closed: a pick with no audit verdict is not published.
+    """
+    if isinstance(audit, dict) and audit.get("approved") is True:
+        return {"approved": True, "reason": None}
+    from internal.council.red_team import BLOCKING_CODES
+
+    detail = "no audit verdict"
+    if isinstance(audit, dict):
+        codes = audit.get("concern_codes") or []
+        messages = audit.get("concerns") or []
+        blocking = [m for c, m in zip(codes, messages) if c in BLOCKING_CODES]
+        detail = blocking[0] if blocking else (messages[0] if messages else "audit rejected the candidate")
+    return {"approved": False, "reason": f"Audit blocked: {detail}; no LONG published."}
+
+
 def directional_publish_guard(pick: Dict[str, Any]) -> Dict[str, Any]:
     """Block a published LONG when its own signal direction is bearish."""
     impact = pick.get("signal_impact") if isinstance(pick, dict) else {}

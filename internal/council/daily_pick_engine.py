@@ -20,7 +20,9 @@ import fcntl
 from internal.council.daily_pick import select_daily_pick
 from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
+from internal.council.red_team import MISSING_CRITICAL_FIELD, has_concern
 from internal.council.publish_gate import (
+    audit_publish_guard,
     directional_publish_guard,
     publish_gate_fraction,
     publish_gate_label,
@@ -181,8 +183,7 @@ def _hold_from_stale_boot_data(
     sn_block = cand.get("subnet") if isinstance(cand.get("subnet"), dict) else {}
     netuid = sn_block.get("netuid") or cand.get("netuid")
     audit = cand.get("audit") if isinstance(cand.get("audit"), dict) else {}
-    concerns = audit.get("concerns") or []
-    if any("Missing critical field" in str(c) for c in concerns):
+    if has_concern(audit, MISSING_CRITICAL_FIELD):
         return True
     try:
         cand_price = float(sn_block.get("price") or cand.get("price") or 0)
@@ -224,6 +225,8 @@ def _published_pick_fails_gate(payload: Dict[str, Any]) -> bool:
     except (TypeError, ValueError):
         final_confidence = 0.0
     if final_confidence < publish_gate_fraction():
+        return True
+    if not audit_publish_guard(pick.get("audit"))["approved"]:
         return True
     return not directional_publish_guard(pick)["approved"]
 
@@ -345,13 +348,16 @@ def get_or_create_today_pick(
     final_confidence = float(pick.get("final_confidence", 0.0))
     gate = publish_gate_fraction()
     directional_gate = directional_publish_guard(pick)
+    audit_gate = audit_publish_guard(pick.get("audit"))
 
-    if final_confidence < gate or not directional_gate["approved"]:
+    if final_confidence < gate or not directional_gate["approved"] or not audit_gate["approved"]:
         action = "HOLD"
         stored_pick: Optional[Dict[str, Any]] = None
-        reason = directional_gate["reason"] if not directional_gate["approved"] else (
-            f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
-            "no long call published"
+        reason = (
+            directional_gate["reason"] if not directional_gate["approved"]
+            else f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
+            "no long call published" if final_confidence < gate
+            else audit_gate["reason"]
         )
         candidate: Optional[Dict[str, Any]] = pick
     else:
