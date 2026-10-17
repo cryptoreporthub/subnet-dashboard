@@ -12,23 +12,32 @@ import functools
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 _local = threading.local()
 
 
 def timed_stage(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Record the stage's EXCLUSIVE time: time spent in nested timed stages is charged to them,
+    so stage seconds never sum to more than the wall time."""
+
     def decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             sink: Optional[Dict[str, float]] = getattr(_local, "sink", None)
             if sink is None:
                 return fn(*args, **kwargs)
+            stack: List[float] = _local.stack
+            stack.append(0.0)  # time spent in nested timed stages
             started = time.perf_counter()
             try:
                 return fn(*args, **kwargs)
             finally:
-                sink[name] = sink.get(name, 0.0) + (time.perf_counter() - started)
+                elapsed = time.perf_counter() - started
+                nested = stack.pop()
+                sink[name] = sink.get(name, 0.0) + max(0.0, elapsed - nested)
+                if stack:
+                    stack[-1] += elapsed
 
         return wrapper
 
@@ -38,10 +47,13 @@ def timed_stage(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]
 @contextmanager
 def collect_stage_seconds() -> Iterator[Dict[str, float]]:
     """Collect stage timings for the calling thread; nesting restores the outer sink."""
-    previous = getattr(_local, "sink", None)
+    previous_sink = getattr(_local, "sink", None)
+    previous_stack = getattr(_local, "stack", None)
     sink: Dict[str, float] = {}
     _local.sink = sink
+    _local.stack = []
     try:
         yield sink
     finally:
-        _local.sink = previous
+        _local.sink = previous_sink
+        _local.stack = previous_stack

@@ -43,3 +43,32 @@ def test_build_snapshot_exposes_stage_seconds(monkeypatch):
     assert timing["day_stage_seconds"], "no stage breakdown reported"
     assert "indicators" in timing["day_stage_seconds"]
     assert timing["day_unattributed_seconds"] >= 0.0
+
+
+@timed_stage("outer")
+def _outer() -> None:
+    time.sleep(0.02)
+    _inner()
+
+
+@timed_stage("inner")
+def _inner() -> None:
+    time.sleep(0.03)
+
+
+def test_nested_stages_record_exclusive_time():
+    with collect_stage_seconds() as stages:
+        started = time.perf_counter()
+        _outer()
+        wall = time.perf_counter() - started
+    assert stages["inner"] >= 0.028
+    assert stages["outer"] < stages["inner"], "outer must exclude the nested inner stage"
+    assert sum(stages.values()) <= wall + 0.005
+
+
+def test_real_scoring_stages_never_exceed_wall_time():
+    with collect_stage_seconds() as stages:
+        started = time.perf_counter()
+        score_subnet_for_day(dict(SUBNET), {})
+        wall = time.perf_counter() - started
+    assert sum(stages.values()) <= wall + 0.005
