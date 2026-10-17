@@ -158,19 +158,18 @@ def _reserve_price_tao_with_outcome(
     batch, outcome = reader.call("state_queryStorageAt", [keys, block_hash])
     if outcome != "ok":
         return None, outcome
-    if not batch:
+    if batch is None or batch == []:
         return None, "missing_storage"
-    entry = batch[0] if isinstance(batch[0], dict) else {}
-    changes = entry.get("changes")
-    if changes is None:
-        return None, "missing_storage"
-    if not isinstance(changes, (list, tuple)):
+    if not isinstance(batch, list) or not isinstance(batch[0], dict):
         return None, "malformed_row"
-    if not changes:
+    changes = batch[0].get("changes")
+    if changes is None or changes == []:
         return None, "missing_storage"
+    if not isinstance(changes, list):
+        return None, "malformed_row"
     by_key: Dict[str, Any] = {}
     for row in changes:
-        if not isinstance(row, (list, tuple)) or len(row) < 2:
+        if not isinstance(row, (list, tuple)) or len(row) != 2:
             return None, "malformed_row"
         if not isinstance(row[0], str) or not (row[1] is None or isinstance(row[1], str)):
             return None, "malformed_row"

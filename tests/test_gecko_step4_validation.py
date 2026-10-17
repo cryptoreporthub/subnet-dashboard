@@ -817,39 +817,6 @@ def test_live_probe_records_reserve_read_failures(monkeypatch):
     assert evaluate_gecko_validation(subs)["verdict"] != "PASS"
 
 
-def test_reserve_price_malformed_changes_empty_dict():
-    class _Reader:
-        def call(self, method, params):
-            assert method == "state_queryStorageAt"
-            return [{"changes": {}}], "ok"
-
-    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
-    assert price is None
-    assert outcome == "malformed_row"
-
-
-def test_reserve_price_malformed_changes_empty_row():
-    class _Reader:
-        def call(self, method, params):
-            assert method == "state_queryStorageAt"
-            return [{"changes": [[]]}], "ok"
-
-    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
-    assert price is None
-    assert outcome == "malformed_row"
-
-
-def test_reserve_price_missing_storage_empty_changes_list():
-    class _Reader:
-        def call(self, method, params):
-            assert method == "state_queryStorageAt"
-            return [{"changes": []}], "ok"
-
-    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
-    assert price is None
-    assert outcome == "missing_storage"
-
-
 def test_reserve_price_malformed_changes_short_row():
     keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
 
@@ -878,7 +845,43 @@ def test_reserve_price_malformed_changes_bad_types(bad_row):
     assert outcome == "malformed_row"
 
 
-def test_live_probe_malformed_reserve_empty_row_counts(monkeypatch):
+@pytest.mark.parametrize(
+    "batch, expected",
+    [
+        ([{"changes": {}}], "malformed_row"),
+        ([{"changes": [[]]}], "malformed_row"),
+        ([{"changes": [None]}], "malformed_row"),
+        ([None], "malformed_row"),
+        ({}, "malformed_row"),
+        ([{"changes": []}], "missing_storage"),
+        ([{"changes": None}], "missing_storage"),
+        ([{}], "missing_storage"),
+        ([], "missing_storage"),
+    ],
+    ids=[
+        "changes_dict",
+        "empty_row",
+        "none_row",
+        "entry_not_dict",
+        "batch_dict",
+        "changes_empty_list",
+        "changes_none",
+        "entry_without_changes",
+        "batch_empty",
+    ],
+)
+def test_reserve_price_container_and_row_shapes(batch, expected):
+    class _Reader:
+        def call(self, method, params):
+            return batch, "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == expected
+
+
+@pytest.mark.parametrize("bad_changes", [{}, [[]]], ids=["changes_dict", "empty_row"])
+def test_live_probe_empty_malformed_reserve_container_counts_malformed(monkeypatch, bad_changes):
     now_ts = 1_700_000_000
     monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
     monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
@@ -887,6 +890,11 @@ def test_live_probe_malformed_reserve_empty_row_counts(monkeypatch):
         "_fetch_gecko_ohlcv",
         lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.01]],
     )
+
+    def _good_changes(netuid: int) -> list:
+        k_tao = map_key_hex(b"SubnetTAO", netuid)
+        k_alpha = map_key_hex(b"SubnetAlphaIn", netuid)
+        return [[k_tao, "0x0a"], [k_alpha, "0x0a"]]
 
     class _Reader:
         provider_served = "finney"
@@ -899,14 +907,20 @@ def test_live_probe_malformed_reserve_empty_row_counts(monkeypatch):
         def call(self, method, params):
             if method != "state_queryStorageAt":
                 return None, "rpc_error"
-            return [{"changes": [[]]}], "ok"
+            keys = params[0]
+            netuid = 64 if keys[0] == map_key_hex(b"SubnetTAO", 64) else 65
+            if netuid == 64:
+                return [{"changes": bad_changes}], "ok"
+            return [{"changes": _good_changes(65)}], "ok"
 
-    subs, meta = _live_probe_subnets(
-        [(64, "bittensor", "pool", {"base_is_alpha": True})],
-        window_hours=48,
-        reader=_Reader(),
-    )
+    mapped = [
+        (64, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (65, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs) == 2
     assert len(subs[0].matched) == 0
+    assert len(subs[1].matched) == 1
     assert meta["per_subnet"][0]["stage_outcome_counts"] == {"reserve_read:malformed_row": 1}
     assert meta["aggregate_stage_outcome_counts"].get("reserve_read:malformed_row") == 1
 
