@@ -7,6 +7,7 @@ route the change through the resolver/estimator instead of extending ALLOWED_WRI
 
 import ast
 import pathlib
+import subprocess
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -49,15 +50,24 @@ ALLOWED_SCENARIO_WRITERS = {
     "internal/learning/routes.py": "token-protected POST /api/scenario-memory",
 }
 
-SKIP_DIRS = {".venv", "venv", "node_modules", "tests", ".git"}
+SKIP_DIRS = {"tests"}
+
+
+def _tracked_python_files():
+    """Scan what the repo ships (tracked files), not whatever is on disk: a checkout can hold
+    worktrees, virtualenvs or copies of the code that are not part of it."""
+    listing = subprocess.run(
+        ["git", "ls-files", "*.py"], cwd=REPO_ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+    return [REPO_ROOT / name for name in listing]
 
 
 def _writer_modules(calls=None):
     calls = WRITER_CALLS if calls is None else calls
     found = {}
-    for path in REPO_ROOT.rglob("*.py"):
+    for path in _tracked_python_files():
         rel = path.relative_to(REPO_ROOT)
-        if rel.parts[0] in SKIP_DIRS or any(part in SKIP_DIRS for part in rel.parts):
+        if rel.parts[0] in SKIP_DIRS:
             continue
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(rel))
