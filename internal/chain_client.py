@@ -333,7 +333,9 @@ class ChainClient:
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
                     _record_chain_rpc(self.endpoint, method, "rate_limited")
-                    raise ChainRpcError("rate_limited", "HTTP 429", code=429)
+                    raise ChainRpcError(
+                        "rate_limited", "HTTP 429", code=429, http_status=429
+                    )
                 response.raise_for_status()
                 data = response.json()
                 if "error" in data:
@@ -386,6 +388,7 @@ class ChainClient:
                         "HTTP 429",
                         code=429,
                         retry_after=retry_after,
+                        http_status=429,
                     )
                 if response.status_code >= 500:
                     _record_chain_rpc(self.endpoint, method, "error")

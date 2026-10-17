@@ -45,18 +45,34 @@ def classify_rpc_error(exc: BaseException) -> RpcOutcome:
     return "rpc_error"
 
 
+def _rate_limit_http_status(exc: BaseException) -> Optional[int]:
+    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
+        return exc.http_status
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        if exc.response.status_code == 429:
+            return 429
+    return None
+
+
 def rpc_call(
     client: Any,
     method: str,
     params: Optional[list] = None,
 ) -> Tuple[Optional[Any], RpcOutcome]:
     params = params or []
+    try:
+        delattr(client, "_last_rate_limit_http_status")
+    except AttributeError:
+        pass
     if method == "state_queryStorageAt" and len(params) >= 2:
         try:
             result = client.query_storage_at(params[0], params[1])
             return result, "ok"
         except Exception as exc:
             outcome = classify_rpc_error(exc)
+            http_status = _rate_limit_http_status(exc)
+            if http_status is not None:
+                setattr(client, "_last_rate_limit_http_status", http_status)
             logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
             return None, outcome
     if hasattr(client, "_call_typed"):
@@ -65,6 +81,9 @@ def rpc_call(
             return result, "ok"
         except Exception as exc:
             outcome = classify_rpc_error(exc)
+            http_status = _rate_limit_http_status(exc)
+            if http_status is not None:
+                setattr(client, "_last_rate_limit_http_status", http_status)
             logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
             return None, outcome
     try:
@@ -72,6 +91,9 @@ def rpc_call(
         return result, "ok"
     except Exception as exc:
         outcome = classify_rpc_error(exc)
+        http_status = _rate_limit_http_status(exc)
+        if http_status is not None:
+            setattr(client, "_last_rate_limit_http_status", http_status)
         logger.debug("chain price rpc %s -> %s: %s", method, outcome, exc)
         return None, outcome
 

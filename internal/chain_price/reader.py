@@ -27,6 +27,14 @@ class ChainReader:
         self._providers: List[Tuple[str, ChainClient]] = clients or cfg.rpc_provider_clients()
         self._pinned_hash: Optional[str] = None
         self.provider_served: Optional[str] = None
+        self.fallback_count: int = 0
+        self.rate_limit_events: List[Dict[str, Any]] = []
+
+    def reset_probe_diagnostics(self) -> None:
+        """Clear per-run probe counters (Step 4 live harness)."""
+        self.fallback_count = 0
+        self.rate_limit_events = []
+        self.provider_served = None
 
     def _available_providers(self) -> List[Tuple[str, ChainClient]]:
         now = time.monotonic()
@@ -38,15 +46,24 @@ class ChainReader:
             out.append((label, client))
         return out
 
-    def _mark_rate_limited(self, label: str, client: ChainClient) -> None:
+    def _mark_rate_limited(
+        self,
+        label: str,
+        client: ChainClient,
+        *,
+        http_status: Optional[int] = None,
+    ) -> None:
         endpoint = getattr(client, "endpoint", None)
         if not endpoint:
             logger.warning("chain reader provider %s rate limited (no endpoint)", label)
             return
         duration = note_rate_limit(endpoint)
+        event: Dict[str, Any] = {"provider": label, "http_status": http_status}
+        self.rate_limit_events.append(event)
         logger.warning(
-            "chain reader provider %s rate limited; endpoint cooldown %.0fs",
+            "chain reader provider %s rate limited (http_status=%s); endpoint cooldown %.0fs",
             label,
+            http_status,
             duration,
         )
 
@@ -67,6 +84,9 @@ class ChainReader:
     def call(self, method: str, params: list) -> Tuple[Optional[Any], RpcOutcome]:
         providers = self._available_providers()
         if not providers:
+            self.rate_limit_events.append(
+                {"provider": None, "http_status": None, "reason": "all_providers_cooldown"}
+            )
             return None, "rate_limited"
         last_outcome: RpcOutcome = "rpc_error"
         for idx, (label, client) in enumerate(providers):
@@ -74,7 +94,8 @@ class ChainReader:
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"
             if outcome == "rate_limited":
-                self._mark_rate_limited(label, client)
+                rl_http = getattr(client, "_last_rate_limit_http_status", None)
+                self._mark_rate_limited(label, client, http_status=rl_http)
             if outcome == "ok":
                 endpoint = getattr(client, "endpoint", None)
                 if endpoint:
@@ -84,6 +105,7 @@ class ChainReader:
             last_outcome = outcome
             if not self._should_fallback(outcome) or idx == len(providers) - 1:
                 return None, outcome
+            self.fallback_count += 1
             logger.info(
                 "chain reader fallback after %s on %s for %s",
                 outcome,

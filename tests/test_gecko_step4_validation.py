@@ -19,7 +19,14 @@ from internal.chain_price.gecko_validation import (
     subnets_from_serializable,
 )
 from scripts import gecko_step4_validation as step4_script
-from scripts.gecko_step4_validation import _gecko_params, _live_probe_subnets, main
+from internal.chain_price.storage_keys import map_key_hex
+from scripts.gecko_step4_validation import (
+    _gecko_fetch_error_label,
+    _gecko_params,
+    _live_probe_subnets,
+    _reserve_price_tao_with_outcome,
+    main,
+)
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "gecko_validation"
 
@@ -234,10 +241,10 @@ def test_live_probe_uses_close_timestamp_and_skips_in_progress(monkeypatch):
         return (1, "0xabc", "ok")
 
     def fake_reserve(_reader, _netuid, _block_hash):
-        return 0.01
+        return 0.01, "ok"
 
     monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
-    monkeypatch.setattr(step4_script, "_reserve_price_tao", fake_reserve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
     monkeypatch.setattr(
         step4_script,
         "_fetch_gecko_ohlcv",
@@ -249,12 +256,18 @@ def test_live_probe_uses_close_timestamp_and_skips_in_progress(monkeypatch):
     )
 
     class _Reader:
-        pass
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
 
     mapped = [(64, "bittensor", "pool", {"base_is_alpha": True})]
-    subs = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    subs, probe_meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
     assert len(subs) == 1
     assert len(subs[0].matched) == 2
+    assert "per_subnet" in probe_meta
     assert recorded == [(now_ts - 3600) * 1000, now_ts * 1000]
 
 
@@ -730,6 +743,627 @@ def test_insufficient_coverage_loses_quorum_inconclusive():
         e["netuid"] == 88 and e["reason"] == "insufficient_coverage"
         for e in report["excluded_subnets"]
     )
+
+
+def test_live_probe_records_resolve_failures(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    outcomes = iter(["rate_limited", "archive_miss"])
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        outcome = next(outcomes)
+        return None, None, outcome
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 1.0], [now_ts - 7200, 0, 0, 0, 0.99]],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 2
+        rate_limit_events = [{"provider": "finney", "http_status": 429}]
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    mapped = [(64, "bittensor", "pool", {"base_is_alpha": True})]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs[0].matched) == 0
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("resolve_block_at:rate_limited") == 1
+    assert counts.get("resolve_block_at:archive_miss") == 1
+    assert meta["provider_fallback_count"] == 2
+    assert meta["rate_limit_events"][0]["http_status"] == 429
+    report = evaluate_gecko_validation(subs)
+    assert report["verdict"] != "PASS"
+
+
+def test_live_probe_records_reserve_read_failures(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return None, "missing_storage"
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 1.0], [now_ts - 7200, 0, 0, 0, 0.99]],
+    )
+
+    class _Reader:
+        provider_served = "blockmachine"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("reserve_read:missing_storage") == 2
+    assert evaluate_gecko_validation(subs)["verdict"] != "PASS"
+
+
+def test_reserve_price_malformed_changes_short_row():
+    keys = [map_key_hex(b"SubnetTAO", 64), map_key_hex(b"SubnetAlphaIn", 64)]
+
+    class _Reader:
+        def call(self, method, params):
+            assert method == "state_queryStorageAt"
+            return [{"changes": [[keys[0]]]}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+@pytest.mark.parametrize(
+    "bad_row",
+    [[["0xdeadbeef"], "0x0a"], [map_key_hex(b"SubnetTAO", 64), 10]],
+    ids=["unhashable_key", "non_str_value"],
+)
+def test_reserve_price_malformed_changes_bad_types(bad_row):
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": [bad_row]}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+@pytest.mark.parametrize(
+    "bad_row",
+    [
+        [[map_key_hex(b"SubnetTAO", 64), "0x0a"], [map_key_hex(b"SubnetTAO", 64), "0x14"]],
+        [[map_key_hex(b"SubnetTAO", 64), "0x0a"], [map_key_hex(b"SubnetTAO", 64), "0x0a"]],
+    ],
+    ids=["conflicting_duplicate", "identical_duplicate"],
+)
+def test_reserve_price_duplicate_keys_fail_closed(bad_row):
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": bad_row}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+@pytest.mark.parametrize(
+    "batch, expected",
+    [
+        ([{"changes": {}}], "malformed_row"),
+        ([{"changes": [[]]}], "malformed_row"),
+        ([{"changes": [None]}], "malformed_row"),
+        ([{"changes": [["0xkey"]]}], "malformed_row"),
+        ([{"changes": [["0xkey", "0x0a", "extra"]]}], "malformed_row"),
+        ([None], "malformed_row"),
+        ({}, "malformed_row"),
+        ([{"changes": []}], "missing_storage"),
+        ([{"changes": None}], "missing_storage"),
+        ([{}], "missing_storage"),
+        ([], "missing_storage"),
+    ],
+    ids=[
+        "changes_dict",
+        "empty_row",
+        "none_row",
+        "one_element_row",
+        "three_element_row",
+        "entry_not_dict",
+        "batch_dict",
+        "changes_empty_list",
+        "changes_none",
+        "entry_without_changes",
+        "batch_empty",
+    ],
+)
+def test_reserve_price_container_and_row_shapes(batch, expected):
+    class _Reader:
+        def call(self, method, params):
+            return batch, "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == expected
+
+
+@pytest.mark.parametrize("bad_changes", [{}, [[]]], ids=["changes_dict", "empty_row"])
+def test_live_probe_empty_malformed_reserve_container_counts_malformed(monkeypatch, bad_changes):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.01]],
+    )
+
+    def _good_changes(netuid: int) -> list:
+        k_tao = map_key_hex(b"SubnetTAO", netuid)
+        k_alpha = map_key_hex(b"SubnetAlphaIn", netuid)
+        return [[k_tao, "0x0a"], [k_alpha, "0x0a"]]
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+        def call(self, method, params):
+            if method != "state_queryStorageAt":
+                return None, "rpc_error"
+            keys = params[0]
+            netuid = 64 if keys[0] == map_key_hex(b"SubnetTAO", 64) else 65
+            if netuid == 64:
+                return [{"changes": bad_changes}], "ok"
+            return [{"changes": _good_changes(65)}], "ok"
+
+    mapped = [
+        (64, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (65, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs) == 2
+    assert len(subs[0].matched) == 0
+    assert len(subs[1].matched) == 1
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"reserve_read:malformed_row": 1}
+    assert meta["aggregate_stage_outcome_counts"].get("reserve_read:malformed_row") == 1
+
+
+def test_live_probe_malformed_reserve_row_continues_other_subnets(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.01]],
+    )
+
+    def _good_changes(netuid: int) -> list:
+        k_tao = map_key_hex(b"SubnetTAO", netuid)
+        k_alpha = map_key_hex(b"SubnetAlphaIn", netuid)
+        return [[k_tao, "0x0a"], [k_alpha, "0x0a"]]
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+        def call(self, method, params):
+            if method != "state_queryStorageAt":
+                return None, "rpc_error"
+            keys = params[0]
+            netuid = 64 if keys[0] == map_key_hex(b"SubnetTAO", 64) else 65
+            if netuid == 64:
+                return [{"changes": [[keys[0]]]}], "ok"
+            return [{"changes": _good_changes(65)}], "ok"
+
+    mapped = [
+        (64, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (65, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs) == 2
+    assert len(subs[0].matched) == 0
+    assert len(subs[1].matched) == 1
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"reserve_read:malformed_row": 1}
+    assert meta["aggregate_stage_outcome_counts"].get("reserve_read:malformed_row") == 1
+
+
+def test_live_probe_gecko_error_visible_in_meta(monkeypatch):
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("gecko_http_429")),
+    )
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(2, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=24,
+        reader=_Reader(),
+    )
+    assert subs[0].error == "gecko_fetch:gecko_http_429"
+    row = meta["per_subnet"][0]
+    assert row["gecko_error"] == "gecko_fetch:gecko_http_429"
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:gecko_http_429") == 1
+    report = evaluate_gecko_validation(subs)
+    assert report["verdict"] == "INCONCLUSIVE"
+
+
+def test_live_probe_gecko_http_error_omits_urls_from_diagnostics(monkeypatch):
+    import requests
+
+    resp = requests.Response()
+    resp.status_code = 404
+    resp.url = "https://api.geckoterminal.com/api/v2/networks/foo/pools/bar/ohlcv/hour"
+    err = requests.HTTPError(
+        f"404 Client Error: Not Found for url: {resp.url}",
+        response=resp,
+    )
+
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: (_ for _ in ()).throw(err),
+    )
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(2, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=24,
+        reader=_Reader(),
+    )
+    row = meta["per_subnet"][0]
+    diag_blob = json.dumps(
+        {
+            "subnet_error": subs[0].error,
+            "gecko_error": row["gecko_error"],
+            "stage_outcome_counts": row["stage_outcome_counts"],
+            "aggregate_stage_outcome_counts": meta["aggregate_stage_outcome_counts"],
+        }
+    ).lower()
+    assert "geckoterminal" not in diag_blob
+    assert "for url" not in diag_blob
+    assert subs[0].error == "gecko_fetch:HTTPError"
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_fetch:HTTPError") == 1
+
+
+def test_gecko_fetch_error_label_distinguishes_runtime_codes():
+    assert _gecko_fetch_error_label(RuntimeError("gecko_http_429")) == "gecko_fetch:gecko_http_429"
+    assert (
+        _gecko_fetch_error_label(RuntimeError("unexpected_gecko_shape"))
+        == "gecko_fetch:unexpected_gecko_shape"
+    )
+
+
+def test_live_probe_gecko_fetch_stage_keys_differ_for_429_and_shape(monkeypatch):
+    outcomes = iter(
+        [
+            RuntimeError("gecko_http_429"),
+            RuntimeError("unexpected_gecko_shape"),
+        ]
+    )
+
+    def fake_fetch(*_a, **_k):
+        raise next(outcomes)
+
+    monkeypatch.setattr(step4_script, "_fetch_gecko_ohlcv", fake_fetch)
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    mapped = [
+        (1, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (2, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=24, reader=_Reader())
+    counts = meta["aggregate_stage_outcome_counts"]
+    assert counts.get("gecko_fetch:gecko_http_429") == 1
+    assert counts.get("gecko_fetch:unexpected_gecko_shape") == 1
+    assert counts.get("gecko_fetch:RuntimeError") is None
+    assert subs[0].error == "gecko_fetch:gecko_http_429"
+    assert subs[1].error == "gecko_fetch:unexpected_gecko_shape"
+
+
+def test_live_probe_per_subnet_provider_served_after_reserve_before_close_check(monkeypatch):
+    """Replit/Claude MODIFY: finney must appear when reserve ok but close <= 0."""
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(reader, _netuid, _block_hash):
+        reader.provider_served = "finney"
+        return 0.01, "ok"
+
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.0]],
+    )
+
+    class _Reader:
+        provider_served = None
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert len(subs[0].matched) == 0
+    assert meta["per_subnet"][0]["provider_served"] == "finney"
+
+
+def test_live_probe_per_subnet_provider_served_not_stale_from_prior_subnet(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    probe_netuid = {"current": 1}
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    def fake_fetch(_network, pool, _gt, _limit):
+        probe_netuid["current"] = 1 if pool == "pool-a" else 2
+        return [[now_ts - 3600, 0, 0, 0, 1.0]]
+
+    def fake_resolve(_reader, target_ms, search="bracketed"):
+        if probe_netuid["current"] == 2:
+            return None, None, "rate_limited"
+        return 1, "0xabc", "ok"
+
+    def fake_reserve(_reader, _netuid, _block_hash):
+        return 0.01, "ok"
+
+    monkeypatch.setattr(step4_script, "_fetch_gecko_ohlcv", fake_fetch)
+    monkeypatch.setattr(step4_script, "resolve_block_at", fake_resolve)
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", fake_reserve)
+
+    mapped = [
+        (1, "bittensor", "pool-a", {"base_is_alpha": True}),
+        (2, "bittensor", "pool-b", {"base_is_alpha": True}),
+    ]
+    subs, meta = _live_probe_subnets(mapped, window_hours=48, reader=_Reader())
+    assert len(subs[0].matched) == 1
+    assert len(subs[1].matched) == 0
+    assert meta["per_subnet"][0]["provider_served"] == "finney"
+    assert meta["per_subnet"][1]["provider_served"] is None
+
+
+def test_live_probe_nonpositive_close_counted_in_aggregate(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", lambda *_a: (0.01, "ok"))
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [[now_ts - 3600, 0, 0, 0, 0.0]],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert len(subs[0].matched) == 0
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"gecko_validation:nonpositive_close": 1}
+    assert meta["aggregate_stage_outcome_counts"].get("gecko_validation:nonpositive_close") == 1
+
+
+def test_live_probe_skips_malformed_gecko_rows(monkeypatch):
+    now_ts = 1_700_000_000
+    monkeypatch.setattr(step4_script.time, "time", lambda: float(now_ts))
+    monkeypatch.setattr(step4_script, "resolve_block_at", lambda *_a, **_k: (1, "0xabc", "ok"))
+    monkeypatch.setattr(step4_script, "_reserve_price_tao_with_outcome", lambda *_a: (0.01, "ok"))
+    malformed = [
+        "garbage",
+        [1, 2],
+        ["bad-ts", 0, 0, 0, 0.01],
+        [float("inf"), 0, 0, 0, 0.01],
+        [now_ts - 7200, 0, 0, 0, "not-a-number"],
+        [now_ts - 5400, 0, 0, 0, None],
+        [now_ts - 3600, 0, 0, 0, float("nan")],
+    ]
+    valid = [now_ts - 10800, 0, 0, 0, 0.01]
+    monkeypatch.setattr(
+        step4_script,
+        "_fetch_gecko_ohlcv",
+        lambda *_a, **_k: [*malformed, valid],
+    )
+
+    class _Reader:
+        provider_served = "finney"
+        fallback_count = 0
+        rate_limit_events = []
+
+        def reset_probe_diagnostics(self):
+            pass
+
+    subs, meta = _live_probe_subnets(
+        [(64, "bittensor", "pool", {"base_is_alpha": True})],
+        window_hours=48,
+        reader=_Reader(),
+    )
+    assert subs[0].error is None
+    assert [m.hour_unix for m in subs[0].matched] == [now_ts - 10800]
+    assert meta["per_subnet"][0]["stage_outcome_counts"] == {"gecko_validation:malformed_row": 7}
+
+
+def test_rpc_call_rate_limited_non_numeric_code_does_not_raise():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "HTTP 429 too many requests", code="abc")
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert getattr(client, "_last_rate_limit_http_status", None) is None
+
+
+def test_rpc_call_jsonrpc_code_429_does_not_record_http_status():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "too many requests", code=429)
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert getattr(client, "_last_rate_limit_http_status", None) is None
+
+
+def test_rpc_call_clears_stale_rate_limit_status_on_next_call():
+    from internal.chain_client import ChainRpcError
+    from internal.chain_price.rpc import rpc_call
+
+    class _Client:
+        def __init__(self):
+            self.attempts = 0
+
+        def _call_typed(self, method, params=None):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise ChainRpcError(
+                    "rate_limited", "HTTP 429", code=429, http_status=429
+                )
+            raise RuntimeError("boom")
+
+    client = _Client()
+    _, first = rpc_call(client, "chain_getBlockHash", [])
+    assert first == "rate_limited"
+    assert client._last_rate_limit_http_status == 429
+    _, second = rpc_call(client, "chain_getBlockHash", [])
+    assert second == "rpc_error"
+    assert not hasattr(client, "_last_rate_limit_http_status")
+
+
+def test_rpc_call_raw_http_429_records_http_status():
+    import requests
+    from internal.chain_price.rpc import rpc_call
+
+    resp = requests.Response()
+    resp.status_code = 429
+
+    class _Client:
+        def _call_typed(self, method, params=None):
+            raise requests.HTTPError("429 Client Error: Too Many Requests", response=resp)
+
+    client = _Client()
+    result, outcome = rpc_call(client, "chain_getBlockHash", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert client._last_rate_limit_http_status == 429
+
+
+def test_reader_rate_limit_event_jsonrpc_code_429_not_http_status():
+    from internal.chain_client import ChainClient, ChainRpcError
+    from internal.chain_price.reader import ChainReader
+
+    class _Scripted(ChainClient):
+        def __init__(self):
+            super().__init__(
+                "https://example.invalid/rpc-jsonrpc-429", init_volume_db=False
+            )
+
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError("rate_limited", "too many requests", code=429)
+
+    reader = ChainReader([("finney", _Scripted())])
+    result, outcome = reader.call("chain_getFinalizedHead", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert reader.rate_limit_events == [{"provider": "finney", "http_status": None}]
+
+
+def test_reader_rate_limit_event_includes_http_status():
+    from internal.chain_client import ChainClient, ChainRpcError
+    from internal.chain_price.reader import ChainReader
+
+    class _Scripted(ChainClient):
+        def __init__(self):
+            super().__init__(
+                "https://example.invalid/rpc-http-429", init_volume_db=False
+            )
+
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError(
+                "rate_limited", "HTTP 429", code=429, http_status=429
+            )
+
+    reader = ChainReader([("finney", _Scripted())])
+    result, outcome = reader.call("chain_getFinalizedHead", [])
+    assert result is None
+    assert outcome == "rate_limited"
+    assert reader.rate_limit_events == [{"provider": "finney", "http_status": 429}]
 
 
 def test_conflicting_duplicate_among_eight_clean_fails_gate():

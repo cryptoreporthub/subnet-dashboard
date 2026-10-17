@@ -245,6 +245,21 @@ def test_chain_rpc_requests_total_increments(clear_endpoint_rate_limits):
     )
 
 
+@pytest.mark.parametrize("call_name", ["_call", "_call_typed"])
+def test_http_429_sets_transport_http_status(clear_endpoint_rate_limits, call_name):
+    from internal.chain_client import ChainClient
+
+    client = ChainClient("https://rpc.http429.example", init_volume_db=False, retries=0)
+    resp429 = MagicMock()
+    resp429.status_code = 429
+    resp429.headers = {}
+    with patch("internal.chain_client.requests.post", return_value=resp429):
+        with pytest.raises(ChainRpcError) as exc_info:
+            getattr(client, call_name)("chain_getBlockHash", [])
+    assert exc_info.value.kind == "rate_limited"
+    assert exc_info.value.http_status == 429
+
+
 def test_price_batch_deadline_returns_completed_rows(monkeypatch):
     from internal.chain_client import ChainClient
 
