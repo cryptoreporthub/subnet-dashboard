@@ -35,6 +35,9 @@ SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
 SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
+SCORE_SNAPSHOT_SCORE_WORKERS = max(
+    1, int(os.environ.get("SCORE_SNAPSHOT_SCORE_WORKERS", "4"))
+)
 JOB_ID = "score-snapshot-scheduler"
 
 
@@ -425,7 +428,10 @@ def build_full_universe_snapshot(
     if score_hour is None:
         score_hour = _score_hour_enabled()
     pump_load_started = time.monotonic()
-    build_context = {**(market_context or {}), "pump_ladder_state": _load_pump_ladder_state_for_build()}
+    from internal.council.scoring_context import enrich_scoring_market_context
+
+    build_context = enrich_scoring_market_context(market_context)
+    build_context["pump_ladder_state"] = _load_pump_ladder_state_for_build()
     pump_load_seconds = time.monotonic() - pump_load_started
     rows = tradable_subnets(subnets) if subnets else []
     build_started_at = _now_iso()
@@ -443,66 +449,98 @@ def build_full_universe_snapshot(
     day_scoring_seconds = 0.0
     hour_scoring_seconds = 0.0
     slowest_day: List[Tuple[float, int]] = []
-    for idx, sn in enumerate(rows):
-        try:
-            netuid = int(sn.get("netuid"))
-        except (TypeError, ValueError):
-            skipped_invalid += 1
-            continue
-        if score_hour:
-            hour_attempted.append(netuid)
-            hour_started = time.monotonic()
-            try:
-                h = score_subnet_for_hour(sn, build_context)
-                hour_rows.append(
-                    {
-                        "netuid": netuid,
-                        "total_score": float(h.get("total_score") or 0),
-                        "name": sn.get("name"),
-                        "recovery_context": h.get("recovery_context"),
-                    }
-                )
-                hour_succeeded.append(netuid)
-            except Exception as exc:
-                hour_failed.append(
-                    {
-                        "netuid": netuid,
-                        "stage": "hour",
-                        "error_class": type(exc).__name__,
-                    }
-                )
-            hour_scoring_seconds += time.monotonic() - hour_started
-        day_attempted.append(netuid)
-        day_started = time.monotonic()
-        try:
-            d = score_subnet_for_day(sn, build_context)
-            day_rows.append(
-                {
-                    "netuid": netuid,
-                    "total_score": float(d.get("total_score") or 0),
-                    "name": sn.get("name"),
-                    "recovery_context": d.get("recovery_context"),
-                }
-            )
-            day_succeeded.append(netuid)
-        except Exception as exc:
-            day_failed.append(
-                {
-                    "netuid": netuid,
-                    "stage": "day",
-                    "error_class": type(exc).__name__,
-                }
-            )
-        day_elapsed = time.monotonic() - day_started
-        day_scoring_seconds += day_elapsed
+
+    def _record_slowest(day_elapsed: float, netuid: int) -> None:
         if len(slowest_day) < _SLOWEST_NETUID_SAMPLES:
             slowest_day.append((day_elapsed, netuid))
             slowest_day.sort(reverse=True)
         elif day_elapsed > slowest_day[-1][0]:
             slowest_day[-1] = (day_elapsed, netuid)
             slowest_day.sort(reverse=True)
-        if progress_cb and total and (idx + 1) % 20 == 0:
-            progress_cb(idx + 1, total)
+
+    def _score_one(sn: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            netuid = int(sn.get("netuid"))
+        except (TypeError, ValueError):
+            return {"skip": True}
+        out: Dict[str, Any] = {
+            "netuid": netuid,
+            "day_elapsed": 0.0,
+            "hour_elapsed": 0.0,
+        }
+        if score_hour:
+            hour_started = time.monotonic()
+            try:
+                h = score_subnet_for_hour(sn, build_context)
+                out["hour_row"] = {
+                    "netuid": netuid,
+                    "total_score": float(h.get("total_score") or 0),
+                    "name": sn.get("name"),
+                    "recovery_context": h.get("recovery_context"),
+                }
+                out["hour_ok"] = True
+            except Exception as exc:
+                out["hour_fail"] = {
+                    "netuid": netuid,
+                    "stage": "hour",
+                    "error_class": type(exc).__name__,
+                }
+            out["hour_elapsed"] = time.monotonic() - hour_started
+        day_started = time.monotonic()
+        try:
+            d = score_subnet_for_day(sn, build_context)
+            out["day_row"] = {
+                "netuid": netuid,
+                "total_score": float(d.get("total_score") or 0),
+                "name": sn.get("name"),
+                "recovery_context": d.get("recovery_context"),
+            }
+            out["day_ok"] = True
+        except Exception as exc:
+            out["day_fail"] = {
+                "netuid": netuid,
+                "stage": "day",
+                "error_class": type(exc).__name__,
+            }
+        out["day_elapsed"] = time.monotonic() - day_started
+        return out
+
+    def _apply_score_result(res: Dict[str, Any]) -> None:
+        nonlocal skipped_invalid, day_scoring_seconds, hour_scoring_seconds
+        if res.get("skip"):
+            skipped_invalid += 1
+            return
+        netuid = res["netuid"]
+        if score_hour:
+            hour_attempted.append(netuid)
+            hour_scoring_seconds += float(res.get("hour_elapsed") or 0)
+            if res.get("hour_ok"):
+                hour_rows.append(res["hour_row"])
+                hour_succeeded.append(netuid)
+            elif res.get("hour_fail"):
+                hour_failed.append(res["hour_fail"])
+        day_attempted.append(netuid)
+        day_scoring_seconds += float(res.get("day_elapsed") or 0)
+        if res.get("day_ok"):
+            day_rows.append(res["day_row"])
+            day_succeeded.append(netuid)
+        elif res.get("day_fail"):
+            day_failed.append(res["day_fail"])
+        _record_slowest(float(res.get("day_elapsed") or 0), netuid)
+
+    workers = SCORE_SNAPSHOT_SCORE_WORKERS if not score_hour else 1
+    if workers <= 1:
+        for idx, sn in enumerate(rows):
+            _apply_score_result(_score_one(sn))
+            if progress_cb and total and (idx + 1) % 20 == 0:
+                progress_cb(idx + 1, total)
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="snap-score") as pool:
+            results = list(pool.map(_score_one, rows))
+        for idx, res in enumerate(results):
+            _apply_score_result(res)
+            if progress_cb and total and (idx + 1) % 20 == 0:
+                progress_cb(idx + 1, total)
 
     hour_copied_from_day = False
     if not score_hour and day_rows:
@@ -520,6 +558,7 @@ def build_full_universe_snapshot(
         "day_scoring_seconds": round(day_scoring_seconds, 6),
         "hour_scoring_seconds": round(hour_scoring_seconds, 6),
         "subnet_scoring_loop_wall_seconds": round(subnet_scoring_loop_wall_seconds, 6),
+        "score_workers": workers,
         "slowest_day_netuids": [
             {"netuid": nu, "seconds": round(sec, 6)}
             for sec, nu in slowest_day
@@ -635,7 +674,9 @@ def write_full_universe_snapshot(
             capped_out = max(0, pre_cap_len - len(subnets or []))
             selection_policy = "rank_cap"
         ctx_started = time.monotonic()
-        ctx = _market_context_with_weights(subnets or [])
+        from internal.council.scoring_context import enrich_scoring_market_context
+
+        ctx = enrich_scoring_market_context(_market_context_with_weights(subnets or []))
         write_stage_timing["market_context_seconds"] = round(time.monotonic() - ctx_started, 6)
         logger.info(
             "score snapshot build started: source=%s registry_only=%s feed_rows=%d admitted=%d expected=%d",

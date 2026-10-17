@@ -241,10 +241,15 @@ def calibration_for_subnet(
     db=None,
     now: Optional[datetime] = None,
     conviction_rows: Optional[List[Dict[str, Any]]] = None,
+    calibration_health_snapshot: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return an additive, bounded score adjustment for one subnet's current calls."""
     rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
-    health = calibration_health(db=db, now=now, conviction_rows=rows)
+    health = (
+        calibration_health_snapshot
+        if calibration_health_snapshot is not None
+        else calibration_health(db=db, now=now, conviction_rows=rows)
+    )
     now = now or datetime.now(timezone.utc)
     cfg = _config()
     try:

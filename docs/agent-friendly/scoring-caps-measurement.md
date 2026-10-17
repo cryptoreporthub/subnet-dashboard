@@ -1,6 +1,6 @@
 ---
 cursor:
-  subagentId: "bc-3203c84d-ebb6-52d5-9525-3a12961e7605"
+  subagentId: "bc-2b73b904-2901-50eb-9140-0a0daddb3cc1"
 ---
 
 # Scoring caps — measurement log
@@ -68,9 +68,13 @@ Per-subnet median `score_subnet_for_day` **0.71 ms** — fixture-thin.
 
 After `build_top_picks_from_snapshot`: **~1.54 ms** per `_build_top_picks()` call (50-iteration average with fixture snapshot).
 
-### Per-name calibration bug (Ditto `ec3c24cc`)
+### Per-name calibration bug (Ditto `ec3c24cc`) — **confirmed mechanism, not on prod**
 
-**Claim:** calibration context rebuilt per subnet (~805 ms → 0.2 ms with hoist). **Not re-measured on this run**; treat as **open on prod** until hoist ships and metrics repeat.
+**Prod (`ef234c95`):** hoist **absent** on snapshot path. **Local:** TELEGRAM=on, 50 ms mocked `_conviction_rows` → **2.06 s / 40** without hoist vs **0.01 s** with hoist (`scoring-caps-profile.md`). Ditto **805 ms**/read ⇒ **~32 s / 40** explains majority of **57.7 s** build.
+
+### Draft branch harness (2026-10-17, `cursor/scoring-profile-2b73`)
+
+128 tradable, hoist on, pump fixture: **0.068 s** serial / **0.061 s** parallel (4 workers), RSS **85.7 MB** — thin sandbox only. See `docs/scoring-caps-profile.md`.
 
 ## RPC / Finney + Blockmachine
 
