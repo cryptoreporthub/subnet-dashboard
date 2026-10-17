@@ -8,6 +8,8 @@ backward-compatible.
 
 from __future__ import annotations
 
+from internal.council.stage_timing import timed_stage
+
 from typing import Any, Dict, List, Optional
 
 
@@ -284,6 +286,7 @@ def recovery_risk_adjustment(context: Optional[Dict[str, Any]]) -> Dict[str, Any
     }
 
 
+@timed_stage("recovery_context")
 def build_recovery_context(
     sn: Dict[str, Any],
     indicators: Optional[Dict[str, Any]] = None,

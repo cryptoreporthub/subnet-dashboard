@@ -5,6 +5,7 @@ Provides a reusable, serializable state vector for a single subnet plus scoring
 helpers used by the Selector's top-pick engine.
 """
 
+from internal.council.stage_timing import timed_stage
 import json as _json
 import math as _math
 import os as _os
@@ -122,6 +123,7 @@ def _lazy_fill_price_candles(netuid: Any) -> List[Dict[str, Any]]:
         return []
 
 
+@timed_stage("price_history")
 def _get_price_history(
     netuid: Any,
     sn: Dict[str, Any],
@@ -566,6 +568,7 @@ def _degraded_technical_indicators(hist: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+@timed_stage("indicators")
 def _compute_technical_indicators(
     sn: Dict[str, Any],
     *,
@@ -620,6 +623,7 @@ def _compute_technical_indicators(
     }
 
 
+@timed_stage("technical_score")
 def _compute_technical_score(
     sn: Dict[str, Any],
     horizon_type: str = "day",
@@ -818,6 +822,7 @@ def _signal_weight_for_impact(
         return 1.0
 
 
+@timed_stage("signal_impact")
 def _compute_signal_impact(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
@@ -1420,6 +1425,7 @@ _DEFAULT_WEIGHTS = {
 }
 
 
+@timed_stage("experts")
 def _expert_contributions(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],
@@ -1621,6 +1627,7 @@ def clear_resolver_hit_rate_cache() -> None:
 from internal.council.confidence_calibration import COLD_START_PRIOR as _COLD_START_PRIOR  # noqa: E402
 
 
+@timed_stage("confidence")
 def _compute_confidence(
     sn: Dict[str, Any],
     indicators: Dict[str, Any],

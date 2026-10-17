@@ -7,6 +7,8 @@ council weights, or writes to the message-intel database.
 
 from __future__ import annotations
 
+from internal.council.stage_timing import timed_stage
+
 import logging
 import math
 import os
@@ -235,6 +237,7 @@ def calibration_health(
     }
 
 
+@timed_stage("telegram_calibration")
 def calibration_for_subnet(
     netuid: Any,
     *,

@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+from internal.council.stage_timing import collect_stage_seconds
 from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -312,6 +313,7 @@ def build_full_universe_snapshot(
     day_scoring_seconds = 0.0
     hour_scoring_seconds = 0.0
     slowest_day: List[Tuple[float, int]] = []
+    day_stage_seconds: Dict[str, float] = {}
     for idx, sn in enumerate(rows):
         try:
             netuid = int(sn.get("netuid"))
@@ -344,7 +346,10 @@ def build_full_universe_snapshot(
         day_attempted.append(netuid)
         day_started = time.monotonic()
         try:
-            d = score_subnet_for_day(sn, build_context)
+            with collect_stage_seconds() as stages:
+                d = score_subnet_for_day(sn, build_context)
+            for stage_name, stage_sec in stages.items():
+                day_stage_seconds[stage_name] = day_stage_seconds.get(stage_name, 0.0) + stage_sec
             day_rows.append(
                 {
                     "netuid": netuid,
@@ -393,6 +398,9 @@ def build_full_universe_snapshot(
             {"netuid": nu, "seconds": round(sec, 6)}
             for sec, nu in slowest_day
         ],
+        # Where day scoring time goes, summed over subnets; the remainder is unattributed.
+        "day_stage_seconds": {k: round(v, 3) for k, v in sorted(day_stage_seconds.items())},
+        "day_unattributed_seconds": round(max(0.0, day_scoring_seconds - sum(day_stage_seconds.values())), 3),
     }
     return {
         "build_started_at": build_started_at,

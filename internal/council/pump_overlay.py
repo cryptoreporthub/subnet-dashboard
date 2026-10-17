@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from internal.council.stage_timing import timed_stage
+
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -55,6 +57,7 @@ def pump_prior_0_1(entry: Dict[str, Any]) -> Optional[float]:
     return None
 
 
+@timed_stage("pump_overlay")
 def apply_pump_score_overlay(
     total_score: float,
     subnet_data: Dict[str, Any],

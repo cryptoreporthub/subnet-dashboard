@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from internal.council.stage_timing import timed_stage
+
 from typing import Any, Dict, Optional
 
 _DISPOSITION_CAP = 3.0
@@ -42,6 +44,7 @@ def _load_disposition(netuid: int) -> Optional[Dict[str, Any]]:
     return None
 
 
+@timed_stage("memory_disposition")
 def disposition_score_adjustment(sn: Dict[str, Any]) -> float:
     """Capped ±3 pt tilt from message-intel / pump dispositions."""
     netuid = _netuid_key(sn or {})
@@ -64,6 +67,7 @@ def disposition_score_adjustment(sn: Dict[str, Any]) -> float:
     return 0.0
 
 
+@timed_stage("memory_scenarios")
 def scenario_outcome_adjustment(
     sn: Dict[str, Any],
     market_context: Optional[Dict[str, Any]] = None,
