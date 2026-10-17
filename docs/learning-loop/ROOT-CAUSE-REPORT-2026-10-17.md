@@ -10,7 +10,7 @@ Rule applied to every fix below: **root cause or nothing.** A fix that detects, 
 ## 1. Executive summary
 
 1. The loop grades the **sign of the next move for names it already likes**. Published council picks are 100% long, so the hit rate is the market's up-rate for those names. Nothing in the data shows skill: 1h published hit rate 0.477, 95% day-clustered CI [0.41, 0.54], 53 days.
-2. **Confidence is not a probability.** Hit rate when confidence >= 0.55 is 0.375 (n=64) against 0.510 below it (n=200). Suggestive, not significance-tested.
+2. **Confidence is not a probability.** It shows no positive relationship with outcomes: 1h published hit rate is 0.48 across the 0.4-0.6 confidence range (all horizons, n=289 clean rows). The apparent drop at confidence >= 0.55 (-0.135, 1h only, n=264) is **not significant** (day-clustered 95% CI [-0.30, +0.05]); I retract the earlier suggestion that higher confidence is worse.
 3. **The weights are not a function of the ledger.** They are an accumulator of +/- nudges with an asymmetric step (+0.02 / -0.03, break-even hit rate 60%, measured 44-47%), two of four experts receive no learning at all, and replay and live use different row filters.
 4. **The judges are not independent.** Oracle and echo endorse 100% of rows, so their grade equals the council's grade by construction. Oracle/pulse scores correlate at 0.64.
 5. **There is a public, unauthenticated weight writer** (`POST /api/feedback`). The repo is public, so this is documented to the internet. Fix first.
@@ -36,13 +36,13 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 ### 2.2 Confidence and the publish gate
 | # | Finding | Evidence | Status |
 |---|---|---|---|
-| F8 | Confidence has no discriminating power | bins 0.4-0.5: 0.48 (62), 0.5-0.6: 0.48 (212), 0.6-0.7: 0.20 (15); conf>=0.55: 0.375 (64) vs 0.510 (200); corr -0.07 | M |
+| F8 | Confidence has no demonstrated discriminating power | bins (all horizons, n=289): 0.4-0.5: 0.48 (62), 0.5-0.6: 0.48 (212), 0.6-0.7: 0.20 (15, too small to read); corr -0.07. 1h only (n=264): hit(conf>=0.55) - hit(conf<0.55) = -0.135, day-clustered 95% CI [-0.302, +0.047]: not significant | M |
 | F9 | Loop is circular: confidence blends the resolver hit rate; confidence gates publication; published picks update weights | `state_vector.py:1642` (`_resolver_hit_rate`), `daily_pick_engine.py:349` | V |
 | F10 | Publish gate never reads `audit["approved"]` | `daily_pick_engine.py:349` checks confidence and directional guard only | V |
 | F11 | Red-team floor resurrects a blocked candidate: multiplier 0.0 then `_apply_multiplier` returns `max(0.88, m*f)`. Latent today because `tradable_subnets()` filters first | `red_team.py`, `daily_pick.py:~124`, `hourly_pick.py:60` | V |
 | F12 | `approved` and the missing-field gate depend on string prefixes | `red_team.py` (`startswith`), `daily_pick_engine.py:185` | V |
 | F13 | Score adjustments are each capped (memory +/-5 pts, telegram <=5, pump blend <=25%, recovery haircut, value/flow/size tilts) but have no total budget; the calibration they were fitted on was n~60 | `memory_scoring.py:7-8`, `message_intel/calibration.py:166`, `pump_overlay.py:18`, `state_vector.py`, `red_team.py` docstring | V |
-| F14 | Prod publish gate is 0.40 (fly.toml), `AGENTS.md` documents 0.50 | `fly.toml:104` | V |
+| F14 | Prod publish gate is 0.40 (`fly.toml:104`); the code default is 0.50, so any environment without the fly env (local, tests, the local UI pill "AUDIT GATE 50%") shows and applies a different gate than prod. (`AGENTS.md` does not state a gate value; the 0.50 figure I earlier attributed to it came from the pasted report.) | `fly.toml:104`, `tribunal_hero.html:63` | V |
 
 ### 2.3 Weights
 | # | Finding | Evidence | Status |
@@ -50,10 +50,10 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 | F15 | Expert step is asymmetric: +0.02 / -0.03; break-even hit rate 0.60; measured expert hit rates 0.44-0.47 | `weights.py:28-29`; prod trail shows delta -0.03 | V, M |
 | F16 | The judge module documents and fixed this exact bug (symmetric steps, commit 15292648, 2026-08-05); experts and signals still have it | `judges/weights.py:14-19` | V |
 | F17 | Expert weights track the market's short-run direction: hype 0.12 -> 0.68 (Sep 29 - Oct 5) because 27 of 30 hype-attributed published picks hit (90% vs 0.44 overall), then reverted | ledger; `weights_at_creation` is raw `load_weights()` (`prediction_loop.py:339-340`) | V, M |
-| F18 | Two of four experts get no learning: quant is 2.0 on all 621 rows, dark_horse 1.0 on all 621. Quant is credited on 28 rows, all `council_shadow`, which the live nudge skips; dark_horse is never credited. Expert attribution is single-credit (`expert` field: published = hype 258 / technical 96). Quant carries the highest weight in every score with zero feedback | ledger; `resolver._skip_council_learning` | V, M |
+| F18 | Two of four experts get no learning (the system's own 2026-10-06 probe reports `expert_graded_counts` quant 0, dark_horse 0, hype 200, technical 69): quant is 2.0 on all 621 rows, dark_horse 1.0 on all 621. Quant is credited on 28 rows, all `council_shadow`, which the live nudge skips; dark_horse is never credited. Expert attribution is single-credit (`expert` field: published = hype 258 / technical 96). Quant carries the highest weight in every score with zero feedback | ledger; `resolver._skip_council_learning` | V, M |
 | F19 | Replay is not live: replay includes shadow rows, live skips them. Replay from defaults gives technical 0.10 (with shadow) or 0.74 (without); live is 1.044. Quant 1.0-1.06 vs live 2.0 | `weights.py:_replay_rows_from_blob` vs `resolver.py:133-137` | V |
 | F20 | The boot rebalance only runs when weights are near-flat and the env flag is off, so a stale non-flat value is never repaired | `maybe_rebalance_council_weights_on_boot`; `COUNCIL_WEIGHT_REBALANCE_ON_BOOT` absent from fly tomls | V |
-| F21 | Learned signal weights are negatively correlated with the next outcome (macd -0.18 n=289, williams_r -0.23 n=151, cci -0.16, mfi -0.08, rsi -0.06): weights chase short streaks that revert. Rows are autocorrelated, so this is suggestive only | ledger | M |
+| F21 | Learned signal weights at creation are negatively correlated with the outcome. Day-clustered bootstrap 95% CIs exclude zero: macd_cross -0.18 [-0.29, -0.07] (n=289), williams_r -0.23 [-0.35, -0.11] (n=151), cci_divergence -0.16 [-0.26, -0.05] (n=275); mfi/rsi weaker. Consistent with weights chasing streaks that revert, but time-varying base rates are a confound the clustering does not remove, so this shows the weights are not helping, not the mechanism | ledger | M |
 | F22 | Live state includes history not in the current ledger (replay of 304 clean rows from defaults does not reproduce it) | simulation | V |
 
 ### 2.4 Judges
@@ -81,16 +81,37 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 | F34 | `WRITE_API_TOKEN` **is** set in prod: an unauthenticated POST to an unknown path returns 401 `write_api_token_required`. Other write routes (`/api/learning/rebalance-weights`, `/api/learning/trigger`, `/api/scenario-memory`) are therefore token-protected | non-mutating probe | V |
 | F35 | `/api/mindmap/feedback` is allowlisted but no route exists | grep | V |
 | F36 | `CALIBRATION_AUTO_RETRAIN` is off in both fly tomls; capture grading mode is off in prod (trail `band`/`capture` null) | `fly.toml:87`, prod trail | V |
-| F37 | The repo is public (GitHub API 200 unauthenticated), so F33 is publicly documented | API probe | V |
+| F37 | The repo is public (unauthenticated GitHub API: `private: false`, `visibility: public`), so F33 and this report are publicly readable once pushed to a public branch | API probe | V |
 | F38 | Only 2 of 8 SQLite-using modules enable WAL (`fetchers/_sqlite.py`, `message_intel/models.py`); `chain_client.py` (5 sites) and `investigation/service.py` (3) connect directly. Web, inline worker and fetch child share one volume | grep | V |
 | F39 | Tests rewrite six committed `data/*.json` files; 57 tracked files under `data/`, including `pump_desk/snapshots/*.json` | git | V |
 
-### 2.7 Architecture
+### 2.7 Scoring-universe caps (the 24 / 40 hard caps)
+The council scores a capped slice of the subnets, not every active subnet. Count caps found in source (`@ main e620ee4`) and fly config:
+
+| Cap | Where | Effective on prod web (from source + `fly.toml`; not env-probed) |
+|---|---|---|
+| `TOP_SCORING_UNIVERSE` default **20** | `server.py:647` (not set in fly.toml) | 20 |
+| `PICK_SCHEDULER_UNIVERSE_CAP` default **24** | `pick_scheduler.py:32,157` (`min(24, server TOP)`) | min(24, 20) = 20 |
+| `min(24, TOP_SCORING_UNIVERSE)` | `server.py:1066, 3391` | 20 |
+| `TOP_SCORING_UNIVERSE` default **40** and `min(40, ...)` | `daily_pick_engine.py:209-210`, `pick_selection_audit.py:58-72`, `score_snapshots.py:53` | engine/audit paths: min(24, 40) = 24; snapshot fallback 40 |
+| `SCORE_SNAPSHOT_MAX_SUBNETS` = **40** | `fly.toml:89`, `fly.worker-v2.toml:64`, soak toml `:75` | 40 |
+| mid-rank window 11-75, mega ceiling 10 | `scoring_cap.py:111-113`, fly tomls `:91-93` | heuristic pool when no snapshot ranking exists |
+
+| # | Finding | Evidence | Status |
+|---|---|---|---|
+| F44 | The same intent ("how many subnets to score") has at least four different values (20/24/40/75) in four places; effective values differ by code path | table above | V |
+| F45 | `cap_subnets_for_scoring` ranks by the **previous** snapshot and slices (`scoring_cap.py:101-108`), so eligibility depends on a prior capped result: names that were scored stay selected, unscored names stay deprioritised (also the user's own handoff finding 4) | `scoring_cap.py` | V |
+| F46 | The published-pick sample is narrow: 34 distinct netuids over 60 days, netuid 105 = 52 rows, 61 = 44 rows (consistent with F44/F45; cause not isolated) | ledger | M |
+| F47 | The handoff (pin `9535c3c2`) said snapshot coverage is `len(rows)` and failures are swallowed. Current main already tracks `day_attempted/day_succeeded/hour_attempted/hour_succeeded` per netuid (`score_snapshots.py:305-357`); the handoff finding is partly stale. Whether a snapshot can still be reported complete when some netuids failed was not re-verified | `score_snapshots.py` | V (lists exist), U (completeness semantics) |
+| F48 | Per-subnet scoring cost on prod is unknown: the local latency log (24 rows, median 1 ms) has no network and is not representative | `data/pick_score_latency.jsonl` | U |
+| F49 | `tradable_subnets()` removes root/invalid IDs and dedupes by netuid; it does not establish *active* membership | `internal/subnets/tradable.py:43-51` | V |
+
+### 2.8 Architecture
 | # | Finding | Evidence | Status |
 |---|---|---|---|
 | F40 | 16 router imports are wrapped in `try/except`; none pull third-party-only dependencies, so a failure is always a bug and is currently silent | `server.py:35-171`, `requirements.txt` | V |
 | F41 | `server.py` is a shared kernel: 3,467 lines, 104 functions, 32 routes, `_lifespan` 265 lines; **21 imports from other modules back into `server`** (8 of them `_get_subnets_with_source`) | grep | V |
-| F42 | Prod serves `asgi_entry:app` (gzip + static-cache wrapper), while `AGENTS.md` and the contract test describe `server:app`; whether the contract test also covers the wrapper is unchecked | `scripts/run_web_with_guard.py`, `asgi_entry.py` | V (fact), U (coverage) |
+| F42 | Prod serves `asgi_entry:app` (gzip + static-cache wrapper), but the contract test imports `from server import app` (`tests/test_endpoint_contract.py:19`): the prod wrapper is not covered by the contract guard | `scripts/run_web_with_guard.py`, `asgi_entry.py` | V |
 | F43 | UI: strong visual identity; at 1440px the content is a ~680px column, the fixed status bar overlaps cards, mobile tab bar and FAB cover content, small text over gradients is low contrast; ~1.2 MB hand-written JS/CSS including `ui-legacy.css` | screenshots | V |
 
 ---
@@ -109,6 +130,7 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 | RC8 | Prices carry no unit, so unit mixing is detected by heuristic after the fact | F29-F32 |
 | RC9 | The ledger is not point-in-time or append-only: runtime state is in git, JSON blobs are rewritten, no universe snapshot is stored | F4, F38-F39, F22 |
 | RC10 | Router wiring and shared helpers live in the entry point | F40-F42 |
+| RC11 | Scoring coverage is bounded by hard-coded counts (20/24/40/75) that stand in for an unmeasured per-run cost problem, and eligibility is decided by slicing a prior capped snapshot | F44-F49 |
 
 ---
 
@@ -171,6 +193,15 @@ Each fix names the structure that makes the defect unrepresentable and the test 
 - Extract the shared helpers (`_get_subnets_with_source`, `load_data`, `_normalize_registry_subnet`, ...) into `internal/subnets/` so no module imports `server`; extract `_lifespan`; move the 32 routes into routers.
 - Acceptance: `grep "from server import"` outside `asgi_entry.py` and tests returns nothing; contract test passes against `asgi_entry:app` and `server:app`.
 
+### FX11 (RC11): full-active scoring, no count caps
+Contract (from the repo's own `cap-audit/cursor-cap-audit-handoff.md`): score every dynamically established **active non-root** subnet; do not replace 40 with another magic constant; keep concurrency, provider rate limits, pagination, retention, cache-byte bounds and score clamps distinct from count caps; do not "fix" by raising deadlines.
+- Root cause to fix, not the symptom: scoring is recomputed per request/run for the whole slice, so a count cap was the only way to stay inside the 90s / 480s budgets. Replace with an **incremental per-subnet score store**: a worker scores each active subnet when its inputs change (input-hash keyed; `pick_score_cache` is the seed), with an explicit per-subnet state `{scored, stale, failed(reason), unscored}` and attempted / succeeded / failed / netuid coverage emitted on every cycle.
+- Pick selection = argmax over the full fresh score table. Eligibility comes from authoritative active membership resolved dynamically (unknown or stale membership is an explicit state), never from slicing a prior snapshot. Root is excluded from alpha scoring without being hidden from network displays.
+- Delete: `TOP_SCORING_UNIVERSE` (all three defaults), `PICK_SCHEDULER_UNIVERSE_CAP`, `SCORE_SNAPSHOT_MAX_SUBNETS`, the `min(24, ...)` and `min(40, ...)` expressions, `cap_subnets_for_scoring` and the mid-rank heuristic pool, and the matching fly.toml entries. Keep a deletion test: no module may define a subnet-count default.
+- Dependencies: FX1 first, so the learning ledger records the universe each pick was chosen from; otherwise widening the universe silently changes the evaluated population. FX9 (SQLite, single connection helper) for the score table.
+- Acceptance: every active non-root netuid has a score row with a state after each cycle; a complete cycle cannot report full coverage when any netuid is `failed`/`unscored`; peak memory and cycle time are measured under shared web+worker load before rollout.
+- Rollout gate (from the handoff, still binding): measure real per-subnet cost, effective Fly env, RSS headroom and authoritative membership; rollback on missing active IDs, falsely green coverage, memory growth/OOM, overlapping jobs, stale/late overwrites, or daily-pick/audit parity break. No production change without separate approval.
+
 ---
 
 ## 5. Existing band-aids (do not extend; retire as the root fix lands)
@@ -185,6 +216,8 @@ Each fix names the structure that makes the defect unrepresentable and the test 
 | `_apply_multiplier` floor, `RED_TEAM_MAX_HAIRCUT` | stacked haircuts | FX5, FX7 |
 | `tradable_subnets()` pre-filter hiding F11 | blocked candidates | FX7 |
 | Cold-cache and `price_data_unavailable` alerts | missing price at horizon | FX9 (store inputs at capture) |
+| 20/24/40/75 scoring caps, `min(24, ...)`, snapshot-rank slicing | per-run scoring cost | FX11 |
+| Raising timeouts (90s / 480s) to fit more subnets | same | rejected: handoff forbids it; FX11 removes the need |
 | Freezing weight updates | noise | **rejected**: it stops the symptom without fixing RC2 |
 
 ---
@@ -195,26 +228,38 @@ Sources: Ditto memories (2026-09-26 evaluation, 2026-10-15 integration note); `d
 - Prior plan (kept): fix judge independence first; shadow forecaster, no write access; promote only on Brier skill over ~100 graded observations; **"Jev emits, code scores"**; rugger-flagged text never enters the state; route via a gateway that does not depend on one vendor's signup.
 - Correction to that plan: it said judge weights "structurally cannot diverge." They have diverged (oracle 0.086 / echo 0.638 / pulse 0.276), though not toward skill.
 - Sequencing: Jev enters at FX4, after FX1 (a market-relative target) and FX9 (point-in-time inputs). Before that it would be graded against the council, which reproduces the current defect.
-- Unverified: API shape, rate limits, latency and current pricing (only the landing page was read), data-processing region.
+- Verified from the public pages (2026-10-17): Decision Models hosts four open models (s1-pro, s1-fast, s1-vision, quyet-1-large; Apache-2.0), billed per 1M **input** tokens with free output, pay-as-you-go from EUR 1, keys are server-side only. Two tiers: Peer-to-Peer (independent providers on network-enabled keys **may store content**) and EU (gateway and GPU inference in the EU, no payload logs). A launch promo makes `s1-fast-1` / `s1-pro-1` free on the Peer-to-Peer tier until Sun 18 Oct 2026 22:00 UTC (single-question text only). FAQ on the landing page states it is **not** the Jev service itself.
+- Still unverified: per-token price figures, rate limits, latency and calibration of the hosted models, the exact request/response schema (the quickstart examples need an API key), and whether answers are comparable to TypeSafe's Jev. Any use with dashboard/Telegram text implies choosing the EU tier or sending only derived numeric features; rugger-flagged text stays out either way.
 
 ---
 
 ## 7. Verification ledger
 
-**Verified this session (code or live data):** F1, F3 (shadow definition), F6-F7, F9-F12, F14-F16, F18-F20, F23-F27, F29-F42 (see statuses above); write-auth is active in prod; capture mode off; calibration auto-retrain off; quarantine coverage of weight-update paths; red-team floor mechanics; adjuster caps.
+**Verified in code or live data:** F1, F3, F6-F7, F9-F12, F14-F16, F18-F20, F23-F27, F29-F42, F44-F45, F49, F37 (repo is public), write-auth active in prod, capture mode off, calibration auto-retrain off, quarantine coverage of weight-update paths, red-team floor mechanics, adjuster caps, contract test imports `server:app` only, decisionmodels.io facts listed in section 6.
 
-**Measured, with stated limits:** F2, F4, F8, F17, F21, F25 (rows are autocorrelated and clustered: 34 netuids, 60 days, netuid 105 has 52 rows).
+**Measured, with stated limits:** F2, F4 (baseline absent), F8 (CI included), F17, F21 (CI included, confounded), F25, F46 (rows clustered: 34 netuids, 60 days).
+
+**Closed this round**
+| Item | Result |
+|---|---|
+| Contract test covers prod wrapper? | **No** (`from server import app`) |
+| Is the repo public? | **Yes** (`private: false`) |
+| F8 significance | **Not significant** (CI [-0.30, +0.05]); claim retracted |
+| F21 significance | **Excludes zero** for macd, williams_r, cci under day-cluster bootstrap; mechanism still unproven |
+| `/api/feedback` ever used? | **Cannot be established.** The trail endpoint is capped at 500 events with no paging; the last 500 (about 2 days, 36 weight changes) contain no `reason=feedback` |
+| Adjuster lift | **Cannot be measured from the ledger:** rows do not store pump-overlay, telegram, recovery or memory adjustment fields. FX9/FX5 capture comes first |
+| Market baseline from existing data | **Not derivable:** only 1 of 29 `pick_history` rows keeps the universe snapshot; the prediction ledger stores none |
+| F14 attribution | Corrected: `AGENTS.md` states no gate value |
+| Jev / Decision Models facts | Recorded in section 6 |
 
 **Still unverified or unexplained (must not be treated as fact):**
-1. Why live judge weights are oracle 0.086 / echo 0.638 / pulse 0.276. Not reproducible from the current ledger; earlier-epoch history is in the state.
-2. Whether `/api/feedback` was ever abused. The last 100 trail events show no `reason=feedback` changes; older history is unavailable.
-3. A market-wide baseline for a random long (the ledger does not store it; FX1 creates it).
-4. Per-adjuster lift (memory/telegram/pump/recovery/tilts). Needs FX1 data and ablations.
-5. Whether the contract test exercises `asgi_entry:app`.
-6. Jev API shape, limits, latency, cost.
-7. Prod secrets, machine state and logs (no flyctl/token in this environment); anything beyond `fly.toml` and public endpoints.
-8. Statistical significance of F8's high-confidence drop (n=64) and F21 (autocorrelated rows).
-9. Whether the 2026-08-09 "one-time rebalance" or earlier migrations produced the quant 2.0 value (pre-dates the ledger window).
+1. Why live judge weights are oracle 0.086 / echo 0.638 / pulse 0.276. Trajectory evidence: 2026-10-06 probe oracle 0.149 / echo 0.551 / pulse 0.301; now oracle 0.086; raw (trail) oracle ~0.14, echo ~1.07, pulse ~0.47. Not reproducible from the current ledger.
+2. Origin of quant = 2.0: it pre-dates the earliest ledger row (Aug 5) and is already present on 2026-10-06. The code docstring (`signal_expert.py:115-123`, commit `713a4a50`, 2026-08-09) says legacy misattribution inflated it to the cap; I did not reproduce that, and git history of committed data/docs holds no earlier value.
+3. Whether `/api/feedback` was abused before the last ~2 days (no available history).
+4. Per-subnet scoring cost, memory headroom and effective env values on prod (no flyctl/token here; `fly.toml` and public endpoints only), and the current authoritative active-subnet count.
+5. Whether a snapshot can report complete coverage when some netuids failed (F47).
+6. Decision Models: price figures, limits, latency, schema, comparability to Jev.
+7. Prod secrets, machine state, logs.
 
 ---
 
@@ -224,6 +269,7 @@ Sources: Ditto memories (2026-09-26 evaluation, 2026-10-15 integration note); `d
 1. **FX10a**: unconditional router imports; drop the #1437 registry; keep its duplicate-CONTRACT and forbidden-import guards.
 2. **FX9**: temp `DATA_DIR` in tests, stop tracking runtime state, one SQLite connection helper (WAL + busy_timeout).
 3. **FX1 + FX8**: capture universe reference and typed prices going forward (data collection starts the clock on a clean evaluation window).
+3b. **FX11**: full-active scoring, delete the 20/24/40/75 caps (after FX1 so the evaluated population change is recorded; gated by the measurements in FX11).
 4. **FX2 + FX3**: deterministic weight function and per-expert grading, shadow-run beside the current weights.
 5. **FX7**: typed audit and gate consumption.
 6. **FX4 + FX5**: independent probability judges, calibrated publish probability, ablations.

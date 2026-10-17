@@ -330,3 +330,10 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-10-17 — Learning-loop root-cause audit (Claude Code session)
+
+- **Report:** `docs/learning-loop/ROOT-CAUSE-REPORT-2026-10-17.md` (evidence appendix `docs/learning-loop-audit-2026-10-17.md`), branch `claude/port-cursor-config`. Findings, root causes, fix design FX1-FX11, verification ledger. No product code changed; no production mutation (read-only public GETs and one non-mutating write-auth probe).
+- **Security:** `POST /api/feedback` is public-write and nudges expert weights; repo is public. Fix first (FX6).
+- **Corrections to earlier notes:** Sep 26 Ditto plan said judge weights "cannot diverge"; they have diverged (not toward skill). Confidence-drop claim retracted (not significant).
+- **Scoring caps (20/24/40/75):** inventory in report section 2.7, removal design FX11; per the cap-audit handoff, no cap/deadline change or deploy without separate approval.
