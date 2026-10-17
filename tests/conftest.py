@@ -39,6 +39,24 @@ def _isolate_message_intel_db(tmp_path, monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limiter_state():
+    """The slowapi limiter is a process-wide singleton keyed by client IP; every TestClient
+    shares one IP, so request counts leaked across tests and later tests got 429s."""
+    def _reset():
+        try:
+            import internal.rate_limit as rate_limit
+
+            if rate_limit._limiter is not None:
+                rate_limit._limiter.reset()
+        except Exception:
+            pass
+
+    _reset()
+    yield
+    _reset()
+
+
+@pytest.fixture(autouse=True)
 def _isolate_readiness_cache():
     """Prevent readiness cache/refresher state leaking between tests."""
     try:
