@@ -94,3 +94,80 @@ def test_settle_due_snapshots_grades_long_short_and_neutral(tmp_path):
     assert snap["daily_model"][0]["result"] == "hit"
     assert snap["judge_council"][0]["result"] == "hit"
     assert snap["judge_council"][1]["result"] == "neutral"
+
+def _seed(path, captured, rows):
+    from internal.council import ab_benchmark
+
+    ab_benchmark.record_snapshot(
+        [_subnet(1, 10), _subnet(2, 10)],
+        {},
+        captured_at=captured.isoformat().replace("+00:00", "Z"),
+        path=path,
+    )
+    data = ab_benchmark._load(path)
+    data["snapshots"][0]["daily_model"] = rows
+    data["snapshots"][0]["judge_council"] = []
+    ab_benchmark._save(data, path)
+
+
+def test_unchanged_exit_quote_is_deferred_not_graded_a_miss(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=30)
+    _seed(path, captured, [{"netuid": 1, "direction": "long", "entry_price": 10, "result": None}])
+
+    stale = ab_benchmark.settle_due_snapshots(
+        [_subnet(1, 10)], now=captured + timedelta(hours=25), path=path
+    )
+    assert stale["snapshots"][0]["daily_model"][0]["result"] is None
+    assert stale["snapshots"][0]["status"] == "partial"
+
+    fresh = ab_benchmark.settle_due_snapshots(
+        [_subnet(1, 11)], now=captured + timedelta(hours=26), path=path
+    )
+    row = fresh["snapshots"][0]["daily_model"][0]
+    assert row["result"] == "hit" and row["exit_price"] == 11
+    assert fresh["snapshots"][0]["status"] == "settled"
+
+
+def test_exit_quote_still_unchanged_after_grace_is_flat_and_not_in_hit_rate(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=60)
+    _seed(
+        path,
+        captured,
+        [
+            {"netuid": 1, "direction": "long", "entry_price": 10, "result": None},
+            {"netuid": 2, "direction": "long", "entry_price": 10, "result": None},
+        ],
+    )
+    late = captured + timedelta(hours=ab_benchmark.AB_BENCHMARK_HORIZON_HOURS + ab_benchmark.AB_STALE_EXIT_GRACE_HOURS)
+    ab_benchmark.settle_due_snapshots([_subnet(1, 10), _subnet(2, 12)], now=late, path=path)
+
+    metrics = ab_benchmark.comparison(path=path)["daily_model"]
+    assert [r["result"] for r in ab_benchmark._load(path)["snapshots"][0]["daily_model"]] == ["flat", "hit"]
+    assert metrics["stale_exit_entries"] == 1
+    assert metrics["directional_entries"] == 1
+    assert metrics["hit_rate"] == 1.0
+
+
+def test_legacy_miss_graded_off_an_unchanged_quote_is_excluded_from_metrics(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    captured = datetime.now(timezone.utc) - timedelta(hours=30)
+    _seed(
+        path,
+        captured,
+        [
+            {"netuid": 1, "direction": "long", "entry_price": 10, "exit_price": 10, "return_pct": 0.0, "result": "miss"},
+            {"netuid": 2, "direction": "long", "entry_price": 10, "exit_price": 9, "return_pct": -10.0, "result": "miss"},
+        ],
+    )
+    metrics = ab_benchmark.comparison(path=path)["daily_model"]
+    assert metrics["stale_exit_entries"] == 1
+    assert metrics["directional_entries"] == 1
+    assert metrics["hit_rate"] == 0.0

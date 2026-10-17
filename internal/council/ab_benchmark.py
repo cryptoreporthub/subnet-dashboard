@@ -30,6 +30,12 @@ AB_BENCHMARK_INTERVAL_MINUTES = max(
     15, min(int(os.environ.get("AB_BENCHMARK_INTERVAL_MINUTES", "180")), 24 * 60)
 )
 AB_BENCHMARK_MINIMUM_DAYS = 7
+# An exit quote bit-identical to the entry after a full horizon is a stale feed, not a
+# 0.0% market move (23% of settled entries, 100% of Oct 3-5 slots). Settlement waits this
+# long for a fresh quote before recording the entry as flat.
+AB_STALE_EXIT_GRACE_HOURS = max(
+    0, int(os.environ.get("AB_STALE_EXIT_GRACE_HOURS", "24"))
+)
 
 
 def _now_iso() -> str:
@@ -255,8 +261,22 @@ def _return_for(entry: Any, exit_price: Any, direction: str) -> Optional[float]:
     return round(raw, 6)
 
 
+def _is_stale_exit(row: Dict[str, Any]) -> bool:
+    """Directional entry whose recorded exit quote equals its entry quote exactly."""
+    entry = _number(row.get("entry_price"))
+    return (
+        row.get("direction") in ("long", "short")
+        and entry is not None
+        and _number(row.get("exit_price")) == entry
+    )
+
+
 def _settle_rows(
-    rows: List[Dict[str, Any]], current_by_netuid: Dict[int, Dict[str, Any]], settled_at: str
+    rows: List[Dict[str, Any]],
+    current_by_netuid: Dict[int, Dict[str, Any]],
+    settled_at: str,
+    *,
+    stale_grace_over: bool = False,
 ) -> int:
     changed = 0
     for row in rows:
@@ -268,10 +288,18 @@ def _settle_rows(
         result = _return_for(row.get("entry_price"), exit_price, str(row.get("direction") or "neutral"))
         if result is None:
             continue
+        stale = _is_stale_exit({**row, "exit_price": exit_price})
+        if stale and not stale_grace_over:
+            continue  # retry next cycle with a fresh quote instead of grading a stale one
         row["exit_price"] = exit_price
         row["settled_at"] = settled_at
         row["return_pct"] = round(result * 100.0, 4)
-        row["result"] = "neutral" if row.get("direction") == "neutral" else ("hit" if result > 0 else "miss")
+        if row.get("direction") == "neutral":
+            row["result"] = "neutral"
+        elif stale:
+            row["result"] = "flat"  # unchanged quote after the grace window: neither hit nor miss
+        else:
+            row["result"] = "hit" if result > 0 else "miss"
         changed += 1
     return changed
 
@@ -297,8 +325,13 @@ def settle_due_snapshots(
         if not captured or current_time < captured + timedelta(hours=AB_BENCHMARK_HORIZON_HOURS):
             continue
         settled_at = current_time.isoformat().replace("+00:00", "Z")
-        changed += _settle_rows(snapshot.get("daily_model") or [], current_by_netuid, settled_at)
-        changed += _settle_rows(snapshot.get("judge_council") or [], current_by_netuid, settled_at)
+        grace_over = current_time >= captured + timedelta(
+            hours=AB_BENCHMARK_HORIZON_HOURS + AB_STALE_EXIT_GRACE_HOURS
+        )
+        for key in ("daily_model", "judge_council"):
+            changed += _settle_rows(
+                snapshot.get(key) or [], current_by_netuid, settled_at, stale_grace_over=grace_over
+            )
         all_rows = (snapshot.get("daily_model") or []) + (snapshot.get("judge_council") or [])
         snapshot["status"] = "settled" if all(row.get("result") is not None for row in all_rows) else "partial"
         snapshot["settled_at"] = settled_at
@@ -312,14 +345,20 @@ def _model_metrics(snapshots: List[Dict[str, Any]], key: str) -> Dict[str, Any]:
         row
         for snapshot in snapshots
         for row in (snapshot.get(key) or [])
-        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral")
+        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral", "flat")
     ]
-    directional = [row for row in rows if row.get("direction") in ("long", "short")]
+    # Legacy rows graded "miss" off an unchanged exit quote are stale feed, not outcomes.
+    stale = [row for row in rows if row.get("result") == "flat" or _is_stale_exit(row)]
+    stale_ids = {id(row) for row in stale}
+    directional = [
+        row for row in rows if row.get("direction") in ("long", "short") and id(row) not in stale_ids
+    ]
     returns = [_number(row.get("return_pct")) for row in directional]
     returns = [value for value in returns if value is not None]
     hits = sum(1 for row in directional if row.get("result") == "hit")
     return {
         "settled_entries": len(rows),
+        "stale_exit_entries": len(stale),
         "directional_entries": len(directional),
         "hit_rate": round(hits / len(directional), 4) if directional else None,
         "equal_weight_return_pct": round(sum(returns) / len(returns), 4) if returns else None,
