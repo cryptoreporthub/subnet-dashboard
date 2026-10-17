@@ -13,7 +13,7 @@ Rule applied to every fix below: **root cause or nothing.** A fix that detects, 
 2. **Confidence is not a probability.** It shows no positive relationship with outcomes: 1h published hit rate is 0.48 across the 0.4-0.6 confidence range (all horizons, n=289 clean rows). The apparent drop at confidence >= 0.55 (-0.135, 1h only, n=264) is **not significant** (day-clustered 95% CI [-0.30, +0.05]); I retract the earlier suggestion that higher confidence is worse.
 3. **The weights are not a function of the ledger.** They are an accumulator of +/- nudges with an asymmetric step (+0.02 / -0.03, break-even hit rate 60%, measured 44-47%), two of four experts receive no learning at all, and replay and live use different row filters.
 4. **The judges are not independent.** Oracle and echo endorse 100% of rows, so their grade equals the council's grade by construction. Oracle/pulse scores correlate at 0.64.
-5. **There is a public, unauthenticated weight writer** (`POST /api/feedback`). The repo is public, so this is documented to the internet. Fix first.
+5. **Two public routes (`POST /api/feedback`, `POST /api/mindmap/feedback`) wrote expert weights and scenario memory from client-supplied labels.** Fixed on `claude/fx6-single-weight-writer` (not merged).
 6. **Scoring caps (the 20/24/40/75 hard caps):** prod's own snapshot reports `count 40, complete false, capped_out 125` of 165 admitted subnets (24% scored); FX11 deletes the caps rather than raising them. Measured prod cost is about 1.3 s per subnet while the same scoring runs in ~3 ms locally, so the cap is compensating for an unexplained I/O or contention cost, not for compute.
 7. **Architecture:** keep FastAPI and the slice routers. The defects are in the measurement and learning layers, in swallowed router imports, in `server.py` acting as a shared kernel (21 reverse imports), and in runtime state living in git.
 
@@ -71,18 +71,20 @@ Legend: **V** verified in code or live data this session; **M** measured on the 
 | # | Finding | Evidence | Status |
 |---|---|---|---|
 | F29 | 300 of 1,476 graded rows are phantom-VWAP contaminated (Aug 7-17, all `price_source=vwap`), mostly pump rows | ledger | M |
-| F30 | The exclusion predicate covers every replay/eval path and the live resolver (via unit-mismatch rejection at `resolver.py:828,955`); the one uncovered writer is `/api/feedback` | grep of ~18 call sites | V |
+| F30 | The exclusion predicate covers every replay/eval path and the live resolver (via unit-mismatch rejection at `resolver.py:828,955`); the uncovered writers were the two feedback routes (F33, F35) | grep of ~18 call sites | V |
 | F31 | The exclusion is a ratio heuristic over a mixed-unit price feed (TAO vs USD per alpha), not a typed price | `grading.py:is_price_unit_mismatch` | V |
 | F32 | `cold_cache_alert: true` (14%), 136 ungradeable, 50 `price_data_unavailable` | `/api/learning/stats` | V |
 
 ### 2.6 Security and operations
 | # | Finding | Evidence | Status |
 |---|---|---|---|
-| F33 | `POST /api/feedback` is on the public-write allowlist, takes a client-supplied `correct_prediction`, and calls `nudge_expert`; no frontend caller (tests only). **Reachable and unauthenticated on prod:** an empty-body POST returned HTTP 400 "Missing subnet_id or recommendation" (handler reached; a protected route would have returned 401). Only `{}` was sent, so nothing changed | `write_auth.py:22-27`, `learning_engine.py:57-90`, `routes.py:41`, prod probe | V |
-| F34 | `WRITE_API_TOKEN` **is** set in prod: an unauthenticated POST to an unknown path returns 401 `write_api_token_required`. Other write routes (`/api/learning/rebalance-weights`, `/api/learning/trigger`, `/api/scenario-memory`) are therefore token-protected | non-mutating probe | V |
-| F35 | `/api/mindmap/feedback` is allowlisted but no route exists | grep | V |
+| F33 | **Two public routes wrote learning state through `LearningEngine.record_feedback`:** `POST /api/feedback` (`datastore/learning_engine.py`, removed in FX6) and `POST /api/mindmap/feedback` (`server.py:2331`, rate-limited). Each took a client-supplied `correct_prediction` and (a) called `nudge_expert` on an expert chosen by substring-matching the `recommendation` string, and (b) wrote a scenario-memory entry (`features.subnet_id`, outcome correct/wrong) that `scenario_outcome_adjustment` reads as a +/-2 point score tilt. Both were on the public-write allowlist (`write_auth.py`). No frontend code calls either (tests only); `docs/file-map-and-scope.md:109` described the route as "stored, not yet applied" while the code applied it. Prod: an empty `{}` POST to `/api/feedback` returned 400 (handler reached, no 401) and to `/api/mindmap/feedback` returned 200; both bodies empty, nothing changed | `write_auth.py`, `learning_engine.py`, `server.py:2331`, `memory_scoring.py:67-99`, prod probes | V |
+| F34 | `WRITE_API_TOKEN` is set in prod (unauthenticated POST to an unknown path returns 401). Other write routes (`/api/learning/rebalance-weights`, `/api/learning/trigger`, `/api/scenario-memory`) are token-protected | non-mutating probe | V |
+| F35 | **Correction:** I earlier wrote that `/api/mindmap/feedback` was allowlisted with no route. That was wrong (my grep covered `internal/` only); the route exists in `server.py:2331` and is live. It is not a dead allowlist entry | grep, prod probe | V |
+| F35b | A dormant third weight writer existed: `SelfLearning.adjust_jury_weights` (`message_intel/self_learning.py`) called `nudge_expert` from substring-matched pattern descriptions. It was only reachable from `start_background_learning`, which no boot path starts (a test asserts that). Removed in FX6 | `self_learning.py`, `tests/test_learning_loop_health.py:760` | V |
+| F35c | `MindmapBridge` loads `soul_map_state` at init and `_save_to_disk` blindly replaces whole subtrees (`soul_map_state`, `feedback_logs`) from that copy. A request-scoped bridge (as in `/api/mindmap/feedback`) could drop concurrent writers' updates (pump ladder, last picks, trail rows). Weights live under `adversarial_state.council_weights`, `expert_weights`, `judge_weights`, which this path does not write, so weights were not at risk from this race. Fixed in FX6 by appending inside the soul-map lock against fresh disk state; the regression test fails on the old code | `mindmap_bridge.py`, prod `/api/soul-map` key layout | V |
 | F36 | `CALIBRATION_AUTO_RETRAIN` is off in both fly tomls; capture grading mode is off in prod (trail `band`/`capture` null) | `fly.toml:87`, prod trail | V |
-| F37 | The repo is public (unauthenticated GitHub API: `private: false`, `visibility: public`), so F33 and this report are publicly readable once pushed to a public branch | API probe | V |
+| F37 | The repo is public (`private: false`). Recorded as a fact only; it does not influence any decision in this report | API probe | V |
 | F38 | Only 2 of 8 SQLite-using modules enable WAL (`fetchers/_sqlite.py`, `message_intel/models.py`); `chain_client.py` (5 sites) and `investigation/service.py` (3) connect directly. Web, inline worker and fetch child share one volume | grep | V |
 | F39 | Tests rewrite six committed `data/*.json` files; 57 tracked files under `data/`, including `pump_desk/snapshots/*.json` | git | V |
 
@@ -173,11 +175,16 @@ Each fix names the structure that makes the defect unrepresentable and the test 
 - Every score adjuster (memory, telegram, pump, recovery, tilts) must show out-of-sample lift via ablation on the FX1 ledger or be deleted. Adjusters share one recorded budget on the row.
 - Acceptance: reliability curve is monotone out-of-sample; ablation table exists for each adjuster.
 
-### FX6 (RC6): single writer for learning state
-- Only the batch estimator (FX2) writes weights. `LearningEngine.record_feedback` stops calling `nudge_expert`; `/api/feedback` becomes an append-only unverified-opinion log that is never an estimator input (or is removed).
-- Remove the dead `/api/mindmap/feedback` allowlist entry.
-- Acceptance: a test enumerates every callable that writes `soul_map` weights and asserts the set is `{estimator}`; an unauthenticated POST to `/api/feedback` leaves weights unchanged.
-- Tests that change with the fix (updated, never skipped): `tests/test_living_brain.py:131` currently asserts `record_feedback` emits a `reason=feedback` weight change. The `/api/feedback` CONTRACT row (`test_endpoint_contract.py:144`) and `test_audit_remediation.py:192` stay valid because the route stays.
+### FX6 (RC6): single writer for learning state (implemented on `claude/fx6-single-weight-writer`, commit `aea52cf8`)
+Decision rationale (on merit; who can read the repo is irrelevant): a client-supplied label is not a graded outcome; the price-based resolver is the only authoritative grader. A second writer to the same state makes weights irreproducible from the ledger (RC2). Substring-matching a free-text `recommendation` to pick which expert to reward is a string decision (RC7). Nothing in the repo calls either route. So the learning side effects are removed, not gated or authenticated.
+- `LearningEngine.record_feedback`, `_normalize_recommendation` and `POST /api/feedback` are deleted (deliberate API removal: the route is in the historical 47-route monolith (`528ba62:server_original.py:1058`) and in the committed OpenAPI spec; `.restless/openapi.json` regenerated, `restless_openapi.py --check` passes). `/api/feedback` leaves the public-write allowlist and the contract list.
+- `POST /api/mindmap/feedback` stays as the single feedback sink: user notes and alignment logs only, no weight or scenario-memory writes (matches the documented "stored, not yet applied").
+- `SelfLearning.adjust_jury_weights` (dormant) is deleted.
+- `MindmapBridge` trail/feedback appends run in-lock on fresh state (F35c).
+- `tests/test_single_weight_writer.py` pins the allowed weight writers and the allowed scenario-memory writers by AST call-name scan (negative control verified: adding a writer fails it); aliased imports would evade it (noted in the test).
+- Tests updated, not skipped: the feedback-nudge assertions became "feedback never changes weights or scenario memory" and "legacy route is gone".
+- Verified: CI-smoke commands (static guards, `py_compile`, OpenAPI check, listed pytest set, hydration smoke) and Deploy Guard tests pass (378 passed). Full suite: 179 failed on the branch vs 178 on main; the five differing failures are order/timing dependent (three pass in isolation on the branch; one fails in isolation on main). The three failures found in the touched test files fail identically on clean main (`test_disposition_adjustment_bullish`, two `test_rogue_attribution`).
+- Not changed (still open): quant/dark_horse never receive grades (FX3), echo's consensus share, weights as a pure function (FX2).
 
 ### FX7 (RC7): typed audit
 - `Concern` becomes a typed value (code, severity, `blocking: bool`); `approved = not any(c.blocking)`; a blocked candidate is a state, not a multiplier of 0.0.
@@ -285,7 +292,7 @@ Read 2026-10-17 via Ditto search; saved by earlier sessions. Treated as records 
 
 ## 8. Order of work (each item is a reviewable PR)
 
-0. **FX6**: remove the weight write from `/api/feedback` and the dead allowlist entry (security; first, independent of the rest).
+0. **FX6** (done on `claude/fx6-single-weight-writer`, unmerged): unverified inputs cannot write weights or scoring memory; one feedback sink; writer allowlist test.
 1. **FX10a**: unconditional router imports; drop the #1437 registry; keep its duplicate-CONTRACT and forbidden-import guards.
 2. **FX9**: temp `DATA_DIR` in tests, stop tracking runtime state, one SQLite connection helper (WAL + busy_timeout); move `price_cache.json` (F50) behind an atomic, single-writer store.
 3. **FX1 + FX8**: capture universe reference and typed prices going forward (data collection starts the clock on a clean evaluation window).
