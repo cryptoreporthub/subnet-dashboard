@@ -45,6 +45,7 @@ def test_regen_calls_select_on_capped_universe(monkeypatch, tmp_path):
             "subnet": {"netuid": 40, "name": "Chunking"},
             "final_confidence": 0.52,
             "action": "long",
+            "audit": {"approved": True, "concerns": []},
         }
 
     monkeypatch.setattr(daily_pick_engine, "select_daily_pick", _fake_select)
