@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 CACHE_DB = os.environ.get("INVESTIGATION_CACHE_DB", "data/investigation_cache.db")
 CACHE_TTL_SECONDS = int(os.environ.get("INVESTIGATION_CACHE_TTL", "180"))
+CACHE_MAX_ROWS = int(os.environ.get("INVESTIGATION_CACHE_MAX_ROWS", "2000"))
 
 _SELL_TOKENS = ("unstake", "sell", "remove", "undelegate", "out", "withdraw")
 _BUY_TOKENS = ("stake", "buy", "add", "delegate", "in", "deposit")
@@ -113,6 +114,12 @@ def _cache_set(key: str, data: Dict[str, Any]) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO investigation_cache (cache_key, payload, cached_at) VALUES (?, ?, ?)",
             (key, json.dumps(data), time.time()),
+        )
+        # Reads ignore expired rows but nothing removed them: bound the table to the newest rows.
+        conn.execute(
+            "DELETE FROM investigation_cache WHERE cache_key NOT IN "
+            "(SELECT cache_key FROM investigation_cache ORDER BY cached_at DESC LIMIT ?)",
+            (CACHE_MAX_ROWS,),
         )
         conn.commit()
         conn.close()

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from internal.rate_limit import limit_or_noop, strict_limit
 from internal.simivision.chat_service import (
@@ -16,6 +16,9 @@ from internal.simivision.chat_service import (
 logger = logging.getLogger(__name__)
 
 simivision_router = APIRouter(tags=["simivision"])
+
+# The message is forwarded to a paid LLM call; output is capped at 400 tokens but input was not.
+MAX_CHAT_MESSAGE_CHARS = 2000
 
 
 def _wants_stream(payload: dict, request: Request) -> bool:
@@ -34,6 +37,11 @@ async def api_simivision_chat(request: Request):
     except Exception:
         payload = {}
     message = (payload or {}).get("message", "") or ""
+    if not isinstance(message, str) or len(message) > MAX_CHAT_MESSAGE_CHARS:
+        return JSONResponse(
+            {"error": f"message must be a string of at most {MAX_CHAT_MESSAGE_CHARS} characters"},
+            status_code=422,
+        )
     if _wants_stream(payload or {}, request):
         return StreamingResponse(
             iter_simivision_chat_chunks(message),
