@@ -172,6 +172,8 @@ def _reserve_price_tao_with_outcome(
             continue
         if not isinstance(row, (list, tuple)) or len(row) < 2:
             return None, "malformed_row"
+        if not isinstance(row[0], str) or not (row[1] is None or isinstance(row[1], str)):
+            return None, "malformed_row"
         by_key[row[0]] = row[1]
     tao_raw = _decode_u64_storage(by_key.get(keys[0]))
     alpha_raw = _decode_u64_storage(by_key.get(keys[1]))
