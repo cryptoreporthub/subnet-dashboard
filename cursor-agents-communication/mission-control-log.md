@@ -330,3 +330,9 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-10-17 — #1439 reserve hex normalize merged + deployed (Joshua GO Finney)
+
+- **PR #1439** squash **`387ecfdf`** @ review pin `b18b1f5f`; Replit PASS ([comment](https://github.com/cryptoreporthub/subnet-dashboard/pull/1439#issuecomment-6236206748)); MC PASS posted; Claude final not recorded (Joshua GO lane).
+- **Fly:** vehicle [#1441](https://github.com/cryptoreporthub/subnet-dashboard/pull/1441) + `fly-deploy`; run [39047551494](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/39047551494) success; prod `/version` **`357980b4`**; `/health` 200.
+- **§A.3 live probe:** `gecko_step4_validation.py --subnet-limit 8` → **INCONCLUSIVE** (exit 2; blockmachine 429 + cooldown; 7 qualifying subnets, threshold_checks pass where computed). Posted [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6236338929) / [#1433](https://github.com/cryptoreporthub/subnet-dashboard/issues/1433#issuecomment-6236339288).
