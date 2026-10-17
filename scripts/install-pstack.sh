@@ -19,6 +19,10 @@ grep -rlE '\.cursor|agent-transcripts' "$dest" | while read -r f; do
     -e 's#with the leading slash dropped and each "/" turned into "-" (so `/Users/you/proj` becomes `Users-you-proj`)#with each "/" turned into "-", leading dash kept (so `/home/user/proj` becomes `-home-user-proj`)#' \
     -e 's#~/\.cursor/rules/pstack-models\.mdc#~/.claude/rules/pstack-models.md#g' \
     -e 's#\.cursor/#.claude/#g' \
+    -e 's#<agent-transcripts>#~/.claude/projects/<slug>#g' \
+    -e 's#<slugified-repo-path>/agent-transcripts#<slug>#g' \
+    -e 's#`agent-transcripts/`#`~/.claude/projects/<slug>/`#g' \
+    -e 's#agent-transcripts/#~/.claude/projects/<slug>/#g' \
     "$f"
 done
 # worktree-audit.sh builds the transcripts dir itself; Claude has no agent-transcripts subdir and keeps the leading dash.
