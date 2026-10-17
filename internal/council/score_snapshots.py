@@ -266,6 +266,137 @@ def rank_subnets_by_snapshot(
     return sorted(subnets, key=_key, reverse=True)
 
 
+def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+    out: Dict[int, Dict[str, Any]] = {}
+    for sn in subnets:
+        try:
+            out[int(sn.get("netuid") or sn.get("id") or 0)] = sn
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _top_pick_row(
+    row: Dict[str, Any],
+    subnets_by_netuid: Dict[int, Dict[str, Any]],
+) -> Dict[str, Any]:
+    try:
+        netuid = int(row["netuid"])
+    except (TypeError, ValueError, KeyError):
+        return {}
+    sn = subnets_by_netuid.get(netuid, {})
+    total = float(row.get("total_score") or 0)
+    return {
+        "netuid": netuid,
+        "name": sn.get("name") or row.get("name"),
+        "symbol": sn.get("symbol"),
+        "score": total,
+        "confidence": total,
+        "expert_contributions": {},
+        "signals": {
+            "price_change_24h": sn.get("price_change_24h"),
+            "price_change_7d": sn.get("price_change_7d"),
+            "emission": sn.get("emission"),
+            "apy": sn.get("apy"),
+            "volume": sn.get("volume"),
+        },
+        "scenario_tags": {},
+        "recovery_context": row.get("recovery_context"),
+    }
+
+
+def build_top_picks_from_snapshot(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    max_age_seconds: Optional[int] = None,
+    limit: int = 3,
+    path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Read top hour/day picks from disk snapshot — no scoring on the request path."""
+    age = snapshot_age_seconds(path)
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    if age is None or age > ttl:
+        return None
+    snap = load_score_snapshot(path)
+    if not snap:
+        return None
+    hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
+    day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
+    if not hour_rows and not day_rows:
+        return None
+    hour_rows.sort(key=lambda r: float(r.get("total_score") or 0), reverse=True)
+    day_rows.sort(key=lambda r: float(r.get("total_score") or 0), reverse=True)
+    if subnets is None:
+        subnets = []
+    by_netuid = _subnets_by_netuid(subnets)
+    hour_picks = [_top_pick_row(r, by_netuid) for r in hour_rows[:limit]]
+    day_picks = [_top_pick_row(r, by_netuid) for r in day_rows[:limit]]
+    hour_picks = [p for p in hour_picks if p]
+    day_picks = [p for p in day_picks if p]
+    if not hour_picks and not day_picks:
+        return None
+    return {
+        "hour_picks": hour_picks,
+        "day_picks": day_picks,
+        "meta": {
+            "source": "score_snapshot",
+            "snapshot_age_seconds": round(age, 3),
+            "count_hour": len(hour_rows),
+            "count_day": len(day_rows),
+        },
+    }
+
+
+def day_scored_from_snapshot(
+    subnets: List[Dict[str, Any]],
+    *,
+    max_age_seconds: Optional[int] = None,
+    path: Optional[str] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Join tradable subnets to day scores from snapshot (minimal score payloads)."""
+    ranked = rank_subnets_by_snapshot(
+        subnets, horizon="day", max_age_seconds=max_age_seconds, path=path
+    )
+    if ranked is None:
+        return None
+    snap = load_score_snapshot(path)
+    if not snap:
+        return None
+    scores: Dict[int, Dict[str, Any]] = {}
+    for row in snap.get("day") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row["netuid"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        scores[netuid] = row
+    out: List[Dict[str, Any]] = []
+    for sn in ranked:
+        try:
+            netuid = int(sn.get("netuid") or 0)
+        except (TypeError, ValueError):
+            continue
+        row = scores.get(netuid)
+        if not row:
+            continue
+        total = float(row.get("total_score") or 0)
+        out.append(
+            {
+                "subnet": sn,
+                "score": {
+                    "total_score": total,
+                    "confidence": total,
+                    "expert_contributions": {},
+                    "scenario_tags": {},
+                    "recovery_context": row.get("recovery_context"),
+                    "reasons": [],
+                },
+            }
+        )
+    return out if out else None
+
+
 def _load_pump_ladder_state_for_build() -> Dict[str, Any]:
     """One disk read per snapshot build; not cached across builds."""
     try:
