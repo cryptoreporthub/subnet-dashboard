@@ -295,6 +295,14 @@ def build_full_universe_snapshot(
         score_hour = _score_hour_enabled()
     pump_load_started = time.monotonic()
     build_context = {**(market_context or {}), "pump_ladder_state": _load_pump_ladder_state_for_build()}
+    if "telegram_calibration_context" not in build_context:
+        # Subnet-independent Telegram calibration work, done once per cycle instead of per subnet.
+        try:
+            from internal.message_intel.calibration import build_calibration_context
+
+            build_context["telegram_calibration_context"] = build_calibration_context()
+        except Exception as exc:
+            logger.warning("snapshot: telegram calibration context unavailable (%s)", exc)
     pump_load_seconds = time.monotonic() - pump_load_started
     rows = tradable_subnets(subnets) if subnets else []
     build_started_at = _now_iso()

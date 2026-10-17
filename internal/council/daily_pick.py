@@ -122,6 +122,15 @@ def select_daily_pick(
             market_context["telegram_conviction_rows"] = _conviction_rows()
         except Exception:
             market_context["telegram_conviction_rows"] = None
+    if "telegram_calibration_context" not in market_context:
+        try:
+            from internal.message_intel.calibration import build_calibration_context
+
+            market_context["telegram_calibration_context"] = build_calibration_context(
+                conviction_rows=market_context.get("telegram_conviction_rows")
+            )
+        except Exception:
+            market_context["telegram_calibration_context"] = None
     subnets = tradable_subnets(subnets)
 
     if not subnets:

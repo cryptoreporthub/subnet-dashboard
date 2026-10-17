@@ -241,27 +241,18 @@ def calibration_for_subnet(
     db=None,
     now: Optional[datetime] = None,
     conviction_rows: Optional[List[Dict[str, Any]]] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return an additive, bounded score adjustment for one subnet's current calls."""
-    rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
-    health = calibration_health(db=db, now=now, conviction_rows=rows)
-    now = now or datetime.now(timezone.utc)
-    cfg = _config()
+    if context is None:
+        context = build_calibration_context(db=db, now=now, conviction_rows=conviction_rows)
+    health = context["health"]
+    cfg = context["cfg"]
     try:
         wanted = int(netuid)
     except (TypeError, ValueError):
         return {**health, "applied": False, "adjustment_points": 0.0, "current_evidence": None}
-    cutoff = now - timedelta(hours=cfg["current_window_hours"])
-    current = []
-    for row in rows:
-        proof = classify_call(row)
-        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
-        if not proof["eligible"] or timestamp is None or timestamp < cutoff:
-            continue
-        if wanted not in _netuids_from_row(row):
-            continue
-        if proof["direction"] in {"up", "down"}:
-            current.append((row, proof, timestamp))
+    current = context["by_netuid"].get(wanted, [])
     authors = {stable_author_id(row) for row, _, _ in current}
     direction_sum = sum(1 if proof["direction"] == "up" else -1 for _, proof, _ in current)
     direction = "bullish" if direction_sum > 0 else "bearish" if direction_sum < 0 else "mixed"
@@ -289,3 +280,32 @@ def calibration_for_subnet(
         "adjustment_points": points,
         "current_evidence": evidence,
     }
+
+
+def build_calibration_context(
+    *,
+    db=None,
+    now: Optional[datetime] = None,
+    conviction_rows: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    """Everything ``calibration_for_subnet`` needs that does not depend on the subnet.
+
+    Loading and classifying the conviction rows costs ~0.1-0.8 s; callers that score many
+    subnets in one cycle build this once instead of once per subnet.
+    """
+    now = now or datetime.now(timezone.utc)
+    rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
+    health = calibration_health(db=db, now=now, conviction_rows=rows)
+    cfg = _config()
+    cutoff = now - timedelta(hours=cfg["current_window_hours"])
+    by_netuid: Dict[int, List[Any]] = {}
+    for row in rows:
+        proof = classify_call(row)
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if not proof["eligible"] or timestamp is None or timestamp < cutoff:
+            continue
+        if proof["direction"] not in {"up", "down"}:
+            continue
+        for netuid in set(_netuids_from_row(row)):
+            by_netuid.setdefault(netuid, []).append((row, proof, timestamp))
+    return {"health": health, "cfg": cfg, "by_netuid": by_netuid}
