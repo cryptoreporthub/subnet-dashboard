@@ -344,5 +344,6 @@
 - **Status doc:** `docs/learning-loop/STATUS-2026-10-17.md`.
 - **Open, unverified:** the test that writes `pump_ladder` failure state into the real `data/soul_map.json`; the other 11 `test_phase_h_ui.py` failures (probable cold-cache cause, inferred); `test_price_fetcher_concurrency` 30s-expiry test; `test_prod_stability` mindmap health-latency test failed once in the full run (passes alone).
 - **Final full run, 12 branches (tree `9fcca204`):** 146 failed, 3329 passed, 5 skipped; 35 main failures fixed, 1 new timing-bound failure; polluter still active.
+- **Caps (20/24/40/75) NOT removed** (supersedes the "separate approval" wording in the entry above): sites are `server.py:647,932,1066,3391`, `pick_scheduler.py:32,157`, `selector_scheduler.py:94`, `daily_pick_engine.py:209-210`, `pick_selection_audit.py:58-72`, `score_snapshots.py:53`, `scoring_cap.py` and the three `fly*.toml` files. Blocked on missing prod cost evidence and the 90s daily-pick timeout. Needs a read-first deploy of `claude/scoring-stage-timings`. Details in the status doc.
 - **Owner decisions:** rotate the Chutes key; how prod reaches main; merge order; `/api/feedback` removal; SQLite stance vs the Oct 12 table-free decision; Telegram adjuster keep or drop.
 - Ditto: `4f39f97e`, `0599adf8`, `7f02e308`.
