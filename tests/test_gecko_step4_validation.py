@@ -846,6 +846,24 @@ def test_reserve_price_malformed_changes_bad_types(bad_row):
 
 
 @pytest.mark.parametrize(
+    "bad_row",
+    [
+        [[map_key_hex(b"SubnetTAO", 64), "0x0a"], [map_key_hex(b"SubnetTAO", 64), "0x14"]],
+        [[map_key_hex(b"SubnetTAO", 64), "0x0a"], [map_key_hex(b"SubnetTAO", 64), "0x0a"]],
+    ],
+    ids=["conflicting_duplicate", "identical_duplicate"],
+)
+def test_reserve_price_duplicate_keys_fail_closed(bad_row):
+    class _Reader:
+        def call(self, method, params):
+            return [{"changes": bad_row}], "ok"
+
+    price, outcome = _reserve_price_tao_with_outcome(_Reader(), 64, "0xabc")
+    assert price is None
+    assert outcome == "malformed_row"
+
+
+@pytest.mark.parametrize(
     "batch, expected",
     [
         ([{"changes": {}}], "malformed_row"),
