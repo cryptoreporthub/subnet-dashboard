@@ -22,6 +22,10 @@ def isolate_predictions(tmp_path, monkeypatch):
     sv.clear_resolver_hit_rate_cache()
 
 
+def _row(correct, **extra):
+    return {"correct": correct, "pick_source": "council_pick", **extra}
+
+
 def _confidence(sn, indicators, experts, total_score=None):
     return sv._compute_confidence(sn, indicators, experts, total_score=total_score)
 
@@ -37,7 +41,7 @@ def test_cold_start_prior_when_insufficient_history(isolate_predictions):
 
 def test_resolver_hit_rate_blended_not_raw(isolate_predictions):
     """Enough graded history blends toward hit rate — does not replace prior."""
-    resolved = [{"correct": True} if i % 2 == 0 else {"correct": False} for i in range(40)]
+    resolved = [_row(i % 2 == 0) for i in range(40)]
     with open(isolate_predictions, "w") as f:
         json.dump({"predictions": [], "resolved": resolved}, f)
 
@@ -102,7 +106,7 @@ def test_zero_hit_rate_still_has_floor(isolate_predictions):
 
 def test_resolver_hit_rate_cached_by_mtime(isolate_predictions):
     """Scoring pass should not re-read predictions.json per subnet."""
-    resolved = [{"correct": True}] * 20 + [{"correct": False}] * 20
+    resolved = [_row(True)] * 20 + [_row(False)] * 20
     with open(isolate_predictions, "w") as f:
         json.dump({"predictions": [], "resolved": resolved}, f)
 
@@ -112,6 +116,29 @@ def test_resolver_hit_rate_cached_by_mtime(isolate_predictions):
     assert sv._resolver_hit_rate() == pytest.approx(0.5)
 
     with open(isolate_predictions, "w") as f:
-        json.dump({"predictions": [], "resolved": resolved + [{"correct": True}]}, f)
+        json.dump({"predictions": [], "resolved": resolved + [_row(True)]}, f)
     assert sv._resolver_hit_rate() == pytest.approx(21 / 41)
 
+
+
+def test_resolver_hit_rate_counts_only_council_published(isolate_predictions):
+    """Pump, shadow, counterfactual and legacy rows are other policies, not the council's record."""
+    council = [_row(i % 2 == 0) for i in range(30)]  # 15/30 = 0.5
+    other = (
+        [{"correct": True, "pick_source": "pump_lead"} for _ in range(60)]
+        + [_row(True, shadow=True) for _ in range(20)]
+        + [_row(True, counterfactual=True) for _ in range(20)]
+        + [{"correct": True, "signal_source": "momentum_shift"} for _ in range(20)]
+    )
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": council + other}, f)
+    sv.clear_resolver_hit_rate_cache()
+    assert sv._resolver_hit_rate() == pytest.approx(0.5)
+
+
+def test_resolver_hit_rate_none_when_only_other_populations(isolate_predictions):
+    other = [{"correct": True, "pick_source": "pump_lead"} for _ in range(100)]
+    with open(isolate_predictions, "w") as f:
+        json.dump({"predictions": [], "resolved": other}, f)
+    sv.clear_resolver_hit_rate_cache()
+    assert sv._resolver_hit_rate() is None
