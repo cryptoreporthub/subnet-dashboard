@@ -107,6 +107,9 @@ The council scores a capped slice of the subnets, not every active subnet. Count
 | F48 | Prod snapshot cycle (2026-10-17 07:20Z, `/api/learning/health` `score_snapshot`): `count 40`, `complete false`, `capped_out 125`, `selection_policy rank_cap`, membership expected 165 / admitted 165 (taomarketcap), `day_scoring_seconds 51.7`, slowest netuids 1.31-1.45 s, i.e. about 1.3 s per subnet, near-uniform. Locally the same `score_subnet_for_day` takes ~3 ms with a prod-size ledger (first call 1.8 s to load it), so the prod cost is not scoring math. Likely per-subnet I/O or contention (unverified); full-active serial scoring of 165 would be about 215 s | prod health, local profile | V (numbers), U (cause) |
 | F49 | `tradable_subnets()` removes root/invalid IDs and dedupes by netuid; it does not establish *active* membership | `internal/subnets/tradable.py:43-51` | V |
 
+| F50 | `price_cache.json` is a 4.3 MB whole-file JSON, read by at least 12 modules and rewritten by several writers; `subnet_judges.py:226-245` does read-modify-write of the whole file with a raw `open(..., "w")` (no lock, no atomic write) once per subnet judged. State-vector scoring memoises it by mtime, so any writer touching the file invalidates the memo. Local test: invalidating the memo each call costs 47 ms per subnet (warm: 2 ms) | `state_vector.py:50-69`, `subnet_judges.py:226-245`, local timing | V |
+| F51 | The 47 ms invalidation cost explains at most ~4% of the ~1.3 s/subnet seen on prod; the rest of F48 stays unexplained | local vs prod | V |
+
 ### 2.8 Architecture
 | # | Finding | Evidence | Status |
 |---|---|---|---|
@@ -260,9 +263,23 @@ Sources: Ditto memories (2026-09-26 evaluation, 2026-10-15 integration note); `d
 3. Whether `/api/feedback` was abused before the last ~2 days (no available history).
 4. Per-subnet scoring cost, memory headroom and effective env values on prod (no flyctl/token here; `fly.toml` and public endpoints only), and the current authoritative active-subnet count.
 5. Whether a snapshot can report complete coverage when some netuids failed (F47). Prod currently reports `complete: false` for a 40-of-165 cycle, which is the honest direction; the failure-case semantics were not tested.
-5b. Why scoring costs ~1.3 s per subnet on prod versus ~3 ms locally (F48): no prod profiler access.
+5b. Why scoring costs ~1.3 s per subnet on prod versus ~3 ms locally (F48). Price-cache invalidation accounts for at most 47 ms (F51); no prod profiler access for the rest.
+5c. Body of the 2026-09-08 Council Learning Safety Batch and whether it shipped (section 7b).
 6. Decision Models: price figures, limits, latency, schema, comparability to Jev.
 7. Prod secrets, machine state, logs.
+
+---
+
+## 7b. Prior decisions and evidence found in Ditto (not previously reflected here)
+
+Read 2026-10-17 via Ditto search; saved by earlier sessions. Treated as records of what was decided or found then, not as verified facts now.
+- **2026-10-12 "Judge Layer Rebuild Decisions"** (main `64b9c54`): decisions (1) Echo gets **zero** weight in consensus now (reversible), (2) **yes to universe-wide scoring** (worker stores per-cycle features and judge scores for all active subnets; reuse snapshot features, no second heavy pass; snapshot cost issue #1372), (3) label-source facts: price lookback 7d, cache TTL 300s, TMC TTL 60s, hydration capped 30d, TMC gives exactly 720 hourly candles, **TMC candles rescale historical TAO/USD by the current alpha price so their labels are untrustworthy**, prefer native GeckoTerminal OHLCV where a pool is mapped, >30d unavailable.
+  Its evidence corroborates this report from an independent export: Echo AUC 0.40 (95% CI 0.34-0.47, p=0.005), Oracle ~0.46, Pulse ~0.51, oracle and echo endorse 100%, council P(actual>0) = 50.3%, and the same 300 phantom-VWAP rows (price ratio ~186-212; pump_lead hit 63.1% -> 13.5% once excluded). It also states those rows **fed expert, signal and judge weight nudges**.
+- **Echo-zero decision is not in the code.** `subnet_judges.py` consensus multiplies each judge by `normalized_judge_weights()`; I found no override. On prod Echo holds the largest consensus share (0.638 normalized) while being the judge shown to be below chance. This decision is approved but unimplemented; FX4 supersedes it, but until FX4 lands the consensus display carries it. Decision for the owner: apply the approved Echo=0 as an explicit interim step, or accept FX4 timing.
+- **Storage stance recorded 2026-10-12:** "pick-level judge ledger stays table-free; universe-level observations need SQLite via `internal/store/db.py`." FX9 here proposes SQLite for the prediction ledger as well. This conflicts with that stance on the pick-level ledger; the owner stated today that SQLite is missing from places it belongs. Decision needed (flagged in the reply).
+- **2026-09-08 "Council Learning Safety Batch"** (execution brief: freezing noisy council learning, fail-closed publication gates, MFE/base-rate measurement, dry-run weight rebase). Only existence and summary seen; body not read. Freezing is rejected here as a band-aid; MFE/base-rate measurement overlaps FX1. Whether any of it shipped is unverified.
+- **2026-09-26 Jev evaluation:** plan summarised in section 6; its claim that judge weights "cannot diverge" is wrong (corrected in Ditto).
+- **2026-10-15 Decision Models note:** shadow-mode second opinion for the Pump Desk; consistent with section 6.
 
 ---
 
@@ -270,7 +287,7 @@ Sources: Ditto memories (2026-09-26 evaluation, 2026-10-15 integration note); `d
 
 0. **FX6**: remove the weight write from `/api/feedback` and the dead allowlist entry (security; first, independent of the rest).
 1. **FX10a**: unconditional router imports; drop the #1437 registry; keep its duplicate-CONTRACT and forbidden-import guards.
-2. **FX9**: temp `DATA_DIR` in tests, stop tracking runtime state, one SQLite connection helper (WAL + busy_timeout).
+2. **FX9**: temp `DATA_DIR` in tests, stop tracking runtime state, one SQLite connection helper (WAL + busy_timeout); move `price_cache.json` (F50) behind an atomic, single-writer store.
 3. **FX1 + FX8**: capture universe reference and typed prices going forward (data collection starts the clock on a clean evaluation window).
 3b. **FX11**: full-active scoring, delete the 20/24/40/75 caps (after FX1 so the evaluated population change is recorded; gated by the measurements in FX11).
 4. **FX2 + FX3**: deterministic weight function and per-expert grading, shadow-run beside the current weights.
