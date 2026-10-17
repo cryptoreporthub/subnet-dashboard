@@ -153,11 +153,6 @@ def maybe_adapt_after_resolve(
     n = int(early.get("n") or 0)
     rate = early.get("hit_rate")
     cal = load_calibration()
-    if prediction is not None:
-        cal = _online_update_blend_weights(cal, prediction)
-        save_calibration(cal)
-        if n < int(min_sample):
-            return cal
     if n < int(min_sample) or rate is None:
         return None
     evaluation = pump_lead_train.build_pump_evaluation()
@@ -171,6 +166,11 @@ def maybe_adapt_after_resolve(
             evaluation.get("status"),
         )
         return None
+    # Blend weights learn under the same held-out gate as the knobs below; before this
+    # they moved on every grade, ahead of both the n>=30 floor and the gate.
+    if prediction is not None:
+        cal = _online_update_blend_weights(cal, prediction)
+        save_calibration(cal)
     same_population = (
         cal.get("adapted_from_ledger") == evidence.get("ledger")
         and cal.get("adapted_from_population") == evidence.get("population")
