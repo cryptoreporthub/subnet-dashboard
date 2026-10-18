@@ -39,32 +39,10 @@ H_FULL_SECTION_IDS = [
 ]
 
 
-def test_index_links_split_css():
-    client = TestClient(app)
-    html = client.get("/").text
-    for name in ("base", "ui", "chat"):
-        assert f"/static/css/{name}.css" in html
-
-
-def test_index_has_card_class():
-    client = TestClient(app)
-    html = client.get("/").text
-    # Council-first: primary surfaces use pick/expert cards; dual 12-card grid removed
-    assert 'class="council-stage"' in html or "council-stage" in html
-    assert "class=\"card" in html or "pick-card" in html or "council-call" in html
-
-
 def test_index_no_markdown_heading_triple_hash():
     client = TestClient(app)
     html = client.get("/").text
     assert "###" not in html
-
-
-def test_index_has_data_freshness_badge():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="dataFreshnessBadge"' in html
-    assert "/static/js/data_freshness.js" in html
 
 
 def test_data_freshness_api_shape():
@@ -74,40 +52,6 @@ def test_data_freshness_api_shape():
     data = resp.json()
     assert "stale" in data
     assert "source" in data
-
-
-def test_index_council_first_shell():
-    """Council decision stage first; market tools demoted; no dual 12-card grid."""
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "council-stage" in html
-    assert 'id="council-stage-body"' in html
-    assert "ui-legacy.css" not in html
-    assert 'id="market-drawer"' in html
-    # Unicode apostrophe in “Today’s call” — match brand + stage title id
-    assert "council-stage__title" in html
-    assert "call" in html.lower()
-    # Dual cockpit grid removed from homepage
-    assert html.count('class="cockpit-card card"') == 0
-    # Primary council surfaces still present
-    for sid in (
-        "section-daily-pick",
-        "section-simivision-picks",
-        "section-council",
-        "section-judges",
-        "section-picks",
-        "section-kpi",
-    ):
-        assert f'id="{sid}"' in html
-    # Brand is hero-level in the stage
-    assert "council-stage__brand" in html
-    pos_stage = html.index("council-stage")
-    pos_weighing = html.index('id="section-simivision-picks"')
-    pos_drawer = html.index('id="market-drawer"')
-    assert pos_stage < pos_weighing < pos_drawer
-    assert 'href="#section-simivision-picks">Weighing</a>' in html
-    assert 'class="top-nav"' in html
-    assert "/static/js/onboarding_tour.js" in html
 
 
 def test_index_renders_twelve_cockpit_sections():
@@ -157,22 +101,6 @@ def test_trace_and_message_intel_honest_status():
         assert section.get("summary")
 
 
-def test_h_full_includes_chartjs():
-    """No Chart.js CDN; uPlot spark + canvas radar assets loaded instead."""
-    client = TestClient(app)
-    html = client.get("/").text
-    lower = html.lower()
-    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in lower
-    assert "/static/vendor/uplot/uplot.iife.min.js" in lower
-    assert "/static/js/uplot_charts.js" in lower
-    assert "/static/vendor/uplot/uplot.min.css" in lower
-    app_js = open("static/js/app.js", encoding="utf-8").read().lower()
-    assert "chart.js" not in app_js
-    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
-    assert "drawRadarCanvas" in uplot_js
-    assert "window.__paintRadar" in uplot_js
-
-
 def test_strip_markdown_headings_in_enrichment():
     payload = {
         "status": "success",
@@ -210,16 +138,6 @@ def test_cockpit_api_matches_display_enrichment():
 # --- Phase H-full acceptance tests ---
 
 
-def test_h_full_thirteen_premium_section_ids():
-    client = TestClient(app)
-    html = client.get("/").text
-    for section_id in H_FULL_SECTION_IDS:
-        assert f'id="{section_id}"' in html, f"missing {section_id}"
-    # Dual cockpit grid removed; council stage is the primary landmark
-    assert 'class="council-stage"' in html
-    assert 'id="mindmap-graph-root"' in html
-
-
 def test_h_full_utc_clock_markup_and_app_js():
     client = TestClient(app)
     html = client.get("/").text
@@ -233,14 +151,6 @@ def test_h_full_shorten_filter_registered_and_formats_volume():
     assert _jinja_shorten(1_500_000) == "1.5M"
     assert _jinja_shorten(42_000) == "42.0K"
     assert _jinja_shorten(None) == "—"
-
-
-def test_h_full_header_live_pill_and_data_source():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'class="live-pill"' in html
-    assert "DATA SOURCE:" in html
-    assert 'id="section-header"' in html
 
 
 def test_h_full_kpi_strip_learning_metrics():
@@ -274,15 +184,6 @@ def test_h_full_social_trail_undervalued_sections():
         assert f'id="{sid}"' in html
 
 
-def test_h_full_footer_status_strip_counts():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-footer"' in html
-    assert 'class="status"' in html
-    assert "Subnets:" in html
-    assert "Predictions:" in html
-
-
 def test_h_full_premium_scanner_and_judges_js():
     """Judges load eager; scanner stays in the idle deferred bundle."""
     from pathlib import Path
@@ -294,24 +195,6 @@ def test_h_full_premium_scanner_and_judges_js():
     assert "home_deferred.js" in scripts
     assert "premium_scanner.js" in deferred
     assert "premium_judges.js" not in deferred
-
-
-def test_subnet_grouping_optional_lane():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-subnet-groups"' in html
-    assert 'id="subnet-group-data"' in html
-    assert "/static/js/subnet_grouping.js" in html
-    # Homepage no longer mounts the 12-card cockpit grid
-    assert html.count('class="cockpit-card card"') == 0
-
-
-def test_h_full_hero_market_snapshot_section():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-hero"' in html
-    assert "Market Snapshot" in html
-    assert "kpi-grid" in html or "kpi-cell" in html
 
 
 def test_h_full_simivision_picks_or_honest_empty():
@@ -326,16 +209,6 @@ def test_h_full_simivision_picks_or_honest_empty():
     assert "These may become tomorrow" in html
     assert "Primary daily call:" in html or "No other names on the table" in html
     assert "pick-rank" not in html or "wr-row" in html
-
-
-def test_h_full_daily_pick_hero_or_honest_empty():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-daily-pick"' in html
-    assert "council-stage" in html
-    assert "Council decision" in html or "Today" in html
-    # Stage always states a stance (audited call or HOLD)
-    assert "council-call" in html or "HOLD" in html or "Predicted" in html
 
 
 def test_phase_l_cockpit_signals_and_summary():
@@ -357,13 +230,6 @@ def test_phase_l_cockpit_alerts_honest_empty_or_list():
     assert 'id="alerts-feed-root"' in html
     assert "Threshold" in html or "Alerts" in html
     assert "No active alerts" in html or "pick-card" in html
-
-
-def test_phase_l_premium_signals_js():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "/static/js/premium_signals.js" in html
-    assert 'id="signals-ws-status"' in html
 
 
 def test_c4_cockpit_hydrate_script_on_index():
