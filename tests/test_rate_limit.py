@@ -19,7 +19,12 @@ def rate_limited_client(monkeypatch):
 
     importlib.reload(server)
     yield TestClient(server.app)
+    # Reloading server rebinds the limiter on the shared app object, so the
+    # 2/minute limiter would leak into every later test that uses that app.
+    # Restore the env first, then reload, so the module returns to its default state.
     rl._limiter = None
+    monkeypatch.undo()
+    importlib.reload(server)
 
 
 def test_under_limit_returns_200(rate_limited_client):

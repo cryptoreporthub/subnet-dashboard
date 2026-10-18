@@ -215,8 +215,12 @@ def test_replay_includes_archive_when_current_epoch_thin(tmp_path, monkeypatch):
     assert len(rows) == 6
 
     weights = replay_weights_from_predictions(str(preds))
-    assert weights["quant"] != 1.0
-    assert weights["hype"] != 1.0
+    # Archive rows are bare legacy stamps (expert only, no signal evidence); the
+    # replay guard (#881) routes them to rogue, so they must not move quant.
+    # The attributable current-epoch row does move technical.
+    assert weights["quant"] == 1.0
+    assert weights["hype"] == 1.0
+    assert weights["technical"] == 1.02
 
 
 def test_rebalance_dry_run_does_not_require_soul_write(tmp_path, monkeypatch):
@@ -295,7 +299,10 @@ def test_rebalance_reports_archive_usage(tmp_path, monkeypatch):
     )
     assert result["archive_used"] is True
     assert result["rows_replayed"] >= 5
-    assert result["after"]["quant"] != 1.0
+    # Same replay-guard contract as above: bare archive stamps leave quant at 1.0;
+    # technical moves 1.0 -> 1.02 replayed, then 0.7 * 1.02 + 0.3 * 1.0 = 1.014 after soft blend.
+    assert result["after"]["quant"] == 1.0
+    assert result["after"]["technical"] == 1.014
 
 
 def test_pump_prior_early_phase():

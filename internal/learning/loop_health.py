@@ -358,6 +358,13 @@ def cached_resolver_liveness_view(*, allow_stale: bool = False) -> Optional[Dict
     return _cached_resolver_liveness_view(allow_stale=allow_stale)
 
 
+def invalidate_resolver_liveness_view() -> None:
+    """Drop the shared resolver snapshot so the next read sees a tick that just ran."""
+    with _RESOLVER_LIVENESS_CACHE_LOCK:
+        _RESOLVER_LIVENESS_CACHE["at"] = 0.0
+        _RESOLVER_LIVENESS_CACHE["payload"] = None
+
+
 def _resolver_liveness_view() -> Dict[str, Any]:
     """Return a cached resolver view, with one in-flight builder per process."""
     global _RESOLVER_LIVENESS_BUILDING

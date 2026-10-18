@@ -1441,6 +1441,11 @@ def revive_prediction_resolver_scheduler(*, force: bool = False) -> Dict[str, An
         if state_after.get("next_run_at") is None and sched._active:
             sched._schedule_next(min(2, max(1, sched.refresh_minutes)))
 
+    # The shared liveness view is cached for a few seconds; without dropping it,
+    # age_after would report the pre-revive snapshot taken just above.
+    from internal.learning.loop_health import invalidate_resolver_liveness_view
+
+    invalidate_resolver_liveness_view()
     age_after = _resolver_tick_age_seconds()
     revived = bool(tick_out.get("ok") and not tick_out.get("skipped"))
     return {

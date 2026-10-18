@@ -68,6 +68,17 @@ def test_stale_pump_calibration_provenance_does_not_block_recalibration(monkeypa
         "internal.learning.pump_calibration.save_calibration",
         lambda data, path=None: saved.append(data),
     )
+    # The holdout gate (4abe6225) is a separate check from provenance. Stub it as
+    # passed so this test isolates provenance and does not depend on the real
+    # predictions ledger or write pump_lead_evaluation.json.
+    monkeypatch.setattr(
+        "internal.learning.pump_lead_train.build_pump_evaluation",
+        lambda *a, **k: {"status": "qualified", "adaptation_gate": {"passed": True}},
+    )
+    monkeypatch.setattr(
+        "internal.learning.pump_lead_train.persist_pump_evaluation",
+        lambda report, **k: report,
+    )
     result = maybe_adapt_after_resolve(min_sample=30)
     assert result is not None
     assert saved and saved[0]["adapted_from_fingerprint"]

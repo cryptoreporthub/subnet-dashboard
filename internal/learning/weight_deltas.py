@@ -246,6 +246,13 @@ def build_rogue_stats() -> Dict[str, Any]:
         "hit_rate": None,
         "tracked": True,
         "promotion_rule": _ROGUE_PROMOTION_RULE,
+        # Incumbent comparison keys are always present (None/False until graded
+        # incumbents exist) so the stats shape does not depend on the ledger.
+        "council_best_hit_rate": None,
+        "council_avg_hit_rate": None,
+        "beats_any": False,
+        "beaten_name": None,
+        "beaten_rate": None,
     }
     try:
         from internal.council.expert_attribution import attribute_expert_for_row
@@ -268,9 +275,12 @@ def build_rogue_stats() -> Dict[str, Any]:
             stats["share_pct"] = round(100.0 * stats["count"] / total, 1)
         if stats["count"]:
             stats["hit_rate"] = round(100.0 * hits / stats["count"], 1)
+        # (name, hit_rate_pct) per graded incumbent. The list was built as bare
+        # floats while the reads below index (name, rate) pairs, so every ledger
+        # with graded incumbents raised TypeError, swallowed by the except below.
         rates = [
-            100.0 * hit / graded
-            for graded, hit in per_expert.values()
+            (name, 100.0 * hit / graded)
+            for name, (graded, hit) in per_expert.items()
             if graded > 0
         ]
         if rates:

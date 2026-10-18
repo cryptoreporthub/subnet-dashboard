@@ -8,13 +8,48 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 import internal.council.resolver as resolver
 import internal.council.resolver_scheduler as rs
 import internal.council.weights as weights
+from internal.learning.loop_health import invalidate_resolver_liveness_view
+
+
+@pytest.fixture(autouse=True)
+def _fresh_resolver_liveness_cache():
+    # The shared resolver view is cached for seconds per process; never let one
+    # test's snapshot leak into the next.
+    invalidate_resolver_liveness_view()
+    yield
+    invalidate_resolver_liveness_view()
 
 
 def _iso(dt: datetime) -> str:
     return dt.isoformat().replace("+00:00", "Z")
+
+
+def _seed_resolver_tracker(monkeypatch, *, age_seconds: float):
+    """Install a prediction_resolver tracker whose last success is ``age_seconds`` old.
+
+    The resolver tick clock is the LivenessTracker registry (#1090); the soul_map
+    ``last_cycle.run_at`` clock it replaced is no longer read by the revive path.
+    """
+    from internal.liveness import LivenessTracker
+
+    tracker = LivenessTracker(name="prediction_resolver", interval_seconds=900, persist=False)
+    tracker.record_success(evidence={"resolved_now": 0})
+    tracker._last_success_epoch = time.time() - age_seconds
+    monkeypatch.setattr(
+        "internal.liveness.get_tracker",
+        lambda name: tracker if name == "prediction_resolver" else None,
+    )
+    monkeypatch.setattr(
+        "internal.liveness.build_liveness_registry",
+        lambda probe_worker=False: {"trackers": {"prediction_resolver": tracker.snapshot()}},
+    )
+    invalidate_resolver_liveness_view()
+    return tracker
 
 
 def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
@@ -27,16 +62,8 @@ def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(preds))
 
-    old_tick = _iso(datetime.now(timezone.utc) - timedelta(hours=4))
     soul.write_text(
-        json.dumps(
-            {
-                "prediction_resolver_scheduler": {
-                    "last_cycle": {"run_at": old_tick, "ok": True, "pending": 0},
-                    "lifecycle": "stopped",
-                }
-            }
-        ),
+        json.dumps({"prediction_resolver_scheduler": {"lifecycle": "stopped"}}),
         encoding="utf-8",
     )
 
@@ -75,9 +102,14 @@ def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
     sched = rs.PredictionResolverScheduler(refresh_minutes=15)
     sched._active = True
     rs._scheduler = sched
+    # Hung scheduler: last successful tick four hours ago, persisted to the registry.
+    sched.liveness.record_success(evidence={"resolved_now": 0})
+    sched.liveness._last_success_epoch = time.time() - 4 * 3600
+    sched.liveness._save()
 
     try:
         out = rs.revive_prediction_resolver_scheduler(force=True)
+        assert out["age_before"] is not None and out["age_before"] > 3 * 3600
         assert out["recycled"] is True
         assert out["revived"] is True
         assert out["age_after"] is not None
@@ -93,16 +125,11 @@ def test_revive_recycles_hung_scheduler_and_runs_once(tmp_path, monkeypatch):
 
 def test_revive_honest_when_tick_fresh(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
-    tick = _iso(datetime.now(timezone.utc))
-    soul.write_text(
-        json.dumps(
-            {"prediction_resolver_scheduler": {"last_cycle": {"run_at": tick, "ok": True}}}
-        ),
-        encoding="utf-8",
-    )
+    soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(rs, "SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr("internal.learning.loop_health.SOUL_MAP_PATH", str(soul))
+    _seed_resolver_tracker(monkeypatch, age_seconds=0.0)
     try:
         out = rs.revive_prediction_resolver_scheduler()
         assert out["revived"] is False

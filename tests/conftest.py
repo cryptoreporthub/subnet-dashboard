@@ -56,6 +56,34 @@ def _isolate_readiness_cache():
         pass
 
 
+# apply_resolver_semantics_patch() rebinds these on the shared resolver module
+# for the whole process (boot paths and the retry-semantics tests both call it).
+_RESOLVER_SEMANTICS_PATCH_ATTRS = (
+    "_resolver_semantics_patch_applied",
+    "_PRICE_RETRY_CAP",
+    "_EXPIRY_GRACE_MULTIPLE",
+    "_is_expired",
+    "lookup_horizon_price",
+    "_expire_prediction",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_resolver_semantics_patch():
+    """Restore resolver globals a test's patch application changed (grace 4x, expiry)."""
+    import internal.council.resolver as resolver_mod
+
+    missing = object()
+    saved = {n: getattr(resolver_mod, n, missing) for n in _RESOLVER_SEMANTICS_PATCH_ATTRS}
+    yield
+    for name, value in saved.items():
+        if value is missing:
+            if hasattr(resolver_mod, name):
+                delattr(resolver_mod, name)
+        else:
+            setattr(resolver_mod, name, value)
+
+
 @pytest.fixture(autouse=True)
 def _clear_message_intel_load_cache():
     try:

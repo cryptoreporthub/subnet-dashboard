@@ -106,8 +106,9 @@ def test_hung_resolver_refuses_second_submit(monkeypatch):
     assert started.wait(timeout=2)
     assert recovered.get("skipped") != "previous_cycle_inflight"
     assert len(calls) == 2
-    release.set()
-    sched._inflight_future.result(timeout=5)
+    # The recovered cycle ran to completion inside the call, so its done future
+    # was released (finally-block clear in _run_refresh_cycle_with_timeout).
+    assert sched._inflight_future is None
 
 
 def test_hung_desk_snapshot_refuses_second_submit(monkeypatch):

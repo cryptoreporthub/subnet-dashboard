@@ -532,14 +532,16 @@ def _proxy_degraded_response(path: str) -> Optional[JSONResponse]:
             },
             handler_stale=True,
         )
-        pump_payload.update(
-            bot_contract(
-                source="worker_heartbeat",
-                degraded=True,
-                mode="worker_unavailable",
-                authoritative=False,
-            )
+        contract = bot_contract(
+            source="worker_heartbeat",
+            degraded=True,
+            mode="worker_unavailable",
+            authoritative=False,
         )
+        # The pump desk's string ``freshness`` ("stale"/"unavailable") is what the
+        # UI banner reads; the bot envelope's dict must not overwrite it.
+        contract.pop("freshness", None)
+        pump_payload.update(contract)
         return JSONResponse(
             status_code=200,
             content=pump_payload,

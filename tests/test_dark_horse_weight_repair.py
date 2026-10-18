@@ -33,9 +33,27 @@ def test_replay_weights_counts_legacy_contrarian_as_dark_horse(tmp_path):
             {
                 "predictions": [],
                 "resolved": [
-                    {"expert": "contrarian", "correct": False, "resolved_at": "2026-01-01T00:00:00Z"},
-                    {"expert": "contrarian", "correct": False, "resolved_at": "2026-01-02T00:00:00Z"},
-                    {"expert": "dark_horse", "correct": True, "resolved_at": "2026-01-03T00:00:00Z"},
+                    # Replay only credits rows with signal evidence; a bare expert stamp
+                    # is the legacy misattribution routed to rogue (#881). These rows
+                    # carry a dark-horse signal source so they attribute to dark_horse.
+                    {
+                        "expert": "contrarian",
+                        "signal_source": "delegation_flow",
+                        "correct": False,
+                        "resolved_at": "2026-01-01T00:00:00Z",
+                    },
+                    {
+                        "expert": "contrarian",
+                        "signal_source": "delegation_flow",
+                        "correct": False,
+                        "resolved_at": "2026-01-02T00:00:00Z",
+                    },
+                    {
+                        "expert": "dark_horse",
+                        "signal_source": "delegation_flow",
+                        "correct": True,
+                        "resolved_at": "2026-01-03T00:00:00Z",
+                    },
                 ],
             }
         )
