@@ -66,7 +66,54 @@ def test_hung_daily_pick_refuses_second_submit(monkeypatch):
     assert recovered["ok"] is True
 
 
-def test_hung_resolver_refuses_second_submit(monkeypatch):
+def test_timeout_generation_flips_engine_cancel_callback(monkeypatch):
+    """L6-002 wiring: bumping _work_generation aborts the abandoned worker.
+
+    The engine's is_cancelled callback must flip before _save runs — the
+    timeout path bumps the generation under _work_lock (pick_scheduler).
+    """
+    started = threading.Event()
+    release = threading.Event()
+    calls = []
+    cancel_probe = {}
+
+    def hang(subnets, market_context=None, force=False, is_cancelled=None):
+        calls.append(1)
+        cancel_probe["fn"] = is_cancelled
+        started.set()
+        assert release.wait(timeout=20)
+        return {"action": "HOLD", "date": "2026-09-23", "pick": {"netuid": 1}}
+
+    monkeypatch.setattr(
+        "internal.council.daily_pick_engine.get_or_create_today_pick", hang
+    )
+    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [])
+    monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
+    monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
+    monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
+    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda _p: None)
+    monkeypatch.setattr(pick_scheduler, "DAILY_PICK_TICK_TIMEOUT_SECONDS", 5)
+
+    sched = pick_scheduler.DailyPickScheduler()
+    box = {}
+
+    def first():
+        box["result"] = sched._tick(reschedule=False)
+
+    worker = threading.Thread(target=first, name="daily-pick-test-driver")
+    worker.start()
+    assert started.wait(timeout=2)
+
+    cancel = cancel_probe["fn"]
+    assert cancel() is False  # live worker is not cancelled
+    with sched._work_lock:
+        sched._work_generation += 1  # what the timeout path does
+    assert cancel() is True  # engine must abort before _save
+
+    release.set()
+    worker.join(timeout=15)
+    assert worker.is_alive() is False
+    assert box["result"].get("ok") is True
     started = threading.Event()
     release = threading.Event()
     calls = []

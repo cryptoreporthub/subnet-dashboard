@@ -9,9 +9,27 @@ from server import app
 client = TestClient(app)
 
 
+def _reset_homepage_warm_state():
+    import server as srv
+
+    # Fresh warm every time: earlier tests cache ultra-minimal HTML or a
+    # pre-spotlight degraded ctx, which would poison these HTML assertions,
+    # and a timed-out warm leaves _HOMEPAGE_WARMING/_RENDER_THREAD set (the
+    # hung render is still alive) plus _EMERGENCY_HOME_HTML = ultra-minimal,
+    # so later warms no-op and GET / serves the poisoned emergency shell.
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._DEGRADED_INDEX_CACHE["ctx"] = None
+    srv._DEGRADED_INDEX_CACHE["at"] = 0.0
+    srv._HOMEPAGE_WARMING = False
+    srv._HOMEPAGE_RENDER_THREAD = None
+    srv._EMERGENCY_HOME_HTML = ""
+
+
 def _ensure_homepage_cache():
     import server as srv
 
+    _reset_homepage_warm_state()
     srv._prime_emergency_home_html()
     srv._warm_homepage_cache(None)
 
@@ -147,9 +165,15 @@ def test_degraded_shell_ssrs_daily_pick_not_blank(monkeypatch):
     import server as srv
 
     _force_degraded_homepage_warm(monkeypatch)
+    # Pin the weighing rail: the hero shape must not flip between the two
+    # _read_shell_daily_pick() calls (this read + the warm's read) when the
+    # background SimiVision builder happens to finish in between.
+    monkeypatch.setattr(
+        "internal.learning.dpick_spotlight._weighing_rows_for_spotlight",
+        lambda: [],
+    )
     pick = srv._read_shell_daily_pick()
-    srv._HOMEPAGE_HTML_CACHE["html"] = None
-    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    _reset_homepage_warm_state()
     srv._warm_homepage_cache(None)
     html = client.get("/").text
     assert 'id="k3-dossier"' in html
@@ -168,7 +192,9 @@ def test_degraded_shell_ssrs_daily_pick_not_blank(monkeypatch):
         else:
             move = (pick.get("brief") or {}).get("move")
             if move:
-                assert move in html
+                # Spotlight pending/enriched shapes hide the candidate symbol
+                # from SSR (hydrate fills the call detail); the action paints.
+                assert move.split(" · ")[0] in html
             else:
                 assert "HOLD · no long" not in html
 
@@ -178,8 +204,7 @@ def test_degraded_shell_ssrs_pump_and_horizons(monkeypatch):
     import server as srv
 
     _force_degraded_homepage_warm(monkeypatch)
-    srv._HOMEPAGE_HTML_CACHE["html"] = None
-    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    _reset_homepage_warm_state()
     srv._warm_homepage_cache(None)
     html = client.get("/").text
     assert "Pump desk loads after hydrate" not in html
@@ -210,7 +235,32 @@ def test_degraded_homepage_has_message_intel_skeleton():
     html = client.get("/").text
     assert 'id="message-intel-feed"' in html
     assert "hydrate-skeleton--tall" in html
-    assert "Loading Telegram live feed" in html
+    assert "Loading live feed — Telegram desk" in html
+
+
+def test_emergency_prime_timeout_does_not_join_hung_render(monkeypatch):
+    """TPE context-manager join on timeout hangs the prime (#761 bug class)."""
+    import threading
+
+    import server as srv
+
+    release = threading.Event()
+
+    def _hang(_request):
+        assert release.wait(timeout=30)
+        return {}
+
+    monkeypatch.setattr(srv, "_minimal_index_context", _hang)
+    monkeypatch.setattr(srv, "EMERGENCY_PRIME_TIMEOUT", 0.2)
+    monkeypatch.setattr(srv, "_EMERGENCY_HOME_HTML", "")
+    try:
+        t0 = time.time()
+        html = srv._prime_emergency_home_html()
+        elapsed = time.time() - t0
+    finally:
+        release.set()
+    assert elapsed < 12.0, f"emergency prime joined hung render for {elapsed:.1f}s"
+    assert 'id="tribunal-hero"' in html
 
 
 def test_council_weights_list_trend_from_delta():
@@ -355,8 +405,7 @@ def test_degraded_shell_ssrs_brain_letter_when_available(monkeypatch):
     import server as srv
 
     _force_degraded_homepage_warm(monkeypatch)
-    srv._HOMEPAGE_HTML_CACHE["html"] = None
-    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    _reset_homepage_warm_state()
     srv._warm_homepage_cache(None)
     html = client.get("/").text
     assert "brain-letter" in html
