@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+from internal import build_cost
 from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -703,11 +704,15 @@ def write_full_universe_snapshot(
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
-        payload = build_full_universe_snapshot(
-            subnets or [],
-            ctx,
-            progress_cb=progress_cb,
-        )
+        build_cost.begin(build_started_wall)
+        try:
+            payload = build_full_universe_snapshot(
+                subnets or [],
+                ctx,
+                progress_cb=progress_cb,
+            )
+        finally:
+            cost = build_cost.end()
         build_wall = time.monotonic() - build_started
         inputs = payload.pop("_coverage_inputs", {}) or {}
         stage_timing = payload.pop("build_stage_timing", None)
@@ -717,6 +722,7 @@ def write_full_universe_snapshot(
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
         timing.update(write_stage_timing)
+        timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
