@@ -10,30 +10,44 @@
 
   var PARTIAL_MSG =
     "Partial context — council data loaded, live feeds still warming. Try again shortly.";
+  var WARM_TIMEOUT_MS = 8000;
+  // Server chat is bounded by SIMIVISION_CHAT_TIMEOUT_SECONDS (35s default);
+  // this client deadline covers headers + body so a stalled server can never
+  // leave the send button disabled forever.
+  var SEND_DEADLINE_MS = 50000;
   var chatReady = false;
 
   function setChatReady(ready) {
     chatReady = !!ready;
     btn.disabled = !chatReady;
-    if (meta && chatReady) meta.textContent = "LLM: ready";
   }
 
   function warmChatContext() {
     setChatReady(false);
     if (meta) meta.textContent = "LLM: warming…";
     var probe = window.apiFetchJson
-      ? window.apiFetchJson("/api/daily-pick", 8000)
+      ? window.apiFetchJson("/api/daily-pick", WARM_TIMEOUT_MS)
       : fetch("/api/daily-pick", { headers: { Accept: "application/json" } }).then(function (r) {
           if (!r.ok) throw new Error("HTTP " + r.status);
           return r.json();
         });
+    var settled = false;
+    function openChat(label) {
+      if (settled) return;
+      settled = true;
+      setChatReady(true);
+      if (meta) meta.textContent = label;
+    }
+    // Fail open: a slow or hung warm probe must never wedge the send button.
+    setTimeout(function () {
+      openChat("LLM: partial context");
+    }, WARM_TIMEOUT_MS);
     probe
       .then(function () {
-        setChatReady(true);
+        openChat("LLM: ready");
       })
       .catch(function () {
-        setChatReady(true);
-        if (meta) meta.textContent = "LLM: partial context";
+        openChat("LLM: partial context");
       });
   }
 
@@ -109,7 +123,6 @@
     if (isPartialChatStatus(status)) {
       botBody.textContent = PARTIAL_MSG;
       if (meta) meta.textContent = formatChatMeta(j.model || (j.data && j.data.model), status);
-      setChatReady(false);
       return;
     }
     botBody.textContent = j.reply || (j.data && j.data.reply) || "No response.";
@@ -134,7 +147,6 @@
           try {
             var m = JSON.parse(ev.data);
             if (meta) meta.textContent = formatChatMeta(m.model, m.status);
-            if (isPartialChatStatus(m.status)) setChatReady(false);
             if (m.sources && m.sources.length) streamSources = m.sources;
           } catch (e) {
             /* ignore */
@@ -174,27 +186,34 @@
   }
 
   async function deliverChat(msg, botRow, useStream) {
-    var botBody = botRow.body || botRow;
     var url = useStream ? "/api/simivision/chat?stream=1" : "/api/simivision/chat";
     var body = useStream
       ? JSON.stringify({ message: msg, stream: true })
       : JSON.stringify({ message: msg });
-    var resp = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: body,
-    });
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () {
+      ctrl.abort();
+    }, SEND_DEADLINE_MS);
+    try {
+      var resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: body,
+        signal: ctrl.signal,
+      });
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
 
-    var ct = resp.headers.get("content-type") || "";
-    if (ct.indexOf("text/event-stream") < 0) {
-      applyJsonReply(botRow, await resp.json());
-      return;
+      var ct = resp.headers.get("content-type") || "";
+      if (ct.indexOf("text/event-stream") < 0) {
+        applyJsonReply(botRow, await resp.json());
+        return;
+      }
+      if (!resp.body || !resp.body.getReader) throw new Error("no stream");
+      await readStream(resp, botRow);
+    } finally {
+      clearTimeout(timer);
+      setChatReady(true);
     }
-    if (!resp.body || !resp.body.getReader) throw new Error("no stream");
-    await readStream(resp, botRow);
-    if (botBody.textContent !== PARTIAL_MSG) setChatReady(true);
-    else setChatReady(false);
   }
 
   async function send() {
@@ -217,7 +236,8 @@
     } catch (e) {
       botRow.body.textContent = PARTIAL_MSG;
       if (meta) meta.textContent = "LLM: partial context";
-      setChatReady(false);
+      // Fail open — a failed exchange must not permanently disable chat.
+      setChatReady(true);
     } finally {
       if (chatReady) btn.disabled = false;
       input.focus();
