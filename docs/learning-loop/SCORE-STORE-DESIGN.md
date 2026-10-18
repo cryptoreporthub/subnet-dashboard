@@ -61,3 +61,19 @@ The count envs and the 20/24/40/75 literals are removed in one change, and only 
 2. Add the store alongside the current snapshot. Write both. Read the store on request paths.
 3. Switch the scheduler to the budget rule. Keep the snapshot as the publish artifact until coverage reaches 1.0.
 4. Remove the count envs and literals in one change, after the gates above.
+
+## Reconciled plan (mine plus the Grok sequence in #1372)
+
+Each part is marked by where it came from.
+
+1. **Measure first (Grok, steps a and b).** Stack `claude/build-cost-instrumentation` on #1443. Deploy #1443 with the counters after the owner approves. Read-only metrics, no config change. Grok's step (b) was to deploy with parallel workers off or at 2 on the 1 GB machine at first. Keep that.
+2. **Baseline at the current size (Grok, step c).** Observe 2 to 3 cycles at 40 names, read-only. Record build wall, per-stage timings, rate-limit responses and peak RSS. This is the baseline the store is compared against.
+3. **Replace the count with a budget (mine).** The count is not stepped. The store-and-budget rule from this document takes its place. The first budget is the largest that fits 480 s at the measured per-name cost from step 2. Grok's 80 and full-set steps are dropped as count steps.
+4. **Ramp the budget, not the count (Grok's gates, applied to the budget).** Raise the per-cycle budget only when each of these holds for the last 2 cycles: coverage fraction is rising, build wall stays under 480 s with margin, peak RSS from the process is under about 900 MB (Grok's ceiling, measured from the process, not a scrape), and rate-limit responses are stable.
+5. **Request paths read the store only (mine, and #1442).** This is what stops a cold cache from scoring inline. Without it, any budget size puts scoring inside handler timeouts.
+6. **Remove the count envs and literals in one change (mine).** Only after the store has reached full freshness coverage on prod and the gates in step 4 have held.
+7. **Find the variance cause in parallel (Grok, step a).** The 548 s, 2,647 s and 57.4 s cycles are not explained. The counters decide whether the budget must absorb spikes or whether the spikes have a fixable cause.
+
+What is dropped from Grok's plan: the count steps 40 to 80 to full. What is added from mine: the store, the budget, freshness coverage, and store-only request paths. What is kept from Grok: measurement before change, the read-only baseline, the 480 s and 900 MB gates, and the caution on parallel workers.
+
+Owner gate: deploying #1443 needs the owner's GO, which the user has already given, and Joshua's confirmation as named in #1372.
