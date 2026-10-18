@@ -6,9 +6,9 @@ This is the pre-flight pack for an outside reviewer of the learning stack (counc
 
 ## 1. Scope and snapshot
 
-- **Branch:** `claude/port-cursor-config`, HEAD `03f122d8`. It is 27 commits ahead of `origin/main` (`3a65d34a`) and 7 behind it.
+- **Branch:** `claude/port-cursor-config`, HEAD `2966ebf3`. It is 28 commits ahead of `origin/main` (`3a65d34a`) and 7 behind it.
 - **Verdicts commit:** `803e8370` is an ancestor of HEAD. It is **not** an ancestor of `origin/main`, so the verdicts are not on `main` yet (decision D-03).
-- **Paths this branch changes against `origin/main` (27 files, from `git diff --name-only origin/main...HEAD`):** `docs/learning-loop/` and `docs/learning-loop-audit-2026-10-17.md` (docs); `scripts/prototypes/` (walk-forward prototypes, fixtures, helpers); `scripts/claude-session-start.sh` and `scripts/install-pstack.sh`; `.claude/settings.json`, `.claude/skills/verify-subnet-dashboard/SKILL.md`, `.mcp.json`, `CLAUDE.md`; and `cursor-agents-communication/mission-control-log.md`. No app path changed: `server.py`, `internal/`, `message_intel/`, templates, static files, and `tests/` are untouched by this branch.
+- **Paths this branch adds or changes against `origin/main` (29 files, from `git diff --name-only origin/main...HEAD`; this list covers new and modified files alike):** `docs/learning-loop/` and `docs/learning-loop-audit-2026-10-17.md` (docs); `scripts/prototypes/` (walk-forward prototypes, fixtures, helpers); `scripts/claude-session-start.sh` and `scripts/install-pstack.sh`; `.claude/settings.json`, `.claude/skills/verify-subnet-dashboard/SKILL.md`, `.mcp.json`, `CLAUDE.md`; and `cursor-agents-communication/mission-control-log.md`. No app path changed: `server.py`, `internal/`, `message_intel/`, templates, static files, and `tests/` are untouched by this branch.
 - **Out of scope:** product fixes for the failing tests, merges, deploys, and PR creation.
 
 ## 2. Merge and test state
@@ -75,9 +75,9 @@ The notes record proposals. None of them is applied in this pack.
 
 | ID | Question | Status | Who decides |
 |----|----------|--------|-------------|
-| D-01 | #1442 merged to `main` at 2026-10-18T00:58:22Z, closed as draft (`draft: true`), and its body says "Do not merge without GO". #1443 merged at 2026-10-18T00:58:20Z, not a draft, and its body says "Do not merge without Joshua GO." No GO is on record in this session. Ratify or revert both? | open | user |
+| D-01 | #1442 merged to `main` at 2026-10-18T00:58:22Z, closed as draft (`draft: true`), and its body says "Do not merge without GO". #1443 merged at 2026-10-18T00:58:20Z, not a draft, and its body says "Do not merge without Joshua GO." The user states that GO was given for both in a Cursor chat. That chat is not visible from this session, so the GO is user-stated and unverified here. Ratify both on that statement, or revert? | open; GO user-stated, unverified in session | user |
 | D-02 | #1458 merged while its body says "Draft, not for merge", but the PR was not a draft when merged. Ratify? | open | user |
-| D-03 | The branch is 27 commits ahead of `origin/main`, including the verdicts commit `803e8370`. None of those commits are on `origin/main`. Land them on `main`, or keep them on the branch? | open | user |
+| D-03 | The branch is 28 commits ahead of `origin/main`, including the verdicts commit `803e8370`. None of those commits are on `origin/main`. Land them on `main`, or keep them on the branch? | open | user |
 | D-04 | Which fix branch is canonical for the 111: `claude/fix-council-ui-tests`, `claude/fix-daily-pick-root-publish`, or `claude/fix-weight-learning-core`? | open | user, with owners |
 | D-05 | Accept class 3.3 (c) as a waiver, citing `fca4fb94`? | open | reviewer |
 | D-06 | Name an owner for each class in section 4. | open | user |
