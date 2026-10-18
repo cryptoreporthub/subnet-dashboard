@@ -25,7 +25,7 @@ from internal.council.publish_gate import (
     publish_gate_fraction,
     publish_gate_label,
 )
-from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume, tradable_subnets
+from internal.subnets.tradable import payload_uses_root, subnet_volume, tradable_subnets
 
 logger = logging.getLogger(__name__)
 
@@ -141,9 +141,15 @@ def _today_str() -> str:
 
 
 def _find_today(records: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Today's stored row, skipping any row that points at Root.
+
+    Single chokepoint for every reader of "today's pick" (GET hydrate, SSR shell,
+    board context, scheduler regen, save merge). A Root-era row on disk is treated
+    as absent so it is never served and the next scheduler tick replaces it.
+    """
     today = _today_str()
     for rec in reversed(records):
-        if rec.get("date") == today:
+        if rec.get("date") == today and not payload_uses_root(rec):
             return rec
     return None
 
@@ -228,20 +234,6 @@ def _published_pick_fails_gate(payload: Dict[str, Any]) -> bool:
     return not directional_publish_guard(pick)["approved"]
 
 
-def _payload_uses_root(payload: Dict[str, Any]) -> bool:
-    """True if cached pick/candidate points at Root or a missing netuid."""
-    for key in ("pick", "candidate"):
-        block = payload.get(key)
-        if not isinstance(block, dict):
-            continue
-        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else block
-        if isinstance(sn, dict) and not is_tradable_subnet(sn):
-            n = subnet_netuid(sn)
-            if n is None or n <= 0:
-                return True
-    return False
-
-
 def write_scheduler_hold(reason: str) -> Dict[str, Any]:
     """Persist an honest HOLD when the background tick cannot finish scoring."""
     reason = (reason or "daily pick scheduler failed").strip() or "daily pick scheduler failed"
@@ -290,7 +282,7 @@ def get_or_create_today_pick(
 
     if not force:
         existing = _find_today(records)
-        if existing is not None and not _payload_uses_root(existing):
+        if existing is not None:
             # Scheduler timeout/failure HOLD — keep retrying a real score this UTC day.
             if existing.get("scheduler_hold"):
                 logger.info("daily pick: regen scheduler_hold")
@@ -312,7 +304,6 @@ def get_or_create_today_pick(
                 logger.info("daily pick: regen stale published LONG that fails publish gates")
             else:
                 return existing
-        # Stale Root-era cache: fall through and regenerate.
 
     started = _now_stamp()
     if not subnets:

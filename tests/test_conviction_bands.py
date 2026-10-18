@@ -11,8 +11,9 @@ from internal.council.conviction_bands import (
 
 
 def test_expert_agreement_aligned_vs_split():
-    assert expert_agreement({"a": 0.5, "b": 0.5, "c": 0.5}) == 1.0
-    low = expert_agreement({"a": 0.0, "b": 1.0})
+    # Keys must be council experts: expert_agreement ignores others (2e04de18).
+    assert expert_agreement({"quant": 0.5, "hype": 0.5, "technical": 0.5}) == 1.0
+    low = expert_agreement({"quant": 0.0, "hype": 1.0})
     assert low is not None and low < 0.5
 
 

@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
+from internal.subnets.tradable import payload_uses_root
+
 DAILY_PICKS_PATH = os.environ.get("DAILY_PICKS_PATH", os.path.join("data", "daily_picks.json"))
 ALERTS_PATH = os.environ.get("ALERTS_PATH", os.path.join("data", "alerts.json"))
 _SKIP_OUTCOMES = frozenset({"duplicate", "expired", "ungradeable"})
@@ -37,11 +39,13 @@ def _load_daily_picks(path: Optional[str] = None) -> List[Dict[str, Any]]:
     except Exception:
         return []
     if isinstance(data, list):
-        return [row for row in data if isinstance(row, dict)]
-    if isinstance(data, dict):
+        rows = data
+    elif isinstance(data, dict):
         rows = data.get("picks") or data.get("history") or []
-        return [row for row in rows if isinstance(row, dict)]
-    return []
+    else:
+        return []
+    # Root (netuid 0) is never a pick: drop Root-era rows before any letter reads them.
+    return [row for row in rows if isinstance(row, dict) and not payload_uses_root(row)]
 
 
 def _top_pick_block(picks: List[Dict[str, Any]]) -> Dict[str, Any]:

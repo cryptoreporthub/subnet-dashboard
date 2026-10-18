@@ -495,7 +495,11 @@ def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
     assert summary["ready"] is True
     assert "EdgeMaxxing" not in summary["narrative"]
     assert "SN39 (deprecated)" in summary["narrative"]
-    assert summary["top_subnets"][0]["name"] == "Teutonic"
+    # Canonical resolver wins over stale registry_names (2b859fe8); the live
+    # SN3 label depends on cache/data state, so compare against the resolver.
+    from internal.subnet_names import display_name_for_netuid
+
+    assert summary["top_subnets"][0]["name"] == display_name_for_netuid(3, use_taostats_fallback=False)
     assert summary["top_subnets"][1]["name"] == "SN39 (deprecated)"
 
 
@@ -1027,7 +1031,10 @@ def test_telegram_proof_band_and_high_conviction_strip(intel_env):
     assert hc_item["author_name"] == "SideEye"
     assert hc_item["conviction"] == 100.0
     assert hc_item["netuid"] == 100
-    assert hc_item["subnet_name"] == "Base Alpha"
+    # Canonical resolver wins over the stale registry_names entry (2b859fe8).
+    from internal.subnet_names import display_name_for_netuid
+
+    assert hc_item["subnet_name"] == display_name_for_netuid(100, use_taostats_fallback=False)
     assert hc_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
 
 def test_desk_author_helper_matches_bot_identity():

@@ -70,7 +70,11 @@ def test_simivision_payload_exposes_council_reason():
     assert top
     assert top[0].get("reason")
     assert payload["data"]["meta"]["source"] == "council-shortlist"
-    assert all(t["netuid"] != 1 for t in top)
+    # #933 (17764cae): the published call leads the board as a primary row;
+    # alternatives never repeat it. The pre-#933 "netuid 1 absent everywhere"
+    # form encoded the WR-1 board before the primary row existed.
+    assert top[0]["netuid"] == 1 and top[0].get("primary_call") is True
+    assert all(t["netuid"] != 1 for t in top[1:])
 
 
 def test_simivision_honest_empty_when_shortlist_thin():

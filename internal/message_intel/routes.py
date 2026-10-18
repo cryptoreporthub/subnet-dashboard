@@ -133,7 +133,7 @@ async def api_message_intel(
             _message_contract(
                 live=live,
                 captured_at=stats.get("last_message_at"),
-                degraded=not bool(stats.get("ok", True)),
+                degraded=not bool(stats.get("ok", True)) or stale_meta,
                 listener=listener,
             )
         )

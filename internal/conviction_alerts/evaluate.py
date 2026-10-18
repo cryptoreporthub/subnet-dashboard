@@ -7,6 +7,8 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from internal.subnets.tradable import payload_uses_root
+
 if TYPE_CHECKING:
     from internal.signals.alerts import AlertEngine
 
@@ -64,7 +66,7 @@ def _collect_candidates() -> List[Dict[str, Any]]:
     picks = _load_json(picks_path)
     if isinstance(picks, list):
         for rec in reversed(picks):
-            if rec.get("date") != _today_str():
+            if rec.get("date") != _today_str() or payload_uses_root(rec):
                 continue
             pick = rec.get("pick") or rec.get("candidate") or {}
             if not isinstance(pick, dict):

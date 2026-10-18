@@ -317,6 +317,9 @@ def test_alert_row_surfaces_day_whale_chip(tmp_path, monkeypatch):
     data.write_text(json.dumps({"events": [], "profiles": {}, "open_positions": {}, "closed_trades": {}}))
     monkeypatch.setenv("WHALES_CONFIG_PATH", str(config))
     monkeypatch.setenv("WHALES_DATA_PATH", str(data))
+    # No-arg construction is a process singleton pinned at first use (1750d48c);
+    # reset it so _whale_day_chips() reads this test's env-configured ledger.
+    monkeypatch.setattr(WhaleIntelligenceService, "_singleton", None)
     svc = WhaleIntelligenceService(config_path=str(config), data_path=str(data))
     now = datetime.now(timezone.utc).isoformat()
     svc.record_event(

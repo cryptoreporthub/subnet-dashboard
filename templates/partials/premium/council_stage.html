@@ -1,6 +1,8 @@
 {# ============================================================
    Council Hero — Tribunal Design (Agreed & Locked)
    ============================================================ #}
+{# W0-A (57a963d7): trust banner stays visible when blocked; #home-trust-banner is the host trust_banner_ui.js binds to. #}
+{% set tb = trust_banner if trust_banner is mapping else {} %}
 <section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1">
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
@@ -15,6 +17,22 @@
             {% include "partials/premium/tribunal_hero.html" %}
           </div>
         </div>
+      </div>
+      <div
+        id="home-trust-banner"
+        class="trust-banner{% if tb.ready %} trust-banner--ready{% else %} trust-banner--blocked{% endif %}"
+        aria-live="polite"
+      >
+        {% if tb.ready and tb.headline %}
+        <p class="trust-banner__headline">{{ tb.headline }}</p>
+        {% elif tb.message %}
+        <p class="trust-banner__message">{{ tb.message }}</p>
+        {% else %}
+        <p class="trust-banner__message">Building graded track record — trust surfaces stay honest until sample clears.</p>
+        {% endif %}
+        {% if tb.note %}
+        <p class="trust-banner__note">{{ tb.note }}</p>
+        {% endif %}
       </div>
 
       {# ---- CTA actions ---- #}

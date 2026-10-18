@@ -1,6 +1,7 @@
 import json
 import os
 import tempfile
+from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
@@ -79,8 +80,30 @@ def test_daily_pick_returns_structured_payload(client):
         assert "final_confidence" in data["pick"]
 
 
+def _seed_today(row):
+    """Write one of today's rows where the route reads it (GET is read-only)."""
+    row = {"date": datetime.now(timezone.utc).date().isoformat(), **row}
+    with open(daily_pick_engine.DAILY_PICKS_PATH, "w") as handle:
+        json.dump([row], handle)
+
+
 def test_daily_pick_hold_exposes_candidate_not_published(client):
     """HOLD must not invent a BUY; candidate is display-only under the audit gate."""
+    _seed_today({
+        "status": "ok",
+        "timestamp_utc": "2026-10-18T01:00:00Z",
+        "build_started_at": "2026-10-18T01:00:00Z",
+        "action": "HOLD",
+        "reason": "Confidence 40% below 50% audit gate — no long call published",
+        "pick": None,
+        "candidate": {
+            "subnet": {"netuid": 7, "name": "Sub7", "symbol": "S7"},
+            "final_confidence": 0.40,
+        },
+        "regime": "neutral",
+        "rotation_summary": {},
+        "market_context": {},
+    })
     data = client.get("/api/daily-pick").json()
     assert data["status"] == "ok"
     if data["action"] != "HOLD":
@@ -94,9 +117,30 @@ def test_daily_pick_hold_exposes_candidate_not_published(client):
 
 
 def test_daily_pick_never_publishes_root(client):
-    """Root (netuid 0) must never appear as pick or candidate."""
+    """Root (netuid 0) must never appear as pick or candidate.
+
+    Seeds a Root-era LONG row for today: the route must not serve it.
+    """
+    _seed_today({
+        "status": "ok",
+        "timestamp_utc": "2026-10-18T01:00:00Z",
+        "build_started_at": "2026-10-18T01:00:00Z",
+        "action": "long",
+        "pick": {
+            "subnet": {"netuid": 0, "name": "Root", "symbol": "TAO"},
+            "final_confidence": 0.9,
+            "prediction": {"statement": "x", "horizon_hours": 24},
+        },
+        "candidate": None,
+        "reason": None,
+        "regime": "neutral",
+        "rotation_summary": {},
+        "market_context": {},
+    })
     data = client.get("/api/daily-pick").json()
-    assert data["status"] == "ok"
+    # pending (no publishable row today) is the honest answer, see 64176d16.
+    assert data["status"] in ("ok", "pending")
+    assert data.get("pick") is None
     for key in ("pick", "candidate"):
         block = data.get(key)
         if not isinstance(block, dict):

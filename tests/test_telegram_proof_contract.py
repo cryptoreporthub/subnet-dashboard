@@ -397,6 +397,10 @@ def test_leaderboard_gating_and_accuracy(intel_db):
     # add 4 more so sample_size 5 qualifies
     for _ in range(4):
         _seed(intel_db, outcome="pump")
+    # #1340 (73b2babb): proof rows come from a 30s single-flight TTL cache that
+    # writes do not invalidate, so the re-read after new seeds must clear it.
+    from internal.message_intel.load_guard import clear_message_intel_load_cache
+    clear_message_intel_load_cache()
     board = build_telegram_caller_leaderboard(days=30, db=intel_db)
     top = board["callers"][0]
     assert top["qualified"] is True

@@ -72,6 +72,8 @@ def _judge_long_rows(
     """Top judge-council rows with unanimous long verdict — never hide from weighing."""
     if not subnets:
         return []
+    from internal.subnets.tradable import is_tradable_subnet
+
     scored: List[Dict[str, Any]] = []
     try:
         from internal.judges.council_routes import _cap_subnets_for_judges, _load_judges_cache_file
@@ -103,7 +105,16 @@ def _judge_long_rows(
         if verdict not in _LONG_VERDICTS:
             continue
         nu = item.get("netuid")
-        sn = by_netuid.get(int(nu)) if nu is not None else {}
+        # Root (netuid 0) is never a weighing candidate; judge cache can carry it.
+        if nu is None or not is_tradable_subnet({"netuid": nu}):
+            continue
+        # The judge cache is on-disk state and can carry netuids outside the
+        # current universe (or deprecated ones already dropped from it). Only
+        # the supplied universe may surface, so the board never shows a row we
+        # cannot name or price.
+        if int(nu) not in by_netuid:
+            continue
+        sn = by_netuid[int(nu)]
         try:
             conv = int(round(float(consensus.get("score", 0)) * 100))
         except (TypeError, ValueError):
@@ -198,6 +209,17 @@ def build_weighing_candidates_from_shortlist(
     from internal.learning.dpick_shortlist import build_deliberation_shortlist
     from internal.subnets.apy import subnet_apy_percent
     from internal.subnets.tradable import subnet_volume
+
+    # Deprecated subnets are never weighing candidates. WR-1 (821c9f1f) dropped
+    # the pre-WR-1 _simivision_eligible status filter when it replaced the pool.
+    subnets = [
+        s
+        for s in subnets
+        if not (
+            isinstance(s, dict)
+            and str(s.get("status") or "active").lower() == "deprecated"
+        )
+    ]
 
     deliberation = build_deliberation_shortlist(
         subnets, market_context or {}, daily_pick

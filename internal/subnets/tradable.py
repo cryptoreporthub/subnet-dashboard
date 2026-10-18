@@ -51,6 +51,20 @@ def tradable_subnets(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return list(out.values())
 
 
+def payload_uses_root(payload: Dict[str, Any]) -> bool:
+    """True if a stored pick row's ``pick`` or ``candidate`` is Root or netuid-less."""
+    if not isinstance(payload, dict):
+        return False
+    for key in ("pick", "candidate"):
+        block = payload.get(key)
+        if not isinstance(block, dict):
+            continue
+        sn = block.get("subnet") if isinstance(block.get("subnet"), dict) else block
+        if isinstance(sn, dict) and not is_tradable_subnet(sn):
+            return True
+    return False
+
+
 def subnet_volume(sn: Dict[str, Any]) -> float:
     """Unified 24h turnover — ``volume`` or buy+sell chain volumes."""
     if not isinstance(sn, dict):

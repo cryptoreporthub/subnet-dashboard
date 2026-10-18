@@ -6,7 +6,9 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from internal.council.publish_gate import publish_gate_label
 from internal.learning.trust_stats import build_trust_banner
+from internal.preview.tribunal_hero import build_tribunal_view
 
 
 def test_proof_band_template_gates_on_ready():
@@ -64,9 +66,13 @@ def test_council_stage_accuracy_gated_on_ready():
         loader=FileSystemLoader("templates"),
         autoescape=select_autoescape(["html", "xml"]),
     )
+    # Mirrors server.py:525 (templates.env.globals["publish_gate_label"]).
+    env.globals["publish_gate_label"] = publish_gate_label
     tmpl = env.get_template("partials/premium/council_stage.html")
     html = tmpl.render(
         dpick={"action": "HOLD", "pick": None, "candidate": None},
+        # Production always supplies tribunal (server.py: "tribunal": build_tribunal_view({}, {})).
+        tribunal=build_tribunal_view({}, {}),
         hybrid_trust={"n": 15},
         trust_banner={
             "graded": 15,
@@ -85,6 +91,7 @@ def test_council_stage_accuracy_gated_on_ready():
     assert "66.7%" not in html
     html_ready = tmpl.render(
         dpick={"action": "HOLD", "pick": None, "candidate": None},
+        tribunal=build_tribunal_view({}, {}),
         hybrid_trust={"n": 454},
         trust_banner={
             "graded": 454,

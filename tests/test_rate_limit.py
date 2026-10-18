@@ -20,6 +20,10 @@ def rate_limited_client(monkeypatch):
     importlib.reload(server)
     yield TestClient(server.app)
     rl._limiter = None
+    # `server` is a process-wide module. Restore the default env before reloading,
+    # or every later test that imports it inherits this 2/minute app and 429s.
+    monkeypatch.undo()
+    importlib.reload(server)
 
 
 def test_under_limit_returns_200(rate_limited_client):
