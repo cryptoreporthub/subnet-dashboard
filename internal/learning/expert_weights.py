@@ -15,6 +15,8 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 GRADED_OUTCOMES = frozenset({"hit", "miss"})
+# Shadow rows are counterfactual; live grading skips them, so the estimator does too.
+SHADOW_SOURCE_SUFFIX = "_shadow"
 Z_95 = 1.959963984540054
 
 
@@ -30,8 +32,11 @@ def wilson_interval(hits: int, n: int, z: float = Z_95) -> Tuple[float, float]:
 
 def eligible_rows(rows: Iterable[Dict[str, Any]]) -> Iterable[Dict[str, Any]]:
     for row in rows:
-        if row.get("outcome") in GRADED_OUTCOMES:
-            yield row
+        if row.get("outcome") not in GRADED_OUTCOMES:
+            continue
+        if str(row.get("pick_source") or "").endswith(SHADOW_SOURCE_SUFFIX):
+            continue
+        yield row
 
 
 def estimate_weights(
@@ -43,7 +48,8 @@ def estimate_weights(
 ) -> Dict[str, Dict[str, Any]]:
     counts: Dict[str, list] = defaultdict(lambda: [0, 0])
     for row in eligible_rows(rows):
-        key = str(row.get("expert") or "unassigned")
+        # A key is expert and source together: one expert can grade different products.
+        key = f"{row.get('expert') or 'unassigned'}|{row.get('pick_source') or 'unknown'}"
         counts[key][1] += 1
         counts[key][0] += row["outcome"] == "hit"
     out: Dict[str, Dict[str, Any]] = {}
