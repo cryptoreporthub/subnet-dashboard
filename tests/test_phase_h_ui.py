@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 from fastapi.templating import Jinja2Templates
 
@@ -13,6 +14,15 @@ from internal.analytics.cockpit_render import (
 )
 from internal.cockpit.sections import COCKPIT_SECTION_IDS
 from server import _jinja_shorten, app, templates
+
+
+@pytest.fixture(autouse=True)
+def _warm_homepage_cache():
+    """A cold GET / serves a ~1 KB shell, so warm the cache before each test."""
+    import server as srv
+
+    srv._prime_emergency_home_html()
+    srv._warm_homepage_cache(None)
 
 
 H_FULL_SECTION_IDS = [
@@ -39,10 +49,32 @@ H_FULL_SECTION_IDS = [
 ]
 
 
+def test_index_links_split_css():
+    client = TestClient(app)
+    html = client.get("/").text
+    for name in ("base", "ui", "chat"):
+        assert f"/static/css/{name}.css" in html
+
+
+def test_index_has_card_class():
+    client = TestClient(app)
+    html = client.get("/").text
+    # Council-first: primary surfaces use pick/expert cards; dual 12-card grid removed
+    assert 'class="council-stage"' in html or "council-stage" in html
+    assert "class=\"card" in html or "pick-card" in html or "council-call" in html
+
+
 def test_index_no_markdown_heading_triple_hash():
     client = TestClient(app)
     html = client.get("/").text
     assert "###" not in html
+
+
+def test_index_has_data_freshness_badge():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="dataFreshnessBadge"' in html
+    assert "/static/js/data_freshness.js" in html
 
 
 def test_data_freshness_api_shape():
@@ -209,6 +241,16 @@ def test_h_full_simivision_picks_or_honest_empty():
     assert "These may become tomorrow" in html
     assert "Primary daily call:" in html or "No other names on the table" in html
     assert "pick-rank" not in html or "wr-row" in html
+
+
+def test_h_full_daily_pick_hero_or_honest_empty():
+    client = TestClient(app)
+    html = client.get("/").text
+    assert 'id="section-daily-pick"' in html
+    assert "council-stage" in html
+    assert "Council decision" in html or "Today" in html
+    # Stage always states a stance (audited call or HOLD)
+    assert "council-call" in html or "HOLD" in html or "Predicted" in html
 
 
 def test_phase_l_cockpit_signals_and_summary():
