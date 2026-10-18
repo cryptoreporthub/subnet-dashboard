@@ -1,6 +1,7 @@
 {# ============================================================
    Council Hero — Tribunal Design (Agreed & Locked)
    ============================================================ #}
+{% set alerts_on = habit_alerts.enabled if (habit_alerts is mapping) else false %}
 <section class="council-stage home-job" id="section-daily-pick" aria-labelledby="council-stage-title" data-home-live="1">
   <div class="council-stage__atmosphere" aria-hidden="true"></div>
   <div class="council-stage__inner">
@@ -10,7 +11,9 @@
           class="k3-dossier"
           id="k3-dossier"
           data-testid="council-hero"
+          data-generated-at="{{ dpick.timestamp_utc|default(dpick.generated_at|default('')) }}"
         >
+          <span id="k3-stale-badge" class="k3-temporal-badge k3-stale-badge" hidden aria-live="polite"></span>
           <div class="k3-layer open" id="k3-layer-claim">
             {% include "partials/premium/tribunal_hero.html" %}
           </div>
@@ -24,8 +27,18 @@
           class="home-cta home-cta--primary"
           id="habit-pin-btn"
         >Pin to watchlist</button>
+        <button
+          type="button"
+          class="home-cta home-cta--ghost"
+          id="habit-alert-btn"
+          data-enabled="{{ '1' if alerts_on else '0' }}"
+          {% if not alerts_on %}hidden{% endif %}
+        >Run conviction check</button>
         <a class="home-cta home-cta--ghost" href="#section-proof-band">View proof</a>
       </div>
+      {% if not alerts_on %}
+      <p class="home-habit-status__alerts home-habit-status__alerts--off" id="habit-alerts-summary">Conviction alerts off on this deploy</p>
+      {% endif %}
       <a id="hour-watch-now" class="hour-watch-now hour-watch-now--building" href="#" aria-live="polite">Hour watch loading…</a>
       <p id="hour-watch-shift" class="hour-watch-shift" hidden aria-live="polite"></p>
     </div>

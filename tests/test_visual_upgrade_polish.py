@@ -108,8 +108,8 @@ def test_council_stage_h1_resolving_conf_state_ssr():
         conviction=None,
     )
     assert 'id="k3-dossier"' in html
-    assert 'data-conf-state="resolving"' in html
     assert 'id="tribunal-hero"' in html
+    assert "data-hero-conviction=" not in html
     gauge = _gauge_score_html(html)
     assert "data-gauge-value" in gauge
     assert "—" in gauge
@@ -118,14 +118,14 @@ def test_council_stage_h1_resolving_conf_state_ssr():
 
 def test_council_stage_h1_zero_conf_state_ssr():
     html = _render_council_stage_confidence(final_confidence=0)
-    assert 'data-conf-state="zero"' in html
+    assert 'data-hero-conviction="0"' in html
     gauge = _gauge_score_html(html)
     assert "0%" in gauge
 
 
 def test_council_stage_h1_value_conf_state_ssr():
     html = _render_council_stage_confidence(final_confidence=0.5)
-    assert 'data-conf-state="value"' in html
+    assert 'data-hero-conviction="50"' in html
     gauge = _gauge_score_html(html)
     assert "50%" in gauge
     assert "—" not in gauge
@@ -236,10 +236,10 @@ def test_council_stage_horizon_badge_ssr_hidden_hydrate_unhides():
 def test_council_stage_accuracy_building_sample_size_when_trust_not_ready():
     """AC5: trust_banner.ready false → building sample size, not a fake accuracy %."""
     html = _render_council_stage(82)
-    assert 'id="k3-learning-acc-label">building sample size<' in html
-    assert "Building sample size" in html
-    acc = html.split('id="k3-learning-acc"', 1)[1].split("</div>", 1)[0]
-    assert "%" not in acc
+    assert "Building sample" in html
+    win_rate = html.split("data-accuracy-win-rate>", 1)[1].split("<", 1)[0]
+    assert win_rate == "—"
+    assert "%" not in win_rate
 
 
 def test_cockpit_hydrate_horizon_badge_and_conf_label_hooks():
@@ -268,7 +268,8 @@ def test_tribunal_hero_keeps_motion_layers_in_ui_css():
         assert anim in css
     html = _render_council_stage(82)
     assert "tribunal-hero__puffs" in html
-    assert "tribunal-hero__gauge-fill" in html
+    assert "tribunal-hero__ring" in html
+    assert "data-conviction-arc" in html
 
 
 def test_hydrate_js_mirrors_band_formula():
@@ -295,9 +296,9 @@ def test_soul_map_renders_orb_constellation_not_flat_bars():
             {"expert": "technical", "weight": 1.0, "trend": "even"},
         ]
     )
-    assert "soul-orb" in html
-    assert "soul-orb--up" in html
-    assert "soul-orb--down" in html
+    assert "council-arc-card" in html
+    assert "council-arc-card__bias--up" in html
+    assert "council-arc-card__bias--down" in html
     assert "wbar" not in html
     assert "wfill" not in html
 
@@ -361,8 +362,9 @@ def test_empty_hold_shell_emits_warming_tribunal_without_netuid_band():
         habit_alerts={"enabled": False},
         tribunal=_tribunal_for(dpick),
     )
-    assert 'data-hero-phase="warming"' in html
+    assert 'data-hero-verdict="cold"' in html
     assert 'id="tribunal-hero"' in html
+    assert "—" in _gauge_score_html(html)
     assert 'data-band=' not in html
 
 
@@ -590,7 +592,6 @@ def test_council_home_shell_live_in_ui_css():
         ".desk-zone",
         "#home-trust-banner.trust-banner",
         "body.council-first-theme::after",
-        "var(--bg-atmosphere)",
         ".home-job__signals--demoted",
     ):
         assert selector in css
@@ -628,12 +629,8 @@ def test_council_pick_card_uses_pewter_smoke_background():
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert (
-        "var(--hero-void)" in hero_card
-        or "#1e2128" in hero_card
-        or "rgba(12, 18, 28" in hero_card
-        or "#080b0e" in hero_card
-    )
+    # Approved clear-glass hero (fca4fb94): translucent fill over a blurred backdrop.
+    assert "backdrop-filter" in hero_card
     assert "simivision-smoke-bg.svg" not in hero_card
     smoke = css.split(".tribunal-hero__card::before {", 1)[1].split("}", 1)[0]
     assert "radial-gradient" in smoke
@@ -975,25 +972,20 @@ def test_ui_legacy_is_stub_only():
 
 
 def test_grey_smoke_bg_base_token():
-    """Global glass pass — soft smoke page base + glass tokens (no grain screen)."""
+    """Clear-glass page contract. fca4fb94 replaced the grey smoke atmosphere
+    with the cosmos glass treatment: the atmosphere token is disabled and the
+    body paints a solid fallback; glass tokens and the veil overlay stay defined."""
     base_css = open("static/css/base.css", encoding="utf-8").read()
     ui_css = _read_ui_css()
-    assert "--bg-atmosphere" in base_css
-    assert "simivision-smoke-bg.svg" in base_css
-    assert "#1e2128" in base_css
+    assert "--bg-atmosphere: none" in base_css
     body_block = ui_css.split("body.council-first-theme {", 1)[1].split("}", 1)[0]
-    assert "var(--bg-atmosphere)" in body_block
+    assert "background-color: var(--ds-void" in body_block
     assert "--glass-fill:" in ui_css
     assert "body.council-first-theme::after" in ui_css
     after = ui_css.split("body.council-first-theme::after {", 1)[1].split("}", 1)[0]
     assert "radial-gradient(#000 1px, transparent 1px)" not in after
-    assert "blur(" in after or "radial-gradient" in after
     assert "body.council-first-theme .app-shell" in ui_css
     assert "body.council-first-theme > *" not in ui_css
-    aurora = ui_css.split("body.council-first-theme::before {", 1)[1].split("}", 1)[0]
-    assert "opacity:" in aurora
-    assert float(aurora.split("opacity:")[1].split(";")[0].strip()) >= 0.55
-    assert ".council-stage__atmosphere" in ui_css
     atm = ui_css.split(".council-stage__atmosphere {", 1)[1].split("}", 1)[0]
     assert "#0a0a0c" not in atm
     assert "transparent" in atm
@@ -1010,7 +1002,7 @@ def test_global_glass_card_overrides_in_ui_css():
     m = re.search(r"(?m)^\.tribunal-hero__card \{([^}]*)\}", css)
     assert m, "missing .tribunal-hero__card base rule"
     hero_card = m.group(1)
-    assert "var(--hero-void)" in hero_card or "#1e2128" in hero_card or "rgba(12, 18, 28" in hero_card
+    assert "backdrop-filter" in hero_card
     assert "transparent" not in hero_card.split("background-color")[1].split(";")[0]
     after_rules = [
         p.split("}", 1)[0]

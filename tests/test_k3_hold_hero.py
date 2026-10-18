@@ -107,8 +107,7 @@ def test_council_stage_hold_candidate_renders_full_hero():
     assert "k3-horizon-chips" in html
     assert "k3-call-headline" in html
     assert "GATED · HOLD" in html
-    assert "FLIP" in html
-    assert "Long when" in html
+    assert "Flip to LONG when conviction" in html
     assert "k3-pump-chip" in html
     assert "council scan" not in html.lower()
     assert 'id="k3-orb-score"' in html

@@ -489,7 +489,7 @@ def hold_reason_line(payload: Dict[str, Any]) -> Optional[str]:
     if act not in ("HOLD", "NONE", ""):
         return None
     line: Optional[str] = None
-    raw_reason = payload.get("reason")
+    raw_reason = payload.get("reason") or payload.get("hold_reason")
     if raw_reason:
         line = str(raw_reason).strip()
     if not line:

@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from internal.council.publish_gate import publish_gate_label
+from internal.preview.tribunal_hero import build_tribunal_view
 from server import app
 
 client = TestClient(app)
@@ -23,13 +24,15 @@ def _jinja_env() -> Environment:
 def test_alert_button_hidden_when_disabled():
     env = _jinja_env()
     env.globals["publish_gate_label"] = publish_gate_label
+    dpick = {"action": "HOLD", "pick": None, "candidate": None}
     html = env.get_template("partials/premium/council_stage.html").render(
-        dpick={"action": "HOLD", "pick": None, "candidate": None},
+        dpick=dpick,
         hybrid_trust={"n": 0},
         trust_banner={"ready": False, "message": "Building"},
         story_path={},
         habit_watchlist={"netuids": [], "count": 0},
         habit_alerts={"enabled": False},
+        tribunal=build_tribunal_view(dpick, {"trust_banner": {"ready": False}}),
     )
     assert 'id="habit-alert-btn"' in html
     assert 'data-enabled="0"' in html
@@ -62,25 +65,30 @@ def test_council_stage_hold_degraded_note():
     env = _jinja_env()
     env.globals["publish_gate_label"] = publish_gate_label
     gate = publish_gate_label()
-    html = env.get_template("partials/premium/council_stage.html").render(
-        dpick={
-            "action": "HOLD",
-            "pick": None,
-            "candidate": {
-                "subnet": {"netuid": 15, "name": "BitQuant"},
-                "final_confidence": 0.32,
-                "confidence": 0.32,
-            },
-            "hold_reason": f"Confidence 32% below {gate}",
+    dpick = {
+        "action": "HOLD",
+        "pick": None,
+        "candidate": {
+            "subnet": {"netuid": 15, "name": "BitQuant"},
+            "final_confidence": 0.32,
+            "confidence": 0.32,
         },
+        "hold_reason": f"Confidence 32% below {gate}",
+    }
+    trust = {"ready": True, "graded": 100, "accuracy": 0.31}
+    html = env.get_template("partials/premium/council_stage.html").render(
+        dpick=dpick,
         hybrid_trust={"n": 100},
-        trust_banner={"ready": True, "graded": 100, "accuracy": 0.31},
+        trust_banner=trust,
         story_path={},
         habit_watchlist={"netuids": [], "count": 0},
         habit_alerts={"enabled": False},
+        tribunal=build_tribunal_view(dpick, {"trust_banner": trust}),
     )
-    assert "k3-degraded-note" in html
-    assert gate in html
+    # The HOLD publish blocker is shown under the hero, not just in the payload.
+    reason_line = html.split('id="tribunal-hero-hold-reason"', 1)[1].split("</p>", 1)[0]
+    assert gate in reason_line
+    assert "hidden" not in reason_line.split(">", 1)[0]
 
 
 def test_paper_portfolio_quiet_states_in_js():

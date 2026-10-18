@@ -97,6 +97,6 @@ def test_council_hero_data_hooks():
         tribunal=_tribunal_ctx(dpick),
     )
     assert "data-testid=\"council-hero\"" in html
-    assert "data-hero-phase=\"live\"" in html
+    assert "data-hero-verdict=" in html
     assert "data-hero-netuid=\"82\"" in html
     assert "data-hero-conviction=\"34\"" in html

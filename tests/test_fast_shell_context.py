@@ -12,6 +12,13 @@ client = TestClient(app)
 def _ensure_homepage_cache():
     import server as srv
 
+    # Earlier tests can leave an ultra-minimal shell (a timed-out warm) or a
+    # degraded context with empty council weights in these caches. Drop both,
+    # then warm for this test.
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
+    srv._DEGRADED_INDEX_CACHE["ctx"] = None
+    srv._DEGRADED_INDEX_CACHE["at"] = 0.0
     srv._prime_emergency_home_html()
     srv._warm_homepage_cache(None)
 
@@ -122,6 +129,13 @@ def test_warm_homepage_cache_timeout_does_not_join_hung_render(monkeypatch):
     t0 = time.time()
     srv._warm_homepage_cache(None)
     elapsed = time.time() - t0
+    # The hung render thread is still sleeping: its warm flag and thread handle
+    # would block every later warm, and the ultra-minimal fallback it cached
+    # would leak into the next tests. Reset that state.
+    srv._HOMEPAGE_RENDER_THREAD = None
+    srv._HOMEPAGE_WARMING = False
+    srv._HOMEPAGE_HTML_CACHE["html"] = None
+    srv._HOMEPAGE_HTML_CACHE["at"] = 0.0
     assert elapsed < 12.0, f"warm cache joined hung render for {elapsed:.1f}s"
 
 
@@ -208,9 +222,9 @@ def test_degraded_homepage_has_council_weights():
 def test_degraded_homepage_has_message_intel_skeleton():
     _ensure_homepage_cache()
     html = client.get("/").text
-    assert 'id="message-intel-feed"' in html
+    feed_open_tag = html.split('id="message-intel-feed"', 1)[1].split(">", 1)[0]
+    assert 'aria-busy="true"' in feed_open_tag
     assert "hydrate-skeleton--tall" in html
-    assert "Loading Telegram live feed" in html
 
 
 def test_council_weights_list_trend_from_delta():
