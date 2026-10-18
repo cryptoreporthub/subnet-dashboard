@@ -1,8 +1,8 @@
 # Learning-stack architect verdicts (2026-10-17)
 
-**Nothing committed or pushed; no product code changed.** Files (uncommitted, in the worktree): `/home/user/subnet-dashboard/.claude/worktrees/agent-a0efb63fd87c296a0/docs/learning-loop/ARCHITECT-VERDICTS.md` and `/home/user/subnet-dashboard/.claude/worktrees/agent-a0efb63fd87c296a0/scripts/prototypes/`.
+**Commit:** `803e8370` (2026-10-17). **Owner:** unconfirmed. **Last updated:** 2026-10-18. **Supersedes:** none. **Batch review:** [REVIEW-BATCH.md](REVIEW-BATCH.md).
 
-Worktree `.claude/worktrees/agent-a0efb63fd87c296a0`, base main `e620ee4` (prod serves `fbb13f4`/`e1cfaf8e`; learning/council/judges code identical). **No product code changed.** Deliverables: this file and `scripts/prototypes/` (uncommitted). Source reports (untracked in the main checkout): `/home/user/subnet-dashboard/docs/learning-loop/ROOT-CAUSE-REPORT-2026-10-17.md` (F1-F51, RC1-RC11, FX1-FX11) and `/home/user/subnet-dashboard/docs/learning-loop-audit-2026-10-17.md`.
+Base: `e620ee4` (the merge-base of `803e8370` and `origin/main`). **Not on `origin/main`:** `origin/main` is now `3a65d34a`, and `803e8370` is not an ancestor of it. This commit changes docs and `scripts/prototypes/` only. No app path is in its file list (`server.py`, `internal/`, `message_intel/`, templates, static files, `tests/`). Deliverables: this file and `scripts/prototypes/`. Source reports: `docs/learning-loop/ROOT-CAUSE-REPORT-2026-10-17.md` (F1-F51, RC1-RC11, FX1-FX11) and `docs/learning-loop-audit-2026-10-17.md`.
 
 ## 0. Method and limits (read first)
 
