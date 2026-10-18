@@ -347,3 +347,12 @@
 - **Caps (20/24/40/75) NOT removed** (supersedes the "separate approval" wording in the entry above): sites are `server.py:647,932,1066,3391`, `pick_scheduler.py:32,157`, `selector_scheduler.py:94`, `daily_pick_engine.py:209-210`, `pick_selection_audit.py:58-72`, `score_snapshots.py:53`, `scoring_cap.py` and the three `fly*.toml` files. Blocked on missing prod cost evidence and the 90s daily-pick timeout. Needs a read-first deploy of `claude/scoring-stage-timings`. Details in the status doc.
 - **Owner decisions:** rotate the Chutes key; how prod reaches main; merge order; `/api/feedback` removal; SQLite stance vs the Oct 12 table-free decision; Telegram adjuster keep or drop.
 - Ditto: `4f39f97e`, `0599adf8`, `7f02e308`.
+
+## 2026-10-18 — Status doc corrected to verified merge state (Claude Code session)
+
+- **#1443 merged to `main`** at 2026-10-18T00:58:20Z (head `49faea95`, base `ef234c95`). Verified on GitHub. No deploy ran in this session, so prod is not on the hoist (inferred from that).
+- **#1458 merged** (verified on GitHub).
+- **#1459 still an open draft** at head `6c9ac3bb` (retire label-driven deploys; deploy only by `workflow_dispatch`).
+- **#1442** merge state not re-checked this pass.
+- **Status doc** `docs/learning-loop/STATUS-2026-10-17.md` sections 10 and 11 corrected to the verified state. No product code changed.
+- **Fly:** the flyctl MCP server failed to start (binary not on PATH). No Fly read or deploy from this session.
