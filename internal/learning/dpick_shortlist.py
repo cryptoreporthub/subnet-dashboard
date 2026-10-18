@@ -129,17 +129,29 @@ def build_deliberation_shortlist(
     if not subnets:
         return empty
 
+    scored: List[Dict[str, Any]] = []
     try:
-        from internal.council.score_cache import score_universe
+        from internal.council.score_snapshots import day_scored_from_snapshot
 
-        _, day_scored = score_universe(
-            subnets,
-            market_context,
-            score_hour=score_subnet_for_hour,
-            score_day=score_subnet_for_day,
-        )
-        scored = [{"subnet": item["subnet"], "score": item["score"]} for item in day_scored]
+        snap_scored = day_scored_from_snapshot(subnets)
+        if snap_scored is not None:
+            scored = [{"subnet": item["subnet"], "score": item["score"]} for item in snap_scored]
     except Exception:
+        scored = []
+    if not scored:
+        try:
+            from internal.council.score_cache import score_universe
+
+            _, day_scored = score_universe(
+                subnets,
+                market_context,
+                score_hour=score_subnet_for_hour,
+                score_day=score_subnet_for_day,
+            )
+            scored = [{"subnet": item["subnet"], "score": item["score"]} for item in day_scored]
+        except Exception:
+            scored = []
+    if not scored:
         scored = []
         for sn in subnets:
             try:
