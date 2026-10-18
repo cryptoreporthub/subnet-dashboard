@@ -1074,6 +1074,47 @@ def test_weekly_authors_exclude_desk_account(monkeypatch):
     assert authors[0]["author_name"] == "Alice"
 
 
+def test_24h_summary_excludes_desk_account(monkeypatch):
+    from datetime import datetime, timezone
+
+    from internal.message_intel import rollup
+
+    now = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for i in range(12):
+        rows.append(
+            {
+                "timestamp": now,
+                "author_id": "u1",
+                "author_name": "Alice",
+                "author_username": "alice",
+                "content": f"SN7 looks strong {i}",
+                "sentiment": "bullish",
+                "conviction": 50.0,
+                "group_name": "OfficialSubnetSummer",
+            }
+        )
+    rows.append(
+        {
+            "timestamp": now,
+            "author_id": "8661669822",
+            "author_name": "Subnet Summer Bot",
+            "author_username": "@SubnetSummerBot",
+            "content": "SN99 daily gainers push",
+            "sentiment": "bullish",
+            "conviction": 95.0,
+            "group_name": "OfficialSubnetSummer",
+        }
+    )
+    monkeypatch.setattr(rollup, "_load_message_rows", lambda db=None: rows)
+    monkeypatch.setattr(rollup, "_netuids_from_row", lambda row: [7] if "SN7" in row.get("content", "") else [99])
+
+    summary = rollup.build_24h_summary(limit=5, db=None)
+    assert summary.get("ready") is True
+    assert summary.get("message_count") == 12
+    assert all(t.get("netuid") != 99 for t in summary.get("top_subnets") or [])
+
+
 def test_trending_and_crowns_exclude_desk_account(monkeypatch):
     from datetime import datetime, timezone
 
