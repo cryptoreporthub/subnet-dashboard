@@ -4899,7 +4899,8 @@
       // sections, and replay evidence are already available.
       picksRequest.then(function (pickPayload) {
         pickPayload = safePayload(pickPayload);
-        if (pickPayload && Object.keys(pickPayload).length && !cockpitPicksConnected) {
+        var snapshotHasPicks = !!(pickPayload && ((pickPayload.hour_picks || []).length || (pickPayload.day_picks || []).length));
+        if (snapshotHasPicks && !cockpitPicksConnected) {
           hourPicks = pickPayload.hour_picks || [];
           dayPicks = pickPayload.day_picks || [];
           renderHourDayPicks(hourPicks, dayPicks);
