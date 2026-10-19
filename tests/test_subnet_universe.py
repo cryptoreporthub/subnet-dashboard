@@ -19,6 +19,7 @@ from internal.subnet_universe import (
     UniverseSnapshot,
     _build_rows,
     _default_probe_fetch,
+    _probe_workers,
     _reset_provider_for_tests,
     _shrink_allowed,
     _validity_entry,
@@ -884,3 +885,15 @@ def test_probe_past_deadline_reports_incomplete(monkeypatch):
     observed, complete = _default_probe_fetch([1, 2, 3], deadline=time.monotonic() - 1)
     assert observed == {}
     assert complete is False
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [(None, 8), ("1", 1), ("4", 4), ("0", 1), ("99", 16), ("many", 8)],
+)
+def test_probe_workers_env_is_clamped(monkeypatch, raw, expected):
+    if raw is None:
+        monkeypatch.delenv("SUBNET_UNIVERSE_PROBE_WORKERS", raising=False)
+    else:
+        monkeypatch.setenv("SUBNET_UNIVERSE_PROBE_WORKERS", raw)
+    assert _probe_workers() == expected
