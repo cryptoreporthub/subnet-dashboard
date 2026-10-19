@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 HYDRATE = Path("static/js/cockpit_hydrate.js")
 
@@ -44,8 +47,11 @@ for (const [payload, connected, want, text] of cases) {
 
 
 def test_empty_picks_payloads_get_a_message_not_a_blank_or_live_scoring():
+    node = shutil.which("node")
+    if not node:
+        pytest.fail("node is required for this test")
     result = subprocess.run(
-        ["node", "-e", SCRIPT, str(HYDRATE)],
+        [node, "-e", SCRIPT, str(HYDRATE)],
         check=False,
         capture_output=True,
         text=True,
