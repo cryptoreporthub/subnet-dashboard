@@ -231,10 +231,20 @@
     empty.classList.add('empty--quiet');
   }
 
-  function picksStateFor(payload, connected) {
-    if (connected) return 'skip';
-    if (!payload || !Object.keys(payload).length) return 'fallback';
-    return payload.status === 'pending_snapshot' ? 'pending' : 'render';
+  function picksViewFor(payload, connected) {
+    var PICKS_EMPTY_MESSAGES = {
+      pending_snapshot: 'Score snapshot pending. Picks return when the next build finishes.',
+      busy: 'Picks are being built for another viewer. Reopen shortly.',
+      timeout: 'Picks timed out before scoring finished. Reopen after /api/top-picks responds.'
+    };
+    if (connected) return { state: 'skip' };
+    if (!payload || !Object.keys(payload).length) return { state: 'fallback' };
+    var hasPicks = (payload.hour_picks || []).length || (payload.day_picks || []).length;
+    if (hasPicks) return { state: 'render' };
+    var message = payload.error
+      ? 'Picks failed to load. Reopen after /api/top-picks responds.'
+      : PICKS_EMPTY_MESSAGES[payload.status];
+    return message ? { state: 'message', message: message } : { state: 'render' };
   }
 
   function pickNetuidFromPayload(payload) {
@@ -4905,12 +4915,12 @@
       // sections, and replay evidence are already available.
       picksRequest.then(function (pickPayload) {
         pickPayload = safePayload(pickPayload);
-        var picksState = picksStateFor(pickPayload, cockpitPicksConnected);
-        if (picksState === 'pending') {
-          markSectionFailed('section-picks', 'Score snapshot pending. Picks return when the next build finishes.');
+        var picksView = picksViewFor(pickPayload, cockpitPicksConnected);
+        if (picksView.state === 'message') {
+          markSectionFailed('section-picks', picksView.message);
           return;
         }
-        if (picksState === 'render') {
+        if (picksView.state === 'render') {
           hourPicks = pickPayload.hour_picks || [];
           dayPicks = pickPayload.day_picks || [];
           renderHourDayPicks(hourPicks, dayPicks);
@@ -4918,7 +4928,7 @@
           paintCharts();
           return;
         }
-        if (picksState === 'skip') return;
+        if (picksView.state === 'skip') return;
         return Promise.all([
           fetchJsonRetry('/api/top-pick/hour', 18000, 1),
           fetchJsonRetry('/api/top-pick/day', 18000, 1),
