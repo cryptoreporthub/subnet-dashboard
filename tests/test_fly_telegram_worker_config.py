@@ -676,3 +676,18 @@ def test_fly_toml_keeps_snapshot_scoring_workers_low():
     match = re.search(r'^\s*SCORE_SNAPSHOT_SCORE_WORKERS\s*=\s*"(\d+)"', _fly_toml(), re.MULTILINE)
     assert match, "fly.toml [env] must set SCORE_SNAPSHOT_SCORE_WORKERS"
     assert int(match.group(1)) <= 2
+
+
+def test_snapshot_scoring_workers_default_is_serial_without_env(monkeypatch):
+    """The code default must stay 1 so a deploy without the fly.toml entry does not reinstate 4."""
+    import importlib
+
+    from internal.council import score_snapshots
+
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCORE_WORKERS", raising=False)
+    try:
+        reloaded = importlib.reload(score_snapshots)
+        assert reloaded.SCORE_SNAPSHOT_SCORE_WORKERS == 1
+    finally:
+        monkeypatch.undo()
+        importlib.reload(score_snapshots)
