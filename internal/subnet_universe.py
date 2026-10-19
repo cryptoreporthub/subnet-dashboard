@@ -11,7 +11,6 @@ import logging
 import os
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -20,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
-# The chain answers swap_currentAlphaPrice with exactly 1.0 for any unregistered netuid.
-# A brand-new subnet also starts at 1.0, but TaoMarketCap lists it, which keeps it positive.
-_UNREGISTERED_NETUID_PRICE = 1.0
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -131,63 +127,36 @@ def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
         return set(), {}, False
 
 
-def _probe_workers() -> int:
-    """Worker count for the probe sweep; 1 restores the old serial pace."""
-    try:
-        return max(1, min(int(os.environ.get("SUBNET_UNIVERSE_PROBE_WORKERS", "8")), 16))
-    except ValueError:
-        return 8
-
-
-def _probe_netuid(
-    client: Any,
-    netuid: int,
-    deadline: Optional[float],
-) -> Optional[Tuple[int, Optional[bool], bool]]:
-    """Return (netuid, observed, errored), or None when the deadline passed before the call."""
-    if deadline is not None and time.monotonic() >= deadline:
-        return None
-    try:
-        price, outcome = client.get_alpha_price_probed(netuid)
-        if outcome in ("rpc_error", "no_price"):
-            return netuid, None, False
-        if netuid != 0 and price == _UNREGISTERED_NETUID_PRICE:
-            return netuid, False, False
-        return netuid, bool(price and float(price) > 0), False
-    except Exception:
-        return netuid, None, True
-
-
 def _default_probe_fetch(
     netuids: List[int],
     *,
     deadline: Optional[float] = None,
 ) -> Tuple[Dict[int, Optional[bool]], bool]:
-    """Map netuid -> True/False (positive probe), or None when that netuid is unobserved.
+    """Map netuid -> True/False from the chain's NetworksAdded registration map.
 
-    Per-netuid ``None`` means ``no_price``, ``rpc_error``, or the netuid was not reached
-    before ``deadline`` — it does not by itself mark the probe pass incomplete.
-    The returned ``complete`` flag is False only on deadline truncation or fetch failure.
+    The price call cannot tell a registered subnet from an unregistered one, because the
+    chain answers 1.0 for both an unseeded pool and an unregistered netuid. Registration is
+    read directly instead, at one pinned finalized block. When that read does not succeed,
+    nothing is observed and ``complete`` is False, so the universe keeps its prior members.
     """
-    observed: Dict[int, Optional[bool]] = {}
-    complete = True
-    try:
-        from internal.chain_client import get_default_client
-
-        client = get_default_client()
-        with ThreadPoolExecutor(max_workers=_probe_workers()) as pool:
-            for result in pool.map(lambda n: _probe_netuid(client, n, deadline), netuids):
-                if result is None:
-                    complete = False
-                    continue
-                netuid, value, errored = result
-                observed[netuid] = value
-                if errored:
-                    complete = False
-    except Exception as exc:
-        logger.warning("subnet_universe probe fetch failed: %s", exc)
+    if deadline is not None and time.monotonic() >= deadline:
         return {}, False
-    return observed, complete
+    try:
+        from internal.chain_price.membership import get_member_netuids
+        from internal.chain_price.reader import ChainReader
+
+        reader = ChainReader()
+        at_hash, outcome = reader.pin_finalized_head()
+        if outcome != "ok" or not at_hash:
+            return {}, False
+        members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+    except Exception as exc:
+        logger.warning("subnet_universe registration read failed: %s", exc)
+        return {}, False
+    if outcome != "ok":
+        return {}, False
+    registered = set(members)
+    return {n: n == 0 or n in registered for n in netuids}, True
 
 
 def _validity_entry(
