@@ -858,3 +858,29 @@ def test_unregistered_netuid_ages_out_after_grace(universe_tmp, monkeypatch):
 
     again = builder.build(rebuilt)
     assert 129 not in again.netuids
+
+
+class _SlowPriceClient(_FakePriceClient):
+    def get_alpha_price_probed(self, netuid):
+        time.sleep(0.01)
+        return super().get_alpha_price_probed(netuid)
+
+
+def test_probe_reaches_every_netuid_within_budget(monkeypatch):
+    client = _SlowPriceClient({n: (0.01 + n / 1000, "ok") for n in range(1, 129)})
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: client)
+    observed, complete = _default_probe_fetch(
+        list(range(MAX_NETUIDS)), deadline=time.monotonic() + 1.0
+    )
+    assert complete is True
+    assert len(observed) == MAX_NETUIDS
+    assert observed[128] is True
+    assert observed[129] is False
+
+
+def test_probe_past_deadline_reports_incomplete(monkeypatch):
+    client = _SlowPriceClient({})
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: client)
+    observed, complete = _default_probe_fetch([1, 2, 3], deadline=time.monotonic() - 1)
+    assert observed == {}
+    assert complete is False
