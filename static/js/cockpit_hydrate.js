@@ -235,16 +235,16 @@
     var PICKS_EMPTY_MESSAGES = {
       pending_snapshot: 'Score snapshot is missing or out of date. Picks are hidden until a fresh build publishes.',
       busy: 'Picks are being built for another viewer. Reopen shortly.',
-      timeout: 'Picks timed out before scoring finished. Reopen after /api/top-picks responds.'
+      timeout: 'Picks timed out. Reopen shortly.'
     };
     if (connected) return { state: 'skip' };
     if (!payload || !Object.keys(payload).length) return { state: 'fallback' };
     var hasPicks = (payload.hour_picks || []).length || (payload.day_picks || []).length;
     if (hasPicks) return { state: 'render' };
     var message = payload.error
-      ? 'Picks failed to load. Reopen after /api/top-picks responds.'
-      : PICKS_EMPTY_MESSAGES[payload.status];
-    return message ? { state: 'message', message: message } : { state: 'render' };
+      ? 'Picks failed to load. Reopen shortly.'
+      : PICKS_EMPTY_MESSAGES[payload.status] || 'No picks available right now.';
+    return { state: 'message', message: message };
   }
 
   function pickNetuidFromPayload(payload) {
