@@ -18,6 +18,7 @@ from internal.subnet_universe import (
     SubnetUniverseProvider,
     UniverseSnapshot,
     _build_rows,
+    _default_probe_fetch,
     _reset_provider_for_tests,
     _shrink_allowed,
     _validity_entry,
@@ -802,3 +803,55 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     assert 100 in result.netuids
     assert result.refresh_incomplete is True
     assert provider.get_snapshot().netuids == result.netuids
+
+
+class _FakePriceClient:
+    """Mimics the chain: unregistered netuids answer with the default price 1.0."""
+
+    def __init__(self, replies):
+        self._replies = replies
+
+    def get_alpha_price_probed(self, netuid):
+        return self._replies.get(netuid, (1.0, "ok"))
+
+
+def test_probe_treats_default_price_of_unregistered_netuid_as_not_positive(monkeypatch):
+    client = _FakePriceClient(
+        {
+            0: (1.0, "ok"),
+            1: (0.0064, "ok"),
+            140: (None, "rpc_error"),
+            141: (None, "no_price"),
+        }
+    )
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: client)
+    observed, complete = _default_probe_fetch([0, 1, 129, 131, 140, 141])
+    assert observed == {0: True, 1: True, 129: False, 131: False, 140: None, 141: None}
+    assert complete is True
+
+
+def test_unregistered_netuid_ages_out_after_grace(universe_tmp, monkeypatch):
+    client = _FakePriceClient({1: (0.0064, "ok")})
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: client)
+    prior = _prior_snapshot([1, 129])
+    prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+
+    built = builder.build(prior)
+    entry = built.validity_map["129"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"]
+    assert 129 in built.netuids
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    aged = UniverseSnapshot(
+        netuids=built.netuids,
+        rows=built.rows,
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
+    )
+    rebuilt = builder.build(aged)
+    assert 129 not in rebuilt.netuids
+    assert 1 in rebuilt.netuids
