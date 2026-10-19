@@ -11,6 +11,7 @@ import logging
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
@@ -22,6 +23,7 @@ STALE_GRACE_SECONDS = 172800  # 48h
 # The chain answers swap_currentAlphaPrice with exactly 1.0 for any unregistered netuid.
 # A brand-new subnet also starts at 1.0, but TaoMarketCap lists it, which keeps it positive.
 _UNREGISTERED_NETUID_PRICE = 1.0
+_PROBE_WORKERS = 8
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -130,6 +132,25 @@ def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
         return set(), {}, False
 
 
+def _probe_netuid(
+    client: Any,
+    netuid: int,
+    deadline: Optional[float],
+) -> Optional[Tuple[int, Optional[bool], bool]]:
+    """Return (netuid, observed, errored), or None when the deadline passed before the call."""
+    if deadline is not None and time.monotonic() >= deadline:
+        return None
+    try:
+        price, outcome = client.get_alpha_price_probed(netuid)
+        if outcome in ("rpc_error", "no_price"):
+            return netuid, None, False
+        if netuid != 0 and price == _UNREGISTERED_NETUID_PRICE:
+            return netuid, False, False
+        return netuid, bool(price and float(price) > 0), False
+    except Exception:
+        return netuid, None, True
+
+
 def _default_probe_fetch(
     netuids: List[int],
     *,
@@ -147,23 +168,15 @@ def _default_probe_fetch(
         from internal.chain_client import get_default_client
 
         client = get_default_client()
-        for netuid in netuids:
-            if deadline is not None and time.monotonic() >= deadline:
-                complete = False
-                break
-            try:
-                price, outcome = client.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    observed[netuid] = None
-                elif outcome == "no_price":
-                    observed[netuid] = None
-                elif netuid != 0 and price == _UNREGISTERED_NETUID_PRICE:
-                    observed[netuid] = False
-                else:
-                    observed[netuid] = bool(price and float(price) > 0)
-            except Exception:
-                observed[netuid] = None
-                complete = False
+        with ThreadPoolExecutor(max_workers=_PROBE_WORKERS) as pool:
+            for result in pool.map(lambda n: _probe_netuid(client, n, deadline), netuids):
+                if result is None:
+                    complete = False
+                    continue
+                netuid, value, errored = result
+                observed[netuid] = value
+                if errored:
+                    complete = False
     except Exception as exc:
         logger.warning("subnet_universe probe fetch failed: %s", exc)
         return {}, False
