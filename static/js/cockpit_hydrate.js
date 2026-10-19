@@ -231,6 +231,12 @@
     empty.classList.add('empty--quiet');
   }
 
+  function picksStateFor(payload, connected) {
+    if (connected) return 'skip';
+    if (!payload || !Object.keys(payload).length) return 'fallback';
+    return payload.status === 'pending_snapshot' ? 'pending' : 'render';
+  }
+
   function pickNetuidFromPayload(payload) {
     if (!payload || typeof payload !== 'object') return null;
     var pick = payload.pick || payload.candidate;
@@ -4899,8 +4905,12 @@
       // sections, and replay evidence are already available.
       picksRequest.then(function (pickPayload) {
         pickPayload = safePayload(pickPayload);
-        var snapshotHasPicks = !!(pickPayload && ((pickPayload.hour_picks || []).length || (pickPayload.day_picks || []).length));
-        if (snapshotHasPicks && !cockpitPicksConnected) {
+        var picksState = picksStateFor(pickPayload, cockpitPicksConnected);
+        if (picksState === 'pending') {
+          markSectionFailed('section-picks', 'Score snapshot pending. Picks return when the next build finishes.');
+          return;
+        }
+        if (picksState === 'render') {
           hourPicks = pickPayload.hour_picks || [];
           dayPicks = pickPayload.day_picks || [];
           renderHourDayPicks(hourPicks, dayPicks);
@@ -4908,7 +4918,7 @@
           paintCharts();
           return;
         }
-        if (cockpitPicksConnected) return;
+        if (picksState === 'skip') return;
         return Promise.all([
           fetchJsonRetry('/api/top-pick/hour', 18000, 1),
           fetchJsonRetry('/api/top-pick/day', 18000, 1),
