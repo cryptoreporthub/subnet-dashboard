@@ -897,3 +897,71 @@ def test_probe_workers_env_is_clamped(monkeypatch, raw, expected):
     else:
         monkeypatch.setenv("SUBNET_UNIVERSE_PROBE_WORKERS", raw)
     assert _probe_workers() == expected
+
+
+def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
+    class _Reader:
+        def pin_finalized_head(self):
+            return pin
+
+        def call_fn(self):
+            return lambda method, params: (None, "ok")
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: (list(members) if read == "ok" else [], read),
+    )
+
+
+def test_registration_read_marks_registered_netuids_positive(monkeypatch):
+    _patch_registration(monkeypatch, [1, 2])
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {0: True, 1: True, 2: True, 129: False}
+    assert complete is True
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"read": "rate_limited"}, {"read": "invalid"}, {"pin": (None, "rpc_error")}],
+)
+def test_registration_read_failure_observes_nothing(monkeypatch, kwargs):
+    _patch_registration(monkeypatch, [1, 2], **kwargs)
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {}
+    assert complete is False
+
+
+def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1])
+    prior = _prior_snapshot([1, 129])
+    prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+
+    built = builder.build(prior)
+    entry = built.validity_map["129"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"]
+    assert 129 in built.netuids
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    aged = UniverseSnapshot(
+        netuids=built.netuids,
+        rows=built.rows,
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
+    )
+    rebuilt = builder.build(aged)
+    assert 129 not in rebuilt.netuids
+    assert 1 in rebuilt.netuids
+    assert 129 not in builder.build(rebuilt).netuids
+
+
+def test_registered_netuid_missing_from_tmc_stays_positive(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1, 130])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+    built = builder.build(_prior_snapshot([1]))
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
