@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
+# The chain answers swap_currentAlphaPrice with exactly 1.0 for any unregistered netuid.
+# A brand-new subnet also starts at 1.0, but TaoMarketCap lists it, which keeps it positive.
+_UNREGISTERED_NETUID_PRICE = 1.0
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -154,6 +157,8 @@ def _default_probe_fetch(
                     observed[netuid] = None
                 elif outcome == "no_price":
                     observed[netuid] = None
+                elif netuid != 0 and price == _UNREGISTERED_NETUID_PRICE:
+                    observed[netuid] = False
                 else:
                     observed[netuid] = bool(price and float(price) > 0)
             except Exception:
