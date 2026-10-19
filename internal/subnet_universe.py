@@ -23,7 +23,6 @@ STALE_GRACE_SECONDS = 172800  # 48h
 # The chain answers swap_currentAlphaPrice with exactly 1.0 for any unregistered netuid.
 # A brand-new subnet also starts at 1.0, but TaoMarketCap lists it, which keeps it positive.
 _UNREGISTERED_NETUID_PRICE = 1.0
-_PROBE_WORKERS = 8
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -132,6 +131,14 @@ def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
         return set(), {}, False
 
 
+def _probe_workers() -> int:
+    """Worker count for the probe sweep; 1 restores the old serial pace."""
+    try:
+        return max(1, min(int(os.environ.get("SUBNET_UNIVERSE_PROBE_WORKERS", "8")), 16))
+    except ValueError:
+        return 8
+
+
 def _probe_netuid(
     client: Any,
     netuid: int,
@@ -168,7 +175,7 @@ def _default_probe_fetch(
         from internal.chain_client import get_default_client
 
         client = get_default_client()
-        with ThreadPoolExecutor(max_workers=_PROBE_WORKERS) as pool:
+        with ThreadPoolExecutor(max_workers=_probe_workers()) as pool:
             for result in pool.map(lambda n: _probe_netuid(client, n, deadline), netuids):
                 if result is None:
                     complete = False
