@@ -855,3 +855,6 @@ def test_unregistered_netuid_ages_out_after_grace(universe_tmp, monkeypatch):
     rebuilt = builder.build(aged)
     assert 129 not in rebuilt.netuids
     assert 1 in rebuilt.netuids
+
+    again = builder.build(rebuilt)
+    assert 129 not in again.netuids
