@@ -20,7 +20,7 @@ for (let i = src.indexOf('{', start); i < src.length; i++) {
 const picksViewFor = new Function(src.slice(start, end) + '; return picksViewFor;')();
 const PICK = [{ netuid: 1 }];
 const cases = [
-  [{ hour_picks: [], day_picks: [], status: 'pending_snapshot' }, false, 'message', /snapshot pending/],
+  [{ hour_picks: [], day_picks: [], status: 'pending_snapshot' }, false, 'message', /missing or out of date/],
   [{ hour_picks: [], day_picks: [], status: 'busy' }, false, 'message', /another viewer/],
   [{ hour_picks: [], day_picks: [], status: 'timeout' }, false, 'message', /timed out/],
   [{ hour_picks: [], day_picks: [], error: 'boom' }, false, 'message', /failed to load/],

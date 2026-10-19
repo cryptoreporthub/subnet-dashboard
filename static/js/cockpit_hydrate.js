@@ -233,7 +233,7 @@
 
   function picksViewFor(payload, connected) {
     var PICKS_EMPTY_MESSAGES = {
-      pending_snapshot: 'Score snapshot pending. Picks return when the next build finishes.',
+      pending_snapshot: 'Score snapshot is missing or out of date. Picks are hidden until a fresh build publishes.',
       busy: 'Picks are being built for another viewer. Reopen shortly.',
       timeout: 'Picks timed out before scoring finished. Reopen after /api/top-picks responds.'
     };
