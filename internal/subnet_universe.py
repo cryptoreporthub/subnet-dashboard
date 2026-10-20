@@ -139,7 +139,7 @@ def _default_probe_fetch(
     read directly instead, at one pinned finalized block. When that read does not succeed,
     nothing is observed and ``complete`` is False, so the universe keeps its prior members.
 
-    ``deadline`` is checked on entry only. The reader calls have no time budget of their own.
+    ``deadline`` is checked on entry only. Each reader call is bounded by the client request timeout, not by ``deadline``.
     """
     if deadline is not None and time.monotonic() >= deadline:
         return {}, False
