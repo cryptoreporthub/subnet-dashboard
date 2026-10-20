@@ -195,7 +195,7 @@ anchors, re-verified at `3a65d34a` by direct file read:
 | `scoring_cap.py` `cap_subnets_for_scoring` | 96–127 | **91–122** |
 | `pick_scheduler.py` `PICK_SCHEDULER_UNIVERSE_CAP` | 37 | **32** |
 | `pick_scheduler.py` `_load_capped_subnets` | 156–163 | **151–161** |
-| `pick_scheduler.py` `_tick` | 320–360 | **315–355** |
+| `pick_scheduler.py` `_tick` | 320–360 | **315–427** (`HourPickScheduler._tick` is 477–514) |
 | `daily_pick_engine.py` `_subnets_for_pick_creation` | 210–217 | **205–212** |
 | `pick_selection_audit.py` docstring claim | 11 | **6** |
 | `pick_selection_audit.py` `POLICY_*` | 29–31 | **24–29** |
@@ -1042,8 +1042,10 @@ cap are not the same control and must not ship together:
 - **Scheduler cap → remove second.** `pick_scheduler._tick` still scores synchronously
   inside `get_or_create_today_pick` under `DAILY_PICK_TICK_TIMEOUT_SECONDS` (H5, R4).
   Removing it first reintroduces sync scoring on the 90 s tick. Refute only if you can show
-  the tick is snapshot-fed at base — it is not, per 320–360 and the absence of any
-  `score_universe` call.
+  the tick is snapshot-fed at base — it is not, per `pick_scheduler.py:319–336` and the
+  absence of any `score_universe` call. It applies a cap twice, in fact:
+  `_load_capped_subnets()` (`:321`, 20) and then `daily_pick_engine.py:343`
+  (`_subnets_for_pick_creation`, min(24, 40) = 24) — the second cannot widen the first.
 
 **F9 — consumers of `coverage_complete`.** Enumerate every reader. With `capped_out == 0`
 in the predicate, `complete` has been false since the cap was set. Find out what has been
