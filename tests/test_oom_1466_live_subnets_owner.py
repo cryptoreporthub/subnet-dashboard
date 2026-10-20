@@ -175,20 +175,72 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
-    repo = Path(__file__).resolve().parents[1]
-    sleep_id = "61999001248"
-    web_sleep_id = "61999001249"
-    hb_path = tmp_path / "hb.json"
-    pidfile = tmp_path / "inline_worker.pid"
+def _pgid_has_live_member(pgid: str) -> bool:
+    if not pgid:
+        return False
+    proc = subprocess.run(
+        [
+            "dash",
+            "-c",
+            f"""awk -v pgid='{pgid}' '
+              {{
+                if (match($0, /\\)/)) {{
+                  rest = substr($0, RSTART + RLENGTH)
+                  sub(/^ /, "", rest)
+                  split(rest, f, " ")
+                  if (f[3] == pgid && f[1] != "Z") found = 1
+                }}
+              }}
+              END {{ exit(found ? 0 : 1) }}
+            ' /proc/[0-9]*/stat 2>/dev/null""",
+        ],
+        capture_output=True,
+        check=False,
+    )
+    return proc.returncode == 0
+
+
+def _pids_matching(pattern: str) -> set[str]:
+    out = subprocess.run(
+        ["pgrep", "-f", pattern],
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
+    return {p for p in out.split() if p}
+
+
+def _stub_ps_absent(tmp_path: Path) -> str:
     no_ps_bin = tmp_path / "bin"
-    no_ps_bin.mkdir()
+    no_ps_bin.mkdir(exist_ok=True)
     (no_ps_bin / "ps").write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
     (no_ps_bin / "ps").chmod(0o755)
-    src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
-    src = src.replace(
+    return str(no_ps_bin)
+
+
+def _patch_entrypoint_for_harness(entrypoint_src: str, web_sleep_id: str) -> str:
+    return entrypoint_src.replace(
         "exec python scripts/run_web_with_guard.py",
         f"exec sleep {web_sleep_id}\n",
+    )
+
+
+def _run_supervisor_stale_heartbeat_harness(
+    tmp_path: Path,
+    entrypoint_src: str,
+    *,
+    parent_sleep_id: str,
+    child_sleep_id: str,
+    web_sleep_id: str,
+) -> None:
+    """TERM-ignoring worker with a child; ps absent on PATH. Raises on failure."""
+    repo = Path(__file__).resolve().parents[1]
+    hb_path = tmp_path / "hb.json"
+    pidfile = tmp_path / "inline_worker.pid"
+    no_ps_prefix = _stub_ps_absent(tmp_path)
+    src = _patch_entrypoint_for_harness(entrypoint_src, web_sleep_id)
+    launch = (
+        f"sh -c 'trap \"\" TERM; (exec sleep {child_sleep_id}) & exec sleep {parent_sleep_id}'"
     )
     env = os.environ.copy()
     env.update(
@@ -196,12 +248,12 @@ def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
             "INLINE_WORKER_PIDFILE": str(pidfile),
             "INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS": "1",
             "INLINE_WORKER_STOP_GRACE_SECONDS": "2",
-            "INLINE_WORKER_LAUNCH": f"sh -c 'trap \"\" TERM; exec sleep {sleep_id}'",
+            "INLINE_WORKER_LAUNCH": launch,
             "WORKER_HEARTBEAT_PATH": str(hb_path),
             "ENABLE_INLINE_WORKER": "1",
             "WORKER_SPLIT_V2": "0",
             "PYTHONPATH": str(repo),
-            "PATH": f"{no_ps_bin}:{env.get('PATH', '')}",
+            "PATH": f"{no_ps_prefix}:{env.get('PATH', '')}",
         }
     )
     log_path = tmp_path / "entrypoint_supervisor.log"
@@ -215,49 +267,64 @@ def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
         text=True,
         start_new_session=True,
     )
-    subprocess.run(["pkill", "-9", "-f", sleep_id], check=False)
+    for pattern in (parent_sleep_id, child_sleep_id):
+        subprocess.run(["pkill", "-9", "-f", pattern], check=False)
     time.sleep(0.2)
+    first_pgid = ""
     first_pids: set[str] = set()
+    second_start_seen = False
     try:
-        time.sleep(0.4)
+        time.sleep(0.5)
         assert pidfile.is_file(), "supervisor did not start inline worker"
-        first_pids = set(
-            subprocess.run(
-                ["pgrep", "-f", sleep_id],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout.split()
-        )
-        assert first_pids, "worker sleep process not running after boot"
+        first_pgid = pidfile.read_text(encoding="utf-8").strip()
+        first_pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
+        assert first_pids, "worker parent/child sleep processes not running after boot"
+        assert len(first_pids) >= 2, f"expected parent+child, saw {first_pids!r}"
         hb_path.write_text(
             json.dumps({"ts": "2000-01-01T00:00:00Z", "pid": 1}),
             encoding="utf-8",
         )
-        time.sleep(12)
+        deadline = time.time() + 14
+        while time.time() < deadline:
+            out = log_path.read_text(encoding="utf-8")
+            starts = out.count("starting inline background worker")
+            if starts >= 2 and not second_start_seen:
+                assert not _pgid_has_live_member(first_pgid), (
+                    f"old pgid {first_pgid} still live at 2nd worker start"
+                )
+                overlap = first_pids & (
+                    _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
+                )
+                assert not overlap, (
+                    f"old worker descendants still alive at 2nd start: {overlap}"
+                )
+                second_start_seen = True
+            if second_start_seen and "sending SIGKILL" in out:
+                break
+            time.sleep(0.25)
+        time.sleep(1)
         listed = subprocess.run(
-            ["pgrep", "-af", sleep_id],
+            ["pgrep", "-af", parent_sleep_id],
             capture_output=True,
             text=True,
             check=False,
         ).stdout.strip()
-        final_pids = set(
-            subprocess.run(
-                ["pgrep", "-f", sleep_id],
-                capture_output=True,
-                text=True,
-                check=False,
-            ).stdout.split()
-        )
+        final_pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
         count = len(final_pids)
-        assert count == 1, f"expected exactly one worker, saw {count} ({listed!r})"
+        assert count <= 2, f"expected at most one worker pair, saw {count} ({listed!r})"
         assert first_pids.isdisjoint(final_pids), (
             f"stale worker pids still alive: {first_pids & final_pids}"
         )
         out = log_path.read_text(encoding="utf-8")
         assert out.count("starting inline background worker") >= 2, out
+        assert second_start_seen, "never observed 2nd start with old pgid dead"
         assert "heartbeat stale" in out, out
         assert "sending SIGKILL" in out, out
+        idx_first = out.find("starting inline background worker")
+        idx_second = out.find("starting inline background worker", idx_first + 1)
+        assert idx_second > idx_first
+        between = out[idx_first:idx_second]
+        assert "heartbeat stale" in between or "heartbeat stale" in out[:idx_second]
     finally:
         log_handle.close()
         if proc.poll() is None:
@@ -266,5 +333,63 @@ def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
             except ProcessLookupError:
                 proc.kill()
             proc.wait(timeout=5)
-        subprocess.run(["pkill", "-9", "-f", sleep_id], check=False)
-        subprocess.run(["pkill", "-9", "-f", web_sleep_id], check=False)
+        for pattern in (parent_sleep_id, child_sleep_id, web_sleep_id):
+            subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+
+
+def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
+    parent_sleep_id = "61999001248"
+    child_sleep_id = "61999001250"
+    web_sleep_id = "61999001249"
+    entrypoint_src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    _run_supervisor_stale_heartbeat_harness(
+        tmp_path,
+        entrypoint_src,
+        parent_sleep_id=parent_sleep_id,
+        child_sleep_id=child_sleep_id,
+        web_sleep_id=web_sleep_id,
+    )
+
+
+def test_supervisor_stale_heartbeat_harness_fails_on_merge_base_entrypoint(tmp_path):
+    proc = subprocess.run(
+        ["git", "show", "057eabf7:scripts/fly_web_entrypoint.sh"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    with pytest.raises(AssertionError):
+        _run_supervisor_stale_heartbeat_harness(
+            tmp_path,
+            proc.stdout,
+            parent_sleep_id="61999001251",
+            child_sleep_id="61999001252",
+            web_sleep_id="61999001253",
+        )
+
+
+def test_supervisor_stale_heartbeat_harness_fails_with_scripts_reverted_to_base(
+    tmp_path,
+):
+    repo = Path(__file__).resolve().parents[1]
+    current = (repo / "scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    base = subprocess.run(
+        ["git", "show", "057eabf7:scripts/fly_web_entrypoint.sh"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    try:
+        (repo / "scripts/fly_web_entrypoint.sh").write_text(base, encoding="utf-8")
+        with pytest.raises(AssertionError):
+            _run_supervisor_stale_heartbeat_harness(
+                tmp_path,
+                base,
+                parent_sleep_id="61999001254",
+                child_sleep_id="61999001255",
+                web_sleep_id="61999001256",
+            )
+    finally:
+        (repo / "scripts/fly_web_entrypoint.sh").write_text(current, encoding="utf-8")
