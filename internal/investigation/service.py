@@ -15,9 +15,11 @@ CACHE_DB = os.environ.get("INVESTIGATION_CACHE_DB", "data/investigation_cache.db
 CACHE_TTL_SECONDS = int(os.environ.get("INVESTIGATION_CACHE_TTL", "180"))
 # A ceiling on abuse, not a tuned working-set size. Rows older than CACHE_TTL_SECONDS are never
 # read, so only fresher rows can produce hits. Seller keys are bounded by netuid count (about 128
-# active) times the limits clients pick; wallet keys are caller-supplied, so they are the unbounded
-# part. The cap binds above 2000 / 180 s, about 11 new keys per second, which organic use does not
-# reach. Entry size and hit rate are not measured here; tune it from data/investigation_cache.db on prod.
+# active) times the limits clients pick. Wallet keys are format-validated (SS58 pattern) but still
+# unbounded in count: every distinct valid-looking address is a new key. The cap counts rows, not
+# bytes, and one wallet or flow payload at limit=200 can be large. Entry size and hit rate are not
+# measured here; read the row count and max and average payload length from prod
+# data/investigation_cache.db before treating 2000 as safe or adding a byte cap.
 CACHE_MAX_ROWS = int(os.environ.get("INVESTIGATION_CACHE_MAX_ROWS", "2000"))
 
 _SELL_TOKENS = ("unstake", "sell", "remove", "undelegate", "out", "withdraw")
