@@ -175,12 +175,16 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def test_entrypoint_supervisor_at_most_one_worker_under_dash(tmp_path):
+def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
     repo = Path(__file__).resolve().parents[1]
     sleep_id = "61999001248"
     web_sleep_id = "61999001249"
     hb_path = tmp_path / "hb.json"
     pidfile = tmp_path / "inline_worker.pid"
+    no_ps_bin = tmp_path / "bin"
+    no_ps_bin.mkdir()
+    (no_ps_bin / "ps").write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+    (no_ps_bin / "ps").chmod(0o755)
     src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
     src = src.replace(
         "exec python scripts/run_web_with_guard.py",
@@ -197,18 +201,35 @@ def test_entrypoint_supervisor_at_most_one_worker_under_dash(tmp_path):
             "ENABLE_INLINE_WORKER": "1",
             "WORKER_SPLIT_V2": "0",
             "PYTHONPATH": str(repo),
+            "PATH": f"{no_ps_bin}:{env.get('PATH', '')}",
         }
     )
+    log_path = tmp_path / "entrypoint_supervisor.log"
+    log_handle = log_path.open("w", encoding="utf-8")
     proc = subprocess.Popen(
         ["dash", "-c", src],
         env=env,
         cwd=str(repo),
-        stdout=subprocess.PIPE,
+        stdout=log_handle,
         stderr=subprocess.STDOUT,
         text=True,
+        start_new_session=True,
     )
+    subprocess.run(["pkill", "-9", "-f", sleep_id], check=False)
+    time.sleep(0.2)
+    first_pids: set[str] = set()
     try:
         time.sleep(0.4)
+        assert pidfile.is_file(), "supervisor did not start inline worker"
+        first_pids = set(
+            subprocess.run(
+                ["pgrep", "-f", sleep_id],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.split()
+        )
+        assert first_pids, "worker sleep process not running after boot"
         hb_path.write_text(
             json.dumps({"ts": "2000-01-01T00:00:00Z", "pid": 1}),
             encoding="utf-8",
@@ -220,13 +241,30 @@ def test_entrypoint_supervisor_at_most_one_worker_under_dash(tmp_path):
             text=True,
             check=False,
         ).stdout.strip()
-        count = len(listed.splitlines()) if listed else 0
-        assert count <= 1, f"expected at most one worker, saw {count} ({listed!r})"
+        final_pids = set(
+            subprocess.run(
+                ["pgrep", "-f", sleep_id],
+                capture_output=True,
+                text=True,
+                check=False,
+            ).stdout.split()
+        )
+        count = len(final_pids)
+        assert count == 1, f"expected exactly one worker, saw {count} ({listed!r})"
+        assert first_pids.isdisjoint(final_pids), (
+            f"stale worker pids still alive: {first_pids & final_pids}"
+        )
+        out = log_path.read_text(encoding="utf-8")
+        assert out.count("starting inline background worker") >= 2, out
+        assert "heartbeat stale" in out, out
+        assert "sending SIGKILL" in out, out
     finally:
-        proc.terminate()
-        try:
+        log_handle.close()
+        if proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(proc.pid), 9)
+            except ProcessLookupError:
+                proc.kill()
             proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-        subprocess.run(["pkill", "-f", sleep_id], check=False)
-        subprocess.run(["pkill", "-f", web_sleep_id], check=False)
+        subprocess.run(["pkill", "-9", "-f", sleep_id], check=False)
+        subprocess.run(["pkill", "-9", "-f", web_sleep_id], check=False)

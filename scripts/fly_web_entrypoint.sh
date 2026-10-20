@@ -26,7 +26,18 @@ _inline_worker_group_live() {
   if ! kill -0 -"$pgid" 2>/dev/null; then
     return 1
   fi
-  if ps -o stat= -g "$pgid" 2>/dev/null | grep -qv '^Z'; then
+  # ponytail: python:3.12-slim has no procps/ps — scan /proc (pgrp + state) instead.
+  if awk -v pgid="$pgid" '
+    {
+      if (match($0, /\)/)) {
+        rest = substr($0, RSTART + RLENGTH)
+        sub(/^ /, "", rest)
+        split(rest, f, " ")
+        if (f[3] == pgid && f[1] != "Z") found = 1
+      }
+    }
+    END { exit(found ? 0 : 1) }
+  ' /proc/[0-9]*/stat 2>/dev/null; then
     return 0
   fi
   return 1
@@ -37,13 +48,13 @@ _stop_inline_worker() {
   if [ -z "$pgid" ]; then
     return 0
   fi
-  if ! _inline_worker_group_live "$pgid"; then
+  if ! kill -0 -"$pgid" 2>/dev/null; then
     wait "$pgid" 2>/dev/null || true
     return 0
   fi
   kill -TERM -"$pgid" 2>/dev/null || kill -TERM "$pgid" 2>/dev/null || true
   deadline=$(( $(date +%s) + INLINE_WORKER_STOP_GRACE_SECONDS ))
-  while _inline_worker_group_live "$pgid"; do
+  while kill -0 -"$pgid" 2>/dev/null; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
       echo "inline worker pgid=$pgid did not exit after ${INLINE_WORKER_STOP_GRACE_SECONDS}s; sending SIGKILL"
       kill -KILL -"$pgid" 2>/dev/null || kill -KILL "$pgid" 2>/dev/null || true
