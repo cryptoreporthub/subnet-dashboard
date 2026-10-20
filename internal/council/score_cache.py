@@ -44,7 +44,9 @@ def score_universe(
     score_day,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Score subnets once per TTL; return (hour_scored, day_scored) item lists."""
-    ctx = dict(market_context or {})
+    from internal.council.scoring_context import enrich_scoring_market_context
+
+    ctx = enrich_scoring_market_context(market_context)
     # Hoist soul_map-backed dials once — scoring used to re-deepcopy soul_map
     # per subnet via load_impact_strength / load_signal_weights.
     if "impact_strength" not in ctx:

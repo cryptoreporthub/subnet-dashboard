@@ -214,6 +214,12 @@ def test_shortlist_wire_builds_from_deliberation_alternatives(monkeypatch):
         "internal.simivision.weighing_room._judge_long_rows",
         lambda subnets, limit=6: [],
     )
+    from internal.council.state_vector import score_subnet_for_day
+
+    scored = [{"subnet": sn, "score": score_subnet_for_day(sn, {})} for sn in _sample_subnets()]
+    monkeypatch.setattr(
+        "internal.council.score_snapshots.day_scored_from_snapshot", lambda _subnets: scored
+    )
     daily = {
         "pick": {
             "subnet": {"netuid": 1, "name": "Alpha"},
