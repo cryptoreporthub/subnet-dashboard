@@ -18,43 +18,41 @@ _inline_worker_proc_state() {
   awk '{print $3}' "/proc/$pid/stat"
 }
 
-_inline_worker_live() {
-  pid="$1"
-  if [ -z "$pid" ]; then
+_inline_worker_group_live() {
+  pgid="$1"
+  if [ -z "$pgid" ]; then
     return 1
   fi
-  if ! kill -0 "$pid" 2>/dev/null; then
+  if ! kill -0 -"$pgid" 2>/dev/null; then
     return 1
   fi
-  state="$(_inline_worker_proc_state "$pid" || true)"
-  if [ "$state" = "Z" ]; then
-    wait "$pid" 2>/dev/null || true
-    return 1
+  if ps -o stat= -g "$pgid" 2>/dev/null | grep -qv '^Z'; then
+    return 0
   fi
-  return 0
+  return 1
 }
 
 _stop_inline_worker() {
-  pid="$1"
-  if [ -z "$pid" ]; then
+  pgid="$1"
+  if [ -z "$pgid" ]; then
     return 0
   fi
-  if ! _inline_worker_live "$pid"; then
-    wait "$pid" 2>/dev/null || true
+  if ! _inline_worker_group_live "$pgid"; then
+    wait "$pgid" 2>/dev/null || true
     return 0
   fi
-  kill -TERM -- -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
+  kill -TERM -"$pgid" 2>/dev/null || kill -TERM "$pgid" 2>/dev/null || true
   deadline=$(( $(date +%s) + INLINE_WORKER_STOP_GRACE_SECONDS ))
-  while _inline_worker_live "$pid"; do
+  while _inline_worker_group_live "$pgid"; do
     if [ "$(date +%s)" -ge "$deadline" ]; then
-      echo "inline worker pid=$pid did not exit after ${INLINE_WORKER_STOP_GRACE_SECONDS}s; sending SIGKILL"
-      kill -KILL -- -"$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null || true
+      echo "inline worker pgid=$pgid did not exit after ${INLINE_WORKER_STOP_GRACE_SECONDS}s; sending SIGKILL"
+      kill -KILL -"$pgid" 2>/dev/null || kill -KILL "$pgid" 2>/dev/null || true
       sleep 1
       break
     fi
     sleep 1
   done
-  wait "$pid" 2>/dev/null || true
+  wait "$pgid" 2>/dev/null || true
 }
 
 _start_inline_worker() {
@@ -71,43 +69,46 @@ _start_inline_worker() {
       ;;
   esac
   if [ -f "$INLINE_WORKER_PIDFILE" ]; then
-    old_pid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
-    if _inline_worker_live "$old_pid"; then
+    old_pgid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
+    if _inline_worker_group_live "$old_pgid"; then
       return 0
     fi
     rm -f "$INLINE_WORKER_PIDFILE"
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "$INLINE_WORKER_LAUNCH" &
+  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
   echo $! > "$INLINE_WORKER_PIDFILE"
-  echo "inline worker pid=$(cat "$INLINE_WORKER_PIDFILE")"
+  echo "inline worker pgid=$(cat "$INLINE_WORKER_PIDFILE")"
 }
 
 _supervise_inline_worker() {
   case "${ENABLE_INLINE_WORKER:-1}" in
-    0|false|no|off) return 0 ;;
+    0|false|no|off)
+      echo "ENABLE_INLINE_WORKER=${ENABLE_INLINE_WORKER} — skipping inline worker (v2 web config)"
+      return 0
+      ;;
   esac
   (
     _start_inline_worker
     while true; do
       sleep "$INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS"
-      pid=""
+      pgid=""
       if [ -f "$INLINE_WORKER_PIDFILE" ]; then
-        pid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
+        pgid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
       fi
       need_restart=0
-      if [ -z "$pid" ] || ! _inline_worker_live "$pid"; then
+      if [ -z "$pgid" ] || ! _inline_worker_group_live "$pgid"; then
         need_restart=1
       elif ! python -c "from internal.worker_heartbeat import is_alive; import sys; sys.exit(0 if is_alive(max_age_seconds=180) else 1)"; then
-        echo "inline worker heartbeat stale (pid=$pid), restarting..."
+        echo "inline worker heartbeat stale (pgid=$pgid), restarting..."
         need_restart=1
       fi
       if [ "$need_restart" = 1 ]; then
-        if [ -n "$pid" ]; then
-          _stop_inline_worker "$pid"
+        if [ -n "$pgid" ]; then
+          _stop_inline_worker "$pgid"
         fi
-        if [ -n "$pid" ] && _inline_worker_live "$pid"; then
-          echo "inline worker restart skipped: pid=$pid still alive after stop"
+        if [ -n "$pgid" ] && _inline_worker_group_live "$pgid"; then
+          echo "inline worker restart skipped: pgid=$pgid still alive after stop"
         else
           rm -f "$INLINE_WORKER_PIDFILE"
           _start_inline_worker

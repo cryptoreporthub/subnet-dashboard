@@ -329,7 +329,7 @@ def _fetch_chain_data():
     (default 3s) so executor shutdown and framed IPC send fit inside the parent's
     recv/terminate window. Parent keeps the full ``rpc_deadline`` for recv.
     """
-    if not _sync_scheduling_allowed():
+    if not _sync_owner_process():
         logger.warning("live_subnets fetch child refused: not sync owner process")
         return None
 
@@ -541,12 +541,16 @@ def _sync_once() -> bool:
         _sync_lock.release()
 
 
-def _sync_scheduling_allowed() -> bool:
-    if not AUTO_SYNC:
-        return False
+def _sync_owner_process() -> bool:
     from internal.run_mode import live_subnets_sync_owner_enabled
 
     return live_subnets_sync_owner_enabled()
+
+
+def _sync_scheduling_allowed() -> bool:
+    if not AUTO_SYNC:
+        return False
+    return _sync_owner_process()
 
 
 def bootstrap_live_subnets_cache() -> bool:

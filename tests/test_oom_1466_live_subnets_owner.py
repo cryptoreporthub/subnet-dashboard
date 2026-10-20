@@ -175,32 +175,58 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def test_stop_inline_worker_terminates_setsid_session():
-    full = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
-    start = full.index("_inline_worker_proc_state()")
-    end = full.index("_start_inline_worker()")
-    stop_helpers = full[start:end]
-    proc = subprocess.Popen(["sleep", "610246"], start_new_session=True)
+def test_entrypoint_supervisor_at_most_one_worker_under_dash(tmp_path):
+    repo = Path(__file__).resolve().parents[1]
+    sleep_id = "61999001248"
+    web_sleep_id = "61999001249"
+    hb_path = tmp_path / "hb.json"
+    pidfile = tmp_path / "inline_worker.pid"
+    src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    src = src.replace(
+        "exec python scripts/run_web_with_guard.py",
+        f"exec sleep {web_sleep_id}\n",
+    )
+    env = os.environ.copy()
+    env.update(
+        {
+            "INLINE_WORKER_PIDFILE": str(pidfile),
+            "INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS": "1",
+            "INLINE_WORKER_STOP_GRACE_SECONDS": "2",
+            "INLINE_WORKER_LAUNCH": f"sh -c 'trap \"\" TERM; exec sleep {sleep_id}'",
+            "WORKER_HEARTBEAT_PATH": str(hb_path),
+            "ENABLE_INLINE_WORKER": "1",
+            "WORKER_SPLIT_V2": "0",
+            "PYTHONPATH": str(repo),
+        }
+    )
+    proc = subprocess.Popen(
+        ["dash", "-c", src],
+        env=env,
+        cwd=str(repo),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
     try:
-        subprocess.run(
-            [
-                "sh",
-                "-c",
-                stop_helpers
-                + f"""
-export INLINE_WORKER_STOP_GRACE_SECONDS=2
-_stop_inline_worker "{proc.pid}"
-if _inline_worker_live "{proc.pid}"; then
-  echo "worker still live"
-  exit 1
-fi
-""",
-            ],
-            check=True,
-            timeout=15,
-            cwd=str(Path(__file__).resolve().parents[1]),
+        time.sleep(0.4)
+        hb_path.write_text(
+            json.dumps({"ts": "2000-01-01T00:00:00Z", "pid": 1}),
+            encoding="utf-8",
         )
-        proc.wait(timeout=5)
+        time.sleep(12)
+        listed = subprocess.run(
+            ["pgrep", "-af", sleep_id],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.strip()
+        count = len(listed.splitlines()) if listed else 0
+        assert count <= 1, f"expected at most one worker, saw {count} ({listed!r})"
     finally:
-        if proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
             proc.kill()
+        subprocess.run(["pkill", "-f", sleep_id], check=False)
+        subprocess.run(["pkill", "-f", web_sleep_id], check=False)
