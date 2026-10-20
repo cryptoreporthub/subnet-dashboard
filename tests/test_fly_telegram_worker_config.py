@@ -280,8 +280,8 @@ def test_fresh_volume_optional_state_fallbacks(tmp_path, monkeypatch):
     assert registry_subnet_rows() == []
 
 
-def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
-    """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off.
+def test_fly_yml_dispatch_only_not_push():
+    """Deploy is workflow_dispatch only; push-to-main and the label path stay off (#1459).
 
     #1185: the deploy checkout ref resolves at runtime via the deploy_ref step
     (steps.deploy_ref.outputs.ref). Merged docs-only vehicles under
@@ -292,16 +292,10 @@ def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
     yml = _fly_yml()
     on_block = yml.split("jobs:", 1)[0]
     assert "workflow_dispatch:" in on_block
-    assert "pull_request:" in on_block
-    assert "types: [labeled]" in on_block
+    assert "pull_request:" not in on_block
+    assert "types: [labeled]" not in on_block
     assert "\n  push:" not in on_block
-    gate = (
-        "github.event_name == 'workflow_dispatch' || "
-        "(github.event_name == 'pull_request' && "
-        "github.event.label.name == 'fly-deploy' && "
-        "github.event.pull_request.head.repo.full_name == github.repository && "
-        "github.actor == 'cryptoreporthub')"
-    )
+    gate = "if: ${{ github.event_name == 'workflow_dispatch' }}"
     assert yml.count(gate) == 2
     # #1185: ref-resolve step replaced the inline head.sha || github.sha expression.
     assert "steps.deploy_ref.outputs.ref" in yml

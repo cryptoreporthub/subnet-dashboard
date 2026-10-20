@@ -635,6 +635,24 @@ def _score_hour_enabled() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
+def _receipt_line(build_id: str, timing: Dict[str, Any], outcome: Dict[str, Any]) -> str:
+    # previous_publish_wall_seconds belongs to the prior build; leave it off this build's line.
+    body = {k: v for k, v in timing.items() if k != "previous_publish_wall_seconds"}
+    return "score snapshot build receipt build_id=%s %s" % (
+        build_id,
+        json.dumps({**body, **outcome}, default=str, sort_keys=True),
+    )
+
+
+def _log_build_receipt(build_id: str, timing: Dict[str, Any], **outcome: Any) -> None:
+    """One INFO line with the timing block and the publish outcome. Never raises:
+    a logging problem must not suppress a snapshot that was already written."""
+    try:
+        logger.info(_receipt_line(build_id, timing, outcome))
+    except Exception:
+        logger.warning("score snapshot build receipt could not be logged", exc_info=True)
+
+
 def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
@@ -711,7 +729,7 @@ def write_full_universe_snapshot(
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
 
-    def _build_and_save() -> Dict[str, Any]:
+    def _build_and_save(build_id: str) -> Dict[str, Any]:
         from internal.council.snapshot_coverage import (
             build_coverage_block,
             coverage_capture_deadline_seconds,
@@ -725,7 +743,7 @@ def write_full_universe_snapshot(
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
-        build_cost.begin(build_started_wall)
+        build_cost.begin(build_id)
         try:
             payload = build_full_universe_snapshot(
                 subnets or [],
@@ -743,7 +761,8 @@ def write_full_universe_snapshot(
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
         timing.update(write_stage_timing)
-        timing["build_cost"] = cost
+        if cost:
+            timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
@@ -842,6 +861,13 @@ def write_full_universe_snapshot(
             publish_metrics(coverage)
         except Exception:
             pass
+        _log_build_receipt(
+            build_id,
+            timing_for_metrics,
+            published=published,
+            complete=bool(coverage.get("complete")),
+            count=payload.get("count"),
+        )
         payload["source"] = source
         payload["coverage"] = coverage
         out: Dict[str, Any] = {
@@ -861,7 +887,7 @@ def write_full_universe_snapshot(
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
         try:
-            return _build_and_save()
+            return _build_and_save(_now_iso())
         except Exception as exc:
             logger.warning("score snapshot write failed: %s", exc)
             return {"ok": False, "error": str(exc)}
@@ -877,7 +903,7 @@ def write_full_universe_snapshot(
             _write_executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="score-snap-write"
             )
-        fut = _write_executor.submit(_build_and_save)
+        fut = _write_executor.submit(_build_and_save, build_started_wall)
         _write_future = fut
     fut.add_done_callback(_release_write_future)
 
