@@ -30,9 +30,8 @@ AB_BENCHMARK_INTERVAL_MINUTES = max(
     15, min(int(os.environ.get("AB_BENCHMARK_INTERVAL_MINUTES", "180")), 24 * 60)
 )
 AB_BENCHMARK_MINIMUM_DAYS = 7
-# An exit quote bit-identical to the entry after a full horizon is a stale feed, not a
-# 0.0% market move (23% of settled entries, 100% of Oct 3-5 slots). Settlement waits this
-# long for a fresh quote before recording the entry as flat.
+# A row the feed marks live=False carries the registry's stored price, not a market quote.
+# Settlement waits this long for a live quote before recording the entry as stale.
 AB_STALE_EXIT_GRACE_HOURS = max(
     0, int(os.environ.get("AB_STALE_EXIT_GRACE_HOURS", "24"))
 )
@@ -261,16 +260,6 @@ def _return_for(entry: Any, exit_price: Any, direction: str) -> Optional[float]:
     return round(raw, 6)
 
 
-def _is_stale_exit(row: Dict[str, Any]) -> bool:
-    """Directional entry whose recorded exit quote equals its entry quote exactly."""
-    entry = _number(row.get("entry_price"))
-    return (
-        row.get("direction") in ("long", "short")
-        and entry is not None
-        and _number(row.get("exit_price")) == entry
-    )
-
-
 def _settle_rows(
     rows: List[Dict[str, Any]],
     current_by_netuid: Dict[int, Dict[str, Any]],
@@ -288,18 +277,23 @@ def _settle_rows(
         result = _return_for(row.get("entry_price"), exit_price, str(row.get("direction") or "neutral"))
         if result is None:
             continue
-        stale = _is_stale_exit({**row, "exit_price": exit_price})
-        if stale and not stale_grace_over:
-            continue  # retry next cycle with a fresh quote instead of grading a stale one
-        row["exit_price"] = exit_price
+        # live is False only for a registry-fallback price. A missing key is unknown, not stale,
+        # and an unchanged live quote is a real flat move that grades like any other.
+        registry_fallback = (current or {}).get("live") is False
+        if registry_fallback and not stale_grace_over:
+            continue  # retry next cycle with a live quote instead of grading a stored price
         row["settled_at"] = settled_at
-        row["return_pct"] = round(result * 100.0, 4)
-        if row.get("direction") == "neutral":
-            row["result"] = "neutral"
-        elif stale:
-            row["result"] = "flat"  # unchanged quote after the grace window: neither hit nor miss
+        if registry_fallback:
+            row["exit_price"] = None
+            row["return_pct"] = None
+            row["result"] = "stale"
         else:
-            row["result"] = "hit" if result > 0 else "miss"
+            row["exit_price"] = exit_price
+            row["return_pct"] = round(result * 100.0, 4)
+            if row.get("direction") == "neutral":
+                row["result"] = "neutral"
+            else:
+                row["result"] = "hit" if result > 0 else "miss"
         changed += 1
     return changed
 
@@ -345,13 +339,11 @@ def _model_metrics(snapshots: List[Dict[str, Any]], key: str) -> Dict[str, Any]:
         row
         for snapshot in snapshots
         for row in (snapshot.get(key) or [])
-        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral", "flat")
+        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral", "stale")
     ]
-    # Legacy rows graded "miss" off an unchanged exit quote are stale feed, not outcomes.
-    stale = [row for row in rows if row.get("result") == "flat" or _is_stale_exit(row)]
-    stale_ids = {id(row) for row in stale}
+    stale = [row for row in rows if row.get("result") == "stale"]
     directional = [
-        row for row in rows if row.get("direction") in ("long", "short") and id(row) not in stale_ids
+        row for row in rows if row.get("direction") in ("long", "short") and row.get("result") != "stale"
     ]
     returns = [_number(row.get("return_pct")) for row in directional]
     returns = [value for value in returns if value is not None]
