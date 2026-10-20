@@ -27,7 +27,8 @@ _inline_worker_group_live() {
     return 1
   fi
   # ponytail: python:3.12-slim has no procps/ps — scan /proc (pgrp + state) instead.
-  if awk -v pgid="$pgid" '
+  # ponytail: mawk aborts if a /proc/*/stat vanishes mid-read; cat snapshots first.
+  if cat /proc/[0-9]*/stat 2>/dev/null | awk -v pgid="$pgid" '
     {
       if (match($0, /\)/)) {
         rest = substr($0, RSTART + RLENGTH)
@@ -37,7 +38,7 @@ _inline_worker_group_live() {
       }
     }
     END { exit(found ? 0 : 1) }
-  ' /proc/[0-9]*/stat 2>/dev/null; then
+  '; then
     return 0
   fi
   return 1

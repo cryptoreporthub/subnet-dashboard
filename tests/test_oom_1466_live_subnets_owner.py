@@ -175,25 +175,25 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def _pgid_has_live_member(pgid: str) -> bool:
+def _entrypoint_pgid_scan_shell(pgid: str, *, awk_bin: str = "mawk") -> str:
+    return f"""cat /proc/[0-9]*/stat 2>/dev/null | {awk_bin} -v pgid='{pgid}' '
+      {{
+        if (match($0, /\\)/)) {{
+          rest = substr($0, RSTART + RLENGTH)
+          sub(/^ /, "", rest)
+          split(rest, f, " ")
+          if (f[3] == pgid && f[1] != "Z") found = 1
+        }}
+      }}
+      END {{ exit(found ? 0 : 1) }}
+    '"""
+
+
+def _pgid_has_live_member(pgid: str, *, awk_bin: str = "mawk") -> bool:
     if not pgid:
         return False
     proc = subprocess.run(
-        [
-            "dash",
-            "-c",
-            f"""awk -v pgid='{pgid}' '
-              {{
-                if (match($0, /\\)/)) {{
-                  rest = substr($0, RSTART + RLENGTH)
-                  sub(/^ /, "", rest)
-                  split(rest, f, " ")
-                  if (f[3] == pgid && f[1] != "Z") found = 1
-                }}
-              }}
-              END {{ exit(found ? 0 : 1) }}
-            ' /proc/[0-9]*/stat 2>/dev/null""",
-        ],
+        ["dash", "-c", _entrypoint_pgid_scan_shell(pgid, awk_bin=awk_bin)],
         capture_output=True,
         check=False,
     )
@@ -335,6 +335,33 @@ def _run_supervisor_stale_heartbeat_harness(
             proc.wait(timeout=5)
         for pattern in (parent_sleep_id, child_sleep_id, web_sleep_id):
             subprocess.run(["pkill", "-9", "-f", pattern], check=False)
+
+
+def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
+    target = "61999009888"
+    worker = subprocess.Popen(["setsid", "sleep", target])
+    churn = subprocess.Popen(
+        ["dash", "-c", "while true; do (sleep 0.01 &); done"],
+        start_new_session=True,
+    )
+    try:
+        time.sleep(0.3)
+        pgid = str(worker.pid)
+        assert _pgid_has_live_member(pgid), "stable worker group not visible before churn"
+        false_dead = 0
+        for _ in range(80):
+            if not _pgid_has_live_member(pgid):
+                false_dead += 1
+        assert false_dead == 0, f"mawk+cat scan reported dead {false_dead}/80 under churn"
+    finally:
+        for proc in (worker, churn):
+            if proc.poll() is None:
+                try:
+                    os.killpg(os.getpgid(proc.pid), 9)
+                except ProcessLookupError:
+                    proc.kill()
+                proc.wait(timeout=5)
+        subprocess.run(["pkill", "-9", "-f", target], check=False)
 
 
 def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
