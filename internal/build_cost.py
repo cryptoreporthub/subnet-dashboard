@@ -23,13 +23,10 @@ _active: Optional[Dict[str, Any]] = None
 
 def begin(build_id: str) -> None:
     global _active
+    replaced: Optional[str] = None
     with _lock:
         if _active is not None:
-            logger.warning(
-                "build_cost.begin: build %s already active, replacing it with %s",
-                _active["build_id"],
-                build_id,
-            )
+            replaced = _active["build_id"]
         _active = {
             "build_id": build_id,
             "cpu_start": time.process_time(),
@@ -39,6 +36,10 @@ def begin(build_id: str) -> None:
             "rpc_calls": 0,
             "rpc_seconds": 0.0,
         }
+    if replaced is not None:
+        logger.warning(
+            "build_cost.begin: build %s already active, replacing it with %s", replaced, build_id
+        )
 
 
 def record(kind: str, seconds: float) -> None:

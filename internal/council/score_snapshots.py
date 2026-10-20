@@ -614,6 +614,22 @@ def _score_hour_enabled() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
+def _receipt_line(build_id: str, timing: Dict[str, Any], outcome: Dict[str, Any]) -> str:
+    return "score snapshot build receipt build_id=%s %s" % (
+        build_id,
+        json.dumps({**timing, **outcome}, default=str, sort_keys=True),
+    )
+
+
+def _log_build_receipt(build_id: str, timing: Dict[str, Any], **outcome: Any) -> None:
+    """One INFO line with the timing block and the publish outcome. Never raises:
+    a logging problem must not suppress a snapshot that was already written."""
+    try:
+        logger.info(_receipt_line(build_id, timing, outcome))
+    except Exception:
+        logger.warning("score snapshot build receipt could not be logged", exc_info=True)
+
+
 def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
@@ -726,11 +742,6 @@ def write_full_universe_snapshot(
             timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
-        logger.info(
-            "score snapshot build receipt build_id=%s %s",
-            build_id,
-            json.dumps(timing, default=str, sort_keys=True),
-        )
         try:
             coverage = build_coverage_block(
                 receipt=receipt,
@@ -827,6 +838,13 @@ def write_full_universe_snapshot(
             publish_metrics(coverage)
         except Exception:
             pass
+        _log_build_receipt(
+            build_id,
+            timing_for_metrics,
+            published=published,
+            complete=bool(coverage.get("complete")),
+            count=payload.get("count"),
+        )
         payload["source"] = source
         payload["coverage"] = coverage
         out: Dict[str, Any] = {
