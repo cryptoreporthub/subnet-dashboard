@@ -194,15 +194,15 @@ anchors, re-verified at `3a65d34a` by direct file read:
 | `scoring_cap.py` file length | 127 | **122** |
 | `scoring_cap.py` `cap_subnets_for_scoring` | 96–127 | **91–122** |
 | `pick_scheduler.py` `PICK_SCHEDULER_UNIVERSE_CAP` | 37 | **32** |
-| `pick_scheduler.py` `_load_capped_subnets` | 156–163 | **151–158** |
+| `pick_scheduler.py` `_load_capped_subnets` | 156–163 | **151–161** |
 | `pick_scheduler.py` `_tick` | 320–360 | **315–355** |
-| `daily_pick_engine.py` `_subnets_for_pick_creation` | 210–217 | **204–211** |
+| `daily_pick_engine.py` `_subnets_for_pick_creation` | 210–217 | **205–212** |
 | `pick_selection_audit.py` docstring claim | 11 | **6** |
 | `pick_selection_audit.py` `POLICY_*` | 29–31 | **24–29** |
 | `pick_selection_audit.py` `_scheduler_cap_limit` | 55–80 | **57–60** |
-| `calibration.py` `calibration_for_subnet` | — | **243** |
-| `calibration.py` row loop / netuid filter | — | **266–271** |
-| `calibration.py` `applied` | — | **288** |
+| `calibration.py` `calibration_for_subnet` | — | **238** |
+| `calibration.py` row loop / netuid filter | — | **261–269** |
+| `calibration.py` `applied` | — | **283** |
 | `calibration.py` file length | 302 | **297** |
 | `state_vector.py` Telegram block | ~1897–1913 | **1893–1912** |
 | `state_vector.py` contract key | — | **1960** |
@@ -235,7 +235,7 @@ All fetched at `3a65d34a`. Line numbers re-derived from decoded content.
 
 #### R1 — the cap is a fallback heuristic and its default is unreachable
 
-`internal/subnets/scoring_cap.py`, 96–127 (of 127):
+`internal/subnets/scoring_cap.py`, 91–122 (of 122):
 
 ```python
 
@@ -272,11 +272,16 @@ def cap_subnets_for_scoring(
     return pool[:cap]
 ```
 
-The "top 10 removed" framing is wrong: line 112 returns `ranked[:cap]`, a straight top-N
+The "top 10 removed" framing is wrong: line 107 returns `ranked[:cap]`, a straight top-N
 with **no** mega exclusion. `_heuristic_hunt_pool` and `SCORING_CAP_MEGA_CEILING_RANK` run
 only when `rank_subnets_by_snapshot` raises or returns empty — the top-10 exclusion is the
-*degraded path*. And `default_limit=40` is doubly unreachable: every caller passes an
-explicit `limit=`, and `server._cap_subnets_for_scoring` (R4) passes `default_limit=20`.
+*degraded path*. And `default_limit=40` is unreachable — but the reason given in Rev 3 was wrong.
+The two callers that pass no `limit=` are `server.py:1214` (spotlight) and
+`server.py:2946` (SimiVision); both go through `server._cap_subnets_for_scoring`, which
+supplies `default_limit=TOP_SCORING_UNIVERSE` (`:647`, **20**). Every other caller
+(`:1066`, `:3363`, `pick_scheduler.py:158`, `score_snapshots.py:674`,
+`daily_pick_engine.py:212`, `pick_selection_audit.py:70`/`:72`) passes `limit=` explicitly.
+So the literal default 40 is never reached — not because every caller passes `limit=`.
 
 #### R2 — one env var, two readers, two answers
 
@@ -328,17 +333,17 @@ fly.toml:92                            SCORING_CAP_MID_RANK_MIN = "11"
 fly.toml:93                            SCORING_CAP_MID_RANK_MAX = "75"
 
 fly.worker-v2.toml:64                  SCORE_SNAPSHOT_MAX_SUBNETS = "40"
-fly.worker-v2.toml:70                  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
-fly.worker-v2.toml:71                  SCORING_CAP_MEGA_CEILING_RANK = "10"
-fly.worker-v2.toml:72                  SCORING_CAP_MID_RANK_MIN = "11"
-fly.worker-v2.toml:73                  SCORING_CAP_MID_RANK_MAX = "75"
+fly.worker-v2.toml:65                  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
+fly.worker-v2.toml:66                  SCORING_CAP_MEGA_CEILING_RANK = "10"
+fly.worker-v2.toml:67                  SCORING_CAP_MID_RANK_MIN = "11"
+fly.worker-v2.toml:68                  SCORING_CAP_MID_RANK_MAX = "75"
 
 
-fly.worker-v2-essential-soak.toml:80   SCORE_SNAPSHOT_MAX_SUBNETS = "40"
-fly.worker-v2-essential-soak.toml:81   SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
-fly.worker-v2-essential-soak.toml:82   SCORING_CAP_MEGA_CEILING_RANK = "10"
-fly.worker-v2-essential-soak.toml:83   SCORING_CAP_MID_RANK_MIN = "11"
-fly.worker-v2-essential-soak.toml:84   SCORING_CAP_MID_RANK_MAX = "75"
+fly.worker-v2-essential-soak.toml:75   SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+fly.worker-v2-essential-soak.toml:76   SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
+fly.worker-v2-essential-soak.toml:77   SCORING_CAP_MEGA_CEILING_RANK = "10"
+fly.worker-v2-essential-soak.toml:78   SCORING_CAP_MID_RANK_MIN = "11"
+fly.worker-v2-essential-soak.toml:79   SCORING_CAP_MID_RANK_MAX = "75"
 ```
 
 `TELEGRAM_EVIDENCE_CALIBRATION`, `TOP_SCORING_UNIVERSE` and `SCORE_SNAPSHOT_SCORE_WORKERS`
@@ -382,7 +387,7 @@ def _cap_subnets_for_scoring(
             subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
 ```
 
-`internal/council/pick_scheduler.py`, 37 and 156–163:
+`internal/council/pick_scheduler.py`, 32 and 151–161:
 
 ```python
 PICK_SCHEDULER_UNIVERSE_CAP = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
@@ -397,7 +402,7 @@ def _load_capped_subnets() -> Any:
         return _cap_subnets_for_scoring(subnets or [], limit=cap)
 ```
 
-`internal/council/daily_pick_engine.py`, 210–217:
+`internal/council/daily_pick_engine.py`, 205–212:
 
 ```python
 def _subnets_for_pick_creation(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -466,7 +471,7 @@ not 24)". **Nobody propagated that correction to the verdict doc, to
 
 #### R6 — the 3000-row claim is a code receipt
 
-`internal/message_intel/rollup.py`, 1082 and 1096–1101:
+`internal/message_intel/rollup.py`, 1068 and 1077–1098:
 
 ```python
 def _query_conviction_rows(db=None) -> List[Dict[str, Any]]:
@@ -485,7 +490,7 @@ def _query_conviction_rows(db=None) -> List[Dict[str, Any]]:
 
 
 Five-table join, filtered to `source='telegram'`, capped at 3000 rows. Called from
-`calibration.py:199` and `calibration.py:252`. (A second `LIMIT 3000` at `rollup.py:1775`
+`calibration.py:194` and `calibration.py:247`. (A second `LIMIT 3000` at `rollup.py:1770`
 is out of scope — do not touch it.)
 
 #### R7 — the cost is paid unconditionally for an adjustment that is always zero
@@ -547,7 +552,7 @@ here is the mechanism.
 The authors wrote down that they were reporting honestly and deliberately **not** changing
 cap policy.
 
-`snapshot_coverage.py`, 208–215 — the denominator:
+`snapshot_coverage.py`, 203–208 — the denominator:
 
 ```python
 def scoring_expected_netuids(
@@ -558,7 +563,7 @@ def scoring_expected_netuids(
     return membership_scoring_expected(membership_netuids)
 ```
 
-`snapshot_coverage.py`, ~359–363 — the completeness predicate:
+`snapshot_coverage.py`, 354–359 — the completeness predicate:
 
 ```python
     horizons_complete = day_block["complete"] and hour_ok
@@ -593,7 +598,7 @@ Two further consequences:
 
 #### R10 — the rank input starves exactly what the desk is built to find
 
-`internal/council/score_snapshots.py`, `rank_subnets_by_snapshot`, 242–273:
+`internal/council/score_snapshots.py`, `rank_subnets_by_snapshot`, 237–270:
 
 ```python
 def rank_subnets_by_snapshot(...) -> Optional[List[Dict[str, Any]]]:
@@ -636,7 +641,7 @@ def is_worker_mode() -> bool:
 On the v1 topology (`fly.toml` sets `RUN_MODE = "web"`) the snapshot job runs under web
 
 mode, where `_snapshot_subnet_cap()` would return 0 — except `SCORE_SNAPSHOT_MAX_SUBNETS=40`
-short-circuits first at line 52. The cap is applied by env, not by mode.
+short-circuits first at lines 48–50. The cap is applied by env, not by mode.
 
 #### R12 — `telegram_evidence_calibration` is a persisted contract
 
@@ -887,8 +892,8 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 `TOP_SCORING_UNIVERSE` at `3a65d34a`, plus direct reads.
 
 **Delete outright**
-- `internal/subnets/scoring_cap.py` (127 lines)
-- `internal/message_intel/calibration.py` (302 lines)
+- `internal/subnets/scoring_cap.py` (122 lines)
+- `internal/message_intel/calibration.py` (297 lines)
 - `tests/test_telegram_evidence_calibration.py`
 - `tests/test_scoring_cap.py` (87 lines — imports `cap_subnets_for_scoring`, autouse
   fixture stubs `rank_subnets_by_snapshot`)
@@ -902,12 +907,13 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 - `server.py`: `_cap_subnets_for_scoring` (925–932), `TOP_SCORING_UNIVERSE` (647)
 
 **Edit — pick path (second, sequenced — F8)**
-- `internal/council/pick_scheduler.py`: `PICK_SCHEDULER_UNIVERSE_CAP` (37),
-  `_load_capped_subnets` (156–163)
-- `internal/council/daily_pick_engine.py`: `_subnets_for_pick_creation` (210–217)
-- `internal/council/pick_selection_audit.py`: `_scheduler_cap_limit` (62–66),
-  `universe_for_policy` (68–80), `POLICY_*` constants (29–31), the
-  "matches pick_scheduler universe" claim (11), and the `cap-{...}` wording (242, 249).
+- `internal/council/pick_scheduler.py`: `PICK_SCHEDULER_UNIVERSE_CAP` (32),
+  `_load_capped_subnets` (151–161)
+- `internal/council/daily_pick_engine.py`: `_subnets_for_pick_creation` (205–212)
+- `internal/council/pick_selection_audit.py`: `_scheduler_cap_limit` (57–60),
+  `universe_for_policy` (63–75), `POLICY_*` constants (24–29), the
+  "matches pick_scheduler universe" claim (6), the `cap-24` literal (232), and the
+  `cap-{_scheduler_cap_limit()}` f-string (237).
   **This file's oracle is wrong today (R4); fixing the universe is not optional.**
 - `cursor-agents-communication/pick-audit-lock.md`: `scheduler_cap_24` is mislabelled —
   either fix the label or record that 20 is the live value
@@ -922,11 +928,16 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 - `internal/message_intel/routes.py`: `api_message_intel_calibration`
 - `internal/council/daily_pick.py`, `internal/council/pick_explain.py`,
   `tests/test_pick_explain.py`: R12 / F4
-- `tests/test_score_snapshots.py`: references both cap symbols — **do not delete this
-  file**; surgical edits only
+- `tests/test_score_snapshots.py`: references both cap symbols at `:98–100`
+  (`_cap_subnets_for_scoring(rows, limit=5)`) and `:258–262`
+  (`test_snapshot_subnet_cap_defaults_on_worker`) — **do not delete this file**;
+  surgical edits only. The second one also pins the `TOP_SCORING_UNIVERSE` worker
+  fallback that R2 relies on.
 
-- `tests/test_ohlcv_call_quality.py`, `tests/test_market_feed_quality.py`: determine
-  whether the `cap_subnets_for_scoring` reference is setup or assertion before touching
+- `tests/test_ohlcv_call_quality.py` (`:23–24`) and `tests/test_market_feed_quality.py`
+  (`:59–60`): **both are assertions, not setup.** Neither file exercises the cap for any
+  other purpose — drop those two tests and keep the `_safe_simivision_payload` tests
+  that share the file.
 
 **Docs — three files, not one**
 - `docs/agent-friendly/scoring-caps-verdict.md`: its "Keep" rows and its
@@ -1078,7 +1089,7 @@ classifications may be unreliable — that is a finding about the audit, not jus
    re-measured at `3a65d34a`.**
 3. **`TELEGRAM_EVIDENCE_CALIBRATION` unset in deploy.** Proven for repo files only. Could be
    set through `fly secrets`, invisible to the repo. Unverified against live config.
-4. **`pick_selection_audit.py` behaviour unread beyond lines 11, 29–31, 55–80, 242, 249 (cap assignments 57–60; docstring claim line 6).**
+4. **`pick_selection_audit.py` behaviour unread beyond lines 6, 24–29, 57–75, 232, 237 and 249 (cap assignments 57–60; docstring claim line 6).**
    The rest of the file is unread; F10 depends on it.
 5. **Whether `data/pick_audits/` history exists and covers the 20-vs-24 window.** Not
    checked.
@@ -1089,7 +1100,7 @@ classifications may be unreliable — that is a finding about the audit, not jus
    (`_conviction_rows`), which the hoist already reduced to ~1 per build. The remaining
 
    per-name cost is the `classify_call` + `_parse_ts` loop over up to 3000 rows
-   (`calibration.py` 266–271), which `build_cost` does not instrument. If F7 is to be
+   (`calibration.py` 261–269), which `build_cost` does not instrument. If F7 is to be
    settled by measurement rather than arithmetic, that loop needs its own counter — or the
    loop gets deleted first, which satisfies F7 trivially.
 
