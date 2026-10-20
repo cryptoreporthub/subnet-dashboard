@@ -12,6 +12,7 @@ are notes with tiny haircuts. Stacked cuts are capped (RED_TEAM_MAX_HAIRCUT).
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from internal.subnets.tradable import is_tradable_subnet, subnet_netuid, subnet_volume
@@ -32,6 +33,37 @@ def _apply_multiplier(multiplier: float, factor: float) -> float:
     return max(floor, multiplier * factor)
 
 
+# Concern codes. Blocking concerns make ``approved`` False; the rest are advisory haircuts.
+NOT_TRADABLE = "not_tradable"
+MISSING_CRITICAL_FIELD = "missing_critical_field"
+BLOCKING_CODES = frozenset({NOT_TRADABLE, MISSING_CRITICAL_FIELD})
+
+
+@dataclass(frozen=True)
+class Concern:
+    code: str
+    message: str
+
+    @property
+    def blocking(self) -> bool:
+        return self.code in BLOCKING_CODES
+
+
+def has_concern(audit: Optional[Dict[str, Any]], code: str) -> bool:
+    """True when ``audit`` carries a concern with this code.
+
+    Audits stored before codes existed (pre 2026-10-17) only have message strings; those are
+    matched by their original message prefix so historical rows still classify.
+    """
+    if not isinstance(audit, dict):
+        return False
+    codes = audit.get("concern_codes")
+    if isinstance(codes, list):
+        return code in codes
+    legacy_prefix = {NOT_TRADABLE: "Not a tradable", MISSING_CRITICAL_FIELD: "Missing critical"}[code]
+    return any(str(c).startswith(legacy_prefix) for c in (audit.get("concerns") or []))
+
+
 def audit_daily_pick(
     candidate: Dict[str, Any],
     all_subnets: Optional[List[Dict[str, Any]]] = None,
@@ -48,14 +80,22 @@ def audit_daily_pick(
     """
     candidate = candidate or {}
     all_subnets = all_subnets or []
-    concerns: List[str] = []
+    found: List[Concern] = []
     confidence_multiplier = 1.0
+    blocked = False
+
+    def cut(factor: float) -> None:
+        """Apply an advisory haircut; a blocked candidate stays at zero confidence."""
+        nonlocal confidence_multiplier
+        if not blocked:
+            confidence_multiplier = _apply_multiplier(confidence_multiplier, factor)
 
     # Root (netuid 0) is TAO staking infrastructure — never a tradable pick.
     if not is_tradable_subnet(candidate):
         n = subnet_netuid(candidate)
         label = "Root" if n == 0 else "missing/invalid netuid"
-        concerns.append(f"Not a tradable subnet: {label}")
+        found.append(Concern(NOT_TRADABLE, f"Not a tradable subnet: {label}"))
+        blocked = True
         confidence_multiplier = 0.0
 
     # Missing critical fields
@@ -67,49 +107,50 @@ def audit_daily_pick(
             if subnet_volume(candidate) > 0:
                 continue
         if value is None or value == "":
-            concerns.append(f"Missing critical field: {field}")
-            confidence_multiplier *= 0.5
+            found.append(Concern(MISSING_CRITICAL_FIELD, f"Missing critical field: {field}"))
+            blocked = True
+            confidence_multiplier = 0.0
 
     # Liquidity — alpha turnover is typically $0.5k–$50k/day.
     # Graded sample: volume<$500 hit ≈ base rate; do not crush thin names.
     volume = subnet_volume(candidate)
     if volume < 100:
-        concerns.append(f"Very thin volume: ${volume:,.0f} < $100")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.97)
+        found.append(Concern("advisory", f"Very thin volume: ${volume:,.0f} < $100"))
+        cut(0.97)
     elif volume < 500:
-        concerns.append(f"Low liquidity: volume ${volume:,.0f} < $500")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
+        found.append(Concern("advisory", f"Low liquidity: volume ${volume:,.0f} < $500"))
+        cut(0.98)
     elif volume < 5_000:
-        concerns.append(f"Thin volume: ${volume:,.0f} < $5k")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.99)
+        found.append(Concern("advisory", f"Thin volume: ${volume:,.0f} < $5k"))
+        cut(0.99)
 
     # Volatility — momentum can be the edge; haircuts are mild notes.
     chg24 = float(candidate.get("price_change_24h", 0) or 0)
     chg7 = float(candidate.get("price_change_7d", 0) or 0)
     if abs(chg24) > 20:
-        concerns.append(f"Extreme 24h volatility: {chg24:+.1f}%")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.92)
+        found.append(Concern("advisory", f"Extreme 24h volatility: {chg24:+.1f}%"))
+        cut(0.92)
     elif abs(chg24) > 12:
-        concerns.append(f"Elevated 24h volatility: {chg24:+.1f}%")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
+        found.append(Concern("advisory", f"Elevated 24h volatility: {chg24:+.1f}%"))
+        cut(0.98)
 
     if abs(chg7) > 50:
-        concerns.append(f"Extreme 7d volatility: {chg7:+.1f}%")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.95)
+        found.append(Concern("advisory", f"Extreme 7d volatility: {chg7:+.1f}%"))
+        cut(0.95)
 
     # Real risk — keep meaningful, but never stack to a second HOLD via audit alone.
     risk_flags = candidate.get("risk_flags") or []
     if risk_flags:
-        concerns.append(f"Risk flags present: {risk_flags}")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.95)
+        found.append(Concern("advisory", f"Risk flags present: {risk_flags}"))
+        cut(0.95)
 
     if candidate.get("is_overvalued"):
-        concerns.append("Subnet flagged as overvalued")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.92)
+        found.append(Concern("advisory", "Subnet flagged as overvalued"))
+        cut(0.92)
 
     if str(candidate.get("status", "active")).lower() in ("deprecated", "at-risk", "inactive"):
-        concerns.append(f"Non-active status: {candidate.get('status')}")
-        confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.90)
+        found.append(Concern("advisory", f"Non-active status: {candidate.get('status')}"))
+        cut(0.90)
 
     # Emission-rank mismatch: note only — did not predict misses in graded sample.
     if all_subnets and len(all_subnets) > 1:
@@ -125,22 +166,22 @@ def audit_daily_pick(
                 None,
             )
             if emission_rank and emission_rank > max(3, len(sorted_by_emission) // 3):
-                concerns.append(
-                    f"Unstable rank: score pick but emission rank #{emission_rank}"
-                )
-                confidence_multiplier = _apply_multiplier(confidence_multiplier, 0.98)
+                found.append(Concern(
+                    "advisory", f"Unstable rank: score pick but emission rank #{emission_rank}"
+                ))
+                cut(0.98)
         except Exception:
             pass
 
     base_confidence = float(candidate.get("confidence", 0.5) or 0.5)
     adjusted = round(min(1.0, max(0.0, base_confidence * confidence_multiplier)), 4)
-    missing_critical = any(c.startswith("Missing critical") for c in concerns)
-    not_tradable = any(c.startswith("Not a tradable") for c in concerns)
-    approved = not missing_critical and not not_tradable
+    approved = not any(c.blocking for c in found)
 
     return {
         "approved": approved,
-        "concerns": concerns,
+        "blocked": blocked,
+        "concerns": [c.message for c in found],
+        "concern_codes": [c.code for c in found],
         "adjusted_confidence": adjusted,
         "confidence_multiplier": round(confidence_multiplier, 4),
         "max_haircut": _max_haircut_fraction(),

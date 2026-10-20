@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from internal.council.daily_pick import select_daily_pick
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_percent
+from internal.council.red_team import MISSING_CRITICAL_FIELD, has_concern
 from internal.subnets.scoring_cap import cap_subnets_for_scoring
 from internal.subnets.tradable import tradable_subnets, subnet_netuid
 
@@ -137,8 +138,7 @@ def _has_stale_data_signals(row: Dict[str, Any]) -> bool:
     if not isinstance(block, dict):
         return False
     audit = block.get("audit") if isinstance(block.get("audit"), dict) else {}
-    concerns = audit.get("concerns") or []
-    return any("Missing critical field" in str(c) for c in concerns)
+    return has_concern(audit, MISSING_CRITICAL_FIELD)
 
 
 def classify_miss(

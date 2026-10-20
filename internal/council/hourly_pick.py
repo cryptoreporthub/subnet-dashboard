@@ -19,6 +19,7 @@ from internal.council.state_vector import (
 )
 from internal.council.red_team import audit_daily_pick
 from internal.council.publish_gate import (
+    audit_publish_guard,
     directional_publish_guard,
     publish_gate_fraction,
     publish_gate_label,
@@ -135,11 +136,14 @@ def select_hourly_pick(
     directional_gate = directional_publish_guard(
         {**prediction, "signal_impact": learning["signal_impact"]}
     )
-    if final_confidence < gate or not directional_gate["approved"]:
+    audit_gate = audit_publish_guard(audit)
+    if final_confidence < gate or not directional_gate["approved"] or not audit_gate["approved"]:
         action = "HOLD"
-        hold_reason = directional_gate["reason"] if not directional_gate["approved"] else (
-            f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
-            "no long call published"
+        hold_reason = (
+            directional_gate["reason"] if not directional_gate["approved"]
+            else f"Confidence {final_confidence:.0%} below {publish_gate_label()} — "
+            "no long call published" if final_confidence < gate
+            else audit_gate["reason"]
         )
     else:
         action = "long"
