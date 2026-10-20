@@ -283,12 +283,17 @@ def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any
 def _confidence_fields(source: Dict[str, Any]) -> Dict[str, Any]:
     """Real 0-1 confidence and scenario tags from a day score or snapshot row.
 
-    A field the source does not have is left out. Never default confidence to the
-    0-100 score, because the cockpit would show it as a different quantity.
+    A field the source does not have, or a confidence outside 0 to 1, is left out.
+    Never default confidence to the 0-100 score, because the cockpit would show it
+    as a different quantity.
     """
     out: Dict[str, Any] = {}
     confidence = source.get("confidence")
-    if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+    if (
+        isinstance(confidence, (int, float))
+        and not isinstance(confidence, bool)
+        and 0.0 <= confidence <= 1.0
+    ):
         out["confidence"] = float(confidence)
     tags = source.get("scenario_tags")
     if isinstance(tags, dict):
@@ -494,6 +499,7 @@ def build_full_universe_snapshot(
                     "total_score": float(h.get("total_score") or 0),
                     "name": sn.get("name"),
                     "recovery_context": h.get("recovery_context"),
+                    **_confidence_fields(h),
                 }
                 out["hour_ok"] = True
             except Exception as exc:

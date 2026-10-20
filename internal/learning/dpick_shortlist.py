@@ -178,9 +178,7 @@ def build_deliberation_shortlist(
                 continue
         except (TypeError, ValueError):
             pass
-        conv = _conviction_pct(
-            row["score"].get("confidence", row["score"].get("total_score", 0))
-        )
+        conv = _conviction_pct(row["score"].get("confidence", 0))
         ec = row["score"].get("expert_contributions") or {}
         # Strip nested metadata — peel only needs the four expert scores
         expert_scores = {
@@ -272,6 +270,8 @@ def attach_shortlist_to_daily_pick(
         cards = shortlist_cards_for_template(deliberation)
         min_cards = _shortlist_min_cards(base)
         base["shortlist"] = cards if len(cards) >= min_cards else []
+        if deliberation.get("status"):
+            base["shortlist_status"] = deliberation["status"]
     except Exception as exc:
         logger.warning("dpick.shortlist attach failed: %s", exc)
         base["shortlist"] = []

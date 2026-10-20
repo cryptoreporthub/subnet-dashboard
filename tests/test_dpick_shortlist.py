@@ -142,3 +142,16 @@ def test_missing_snapshot_never_scores_on_the_request_path(monkeypatch):
     assert out["alternatives"] == []
     assert out["picked"] is None
     assert out["status"] == "pending_snapshot"
+
+
+def test_attach_shortlist_carries_the_pending_snapshot_status(monkeypatch):
+    monkeypatch.setattr("internal.council.score_snapshots.day_scored_from_snapshot", lambda _s: None)
+    out = attach_shortlist_to_daily_pick({"pick": None}, _sample_subnets(), {})
+    assert out["shortlist"] == []
+    assert out["shortlist_status"] == "pending_snapshot"
+
+
+def test_attach_shortlist_has_no_status_when_the_snapshot_serves(monkeypatch):
+    _serve_snapshot(monkeypatch, _sample_subnets())
+    out = attach_shortlist_to_daily_pick({"pick": None}, _sample_subnets(), {})
+    assert "shortlist_status" not in out

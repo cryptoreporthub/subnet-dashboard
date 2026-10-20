@@ -124,3 +124,39 @@ def test_built_snapshot_rows_carry_confidence_between_zero_and_one():
         assert 0 <= row["confidence"] <= 1
         assert row["confidence"] != row["total_score"]
         assert isinstance(row["scenario_tags"], dict)
+
+
+def test_built_snapshot_hour_rows_carry_confidence_when_hour_scoring_is_on():
+    from internal.council import score_snapshots as snaps
+
+    subnets = [
+        {"netuid": n, "name": f"S{n}", "price": 1.0, "price_change_24h": 1.0, "emission": 1.0, "volume": 1000.0}
+        for n in (1, 2, 3)
+    ]
+    snap = snaps.build_full_universe_snapshot(subnets, {}, score_hour=True)
+    assert snap["hour"], "expected scored hour rows"
+    for row in snap["hour"]:
+        assert 0 <= row["confidence"] <= 1
+        assert row["confidence"] != row["total_score"]
+
+
+@pytest.mark.parametrize("bad", [66.35, -0.1, 1.01, True, "0.5", None])
+def test_confidence_outside_zero_to_one_is_left_out(bad):
+    from internal.council import score_snapshots as snaps
+
+    assert "confidence" not in snaps._confidence_fields({"confidence": bad})
+
+
+def test_alternative_conviction_does_not_fall_back_to_the_score(monkeypatch):
+    from internal.learning.dpick_shortlist import build_deliberation_shortlist
+
+    subnets = [{"netuid": n, "name": f"S{n}", "price": 1.0, "volume": 1000.0} for n in (1, 2, 3)]
+    scored = [
+        {"subnet": sn, "score": {"total_score": 66.0, "expert_contributions": {}}} for sn in subnets
+    ]
+    monkeypatch.setattr(
+        "internal.council.score_snapshots.day_scored_from_snapshot", lambda _subnets: scored
+    )
+    out = build_deliberation_shortlist(subnets, {}, {"pick": None})
+    assert out["alternatives"], "expected alternatives"
+    assert all(alt["conviction"] == 0 for alt in out["alternatives"])
