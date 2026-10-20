@@ -280,6 +280,22 @@ def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any
     return out
 
 
+def _confidence_fields(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Real 0-1 confidence and scenario tags from a day score or snapshot row.
+
+    A field the source does not have is left out. Never default confidence to the
+    0-100 score, because the cockpit would show it as a different quantity.
+    """
+    out: Dict[str, Any] = {}
+    confidence = source.get("confidence")
+    if isinstance(confidence, (int, float)) and not isinstance(confidence, bool):
+        out["confidence"] = float(confidence)
+    tags = source.get("scenario_tags")
+    if isinstance(tags, dict):
+        out["scenario_tags"] = tags
+    return out
+
+
 def _top_pick_row(
     row: Dict[str, Any],
     subnets_by_netuid: Dict[int, Dict[str, Any]],
@@ -295,7 +311,6 @@ def _top_pick_row(
         "name": sn.get("name") or row.get("name"),
         "symbol": sn.get("symbol"),
         "score": total,
-        "confidence": total,
         "expert_contributions": {},
         "signals": {
             "price_change_24h": sn.get("price_change_24h"),
@@ -306,6 +321,7 @@ def _top_pick_row(
         },
         "scenario_tags": {},
         "recovery_context": row.get("recovery_context"),
+        **_confidence_fields(row),
     }
 
 
@@ -390,11 +406,11 @@ def day_scored_from_snapshot(
                 "subnet": sn,
                 "score": {
                     "total_score": total,
-                    "confidence": total,
                     "expert_contributions": {},
                     "scenario_tags": {},
                     "recovery_context": row.get("recovery_context"),
                     "reasons": [],
+                    **_confidence_fields(row),
                 },
             }
         )
@@ -495,6 +511,7 @@ def build_full_universe_snapshot(
                 "total_score": float(d.get("total_score") or 0),
                 "name": sn.get("name"),
                 "recovery_context": d.get("recovery_context"),
+                **_confidence_fields(d),
             }
             out["day_ok"] = True
         except Exception as exc:

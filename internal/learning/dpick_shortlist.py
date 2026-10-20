@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from internal.council.publish_gate import publish_gate_percent
-from internal.council.state_vector import score_subnet_for_day, score_subnet_for_hour
 from internal.subnet_names import name_for_netuid
 from internal.subnets.tradable import tradable_subnets
 
@@ -116,7 +115,6 @@ def build_deliberation_shortlist(
     daily_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Return V2 §4A deliberation payload; alternatives may be empty when data is thin."""
-    market_context = dict(market_context or {})
     subnets = tradable_subnets(subnets)
     empty: Dict[str, Any] = {
         "picked": None,
@@ -129,6 +127,8 @@ def build_deliberation_shortlist(
     if not subnets:
         return empty
 
+    # The snapshot is the only scoring source here. Scoring live on a web request
+    # when it is missing or stale is what wedged the box, so say so and stop.
     scored: List[Dict[str, Any]] = []
     try:
         from internal.council.score_snapshots import day_scored_from_snapshot
@@ -139,26 +139,7 @@ def build_deliberation_shortlist(
     except Exception:
         scored = []
     if not scored:
-        try:
-            from internal.council.score_cache import score_universe
-
-            _, day_scored = score_universe(
-                subnets,
-                market_context,
-                score_hour=score_subnet_for_hour,
-                score_day=score_subnet_for_day,
-            )
-            scored = [{"subnet": item["subnet"], "score": item["score"]} for item in day_scored]
-        except Exception:
-            scored = []
-    if not scored:
-        scored = []
-        for sn in subnets:
-            try:
-                score = score_subnet_for_day(sn, market_context)
-                scored.append({"subnet": sn, "score": score})
-            except Exception:
-                continue
+        return {**empty, "status": "pending_snapshot"}
     scored.sort(key=lambda row: float(row["score"].get("total_score", 0)), reverse=True)
     if not scored:
         return empty
