@@ -59,9 +59,50 @@ A number counts only with a receipt. Everything else is a claim and is labelled 
 - The pick replay differs after the `Selection` swap.
 - Snapshot reads on the request path misbehave on a stale snapshot.
 
+## Healthy enough to measure (owner-approved definition, reviewed by Ditto)
+
+Defined by the owner on 2026-10-20 on Claude Code's recommendation, revised after Ditto's review. Every threshold below is a chosen value, not a measured one. Ditto could not verify them: its only prod anchor is one 2026-10-17 scrape, and #1443 changes the scoring path, so the baseline is unknown until the first builds land.
+
+A reading counts only if the system was healthy for the whole window. The window is 6 consecutive clean builds (30 minutes apart, about 3 hours) after the Release 1 deploy. The first post-deploy build is discarded. All conditions must hold.
+
+| # | Condition | Source |
+| --- | --- | --- |
+| 0 | `/version` equals the intended release SHA at the start and at the end of the window. | `/version` |
+| 1 | No machine restart and no out-of-memory kill. | Fly machine events and logs |
+| 2 | No failed health check. | Fly checks, `/health` |
+| 3 | Every build published: each receipt shows `published: true` and `score_workers: 1`. The deployed `fly.toml` and Fly env also show `SCORE_SNAPSHOT_SCORE_WORKERS` as 1. | Build receipt line (#1465), `fly.toml`, Fly env |
+| 4 | Build wall time under 240 s (half the 480 s write budget), and every build within 25% of the window's median. Report the median with min and max. | Receipt `build_wall_seconds` |
+| 5 | Snapshot age at serve is present and between 0 and 2700 s. A reading of -1 means missing and fails. Cadence is 1800 s, so 2700 s is one missed build plus 15 minutes. | `subnet_score_snapshot_age_seconds`, `/api/learning/health` |
+| 6 | No heavy-job gate reject of `prediction_resolver` or of `score_snapshot` during a build. | `heavy_job_slot reject name=... holder=...` log lines |
+| 7 | `/api/top-picks` returns picks, not `timeout` or `pending_snapshot`, on an hourly manual check, and there is no `top-picks timed out` warning in that hour. | Hourly curl, logs |
+| 8 | Denominator present: every receipt has `count` equal to the snapshot cap (40; re-read the deployed `fly.toml` rather than assuming) and a non-empty `build_cost` block. | Receipt |
+
+Per-name cost is not a condition, because it is the thing being measured. Coverage gauges are read only inside a fresh window, because they reset when the snapshot is stale.
+
+**Covariates, reported with the reading and not gated.**
+- Resident memory against a stated ceiling. The baseline was about 413 MB of the 1024 MB machine.
+- The change in rate-limited RPC calls (`chain_rpc_requests_total{outcome="rate_limited"}`). The baseline is non-zero, so fail only if it dominates.
+- `build_cost` counts RPC and conviction calls from all threads, and the Telegram listeners run during a build. Per-name cost is therefore an upper bound unless the window had little concurrent load.
+
+**Abort and discard the window (do not annotate it) on:**
+- `build_cost.begin: build ... already active` (overlapping builds mix counters).
+- `reject name=score_snapshot`.
+- `published: false` or `skipped_older: true` in a receipt.
+- A `capture_reason` of `capture_timeout`, `coverage_assembly_error` or `membership_gated_skip_publish`.
+- A snapshot age of -1, or coverage gauges reset.
+- A receipt with no `build_cost`.
+- `/version` differing from the release SHA.
+
+**Two bars.**
+- To take a measurement: 6 clean consecutive builds.
+- To change any cap: 24 hours, 48 builds, so the window includes the 00:15 UTC daily pick slot and at least one hourly pick cycle. State which slots the window covered.
+- The cap stays at 40 for the whole window and is lifted afterward in steps.
+
+If any condition fails, no measurement is taken and the cause is fixed first. If condition 1 or 4 fails with one worker, stop and report; no cap changes.
+
 ## Open questions for the owner
 
-- What counts as "healthy enough to measure"?
+- Settled: the definition of "healthy enough to measure" is the section above.
 - Is the 2026-09-17 fabricated-citations thread the event the owner meant? Not confirmed.
 - Approval to deploy #1443 and its fixes is the owner's alone.
 
