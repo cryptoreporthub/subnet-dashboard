@@ -10,7 +10,7 @@
 
 ## Rev 5 correction block (2026-10-20, docs only)
 
-Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20). No product code changed. Until a body section is renumbered, this block overrides it.
+Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20). No product code changed. The body of §2, §3 and §6 is renumbered to these values. This block stays as the record of what changed.
 
 **Anchors that are off by +5**
 
@@ -280,7 +280,7 @@ explicit `limit=`, and `server._cap_subnets_for_scoring` (R4) passes `default_li
 
 #### R2 — one env var, two readers, two answers
 
-`internal/council/score_snapshots.py`, 43–62 and 672–681:
+`internal/council/score_snapshots.py`, 45–60 and 667–676:
 
 ```python
 SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
@@ -315,19 +315,19 @@ def _snapshot_subnet_cap() -> int:
 ```
 
 The module constant reads the var with default `0`; `_snapshot_subnet_cap()` reads the same
-var and then falls back to `TOP_SCORING_UNIVERSE`. Line 672 calls the **function**, so the
+var and then falls back to `TOP_SCORING_UNIVERSE`. Line 667 calls the **function**, so the
 constant is dead weight unless Claude finds a reader (F1).
 
 #### R3 — the cap is pinned in all three deploy configs
 
 ```
-fly.toml:94                            SCORE_SNAPSHOT_MAX_SUBNETS = "40"
-fly.toml:95                            SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
-fly.toml:96                            SCORING_CAP_MEGA_CEILING_RANK = "10"
-fly.toml:97                            SCORING_CAP_MID_RANK_MIN = "11"
-fly.toml:98                            SCORING_CAP_MID_RANK_MAX = "75"
+fly.toml:89                            SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+fly.toml:90                            SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
+fly.toml:91                            SCORING_CAP_MEGA_CEILING_RANK = "10"
+fly.toml:92                            SCORING_CAP_MID_RANK_MIN = "11"
+fly.toml:93                            SCORING_CAP_MID_RANK_MAX = "75"
 
-fly.worker-v2.toml:69                  SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+fly.worker-v2.toml:64                  SCORE_SNAPSHOT_MAX_SUBNETS = "40"
 fly.worker-v2.toml:70                  SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
 fly.worker-v2.toml:71                  SCORING_CAP_MEGA_CEILING_RANK = "10"
 fly.worker-v2.toml:72                  SCORING_CAP_MID_RANK_MIN = "11"
@@ -344,7 +344,7 @@ fly.worker-v2-essential-soak.toml:84   SCORING_CAP_MID_RANK_MAX = "75"
 `TELEGRAM_EVIDENCE_CALIBRATION`, `TOP_SCORING_UNIVERSE` and `SCORE_SNAPSHOT_SCORE_WORKERS`
 have **zero hits** in all three tomls.
 
-**Note the shape of lines 93–98:** every neighbouring block in `fly.toml` carries an
+**Note the shape of lines 89–93:** every neighbouring block in `fly.toml` carries an
 explanatory comment ("# Web process: keep CPU for GET / + hydrate…", "# Issue #888:
 hydrate cold price cache…"). The five cap lines carry **none**. Nothing in the deploy
 config says why these exist, what they were sized against, or that they were provisional.
@@ -354,13 +354,13 @@ That absence is itself evidence in §2b H8.
 
 This corrects Rev 2, which said 24 flatly. Four call sites, three different answers:
 
-`server.py`, 652:
+`server.py`, 647:
 
 ```python
 TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
 ```
 
-`server.py`, 930–937:
+`server.py`, 925–932:
 
 ```python
 def _cap_subnets_for_scoring(
@@ -373,7 +373,7 @@ def _cap_subnets_for_scoring(
     return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)
 ```
 
-`server.py`, 1071 (homepage shell) and 3368 (hourly pick):
+`server.py`, 1066 (homepage shell) and 3363 (hourly pick):
 
 ```python
     return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
@@ -414,8 +414,8 @@ Resolving, with `TOP_SCORING_UNIVERSE` unset everywhere (R3):
 
 | Path | Reads | Value |
 |---|---|---|
-| `server.py` homepage shell, 1071 | `min(24, server.TOP)` = `min(24, 20)` | **20** |
-| `server.py` hourly pick, 3368 | `min(24, server.TOP)` | **20** |
+| `server.py` homepage shell, 1066 | `min(24, server.TOP)` = `min(24, 20)` | **20** |
+| `server.py` hourly pick, 3363 | `min(24, server.TOP)` | **20** |
 | `pick_scheduler._load_capped_subnets` | `min(24, server.TOP)` — imports from `server` | **20** |
 | `daily_pick_engine._subnets_for_pick_creation` | `min(24, local default 40)` | **24** |
 | `pick_selection_audit._scheduler_cap_limit` | `min(24, local default 40)` | **24** |
@@ -897,9 +897,9 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
   it is correct and it was never testing what it claimed)
 
 **Edit — snapshot path (first)**
-- `internal/council/score_snapshots.py`: `_snapshot_subnet_cap()` (50–62), the `cap > 0`
-  block (672–681), `capped_out` / `selection_policy = "rank_cap"` (681, 744)
-- `server.py`: `_cap_subnets_for_scoring` (930–937), `TOP_SCORING_UNIVERSE` (652)
+- `internal/council/score_snapshots.py`: `_snapshot_subnet_cap()` (45–60), the `cap > 0`
+  block (667–676), `capped_out` / `selection_policy = "rank_cap"` (676, 739–740)
+- `server.py`: `_cap_subnets_for_scoring` (925–932), `TOP_SCORING_UNIVERSE` (647)
 
 **Edit — pick path (second, sequenced — F8)**
 - `internal/council/pick_scheduler.py`: `PICK_SCHEDULER_UNIVERSE_CAP` (37),
@@ -1078,7 +1078,7 @@ classifications may be unreliable — that is a finding about the audit, not jus
    re-measured at `3a65d34a`.**
 3. **`TELEGRAM_EVIDENCE_CALIBRATION` unset in deploy.** Proven for repo files only. Could be
    set through `fly secrets`, invisible to the repo. Unverified against live config.
-4. **`pick_selection_audit.py` behaviour unread beyond lines 11, 29–31, 55–80, 242, 249.**
+4. **`pick_selection_audit.py` behaviour unread beyond lines 11, 29–31, 55–80, 242, 249 (cap assignments 57–60; docstring claim line 6).**
    The rest of the file is unread; F10 depends on it.
 5. **Whether `data/pick_audits/` history exists and covers the 20-vs-24 window.** Not
    checked.
