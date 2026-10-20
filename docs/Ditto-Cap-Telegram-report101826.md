@@ -8,6 +8,36 @@
 
 > **Line numbers.** Every line number here is a **file offset at the SHA named beside it** — never a line in a downloaded copy. Raw-GitHub copies carry a five-line header, and that is what produced every wrong number in Parts VI–VIII; they are corrected. The single authoritative Telegram line map is **VIII.1**. The "earlier claim → now" tables now live in **Part X** (Part II §0 carries its own revision history); read them as provenance, never as guidance.
 
+## Rev 5 correction block (2026-10-20, docs only)
+
+Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20). No product code changed. Until a body section is renumbered, this block overrides it.
+
+**Anchors that are off by +5**
+
+- Every Rev 3 line number in §2, §3 and §6 is five lines high. The §2a table holds the right values. Correct values: `fly.toml` 89–93 (not 94–98); `server.py` `TOP_SCORING_UNIVERSE` 647 (not 652); `_cap_subnets_for_scoring` 925–932 (not 930–937); the shell cap at 1066 and the hourly cap at 3363 (not 1071 and 3368); `score_snapshots.py` `_snapshot_subnet_cap()` 45–60 and its call site 667–676 (not 672–681); `pick_scheduler.py` `_load_capped_subnets` 151–161 and `_scheduler_cap_limit` 57–60; `daily_pick_engine.py` `_subnets_for_pick_creation` from 205.
+- Cause: raw read output starts with a five-line header (Title, blank, URL Source, blank, Markdown Content). Numbering raw output shifts every citation by +5.
+- The table rows near 1883–1888 and the door table near 2788–2789 carry the same offset.
+- §6 cites `pick_selection_audit.py` lines 55–80. The cap assignments are at 57–60 and the docstring claim is at line 6.
+- Correct at the pin: `score_snapshots.py:263-268` (`_key`) and `state_vector.py:1893` (calibration block).
+
+**Premises that are wrong or incomplete**
+
+- `TOP_SCORING_UNIVERSE` has three raw-env readers, not two: `server.py:647` (default 20), `daily_pick_engine.py` near 210 (default 40), and `pick_selection_audit.py:57–60` (default 40). `score_snapshots.py:45–60` is a fourth. In worker mode it falls back to `TOP_SCORING_UNIVERSE` with default 40. Its module constant at `:38` defaults to 0.
+- So "0 or 40" describes the deployed value (`fly.toml:89` = 40), not the code default. Changing the `TOP_SCORING_UNIVERSE` default touches more than one site.
+- Neither `TOP_SCORING_UNIVERSE` nor `PICK_SCHEDULER_UNIVERSE_CAP` is declared in `fly.toml`. Whether Fly secrets override them is unverified.
+- This collision is already tracked in `cursor-agents-communication/audit-kit/findings/C9-TOP-SCORING-UNIVERSE-001.json` and `queue/done/C-016.json`. Check their dispositions before treating it as new.
+- §4: the 200-row comment in `engine.py` is stale. `engine.py:397-399` documents the deliberate raise to 5,000 rows. This is a stale comment, not a regression.
+- "37 `source: none` at 129 and 131 to 167" lists 38 values. The real set is 129, 131, and 133–167 (37). Netuids 130 and 132 have no row.
+- `expected_netuids` does not exist in `/api/learning/health`. Cite `membership_expected_count == membership_admitted_count == 165` from the timing block instead.
+- §7.3's "~7,471×" does not reproduce from its printed operands (61.745 / 0.0083 ≈ 7,439). Print the unrounded operands or drop the ratio.
+- The table of contents lists Part IX twice. Remove the second row.
+
+**Not corrected here**
+
+- The Fix A and Fix B premises (gauge behaviour, the same-process claim) are not confirmed by the review. Treat them as open.
+- Every `/metrics` reading in Part III §7 is a scrape-time value. The code that produces it is verified; the readings are not.
+- The review verdict is KEEP with one condition: §2, §3 and §6 must be renumbered before §3 is used as an edit list. This block is the interim fix.
+
 ## How to read this
 
 | Part | What it answers | Originally |
@@ -22,7 +52,6 @@
 | **VIII** | **Reconciliation** — every contradiction between Parts I–VII, with a ruling | new |
 | **IX** | What is still unverified, ordered by what would change a decision fastest | new |
 | **X** | **Provenance appendix** — every claim that moved, every retired line number. Not guidance | new |
-| **IX** | What is still unverified, and the commands that would settle it | new |
 
 Part numbering is deliberate: each part keeps the section numbers it was written with (`§2a`, `R5`, `H10`, `§10.3`), because those numbers are quoted in review. A bare `§n` means *inside the part you are reading*.
 
