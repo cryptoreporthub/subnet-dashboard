@@ -244,13 +244,18 @@ def test_h_full_simivision_picks_or_honest_empty():
 
 
 def test_h_full_daily_pick_hero_or_honest_empty():
+    import server as srv
+
+    srv._prime_emergency_home_html()
+    srv._warm_homepage_cache(None)
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="section-daily-pick"' in html
     assert "council-stage" in html
     assert "Council decision" in html or "Today" in html
-    # Stage always states a stance (audited call or HOLD)
-    assert "council-call" in html or "HOLD" in html or "Predicted" in html
+    # The hero always states a stance through its gate label (internal.preview.tribunal_hero.verdict_pills).
+    badge = re.search(r'id="k3-action-badge"[^>]*>\s*([A-Z]+)\s*<', html)
+    assert badge and badge.group(1) in {"SEALED", "GATED", "FORMING", "COLD"}
 
 
 def test_phase_l_cockpit_signals_and_summary():
