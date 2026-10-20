@@ -244,10 +244,6 @@ def test_h_full_simivision_picks_or_honest_empty():
 
 
 def test_h_full_daily_pick_hero_or_honest_empty():
-    import server as srv
-
-    srv._prime_emergency_home_html()
-    srv._warm_homepage_cache(None)
     client = TestClient(app)
     html = client.get("/").text
     assert 'id="section-daily-pick"' in html
@@ -367,3 +363,54 @@ def test_g12_favicon_and_font_consolidation():
     assert "Orbitron" not in base_css
     assert "--font-display: 'Space Grotesk'" in base_css
     assert client.get("/static/favicon.svg").status_code == 200
+
+
+def test_index_shell_keeps_the_council_stage_layout():
+    html = TestClient(app).get("/").text
+    for marker in (
+        "council-stage",
+        'id="council-stage-body"',
+        'id="market-drawer"',
+        'class="top-nav"',
+        'id="liveFeedPill"',
+        'id="signals-ws-status"',
+        'id="mindmap-graph-root"',
+        "/static/js/onboarding_tour.js",
+    ):
+        assert marker in html, f"missing {marker}"
+    for section_id in (
+        "section-header",
+        "section-hero",
+        "section-daily-pick",
+        "section-simivision-picks",
+        "section-council",
+        "section-judges",
+        "section-picks",
+        "section-kpi",
+        "section-subnet-groups",
+        "section-footer",
+    ):
+        assert f'id="{section_id}"' in html, f"missing {section_id}"
+    assert "Market Snapshot" in html
+    assert 'href="#section-simivision-picks">Weighing</a>' in html
+    assert html.index("council-stage") < html.index('id="section-simivision-picks"') < html.index('id="market-drawer"')
+    assert "ui-legacy.css" not in html
+    assert html.count('class="cockpit-card card"') == 0
+
+
+def test_home_charts_use_uplot_not_chartjs():
+    html = TestClient(app).get("/").text.lower()
+    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in html
+    assert "/static/vendor/uplot/uplot.min.css" in html
+    assert "chart.js" not in open("static/js/app.js", encoding="utf-8").read().lower()
+    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
+    assert "drawRadarCanvas" in uplot_js
+    assert "window.__paintRadar" in uplot_js
+
+
+def test_home_deferred_bundle_loads_charts_signals_and_grouping():
+    from pathlib import Path
+
+    deferred = Path("static/js/home_deferred.js").read_text(encoding="utf-8")
+    for asset in ("uplot_charts.js", "premium_signals.js", "subnet_grouping.js"):
+        assert f"/static/js/{asset}" in deferred
