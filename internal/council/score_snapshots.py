@@ -18,6 +18,7 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
+from internal import build_cost
 from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -35,6 +36,7 @@ SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
 SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
+SCORE_SNAPSHOT_SCORE_WORKERS = max(1, env_int("SCORE_SNAPSHOT_SCORE_WORKERS", 1))
 JOB_ID = "score-snapshot-scheduler"
 
 
@@ -266,6 +268,158 @@ def rank_subnets_by_snapshot(
     return sorted(subnets, key=_key, reverse=True)
 
 
+def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
+    out: Dict[int, Dict[str, Any]] = {}
+    for sn in subnets:
+        try:
+            out[int(sn.get("netuid") or sn.get("id") or 0)] = sn
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _confidence_fields(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Real 0-1 confidence and scenario tags from a day score or snapshot row.
+
+    A field the source does not have, or a confidence outside 0 to 1, is left out.
+    Never default confidence to the 0-100 score, because the cockpit would show it
+    as a different quantity.
+    """
+    out: Dict[str, Any] = {}
+    confidence = source.get("confidence")
+    if (
+        isinstance(confidence, (int, float))
+        and not isinstance(confidence, bool)
+        and 0.0 <= confidence <= 1.0
+    ):
+        out["confidence"] = float(confidence)
+    tags = source.get("scenario_tags")
+    if isinstance(tags, dict):
+        out["scenario_tags"] = tags
+    return out
+
+
+def _top_pick_row(
+    row: Dict[str, Any],
+    subnets_by_netuid: Dict[int, Dict[str, Any]],
+) -> Dict[str, Any]:
+    try:
+        netuid = int(row["netuid"])
+    except (TypeError, ValueError, KeyError):
+        return {}
+    sn = subnets_by_netuid.get(netuid, {})
+    total = float(row.get("total_score") or 0)
+    return {
+        "netuid": netuid,
+        "name": sn.get("name") or row.get("name"),
+        "symbol": sn.get("symbol"),
+        "score": total,
+        "expert_contributions": {},
+        "signals": {
+            "price_change_24h": sn.get("price_change_24h"),
+            "price_change_7d": sn.get("price_change_7d"),
+            "emission": sn.get("emission"),
+            "apy": sn.get("apy"),
+            "volume": sn.get("volume"),
+        },
+        "scenario_tags": {},
+        "recovery_context": row.get("recovery_context"),
+        **_confidence_fields(row),
+    }
+
+
+def build_top_picks_from_snapshot(
+    subnets: Optional[List[Dict[str, Any]]] = None,
+    *,
+    max_age_seconds: Optional[int] = None,
+    limit: int = 3,
+    path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Read top hour/day picks from disk snapshot — no scoring on the request path."""
+    age = snapshot_age_seconds(path)
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    if age is None or age > ttl:
+        return None
+    snap = load_score_snapshot(path)
+    if not snap:
+        return None
+    hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
+    day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
+    if not hour_rows and not day_rows:
+        return None
+    hour_rows.sort(key=lambda r: float(r.get("total_score") or 0), reverse=True)
+    day_rows.sort(key=lambda r: float(r.get("total_score") or 0), reverse=True)
+    if subnets is None:
+        subnets = []
+    by_netuid = _subnets_by_netuid(subnets)
+    hour_picks = [_top_pick_row(r, by_netuid) for r in hour_rows[:limit]]
+    day_picks = [_top_pick_row(r, by_netuid) for r in day_rows[:limit]]
+    hour_picks = [p for p in hour_picks if p]
+    day_picks = [p for p in day_picks if p]
+    if not hour_picks and not day_picks:
+        return None
+    return {
+        "hour_picks": hour_picks,
+        "day_picks": day_picks,
+        "meta": {
+            "source": "score_snapshot",
+            "snapshot_age_seconds": round(age, 3),
+            "count_hour": len(hour_rows),
+            "count_day": len(day_rows),
+        },
+    }
+
+
+def day_scored_from_snapshot(
+    subnets: List[Dict[str, Any]],
+    *,
+    max_age_seconds: Optional[int] = None,
+    path: Optional[str] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Join tradable subnets to day scores from snapshot (minimal score payloads)."""
+    ranked = rank_subnets_by_snapshot(
+        subnets, horizon="day", max_age_seconds=max_age_seconds, path=path
+    )
+    if ranked is None:
+        return None
+    snap = load_score_snapshot(path)
+    if not snap:
+        return None
+    scores: Dict[int, Dict[str, Any]] = {}
+    for row in snap.get("day") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            netuid = int(row["netuid"])
+        except (TypeError, ValueError, KeyError):
+            continue
+        scores[netuid] = row
+    out: List[Dict[str, Any]] = []
+    for sn in ranked:
+        try:
+            netuid = int(sn.get("netuid") or 0)
+        except (TypeError, ValueError):
+            continue
+        row = scores.get(netuid)
+        if not row:
+            continue
+        total = float(row.get("total_score") or 0)
+        out.append(
+            {
+                "subnet": sn,
+                "score": {
+                    "total_score": total,
+                    "expert_contributions": {},
+                    "scenario_tags": {},
+                    "recovery_context": row.get("recovery_context"),
+                    "reasons": [],
+                    **_confidence_fields(row),
+                },
+            }
+        )
+    return out if out else None
+
+
 def _load_pump_ladder_state_for_build() -> Dict[str, Any]:
     """One disk read per snapshot build; not cached across builds."""
     try:
@@ -294,7 +448,10 @@ def build_full_universe_snapshot(
     if score_hour is None:
         score_hour = _score_hour_enabled()
     pump_load_started = time.monotonic()
-    build_context = {**(market_context or {}), "pump_ladder_state": _load_pump_ladder_state_for_build()}
+    from internal.council.scoring_context import enrich_scoring_market_context
+
+    build_context = enrich_scoring_market_context(market_context)
+    build_context["pump_ladder_state"] = _load_pump_ladder_state_for_build()
     pump_load_seconds = time.monotonic() - pump_load_started
     rows = tradable_subnets(subnets) if subnets else []
     build_started_at = _now_iso()
@@ -312,66 +469,100 @@ def build_full_universe_snapshot(
     day_scoring_seconds = 0.0
     hour_scoring_seconds = 0.0
     slowest_day: List[Tuple[float, int]] = []
-    for idx, sn in enumerate(rows):
-        try:
-            netuid = int(sn.get("netuid"))
-        except (TypeError, ValueError):
-            skipped_invalid += 1
-            continue
-        if score_hour:
-            hour_attempted.append(netuid)
-            hour_started = time.monotonic()
-            try:
-                h = score_subnet_for_hour(sn, build_context)
-                hour_rows.append(
-                    {
-                        "netuid": netuid,
-                        "total_score": float(h.get("total_score") or 0),
-                        "name": sn.get("name"),
-                        "recovery_context": h.get("recovery_context"),
-                    }
-                )
-                hour_succeeded.append(netuid)
-            except Exception as exc:
-                hour_failed.append(
-                    {
-                        "netuid": netuid,
-                        "stage": "hour",
-                        "error_class": type(exc).__name__,
-                    }
-                )
-            hour_scoring_seconds += time.monotonic() - hour_started
-        day_attempted.append(netuid)
-        day_started = time.monotonic()
-        try:
-            d = score_subnet_for_day(sn, build_context)
-            day_rows.append(
-                {
-                    "netuid": netuid,
-                    "total_score": float(d.get("total_score") or 0),
-                    "name": sn.get("name"),
-                    "recovery_context": d.get("recovery_context"),
-                }
-            )
-            day_succeeded.append(netuid)
-        except Exception as exc:
-            day_failed.append(
-                {
-                    "netuid": netuid,
-                    "stage": "day",
-                    "error_class": type(exc).__name__,
-                }
-            )
-        day_elapsed = time.monotonic() - day_started
-        day_scoring_seconds += day_elapsed
+
+    def _record_slowest(day_elapsed: float, netuid: int) -> None:
         if len(slowest_day) < _SLOWEST_NETUID_SAMPLES:
             slowest_day.append((day_elapsed, netuid))
             slowest_day.sort(reverse=True)
         elif day_elapsed > slowest_day[-1][0]:
             slowest_day[-1] = (day_elapsed, netuid)
             slowest_day.sort(reverse=True)
-        if progress_cb and total and (idx + 1) % 20 == 0:
-            progress_cb(idx + 1, total)
+
+    def _score_one(sn: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            netuid = int(sn.get("netuid"))
+        except (TypeError, ValueError):
+            return {"skip": True}
+        out: Dict[str, Any] = {
+            "netuid": netuid,
+            "day_elapsed": 0.0,
+            "hour_elapsed": 0.0,
+        }
+        if score_hour:
+            hour_started = time.monotonic()
+            try:
+                h = score_subnet_for_hour(sn, build_context)
+                out["hour_row"] = {
+                    "netuid": netuid,
+                    "total_score": float(h.get("total_score") or 0),
+                    "name": sn.get("name"),
+                    "recovery_context": h.get("recovery_context"),
+                    **_confidence_fields(h),
+                }
+                out["hour_ok"] = True
+            except Exception as exc:
+                out["hour_fail"] = {
+                    "netuid": netuid,
+                    "stage": "hour",
+                    "error_class": type(exc).__name__,
+                }
+            out["hour_elapsed"] = time.monotonic() - hour_started
+        day_started = time.monotonic()
+        try:
+            d = score_subnet_for_day(sn, build_context)
+            out["day_row"] = {
+                "netuid": netuid,
+                "total_score": float(d.get("total_score") or 0),
+                "name": sn.get("name"),
+                "recovery_context": d.get("recovery_context"),
+                **_confidence_fields(d),
+            }
+            out["day_ok"] = True
+        except Exception as exc:
+            out["day_fail"] = {
+                "netuid": netuid,
+                "stage": "day",
+                "error_class": type(exc).__name__,
+            }
+        out["day_elapsed"] = time.monotonic() - day_started
+        return out
+
+    def _apply_score_result(res: Dict[str, Any]) -> None:
+        nonlocal skipped_invalid, day_scoring_seconds, hour_scoring_seconds
+        if res.get("skip"):
+            skipped_invalid += 1
+            return
+        netuid = res["netuid"]
+        if score_hour:
+            hour_attempted.append(netuid)
+            hour_scoring_seconds += float(res.get("hour_elapsed") or 0)
+            if res.get("hour_ok"):
+                hour_rows.append(res["hour_row"])
+                hour_succeeded.append(netuid)
+            elif res.get("hour_fail"):
+                hour_failed.append(res["hour_fail"])
+        day_attempted.append(netuid)
+        day_scoring_seconds += float(res.get("day_elapsed") or 0)
+        if res.get("day_ok"):
+            day_rows.append(res["day_row"])
+            day_succeeded.append(netuid)
+        elif res.get("day_fail"):
+            day_failed.append(res["day_fail"])
+        _record_slowest(float(res.get("day_elapsed") or 0), netuid)
+
+    workers = SCORE_SNAPSHOT_SCORE_WORKERS if not score_hour else 1
+    if workers <= 1:
+        for idx, sn in enumerate(rows):
+            _apply_score_result(_score_one(sn))
+            if progress_cb and total and (idx + 1) % 20 == 0:
+                progress_cb(idx + 1, total)
+    else:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="snap-score") as pool:
+            results = list(pool.map(_score_one, rows))
+        for idx, res in enumerate(results):
+            _apply_score_result(res)
+            if progress_cb and total and (idx + 1) % 20 == 0:
+                progress_cb(idx + 1, total)
 
     hour_copied_from_day = False
     if not score_hour and day_rows:
@@ -389,6 +580,7 @@ def build_full_universe_snapshot(
         "day_scoring_seconds": round(day_scoring_seconds, 6),
         "hour_scoring_seconds": round(hour_scoring_seconds, 6),
         "subnet_scoring_loop_wall_seconds": round(subnet_scoring_loop_wall_seconds, 6),
+        "score_workers": workers,
         "slowest_day_netuids": [
             {"netuid": nu, "seconds": round(sec, 6)}
             for sec, nu in slowest_day
@@ -441,6 +633,24 @@ def _score_hour_enabled() -> bool:
         pass
     flag = os.environ.get("SCORE_SNAPSHOT_SCORE_HOUR", default).strip().lower()
     return flag in ("1", "true", "yes", "on")
+
+
+def _receipt_line(build_id: str, timing: Dict[str, Any], outcome: Dict[str, Any]) -> str:
+    # previous_publish_wall_seconds belongs to the prior build; leave it off this build's line.
+    body = {k: v for k, v in timing.items() if k != "previous_publish_wall_seconds"}
+    return "score snapshot build receipt build_id=%s %s" % (
+        build_id,
+        json.dumps({**body, **outcome}, default=str, sort_keys=True),
+    )
+
+
+def _log_build_receipt(build_id: str, timing: Dict[str, Any], **outcome: Any) -> None:
+    """One INFO line with the timing block and the publish outcome. Never raises:
+    a logging problem must not suppress a snapshot that was already written."""
+    try:
+        logger.info(_receipt_line(build_id, timing, outcome))
+    except Exception:
+        logger.warning("score snapshot build receipt could not be logged", exc_info=True)
 
 
 def write_full_universe_snapshot(
@@ -504,7 +714,9 @@ def write_full_universe_snapshot(
             capped_out = max(0, pre_cap_len - len(subnets or []))
             selection_policy = "rank_cap"
         ctx_started = time.monotonic()
-        ctx = _market_context_with_weights(subnets or [])
+        from internal.council.scoring_context import enrich_scoring_market_context
+
+        ctx = enrich_scoring_market_context(_market_context_with_weights(subnets or []))
         write_stage_timing["market_context_seconds"] = round(time.monotonic() - ctx_started, 6)
         logger.info(
             "score snapshot build started: source=%s registry_only=%s feed_rows=%d admitted=%d expected=%d",
@@ -517,7 +729,7 @@ def write_full_universe_snapshot(
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
 
-    def _build_and_save() -> Dict[str, Any]:
+    def _build_and_save(build_id: str) -> Dict[str, Any]:
         from internal.council.snapshot_coverage import (
             build_coverage_block,
             coverage_capture_deadline_seconds,
@@ -531,11 +743,15 @@ def write_full_universe_snapshot(
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
-        payload = build_full_universe_snapshot(
-            subnets or [],
-            ctx,
-            progress_cb=progress_cb,
-        )
+        build_cost.begin(build_id)
+        try:
+            payload = build_full_universe_snapshot(
+                subnets or [],
+                ctx,
+                progress_cb=progress_cb,
+            )
+        finally:
+            cost = build_cost.end()
         build_wall = time.monotonic() - build_started
         inputs = payload.pop("_coverage_inputs", {}) or {}
         stage_timing = payload.pop("build_stage_timing", None)
@@ -545,6 +761,8 @@ def write_full_universe_snapshot(
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
         timing.update(write_stage_timing)
+        if cost:
+            timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
@@ -643,6 +861,13 @@ def write_full_universe_snapshot(
             publish_metrics(coverage)
         except Exception:
             pass
+        _log_build_receipt(
+            build_id,
+            timing_for_metrics,
+            published=published,
+            complete=bool(coverage.get("complete")),
+            count=payload.get("count"),
+        )
         payload["source"] = source
         payload["coverage"] = coverage
         out: Dict[str, Any] = {
@@ -662,7 +887,7 @@ def write_full_universe_snapshot(
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
         try:
-            return _build_and_save()
+            return _build_and_save(_now_iso())
         except Exception as exc:
             logger.warning("score snapshot write failed: %s", exc)
             return {"ok": False, "error": str(exc)}
@@ -678,7 +903,7 @@ def write_full_universe_snapshot(
             _write_executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="score-snap-write"
             )
-        fut = _write_executor.submit(_build_and_save)
+        fut = _write_executor.submit(_build_and_save, build_started_wall)
         _write_future = fut
     fut.add_done_callback(_release_write_future)
 

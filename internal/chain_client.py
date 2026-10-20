@@ -27,6 +27,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from internal import build_cost
 from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
 from internal.chain_rpc_errors import (
@@ -291,6 +292,20 @@ def _normalize_block_hash(block_hash: str) -> str:
     return normalize_block_hash(block_hash)
 
 
+def _timed_post(endpoint: str, payload: Dict[str, Any], timeout: float) -> requests.Response:
+    """One RPC HTTP attempt, timed for the active snapshot build."""
+    started = time.perf_counter()
+    try:
+        return requests.post(
+            endpoint,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=timeout,
+        )
+    finally:
+        build_cost.record("rpc", time.perf_counter() - started)
+
+
 class ChainClient:
     def __init__(
         self,
@@ -324,12 +339,7 @@ class ChainClient:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = requests.post(
-                    self.endpoint,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=self.timeout,
-                )
+                response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
                     _record_chain_rpc(self.endpoint, method, "rate_limited")
@@ -373,12 +383,7 @@ class ChainClient:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = requests.post(
-                    self.endpoint,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=self.timeout,
-                )
+                response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     retry_after = _parse_retry_after_header(response)
                     note_rate_limit(self.endpoint, retry_after)

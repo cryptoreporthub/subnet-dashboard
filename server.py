@@ -3019,48 +3019,21 @@ async def api_simivision():
 
 
 def _build_top_picks() -> Dict[str, Any]:
-    from internal.council.score_cache import score_universe
+    """Snapshot read only — full-universe scoring stays on the snapshot worker."""
+    from internal.council.score_snapshots import build_top_picks_from_snapshot
 
     hydrate_timeout = float(os.environ.get("HYDRATE_SUBNETS_TIMEOUT_SECONDS", "4"))
     subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
     if not subnets:
         subnets, _ = _get_subnets_hydrate()
-    subnets = _cap_subnets_for_scoring(subnets)
-    if not _PICKS_ENGINE:
-        return {"hour_picks": [], "day_picks": [], "error": "pick engine unavailable"}
-    market_context = _market_context_with_weights(subnets)
-    hour_scored, day_scored = score_universe(
-        subnets,
-        market_context,
-        score_hour=score_subnet_for_hour,
-        score_day=score_subnet_for_day,
-    )
-    hour_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-    day_scored.sort(key=lambda x: x["score"]["total_score"], reverse=True)
-
-    def _format(item):
-        sn, sc = item["subnet"], item["score"]
-        return {
-            "netuid": sn.get("netuid"),
-            "name": sn.get("name"),
-            "symbol": sn.get("symbol"),
-            "score": sc["total_score"],
-            "confidence": sc["confidence"],
-            "expert_contributions": sc["expert_contributions"],
-            "signals": {
-                "price_change_24h": sn.get("price_change_24h"),
-                "price_change_7d": sn.get("price_change_7d"),
-                "emission": sn.get("emission"),
-                "apy": sn.get("apy"),
-                "volume": sn.get("volume"),
-            },
-            "scenario_tags": sc["scenario_tags"],
-            "recovery_context": sc.get("recovery_context"),
-        }
-
+    payload = build_top_picks_from_snapshot(subnets)
+    if payload is not None:
+        return payload
     return {
-        "hour_picks": [_format(i) for i in hour_scored[:3]],
-        "day_picks": [_format(i) for i in day_scored[:3]],
+        "hour_picks": [],
+        "day_picks": [],
+        "status": "pending_snapshot",
+        "meta": {"source": "score_snapshot", "reason": "missing_or_stale"},
     }
 
 
@@ -3162,7 +3135,6 @@ def _daily_pick_weighed_shortlist(pick_payload: Optional[Dict[str, Any]]) -> Lis
             subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
             if not subnets:
                 subnets, _ = _get_subnets_hydrate()
-            subnets = _cap_subnets_for_scoring(subnets)
             if not subnets:
                 return []
             market_context = _market_context_with_weights(subnets)
