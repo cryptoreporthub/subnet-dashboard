@@ -590,7 +590,7 @@ def start_live_subnets_sync() -> None:
     """Owner-only entry: start the background sync loop (idempotent)."""
     if not _sync_scheduling_allowed():
         return
-    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("GITHUB_ACTIONS") or os.environ.get("CI"):
+    if _in_ci_or_test:
         return
     _ensure_sync_loop()
 
@@ -599,7 +599,7 @@ def _ensure_sync_loop() -> None:
     global _sync_loop_running
     if not _sync_scheduling_allowed():
         return
-    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("GITHUB_ACTIONS") or os.environ.get("CI"):
+    if _in_ci_or_test:
         return
     with _lock:
         if _sync_loop_running:

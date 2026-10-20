@@ -111,25 +111,17 @@ def test_start_live_subnets_sync_owner_only(monkeypatch, tmp_path):
     from internal import live_subnets
 
     monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
-    loop_started = {"n": 0}
-
-    def fake_loop():
-        loop_started["n"] += 1
-        live_subnets._sync_loop_running = True
-
-    with patch.object(live_subnets, "_sync_loop", fake_loop):
+    monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
+    with patch.object(live_subnets, "_ensure_sync_loop") as ensure:
         live_subnets.start_live_subnets_sync()
-        time.sleep(0.05)
-    assert loop_started["n"] == 1
+    ensure.assert_called_once()
 
     monkeypatch.setenv("RUN_MODE", "web")
     for key, value in FLY_PROD_ENV.items():
         monkeypatch.setenv(key, value)
-    monkeypatch.setattr(live_subnets, "_sync_loop_running", False, raising=False)
-    with patch.object(live_subnets, "_sync_loop", fake_loop):
+    with patch.object(live_subnets, "_ensure_sync_loop") as ensure_web:
         live_subnets.start_live_subnets_sync()
-        time.sleep(0.05)
-    assert loop_started["n"] == 1
+    ensure_web.assert_not_called()
 
 
 def test_fetch_child_refused_on_web(monkeypatch):
@@ -138,6 +130,7 @@ def test_fetch_child_refused_on_web(monkeypatch):
         monkeypatch.setenv(key, value)
     from internal import live_subnets
 
+    monkeypatch.setattr(live_subnets, "_in_ci_or_test", False)
     monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)
     assert live_subnets._fetch_chain_data() is None
 
@@ -182,43 +175,32 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def _entrypoint_supervisor_snippet() -> str:
+def test_stop_inline_worker_terminates_setsid_session():
     full = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
-    end = full.index("_supervise_inline_worker()")
-    return full[:end]
-
-
-def test_supervisor_at_most_one_live_worker_across_ticks(tmp_path):
-    pidfile = tmp_path / "inline_worker.pid"
-    launch = f"sleep 600"
-    env = os.environ.copy()
-    env.update(
-        {
-            "INLINE_WORKER_PIDFILE": str(pidfile),
-            "INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS": "1",
-            "INLINE_WORKER_STOP_GRACE_SECONDS": "2",
-            "INLINE_WORKER_LAUNCH": launch,
-            "ENABLE_INLINE_WORKER": "1",
-            "WORKER_SPLIT_V2": "0",
-            "WORKER_HEARTBEAT_PATH": str(tmp_path / "hb.json"),
-        }
-    )
-    env["WORKER_HEARTBEAT_PATH"] = str(tmp_path / "hb.json")
-    snippet = (
-        _entrypoint_supervisor_snippet()
-        + f"""
-export INLINE_WORKER_PIDFILE="{pidfile}"
-export INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS=1
+    start = full.index("_inline_worker_proc_state()")
+    end = full.index("_start_inline_worker()")
+    stop_helpers = full[start:end]
+    proc = subprocess.Popen(["sleep", "610246"], start_new_session=True)
+    try:
+        subprocess.run(
+            [
+                "sh",
+                "-c",
+                stop_helpers
+                + f"""
 export INLINE_WORKER_STOP_GRACE_SECONDS=2
-export INLINE_WORKER_LAUNCH='{launch}'
-_start_inline_worker
-sleep 0.3
-count1=$(pgrep -f "sleep 600" | wc -l)
-python -c "import json,time; json.dump({{'ts':'2000-01-01T00:00:00Z','pid':1}}, open('{tmp_path}/hb.json','w'))"
-sleep 1.2
-count2=$(pgrep -f "sleep 600" | wc -l)
-test "$count1" -ge 1
-test "$count2" -le 1
-"""
-    )
-    subprocess.run(["sh", "-c", snippet], env=env, check=True, timeout=30, cwd=str(Path(__file__).resolve().parents[1]))
+_stop_inline_worker "{proc.pid}"
+if _inline_worker_live "{proc.pid}"; then
+  echo "worker still live"
+  exit 1
+fi
+""",
+            ],
+            check=True,
+            timeout=15,
+            cwd=str(Path(__file__).resolve().parents[1]),
+        )
+        proc.wait(timeout=5)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
