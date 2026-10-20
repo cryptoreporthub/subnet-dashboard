@@ -80,3 +80,28 @@ def test_begin_warns_when_a_build_is_already_active(caplog):
         build_cost.begin("second")
     build_cost.end()
     assert any("already active" in r.getMessage() for r in caplog.records)
+
+
+def test_build_receipt_reaches_stdout_after_app_boot():
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    code = (
+        "import server  # boot path that configures app logging\n"
+        "from internal.council.score_snapshots import _log_build_receipt\n"
+        "_log_build_receipt('probe', {'previous_publish_wall_seconds': 1, 'x': 2}, published=True)\n"
+    )
+    out = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=root,
+        env={**os.environ, "PYTHONPATH": str(root)},
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    )
+    assert "score snapshot build receipt build_id=probe" in out.stdout
+    assert "previous_publish_wall_seconds" not in out.stdout

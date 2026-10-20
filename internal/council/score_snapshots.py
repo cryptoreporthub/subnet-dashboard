@@ -615,9 +615,11 @@ def _score_hour_enabled() -> bool:
 
 
 def _receipt_line(build_id: str, timing: Dict[str, Any], outcome: Dict[str, Any]) -> str:
+    # previous_publish_wall_seconds belongs to the prior build; leave it off this build's line.
+    body = {k: v for k, v in timing.items() if k != "previous_publish_wall_seconds"}
     return "score snapshot build receipt build_id=%s %s" % (
         build_id,
-        json.dumps({**timing, **outcome}, default=str, sort_keys=True),
+        json.dumps({**body, **outcome}, default=str, sort_keys=True),
     )
 
 
