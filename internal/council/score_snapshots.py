@@ -690,7 +690,7 @@ def write_full_universe_snapshot(
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
 
-    def _build_and_save() -> Dict[str, Any]:
+    def _build_and_save(build_id: str) -> Dict[str, Any]:
         from internal.council.snapshot_coverage import (
             build_coverage_block,
             coverage_capture_deadline_seconds,
@@ -704,7 +704,7 @@ def write_full_universe_snapshot(
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
-        build_cost.begin(build_started_wall)
+        build_cost.begin(build_id)
         try:
             payload = build_full_universe_snapshot(
                 subnets or [],
@@ -722,9 +722,15 @@ def write_full_universe_snapshot(
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
         timing.update(write_stage_timing)
-        timing["build_cost"] = cost
+        if cost:
+            timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
+        logger.info(
+            "score snapshot build receipt build_id=%s %s",
+            build_id,
+            json.dumps(timing, default=str, sort_keys=True),
+        )
         try:
             coverage = build_coverage_block(
                 receipt=receipt,
@@ -840,7 +846,7 @@ def write_full_universe_snapshot(
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
         try:
-            return _build_and_save()
+            return _build_and_save(_now_iso())
         except Exception as exc:
             logger.warning("score snapshot write failed: %s", exc)
             return {"ok": False, "error": str(exc)}
@@ -856,7 +862,7 @@ def write_full_universe_snapshot(
             _write_executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="score-snap-write"
             )
-        fut = _write_executor.submit(_build_and_save)
+        fut = _write_executor.submit(_build_and_save, build_started_wall)
         _write_future = fut
     fut.add_done_callback(_release_write_future)
 

@@ -10,9 +10,12 @@ threads during the build window are counted too.
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
 
 _lock = threading.Lock()
 _active: Optional[Dict[str, Any]] = None
@@ -21,6 +24,12 @@ _active: Optional[Dict[str, Any]] = None
 def begin(build_id: str) -> None:
     global _active
     with _lock:
+        if _active is not None:
+            logger.warning(
+                "build_cost.begin: build %s already active, replacing it with %s",
+                _active["build_id"],
+                build_id,
+            )
         _active = {
             "build_id": build_id,
             "cpu_start": time.process_time(),
