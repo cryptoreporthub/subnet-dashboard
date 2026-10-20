@@ -42,7 +42,7 @@ A number counts only with a receipt. Everything else is a claim and is labelled 
 
 ## Verdict
 
-1. **Measure first, on a healthy build.** Nothing about caps, timeouts or gates changes until a post-deploy reading exists. That means deploying #1443 together with its fixes (#1464, #1465, and the rollout items #1462, #1463). Deploy approval is the repo owner's alone. "Healthy" must be defined before measuring, for example a stretch with no health-check failures and no OOM kills. The owner has not set that.
+1. **Measure first, on a healthy build.** Nothing about caps, timeouts or gates changes until a post-deploy reading exists. That means deploying #1443 together with its fixes (#1464, #1465, and the rollout items #1462, #1463). Deploy approval is the repo owner's alone. "Healthy" is defined in the section "Healthy enough to measure" below.
 2. **Telegram scoring path: DELETE**, on structural grounds only (dead capability, council to message-intel coupling, a 43-reference public response field, data at rest in stored picks). The cost argument rests on a model and is not used.
 3. **Cap plumbing: REPLACE** with a `Selection` value carrying a named `NO_LIMIT` and identity-carrying `dropped`, with a `limit < N` test on both paths. A `Dropped` reason that no HTTP response carries is the defect #1464 had with `shortlist_status`, so the reason must reach a response.
 4. **Starvation sentinel fix first and blocking**, then the hunt-band limit (cold start only).
