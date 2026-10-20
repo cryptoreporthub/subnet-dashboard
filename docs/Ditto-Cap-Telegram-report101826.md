@@ -93,7 +93,7 @@ Pinned at `3a65d34a`. Branch name `feat/full-universe-scoring` is **proposed onl
 | `TELEGRAM_EVIDENCE_CALIBRATION` set in **no** fly toml | `fly.toml`, `fly.worker-v2.toml`, `fly.worker-v2-essential-soak.toml` | `enabled` false → `adjustment_points` always `0.0` |
 | ⇒ the scan currently has **zero** score effect | — | pure waste, and the reason a 40-cap "felt" necessary |
 | `scenario_outcome_adjustment` scans 300 scenarios per subnet | `internal/council/memory_scoring.py` | same anti-pattern, 10× smaller |
-| 40-cap has two defaults and one borrowed from another knob | `score_snapshots.py:43` vs `50-61` | `SCORE_SNAPSHOT_MAX_SUBNETS=""` → 40; unset+worker → `TOP_SCORING_UNIVERSE` |
+| 40-cap has two defaults and one borrowed from another knob | `score_snapshots.py:38` vs `45-60` | `SCORE_SNAPSHOT_MAX_SUBNETS=""` → 40; unset+worker → `TOP_SCORING_UNIVERSE` |
 | `TOP_SCORING_UNIVERSE` has three defaults | `server.py` 20, `pick_selection_audit.py` 40, `score_snapshots.py` 40 | unreason-able |
 
 ### Changes
@@ -192,7 +192,7 @@ anchors, re-verified at `3a65d34a` by direct file read:
 | `server.py` `_cap_subnets_for_scoring` | 930–937 | **925–932** |
 | `server.py` homepage shell / hourly pick | 1071 / 3368 | **1066 / 3363** |
 | `scoring_cap.py` file length | 127 | **122** |
-| `scoring_cap.py` `cap_subnets_for_scoring` | 96–127 | **91–122** |
+| `scoring_cap.py` `cap_subnets_for_scoring` | 96–127 | **91–121** |
 | `pick_scheduler.py` `PICK_SCHEDULER_UNIVERSE_CAP` | 37 | **32** |
 | `pick_scheduler.py` `_load_capped_subnets` | 156–163 | **151–161** |
 | `pick_scheduler.py` `_tick` | 320–360 | **315–427** (`HourPickScheduler._tick` is 477–514) |
@@ -235,7 +235,7 @@ All fetched at `3a65d34a`. Line numbers re-derived from decoded content.
 
 #### R1 — the cap is a fallback heuristic and its default is unreachable
 
-`internal/subnets/scoring_cap.py`, 91–122 (of 122):
+`internal/subnets/scoring_cap.py`, 91–121 (of 121):
 
 ```python
 
@@ -285,7 +285,7 @@ So the literal default 40 is never reached — not because every caller passes `
 
 #### R2 — one env var, two readers, two answers
 
-`internal/council/score_snapshots.py`, 45–60 and 667–676:
+`internal/council/score_snapshots.py`, 38–60 and 667–676:
 
 ```python
 SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
@@ -431,7 +431,7 @@ Two consequences worth stopping on:
 
 1. **The nightly audit replays the wrong universe.** `internal/council/pick_selection_audit.py`
    names its primary PASS gate `POLICY_SCHEDULER_24 = "scheduler_cap_24"` and documents it
-   as "matches pick_scheduler universe" (line 11). It does not: the oracle replays 24, the
+   as "matches pick_scheduler universe" (line 6). It does not: the oracle replays 24, the
    scheduler scored 20. A netuid ranked 21–24 can therefore be reported as a
    `universe_mismatch` MISS that the real scheduler could never have produced. And
    `cursor-agents-communication/pick-audit-lock.md` builds the entire nightly selection
@@ -793,7 +793,7 @@ satisfied. By the prior audit's own rule, **A (removal) can start.**
 
 The second falsifier — "for moving scheduler cap to A: pick tick already snapshot-only with
 no `score_universe` on the 90s path" — is **not** satisfied, and I want that stated plainly
-because it is the one place the verdict wins. `pick_scheduler._tick` (315–355) calls
+because it is the one place the verdict wins. `pick_scheduler._tick` (315–427) calls
 `_load_capped_subnets()` → `get_or_create_today_pick(subnets, ctx, ...)` inside a
 `ThreadPoolExecutor` with `DAILY_PICK_TICK_TIMEOUT_SECONDS`. It never calls `score_universe`
 by name, but it scores synchronously through the pick engine. **The scheduler cap is a real
@@ -892,8 +892,8 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 `TOP_SCORING_UNIVERSE` at `3a65d34a`, plus direct reads.
 
 **Delete outright**
-- `internal/subnets/scoring_cap.py` (122 lines)
-- `internal/message_intel/calibration.py` (297 lines)
+- `internal/subnets/scoring_cap.py` (121 lines)
+- `internal/message_intel/calibration.py` (295 lines)
 - `tests/test_telegram_evidence_calibration.py`
 - `tests/test_scoring_cap.py` (87 lines — imports `cap_subnets_for_scoring`, autouse
   fixture stubs `rank_subnets_by_snapshot`)
@@ -953,7 +953,7 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 
 **Keep, deliberately**
 - `internal/message_intel/rollup.py` — ingestion stays a feature; it stops feeding a score.
-  Second `LIMIT 3000` (1775) out of scope.
+  Second `LIMIT 3000` (1770) out of scope.
 - `JUDGES_SCORING_UNIVERSE` — hydration guard, not a scoring cap. Out of scope; say so.
 - Score weighting (`weighted + value_boost + flow_boost + size_tilt`) — model, not filter.
 - `rank_subnets_by_snapshot` as a *display/pick ranking* — but the `-1.0` sentinel (R10)
@@ -1501,7 +1501,7 @@ This is the most serious defect in the audit, and it is a few lines of dashboard
 #### 7.5 Other live readings
 
 - `coverage_complete = 0.0` while `coverage_published = 1.0` — publishing a snapshot it does not consider complete.
-- `horizon_succeeded{hour}=0` / `copied{hour}=40`; `succeeded{day}=40` / `copied{day}=0`. **Not a bug** — `snapshot_coverage.py:466-469` returns the copied count only for `hour`, deliberately.
+- `horizon_succeeded{hour}=0` / `copied{hour}=40`; `succeeded{day}=40` / `copied{day}=0`. **Not a bug** — `snapshot_coverage.py:464-467` returns the copied count only for `hour`, deliberately.
 - `chain_rpc_requests_total` = 132 `ok` / **35 `rate_limited`** / 1 `cooldown_skip` — 21% rate-limited.
 - `subnet_live_refresh_complete = 0.0` with `subnet_live_stale = 0.0` — fresh but partially refreshed.
 - `subnet_source_age_seconds{price_cache}` = 7,180 s (2.0 h), flagged stale.
@@ -1922,14 +1922,14 @@ One question decides most of the audit: *which subnets does a scoring pass see?*
 
 | # | Site | file:line | Limit expression | Effective default |
 |---|---|---|---|---|
-| 1 | wrapper default | `server.py:930` | `cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)` | **20** (`TOP_SCORING_UNIVERSE` default `"20"`, `server.py:652`) |
-| 2 | homepage shell | `server.py:1071` | `min(24, TOP_SCORING_UNIVERSE)` | 20 |
-| 3 | spotlight | `server.py:1219` | no limit → wrapper default | 20 |
-| 4 | simivision | `server.py:2951` | no limit → wrapper default | 20 |
-| 5 | hour pick | `server.py:3368` | `min(24, TOP_SCORING_UNIVERSE)` | 20 |
+| 1 | wrapper default | `server.py:932` | `cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)` | **20** (`TOP_SCORING_UNIVERSE` default `"20"`, `server.py:647`) |
+| 2 | homepage shell | `server.py:1066` | `min(24, TOP_SCORING_UNIVERSE)` | 20 |
+| 3 | spotlight | `server.py:1214` | no limit → wrapper default | 20 |
+| 4 | simivision | `server.py:2946` | no limit → wrapper default | 20 |
+| 5 | hour pick | `server.py:3363` | `min(24, TOP_SCORING_UNIVERSE)` | 20 |
 | 6 | pick scheduler | `internal/council/pick_scheduler.py` `_load_capped_subnets` | `min(PICK_SCHEDULER_UNIVERSE_CAP, TOP_SCORING_UNIVERSE)` | 20 |
 | 7 | daily pick creation | `internal/council/daily_pick_engine.py` `_subnets_for_pick_creation` | `min(sched_cap="24", top="40")` | **24** — different `TOP` default |
-| 8 | snapshot build | `internal/council/score_snapshots.py:672` | `_snapshot_subnet_cap()` | **0** (env) — but **40** in worker mode |
+| 8 | snapshot build | `internal/council/score_snapshots.py:667` | `_snapshot_subnet_cap()` | **0** (env) — but **40** in worker mode |
 
 Site 7 sets `TOP_SCORING_UNIVERSE` to `"40"`; every other site reads `20`. Site 8 returns `0` when the env is unset — *unless* `is_worker_mode()`, where it silently becomes 40. So the same process graph runs at 20, 24, 40, or "everything" depending on which door you enter. That is the audit's "40-cap has two defaults" finding, confirmed and larger than stated: **it is four.**
 
@@ -1952,7 +1952,7 @@ Site 7 sets `TOP_SCORING_UNIVERSE` to `"40"`; every other site reads `20`. Site 
 
 Three properties matter:
 
-1. **It imports `rank_subnets_by_snapshot` from the module that calls it.** `score_snapshots.py:680` does `from server import _cap_subnets_for_scoring`, which imports `scoring_cap`, which imports back into `score_snapshots`. A real cycle, load-order-sensitive, and it works today only because every hop is a lazy function-level import.
+1. **It imports `rank_subnets_by_snapshot` from the module that calls it.** `score_snapshots.py:672` does `from server import _cap_subnets_for_scoring`, which imports `scoring_cap`, which imports back into `score_snapshots`. A real cycle, load-order-sensitive, and it works today only because every hop is a lazy function-level import.
 2. **Its meaning depends on data availability.** With a fresh snapshot it promotes *any* netuid by rank. Without one it drops everything at `marketcap_rank <= 10` — permanently, not by rank pressure. The exceptions are swallowed (`except Exception: pass`), so a snapshot read that throws silently switches selection policy.
 3. **Unranked is `10_000`, not `None`.** Missing marketcap rank sorts as "low cap", which is into the hunt band. Absent data is silently promoted.
 
@@ -2113,7 +2113,7 @@ The cycle is broken by construction: the ranker is a parameter, so `scoring_budg
 
 ### Migration order — five units, each ending verifiable
 
-1. **Subtract dead weight first.** Delete the unused `SCORE_SNAPSHOT_MAX_SUBNETS` module constant (`score_snapshots.py:43`) — the function reads the env directly; the constant is referenced nowhere else in the file. Delete `_heuristic_hunt_pool` / `_focus_tier` / the three `SCORING_CAP_*` envs with their tests. Verify: grep finds no importer, suite green.
+1. **Subtract dead weight first.** Delete the unused `SCORE_SNAPSHOT_MAX_SUBNETS` module constant (`score_snapshots.py:38`) — the function reads the env directly; the constant is referenced nowhere else in the file. Delete `_heuristic_hunt_pool` / `_focus_tier` / the three `SCORING_CAP_*` envs with their tests. Verify: grep finds no importer, suite green.
 2. **Add the type, unwired.** `scoring_budget.py` + tests (N in → N out for full; dropped netuids named for deadline; no promotion of missing rank). Production behavior unchanged — nothing calls it yet.
 3. **Convert the snapshot path.** `select_universe` with `full()`; coverage takes `Selection`. Verify: a build at the pin's universe returns exactly the membership count, and `complete` is now reachable — the first cycle it can be true is the proof.
 4. **Convert the four request paths**, each in its own commit, each with its latency budget named at the call site. Delete `_cap_subnets_for_scoring` when the last caller leaves — not before, and not kept as a shim.
@@ -2176,7 +2176,7 @@ Second design pass. The first ([Scoring Universe Contract](scoring-universe-cont
 
 ### What the 3,000 is
 
-    # rollup.py:1073
+    # rollup.py:1068
     SELECT m.id, m.source, ..., a.entities_json, v.verdict, v.conviction, ...
            ps.tao_usd_price, po.price_24h, po.price_24h_recorded_at
     FROM messages m
@@ -2406,7 +2406,7 @@ if "telegram_calibration_health" not in ctx and ...:
 
 Delete those two blocks; keep the `scenario_memory` half, which is a different concern.
 
-**3. `internal/message_intel/engine.py:1084` — `telegram_calibration_status()`**
+**3. `internal/message_intel/engine.py:600` — `telegram_calibration_status()`**
 
 A calibration health endpoint served from the *engine*. It stays, but as a listener-diagnostic route owned by `message_intel/routes.py`, not a council-facing surface.
 
@@ -2576,7 +2576,7 @@ All read-only GETs against `https://subnet-dashboard.fly.dev`, 2026-10-18 19:57�
 32|            ctx["telegram_calibration_health"] = None`
 `scenario_memory_scenarios` (lines 33–39) is the only other enrichment and is **unrelated** — Fix A must leave it standing.
 
-Callers at PIN (both verified by fetch): `internal/council/daily_pick.py:123-125` and `internal/council/score_cache.py:52-54`.
+Callers at PIN (both verified by fetch): `internal/council/daily_pick.py:120` and `internal/council/score_cache.py:49`.
 
 ### S2 — PIN, `state_vector.py` 1893–1912
 
@@ -2613,7 +2613,7 @@ Identical except **the `calibration_health_snapshot=` argument is absent** and t
 1903|        )
 1904|        total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))`
 
-On PROD, nothing populates `telegram_conviction_rows` — `scoring_context.py` does not exist there — so `conviction_rows` is always `None`, and `calibration_for_subnet` falls through to a fresh DB read **per subnet** (`calibration.py:252`), then recomputes health because the snapshot is also `None`.
+On PROD, nothing populates `telegram_conviction_rows` — `scoring_context.py` does not exist there — so `conviction_rows` is always `None`, and `calibration_for_subnet` falls through to a fresh DB read **per subnet** (`calibration.py:247`), then recomputes health because the snapshot is also `None`.
 
 ### S3 — payload field
 
@@ -2627,21 +2627,21 @@ Exact string appears **once** per zone; there is no second consumer. Repo-wide s
 
 In `calibration.py` (identical structure on PIN):
 
-`193| def calibration_health(
+`188| def calibration_health(
 ...
-199|     rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
-200|     receipts = _resolved_receipts(rows, now)
-201|     scored = [r for r in receipts if r["_proof"]["status"] in {"hit", "miss"}]
+194|     rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
+195|     receipts = _resolved_receipts(rows, now)
+196|     scored = [r for r in receipts if r["_proof"]["status"] in {"hit", "miss"}]
 ...
-207|     reasons: List[str] = []
-208|     if not cfg["enabled"]:
-209|         reasons.append("disabled_by_environment")`
+202|     reasons: List[str] = []
+203|     if not cfg["enabled"]:
+204|         reasons.append("disabled_by_environment")`
 
-**Line 199 reads the rows; line 208 is the first time the flag is consulted.** The flag gates the arithmetic, not the work. Same shape in `calibration_for_subnet`: rows load at line 252, `applied` is computed at line 288.
+**Line 194 reads the rows; line 203 is the first time the flag is consulted.** The flag gates the arithmetic, not the work. Same shape in `calibration_for_subnet`: rows load at line 247, `applied` is computed at line 283.
 
-`_conviction_rows` is `internal/message_intel/rollup.py:1073`, with **`LIMIT 3000`** at line 1101.
+`_conviction_rows` is `internal/message_intel/rollup.py:1068`, with **`LIMIT 3000`** at line 1096.
 
-Default thresholds (PIN `calibration.py:27-31`): `min_samples=10`, `min_hit_rate=0.55`, `max_age_days=30`, `max_adjustment_points=2.0`. All env-overridable; none overridden in `fly.toml`.
+Default thresholds (PIN `calibration.py:22-26`): `min_samples=10`, `min_hit_rate=0.55`, `max_age_days=30`, `max_adjustment_points=2.0`. All env-overridable; none overridden in `fly.toml`.
 
 ---
 
@@ -2675,7 +2675,7 @@ This is the finding that changes the plan, so it gets its own section.
 If Fix A is applied to a tree that still contains S2:
 
 1. `market_context` no longer carries `telegram_conviction_rows` → S2's `conviction_rows` becomes `None` (line 1899).
-2. `calibration_for_subnet` sees `None` and calls `_conviction_rows(db)` itself (`calibration.py:252`).
+2. `calibration_for_subnet` sees `None` and calls `_conviction_rows(db)` itself (`calibration.py:247`).
 
 3. `calibration_health_snapshot` also becomes `None`, so `calibration_health` is recomputed per call.
 
@@ -2807,7 +2807,7 @@ Every Telegram line number quoted today was correct **relative to its own extrac
 | Step 4 | Delete the capability + move status route | **A + E** — sever hoist, retire hoist test |
 | Step 5 | Score-neutral replay, then deploy | capability delete, replay |
 
-Both are **score-neutral in either order** — the adjustment is `0.0` under `enabled:false`. They differ in latency. Part VI's step 2 removes the hoist first; with S2 still present, `conviction_rows` becomes `None`, and `calibration_for_subnet` falls through to `calibration.py:252` → `_conviction_rows(db)` **per subnet**, plus a health recompute per call. Part VI calls that intermediate "safe", and it is — for scores. It is also a regression in cost that Part VI does not mention.
+Both are **score-neutral in either order** — the adjustment is `0.0` under `enabled:false`. They differ in latency. Part VI's step 2 removes the hoist first; with S2 still present, `conviction_rows` becomes `None`, and `calibration_for_subnet` falls through to `calibration.py:247` → `_conviction_rows(db)` **per subnet**, plus a health recompute per call. Part VI calls that intermediate "safe", and it is — for scores. It is also a regression in cost that Part VI does not mention.
 
 **Ruling: take Part VI's constraint (fence red first) and Part VII's order.** Fence → B → C → A+E → capability delete → replay. The hoist can only be removed once nothing consumes what it hoists; that is the one sequencing fact both parts agree on in substance and disagree on in order.
 
@@ -2827,8 +2827,8 @@ Four numbers circulate; all four are real, at different doors.
 
 | Door | Effective limit | Source |
 |---|---|---|
-| `server.py` homepage shell (1071) | **20** | `min(24, TOP=20)` |
-| `server.py` hourly pick (3368) | **20** | `min(24, TOP=20)` |
+| `server.py` homepage shell (1066) | **20** | `min(24, TOP=20)` |
+| `server.py` hourly pick (3363) | **20** | `min(24, TOP=20)` |
 | `pick_scheduler._load_capped_subnets` | **20** | `min(24, server.TOP)` |
 | `daily_pick_engine._subnets_for_pick_creation` | **24** | local `TOP` default **40** |
 | `pick_selection_audit._scheduler_cap_limit` | **24** | local `TOP` default **40** |
@@ -2926,7 +2926,7 @@ Kept so the packet does not depend on the conversation that produced it.
 | 5 | A TTL cache on the status endpoint is needed | §3 | **Dropped** | 15.5 ms observed; traffic absent |
 | 6 | Scheduler gauges are trustworthy | §4 | **Refuted** | All read `0` while readiness builds at 15.8 s age |
 | 7 | The patch might never be scraped (multiprocess) | §5.4 | **Closed — fine** | Single `web` process, no `--workers` |
-| 8 | The hourly horizon metric looks broken | — | **Retracted — by design** | `snapshot_coverage.py:466-469` |
+| 8 | The hourly horizon metric looks broken | — | **Retracted — by design** | `snapshot_coverage.py:464-467` |
 | 9 | The repo needs a full overhaul | §9 | **Rejected** | 61.7 s build vs 8 ms publish; the defect is truth, not structure |
 
 Three of these nine were my own errors, all of the same kind: **I trusted a comment or an inference where a measurement was available.** That is the same failure mode as the gauges. It is worth keeping in the packet, because the packet's conclusion — that this codebase needs a truth layer, not a rewrite — is a claim about a class of error that I made three times while auditing it.
