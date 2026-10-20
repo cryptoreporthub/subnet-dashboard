@@ -72,3 +72,11 @@ def worker_heavy_feeds_enabled() -> bool:
     """True when live-subnet sync + feed warmup should run (WORKER_HEAVY=full)."""
     flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
     return flag in ("1", "true", "yes", "on", "full")
+
+
+def live_subnets_sync_owner_enabled() -> bool:
+    """Worker owns live_subnets sync on prod split VMs; web is read-only unless combined."""
+    if is_worker_mode():
+        flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
+        return flag not in ("0", "false", "no", "off")
+    return background_heavy_on_web()
