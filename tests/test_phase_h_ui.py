@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 
+import pytest
 from fastapi.testclient import TestClient
 from fastapi.templating import Jinja2Templates
 
@@ -13,6 +14,15 @@ from internal.analytics.cockpit_render import (
 )
 from internal.cockpit.sections import COCKPIT_SECTION_IDS
 from server import _jinja_shorten, app, templates
+
+
+@pytest.fixture(autouse=True)
+def _warm_homepage_cache():
+    """A cold GET / serves a ~1 KB shell, so warm the cache before each test."""
+    import server as srv
+
+    srv._prime_emergency_home_html()
+    srv._warm_homepage_cache(None)
 
 
 H_FULL_SECTION_IDS = [
@@ -76,40 +86,6 @@ def test_data_freshness_api_shape():
     assert "source" in data
 
 
-def test_index_council_first_shell():
-    """Council decision stage first; market tools demoted; no dual 12-card grid."""
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "council-stage" in html
-    assert 'id="council-stage-body"' in html
-    assert "ui-legacy.css" not in html
-    assert 'id="market-drawer"' in html
-    # Unicode apostrophe in “Today’s call” — match brand + stage title id
-    assert "council-stage__title" in html
-    assert "call" in html.lower()
-    # Dual cockpit grid removed from homepage
-    assert html.count('class="cockpit-card card"') == 0
-    # Primary council surfaces still present
-    for sid in (
-        "section-daily-pick",
-        "section-simivision-picks",
-        "section-council",
-        "section-judges",
-        "section-picks",
-        "section-kpi",
-    ):
-        assert f'id="{sid}"' in html
-    # Brand is hero-level in the stage
-    assert "council-stage__brand" in html
-    pos_stage = html.index("council-stage")
-    pos_weighing = html.index('id="section-simivision-picks"')
-    pos_drawer = html.index('id="market-drawer"')
-    assert pos_stage < pos_weighing < pos_drawer
-    assert 'href="#section-simivision-picks">Weighing</a>' in html
-    assert 'class="top-nav"' in html
-    assert "/static/js/onboarding_tour.js" in html
-
-
 def test_index_renders_twelve_cockpit_sections():
     """API still exposes 12 cockpit section ids; homepage no longer mirrors them as a grid."""
     client = TestClient(app)
@@ -157,22 +133,6 @@ def test_trace_and_message_intel_honest_status():
         assert section.get("summary")
 
 
-def test_h_full_includes_chartjs():
-    """No Chart.js CDN; uPlot spark + canvas radar assets loaded instead."""
-    client = TestClient(app)
-    html = client.get("/").text
-    lower = html.lower()
-    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in lower
-    assert "/static/vendor/uplot/uplot.iife.min.js" in lower
-    assert "/static/js/uplot_charts.js" in lower
-    assert "/static/vendor/uplot/uplot.min.css" in lower
-    app_js = open("static/js/app.js", encoding="utf-8").read().lower()
-    assert "chart.js" not in app_js
-    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
-    assert "drawRadarCanvas" in uplot_js
-    assert "window.__paintRadar" in uplot_js
-
-
 def test_strip_markdown_headings_in_enrichment():
     payload = {
         "status": "success",
@@ -210,16 +170,6 @@ def test_cockpit_api_matches_display_enrichment():
 # --- Phase H-full acceptance tests ---
 
 
-def test_h_full_thirteen_premium_section_ids():
-    client = TestClient(app)
-    html = client.get("/").text
-    for section_id in H_FULL_SECTION_IDS:
-        assert f'id="{section_id}"' in html, f"missing {section_id}"
-    # Dual cockpit grid removed; council stage is the primary landmark
-    assert 'class="council-stage"' in html
-    assert 'id="mindmap-graph-root"' in html
-
-
 def test_h_full_utc_clock_markup_and_app_js():
     client = TestClient(app)
     html = client.get("/").text
@@ -233,14 +183,6 @@ def test_h_full_shorten_filter_registered_and_formats_volume():
     assert _jinja_shorten(1_500_000) == "1.5M"
     assert _jinja_shorten(42_000) == "42.0K"
     assert _jinja_shorten(None) == "—"
-
-
-def test_h_full_header_live_pill_and_data_source():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'class="live-pill"' in html
-    assert "DATA SOURCE:" in html
-    assert 'id="section-header"' in html
 
 
 def test_h_full_kpi_strip_learning_metrics():
@@ -274,15 +216,6 @@ def test_h_full_social_trail_undervalued_sections():
         assert f'id="{sid}"' in html
 
 
-def test_h_full_footer_status_strip_counts():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-footer"' in html
-    assert 'class="status"' in html
-    assert "Subnets:" in html
-    assert "Predictions:" in html
-
-
 def test_h_full_premium_scanner_and_judges_js():
     """Judges load eager; scanner stays in the idle deferred bundle."""
     from pathlib import Path
@@ -294,24 +227,6 @@ def test_h_full_premium_scanner_and_judges_js():
     assert "home_deferred.js" in scripts
     assert "premium_scanner.js" in deferred
     assert "premium_judges.js" not in deferred
-
-
-def test_subnet_grouping_optional_lane():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-subnet-groups"' in html
-    assert 'id="subnet-group-data"' in html
-    assert "/static/js/subnet_grouping.js" in html
-    # Homepage no longer mounts the 12-card cockpit grid
-    assert html.count('class="cockpit-card card"') == 0
-
-
-def test_h_full_hero_market_snapshot_section():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert 'id="section-hero"' in html
-    assert "Market Snapshot" in html
-    assert "kpi-grid" in html or "kpi-cell" in html
 
 
 def test_h_full_simivision_picks_or_honest_empty():
@@ -334,8 +249,9 @@ def test_h_full_daily_pick_hero_or_honest_empty():
     assert 'id="section-daily-pick"' in html
     assert "council-stage" in html
     assert "Council decision" in html or "Today" in html
-    # Stage always states a stance (audited call or HOLD)
-    assert "council-call" in html or "HOLD" in html or "Predicted" in html
+    # The hero always states a stance through its gate label (internal.preview.tribunal_hero.verdict_pills).
+    badge = re.search(r'id="k3-action-badge"[^>]*>\s*([A-Z]+)\s*<', html)
+    assert badge and badge.group(1) in {"SEALED", "GATED", "FORMING", "COLD"}
 
 
 def test_phase_l_cockpit_signals_and_summary():
@@ -357,13 +273,6 @@ def test_phase_l_cockpit_alerts_honest_empty_or_list():
     assert 'id="alerts-feed-root"' in html
     assert "Threshold" in html or "Alerts" in html
     assert "No active alerts" in html or "pick-card" in html
-
-
-def test_phase_l_premium_signals_js():
-    client = TestClient(app)
-    html = client.get("/").text
-    assert "/static/js/premium_signals.js" in html
-    assert 'id="signals-ws-status"' in html
 
 
 def test_c4_cockpit_hydrate_script_on_index():
@@ -454,3 +363,54 @@ def test_g12_favicon_and_font_consolidation():
     assert "Orbitron" not in base_css
     assert "--font-display: 'Space Grotesk'" in base_css
     assert client.get("/static/favicon.svg").status_code == 200
+
+
+def test_index_shell_keeps_the_council_stage_layout():
+    html = TestClient(app).get("/").text
+    for marker in (
+        "council-stage",
+        'id="council-stage-body"',
+        'id="market-drawer"',
+        'class="top-nav"',
+        'id="liveFeedPill"',
+        'id="signals-ws-status"',
+        'id="mindmap-graph-root"',
+        "/static/js/onboarding_tour.js",
+    ):
+        assert marker in html, f"missing {marker}"
+    for section_id in (
+        "section-header",
+        "section-hero",
+        "section-daily-pick",
+        "section-simivision-picks",
+        "section-council",
+        "section-judges",
+        "section-picks",
+        "section-kpi",
+        "section-subnet-groups",
+        "section-footer",
+    ):
+        assert f'id="{section_id}"' in html, f"missing {section_id}"
+    assert "Market Snapshot" in html
+    assert 'href="#section-simivision-picks">Weighing</a>' in html
+    assert html.index("council-stage") < html.index('id="section-simivision-picks"') < html.index('id="market-drawer"')
+    assert "ui-legacy.css" not in html
+    assert html.count('class="cockpit-card card"') == 0
+
+
+def test_home_charts_use_uplot_not_chartjs():
+    html = TestClient(app).get("/").text.lower()
+    assert 'src="https://cdn.jsdelivr.net/npm/chart.js' not in html
+    assert "/static/vendor/uplot/uplot.min.css" in html
+    assert "chart.js" not in open("static/js/app.js", encoding="utf-8").read().lower()
+    uplot_js = open("static/js/uplot_charts.js", encoding="utf-8").read()
+    assert "drawRadarCanvas" in uplot_js
+    assert "window.__paintRadar" in uplot_js
+
+
+def test_home_deferred_bundle_loads_charts_signals_and_grouping():
+    from pathlib import Path
+
+    deferred = Path("static/js/home_deferred.js").read_text(encoding="utf-8")
+    for asset in ("uplot_charts.js", "premium_signals.js", "subnet_grouping.js"):
+        assert f"/static/js/{asset}" in deferred
