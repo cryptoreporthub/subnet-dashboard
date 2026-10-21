@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from internal.investigation import service
-from internal.simivision.routes import MAX_CHAT_MESSAGE_CHARS
+from internal.simivision.routes import MAX_CHAT_BODY_BYTES, MAX_CHAT_MESSAGE_CHARS
 from server import app
 
 GOOD = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"  # well-formed SS58, 48 chars
@@ -33,6 +33,33 @@ def test_chat_accepts_message_at_the_limit(client):
     with patch("internal.simivision.routes.handle_simivision_chat", return_value={"reply": "ok"}):
         resp = client.post("/api/simivision/chat", json={"message": "x" * MAX_CHAT_MESSAGE_CHARS})
     assert resp.status_code == 200
+
+
+def test_chat_rejects_oversized_body_before_parsing(client):
+    big = b'{"message": "ok", "pad": "' + b"x" * (MAX_CHAT_BODY_BYTES + 1) + b'"}'
+    with patch("internal.simivision.routes.handle_simivision_chat") as handler:
+        resp = client.post("/api/simivision/chat", content=big, headers={"content-type": "application/json"})
+    assert resp.status_code == 413
+    handler.assert_not_called()
+
+
+def test_chat_rejects_oversized_chunked_body(client):
+    def chunks():
+        for _ in range(MAX_CHAT_BODY_BYTES // 1024 + 2):
+            yield b"x" * 1024
+
+    with patch("internal.simivision.routes.handle_simivision_chat") as handler:
+        resp = client.post("/api/simivision/chat", content=chunks(), headers={"content-type": "application/json"})
+    assert resp.status_code == 413
+    handler.assert_not_called()
+
+
+@pytest.mark.parametrize("body", [b"{", b"", b"[]", b"[1]", b'"text"', b"null"])
+def test_chat_rejects_malformed_or_non_object_json_before_the_paid_handler(client, body):
+    with patch("internal.simivision.routes.handle_simivision_chat") as handler:
+        resp = client.post("/api/simivision/chat", content=body, headers={"content-type": "application/json"})
+    assert resp.status_code == 422
+    handler.assert_not_called()
 
 
 def test_ask_rejects_long_question_and_bad_wallet(client):
