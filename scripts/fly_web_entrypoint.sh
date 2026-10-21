@@ -30,12 +30,11 @@ _inline_worker_group_live() {
   # ponytail: mawk aborts if a /proc/*/stat vanishes mid-read; cat snapshots first.
   if cat /proc/[0-9]*/stat 2>/dev/null | awk -v pgid="$pgid" '
     {
-      if (match($0, /\)/)) {
-        rest = substr($0, RSTART + RLENGTH)
-        sub(/^ /, "", rest)
-        split(rest, f, " ")
-        if (f[3] == pgid && f[1] != "Z") found = 1
-      }
+      n = split($0, parts, ")")
+      rest = parts[n]
+      sub(/^ /, "", rest)
+      split(rest, f, " ")
+      if (f[3] == pgid && f[1] != "Z") found = 1
     }
     END { exit(found ? 0 : 1) }
   '; then

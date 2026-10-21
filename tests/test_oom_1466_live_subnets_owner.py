@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from unittest.mock import patch
@@ -175,29 +176,55 @@ with open("/proc/self/comm", encoding="utf-8") as f:
     assert comm.startswith("live-subnets")
 
 
-def _entrypoint_pgid_scan_shell(pgid: str, *, awk_bin: str = "mawk") -> str:
-    return f"""cat /proc/[0-9]*/stat 2>/dev/null | {awk_bin} -v pgid='{pgid}' '
-      {{
-        if (match($0, /\\)/)) {{
-          rest = substr($0, RSTART + RLENGTH)
-          sub(/^ /, "", rest)
-          split(rest, f, " ")
-          if (f[3] == pgid && f[1] != "Z") found = 1
-        }}
-      }}
-      END {{ exit(found ? 0 : 1) }}
-    '"""
+def _repo_entrypoint_text() -> str:
+    return Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
 
 
-def _pgid_has_live_member(pgid: str, *, awk_bin: str = "mawk") -> bool:
+def _entrypoint_library_src(entrypoint_src: str) -> str:
+    """Functions only — do not source trailing boot/supervisor invocations."""
+    lines = entrypoint_src.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.startswith('case "${ENABLE_INLINE_WORKER'):
+            return "".join(lines[:i])
+    raise ValueError("entrypoint boot marker missing")
+
+
+def _inline_worker_group_live(pgid: str, entrypoint_src: str) -> bool:
     if not pgid:
         return False
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".sh",
+        encoding="utf-8",
+        delete=False,
+    ) as script:
+        script.write(_entrypoint_library_src(entrypoint_src))
+        script_path = script.name
+    try:
+        proc = subprocess.run(
+            [
+                "dash",
+                "-c",
+                f'. "{script_path}"; _inline_worker_group_live "{pgid}"',
+            ],
+            capture_output=True,
+            check=False,
+        )
+        return proc.returncode == 0
+    finally:
+        os.unlink(script_path)
+
+
+def _git_show_entrypoint(rev: str) -> str:
+    repo = Path(__file__).resolve().parents[1]
     proc = subprocess.run(
-        ["dash", "-c", _entrypoint_pgid_scan_shell(pgid, awk_bin=awk_bin)],
+        ["git", "show", f"{rev}:scripts/fly_web_entrypoint.sh"],
+        cwd=repo,
         capture_output=True,
-        check=False,
+        text=True,
+        check=True,
     )
-    return proc.returncode == 0
+    return proc.stdout
 
 
 def _pids_matching(pattern: str) -> set[str]:
@@ -232,8 +259,10 @@ def _run_supervisor_stale_heartbeat_harness(
     parent_sleep_id: str,
     child_sleep_id: str,
     web_sleep_id: str,
+    group_live_check: str | None = None,
 ) -> None:
     """TERM-ignoring worker with a child; ps absent on PATH. Raises on failure."""
+    live_src = group_live_check if group_live_check is not None else entrypoint_src
     repo = Path(__file__).resolve().parents[1]
     hb_path = tmp_path / "hb.json"
     pidfile = tmp_path / "inline_worker.pid"
@@ -289,7 +318,7 @@ def _run_supervisor_stale_heartbeat_harness(
             out = log_path.read_text(encoding="utf-8")
             starts = out.count("starting inline background worker")
             if starts >= 2 and not second_start_seen:
-                assert not _pgid_has_live_member(first_pgid), (
+                assert not _inline_worker_group_live(first_pgid, live_src), (
                     f"old pgid {first_pgid} still live at 2nd worker start"
                 )
                 overlap = first_pids & (
@@ -337,22 +366,30 @@ def _run_supervisor_stale_heartbeat_harness(
             subprocess.run(["pkill", "-9", "-f", pattern], check=False)
 
 
-def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
-    target = "61999009888"
+def _run_churn_group_live_checks(
+    entrypoint_src: str,
+    *,
+    target: str,
+    iterations: int,
+    assert_stable_with: str | None = None,
+) -> int:
     worker = subprocess.Popen(["setsid", "sleep", target])
     churn = subprocess.Popen(
         ["dash", "-c", "while true; do (sleep 0.01 &); done"],
         start_new_session=True,
     )
+    false_dead = 0
     try:
         time.sleep(0.3)
         pgid = str(worker.pid)
-        assert _pgid_has_live_member(pgid), "stable worker group not visible before churn"
-        false_dead = 0
-        for _ in range(80):
-            if not _pgid_has_live_member(pgid):
+        os.kill(worker.pid, 0)
+        stable_src = assert_stable_with if assert_stable_with is not None else entrypoint_src
+        assert _inline_worker_group_live(pgid, stable_src), (
+            "stable worker group not visible before churn"
+        )
+        for _ in range(iterations):
+            if not _inline_worker_group_live(pgid, entrypoint_src):
                 false_dead += 1
-        assert false_dead == 0, f"mawk+cat scan reported dead {false_dead}/80 under churn"
     finally:
         for proc in (worker, churn):
             if proc.poll() is None:
@@ -362,13 +399,38 @@ def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
                     proc.kill()
                 proc.wait(timeout=5)
         subprocess.run(["pkill", "-9", "-f", target], check=False)
+    return false_dead
+
+
+def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
+    false_dead = _run_churn_group_live_checks(
+        _repo_entrypoint_text(),
+        target="61999009888",
+        iterations=80,
+    )
+    assert false_dead == 0, (
+        f"_inline_worker_group_live reported dead {false_dead}/80 under churn"
+    )
+
+
+def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
+    pre_cat = _git_show_entrypoint("fb1fdb8e")
+    false_dead = _run_churn_group_live_checks(
+        pre_cat,
+        target="61999009890",
+        iterations=120,
+        assert_stable_with=_repo_entrypoint_text(),
+    )
+    assert false_dead >= 1, (
+        "fb1fdb8e awk-on-glob scan should false-negative under /proc churn"
+    )
 
 
 def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
     parent_sleep_id = "61999001248"
     child_sleep_id = "61999001250"
     web_sleep_id = "61999001249"
-    entrypoint_src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    entrypoint_src = _repo_entrypoint_text()
     _run_supervisor_stale_heartbeat_harness(
         tmp_path,
         entrypoint_src,
@@ -379,44 +441,24 @@ def test_entrypoint_supervisor_replaces_hung_worker_without_ps(tmp_path):
 
 
 def test_supervisor_stale_heartbeat_harness_fails_on_merge_base_entrypoint(tmp_path):
-    proc = subprocess.run(
-        ["git", "show", "057eabf7:scripts/fly_web_entrypoint.sh"],
-        cwd=Path(__file__).resolve().parents[1],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    base_entrypoint = _git_show_entrypoint("057eabf7")
     with pytest.raises(AssertionError):
         _run_supervisor_stale_heartbeat_harness(
             tmp_path,
-            proc.stdout,
+            base_entrypoint,
             parent_sleep_id="61999001251",
             child_sleep_id="61999001252",
             web_sleep_id="61999001253",
         )
 
 
-def test_supervisor_stale_heartbeat_harness_fails_with_scripts_reverted_to_base(
-    tmp_path,
-):
-    repo = Path(__file__).resolve().parents[1]
-    current = (repo / "scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
-    base = subprocess.run(
-        ["git", "show", "057eabf7:scripts/fly_web_entrypoint.sh"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-    try:
-        (repo / "scripts/fly_web_entrypoint.sh").write_text(base, encoding="utf-8")
-        with pytest.raises(AssertionError):
-            _run_supervisor_stale_heartbeat_harness(
-                tmp_path,
-                base,
-                parent_sleep_id="61999001254",
-                child_sleep_id="61999001255",
-                web_sleep_id="61999001256",
-            )
-    finally:
-        (repo / "scripts/fly_web_entrypoint.sh").write_text(current, encoding="utf-8")
+def test_supervisor_stale_heartbeat_harness_fails_with_pre_cat_entrypoint(tmp_path):
+    pre_cat = _git_show_entrypoint("fb1fdb8e")
+    with pytest.raises(AssertionError):
+        _run_supervisor_stale_heartbeat_harness(
+            tmp_path,
+            pre_cat,
+            parent_sleep_id="61999001254",
+            child_sleep_id="61999001255",
+            web_sleep_id="61999001256",
+        )
