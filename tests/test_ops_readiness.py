@@ -185,11 +185,7 @@ def test_readiness_pump_desk_trust_from_liveness_registry(monkeypatch):
     assert trust["source"] == "liveness_registry"
 
 
-def test_readiness_pump_desk_trust_not_ready_when_stale(monkeypatch, tmp_path):
-    soul = tmp_path / "soul_map.json"
-    soul.write_text("{}")
-    monkeypatch.setenv("SOUL_MAP_PATH", str(soul))
-    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+def test_readiness_pump_desk_trust_not_ready_when_stale(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     from internal.liveness import LivenessTracker
 

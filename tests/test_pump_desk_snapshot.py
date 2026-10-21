@@ -112,6 +112,7 @@ def test_scheduler_timeout_is_recorded(monkeypatch):
         lambda save=True: (time.sleep(1.1) or {"alert_level": "ok"}),
     )
     s = sched.PumpDeskSnapshotScheduler(interval_minutes=15)
+    s.liveness.record_success({"noop": True})  # "failing" needs a prior success; do not borrow one from a shared soul map
 
     result = s.run_once()
 
