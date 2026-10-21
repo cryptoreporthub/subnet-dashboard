@@ -6,10 +6,12 @@ import json
 import logging
 import os
 import re
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 
+from internal import build_cost
 from internal.message_intel.store import get_db
 from internal.message_intel.topic_tags import classify_message_topics
 from internal.message_intel.proof import (
@@ -1065,6 +1067,14 @@ def _proof_rows(db=None, *, days: Optional[int] = None, author_id: Optional[str]
 
 def _conviction_rows(db=None) -> List[Dict[str, Any]]:
     """Load only the fields needed to audit current calls and past receipts."""
+    started = time.perf_counter()
+    try:
+        return _query_conviction_rows(db)
+    finally:
+        build_cost.record("conviction", time.perf_counter() - started)
+
+
+def _query_conviction_rows(db=None) -> List[Dict[str, Any]]:
     database = db or get_db()
     with database._connection() as conn:
         rows = conn.execute(

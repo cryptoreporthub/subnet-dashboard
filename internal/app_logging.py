@@ -1,7 +1,7 @@
-"""Send INFO from the heavy-job gate and resolver scheduler to stdout (Fly/Axiom).
+"""Send INFO from the heavy-job gate, resolver scheduler and score-snapshot builder to stdout (Fly/Axiom).
 
 No entrypoint configured logging, so the root logger stayed at WARNING with no
-handler and logger.info() was dropped. Only these two loggers are raised to INFO
+handler and logger.info() was dropped. Only these loggers are raised to INFO
 so prod log volume from the rest of the app is unchanged.
 """
 
@@ -13,6 +13,7 @@ import sys
 INFO_LOGGERS = (
     "internal.heavy_job_gate",
     "internal.council.resolver_scheduler",
+    "internal.council.score_snapshots",
 )
 _HANDLER_NAME = "app-info-stdout"
 

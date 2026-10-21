@@ -39,7 +39,17 @@ def _sample_subnets():
     ]
 
 
-def test_build_deliberation_shortlist_returns_alternatives():
+def _serve_snapshot(monkeypatch, subnets):
+    from internal.council.state_vector import score_subnet_for_day
+
+    scored = [{"subnet": sn, "score": score_subnet_for_day(sn, {})} for sn in subnets]
+    monkeypatch.setattr(
+        "internal.council.score_snapshots.day_scored_from_snapshot", lambda _subnets: scored
+    )
+
+
+def test_build_deliberation_shortlist_returns_alternatives(monkeypatch):
+    _serve_snapshot(monkeypatch, _sample_subnets())
     payload = {
         "pick": {
             "subnet": {"netuid": 1, "name": "Alpha"},
@@ -119,3 +129,29 @@ def test_mindmap_summary_includes_dpick_shortlist():
             assert isinstance(alt.get("conviction"), int)
             assert "role" in alt
             assert "stance" in alt
+
+
+def test_missing_snapshot_never_scores_on_the_request_path(monkeypatch):
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("request path must not score")
+
+    monkeypatch.setattr("internal.council.score_snapshots.day_scored_from_snapshot", lambda _s: None)
+    monkeypatch.setattr("internal.council.score_cache.score_universe", _boom)
+    monkeypatch.setattr("internal.learning.dpick_shortlist.score_subnet_for_day", _boom, raising=False)
+    out = build_deliberation_shortlist(_sample_subnets(), {}, {"pick": None})
+    assert out["alternatives"] == []
+    assert out["picked"] is None
+    assert out["status"] == "pending_snapshot"
+
+
+def test_attach_shortlist_carries_the_pending_snapshot_status(monkeypatch):
+    monkeypatch.setattr("internal.council.score_snapshots.day_scored_from_snapshot", lambda _s: None)
+    out = attach_shortlist_to_daily_pick({"pick": None}, _sample_subnets(), {})
+    assert out["shortlist"] == []
+    assert out["shortlist_status"] == "pending_snapshot"
+
+
+def test_attach_shortlist_has_no_status_when_the_snapshot_serves(monkeypatch):
+    _serve_snapshot(monkeypatch, _sample_subnets())
+    out = attach_shortlist_to_daily_pick({"pick": None}, _sample_subnets(), {})
+    assert "shortlist_status" not in out
