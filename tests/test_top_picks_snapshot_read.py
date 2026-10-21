@@ -59,24 +59,31 @@ def test_build_top_picks_refuses_snapshots_not_proven_complete(tmp_path, monkeyp
 
 @pytest.mark.parametrize(
     "extra",
-    [{}, {"coverage": {"complete": False, "capture_reason": "capture_timeout"}}],
-    ids=["no_coverage_block", "incomplete_capture"],
+    [{}, {"coverage": {"complete": False, "capture_reason": "capture_timeout"}}, {"coverage": {"complete": True}}],
+    ids=["no_coverage_block", "incomplete_capture", "complete_control"],
 )
-def test_day_scored_refuses_snapshots_not_proven_complete(tmp_path, monkeypatch, extra):
+@pytest.mark.parametrize("reader", ["build_top_picks", "day_scored", "rank"])
+def test_scored_readers_refuse_snapshots_not_proven_complete(tmp_path, monkeypatch, extra, reader):
     from internal.council import score_snapshots as snaps
 
     snap_path = tmp_path / "score_snapshots.json"
-    payload = {
-        "written_at": "2026-10-17T00:00:00Z",
-        "hour": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
-        "day": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
-        **extra,
-    }
-    snap_path.write_text(json.dumps(payload), encoding="utf-8")
+    rows = [{"netuid": 2, "total_score": 90.0, "name": "A"}]
+    snap_path.write_text(
+        json.dumps({"written_at": "2026-10-17T00:00:00Z", "hour": rows, "day": rows, **extra}),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
-
-    assert snaps.day_scored_from_snapshot([{"netuid": 2, "name": "A", "symbol": "A"}]) is None
+    subnets = [{"netuid": 2, "name": "A", "symbol": "A"}]
+    read = {
+        "build_top_picks": snaps.build_top_picks_from_snapshot,
+        "day_scored": snaps.day_scored_from_snapshot,
+        "rank": snaps.rank_subnets_by_snapshot,
+    }[reader]
+    if extra.get("coverage", {}).get("complete") is True:
+        assert read(subnets) is not None
+    else:
+        assert read(subnets) is None
 
 
 def test_deliberation_shortlist_says_pending_for_partial_snapshot(tmp_path, monkeypatch):
