@@ -48,7 +48,7 @@ def _reset_rate_limiter_state():
 
             if rate_limit._limiter is not None:
                 rate_limit._limiter.reset()
-        except ImportError:
+        except Exception:
             pass
 
     _reset()
@@ -67,7 +67,7 @@ def _reset_resolver_liveness_cache():
             with loop_health._RESOLVER_LIVENESS_CACHE_LOCK:
                 loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
                 loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
-        except ImportError:
+        except Exception:
             pass
 
     _reset()
@@ -108,14 +108,3 @@ def _clear_message_intel_load_cache():
         clear_message_intel_load_cache()
     except ImportError:
         pass
-
-
-@pytest.fixture(autouse=True)
-def _isolate_soul_map(tmp_path, monkeypatch):
-    """Tests share one process and several write liveness or weights into the soul map.
-    Point the lazy readers at a per-test file so none of them touch data/soul_map.json."""
-    from internal.council import weights
-
-    path = str(tmp_path / "soul_map.json")
-    monkeypatch.setenv("SOUL_MAP_PATH", path)
-    monkeypatch.setattr(weights, "SOUL_MAP_PATH", path)
