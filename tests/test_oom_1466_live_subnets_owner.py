@@ -443,10 +443,15 @@ def test_entrypoint_library_src_raises_without_boot_marker():
 
 def test_fetch_child_rss_heartbeat_uses_fetch_child_role():
     repo = Path(__file__).resolve().parents[1]
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTEST_CURRENT_TEST", "CI", "GITHUB_ACTIONS")
+    }
     proc = subprocess.run(
         [sys.executable, str(repo / "tests" / "spawn_fetch_child_rss_label_probe.py")],
         cwd=str(repo),
-        env={k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"},
+        env=env,
         capture_output=True,
         text=True,
         timeout=45,
@@ -455,6 +460,35 @@ def test_fetch_child_rss_heartbeat_uses_fetch_child_role():
     assert proc.returncode == 0, combined
     assert "rss-heartbeat role=live_subnets_fetch_child" in combined, combined
     assert "rss-heartbeat run_mode=worker" not in combined, combined
+
+
+def test_fetch_child_rss_regresses_if_worker_configures_logging_at_import():
+    """Fails without worker bootstrap-at-main fix (logging before LIVE_SUBNETS_FETCH_CHILD)."""
+    repo = Path(__file__).resolve().parents[1]
+    code = """
+import os, sys, time
+os.environ.pop("PYTEST_CURRENT_TEST", None)
+os.environ.pop("CI", None)
+os.environ["RUN_MODE"] = "worker"
+os.environ["PROCESS_RSS_LOG_INTERVAL_SECONDS"] = "0.05"
+from internal.app_logging import configure_app_logging
+configure_app_logging()
+os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
+time.sleep(0.12)
+"""
+    env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_CURRENT_TEST", "CI")}
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=str(repo),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode == 0, combined
+    assert "rss-heartbeat run_mode=worker" in combined, combined
+    assert "role=live_subnets_fetch_child" not in combined, combined
 
 
 def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():

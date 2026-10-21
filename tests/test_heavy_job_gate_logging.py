@@ -13,7 +13,8 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_heavy_job_gate_info_reaches_stdout_after_app_boot():
     code = (
         "import logging\n"
-        "import internal.worker  # boot path that configures app logging\n"
+        "from internal.worker import bootstrap_worker_runtime\n"
+        "bootstrap_worker_runtime()\n"
         "from internal.heavy_job_gate import heavy_job_slot\n"
         "assert logging.getLogger('internal.council.resolver_scheduler').isEnabledFor(logging.INFO)\n"
         "with heavy_job_slot('probe'):\n"

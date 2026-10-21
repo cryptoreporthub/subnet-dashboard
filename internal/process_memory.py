@@ -51,7 +51,7 @@ def log_memory_snapshot(label: str) -> None:
     logger.info("%s pid=%s rss_kb=%d", label, os.getpid(), rss)
 
 
-def rss_heartbeat_label() -> str:
+def _rss_heartbeat_label() -> str:
     if os.environ.get("LIVE_SUBNETS_FETCH_CHILD") == "1":
         return "rss-heartbeat role=live_subnets_fetch_child"
     from internal.run_mode import get_run_mode
@@ -67,10 +67,11 @@ def start_rss_heartbeat(interval_seconds: float = 120.0) -> None:
         return
     if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("CI"):
         return
+    label = _rss_heartbeat_label()
 
     def _loop() -> None:
         while True:
-            log_memory_snapshot(rss_heartbeat_label())
+            log_memory_snapshot(label)
             time.sleep(interval_seconds)
 
     _HEARTBEAT_STARTED = True
