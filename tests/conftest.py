@@ -71,3 +71,14 @@ def _clear_message_intel_load_cache():
         clear_message_intel_load_cache()
     except ImportError:
         pass
+
+
+@pytest.fixture(autouse=True)
+def _isolate_soul_map(tmp_path, monkeypatch):
+    """Tests share one process and several write liveness or weights into the soul map.
+    Point the lazy readers at a per-test file so none of them touch data/soul_map.json."""
+    from internal.council import weights
+
+    path = str(tmp_path / "soul_map.json")
+    monkeypatch.setenv("SOUL_MAP_PATH", path)
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", path)

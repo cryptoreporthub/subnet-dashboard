@@ -6,7 +6,6 @@ import threading
 import time
 
 import internal.pump.scheduler as scheduler_mod
-from internal.council import weights
 from internal.heavy_job_gate import heavy_job_slot
 from internal.pump.scheduler import PumpLadderScheduler
 
@@ -22,9 +21,7 @@ def _acquire_within(name: str, seconds: float) -> bool:
         time.sleep(0.02)
 
 
-def test_hung_pump_tick_releases_heavy_slot(monkeypatch, tmp_path):
-    # The stalled tick records liveness failure; keep it out of the real data/soul_map.json.
-    monkeypatch.setattr(weights, "SOUL_MAP_PATH", str(tmp_path / "soul_map.json"))
+def test_hung_pump_tick_releases_heavy_slot(monkeypatch):
     monkeypatch.setattr(scheduler_mod, "PUMP_LADDER_BODY_STALL_SECONDS", 0.2, raising=False)
     monkeypatch.setattr(PumpLadderScheduler, "_schedule_next", lambda self, _r: None)
     body_started = threading.Event()
