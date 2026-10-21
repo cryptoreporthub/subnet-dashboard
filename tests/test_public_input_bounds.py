@@ -54,6 +54,30 @@ def test_chat_rejects_oversized_chunked_body(client):
     handler.assert_not_called()
 
 
+def test_chat_body_reader_never_copies_an_oversized_chunk(monkeypatch):
+    import asyncio
+
+    from internal.simivision import routes
+
+    extended = []
+
+    class RecordingBuffer(bytearray):
+        def extend(self, data):
+            extended.append(len(data))
+            super().extend(data)
+
+    class OneChunk:
+        headers = {}
+
+        async def stream(self):
+            yield b"x" * (MAX_CHAT_BODY_BYTES + 1)
+
+    monkeypatch.setattr(routes, "bytearray", RecordingBuffer, raising=False)
+    with pytest.raises(routes._BodyTooLarge):
+        asyncio.run(routes._read_bounded_json(OneChunk()))
+    assert extended == []
+
+
 @pytest.mark.parametrize("body", [b"{", b"", b"[]", b"[1]", b'"text"', b"null"])
 def test_chat_rejects_malformed_or_non_object_json_before_the_paid_handler(client, body):
     with patch("internal.simivision.routes.handle_simivision_chat") as handler:

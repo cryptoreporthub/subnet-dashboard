@@ -35,9 +35,9 @@ async def _read_bounded_json(request: Request):
         raise _BodyTooLarge
     body = bytearray()
     async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body) > MAX_CHAT_BODY_BYTES:
+        if len(body) + len(chunk) > MAX_CHAT_BODY_BYTES:
             raise _BodyTooLarge
+        body.extend(chunk)
     return json.loads(bytes(body))
 
 
