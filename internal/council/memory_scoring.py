@@ -72,12 +72,16 @@ def scenario_outcome_adjustment(
     netuid = _netuid_key(sn or {})
     if netuid is None:
         return 0.0
-    try:
-        from internal.council import scenario_memory
+    scenarios = None
+    if isinstance(market_context, dict):
+        scenarios = market_context.get("scenario_memory_scenarios")
+    if scenarios is None:
+        try:
+            from internal.council import scenario_memory
 
-        scenarios = scenario_memory.get_scenarios(limit=300)
-    except Exception:
-        return 0.0
+            scenarios = scenario_memory.get_scenarios(limit=300)
+        except Exception:
+            return 0.0
 
     matching = []
     for scen in scenarios or []:

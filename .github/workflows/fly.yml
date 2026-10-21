@@ -2,17 +2,14 @@ name: Fly Deploy
 on:
   # INCIDENT 2026-08-19: push-to-main disabled until fly.toml + this workflow + contract
   # tests agree on one topology (v2 deploy at 01:59 UTC caused outage + rollback loop).
-  # Deploy via workflow_dispatch after explicit review, or by applying the exact
-  # label `fly-deploy` on a same-repo PR (actor cryptoreporthub only; GitHub MCP
-  # can label, it cannot workflow_dispatch).
+  # Deploy only via workflow_dispatch, run against main after explicit review.
+  # The label-driven deploy path is retired (decision 2026-10-18).
   workflow_dispatch:
-  pull_request:
-    types: [labeled]
 jobs:
   deploy-guard:
     name: Deploy Guard
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'fly-deploy' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'cryptoreporthub') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     # PRs are gated by ci-smoke.yml (job: smoke). Re-run contract here before deploy
     # so production never depends on workflow ordering on main.
     steps:
@@ -99,7 +96,7 @@ jobs:
     runs-on: ubuntu-latest
     concurrency: deploy-group
     needs: deploy-guard
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.label.name == 'fly-deploy' && github.event.pull_request.head.repo.full_name == github.repository && github.actor == 'cryptoreporthub') }}
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
       # Merged docs-only fly-deploy vehicles (closed+merged) must deploy
       # origin/main HEAD — not pull_request.head.sha — so the post-deploy
