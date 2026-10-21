@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 
 CACHE_DB = os.environ.get("INVESTIGATION_CACHE_DB", "data/investigation_cache.db")
 CACHE_TTL_SECONDS = int(os.environ.get("INVESTIGATION_CACHE_TTL", "180"))
+# A ceiling on abuse, not a tuned working-set size. Rows older than CACHE_TTL_SECONDS are never
+# read, so only fresher rows can produce hits. Seller keys are bounded by netuid count (about 128
+# active) times the limits clients pick. Wallet keys are format-validated (SS58 pattern) but still
+# unbounded in count: every distinct valid-looking address is a new key. The cap counts rows, not
+# bytes, and one wallet or flow payload at limit=200 can be large. Entry size and hit rate are not
+# measured here; read the row count and max and average payload length from prod
+# data/investigation_cache.db before treating 2000 as safe or adding a byte cap.
+CACHE_MAX_ROWS = int(os.environ.get("INVESTIGATION_CACHE_MAX_ROWS", "2000"))
 
 _SELL_TOKENS = ("unstake", "sell", "remove", "undelegate", "out", "withdraw")
 _BUY_TOKENS = ("stake", "buy", "add", "delegate", "in", "deposit")
@@ -113,6 +121,12 @@ def _cache_set(key: str, data: Dict[str, Any]) -> None:
         conn.execute(
             "INSERT OR REPLACE INTO investigation_cache (cache_key, payload, cached_at) VALUES (?, ?, ?)",
             (key, json.dumps(data), time.time()),
+        )
+        # Reads ignore expired rows but nothing removed them: bound the table to the newest rows.
+        conn.execute(
+            "DELETE FROM investigation_cache WHERE cache_key NOT IN "
+            "(SELECT cache_key FROM investigation_cache ORDER BY cached_at DESC LIMIT ?)",
+            (CACHE_MAX_ROWS,),
         )
         conn.commit()
         conn.close()
