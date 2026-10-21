@@ -36,6 +36,7 @@ SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
 SCORE_SNAPSHOT_SCORE_WORKERS = max(1, env_int("SCORE_SNAPSHOT_SCORE_WORKERS", 1))
+SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS = env_int("SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS", 15)
 JOB_ID = "score-snapshot-scheduler"
 
 
@@ -538,18 +539,24 @@ def build_full_universe_snapshot(
         _record_slowest(float(res.get("day_elapsed") or 0), netuid)
 
     workers = SCORE_SNAPSHOT_SCORE_WORKERS if not score_hour else 1
+    last_progress = time.monotonic()
+
+    def _maybe_progress(done: int) -> None:
+        nonlocal last_progress
+        if progress_cb and total and time.monotonic() - last_progress >= SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS:
+            last_progress = time.monotonic()
+            progress_cb(done, total)
+
     if workers <= 1:
         for idx, sn in enumerate(rows):
             _apply_score_result(_score_one(sn))
-            if progress_cb and total and (idx + 1) % 20 == 0:
-                progress_cb(idx + 1, total)
+            _maybe_progress(idx + 1)
     else:
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="snap-score") as pool:
             results = list(pool.map(_score_one, rows))
         for idx, res in enumerate(results):
             _apply_score_result(res)
-            if progress_cb and total and (idx + 1) % 20 == 0:
-                progress_cb(idx + 1, total)
+            _maybe_progress(idx + 1)
 
     hour_copied_from_day = False
     if not score_hour and day_rows:
