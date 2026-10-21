@@ -29,6 +29,23 @@ class ChainReader:
         self.provider_served: Optional[str] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
+        self.rpc_deadline_mono: Optional[float] = None
+        self._timeout_originals: Dict[Any, float] = {}
+
+    def _deadline_remaining(self) -> Optional[float]:
+        if self.rpc_deadline_mono is None:
+            return None
+        return self.rpc_deadline_mono - time.monotonic()
+
+    def _prepare_client(self, client: ChainClient) -> None:
+        """Clamp per-request timeout and attach absolute RPC deadline for retries."""
+        rem = self._deadline_remaining()
+        setattr(client, "_rpc_deadline_mono", self.rpc_deadline_mono)
+        if rem is None:
+            return
+        if client not in self._timeout_originals:
+            self._timeout_originals[client] = float(client.timeout)
+        client.timeout = min(self._timeout_originals[client], max(0.01, rem))
 
     def reset_probe_diagnostics(self) -> None:
         """Clear per-run probe counters (Step 4 live harness)."""
@@ -70,7 +87,15 @@ class ChainReader:
     def _should_fallback(self, outcome: RpcOutcome) -> bool:
         # Any invalid answer (bad echo, unknown block, pin mismatch) is one provider's answer,
         # so the next provider gets a try. The fail-closed echo check still gates each result.
-        return outcome in ("rpc_error", "archive_miss", "rate_limited", "invalid")
+        return outcome in (
+            "rpc_error",
+            "archive_miss",
+            "rate_limited",
+            "invalid",
+            "timeout",
+            "connection",
+            "parse",
+        )
 
     @staticmethod
     def _echo_mismatch(method: str, params: list, result: Any) -> bool:
@@ -82,6 +107,9 @@ class ChainReader:
         return not storage_block_matches(result[0], params[1])
 
     def call(self, method: str, params: list) -> Tuple[Optional[Any], RpcOutcome]:
+        rem = self._deadline_remaining()
+        if rem is not None and rem <= 0:
+            return None, "timeout"
         providers = self._available_providers()
         if not providers:
             self.rate_limit_events.append(
@@ -90,6 +118,9 @@ class ChainReader:
             return None, "rate_limited"
         last_outcome: RpcOutcome = "rpc_error"
         for idx, (label, client) in enumerate(providers):
+            if self._deadline_remaining() is not None and self._deadline_remaining() <= 0:
+                return None, "timeout"
+            self._prepare_client(client)
             result, outcome = rpc_call(client, method, params)
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"

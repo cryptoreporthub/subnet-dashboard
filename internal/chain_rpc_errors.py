@@ -11,6 +11,9 @@ RpcErrorKind = Literal[
     "rate_limited",
     "rpc_error",
     "invalid",
+    "timeout",
+    "connection",
+    "parse",
 ]
 
 

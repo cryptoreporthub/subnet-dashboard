@@ -154,6 +154,22 @@ def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int], dict[str, Any
     rpc_started = time.monotonic()
     snapshot = fetch_live_subnet_snapshot(deadline)
     rpc_elapsed = time.monotonic() - rpc_started
+    if not snapshot.membership_resolved:
+        degraded = snapshot.failure or "membership_unavailable"
+        logger.warning(
+            "live_subnets child snapshot fetch failed: %s (elapsed=%.1fs)",
+            degraded,
+            rpc_elapsed,
+        )
+        meta = fetch_meta_from_batch(
+            [],
+            [],
+            batch_expired=snapshot.batch_expired,
+            netuid_outcomes={},
+        )
+        meta["refresh_complete"] = False
+        meta["degraded_reason"] = degraded
+        return [], [], meta
     outcomes = dict(snapshot.netuid_outcomes)
     for n in requested:
         if n not in snapshot.requested_netuids:
