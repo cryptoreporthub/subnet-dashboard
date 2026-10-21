@@ -438,6 +438,38 @@ def test_simivision_bg_refresh_build_may_read_cached_rows(monkeypatch):
     assert srv._SIMIVISION_CACHE.get("payload") == warm
 
 
+def test_simivision_cache_reader_does_not_wait_on_running_build(monkeypatch):
+    """Another thread reading the cache mid-build must return at once."""
+    import threading
+
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    monkeypatch.setattr(srv, "_SIMIVISION_LOCK", threading.Lock())
+    started, gate = threading.Event(), threading.Event()
+
+    def _build():
+        started.set()
+        gate.wait(10)
+        return {"status": "success", "data": {"top": []}}
+
+    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
+    try:
+        srv._kick_simivision_background_refresh()
+        assert started.wait(3)
+        reader = threading.Thread(target=srv._simivision_weighing_rows_cached, daemon=True)
+        reader.start()
+        reader.join(1.0)
+        assert not reader.is_alive(), "cache reader blocked behind a running build"
+    finally:
+        gate.set()
+        deadline = time.time() + 3
+        while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
+            time.sleep(0.05)
+
+
 def test_score_universe_avoids_soul_map_deepcopy_storm(tmp_path, monkeypatch):
     """Scoring 20 subnets must not deepcopy soul_map hundreds of times."""
     import copy
