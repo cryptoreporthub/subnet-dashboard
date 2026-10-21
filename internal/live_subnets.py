@@ -460,6 +460,10 @@ def _sync_once() -> bool:
         return False
     _record_boot_status(phase="sync_start")
     try:
+        if not _sync_owner_process():
+            logger.info("live_subnets sync skipped — not sync owner process")
+            _record_boot_status(phase="sync_done", ok=False, reason="not_owner")
+            return False
         if not registry_ready():
             _record_boot_status(
                 phase="deferred",

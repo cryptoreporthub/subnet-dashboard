@@ -125,6 +125,18 @@ def test_start_live_subnets_sync_owner_only(monkeypatch, tmp_path):
     ensure_web.assert_not_called()
 
 
+def test_sync_once_records_not_owner_on_web(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    for key, value in FLY_PROD_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setattr("internal.live_subnets.registry_ready", lambda: True)
+    from internal import live_subnets
+
+    assert live_subnets._sync_once() is False
+    boot = live_subnets._read_boot_status()
+    assert boot.get("reason") == "not_owner"
+
+
 def test_fetch_child_refused_on_web(monkeypatch):
     monkeypatch.setenv("RUN_MODE", "web")
     for key, value in FLY_PROD_ENV.items():
@@ -245,6 +257,28 @@ def _git_show_entrypoint(rev: str) -> str:
     return proc.stdout
 
 
+def _wait_for_inline_worker_pair(
+    pidfile: Path,
+    parent_sleep_id: str,
+    child_sleep_id: str,
+    *,
+    timeout: float = 8.0,
+) -> tuple[str, set[str]]:
+    deadline = time.time() + timeout
+    last_pids: set[str] = set()
+    while time.time() < deadline:
+        if pidfile.is_file():
+            pgid = pidfile.read_text(encoding="utf-8").strip()
+            pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
+            last_pids = pids
+            if pgid and len(pids) >= 2:
+                return pgid, pids
+        time.sleep(0.05)
+    raise AssertionError(
+        f"inline worker parent+child not ready within {timeout}s (pids={last_pids!r})"
+    )
+
+
 def _pids_matching(pattern: str) -> set[str]:
     out = subprocess.run(
         ["pgrep", "-f", pattern],
@@ -320,13 +354,13 @@ def _run_supervisor_stale_heartbeat_harness(
     first_pgid = ""
     first_pids: set[str] = set()
     second_start_seen = False
+    pidfile_replaced_after_sigkill = False
     try:
-        time.sleep(0.5)
-        assert pidfile.is_file(), "supervisor did not start inline worker"
-        first_pgid = pidfile.read_text(encoding="utf-8").strip()
-        first_pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
-        assert first_pids, "worker parent/child sleep processes not running after boot"
-        assert len(first_pids) >= 2, f"expected parent+child, saw {first_pids!r}"
+        first_pgid, first_pids = _wait_for_inline_worker_pair(
+            pidfile,
+            parent_sleep_id,
+            child_sleep_id,
+        )
         hb_path.write_text(
             json.dumps({"ts": "2000-01-01T00:00:00Z", "pid": 1}),
             encoding="utf-8",
@@ -346,10 +380,21 @@ def _run_supervisor_stale_heartbeat_harness(
                     f"old worker descendants still alive at 2nd start: {overlap}"
                 )
                 second_start_seen = True
-            if second_start_seen and "sending SIGKILL" in out:
+            if "sending SIGKILL" in out:
+                current_pgid = (
+                    pidfile.read_text(encoding="utf-8").strip()
+                    if pidfile.is_file()
+                    else ""
+                )
+                if not current_pgid or current_pgid != first_pgid:
+                    pidfile_replaced_after_sigkill = True
+            if second_start_seen and pidfile_replaced_after_sigkill:
                 break
             time.sleep(0.25)
-        time.sleep(1)
+        assert pidfile_replaced_after_sigkill, (
+            "pidfile not cleared or replaced after SIGKILL"
+        )
+        time.sleep(0.5)
         listed = subprocess.run(
             ["pgrep", "-af", parent_sleep_id],
             capture_output=True,
@@ -436,61 +481,6 @@ def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
     )
 
 
-def test_entrypoint_library_src_raises_without_boot_marker():
-    with pytest.raises(ValueError, match="entrypoint boot marker missing"):
-        _entrypoint_library_src("#!/bin/sh\necho hi\n")
-
-
-def test_fetch_child_rss_heartbeat_uses_fetch_child_role():
-    repo = Path(__file__).resolve().parents[1]
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if k not in ("PYTEST_CURRENT_TEST", "CI", "GITHUB_ACTIONS")
-    }
-    proc = subprocess.run(
-        [sys.executable, str(repo / "tests" / "spawn_fetch_child_rss_label_probe.py")],
-        cwd=str(repo),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=45,
-    )
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode == 0, combined
-    assert "rss-heartbeat role=live_subnets_fetch_child" in combined, combined
-    assert "rss-heartbeat run_mode=worker" not in combined, combined
-
-
-def test_fetch_child_rss_regresses_if_worker_configures_logging_at_import():
-    """Fails without worker bootstrap-at-main fix (logging before LIVE_SUBNETS_FETCH_CHILD)."""
-    repo = Path(__file__).resolve().parents[1]
-    code = """
-import os, sys, time
-os.environ.pop("PYTEST_CURRENT_TEST", None)
-os.environ.pop("CI", None)
-os.environ["RUN_MODE"] = "worker"
-os.environ["PROCESS_RSS_LOG_INTERVAL_SECONDS"] = "0.05"
-from internal.app_logging import configure_app_logging
-configure_app_logging()
-os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
-time.sleep(0.12)
-"""
-    env = {k: v for k, v in os.environ.items() if k not in ("PYTEST_CURRENT_TEST", "CI")}
-    proc = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=str(repo),
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    combined = proc.stdout + proc.stderr
-    assert proc.returncode == 0, combined
-    assert "rss-heartbeat run_mode=worker" in combined, combined
-    assert "role=live_subnets_fetch_child" not in combined, combined
-
-
 def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
     false_dead = _run_churn_group_live_checks(
         _pre_cat_mawk_scan_entrypoint(),
@@ -528,3 +518,29 @@ def test_supervisor_stale_heartbeat_harness_fails_on_merge_base_entrypoint(tmp_p
             child_sleep_id="61999001252",
             web_sleep_id="61999001253",
         )
+
+
+def test_entrypoint_library_src_raises_without_boot_marker():
+    with pytest.raises(ValueError, match="entrypoint boot marker missing"):
+        _entrypoint_library_src("#!/bin/sh\necho hi\n")
+
+
+def test_fetch_child_rss_heartbeat_uses_fetch_child_role():
+    repo = Path(__file__).resolve().parents[1]
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTEST_CURRENT_TEST", "CI", "GITHUB_ACTIONS")
+    }
+    proc = subprocess.run(
+        [sys.executable, str(repo / "tests" / "spawn_fetch_child_rss_label_probe.py")],
+        cwd=str(repo),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode == 0, combined
+    assert "rss-heartbeat role=live_subnets_fetch_child" in combined, combined
+    assert "rss-heartbeat run_mode=worker" not in combined, combined

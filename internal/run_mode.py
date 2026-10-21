@@ -69,7 +69,7 @@ def background_boot_allowed() -> bool:
 
 
 def worker_heavy_feeds_enabled() -> bool:
-    """True when live-subnet sync + feed warmup should run (WORKER_HEAVY=full)."""
+    """True when full-universe feed warmup jobs run (WORKER_HEAVY=full only; not sync ownership)."""
     flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
     return flag in ("1", "true", "yes", "on", "full")
 
