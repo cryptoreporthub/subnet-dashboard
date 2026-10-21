@@ -193,9 +193,20 @@ def test_resolver_closes_loop_and_nudges_weights():
     assert after > before
 
 
-def test_mindmap_feedback_records_learning(tmp_path, monkeypatch):
+def test_mindmap_feedback_never_changes_learning_state(tmp_path, monkeypatch):
+    """Client-supplied feedback is an unverified label: it must not move weights or scoring memory."""
+    import internal.council.scenario_memory as scenario_memory
+
     soul_path = str(tmp_path / "soul_map.json")
+    scenario_path = str(tmp_path / "scenario_memory.json")
     monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul_path)
+    monkeypatch.setattr(scenario_memory, "SCENARIO_MEMORY_PATH", scenario_path)
+    weights.save_weights(
+        {"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, soul_path
+    )
+    weights_before = weights.load_weights(soul_path)
+    scenarios_before = scenario_memory.get_scenarios()
+
     from fastapi.testclient import TestClient
     from server import app
 
@@ -205,9 +216,18 @@ def test_mindmap_feedback_records_learning(tmp_path, monkeypatch):
         json={
             "subnet_id": 1,
             "recommendation": "quant",
-            "actual_performance": {"correct_prediction": True},
+            "actual_performance": {"correct_prediction": False},
+            "note": "regression",
         },
     )
     assert resp.status_code == 200
-    body = resp.json()
-    assert body.get("learning", {}).get("success") is True
+    assert "learning" not in resp.json()
+    assert weights.load_weights(soul_path) == weights_before
+    assert scenario_memory.get_scenarios() == scenarios_before
+
+
+def test_legacy_feedback_route_is_gone():
+    from fastapi.testclient import TestClient
+    from server import app
+
+    assert TestClient(app).post("/api/feedback", json={}).status_code == 404

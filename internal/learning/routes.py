@@ -19,7 +19,7 @@ from internal.api_errors import public_error
 from internal.rate_limit import limit_or_noop, strict_limit
 from internal.request_executor import to_thread_timeout as _to_thread_timeout
 
-from datastore.learning_engine import LearningEngine, create_feedback_router
+from datastore.learning_engine import LearningEngine
 from internal.council import pick_history, resolver, rotation_tracker, scenario_memory
 from internal.council.watchdog import check_resolver_watchdog
 from internal.council.weights import load_impact_strength, load_weights, load_weights_for_ui
@@ -38,7 +38,6 @@ from internal.learning.predictions_store import (
 logger = logging.getLogger(__name__)
 
 learning_router = APIRouter(tags=["learning"])
-learning_router.include_router(create_feedback_router())
 
 LEARNING_HEALTH_TIMEOUT = float(os.environ.get("LEARNING_HEALTH_TIMEOUT_SECONDS", "15"))
 LEARNING_STATS_TIMEOUT = float(os.environ.get("LEARNING_STATS_TIMEOUT_SECONDS", "10"))

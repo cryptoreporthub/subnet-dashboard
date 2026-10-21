@@ -189,7 +189,6 @@ def test_write_auth_public_writes_open_with_token_set(monkeypatch):
     with TestClient(app) as client:
         for path, body in (
             ("/api/mindmap/feedback", {"note": "public-ux"}),
-            ("/api/feedback", {"feedback": "public-ux"}),
         ):
             r = client.post(path, json=body)
             assert r.status_code != 401, path

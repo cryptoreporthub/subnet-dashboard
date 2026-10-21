@@ -198,44 +198,6 @@ class SelfLearning:
         logger.info("Discovered %d pattern correlations", len(results))
         return results
 
-    def adjust_jury_weights(self) -> None:
-        """
-        Adjust council weights based on observed pattern performance.
-        Routes through internal.council.weights so changes persist to
-        soul_map.json and flow back into the next pick generation.
-
-        Quarantine (Phase 0 / LB-8): online weight authority is
-        ``nudge_expert`` (+ trail). This path must never renormalize
-        council weights to sum→1.0. ``start_background_learning`` is not
-        started from server/background_boot — keep it off the prod hot path.
-        """
-        if self.db is None:
-            return
-
-        patterns = self.db.list_patterns(limit=20)
-        if not patterns:
-            return
-
-        from internal.council.weights import nudge_expert
-
-        for p in patterns:
-            success = p.get("success_rate", 0.5)
-            desc = p.get("pattern_description", "")
-
-            expert = None
-            if "substance" in desc.lower() or "specific subnet" in desc.lower():
-                expert = "quant"
-            elif "hype" in desc.lower():
-                expert = "hype"
-            elif "noise" in desc.lower() and success < 0.5:
-                expert = "dark_horse"
-
-            if expert:
-                # ponytail: route through nudge_expert; no renormalize-to-1.0
-                nudge_expert(expert, success >= 0.5)
-
-        logger.info("Adjusted council weights via nudge_expert from %d patterns", len(patterns))
-
     def start_background_learning(self, interval: int = 600) -> None:
         # Quarantined: do not call from server.py / background_boot (Phase 0).
         if self._running:
@@ -247,7 +209,6 @@ class SelfLearning:
                 try:
                     self.update_author_reliability()
                     self.discover_patterns()
-                    self.adjust_jury_weights()
                     logger.info("Self-learning cycle completed")
                 except Exception as e:
                     logger.error("Self-learning error: %s", e)

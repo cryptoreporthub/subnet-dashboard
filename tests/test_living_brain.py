@@ -116,24 +116,6 @@ def test_scenario_outcome_adjustment_neutral_without_data():
     assert scenario_outcome_adjustment({"netuid": 99}) == 0.0
 
 
-def test_feedback_nudges_with_trail(tmp_path, monkeypatch):
-    soul = tmp_path / "soul_map.json"
-    save_weights({"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, str(soul))
-    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
-    emitted = []
-    monkeypatch.setattr(
-        "internal.learning.trail_bus.emit_weight_change",
-        lambda *a, **k: emitted.append(k),
-    )
-    from datastore.learning_engine import LearningEngine
-
-    engine = LearningEngine(str(soul))
-    out = engine.record_feedback(1, "quant", {"correct_prediction": True})
-    assert out["success"] is True
-    assert emitted
-    assert emitted[0]["reason"] == "feedback"
-
-
 def test_council_subnet_feed_returns_rows(monkeypatch):
     from internal.subnets.feed import get_council_subnet_feed
 
@@ -167,23 +149,3 @@ def test_alignment_uses_nudge_expert(tmp_path, monkeypatch):
     assert out["diagnostic_recorded"] is True
     assert out["reason"] == "alignment_diagnostic_only"
     assert load_weights(str(soul))["quant"] == 1.0
-
-
-def test_self_learning_adjust_jury_uses_nudge_expert(tmp_path, monkeypatch):
-    """§30-4: intel pattern path must not renormalize council weights to 1.0."""
-    soul = tmp_path / "soul_map.json"
-    save_weights({"quant": 1.0, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}, str(soul))
-    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
-
-    class _FakeDb:
-        def list_patterns(self, limit=20):
-            return [{"success_rate": 0.8, "pattern_description": "hype spike on subnet"}]
-
-    from message_intel.self_learning import SelfLearning
-
-    sl = SelfLearning(db=_FakeDb())
-    sl.adjust_jury_weights()
-    weights = load_weights(str(soul))
-    total = sum(weights.values())
-    assert weights["hype"] > 1.0
-    assert 3.5 < total < 4.5
