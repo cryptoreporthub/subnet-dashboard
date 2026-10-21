@@ -311,11 +311,6 @@ def _top_pick_row(
 
 
 def _load_complete_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """Snapshot only when its capture is proven complete.
-
-    Partial captures (timeout, membership-gated skip) publish complete=False.
-    Serving them would present a partial universe as the full ranking.
-    """
     snap = load_score_snapshot(path)
     if not snap:
         return None
