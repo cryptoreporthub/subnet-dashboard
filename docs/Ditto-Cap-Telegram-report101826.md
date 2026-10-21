@@ -8,9 +8,9 @@
 
 > **Line numbers.** Every line number here is a **file offset at the SHA named beside it** — never a line in a downloaded copy. Raw-GitHub copies carry a five-line header, and that is what produced every wrong number in Parts VI–VIII; they are corrected. The single authoritative Telegram line map is **VIII.1**. The "earlier claim → now" tables now live in **Part X** (Part II §0 carries its own revision history); read them as provenance, never as guidance.
 
-## Rev 5 correction block (2026-10-20, docs only)
+## Rev 5 correction block (2026-10-20, docs only; amended 2026-10-21)
 
-Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20). No product code changed. The body of §2, §3 and §6 is renumbered to these values. This block stays as the record of what changed.
+Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20). No product code changed. The body of §2, §3 and §6 is renumbered to these values. This block stays as the record of what changed. Amended 2026-10-21: three length counts below were wrong (`scoring_cap.py` is 121, `calibration.py` is 296, and the test files are 86 and 63), and the corrected values are in place.
 
 **Anchors that are off by +5**
 
@@ -191,24 +191,24 @@ anchors, re-verified at `3a65d34a` by direct file read:
 | `server.py` `TOP_SCORING_UNIVERSE` | 652 | **647** |
 | `server.py` `_cap_subnets_for_scoring` | 930–937 | **925–932** |
 | `server.py` homepage shell / hourly pick | 1071 / 3368 | **1066 / 3363** |
-| `scoring_cap.py` file length | 127 | **122** |
+| `scoring_cap.py` file length | 127 | **121** |
 | `scoring_cap.py` `cap_subnets_for_scoring` | 96–127 | **91–121** |
 | `pick_scheduler.py` `PICK_SCHEDULER_UNIVERSE_CAP` | 37 | **32** |
 | `pick_scheduler.py` `_load_capped_subnets` | 156–163 | **151–161** |
 | `pick_scheduler.py` `_tick` | 320–360 | **315–427** (`HourPickScheduler._tick` is 477–514) |
 | `daily_pick_engine.py` `_subnets_for_pick_creation` | 210–217 | **205–212** |
 | `pick_selection_audit.py` docstring claim | 11 | **6** |
-| `pick_selection_audit.py` `POLICY_*` | 29–31 | **24–29** |
+| `pick_selection_audit.py` `POLICY_*` | 29–31 | **24–27** (29 is `ALL_POLICIES`) |
 | `pick_selection_audit.py` `_scheduler_cap_limit` | 55–80 | **57–60** |
 | `calibration.py` `calibration_for_subnet` | — | **238** |
 | `calibration.py` row loop / netuid filter | — | **261–269** |
 | `calibration.py` `applied` | — | **283** |
-| `calibration.py` file length | 302 | **297** |
+| `calibration.py` file length | 302 | **296** (295 newline characters; no trailing newline) |
 | `state_vector.py` Telegram block | ~1897–1913 | **1893–1912** |
 | `state_vector.py` contract key | — | **1960** |
 | `rollup.py` `_conviction_rows` / `_query_conviction_rows` | 1082 | **1068 / 1077** |
 | `rollup.py` first / second `LIMIT 3000` | 1096 / 1775 | **1096 / 1770** |
-| `test_scoring_cap.py` / `test_pick_regen_universe_cap.py` | 87 / 64 | **87 / 64 ✓ correct** |
+| `test_scoring_cap.py` / `test_pick_regen_universe_cap.py` | 87 / 64 | **86 / 63** |
 
 **What held exactly.** Every quoted code block in R1–R12 and every verdict-doc quote in
 §2b was re-fetched and matched character for character, including `return ranked[:cap]`,
@@ -893,11 +893,11 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
 
 **Delete outright**
 - `internal/subnets/scoring_cap.py` (121 lines)
-- `internal/message_intel/calibration.py` (295 lines)
+- `internal/message_intel/calibration.py` (296 lines)
 - `tests/test_telegram_evidence_calibration.py`
-- `tests/test_scoring_cap.py` (87 lines — imports `cap_subnets_for_scoring`, autouse
+- `tests/test_scoring_cap.py` (86 lines — imports `cap_subnets_for_scoring`, autouse
   fixture stubs `rank_subnets_by_snapshot`)
-- `tests/test_pick_regen_universe_cap.py` (64 lines — note it sets
+- `tests/test_pick_regen_universe_cap.py` (63 lines — note it sets
   `TOP_SCORING_UNIVERSE=40` in the monkeypatch, which masks R4's default-20 path; deleting
   it is correct and it was never testing what it claimed)
 
@@ -911,7 +911,7 @@ Derived from symbol search for `cap_subnets_for_scoring`, `PICK_SCHEDULER_UNIVER
   `_load_capped_subnets` (151–161)
 - `internal/council/daily_pick_engine.py`: `_subnets_for_pick_creation` (205–212)
 - `internal/council/pick_selection_audit.py`: `_scheduler_cap_limit` (57–60),
-  `universe_for_policy` (63–75), `POLICY_*` constants (24–29), the
+  `universe_for_policy` (63–75), `POLICY_*` constants (24–27; 29 is `ALL_POLICIES`), the
   "matches pick_scheduler universe" claim (6), the `cap-24` literal (232), and the
   `cap-{_scheduler_cap_limit()}` f-string (237).
   **This file's oracle is wrong today (R4); fixing the universe is not optional.**
@@ -1044,7 +1044,7 @@ cap are not the same control and must not ship together:
   Removing it first reintroduces sync scoring on the 90 s tick. Refute only if you can show
   the tick is snapshot-fed at base — it is not, per `pick_scheduler.py:319–336` and the
   absence of any `score_universe` call. It applies a cap twice, in fact:
-  `_load_capped_subnets()` (`:321`, 20) and then `daily_pick_engine.py:343`
+  `_load_capped_subnets()` (defined `:151`, called `:321`; `min(24, TOP_SCORING_UNIVERSE)`, which is 20 at the `server.py` default and 24 at the deployed 40) and then `daily_pick_engine.py:343`
   (`_subnets_for_pick_creation`, min(24, 40) = 24) — the second cannot widen the first.
 
 **F9 — consumers of `coverage_complete`.** Enumerate every reader. With `capped_out == 0`
@@ -1457,11 +1457,11 @@ The second number also corrects an earlier claim of mine in this thread — that
 
 | Metric | Value |
 |---|---|
-| `subnet_score_snapshot_build_wall_seconds` | **61.745 s** |
-| `subnet_score_snapshot_publish_wall_seconds` | **0.0083 s** |
-| Ratio | **~7,471×** |
+| `subnet_score_snapshot_build_wall_seconds` | **61.745 s** (source not recorded in this packet; the 2026-10-21 web scrape reads `-1.0`, unavailable) |
+| `subnet_score_snapshot_publish_wall_seconds` | **0.0083 s** (the 2026-10-21 web scrape reads `-1.0`) |
+| Ratio | **withdrawn.** The printed operands give ~7,439×, and 0.0083 is rounded, so no four-digit ratio is supported. |
 
-Whatever the rows cost lives almost entirely in that 61.7 s. That ratio is the number to defend, not a percentage of "overhead."
+If the 61.7 s reading holds, the rows cost lives almost entirely in that build stage. It is unverified: the 2026-10-21 web scrape reads `-1.0` (unavailable) for both gauges, so a worker-side read is needed before anyone defends it.
 
 
 #### 7.4 The monitoring surface reports "everything stopped" while the system runs
@@ -1470,20 +1470,20 @@ Whatever the rows cost lives almost entirely in that 61.7 s. That ratio is the n
 subnet_scheduler_running{scheduler="resolver"}     0.0
 subnet_scheduler_running{scheduler="adversarial"}  0.0
 subnet_scheduler_running{scheduler="apscheduler"}  0.0
-subnet_scheduler_last_ok{scheduler="resolver"}     0.0
+subnet_scheduler_last_ok{scheduler="resolver"}     1.0
 subnet_scheduler_last_ok{scheduler="adversarial"}  0.0
 subnet_scheduler_job_count                         0.0
 subnet_sync_running                                0.0
 subnet_sync_last_ok                                0.0
 ```
 
-At the same instant the pipeline is demonstrably alive:
+The 2026-10-21 scrape shows the readiness report fresh but the score snapshot 12.0 h old, so "demonstrably alive" is withdrawn for the snapshot path:
 
 ```
-readiness_builds_total                    168
-readiness_report_age_seconds              15.78
-subnet_score_snapshot_age_seconds         1228.50   (20.5 min)
-subnet_score_snapshot_build_wall_seconds  61.75     (fresh build)
+readiness_builds_total                    24
+readiness_report_age_seconds              18.60
+subnet_score_snapshot_age_seconds         43161.70  (12.0 h)
+subnet_score_snapshot_build_wall_seconds  -1.0      (unavailable, 2026-10-21 scrape)
 ```
 
 **Root cause — absent state renders as a hard zero:**
@@ -1492,25 +1492,25 @@ subnet_score_snapshot_build_wall_seconds  61.75     (fresh build)
 - `metrics.py:227` — `SCHEDULER_JOB_COUNT.set(js.get("job_count", 0))`.
 - `metrics.py:193` — `SYNC_RUNNING.set(1 if sync.get("background_running") else 0)`.
 - `metrics.py:201-202` — `SOURCE_STALE` set only when `is_stale is not None`; otherwise the prior scrape's value persists.
-- `metrics.py:165-172` — `_set_optional` skips None, so an age gauge holds whatever it last held, forever.
+- `metrics.py:160-166` — `_set_optional` skips None, so an age gauge holds whatever it last held, forever.
 
-That last one explains `subnet_source_age_seconds{source="soul_map"} = 4,447,452` — **51.5 days** — beside `subnet_source_stale{source="soul_map"} = 1.0`. Either soul_map genuinely has not been written in seven weeks or the gauge is a zombie pinning a value nobody reset. Both are equally invisible.
+That last one explains `subnet_source_age_seconds{source="soul_map"} = 4,642,227` — **53.7 days** on 2026-10-21 (the earlier reading was 4,447,452, 51.5 days) — beside `subnet_source_stale{source="soul_map"} = 1.0`. Either soul_map genuinely has not been written in almost eight weeks or the gauge is a zombie pinning a value nobody reset. Both are equally invisible.
 
 This is the most serious defect in the audit, and it is a few lines of dashboard code from being fixed: a gauge that cannot distinguish *unknown* from *healthy* is worse than no gauge, because it is read as evidence.
 
 #### 7.5 Other live readings
 
-- `coverage_complete = 0.0` while `coverage_published = 1.0` — publishing a snapshot it does not consider complete.
-- `horizon_succeeded{hour}=0` / `copied{hour}=40`; `succeeded{day}=40` / `copied{day}=0`. **Not a bug** — `snapshot_coverage.py:464-467` returns the copied count only for `hour`, deliberately.
-- `chain_rpc_requests_total` = 132 `ok` / **35 `rate_limited`** / 1 `cooldown_skip` — 21% rate-limited.
+- `coverage_complete = 0.0` and `coverage_published = 0.0` on 2026-10-21. The earlier reading (`coverage_published = 1.0` beside `coverage_complete = 0.0`) does not reproduce, so the "publishing an incomplete snapshot" claim is withdrawn until it is re-measured.
+- `horizon_succeeded{hour}=0` / `copied{hour}=40`; `succeeded{day}=40` / `copied{day}=0`. **Not a bug** — `snapshot_coverage.py:464-467` returns the copied count only for `hour`, deliberately (checked at the pin). The 2026-10-21 scrape reads all four horizon gauges as 0.0, so the values above do not reproduce.
+- `chain_rpc_requests_total` on 2026-10-21 = 20 `ok` / **4 `rate_limited`** / 0 `cooldown_skip` (one endpoint, one method), 17% rate-limited. The earlier reading (132 / 35 / 1, 21%) does not reproduce.
 - `subnet_live_refresh_complete = 0.0` with `subnet_live_stale = 0.0` — fresh but partially refreshed.
-- `subnet_source_age_seconds{price_cache}` = 7,180 s (2.0 h), flagged stale.
+- `subnet_source_age_seconds{price_cache}` = 1,026 s (17.1 min) on 2026-10-21, flagged stale. The earlier 7,180 s (2.0 h) reading does not reproduce.
 
 #### 7.6 Deployment topology — the patch works as written
 
 `fly.toml`: single `[processes] web = "sh ./scripts/fly_web_entrypoint.sh"`, `min_machines_running = 1`, with an explicit comment that a Fly worker process group would spawn a second machine and split the volume. `Procfile`: `uvicorn asgi_entry:app` — no `--workers`, so one worker. `server.py` imports `internal.metrics`, so it loads at start.
 
-**Corrected in rev 6:** the web machine runs a second Python process. `scripts/fly_web_entrypoint.sh:34` starts the inline worker with `nice -n 10 env RUN_MODE=worker … python -m internal.worker &`. That is a separate interpreter with its own default registry. Web `/metrics` is served by the web process alone, and `PROMETHEUS_MULTIPROC_DIR` is not set, so the worker's counters are never scraped. The open question in §5.4 is open again.
+**Corrected 2026-10-21:** the web machine runs a second Python process. `scripts/fly_web_entrypoint.sh:34` (pin) starts the inline worker with `nice -n 10 env RUN_MODE=worker … python -m internal.worker &`. That is a separate interpreter with its own default registry. Web `/metrics` is served by the web process alone, and `PROMETHEUS_MULTIPROC_DIR` is not set, so the worker's counters are never scraped. The open question in §5.4 is open again. At live `4560c10d` the same start is at line 90 (`setsid sh -c "exec $INLINE_WORKER_LAUNCH" &`); the second process is unchanged.
 
 Consequence: the guard counters below show request-path loads from the web process only. Background loads that run in the worker do not appear on `/metrics` until the worker's registry is exported some other way. That is a design change, not a caveat.
 
@@ -1525,7 +1525,7 @@ Consequence: the guard counters below show request-path loads from the web proce
 | Tier 2 is cheap because cached | **Supported** — 15 ms end-to-end, 5.8k rows, TTL guard present |
 | `/api/message-intel/status` is a hot path | **Refuted** — 1 call in 2h14m |
 | Most rows fail the conviction gate | **Refuted** — 31.3% pass |
-| Scheduler gauges are trustworthy | **Refuted** — all read 0 while the pipeline runs |
+| Scheduler gauges are trustworthy | **Refuted** — `running` and `job_count` read 0 while the pipeline runs, and resolver `last_ok` reads 1 on 2026-10-21 |
 | A metric must distinguish unknown from zero | **Confirmed** — current gauges conceal a live system |
 
 ---
@@ -1549,7 +1549,7 @@ The evidence points to a **truth problem**, not a structure problem.
 3. **Comments describe behaviour the code dropped** — `engine.py:396` says 200, `:400` fetches 5000.
 4. **Documented intent is not asserted.** "Most-polled" lives in a comment and no test, so nothing catches it being false.
 
-**The argument against a rewrite is quantitative:** the snapshot pipeline is 61.7 s of build and 8 ms of publish. You cannot redesign a system whose cost distribution you have only just measured, and the profile says one stage dominates everything anyone has been arguing about.
+**The argument against a rewrite is quantitative:** the snapshot pipeline was measured at 61.7 s of build and 8 ms of publish (source not recorded here; both gauges read `-1.0` on the 2026-10-21 web scrape). You cannot redesign a system whose cost distribution you have only just measured, and the profile says one stage dominates everything anyone has been arguing about.
 
 **The narrow fix is a truth layer, in order:**
 
@@ -1583,7 +1583,7 @@ A metric has three states, and the code must never collapse two of them:
 
 #### 10.1 Fix A — three-state gauges (`internal/metrics.py`)
 
-**Defect:** `metrics.py:212` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:193` (sync running), `:196` (sync last ok), `:218` (failures), `:226-227` (apscheduler). And `_set_optional` at `:160-166` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie. **Premise check (rev 6).** The code claim holds at the pin: a missing key and a stopped scheduler both emit `0` (`metrics.py:212`, `:226`). The live zeros in §7.4 (lines 1470–1477) do not support the meaning the packet gives them. The web process runs with `BACKGROUND_ON_WEB=off` (`fly.toml:35`) and does not own the scheduler or sync state, so those zeros mean 'not running in this process', not 'stopped' or 'failing'. For `subnet_sync_last_ok`, the gauge is set only when the key is present (`metrics.py:195–196`), so the `0` may be the gauge's untouched default. Fix A's `UNAVAILABLE = -1` for an absent state would make that absence visible. It would not put the worker's state on web. That needs the separate change §7.6 describes.
+**Defect:** `metrics.py:212` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:193` (sync running), `:196` (sync last ok), `:218` (failures), `:226-227` (apscheduler). And `_set_optional` at `:160-166` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie. **Premise check (2026-10-21).** The code claim holds at the pin: a missing key and a stopped scheduler both emit `0` (`metrics.py:212`, `:226`). The live zeros in §7.4 (lines 1470–1477) do not support the meaning the packet gives them. The web process runs with `BACKGROUND_ON_WEB=off` (`fly.toml:35`) and does not own the scheduler or sync state, so those zeros mean 'not running in this process', not 'stopped' or 'failing'. For `subnet_sync_last_ok`, the gauge is set only when the key is present (`metrics.py:195–196`), so the `0` may be the gauge's untouched default. Fix A's `UNAVAILABLE = -1` for an absent state would make that absence visible. It would not put the worker's state on web. That needs the separate change §7.6 describes.
 
 ```diff
 @@ internal/metrics.py
@@ -1608,7 +1608,7 @@ A metric has three states, and the code must never collapse two of them:
 -    if value is None:
 -        return
 +    # Unknown is a value. Skipping the write pins the previous scrape forever,
-+    # which is how subnet_source_age_seconds{soul_map} sat at 51.5 days.
++    # which is how subnet_source_age_seconds{soul_map} sat at 51.5 days (53.7 days on 2026-10-21).
 +    if value is None:
 +        value = UNAVAILABLE
      if labels:
@@ -2924,10 +2924,10 @@ Kept so the packet does not depend on the conversation that produced it.
 | 3 | `/api/message-intel/status` is a hot path | §3 | **Refuted — my error** | 1 request / 8,040 s uptime |
 | 4 | Most rows fail the `conviction >= 60` gate | §2 | **Refuted — my error** | 1,817 of 5,812 = 31.3% pass |
 | 5 | A TTL cache on the status endpoint is needed | §3 | **Dropped** | 15.5 ms observed; traffic absent |
-| 6 | Scheduler gauges are trustworthy | §4 | **Refuted** | All read `0` while readiness builds at 15.8 s age |
-| 7 | The patch might never be scraped (multiprocess) | §5.4 | **Reopened in rev 6 — worker not scraped** | `scripts/fly_web_entrypoint.sh:34` starts the worker as a second process; no multiprocess dir |
+| 6 | Scheduler gauges are trustworthy | §4 | **Refuted** | `running` and `job_count` read `0` while readiness builds at 18.6 s age (2026-10-21); resolver `last_ok` reads `1` |
+| 7 | The patch might never be scraped (multiprocess) | §5.4 | **Reopened 2026-10-21 — worker not scraped** | `scripts/fly_web_entrypoint.sh:34` (pin; line 90 at `4560c10d`) starts the worker as a second process; no multiprocess dir |
 | 8 | The hourly horizon metric looks broken | — | **Retracted — by design** | `snapshot_coverage.py:464-467` |
-| 9 | The repo needs a full overhaul | §9 | **Rejected** | 61.7 s build vs 8 ms publish; the defect is truth, not structure |
+| 9 | The repo needs a full overhaul | §9 | **Rejected** | 61.7 s build vs 8 ms publish (unverified, §7.3); the defect is truth, not structure |
 
 Three of these nine were my own errors, all of the same kind: **I trusted a comment or an inference where a measurement was available.** That is the same failure mode as the gauges. It is worth keeping in the packet, because the packet's conclusion — that this codebase needs a truth layer, not a rewrite — is a claim about a class of error that I made three times while auditing it.
 
