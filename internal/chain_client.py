@@ -302,15 +302,6 @@ def _encode_netuid_arg(netuid):
     return "0x" + struct.pack("<H", netuid).hex()
 
 
-def _decode_storage_u64(raw: Any) -> Optional[int]:
-    if raw is None or raw == "0x" or raw == "0x00":
-        return None
-    try:
-        return _decode_scale_u64(_hex_to_bytes(raw))
-    except (TypeError, ValueError):
-        return None
-
-
 def _storage_chunk_netuids(netuids: List[int], chunk_size: int) -> List[List[int]]:
     size = max(1, chunk_size)
     return [netuids[i : i + size] for i in range(0, len(netuids), size)]

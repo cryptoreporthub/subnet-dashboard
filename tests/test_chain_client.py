@@ -25,7 +25,9 @@ def _fetch_snapshot_batch(monkeypatch, universe, *, deadline=None):
             end = time.monotonic() + budget
     snap = fetch_live_subnet_snapshot(end)
     outcomes = dict(snap.netuid_outcomes)
-    if snap.membership_resolved:
+    membership_resolved = snap.membership_resolved if hasattr(snap, "membership_resolved") else True
+    failure = snap.failure if hasattr(snap, "failure") else None
+    if membership_resolved:
         member_set = set(snap.requested_netuids)
         for n in sorted({int(x) for x in universe}):
             if n not in member_set:
@@ -34,8 +36,8 @@ def _fetch_snapshot_batch(monkeypatch, universe, *, deadline=None):
         "rows": list(snap.rows),
         "batch_expired": snap.batch_expired,
         "netuid_outcomes": outcomes,
-        "membership_resolved": snap.membership_resolved,
-        "failure": snap.failure,
+        "membership_resolved": membership_resolved,
+        "failure": failure,
         "snapshot": snap,
     }
 
@@ -396,7 +398,7 @@ def test_batch_deadline_honors_parent_monotonic_deadline(monkeypatch):
         reserve_by_netuid={1: (1_000_000_000, 1_000_000_000), 2: (2_000_000_000, 1_000_000_000)},
         deadline=deadline,
     )
-    monkeypatch.setenv("LIVE_SUBNETS_STORAGE_CHUNK_NETUIDS", "1")
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot._STORAGE_CHUNK_NETUIDS", 1)
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
     batch = _fetch_snapshot_batch(monkeypatch, [2, 1], deadline=deadline)
     assert batch["batch_expired"] is True
@@ -524,7 +526,7 @@ def test_price_batch_deadline_partial_sets_batch_expired(monkeypatch):
         reserve_by_netuid={1: (1_000_000_000, 1_000_000_000), 2: (2_000_000_000, 1_000_000_000)},
         deadline=deadline,
     )
-    monkeypatch.setenv("LIVE_SUBNETS_STORAGE_CHUNK_NETUIDS", "1")
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot._STORAGE_CHUNK_NETUIDS", 1)
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
     batch = _fetch_snapshot_batch(monkeypatch, [2, 1], deadline=deadline)
     assert batch["batch_expired"] is True
@@ -742,6 +744,75 @@ def test_snapshot_slow_membership_hits_deadline(monkeypatch):
     batch = _fetch_snapshot_batch(monkeypatch, [1, 2, 3, 4], deadline=deadline)
     assert batch["membership_resolved"] is False
     assert batch["failure"] == "membership:deadline"
+
+
+def test_finney_empty_finalized_head_falls_back_to_blockmachine():
+    from internal.chain_price.reader import ChainReader
+
+    calls = []
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            calls.append(("finney", method))
+            if method == "chain_getFinalizedHead":
+                return None
+            return []
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def _call_typed(self, method, params):
+            calls.append(("blockmachine", method))
+            if method == "chain_getFinalizedHead":
+                return "0xabc"
+            return []
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    block_hash, outcome = reader.pin_finalized_head()
+    assert outcome == "ok"
+    assert block_hash == "0xabc"
+    assert reader.provider_served == "blockmachine"
+    assert calls[0] == ("finney", "chain_getFinalizedHead")
+    assert ("blockmachine", "chain_getFinalizedHead") in calls
+
+
+def test_snapshot_sticks_to_head_pin_provider(monkeypatch):
+    from internal.chain_price.storage_keys import map_key_hex
+
+    finney_storage = []
+
+    def fake_pin(self):
+        self.provider_served = "blockmachine"
+        return "0xblock", "ok"
+
+    def fake_call(self, method, params):
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        if method == "state_queryStorageAt":
+            if self.provider_served == "finney":
+                finney_storage.append(1)
+            keys, _ = params
+            changes = [
+                [map_key_hex(b"SubnetTAO", 1), _u64_storage_hex(1_000_000_000)],
+                [map_key_hex(b"SubnetAlphaIn", 1), _u64_storage_hex(1_000_000_000)],
+            ]
+            return [{"block": "0xblock", "changes": changes}], "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: ([1], "ok")
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
+    batch = _fetch_snapshot_batch(monkeypatch, [1])
+    assert batch["rows"][0]["source"] == "blockmachine"
+    assert finney_storage == []
 
 
 def test_finney_read_timeout_falls_back_to_blockmachine(monkeypatch):
