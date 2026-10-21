@@ -1,5 +1,3 @@
-"""Cost guards for scoring the whole subnet universe: indexed conviction joins, throttled heartbeat."""
-
 from __future__ import annotations
 
 import sqlite3
