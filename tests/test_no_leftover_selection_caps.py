@@ -22,7 +22,7 @@ def test_rotation_receives_every_subnet_ranked_by_emission():
         "internal.council.orchestrator.Orchestrator"
     ) as orch_cls, patch("internal.learning.trail_bus.emit_disposition_shift"), patch.object(
         scheduler, "_schedule"
-    ):
+    ), patch.object(scheduler, "liveness"):
         orch_cls.return_value.run_daily_rotation.side_effect = _rotate
         scheduler._tick()
 
