@@ -5,23 +5,7 @@ Lazy OHLCV itself landed in #212; this covers the remaining gaps.
 
 from __future__ import annotations
 
-from server import _cap_subnets_for_scoring, _safe_simivision_payload
-
-
-def test_cap_prefers_priced_over_cold_emission():
-    rows = [
-        {"netuid": 1, "name": "Cold", "emission": 99.0, "volume": 0, "market_cap": 0},
-        {
-            "netuid": 2,
-            "name": "Live",
-            "emission": 1.0,
-            "volume": 5_000,
-            "market_cap": 50_000,
-            "price": 1.2,
-        },
-    ]
-    capped = _cap_subnets_for_scoring(rows, limit=1)
-    assert capped[0]["netuid"] == 2
+from server import _safe_simivision_payload
 
 
 def test_simivision_payload_exposes_council_reason():

@@ -29,7 +29,6 @@ HOUR_JOB_ID = "hour-pick-scheduler"
 HOUR_PICK_REFRESH_MINUTES = int(os.environ.get("HOUR_PICK_REFRESH_MINUTES", "180"))
 DAILY_PICK_SLOT_UTC_HOUR = int(os.environ.get("DAILY_PICK_SLOT_UTC_HOUR", "0"))
 DAILY_PICK_SLOT_UTC_MINUTE = int(os.environ.get("DAILY_PICK_SLOT_UTC_MINUTE", "15"))
-PICK_SCHEDULER_UNIVERSE_CAP = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
 # ponytail: one failed cold-start/slot tick must not wait until tomorrow 00:15.
 DAILY_PICK_RETRY_MINUTES = int(os.environ.get("DAILY_PICK_RETRY_MINUTES", "15"))
 DAILY_PICK_TICK_TIMEOUT_SECONDS = int(os.environ.get("DAILY_PICK_TICK_TIMEOUT_SECONDS", "90"))
@@ -148,14 +147,13 @@ def load_pick_scheduler_state_file() -> Optional[Dict[str, Any]]:
         return None
 
 
-def _load_capped_subnets() -> Any:
-    """Lazy subnet snapshot capped for Fly safety (never full 127 here)."""
+def _load_subnets() -> Any:
+    """Lazy subnet snapshot for the pick scheduler."""
     try:
-        from server import TOP_SCORING_UNIVERSE, _cap_subnets_for_scoring, _get_subnets_with_source
+        from server import _get_subnets_with_source
 
         subnets, _ = _get_subnets_with_source()
-        cap = min(PICK_SCHEDULER_UNIVERSE_CAP, TOP_SCORING_UNIVERSE)
-        return _cap_subnets_for_scoring(subnets or [], limit=cap)
+        return subnets or []
     except Exception as exc:
         logger.warning("pick scheduler subnet load failed: %s", exc)
         return []
@@ -318,7 +316,7 @@ class DailyPickScheduler:
         try:
             from internal.council.daily_pick_engine import get_or_create_today_pick
 
-            subnets = _load_capped_subnets()
+            subnets = _load_subnets()
             ctx = _market_context(subnets)
             timeout = max(5, min(DAILY_PICK_TICK_TIMEOUT_SECONDS, 600))
             payload = None
@@ -479,7 +477,7 @@ class HourPickScheduler:
         try:
             from internal.council.hourly_pick import select_hourly_pick
 
-            subnets = _load_capped_subnets()
+            subnets = _load_subnets()
             ctx = _market_context(subnets)
             result["ab_benchmark"] = _record_ab_benchmark(
                 subnets, ctx, "hour-pick-scheduler"

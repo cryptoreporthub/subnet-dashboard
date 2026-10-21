@@ -45,3 +45,16 @@ def test_picks_snapshot_avoids_live_feed(monkeypatch):
     snap = ps.build_picks_snapshot()
     assert snap.get("type") == "cockpit.picks"
     assert "hour" in snap and "day" in snap
+
+
+def test_registry_hour_rows_are_not_capped(tmp_path, monkeypatch):
+    import json
+
+    import internal.cockpit.picks_snapshot as ps
+
+    (tmp_path / "config").mkdir()
+    registry = {str(n): {"netuid": n, "name": f"SN{n}"} for n in range(1, 31)}
+    (tmp_path / "config" / "registry.json").write_text(json.dumps(registry))
+    monkeypatch.chdir(tmp_path)
+
+    assert len(ps._registry_subnets_for_hour()) == 30
