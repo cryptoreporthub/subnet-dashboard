@@ -87,6 +87,8 @@ primary_region = "sjc"
   CALIBRATION_AUTO_RETRAIN = "off"
   CALIBRATION_HYDRATE_ON_MISS = "true"
   SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+  # One worker matches the serial scoring prod ran before #1443, so the first #1458 cost read is clean.
+  SCORE_SNAPSHOT_SCORE_WORKERS = "1"
   SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
   SCORING_CAP_MEGA_CEILING_RANK = "10"
   SCORING_CAP_MID_RANK_MIN = "11"
