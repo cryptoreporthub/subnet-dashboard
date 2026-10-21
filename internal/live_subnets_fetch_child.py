@@ -225,9 +225,21 @@ def _send_child_frame(conn, payload: dict[str, Any], *, deadline: float) -> bool
 def run_fetch_child(conn) -> None:
     import time
 
-    from internal.live_subnets_ipc import send_message
-
     os.environ["LIVE_SUBNETS_FETCH_CHILD"] = "1"
+    try:
+        from internal.app_logging import configure_app_logging
+
+        configure_app_logging()
+    except Exception:
+        pass
+
+    from internal.live_subnets_ipc import send_message
+    try:
+        from internal.process_memory import set_linux_process_comm
+
+        set_linux_process_comm("live-subnets-fetch")
+    except Exception:
+        pass
     params: dict[str, Any] | None = None
     try:
         ready_sleep = os.environ.get("LIVE_SUBNETS_CHILD_READY_SLEEP_SECONDS", "").strip()

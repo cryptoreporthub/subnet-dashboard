@@ -6,11 +6,67 @@
 set -eu
 
 INLINE_WORKER_PIDFILE="${INLINE_WORKER_PIDFILE:-/tmp/inline_worker.pid}"
+INLINE_WORKER_STOP_GRACE_SECONDS="${INLINE_WORKER_STOP_GRACE_SECONDS:-15}"
+INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS="${INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS:-90}"
+INLINE_WORKER_LAUNCH="${INLINE_WORKER_LAUNCH:-python -m internal.worker}"
+
+_inline_worker_proc_state() {
+  pid="$1"
+  if [ ! -r "/proc/$pid/stat" ]; then
+    return 1
+  fi
+  awk '{print $3}' "/proc/$pid/stat"
+}
+
+_inline_worker_group_live() {
+  pgid="$1"
+  if [ -z "$pgid" ]; then
+    return 1
+  fi
+  if ! kill -0 -"$pgid" 2>/dev/null; then
+    return 1
+  fi
+  # ponytail: python:3.12-slim has no procps/ps — scan /proc (pgrp + state) instead.
+  # ponytail: mawk aborts if a /proc/*/stat vanishes mid-read; cat snapshots first.
+  if cat /proc/[0-9]*/stat 2>/dev/null | awk -v pgid="$pgid" '
+    {
+      n = split($0, parts, ")")
+      rest = parts[n]
+      sub(/^ /, "", rest)
+      split(rest, f, " ")
+      if (f[3] == pgid && f[1] != "Z") found = 1
+    }
+    END { exit(found ? 0 : 1) }
+  '; then
+    return 0
+  fi
+  return 1
+}
+
+_stop_inline_worker() {
+  pgid="$1"
+  if [ -z "$pgid" ]; then
+    return 0
+  fi
+  if ! kill -0 -"$pgid" 2>/dev/null; then
+    wait "$pgid" 2>/dev/null || true
+    return 0
+  fi
+  kill -TERM -"$pgid" 2>/dev/null || kill -TERM "$pgid" 2>/dev/null || true
+  deadline=$(( $(date +%s) + INLINE_WORKER_STOP_GRACE_SECONDS ))
+  while kill -0 -"$pgid" 2>/dev/null; do
+    if [ "$(date +%s)" -ge "$deadline" ]; then
+      echo "inline worker pgid=$pgid did not exit after ${INLINE_WORKER_STOP_GRACE_SECONDS}s; sending SIGKILL"
+      kill -KILL -"$pgid" 2>/dev/null || kill -KILL "$pgid" 2>/dev/null || true
+      sleep 1
+      break
+    fi
+    sleep 1
+  done
+  wait "$pgid" 2>/dev/null || true
+}
 
 _start_inline_worker() {
-  # Both skip paths MUST log "skipping inline worker" — Stage 3 gate check 7
-  # greps that substring. fly.worker-v2.toml sets ENABLE_INLINE_WORKER=0, so
-  # this branch runs before WORKER_SPLIT_V2 and used to return silently.
   case "${ENABLE_INLINE_WORKER:-1}" in
     0|false|no|off)
       echo "ENABLE_INLINE_WORKER=${ENABLE_INLINE_WORKER} — skipping inline worker (v2 web config)"
@@ -24,48 +80,55 @@ _start_inline_worker() {
       ;;
   esac
   if [ -f "$INLINE_WORKER_PIDFILE" ]; then
-    old_pid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
-    if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+    old_pgid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
+    if _inline_worker_group_live "$old_pgid"; then
       return 0
     fi
+    rm -f "$INLINE_WORKER_PIDFILE"
   fi
   echo "starting inline background worker (RUN_MODE=worker, WORKER_HEAVY=${WORKER_HEAVY:-essential})..."
-  # Lower CPU priority so HTTP wins under contention on the shared web+worker VM.
-  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" python -m internal.worker &
+  nice -n 10 env RUN_MODE=worker WORKER_HEAVY="${WORKER_HEAVY:-essential}" setsid sh -c "exec $INLINE_WORKER_LAUNCH" &
   echo $! > "$INLINE_WORKER_PIDFILE"
-  echo "inline worker pid=$(cat "$INLINE_WORKER_PIDFILE")"
+  echo "inline worker pgid=$(cat "$INLINE_WORKER_PIDFILE")"
 }
 
 _supervise_inline_worker() {
   case "${ENABLE_INLINE_WORKER:-1}" in
-    0|false|no|off) return 0 ;;
+    0|false|no|off)
+      echo "ENABLE_INLINE_WORKER=${ENABLE_INLINE_WORKER} — skipping inline worker (v2 web config)"
+      return 0
+      ;;
   esac
   (
+    _start_inline_worker
     while true; do
-      sleep 90
-      pid=""
+      sleep "$INLINE_WORKER_SUPERVISOR_SLEEP_SECONDS"
+      pgid=""
       if [ -f "$INLINE_WORKER_PIDFILE" ]; then
-        pid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
+        pgid="$(cat "$INLINE_WORKER_PIDFILE" 2>/dev/null || true)"
       fi
       need_restart=0
-      if [ -z "$pid" ] || ! kill -0 "$pid" 2>/dev/null; then
+      if [ -z "$pgid" ] || ! _inline_worker_group_live "$pgid"; then
         need_restart=1
       elif ! python -c "from internal.worker_heartbeat import is_alive; import sys; sys.exit(0 if is_alive(max_age_seconds=180) else 1)"; then
-        echo "inline worker heartbeat stale (pid=$pid), restarting..."
-        kill "$pid" 2>/dev/null || true
-        wait "$pid" 2>/dev/null || true
-        rm -f "$INLINE_WORKER_PIDFILE"
+        echo "inline worker heartbeat stale (pgid=$pgid), restarting..."
         need_restart=1
       fi
       if [ "$need_restart" = 1 ]; then
-        _start_inline_worker
+        if [ -n "$pgid" ]; then
+          _stop_inline_worker "$pgid"
+        fi
+        if [ -n "$pgid" ] && _inline_worker_group_live "$pgid"; then
+          echo "inline worker restart skipped: pgid=$pgid still alive after stop"
+        else
+          rm -f "$INLINE_WORKER_PIDFILE"
+          _start_inline_worker
+        fi
       fi
     done
   ) &
 }
 
-# One-shot orphan cleanup before web/inline-worker share the volume (worker-only
-# restarts must not reap — see maybe_reap_at_boot inline_worker_expected gate).
 case "${ENABLE_INLINE_WORKER:-1}" in
   0|false|no|off) ;;
   *)
@@ -78,6 +141,5 @@ case "${ENABLE_INLINE_WORKER:-1}" in
     ;;
 esac
 
-_start_inline_worker
 _supervise_inline_worker
 exec python scripts/run_web_with_guard.py

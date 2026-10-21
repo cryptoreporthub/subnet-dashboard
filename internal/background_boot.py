@@ -592,7 +592,12 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     except Exception as exc:
         logger.warning("resolver retry semantics unavailable: %s", exc)
 
-    from internal.run_mode import background_heavy_on_web, is_worker_mode, worker_heavy_feeds_enabled
+    from internal.run_mode import (
+        background_heavy_on_web,
+        is_worker_mode,
+        live_subnets_sync_owner_enabled,
+        worker_heavy_feeds_enabled,
+    )
 
     if is_worker_mode():
         try:
@@ -682,15 +687,9 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         _start_calibration_snapshot_scheduler()
         _start_dev_radar_github_scheduler()
 
-    # WORKER_HEAVY=essential must not start live_subnets.
-    run_live_subnets = heavy
-    if not run_live_subnets and not heavy:
-        logger.info("background workers: essential mode (heavy feeds skipped)")
-        return
-
-    if run_live_subnets:
+    if live_subnets_sync_owner_enabled():
         try:
-            from internal.live_subnets import bootstrap_live_subnets_cache, get_live_subnets
+            from internal.live_subnets import bootstrap_live_subnets_cache, start_live_subnets_sync
 
             def _live_subnets_boot() -> None:
                 from internal.live_subnets import _record_boot_status, registry_ready
@@ -710,22 +709,23 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
                     )
                     return
                 bootstrap_live_subnets_cache()
-                get_live_subnets()
+                start_live_subnets_sync()
                 _record_boot_status(phase="boot_done")
 
-            # ponytail: defer boot sync so :8081 serves health before chain I/O.
             boot_delay = max(BOOT_DEFER_SECONDS, 5)
             defer_boot("live-subnets-boot", _live_subnets_boot, delay=boot_delay)
             logger.info(
-                "Live subnets sync scheduled (deferred %ss, worker=%s, heavy=%s)",
+                "Live subnets sync scheduled (deferred %ss, worker=%s, owner=%s)",
                 boot_delay,
                 is_worker_mode(),
-                heavy,
+                live_subnets_sync_owner_enabled(),
             )
         except Exception as exc:
             logger.warning("Live subnets sync failed to start: %s", exc)
 
     if not heavy:
+        if is_worker_mode() and not heavy:
+            logger.info("background workers: essential mode (heavy feeds skipped)")
         return
 
     try:
