@@ -27,10 +27,6 @@ Deploy Guard resolves `refs/heads/main` and ships the current `main` HEAD — wh
 `/version` equals the post-merge `main` short SHA. `/api/stats` reports the live universe
 (`active_count_excluding_root` == 128) rather than the stale 75-subnet registry universe.
 
-Note (2026-10-21): the 128 counts only rows with `status == "active"`, Root excluded. Scoring
-membership is 165: those 128 plus 37 rows with no status label, which `summary.py` reports as
-`unknown`. The two numbers answer different questions and both are correct.
-
 ## Non-goals
 
 No code changes, no config or secret changes, no other workflows.

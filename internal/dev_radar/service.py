@@ -103,7 +103,7 @@ def _overlay_github_cache(rows: List[Dict[str, Any]]) -> str:
     return "registry+github" if any(r.get("velocity_score") is not None for r in rows) else "registry"
 
 
-def build_dev_radar_rows(subnets: List[Dict[str, Any]], *, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+def build_dev_radar_rows(subnets: List[Dict[str, Any]], *, limit: int = 128) -> List[Dict[str, Any]]:
     """Registry rows with repo risk flags and graded snippets."""
     rows: List[Dict[str, Any]] = []
     for sn in subnets:
@@ -149,17 +149,17 @@ def build_dev_radar_rows(subnets: List[Dict[str, Any]], *, limit: Optional[int] 
     )
     # ponytail: source tag is returned via build_dev_radar_payload, not per-row
     _ = source
-    return rows if limit is None else rows[: max(1, int(limit))]
+    return rows[: max(1, min(int(limit), 256))]
 
 
-def build_dev_radar_payload(*, limit: Optional[int] = None) -> Dict[str, Any]:
+def build_dev_radar_payload(*, limit: int = 128) -> Dict[str, Any]:
     """Full API payload (cached 5 min)."""
     now = time.monotonic()
     cached = _CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_CACHE.get("at") or 0) < _CACHE_TTL_SEC:
         payload = dict(cached)
         subnets = list(payload.get("subnets") or [])
-        payload["subnets"] = subnets if limit is None else subnets[: max(1, int(limit))]
+        payload["subnets"] = subnets[: max(1, min(int(limit), 256))]
         return payload
 
     subnets = _load_registry_subnets()
@@ -174,7 +174,7 @@ def build_dev_radar_payload(*, limit: Optional[int] = None) -> Dict[str, Any]:
             "message": "No registry economics — dev pulse warming up",
         }
 
-    all_rows = build_dev_radar_rows(subnets)
+    all_rows = build_dev_radar_rows(subnets, limit=256)
     try:
         from internal.dev_radar.github_sync import load_dev_radar_cache
 
@@ -203,5 +203,5 @@ def build_dev_radar_payload(*, limit: Optional[int] = None) -> Dict[str, Any]:
     _CACHE["at"] = now
     _CACHE["payload"] = payload
     out = dict(payload)
-    out["subnets"] = all_rows if limit is None else all_rows[: max(1, int(limit))]
+    out["subnets"] = all_rows[: max(1, min(int(limit), 256))]
     return out

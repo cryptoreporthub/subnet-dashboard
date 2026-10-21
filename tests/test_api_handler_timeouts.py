@@ -411,63 +411,6 @@ def test_simivision_bg_success_clears_flag(monkeypatch):
     assert srv._SIMIVISION_CACHE.get("payload") == warm
 
 
-def test_simivision_bg_refresh_build_may_read_cached_rows(monkeypatch):
-    import threading
-
-    import server as srv
-
-    srv._SIMIVISION_CACHE["payload"] = None
-    srv._SIMIVISION_CACHE["at"] = 0.0
-    srv._SIMIVISION_BG_REFRESHING = False
-    monkeypatch.setattr(srv, "_SIMIVISION_LOCK", threading.Lock())
-    warm = {"status": "success", "data": {"top": [], "meta": {"count": 0, "source": "test"}}}
-
-    def _build():
-        srv._simivision_weighing_rows_cached()
-        return warm
-
-    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
-
-    srv._kick_simivision_background_refresh()
-    deadline = time.time() + 3
-    while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
-        time.sleep(0.05)
-
-    assert srv._SIMIVISION_BG_REFRESHING is False
-    assert srv._SIMIVISION_CACHE.get("payload") == warm
-
-
-def test_simivision_cache_reader_does_not_wait_on_running_build(monkeypatch):
-    import threading
-
-    import server as srv
-
-    srv._SIMIVISION_CACHE["payload"] = None
-    srv._SIMIVISION_CACHE["at"] = 0.0
-    srv._SIMIVISION_BG_REFRESHING = False
-    monkeypatch.setattr(srv, "_SIMIVISION_LOCK", threading.Lock())
-    started, gate = threading.Event(), threading.Event()
-
-    def _build():
-        started.set()
-        gate.wait(10)
-        return {"status": "success", "data": {"top": []}}
-
-    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
-    try:
-        srv._kick_simivision_background_refresh()
-        assert started.wait(3)
-        reader = threading.Thread(target=srv._simivision_weighing_rows_cached, daemon=True)
-        reader.start()
-        reader.join(1.0)
-        assert not reader.is_alive(), "cache reader blocked behind a running build"
-    finally:
-        gate.set()
-        deadline = time.time() + 3
-        while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
-            time.sleep(0.05)
-
-
 def test_score_universe_avoids_soul_map_deepcopy_storm(tmp_path, monkeypatch):
     """Scoring 20 subnets must not deepcopy soul_map hundreds of times."""
     import copy
@@ -1070,37 +1013,3 @@ def test_daily_pick_concurrent_gets_single_flight(monkeypatch):
         resp = client.get("/api/daily-pick")
     assert resp.status_code == 200
     assert resp.json().get("status") != "timeout"
-
-
-def test_simivision_concurrent_kicks_start_one_build(monkeypatch):
-    import threading
-
-    import server as srv
-
-    monkeypatch.setitem(srv._SIMIVISION_CACHE, "payload", None)
-    monkeypatch.setitem(srv._SIMIVISION_CACHE, "at", 0.0)
-    monkeypatch.setattr(srv, "_SIMIVISION_BG_REFRESHING", False)
-    builds = []
-    started, gate = threading.Event(), threading.Event()
-
-    def _build():
-        builds.append(1)
-        started.set()
-        gate.wait(10)
-        return {"status": "success", "data": {"top": []}}
-
-    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
-    try:
-        srv._kick_simivision_background_refresh()
-        assert started.wait(3)
-        kickers = [threading.Thread(target=srv._kick_simivision_background_refresh) for _ in range(20)]
-        for k in kickers:
-            k.start()
-        for k in kickers:
-            k.join(3)
-        assert len(builds) == 1
-    finally:
-        gate.set()
-        deadline = time.time() + 3
-        while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
-            time.sleep(0.05)

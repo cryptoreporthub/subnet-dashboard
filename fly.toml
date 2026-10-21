@@ -86,9 +86,13 @@ primary_region = "sjc"
   # Issue #888: hydrate cold price cache on resolve miss so predictions stop expiring ungraded
   CALIBRATION_AUTO_RETRAIN = "off"
   CALIBRATION_HYDRATE_ON_MISS = "true"
-  # Full universe, no cap. One worker keeps the first full-universe cost read comparable to the serial pre-#1443 baseline. Cost at this size is unmeasured.
+  SCORE_SNAPSHOT_MAX_SUBNETS = "40"
+  # One worker matches the serial scoring prod ran before #1443, so the first #1458 cost read is clean.
   SCORE_SNAPSHOT_SCORE_WORKERS = "1"
   SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = "480"
+  SCORING_CAP_MEGA_CEILING_RANK = "10"
+  SCORING_CAP_MID_RANK_MIN = "11"
+  SCORING_CAP_MID_RANK_MAX = "75"
   CONVICTION_ALERTS_ENABLED = "off"
   PUMP_LADDER_REFRESH_MINUTES = "20"
   PUMP_LADDER_STALE_MINUTES = "12"

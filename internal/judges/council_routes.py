@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 council_router = APIRouter()
 
+JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "20"))
 JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "3"))
 _JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
 _JUDGES_LOCK = threading.Lock()
@@ -86,6 +87,17 @@ _TEMPLATES_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "templates",
 )
+
+
+def _cap_subnets_for_judges(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Score only the top-emission subnets so hydration cannot starve /health."""
+    if not subnets or len(subnets) <= JUDGES_SCORING_UNIVERSE:
+        return subnets
+    return sorted(
+        subnets,
+        key=lambda s: float(s.get("emission", 0) or 0),
+        reverse=True,
+    )[:JUDGES_SCORING_UNIVERSE]
 
 
 def _deduplicate_subnets(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -282,6 +294,8 @@ def _api_council_sync_inner():
                 "meta": {"count": 0, "source": "none", "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")},
             }
 
+        merged = _cap_subnets_for_judges(merged)
+
         # Score through the judge council
         try:
             scored = _score_all_judges(merged)
@@ -341,6 +355,7 @@ def _api_judges_sync_inner():
     try:
         subnets, source = _get_subnets_for_scoring()
         if subnets:
+            subnets = _cap_subnets_for_judges(subnets)
             result = _score_all_judges(subnets)
             logger.info("Judges: scored %d unique subnets (source=%s)", len(result), source)
             return {

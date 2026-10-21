@@ -644,6 +644,7 @@ async def add_cors_headers(request: Request, call_next):
 
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
+TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
 # Hydrate GET must not wait on the scoring pool. Sequential prod #1058 burned
 # the full 8s PICK_HANDLER_TIMEOUT on a queued/stuck _build.
@@ -921,6 +922,16 @@ def _warm_homepage_cache(request: Optional[Request] = None) -> None:
                 _HOMEPAGE_WARMING = False
 
 
+def _cap_subnets_for_scoring(
+    subnets: List[Dict[str, Any]],
+    limit: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Limit council scoring — majors represented, mid-cap focus for the rest."""
+    from internal.subnets.scoring_cap import cap_subnets_for_scoring
+
+    return cap_subnets_for_scoring(subnets, limit, default_limit=TOP_SCORING_UNIVERSE)
+
+
 def _normalize_registry_subnet(sn: Dict[str, Any]) -> Dict[str, Any]:
     """Registry rows use ``id``; ensure ``netuid`` and canonical name."""
     row = dict(sn)
@@ -1042,7 +1053,6 @@ def _registry_shell_subnets() -> List[Dict[str, Any]]:
     bounded live-feed attempt so a fresh volume keeps subnet context.
     """
     from internal.subnet_names import enrich_subnet_rows
-    from internal.subnets.tradable import tradable_subnets
 
     local_registry = load_data("config/registry.json")
     rows = list(local_registry.values()) if isinstance(local_registry, dict) else []
@@ -1052,8 +1062,8 @@ def _registry_shell_subnets() -> List[Dict[str, Any]]:
         except Exception as exc:
             logger.debug("homepage shell live subnet fallback failed: %s", exc)
             rows = []
-    subnets = enrich_subnet_rows(tradable_subnets(rows), use_tmc_names=False)
-    return subnets
+    subnets = enrich_subnet_rows(rows, use_tmc_names=False)
+    return _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
 
 
 def _shell_pump_and_picks(
@@ -1201,7 +1211,7 @@ def _subnets_for_spotlight_lite() -> List[Dict[str, Any]]:
         hydrate_timeout = float(os.environ.get("SPOTLIGHT_SUBNETS_TIMEOUT_SECONDS", "2.5"))
         subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
         if subnets:
-            return subnets
+            return _cap_subnets_for_scoring(subnets)
     except Exception as exc:
         logger.debug("spotlight subnet hydrate skipped: %s", exc)
     return _registry_subnets_for_spotlight()
@@ -2933,6 +2943,7 @@ def _simivision_build_inner():
     subnets, source = _get_subnets_with_source(timeout=hydrate_timeout)
     if not subnets:
         subnets, source = _get_subnets_hydrate()
+    subnets = _cap_subnets_for_scoring(subnets)
     daily_pick: Optional[Dict[str, Any]] = None
     market_context: Optional[Dict[str, Any]] = None
     try:
@@ -2959,14 +2970,18 @@ def _kick_simivision_background_refresh() -> None:
     def _run() -> None:
         global _SIMIVISION_BG_REFRESHING
         try:
-            # Direct build on this thread — no nested ThreadPoolExecutor.
-            # Abandoned pool workers after #761 timeouts starved judges (GIL).
-            # Soul-map read path is now copy_blob=False for scoring, so this
-            # finishes in seconds instead of hanging on deepcopy storms.
-            payload = _simivision_build_inner()
-            with _SIMIVISION_LOCK:
+            if not _SIMIVISION_LOCK.acquire(blocking=False):
+                return
+            try:
+                # Direct build on this thread — no nested ThreadPoolExecutor.
+                # Abandoned pool workers after #761 timeouts starved judges (GIL).
+                # Soul-map read path is now copy_blob=False for scoring, so this
+                # finishes in seconds instead of hanging on deepcopy storms.
+                payload = _simivision_build_inner()
                 _SIMIVISION_CACHE["payload"] = payload
                 _SIMIVISION_CACHE["at"] = time.time()
+            finally:
+                _SIMIVISION_LOCK.release()
         except Exception as exc:
             logger.warning("simivision background refresh failed: %s", exc)
         finally:
@@ -3344,6 +3359,8 @@ async def api_top_pick_hour():
             subnets, _ = _get_subnets_with_source(timeout=hydrate_timeout)
             if not subnets:
                 subnets, _ = _get_subnets_hydrate()
+            # Tight cap — full 40-universe select_hourly_pick is ~9s on Fly shared CPU.
+            subnets = _cap_subnets_for_scoring(subnets, limit=min(24, TOP_SCORING_UNIVERSE))
             market_context = _market_context_with_weights(subnets)
             picks: List[Dict[str, Any]] = []
             try:

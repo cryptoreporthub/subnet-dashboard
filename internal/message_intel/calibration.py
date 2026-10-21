@@ -235,25 +235,6 @@ def calibration_health(
     }
 
 
-def index_conviction_calls(rows: List[Dict[str, Any]]) -> Dict[int, List[tuple]]:
-    """Group eligible up/down calls by netuid once per batch.
-
-    Entries are (row, proof, epoch_seconds). Each subnet's calibration then reads
-    its own bucket instead of re-parsing every row.
-    """
-    index: Dict[int, List[tuple]] = {}
-    for row in rows:
-        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
-        if timestamp is None:
-            continue
-        proof = classify_call(row)
-        if not proof["eligible"] or proof["direction"] not in {"up", "down"}:
-            continue
-        for netuid in _netuids_from_row(row):
-            index.setdefault(netuid, []).append((row, proof, timestamp.timestamp()))
-    return index
-
-
 def calibration_for_subnet(
     netuid: Any,
     *,
@@ -261,7 +242,6 @@ def calibration_for_subnet(
     now: Optional[datetime] = None,
     conviction_rows: Optional[List[Dict[str, Any]]] = None,
     calibration_health_snapshot: Optional[Dict[str, Any]] = None,
-    conviction_index: Optional[Dict[int, List[tuple]]] = None,
 ) -> Dict[str, Any]:
     """Return an additive, bounded score adjustment for one subnet's current calls."""
     rows = conviction_rows if conviction_rows is not None else _conviction_rows(db)
@@ -276,9 +256,17 @@ def calibration_for_subnet(
         wanted = int(netuid)
     except (TypeError, ValueError):
         return {**health, "applied": False, "adjustment_points": 0.0, "current_evidence": None}
-    cutoff = (now - timedelta(hours=cfg["current_window_hours"])).timestamp()
-    index = conviction_index if conviction_index is not None else index_conviction_calls(rows)
-    current = [(row, proof, ts) for row, proof, ts in index.get(wanted, []) if ts >= cutoff]
+    cutoff = now - timedelta(hours=cfg["current_window_hours"])
+    current = []
+    for row in rows:
+        proof = classify_call(row)
+        timestamp = _parse_ts(row.get("timestamp")) or _parse_ts(row.get("created_at"))
+        if not proof["eligible"] or timestamp is None or timestamp < cutoff:
+            continue
+        if wanted not in _netuids_from_row(row):
+            continue
+        if proof["direction"] in {"up", "down"}:
+            current.append((row, proof, timestamp))
     authors = {stable_author_id(row) for row, _, _ in current}
     direction_sum = sum(1 if proof["direction"] == "up" else -1 for _, proof, _ in current)
     direction = "bullish" if direction_sum > 0 else "bearish" if direction_sum < 0 else "mixed"

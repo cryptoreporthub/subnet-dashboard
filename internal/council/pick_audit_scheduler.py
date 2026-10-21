@@ -133,7 +133,7 @@ class PickSelectionAuditScheduler:
             result["verdict"] = payload.get("verdict")
             result["category"] = payload.get("category")
             result["published_netuid"] = payload.get("published_netuid")
-            primary = (payload.get("oracles") or {}).get("full_universe", {})
+            primary = (payload.get("oracles") or {}).get("scheduler_cap_24", {})
             result["oracle_scheduler_netuid"] = (primary.get("pick") or {}).get("netuid")
             result["audit_path"] = payload.get("pick_date")
             self.liveness.record_success(

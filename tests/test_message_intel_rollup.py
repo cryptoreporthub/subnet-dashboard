@@ -458,7 +458,7 @@ def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
     )
     monkeypatch.setattr(
         "internal.subnet_names._tmc_display_names",
-        lambda: {3: "Templar", 39: "EdgeMaxxing"},
+        lambda: {39: "EdgeMaxxing"},
     )
     rows = [
         {
@@ -495,7 +495,7 @@ def test_yesterday_summary_sn39_uses_deprecated_label(monkeypatch):
     assert summary["ready"] is True
     assert "EdgeMaxxing" not in summary["narrative"]
     assert "SN39 (deprecated)" in summary["narrative"]
-    assert summary["top_subnets"][0]["name"] == "Templar"
+    assert summary["top_subnets"][0]["name"] == "Teutonic"
     assert summary["top_subnets"][1]["name"] == "SN39 (deprecated)"
 
 
@@ -985,7 +985,7 @@ def test_conviction_rows_keep_subnet_basis_and_receipt_source_links(intel_env):
     assert fire["source_url"] == "https://t.me/officialsubnetsummer/424242"
 
 
-def test_telegram_proof_band_and_high_conviction_strip(intel_env, monkeypatch):
+def test_telegram_proof_band_and_high_conviction_strip(intel_env):
     """Verify proof band and high conviction strip populate rich metadata,
     permalinks, author handles, and accurate hit/miss statuses."""
     from internal.message_intel import rollup
@@ -1021,14 +1021,13 @@ def test_telegram_proof_band_and_high_conviction_strip(intel_env, monkeypatch):
     assert recent_item["status"] == "hit"
     assert recent_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
 
-    monkeypatch.setattr("internal.subnet_names._tmc_display_names", lambda: {100: "Cortex"})
-    hc_strip = rollup.build_high_conviction_strip(min_conviction=70.0, db=db)
+    hc_strip = rollup.build_high_conviction_strip(min_conviction=70.0, db=db, registry_names={100: "Base Alpha"})
     assert len(hc_strip) == 1
     hc_item = hc_strip[0]
     assert hc_item["author_name"] == "SideEye"
     assert hc_item["conviction"] == 100.0
     assert hc_item["netuid"] == 100
-    assert hc_item["subnet_name"] == "Cortex"
+    assert hc_item["subnet_name"] == "Base Alpha"
     assert hc_item["source_url"] == "https://t.me/officialsubnetsummer/10042"
 
 def test_desk_author_helper_matches_bot_identity():
