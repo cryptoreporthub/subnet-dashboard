@@ -1583,7 +1583,7 @@ A metric has three states, and the code must never collapse two of them:
 
 #### 10.1 Fix A — three-state gauges (`internal/metrics.py`)
 
-**Defect:** `metrics.py:212` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:193` (sync running), `:196` (sync last ok), `:218` (failures), `:226-227` (apscheduler). And `_set_optional` at `:160-166` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie. **Premise check (2026-10-21).** The code claim holds at the pin: a missing key and a stopped scheduler both emit `0` (`metrics.py:212`, `:226`). The live zeros in §7.4 (lines 1470–1477) do not support the meaning the packet gives them. The web process runs with `BACKGROUND_ON_WEB=off` (`fly.toml:35`) and does not own the scheduler or sync state, so those zeros mean 'not running in this process', not 'stopped' or 'failing'. For `subnet_sync_last_ok`, the gauge is set only when the key is present (`metrics.py:195–196`), so the `0` may be the gauge's untouched default. Fix A's `UNAVAILABLE = -1` for an absent state would make that absence visible. It would not put the worker's state on web. That needs the separate change §7.6 describes.
+**Defect:** `metrics.py:212` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:193` (sync running) and `:226-227` (apscheduler). `:196` (sync last ok) and `:218` (failures) are guarded by `is not None`, so an absent key leaves the gauge at its last value instead of writing `0`. And `_set_optional` at `:160-166` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie. **Premise check (2026-10-21).** The code claim holds at the pin: a missing key and a stopped scheduler both emit `0` (`metrics.py:212`, `:226`). The live zeros in §7.4 (lines 1470–1477) do not support the meaning the packet gives them. The web process runs with `BACKGROUND_ON_WEB=off` (`fly.toml:35`) and does not own the scheduler or sync state, so those zeros mean 'not running in this process', not 'stopped' or 'failing'. For `subnet_sync_last_ok`, the gauge is set only when the key is present (`metrics.py:195–196`), so the `0` may be the gauge's untouched default. Fix A's `UNAVAILABLE = -1` for an absent state would make that absence visible. It would not put the worker's state on web. That needs the separate change §7.6 describes.
 
 ```diff
 @@ internal/metrics.py
@@ -2176,7 +2176,7 @@ Second design pass. The first ([Scoring Universe Contract](scoring-universe-cont
 
 ### What the 3,000 is
 
-    # rollup.py:1068 (_conviction_rows); LIMIT 3000 at 1096
+    # rollup.py:1077 (_query_conviction_rows); LIMIT 3000 at 1096
     SELECT m.id, m.source, ..., a.entities_json, v.verdict, v.conviction, ...
            ps.tao_usd_price, po.price_24h, po.price_24h_recorded_at
     FROM messages m
