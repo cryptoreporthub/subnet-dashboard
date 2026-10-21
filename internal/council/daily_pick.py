@@ -115,13 +115,9 @@ def select_daily_pick(
 ) -> Dict[str, Any]:
     market_context = dict(market_context or {})
     market_context.setdefault("weights", _weights_for_context(market_context))
-    if "telegram_conviction_rows" not in market_context:
-        try:
-            from internal.message_intel.rollup import _conviction_rows
+    from internal.council.scoring_context import enrich_scoring_market_context
 
-            market_context["telegram_conviction_rows"] = _conviction_rows()
-        except Exception:
-            market_context["telegram_conviction_rows"] = None
+    market_context = enrich_scoring_market_context(market_context)
     subnets = tradable_subnets(subnets)
 
     if not subnets:
