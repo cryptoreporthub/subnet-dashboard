@@ -257,28 +257,6 @@ def _git_show_entrypoint(rev: str) -> str:
     return proc.stdout
 
 
-def _wait_for_inline_worker_pair(
-    pidfile: Path,
-    parent_sleep_id: str,
-    child_sleep_id: str,
-    *,
-    timeout: float = 8.0,
-) -> tuple[str, set[str]]:
-    deadline = time.time() + timeout
-    last_pids: set[str] = set()
-    while time.time() < deadline:
-        if pidfile.is_file():
-            pgid = pidfile.read_text(encoding="utf-8").strip()
-            pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
-            last_pids = pids
-            if pgid and len(pids) >= 2:
-                return pgid, pids
-        time.sleep(0.05)
-    raise AssertionError(
-        f"inline worker parent+child not ready within {timeout}s (pids={last_pids!r})"
-    )
-
-
 def _pids_matching(pattern: str) -> set[str]:
     out = subprocess.run(
         ["pgrep", "-f", pattern],
@@ -287,6 +265,15 @@ def _pids_matching(pattern: str) -> set[str]:
         check=False,
     ).stdout
     return {p for p in out.split() if p}
+
+
+def _wait_for(predicate, *, timeout: float, interval: float = 0.1) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(interval)
+    return predicate()
 
 
 def _stub_ps_absent(tmp_path: Path) -> str:
@@ -339,6 +326,8 @@ def _run_supervisor_stale_heartbeat_harness(
     )
     log_path = tmp_path / "entrypoint_supervisor.log"
     log_handle = log_path.open("w", encoding="utf-8")
+    for pattern in (parent_sleep_id, child_sleep_id):
+        subprocess.run(["pkill", "-9", "-f", pattern], check=False)
     proc = subprocess.Popen(
         ["dash", "-c", src],
         env=env,
@@ -348,19 +337,17 @@ def _run_supervisor_stale_heartbeat_harness(
         text=True,
         start_new_session=True,
     )
-    for pattern in (parent_sleep_id, child_sleep_id):
-        subprocess.run(["pkill", "-9", "-f", pattern], check=False)
-    time.sleep(0.2)
     first_pgid = ""
     first_pids: set[str] = set()
     second_start_seen = False
-    pidfile_replaced_after_sigkill = False
     try:
-        first_pgid, first_pids = _wait_for_inline_worker_pair(
-            pidfile,
-            parent_sleep_id,
-            child_sleep_id,
-        )
+        assert _wait_for(pidfile.is_file, timeout=10), "supervisor did not start inline worker"
+        assert _wait_for(
+            lambda: len(_pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)) >= 2,
+            timeout=10,
+        ), "worker parent and child sleep processes not running after boot"
+        first_pgid = pidfile.read_text(encoding="utf-8").strip()
+        first_pids = _pids_matching(parent_sleep_id) | _pids_matching(child_sleep_id)
         hb_path.write_text(
             json.dumps({"ts": "2000-01-01T00:00:00Z", "pid": 1}),
             encoding="utf-8",
@@ -380,21 +367,10 @@ def _run_supervisor_stale_heartbeat_harness(
                     f"old worker descendants still alive at 2nd start: {overlap}"
                 )
                 second_start_seen = True
-            if "sending SIGKILL" in out:
-                current_pgid = (
-                    pidfile.read_text(encoding="utf-8").strip()
-                    if pidfile.is_file()
-                    else ""
-                )
-                if not current_pgid or current_pgid != first_pgid:
-                    pidfile_replaced_after_sigkill = True
-            if second_start_seen and pidfile_replaced_after_sigkill:
+            if second_start_seen and "sending SIGKILL" in out:
                 break
             time.sleep(0.25)
-        assert pidfile_replaced_after_sigkill, (
-            "pidfile not cleared or replaced after SIGKILL"
-        )
-        time.sleep(0.5)
+        time.sleep(1)
         listed = subprocess.run(
             ["pgrep", "-af", parent_sleep_id],
             capture_output=True,
@@ -410,6 +386,9 @@ def _run_supervisor_stale_heartbeat_harness(
         out = log_path.read_text(encoding="utf-8")
         assert out.count("starting inline background worker") >= 2, out
         assert second_start_seen, "never observed 2nd start with old pgid dead"
+        assert pidfile.is_file() and pidfile.read_text(encoding="utf-8").strip() != first_pgid, (
+            "pidfile still names the killed worker group"
+        )
         assert "heartbeat stale" in out, out
         assert "sending SIGKILL" in out, out
         idx_first = out.find("starting inline background worker")
