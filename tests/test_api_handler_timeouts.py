@@ -412,7 +412,6 @@ def test_simivision_bg_success_clears_flag(monkeypatch):
 
 
 def test_simivision_bg_refresh_build_may_read_cached_rows(monkeypatch):
-    """A build that reads the cache (spotlight weighing rows) must not wait on itself."""
     import threading
 
     import server as srv
@@ -439,7 +438,6 @@ def test_simivision_bg_refresh_build_may_read_cached_rows(monkeypatch):
 
 
 def test_simivision_cache_reader_does_not_wait_on_running_build(monkeypatch):
-    """Another thread reading the cache mid-build must return at once."""
     import threading
 
     import server as srv
