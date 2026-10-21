@@ -2959,18 +2959,14 @@ def _kick_simivision_background_refresh() -> None:
     def _run() -> None:
         global _SIMIVISION_BG_REFRESHING
         try:
-            if not _SIMIVISION_LOCK.acquire(blocking=False):
-                return
-            try:
-                # Direct build on this thread — no nested ThreadPoolExecutor.
-                # Abandoned pool workers after #761 timeouts starved judges (GIL).
-                # Soul-map read path is now copy_blob=False for scoring, so this
-                # finishes in seconds instead of hanging on deepcopy storms.
-                payload = _simivision_build_inner()
+            # Direct build on this thread — no nested ThreadPoolExecutor.
+            # Abandoned pool workers after #761 timeouts starved judges (GIL).
+            # Soul-map read path is now copy_blob=False for scoring, so this
+            # finishes in seconds instead of hanging on deepcopy storms.
+            payload = _simivision_build_inner()
+            with _SIMIVISION_LOCK:
                 _SIMIVISION_CACHE["payload"] = payload
                 _SIMIVISION_CACHE["at"] = time.time()
-            finally:
-                _SIMIVISION_LOCK.release()
         except Exception as exc:
             logger.warning("simivision background refresh failed: %s", exc)
         finally:
