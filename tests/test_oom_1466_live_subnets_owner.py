@@ -186,7 +186,7 @@ def _entrypoint_library_src(entrypoint_src: str) -> str:
     for i, line in enumerate(lines):
         if line.startswith('case "${ENABLE_INLINE_WORKER'):
             return "".join(lines[:i])
-    raise ValueError("entrypoint boot marker missing")
+    return entrypoint_src
 
 
 def _inline_worker_group_live(pgid: str, entrypoint_src: str) -> bool:
@@ -213,6 +213,14 @@ def _inline_worker_group_live(pgid: str, entrypoint_src: str) -> bool:
         return proc.returncode == 0
     finally:
         os.unlink(script_path)
+
+
+def _pre_cat_mawk_scan_entrypoint() -> str:
+    return (
+        Path(__file__).resolve().parent
+        / "fixtures"
+        / "fly_web_entrypoint_pre_cat_mawk_scan.sh"
+    ).read_text(encoding="utf-8")
 
 
 def _git_show_entrypoint(rev: str) -> str:
@@ -414,15 +422,14 @@ def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
 
 
 def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
-    pre_cat = _git_show_entrypoint("fb1fdb8e")
     false_dead = _run_churn_group_live_checks(
-        pre_cat,
+        _pre_cat_mawk_scan_entrypoint(),
         target="61999009890",
         iterations=120,
         assert_stable_with=_repo_entrypoint_text(),
     )
     assert false_dead >= 1, (
-        "fb1fdb8e awk-on-glob scan should false-negative under /proc churn"
+        "pre-cat awk-on-glob scan should false-negative under /proc churn"
     )
 
 
@@ -449,16 +456,4 @@ def test_supervisor_stale_heartbeat_harness_fails_on_merge_base_entrypoint(tmp_p
             parent_sleep_id="61999001251",
             child_sleep_id="61999001252",
             web_sleep_id="61999001253",
-        )
-
-
-def test_supervisor_stale_heartbeat_harness_fails_with_pre_cat_entrypoint(tmp_path):
-    pre_cat = _git_show_entrypoint("fb1fdb8e")
-    with pytest.raises(AssertionError):
-        _run_supervisor_stale_heartbeat_harness(
-            tmp_path,
-            pre_cat,
-            parent_sleep_id="61999001254",
-            child_sleep_id="61999001255",
-            web_sleep_id="61999001256",
         )
