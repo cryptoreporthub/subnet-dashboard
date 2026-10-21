@@ -57,7 +57,7 @@ def test_daily_run_once_calls_get_or_create(monkeypatch):
         "internal.council.daily_pick_engine.get_or_create_today_pick",
         _fake_get,
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
 
@@ -102,7 +102,7 @@ def test_hour_run_once_records_prediction(monkeypatch):
         recorded["netuid"] = (pick.get("subnet") or {}).get("netuid")
 
     monkeypatch.setattr(pick_scheduler, "_record_hour_pick", _record)
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 7, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 7, "price": 1.0}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
 
     sched = pick_scheduler.HourPickScheduler(refresh_minutes=180)
@@ -128,7 +128,7 @@ def test_hour_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
         lambda subnets, ctx: {"subnet": {"netuid": 3}, "final_confidence": 0.4},
     )
     monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_k: None)
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 3, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 3, "price": 1.0}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
 
     sched = pick_scheduler.HourPickScheduler(refresh_minutes=180)
@@ -158,7 +158,7 @@ def test_daily_state_reads_persisted_tracker_after_worker_stops(monkeypatch):
             "pick": {"netuid": 9},
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 9, "price": 1.0}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 9, "price": 1.0}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
     monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
@@ -210,7 +210,7 @@ def test_daily_tick_retries_when_today_missing(monkeypatch):
             "scheduler_hold": True,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -245,7 +245,7 @@ def test_daily_tick_uses_slot_when_today_ready(monkeypatch):
             "pick": None,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -286,7 +286,7 @@ def test_daily_tick_timeout_writes_scheduler_hold(monkeypatch):
             "scheduler_hold": True,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -329,7 +329,7 @@ def test_daily_tick_timeout_then_immediate_retry_starts_new_worker(monkeypatch):
             "scheduler_hold": True,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -374,7 +374,7 @@ def test_daily_tick_timeout_schedules_retry_not_slot_when_disk_ready(monkeypatch
             "scheduler_hold": True,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -472,7 +472,7 @@ def test_daily_run_once_rearms_when_singleton(monkeypatch):
             "pick": None,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)
@@ -498,7 +498,7 @@ def test_hour_run_once_rearms_when_singleton(monkeypatch):
         lambda subnets, ctx: {"subnet": {"netuid": 3}, "final_confidence": 0.4},
     )
     monkeypatch.setattr(pick_scheduler, "_record_hour_pick", lambda *_a, **_k: None)
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 3}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 3}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
     monkeypatch.setattr(
@@ -526,7 +526,7 @@ def test_daily_run_once_does_not_schedule_when_not_singleton(monkeypatch):
             "pick": None,
         },
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [{"netuid": 1}])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [{"netuid": 1}])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: True)
     monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda extra=None: None)

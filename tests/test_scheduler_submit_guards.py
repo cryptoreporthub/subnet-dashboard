@@ -24,7 +24,7 @@ def test_hung_daily_pick_refuses_second_submit(monkeypatch):
     monkeypatch.setattr(
         "internal.council.daily_pick_engine.get_or_create_today_pick", hang
     )
-    monkeypatch.setattr(pick_scheduler, "_load_capped_subnets", lambda: [])
+    monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: [])
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda _s: {})
     monkeypatch.setattr(pick_scheduler, "_today_pick_ready", lambda: False)
     monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *_a, **_k: None)
