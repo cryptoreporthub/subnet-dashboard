@@ -641,7 +641,7 @@ def is_worker_mode() -> bool:
 On the v1 topology (`fly.toml` sets `RUN_MODE = "web"`) the snapshot job runs under web
 
 mode, where `_snapshot_subnet_cap()` would return 0 — except `SCORE_SNAPSHOT_MAX_SUBNETS=40`
-short-circuits first at lines 48–50. The cap is applied by env, not by mode.
+short-circuits first at lines 47–50. The cap is applied by env, not by mode.
 
 #### R12 — `telegram_evidence_calibration` is a persisted contract
 
@@ -2141,7 +2141,7 @@ Step 5 is deliberately last and independent: if it lands first and something dow
 
 ## The one number that decides whether step 3 ships alone
 
-Removing the cap multiplies snapshot work by roughly `128 / 24 ≈ 5.3×` at `SCORE_SNAPSHOT_SCORE_WORKERS = 2`. The audit's Part III has the production measurements; I did not re-derive them this pass. Before step 3 lands, the falsifier is: **plot `build_wall_seconds` and `build_cost.cpu` against N for at least two N values.** If either grows super-linearly, step 3 ships with a deadline budget and a workers bump, not alone. If it grows linearly, the cap was always compensating for the Telegram scan, and it can go without a replacement.
+Removing the cap multiplies snapshot work by roughly `128 / 40 ≈ 3.2×` at `SCORE_SNAPSHOT_SCORE_WORKERS = 2`. The denominator is the production snapshot cap (`SCORE_SNAPSHOT_MAX_SUBNETS = 40`, `fly.toml:89`), not the pick cap of 24. This is a workload-count ratio, not a measured runtime. The audit's Part III has the production measurements; I did not re-derive them this pass. Before step 3 lands, the falsifier is: **plot `build_wall_seconds` and `build_cost.cpu` against N for at least two N values.** If either grows super-linearly, step 3 ships with a deadline budget and a workers bump, not alone. If it grows linearly, the cap was always compensating for the Telegram scan, and it can go without a replacement.
 
 Either way the decision is made from the two numbers, not from the argument that the cap "felt" necessary.
 
@@ -2465,7 +2465,7 @@ Default for the flag is off, and the earlier read confirmed it is never applied.
 
 - **The 3,000-row scan leaves the score path entirely** — not bounded, removed. The two `LIMIT 3000` sites that remain (`_conviction_rows`, `list_telegram_caller_activity`) now serve only Telegram's own surfaces.
 - **The `Window` type in the calibration-window doc is now optional polish**, scoped to `/listener` and `/api/message-intel/*`. Worth doing later for the 72h-vs-message-id-bias problem; no longer on the critical path, and no longer a reason to touch scoring.
-- **The caps / 5.3× snapshot question is fully decoupled.** Telegram removal does not change it, and it should not ride along in this change.
+- **The caps / 3.2× snapshot question is fully decoupled.** Telegram removal does not change it, and it should not ride along in this change.
 
 ---
 
@@ -2760,7 +2760,8 @@ Every claim in this thread that later evidence changed, so a reviewer can see wh
 
 ## 13. Reproduction
 
-`curl -s https://subnet-dashboard.fly.dev/version
+```bash
+curl -s https://subnet-dashboard.fly.dev/version
 curl -s https://subnet-dashboard.fly.dev/api/message-intel/calibration
 
 P=3a65d34ac46a28395559310f21db013b4581c645
@@ -2771,7 +2772,8 @@ done
 
 # the prod-side 404 that proves the hoist is not deployed:
 curl -s -o /dev/null -w "%{http_code}\n" \
-  "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/357980b43f374ca9bf109380a7229afab0c77643/internal/council/scoring_context.py"`
+  "https://raw.githubusercontent.com/cryptoreporthub/subnet-dashboard/357980b43f374ca9bf109380a7229afab0c77643/internal/council/scoring_context.py"
+```
 
 ---
 
@@ -2845,7 +2847,7 @@ Four numbers circulate; all four are real, at different doors.
 | **32.2 s / 40 names** at 805 ms | Part III §7, via `scoring-caps-profile.md` | prod-shaped, extreme | documented extreme, not current |
 | **57.7 s observed build** = 1.44 s/name | Part III §7 (prod) | actual | measured |
 | "≈**6 s**" total saving from removing the scan | an earlier record today | per-pick, likely | **unreconciled** |
-| **5.3×** build multiplier (128/24) from removing the cap | Part IV | snapshot build | arithmetic |
+| **3.2×** build multiplier (128/40) from removing the cap | Part IV | snapshot build | arithmetic |
 
 **Ruling: quote no single number.** The 57.7 s and 1.44 s/name are measurements; the rest are estimates at different scopes, and the ~6 s figure contradicts 32–40 s by an order of magnitude. The command that settles it is `bb4ce004`'s counters — **on main, not deployed** (VIII.7).
 
@@ -2899,7 +2901,7 @@ Ordered by what would change a decision fastest.
 | 4 | Does anything client-side read `telegram_evidence_calibration`? | Fix VII-C deletes the field | grep `static/` and templates; Python-only search already returned one occurrence |
 | 5 | Does `PICK_SCHEDULER_UNIVERSE_CAP` declare a module default? | Part IV lists it as read-not-verified | read the declaration in `pick_scheduler.py` |
 | 6 | Why did `/api/top-picks` return `status: timeout` at 20:05 PDT? | Live symptom, unrelated to Telegram | run logs at that timestamp |
-| 7 | Does the 5.3× multiplier hold? | Decides whether Part IV step 3 ships alone or with a deadline budget | plot `build_wall_seconds` and `build_cost.cpu` against N for two values of N |
+| 7 | Does the 3.2× multiplier hold? | Decides whether Part IV step 3 ships alone or with a deadline budget | plot `build_wall_seconds` and `build_cost.cpu` against N for two values of N |
 
 ---
 
