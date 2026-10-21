@@ -1070,3 +1070,37 @@ def test_daily_pick_concurrent_gets_single_flight(monkeypatch):
         resp = client.get("/api/daily-pick")
     assert resp.status_code == 200
     assert resp.json().get("status") != "timeout"
+
+
+def test_simivision_concurrent_kicks_start_one_build(monkeypatch):
+    import threading
+
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    builds = []
+    started, gate = threading.Event(), threading.Event()
+
+    def _build():
+        builds.append(1)
+        started.set()
+        gate.wait(10)
+        return {"status": "success", "data": {"top": []}}
+
+    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
+    try:
+        srv._kick_simivision_background_refresh()
+        assert started.wait(3)
+        kickers = [threading.Thread(target=srv._kick_simivision_background_refresh) for _ in range(20)]
+        for k in kickers:
+            k.start()
+        for k in kickers:
+            k.join(3)
+        assert len(builds) == 1
+    finally:
+        gate.set()
+        deadline = time.time() + 3
+        while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
+            time.sleep(0.05)
