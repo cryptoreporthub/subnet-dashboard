@@ -39,6 +39,7 @@ def test_bootstrap_calls_sync_once_on_worker(monkeypatch):
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
     monkeypatch.setenv("LIVE_SUBNETS_BOOT_IMMEDIATE", "on")
     monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "full")
 
     from internal import live_subnets
 
@@ -57,6 +58,7 @@ def test_bootstrap_defers_until_registry_ready(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("LIVE_SUBNETS_BOOT_IMMEDIATE", "on")
     monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "full")
     from internal import live_subnets
 
     monkeypatch.setattr(live_subnets, "AUTO_SYNC", True)

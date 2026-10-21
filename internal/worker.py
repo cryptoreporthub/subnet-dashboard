@@ -15,10 +15,13 @@ import threading
 from internal.app_logging import configure_app_logging
 from internal.sentry_setup import init_sentry
 
-init_sentry()
-configure_app_logging()
-
 logger = logging.getLogger("worker")
+
+
+def bootstrap_worker_runtime() -> None:
+    """Sentry + stdout logging for the worker process (not at import — fetch spawn may import this module first)."""
+    init_sentry()
+    configure_app_logging()
 
 _shutdown = threading.Event()
 
@@ -84,6 +87,8 @@ def _start_job_inventory_http() -> None:
 
 def main() -> None:
     import os
+
+    bootstrap_worker_runtime()
 
     from internal.background_boot import (
         schedule_summary_bot_worker_watchdog,

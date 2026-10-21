@@ -515,7 +515,7 @@ def _run_web_entrypoint_skip_only(env: dict[str, str]) -> str:
     """Run only _start_inline_worker from fly_web_entrypoint.sh (no supervise/uvicorn)."""
     src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
     # Drop supervise (infinite loop when ENABLE=1) and uvicorn exec.
-    marker = "_start_inline_worker\n_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
+    marker = "_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
     assert marker in src, "entrypoint tail changed — update this test"
     stub = src.replace(
         marker,
@@ -545,6 +545,28 @@ def test_web_entrypoint_logs_skip_under_v2_enable_inline_off():
     )
     assert "skipping inline worker" in out.lower()
     assert "starting inline" not in out.lower()
+
+
+def test_web_entrypoint_supervise_logs_skip_under_v2_enable_inline_off():
+    """Full entrypoint path: _supervise_inline_worker must log skip for v2 gate."""
+    src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    stub = src.replace(
+        "exec python scripts/run_web_with_guard.py",
+        "exit 0\n",
+    )
+    merged = dict(os.environ)
+    merged.update({"ENABLE_INLINE_WORKER": "0", "WORKER_SPLIT_V2": "off"})
+    proc = subprocess.run(
+        ["sh", "-s"],
+        input=stub,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=merged,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "skipping inline worker" in proc.stdout.lower()
 
 
 def test_web_entrypoint_logs_skip_when_split_v2_on():
