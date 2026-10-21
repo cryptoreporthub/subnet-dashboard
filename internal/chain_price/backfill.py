@@ -73,6 +73,7 @@ def backfill_bucket(
     search: str = "bracketed",
 ) -> dict:
     """Resolve one hourly bucket and sample chain prices at the pinned block."""
+    reader.reset_pin()
     if search not in _SEARCH_MODES:
         raise ValueError(f"unknown search mode: {search!r}")
     if gecko_fallback:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -19,6 +20,8 @@ from internal.chain_rpc_errors import storage_block_matches
 
 logger = logging.getLogger(__name__)
 
+_FINALIZED_HEAD_HASH_RE = re.compile(r"^0x[0-9a-fA-F]{64}$")
+
 
 class ChainReader:
     """Ordered RPC providers; pin each tick to one block hash."""
@@ -31,6 +34,7 @@ class ChainReader:
         self.rate_limit_events: List[Dict[str, Any]] = []
         self.rpc_deadline_mono: Optional[float] = None
         self._timeout_originals: Dict[Any, float] = {}
+        self._stick_provider_label: Optional[str] = None
 
     def _deadline_remaining(self) -> Optional[float]:
         if self.rpc_deadline_mono is None:
@@ -65,11 +69,17 @@ class ChainReader:
 
     def _providers_for(self, method: str) -> List[Tuple[str, ChainClient]]:
         providers = self._available_providers()
-        if method != "chain_getFinalizedHead" and self.provider_served:
-            stuck = [(label, client) for label, client in providers if label == self.provider_served]
-            if stuck:
-                return stuck
+        stick = self._stick_provider_label
+        if method != "chain_getFinalizedHead" and stick:
+            preferred = [pair for pair in providers if pair[0] == stick]
+            rest = [pair for pair in providers if pair[0] != stick]
+            if preferred:
+                return preferred + rest
         return providers
+
+    @staticmethod
+    def _invalid_finalized_head(result: Any) -> bool:
+        return not isinstance(result, str) or _FINALIZED_HEAD_HASH_RE.fullmatch(result) is None
 
     def _mark_rate_limited(
         self,
@@ -132,10 +142,8 @@ class ChainReader:
             result, outcome = rpc_call(client, method, params)
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"
-            if (
-                outcome == "ok"
-                and method == "chain_getFinalizedHead"
-                and not result
+            if outcome == "ok" and method == "chain_getFinalizedHead" and self._invalid_finalized_head(
+                result
             ):
                 outcome = "invalid"
             if outcome == "rate_limited":
@@ -166,6 +174,7 @@ class ChainReader:
         block_hash, outcome = self.call("chain_getFinalizedHead", [])
         if outcome == "ok" and block_hash:
             self._pinned_hash = str(block_hash)
+            self._stick_provider_label = self.provider_served
         return (str(block_hash) if block_hash else None), outcome
 
     @property
@@ -175,6 +184,7 @@ class ChainReader:
     def reset_pin(self) -> None:
         self._pinned_hash = None
         self.provider_served = None
+        self._stick_provider_label = None
 
     def active_client(self) -> Optional[ChainClient]:
         if self.provider_served:

@@ -322,31 +322,34 @@ def run_forward_sample(
         logger.warning("chain price db unavailable: %s", exc)
         return {"outcome": "db_unavailable"}
 
-    call = reader.call_fn()
-    block_hash, outcome = reader.pin_finalized_head()
-    if outcome != "ok" or not block_hash:
-        _bump_schema_miss(outcome)
-        return {"outcome": outcome or "rpc_error"}
+    try:
+        call = reader.call_fn()
+        block_hash, outcome = reader.pin_finalized_head()
+        if outcome != "ok" or not block_hash:
+            _bump_schema_miss(outcome)
+            return {"outcome": outcome or "rpc_error"}
 
-    header, outcome = call("chain_getHeader", [block_hash])
-    if outcome != "ok" or not isinstance(header, dict):
-        _bump_schema_miss(outcome)
-        return {"outcome": outcome or "rpc_error"}
+        header, outcome = call("chain_getHeader", [block_hash])
+        if outcome != "ok" or not isinstance(header, dict):
+            _bump_schema_miss(outcome)
+            return {"outcome": outcome or "rpc_error"}
 
-    block = _parse_block_number(header)
-    if block is None:
-        _bump_schema_miss("invalid")
-        return {"outcome": "invalid", "error": "missing block number"}
+        block = _parse_block_number(header)
+        if block is None:
+            _bump_schema_miss("invalid")
+            return {"outcome": "invalid", "error": "missing block number"}
 
-    return sample_at_block_hash(
-        reader,
-        block_hash,
-        block,
-        write=write,
-        kind=_KIND_FORWARD,
-        db_path=db_path,
-        bump_schema_miss_on_error=True,
-    )
+        return sample_at_block_hash(
+            reader,
+            block_hash,
+            block,
+            write=write,
+            kind=_KIND_FORWARD,
+            db_path=db_path,
+            bump_schema_miss_on_error=True,
+        )
+    finally:
+        reader.reset_pin()
 
 
 def _log_disk_low_skip(min_free_mb: int, db_file: str) -> None:

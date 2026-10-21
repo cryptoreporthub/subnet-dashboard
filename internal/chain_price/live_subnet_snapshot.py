@@ -163,109 +163,116 @@ def fetch_live_subnet_snapshot(deadline: float) -> LiveSubnetSnapshot:
     reader = ChainReader(chain_price_cfg.rpc_provider_clients())
     reader.rpc_deadline_mono = deadline
     with _clamp_reader_timeouts(reader, _remaining_seconds(deadline)):
-        call = reader.call_fn()
+        try:
+            return _fetch_live_subnet_snapshot_inner(reader, deadline)
+        finally:
+            reader.reset_pin()
 
-        if time.monotonic() >= deadline:
-            return _failed_snapshot(failure="snapshot:deadline", batch_expired=True)
 
-        block_hash, pin_outcome = reader.pin_finalized_head()
-        if pin_outcome != "ok" or not block_hash:
-            label = _outcome_label(pin_outcome if pin_outcome != "ok" else "rpc_error")
-            return _failed_snapshot(
-                provider=reader.provider_served or "",
-                failure=f"head_pin:{label}",
-            )
+def _fetch_live_subnet_snapshot_inner(reader: ChainReader, deadline: float) -> LiveSubnetSnapshot:
+    call = reader.call_fn()
 
-        if time.monotonic() >= deadline:
-            return _failed_snapshot(
-                block_hash=block_hash,
-                provider=reader.provider_served or "",
-                failure="membership:deadline",
-                batch_expired=True,
-            )
+    if time.monotonic() >= deadline:
+        return _failed_snapshot(failure="snapshot:deadline", batch_expired=True)
 
-        members, mem_outcome = get_member_netuids(call, block_hash)
-        if mem_outcome != "ok":
-            label = _outcome_label(mem_outcome)
-            return _failed_snapshot(
-                block_hash=block_hash,
-                provider=reader.provider_served or "",
-                failure=f"membership:{label}",
-            )
-
-        requested = sorted({int(n) for n in members})
-        outcomes: Dict[int, NetuidOutcome] = {}
-
-        if time.monotonic() >= deadline:
-            return _failed_snapshot(
-                block_hash=block_hash,
-                provider=reader.provider_served or "",
-                failure="membership:deadline",
-                batch_expired=True,
-                requested=requested,
-                outcomes=_fail_all(requested, "batch_expired"),
-            )
-
-        chunk_size = _STORAGE_CHUNK_NETUIDS
-
-        rows: List[dict] = []
-        last_price_provider = reader.provider_served or chain_price_cfg.primary_rpc_endpoint()[1]
-
-        for chunk in _storage_chunk_netuids(requested, chunk_size):
-            if time.monotonic() >= deadline:
-                for n in chunk:
-                    outcomes[n] = "batch_expired"
-                for n in requested:
-                    outcomes.setdefault(n, "batch_expired")
-                break
-
-            keys: List[str] = []
-            for netuid in chunk:
-                keys.append(map_key_hex(b"SubnetTAO", netuid))
-                keys.append(map_key_hex(b"SubnetAlphaIn", netuid))
-
-            batch, storage_outcome = call("state_queryStorageAt", [keys, block_hash])
-            if storage_outcome != "ok" or not batch:
-                label = _outcome_label(storage_outcome)
-                for n in chunk:
-                    outcomes[n] = label
-                continue
-
-            if time.monotonic() >= deadline:
-                for n in chunk:
-                    outcomes[n] = "batch_expired"
-                continue
-
-            chunk_provider = reader.provider_served or last_price_provider
-            last_price_provider = chunk_provider
-
-            entry = batch[0] if isinstance(batch[0], dict) else {}
-            reserves, chunk_outcomes = _parse_subnet_reserve_changes(entry.get("changes"), chunk)
-            for netuid, label in chunk_outcomes.items():
-                outcomes[netuid] = label
-            for netuid, (tao_raw, alpha_raw) in reserves.items():
-                rows.append(_row_from_subnet_reserves(netuid, tao_raw, alpha_raw, chunk_provider))
-                outcomes[netuid] = "ok"
-
-        for n in requested:
-            outcomes.setdefault(n, "batch_expired")
-
-        batch_expired = any(outcomes.get(n) == "batch_expired" for n in requested)
-        rows.sort(key=lambda r: r["netuid"])
-        logger.info(
-            "live_subnet_snapshot: %d rows provider=%s members=%d batch_expired=%s",
-            len(rows),
-            last_price_provider,
-            len(requested),
-            batch_expired,
+    block_hash, pin_outcome = reader.pin_finalized_head()
+    if pin_outcome != "ok" or not block_hash:
+        label = _outcome_label(pin_outcome if pin_outcome != "ok" else "rpc_error")
+        return _failed_snapshot(
+            provider=reader.provider_served or "",
+            failure=f"head_pin:{label}",
         )
-        return LiveSubnetSnapshot(
+
+    if time.monotonic() >= deadline:
+        return _failed_snapshot(
             block_hash=block_hash,
-            provider=last_price_provider,
-            rows=rows,
-            netuid_outcomes=dict(outcomes),
-            batch_expired=batch_expired,
-            requested_netuids=requested,
-            membership_resolved=True,
-            failure=None,
+            provider=reader.provider_served or "",
+            failure="membership:deadline",
+            batch_expired=True,
         )
+
+    members, mem_outcome = get_member_netuids(call, block_hash)
+    if mem_outcome != "ok":
+        label = _outcome_label(mem_outcome)
+        return _failed_snapshot(
+            block_hash=block_hash,
+            provider=reader.provider_served or "",
+            failure=f"membership:{label}",
+        )
+
+    requested = sorted({int(n) for n in members})
+    outcomes: Dict[int, NetuidOutcome] = {}
+
+    if time.monotonic() >= deadline:
+        return _failed_snapshot(
+            block_hash=block_hash,
+            provider=reader.provider_served or "",
+            failure="membership:deadline",
+            batch_expired=True,
+            requested=requested,
+            outcomes=_fail_all(requested, "batch_expired"),
+        )
+
+    chunk_size = _STORAGE_CHUNK_NETUIDS
+
+    rows: List[dict] = []
+    last_price_provider = reader.provider_served or chain_price_cfg.primary_rpc_endpoint()[1]
+
+    for chunk in _storage_chunk_netuids(requested, chunk_size):
+        if time.monotonic() >= deadline:
+            for n in chunk:
+                outcomes[n] = "batch_expired"
+            for n in requested:
+                outcomes.setdefault(n, "batch_expired")
+            break
+
+        keys: List[str] = []
+        for netuid in chunk:
+            keys.append(map_key_hex(b"SubnetTAO", netuid))
+            keys.append(map_key_hex(b"SubnetAlphaIn", netuid))
+
+        batch, storage_outcome = call("state_queryStorageAt", [keys, block_hash])
+        if storage_outcome != "ok" or not batch:
+            label = _outcome_label(storage_outcome)
+            for n in chunk:
+                outcomes[n] = label
+            continue
+
+        if time.monotonic() >= deadline:
+            for n in chunk:
+                outcomes[n] = "batch_expired"
+            continue
+
+        chunk_provider = reader.provider_served or last_price_provider
+        last_price_provider = chunk_provider
+
+        entry = batch[0] if isinstance(batch[0], dict) else {}
+        reserves, chunk_outcomes = _parse_subnet_reserve_changes(entry.get("changes"), chunk)
+        for netuid, label in chunk_outcomes.items():
+            outcomes[netuid] = label
+        for netuid, (tao_raw, alpha_raw) in reserves.items():
+            rows.append(_row_from_subnet_reserves(netuid, tao_raw, alpha_raw, chunk_provider))
+            outcomes[netuid] = "ok"
+
+    for n in requested:
+        outcomes.setdefault(n, "batch_expired")
+
+    batch_expired = any(outcomes.get(n) == "batch_expired" for n in requested)
+    rows.sort(key=lambda r: r["netuid"])
+    logger.info(
+        "live_subnet_snapshot: %d rows provider=%s members=%d batch_expired=%s",
+        len(rows),
+        last_price_provider,
+        len(requested),
+        batch_expired,
+    )
+    return LiveSubnetSnapshot(
+        block_hash=block_hash,
+        provider=last_price_provider,
+        rows=rows,
+        netuid_outcomes=dict(outcomes),
+        batch_expired=batch_expired,
+        requested_netuids=requested,
+        membership_resolved=True,
+        failure=None,
+    )

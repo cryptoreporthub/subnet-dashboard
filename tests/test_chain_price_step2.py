@@ -111,7 +111,7 @@ def _reader_fallback_case(kind: str):
     class _OkClient:
         def _call_typed(self, method, params=None):
             if method == "chain_getFinalizedHead":
-                return "0x01"
+                return PINNED_HASH
             return {}
 
         def _call(self, method, params=None):
@@ -123,7 +123,7 @@ def _reader_fallback_case(kind: str):
     reader = ChainReader([("finney", _FailClient()), ("blockmachine", _OkClient())])
     h, outcome = reader.pin_finalized_head()
     assert outcome == "ok"
-    assert h == "0x01"
+    assert h == PINNED_HASH
     assert reader.provider_served == "blockmachine"
     assert reader.fallback_count == 1
 
@@ -156,7 +156,7 @@ def test_reader_fallback_finney_to_blockmachine(tmp_path):
     class _OkClient:
         def _call_typed(self, method, params=None):
             if method == "chain_getFinalizedHead":
-                return "0x01"
+                return PINNED_HASH
             return {}
 
         def _call(self, method, params=None):
@@ -168,7 +168,7 @@ def test_reader_fallback_finney_to_blockmachine(tmp_path):
     reader = ChainReader([("finney", _FailClient()), ("blockmachine", _OkClient())])
     h, outcome = reader.pin_finalized_head()
     assert outcome == "ok"
-    assert h == "0x01"
+    assert h == PINNED_HASH
     assert reader.provider_served == "blockmachine"
 
 

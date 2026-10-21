@@ -7,6 +7,8 @@ import pytest
 from internal.chain_rpc_errors import ChainRpcError
 from internal.chain_price.storage_keys import map_key_hex
 
+VALID_PINNED_HASH = "0x" + "ab" * 32
+
 
 def _fetch_snapshot_batch(monkeypatch, universe, *, deadline=None):
     from internal.chain_price.live_subnet_snapshot import fetch_live_subnet_snapshot
@@ -53,12 +55,12 @@ def _install_storage_batch_rpc_mock(monkeypatch, members, reserve_by_netuid, *, 
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         rpc_calls.append(method)
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         if method == "state_queryStorageAt":
             keys, _block_hash = params
             changes = []
@@ -70,7 +72,7 @@ def _install_storage_batch_rpc_mock(monkeypatch, members, reserve_by_netuid, *, 
                         changes.append([key, _u64_storage_hex(reserves[0])])
                     elif key == alpha_key:
                         changes.append([key, _u64_storage_hex(reserves[1])])
-            return [{"block": "0xblock", "changes": changes}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": changes}], "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (list(members), "ok")
@@ -355,7 +357,7 @@ def _deadline_after_first_storage_mock(monkeypatch, members, reserve_by_netuid, 
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     storage_calls = [0]
 
@@ -374,9 +376,9 @@ def _deadline_after_first_storage_mock(monkeypatch, members, reserve_by_netuid, 
                         changes.append([key, _u64_storage_hex(reserves[0])])
                     elif key == alpha_key:
                         changes.append([key, _u64_storage_hex(reserves[1])])
-            return [{"block": "0xblock", "changes": changes}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": changes}], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
@@ -485,13 +487,13 @@ def test_price_batch_storage_rpc_error_is_fetch_errors_not_batch_deadline(monkey
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         if method == "state_queryStorageAt":
             return None, "timeout"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: ([1, 2], "ok")
@@ -550,7 +552,7 @@ def test_storage_batch_deadline_partial_refresh_meta(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         if method == "state_queryStorageAt":
@@ -565,9 +567,9 @@ def test_storage_batch_deadline_partial_refresh_meta(monkeypatch):
                         changes.append([key, _u64_storage_hex(pair[0])])
                     elif key == map_key_hex(b"SubnetAlphaIn", netuid):
                         changes.append([key, _u64_storage_hex(pair[1])])
-            return [{"block": "0xblock", "changes": changes}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": changes}], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (members, "ok")
@@ -666,24 +668,27 @@ def test_price_chunk_provider_follows_fallback(monkeypatch):
         def call_fn(self):
             def _call(method, params):
                 if method != "state_queryStorageAt":
-                    return "0xblock", "ok"
+                    return VALID_PINNED_HASH, "ok"
                 keys, _block_hash = params
                 tao_key = map_key_hex(b"SubnetTAO", 1)
                 if tao_key not in keys:
-                    return [{"block": "0xblock", "changes": [[keys[0], "0x01"]]}], "ok"
+                    return [{"block": VALID_PINNED_HASH, "changes": [[keys[0], "0x01"]]}], "ok"
                 self.provider_served = "blockmachine"
                 alpha_key = map_key_hex(b"SubnetAlphaIn", 1)
                 changes = [
                     [tao_key, _u64_storage_hex(1_000_000_000)],
                     [alpha_key, _u64_storage_hex(1_000_000_000)],
                 ]
-                return [{"block": "0xblock", "changes": changes}], "ok"
+                return [{"block": VALID_PINNED_HASH, "changes": changes}], "ok"
 
             return _call
 
         def pin_finalized_head(self):
             self.provider_served = "finney"
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
+
+        def reset_pin(self):
+            pass
 
     monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.ChainReader", _Reader)
     batch = _fetch_snapshot_batch(monkeypatch, [1])
@@ -716,7 +721,7 @@ def test_snapshot_slow_head_pin_hits_deadline(monkeypatch):
     def slow_pin(self):
         clock[0] = deadline + 0.01
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
     monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", slow_pin)
@@ -731,7 +736,7 @@ def test_snapshot_slow_membership_hits_deadline(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def slow_members(_call, _at_hash):
         clock[0] = deadline + 0.01
@@ -770,49 +775,246 @@ def test_finney_empty_finalized_head_falls_back_to_blockmachine():
         def _call_typed(self, method, params):
             calls.append(("blockmachine", method))
             if method == "chain_getFinalizedHead":
-                return "0xabc"
+                return VALID_PINNED_HASH
             return []
 
     reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
     block_hash, outcome = reader.pin_finalized_head()
     assert outcome == "ok"
-    assert block_hash == "0xabc"
+    assert block_hash == VALID_PINNED_HASH
     assert reader.provider_served == "blockmachine"
     assert calls[0] == ("finney", "chain_getFinalizedHead")
     assert ("blockmachine", "chain_getFinalizedHead") in calls
 
 
-def test_snapshot_sticks_to_head_pin_provider(monkeypatch):
-    from internal.chain_price.storage_keys import map_key_hex
+@pytest.mark.parametrize(
+    "bad_head",
+    [None, "", "0x", "0x1234", "not-a-hash", 12345],
+)
+def test_invalid_finalized_head_shapes_fallback(bad_head):
+    from internal.chain_price.reader import ChainReader
 
-    finney_storage = []
+    calls = []
 
-    def fake_pin(self):
-        self.provider_served = "blockmachine"
-        return "0xblock", "ok"
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
 
-    def fake_call(self, method, params):
-        if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
-        if method == "state_queryStorageAt":
-            if self.provider_served == "finney":
-                finney_storage.append(1)
-            keys, _ = params
-            changes = [
-                [map_key_hex(b"SubnetTAO", 1), _u64_storage_hex(1_000_000_000)],
-                [map_key_hex(b"SubnetAlphaIn", 1), _u64_storage_hex(1_000_000_000)],
-            ]
-            return [{"block": "0xblock", "changes": changes}], "ok"
-        return None, "rpc_error"
+        def _call_typed(self, method, params):
+            calls.append(("finney", method))
+            if method == "chain_getFinalizedHead":
+                return bad_head
+            return []
 
-    member_fn = lambda _call, _at_hash: ([1], "ok")
-    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
-    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
-    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
-    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
-    batch = _fetch_snapshot_batch(monkeypatch, [1])
-    assert batch["rows"][0]["source"] == "blockmachine"
-    assert finney_storage == []
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def _call_typed(self, method, params):
+            calls.append(("blockmachine", method))
+            if method == "chain_getFinalizedHead":
+                return VALID_PINNED_HASH
+            return []
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    block_hash, outcome = reader.pin_finalized_head()
+    assert outcome == "ok"
+    assert block_hash == VALID_PINNED_HASH
+    assert reader.provider_served == "blockmachine"
+    assert ("blockmachine", "chain_getFinalizedHead") in calls
+
+
+def test_storage_after_pin_tries_pinned_provider_then_fallback():
+    from internal.chain_price.reader import ChainReader
+
+    storage_order = []
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getFinalizedHead":
+                return VALID_PINNED_HASH
+            return []
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("finney")
+            raise ChainRpcError("timeout", "read timed out")
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("blockmachine")
+            return [{"block": at_hash, "changes": []}]
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    assert reader.pin_finalized_head()[1] == "ok"
+    _, outcome = reader.call("state_queryStorageAt", [[], VALID_PINNED_HASH])
+    assert outcome == "ok"
+    assert storage_order == ["finney", "blockmachine"]
+
+
+def test_finney_connection_error_after_pin_storage_falls_back():
+    from internal.chain_price.reader import ChainReader
+
+    storage_order = []
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getFinalizedHead":
+                return VALID_PINNED_HASH
+            return []
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("finney")
+            raise ChainRpcError("connection", "connection refused")
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("blockmachine")
+            return [{"block": at_hash, "changes": []}]
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    assert reader.pin_finalized_head()[1] == "ok"
+    _, outcome = reader.call("state_queryStorageAt", [[], VALID_PINNED_HASH])
+    assert outcome == "ok"
+    assert storage_order == ["finney", "blockmachine"]
+
+
+def test_archive_miss_after_pin_falls_back_to_blockmachine():
+    from internal.chain_price.reader import ChainReader
+
+    storage_order = []
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getFinalizedHead":
+                return VALID_PINNED_HASH
+            return []
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("finney")
+            raise ChainRpcError("archive_miss", "State already discarded")
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("blockmachine")
+            return [{"block": at_hash, "changes": []}]
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    assert reader.pin_finalized_head()[1] == "ok"
+    _, outcome = reader.call("state_queryStorageAt", [[], VALID_PINNED_HASH])
+    assert outcome == "ok"
+    assert storage_order == ["finney", "blockmachine"]
+
+
+def test_backfill_reader_archive_miss_on_finney_falls_back():
+    from internal.chain_price.reader import ChainReader
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getHeader":
+                raise ChainRpcError("archive_miss", "State already discarded")
+            return VALID_PINNED_HASH
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getHeader":
+                return {"number": "0x1"}
+            return []
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    reader.pin_finalized_head()
+    header, outcome = reader.call("chain_getHeader", [VALID_PINNED_HASH])
+    assert outcome == "ok"
+    assert isinstance(header, dict)
+    assert reader.provider_served == "blockmachine"
+
+
+def test_reset_pin_clears_stick_so_next_head_tries_finney_first():
+    from internal.chain_price.reader import ChainReader
+
+    head_order = []
+    storage_order = []
+    finney_head_calls = [0]
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getFinalizedHead":
+                head_order.append("finney")
+                finney_head_calls[0] += 1
+                if finney_head_calls[0] == 1:
+                    return None
+                return VALID_PINNED_HASH
+            return []
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("finney")
+            return [{"block": at_hash, "changes": []}]
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def _call_typed(self, method, params):
+            if method == "chain_getFinalizedHead":
+                head_order.append("blockmachine")
+                return VALID_PINNED_HASH
+            return []
+
+        def query_storage_at(self, keys, at_hash):
+            storage_order.append("blockmachine")
+            return [{"block": at_hash, "changes": []}]
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    assert reader.pin_finalized_head()[1] == "ok"
+    storage_order.clear()
+    reader.call("state_queryStorageAt", [[], VALID_PINNED_HASH])
+    assert storage_order == ["blockmachine"]
+
+    reader.reset_pin()
+    head_order.clear()
+    storage_order.clear()
+    assert reader.pin_finalized_head()[1] == "ok"
+    reader.call("state_queryStorageAt", [[], VALID_PINNED_HASH])
+    assert head_order[0] == "finney"
+    assert storage_order == ["finney"]
 
 
 def test_finney_read_timeout_falls_back_to_blockmachine(monkeypatch):
@@ -837,13 +1039,13 @@ def test_finney_read_timeout_falls_back_to_blockmachine(monkeypatch):
         def _call_typed(self, method, params):
             calls.append(("blockmachine", method))
             if method == "chain_getFinalizedHead":
-                return "0xabc"
+                return VALID_PINNED_HASH
             return []
 
     reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
     block_hash, outcome = reader.pin_finalized_head()
     assert outcome == "ok"
-    assert block_hash == "0xabc"
+    assert block_hash == VALID_PINNED_HASH
     assert reader.provider_served == "blockmachine"
     assert calls[0] == ("finney", "chain_getFinalizedHead")
     assert any(c[0] == "blockmachine" for c in calls)
@@ -854,14 +1056,14 @@ def test_storage_short_changes_row_yields_parse_not_crash(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         if method == "state_queryStorageAt":
             tao_key = map_key_hex(b"SubnetTAO", 1)
-            return [{"block": "0xblock", "changes": [[tao_key]]}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": [[tao_key]]}], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (members, "ok")
@@ -879,7 +1081,7 @@ def test_storage_truncated_u64_rejected_not_padded(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         if method == "state_queryStorageAt":
@@ -887,7 +1089,7 @@ def test_storage_truncated_u64_rejected_not_padded(monkeypatch):
             alpha_key = map_key_hex(b"SubnetAlphaIn", 1)
             return [
                 {
-                    "block": "0xblock",
+                    "block": VALID_PINNED_HASH,
                     "changes": [
                         [tao_key, "0x01"],
                         [alpha_key, _u64_storage_hex(1_000_000_000)],
@@ -895,7 +1097,7 @@ def test_storage_truncated_u64_rejected_not_padded(monkeypatch):
                 }
             ], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (members, "ok")
@@ -913,14 +1115,14 @@ def test_storage_unrequested_key_yields_invalid(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_call(self, method, params):
         if method == "state_queryStorageAt":
             extra = map_key_hex(b"SubnetTAO", 99)
-            return [{"block": "0xblock", "changes": [[extra, _u64_storage_hex(1)]]}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": [[extra, _u64_storage_hex(1)]]}], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (members, "ok")
@@ -940,7 +1142,7 @@ def test_storage_rpc_return_after_deadline_not_ok(monkeypatch):
 
     def fake_pin(self):
         self.provider_served = "finney"
-        return "0xblock", "ok"
+        return VALID_PINNED_HASH, "ok"
 
     def fake_storage(self, method, params):
         if method == "state_queryStorageAt":
@@ -950,9 +1152,9 @@ def test_storage_rpc_return_after_deadline_not_ok(monkeypatch):
                 [map_key_hex(b"SubnetTAO", 1), _u64_storage_hex(1_000_000_000)],
                 [map_key_hex(b"SubnetAlphaIn", 1), _u64_storage_hex(1_000_000_000)],
             ]
-            return [{"block": "0xblock", "changes": changes}], "ok"
+            return [{"block": VALID_PINNED_HASH, "changes": changes}], "ok"
         if method == "chain_getFinalizedHead":
-            return "0xblock", "ok"
+            return VALID_PINNED_HASH, "ok"
         return None, "rpc_error"
 
     member_fn = lambda _call, _at_hash: (members, "ok")
