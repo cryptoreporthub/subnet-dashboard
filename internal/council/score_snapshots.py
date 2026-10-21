@@ -325,6 +325,11 @@ def build_top_picks_from_snapshot(
     snap = load_score_snapshot(path)
     if not snap:
         return None
+    # Partial captures (timeout, membership-gated skip) publish complete=False.
+    # Serving them would present a partial universe as the full ranking.
+    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
+    if coverage.get("complete") is not True:
+        return None
     hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
     day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
     if not hour_rows and not day_rows:
