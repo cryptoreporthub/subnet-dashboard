@@ -48,7 +48,7 @@ def _reset_rate_limiter_state():
 
             if rate_limit._limiter is not None:
                 rate_limit._limiter.reset()
-        except Exception:
+        except ImportError:
             pass
 
     _reset()
@@ -67,7 +67,7 @@ def _reset_resolver_liveness_cache():
             with loop_health._RESOLVER_LIVENESS_CACHE_LOCK:
                 loop_health._RESOLVER_LIVENESS_CACHE["at"] = 0.0
                 loop_health._RESOLVER_LIVENESS_CACHE["payload"] = None
-        except Exception:
+        except ImportError:
             pass
 
     _reset()
