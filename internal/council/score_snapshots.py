@@ -35,27 +35,9 @@ SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_STUCK_SECONDS"
 SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
-SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
 SCORE_SNAPSHOT_SCORE_WORKERS = max(1, env_int("SCORE_SNAPSHOT_SCORE_WORKERS", 1))
 JOB_ID = "score-snapshot-scheduler"
 
-
-def _snapshot_subnet_cap() -> int:
-    """Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE."""
-    raw = os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS")
-    if raw is not None and str(raw).strip() != "":
-        try:
-            return max(0, int(raw))
-        except ValueError:
-            return 0
-    try:
-        from internal.run_mode import is_worker_mode
-
-        if is_worker_mode():
-            return int(os.environ.get("TOP_SCORING_UNIVERSE", "256"))
-    except Exception:
-        pass
-    return 0
 
 _lock = threading.Lock()
 _TICK_ACTIVE = False
@@ -703,16 +685,7 @@ def write_full_universe_snapshot(
             prep_meta.get("excluded_feed_only_count") or 0
         )
 
-        cap = _snapshot_subnet_cap()
-        capped_out = 0
         selection_policy = str(prep_meta.get("selection_basis") or "full")
-        pre_cap_len = len(subnets or [])
-        if cap > 0 and subnets and len(subnets) > cap:
-            from server import _cap_subnets_for_scoring
-
-            subnets = _cap_subnets_for_scoring(subnets, limit=cap)
-            capped_out = max(0, pre_cap_len - len(subnets or []))
-            selection_policy = "rank_cap"
         ctx_started = time.monotonic()
         from internal.council.scoring_context import enrich_scoring_market_context
 
@@ -776,7 +749,6 @@ def write_full_universe_snapshot(
                 day_attempted=list(inputs.get("day_attempted") or []),
                 hour_attempted=list(inputs.get("hour_attempted") or []),
                 hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
-                capped_out=capped_out,
                 selection_policy=selection_policy,
                 subnet_source=str(source),
                 published=True,

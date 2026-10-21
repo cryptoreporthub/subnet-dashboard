@@ -202,16 +202,6 @@ def _hold_from_stale_boot_data(
     return False
 
 
-def _subnets_for_pick_creation(subnets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Same scoring universe as pick_scheduler — never select_daily_pick on full hydrate list."""
-    from internal.subnets.scoring_cap import cap_subnets_for_scoring
-
-    sched_cap = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "256"))
-    top = int(os.environ.get("TOP_SCORING_UNIVERSE", "256"))
-    limit = min(sched_cap, top)
-    return cap_subnets_for_scoring(subnets, limit=limit)
-
-
 def _published_pick_fails_gate(payload: Dict[str, Any]) -> bool:
     """True when a cached LONG would not pass today's publish or directional gates."""
     if str(payload.get("action", "")).upper() not in ("LONG", "BUY"):
@@ -340,8 +330,7 @@ def get_or_create_today_pick(
             logger.warning("record_hold_decision failed (no subnets): %s", exc)
         return payload
 
-    pick_subnets = _subnets_for_pick_creation(subnets)
-    pick = select_daily_pick(pick_subnets, market_context)
+    pick = select_daily_pick(subnets, market_context)
     final_confidence = float(pick.get("final_confidence", 0.0))
     gate = publish_gate_fraction()
     directional_gate = directional_publish_guard(pick)
@@ -365,7 +354,7 @@ def get_or_create_today_pick(
         "date": _today_str(),
         "timestamp_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "regime": classify_regime(market_context),
-        "rotation_summary": get_rotation_summary(pick_subnets),
+        "rotation_summary": get_rotation_summary(subnets),
         "action": action,
         "pick": stored_pick,
         "candidate": candidate,
