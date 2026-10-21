@@ -14,8 +14,8 @@ Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20).
 
 **Anchors that are off by +5**
 
-- Every Rev 3 line number in §2, §3 and §6 is five lines high. The §2a table holds the right values. Correct values: `fly.toml` 89–93 (not 94–98); `server.py` `TOP_SCORING_UNIVERSE` 647 (not 652); `_cap_subnets_for_scoring` 925–932 (not 930–937); the shell cap at 1066 and the hourly cap at 3363 (not 1071 and 3368); `score_snapshots.py` `_snapshot_subnet_cap()` 45–60 and its call site 667–676 (not 672–681); `pick_scheduler.py` `_load_capped_subnets` 151–161 and `_scheduler_cap_limit` 57–60; `daily_pick_engine.py` `_subnets_for_pick_creation` from 205.
-- Cause: raw read output starts with a five-line header (Title, blank, URL Source, blank, Markdown Content). Numbering raw output shifts every citation by +5.
+- Most Rev 3 line numbers in §2, §3 and §6 are five lines high. Offsets vary by row, so the correction table gives the actual value for each one. The §2a table holds the right values. Correct values: `fly.toml` 89–93 (not 94–98); `server.py` `TOP_SCORING_UNIVERSE` 647 (not 652); `_cap_subnets_for_scoring` 925–932 (not 930–937); the shell cap at 1066 and the hourly cap at 3363 (not 1071 and 3368); `score_snapshots.py` `_snapshot_subnet_cap()` 45–60 and its call site 667–676 (not 672–681); `pick_scheduler.py` `_load_capped_subnets` 151–161; `pick_selection_audit.py` `_scheduler_cap_limit` 57–60; `daily_pick_engine.py` `_subnets_for_pick_creation` from 205.
+- Suspected cause, not verified: raw read output may start with a five-line header (Title, blank, URL Source, blank, Markdown Content). If so, numbering raw output would shift every citation by +5.
 - The cap-site table rows are at 1925–1932 and the door table rows at 2830–2835. The earlier pointers, 1883–1888 and 2788–2789, land on other content.
 - §6 cites `pick_selection_audit.py` lines 55–80. The cap assignments are at 57–60 and the docstring claim is at line 6.
 - Correct at the pin: `score_snapshots.py:263-268` (`_key`) and `state_vector.py:1893` (calibration block).
