@@ -202,11 +202,6 @@ def _read_complete_snapshot(
     path: Optional[str] = None,
     max_age_seconds: Optional[int] = None,
 ) -> Optional[Tuple[Dict[str, Any], float]]:
-    """The one gate for every reader that returns scored rows: fresh and proven complete.
-
-    Partial captures (timeout, membership-gated skip) publish complete=False.
-    Serving them would present a partial universe as the whole ranking.
-    """
     age = snapshot_age_seconds(path)
     ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
     if age is None or age > ttl:
