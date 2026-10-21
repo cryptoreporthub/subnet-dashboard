@@ -196,7 +196,6 @@ def test_sync_once_skips_concurrent_call(monkeypatch, tmp_path):
 def test_fetch_chain_data_passes_registry_netuids(monkeypatch):
     from internal import live_subnets
 
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
     monkeypatch.setenv(
         "LIVE_SUBNETS_TEST_ROWS_JSON",
@@ -297,6 +296,7 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
             rows=[{"netuid": 1, "price": 1.0, "source": "finney"}],
             netuid_outcomes={1: "ok"},
             requested_netuids=[1],
+            membership_resolved=True,
         )
 
     from internal.chain_price.live_subnet_snapshot import LiveSubnetSnapshot
@@ -379,7 +379,6 @@ def test_parent_logs_child_closed_not_timeout_on_send_fail(monkeypatch, caplog):
 
     monkeypatch.setattr(ipc, "send_framed_body", _fail_result)
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv(
         "LIVE_SUBNETS_TEST_ROWS_JSON",
         json.dumps([{"netuid": 1, "price": 1.0}]),
@@ -409,7 +408,6 @@ def test_child_result_send_failure_returns_none(monkeypatch):
 
     monkeypatch.setattr(ipc, "send_framed_body", _fail_result)
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv(
         "LIVE_SUBNETS_TEST_ROWS_JSON",
         json.dumps([{"netuid": 1, "price": 1.0}]),
@@ -435,7 +433,6 @@ def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
 
     monkeypatch.setattr(ipc, "send_message", _spy_send)
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv(
         "LIVE_SUBNETS_TEST_ROWS_JSON",
         json.dumps([{"netuid": 1, "price": 1.0}]),
@@ -465,6 +462,7 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
             netuid_outcomes={1: "ok", 2: "batch_expired"},
             batch_expired=True,
             requested_netuids=[1, 2],
+            membership_resolved=True,
         )
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
@@ -511,6 +509,7 @@ def test_fetch_chain_data_carries_netuid_outcomes_on_no_price(monkeypatch):
             netuid_outcomes={1: "ok", 2: "no_price"},
             batch_expired=False,
             requested_netuids=[1, 2],
+            membership_resolved=True,
         )
 
     with patch(
@@ -565,7 +564,6 @@ def test_killed_child_does_not_return_partial_rows(monkeypatch):
     from internal import live_subnets
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.2")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.2)
     monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "30")
@@ -581,7 +579,6 @@ def test_fetch_hung_child_killed_second_sync_proceeds_spawn(monkeypatch, caplog)
 
     caplog.set_level(logging.WARNING, logger="live_subnets")
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.25")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.25)
     monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "30")
@@ -610,17 +607,9 @@ def test_heartbeat_updates_during_hung_chain_fetch(monkeypatch, tmp_path):
     hang.set()
     hb_path = tmp_path / "hb.json"
     monkeypatch.setenv("WORKER_HEARTBEAT_PATH", str(hb_path))
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 2.0)
-
-    class _Client:
-        def get_subnet_price_rows(self, netuids):
-            n = int(counter.read_text(encoding="utf-8")) + 1
-            counter.write_text(str(n), encoding="utf-8")
-            hang.clear()
-            hang.wait(timeout=30)
-            return []
+    monkeypatch.setenv("LIVE_SUBNETS_CHILD_RPC_SLEEP_SECONDS", "30")
 
     timestamps = []
 
@@ -633,10 +622,7 @@ def test_heartbeat_updates_during_hung_chain_fetch(monkeypatch, tmp_path):
             time.sleep(0.05)
 
     try:
-        with (
-            patch("internal.chain_client.get_default_client", return_value=_Client()),
-            patch("internal.subnet_universe.get_netuids", return_value=[1]),
-        ):
+        with patch("internal.subnet_universe.get_netuids", return_value=[1]):
             fetch_t = threading.Thread(target=live_subnets._fetch_chain_data, name="fetch-parent")
             beat_t = threading.Thread(target=_beat, name="heartbeat-test")
             fetch_t.start()
@@ -700,14 +686,13 @@ def test_sync_lock_blocks_parallel_fetch_across_threads(monkeypatch, tmp_path):
     assert fetch_calls["n"] == 1
 
 
-def test_full_mode_pipe_carries_registry_sized_payload(monkeypatch, tmp_path):
-    """Full-mode rows at prod netuid count must round-trip through the fetch Pipe."""
+def test_large_test_rows_pipe_carries_registry_sized_payload(monkeypatch, tmp_path):
+    """Prod-scale row count must round-trip through the fetch Pipe."""
     import json
 
     from internal import live_subnets
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "spawn")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "full")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 30.0)
     netuids = list(range(1, 129))  # prod-scale row count without committed registry.json
     template = {

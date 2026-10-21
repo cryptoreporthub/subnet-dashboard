@@ -51,10 +51,8 @@ def _ensure_registry_netuids(repo_root: str) -> int:
 
 def main() -> int:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    os.environ.setdefault("LIVE_SUBNETS_FETCH_MODE", "lite")
     os.environ["PYTHONPATH"] = repo_root + os.pathsep + os.environ.get("PYTHONPATH", "")
-    mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
-    rpc_wait = float(os.environ.get("LIVE_SUBNETS_MEASURE_RPC_WAIT_SECONDS", "900" if mode == "full" else "600"))
+    rpc_wait = float(os.environ.get("LIVE_SUBNETS_MEASURE_RPC_WAIT_SECONDS", "600"))
     registry_n = _ensure_registry_netuids(repo_root)
 
     from internal.live_subnets_fetch_child import run_fetch_child

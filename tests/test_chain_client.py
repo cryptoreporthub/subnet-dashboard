@@ -1,3 +1,4 @@
+import os
 import time
 from unittest.mock import MagicMock, patch
 
@@ -5,6 +6,38 @@ import pytest
 
 from internal.chain_rpc_errors import ChainRpcError
 from internal.chain_price.storage_keys import map_key_hex
+
+
+def _fetch_snapshot_batch(monkeypatch, universe, *, deadline=None):
+    from internal.chain_price.live_subnet_snapshot import fetch_live_subnet_snapshot
+
+    if deadline is not None:
+        monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
+        end = float(deadline)
+    else:
+        env_dead = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
+        if env_dead:
+            end = float(env_dead)
+        else:
+            monkeypatch.delenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", raising=False)
+            budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+            monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", str(budget))
+            end = time.monotonic() + budget
+    snap = fetch_live_subnet_snapshot(end)
+    outcomes = dict(snap.netuid_outcomes)
+    if snap.membership_resolved:
+        member_set = set(snap.requested_netuids)
+        for n in sorted({int(x) for x in universe}):
+            if n not in member_set:
+                outcomes[int(n)] = "not_member"
+    return {
+        "rows": list(snap.rows),
+        "batch_expired": snap.batch_expired,
+        "netuid_outcomes": outcomes,
+        "membership_resolved": snap.membership_resolved,
+        "failure": snap.failure,
+        "snapshot": snap,
+    }
 
 
 def _u64_storage_hex(value: int) -> str:
@@ -310,7 +343,7 @@ def test_price_batch_deadline_returns_completed_rows(monkeypatch):
         reserve_by_netuid={1: (1_000_000_000, 1_000_000_000), 2: (2_000_000_000, 1_000_000_000)},
     )
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85")
-    rows = client.get_subnet_price_rows([2, 1])
+    rows = _fetch_snapshot_batch(monkeypatch, [2, 1])["rows"]
     assert [r["netuid"] for r in rows] == [1, 2]
     assert rows[0]["source"] == "finney"
 
@@ -365,7 +398,7 @@ def test_batch_deadline_honors_parent_monotonic_deadline(monkeypatch):
     )
     monkeypatch.setenv("LIVE_SUBNETS_STORAGE_CHUNK_NETUIDS", "1")
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
-    batch = client.get_subnet_price_rows_batch([2, 1])
+    batch = _fetch_snapshot_batch(monkeypatch, [2, 1], deadline=deadline)
     assert batch["batch_expired"] is True
     assert batch["netuid_outcomes"].get(2) == "batch_expired"
 
@@ -379,12 +412,12 @@ def test_storage_batch_128_netuids_constant_rpc_count(monkeypatch):
     rpc_calls = _install_storage_batch_rpc_mock(monkeypatch, members, reserves)
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85")
 
-    batch_128 = client.get_subnet_price_rows_batch(members)
+    batch_128 = _fetch_snapshot_batch(monkeypatch, members)
     count_128 = len(rpc_calls)
     assert len(batch_128["rows"]) == 128
 
     rpc_calls.clear()
-    batch_hint = client.get_subnet_price_rows_batch(members[:10] + [200])
+    batch_hint = _fetch_snapshot_batch(monkeypatch, members[:10] + [200])
     count_hint = len(rpc_calls)
     assert len(batch_hint["rows"]) == 128
     assert batch_hint["netuid_outcomes"].get(200) == "not_member"
@@ -402,7 +435,7 @@ def test_price_batch_no_price_is_fetch_errors_not_batch_deadline(monkeypatch):
         reserve_by_netuid={1: (1_000_000_000, 1_000_000_000)},
     )
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "2")
-    batch = client.get_subnet_price_rows_batch([1, 2])
+    batch = _fetch_snapshot_batch(monkeypatch,[1, 2])
     assert batch["batch_expired"] is False
     assert batch["netuid_outcomes"][2] == "not_member"
     from internal.live_subnets_fetch_child import fetch_meta_from_batch
@@ -465,7 +498,7 @@ def test_price_batch_storage_rpc_error_is_fetch_errors_not_batch_deadline(monkey
     monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
     monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "2")
-    batch = client.get_subnet_price_rows_batch([1, 2])
+    batch = _fetch_snapshot_batch(monkeypatch,[1, 2])
     assert batch["batch_expired"] is False
     assert batch["netuid_outcomes"][1] == "timeout"
     assert batch["netuid_outcomes"][2] == "timeout"
@@ -493,7 +526,7 @@ def test_price_batch_deadline_partial_sets_batch_expired(monkeypatch):
     )
     monkeypatch.setenv("LIVE_SUBNETS_STORAGE_CHUNK_NETUIDS", "1")
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
-    batch = client.get_subnet_price_rows_batch([2, 1])
+    batch = _fetch_snapshot_batch(monkeypatch, [2, 1], deadline=deadline)
     assert batch["batch_expired"] is True
     assert batch["netuid_outcomes"].get(2) == "batch_expired"
     from internal.live_subnets_fetch_child import fetch_meta_from_batch
@@ -508,35 +541,61 @@ def test_price_batch_deadline_partial_sets_batch_expired(monkeypatch):
 
 
 def test_storage_batch_deadline_partial_refresh_meta(monkeypatch):
-    from internal.chain_client import ChainClient
+    members = list(range(1, 131))
+    reserves = {n: (n * 1_000_000_000, 1_000_000_000) for n in members}
+    deadline = time.monotonic() + 10.0
+    storage_calls = [0]
 
-    client = ChainClient()
-    deadline = time.monotonic() + 0.1
-    _deadline_after_first_storage_mock(
-        monkeypatch,
-        members=[1, 2, 3],
-        reserve_by_netuid={
-            1: (1_000_000_000, 1_000_000_000),
-            2: (2_000_000_000, 1_000_000_000),
-            3: (3_000_000_000, 1_000_000_000),
-        },
-        deadline=deadline,
-    )
-    monkeypatch.setenv("LIVE_SUBNETS_STORAGE_CHUNK_NETUIDS", "1")
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def fake_call(self, method, params):
+        if method == "state_queryStorageAt":
+            storage_calls[0] += 1
+            if storage_calls[0] >= 2:
+                return None, "rpc_error"
+            keys, _block_hash = params
+            changes = []
+            for key in keys:
+                for netuid, pair in reserves.items():
+                    if key == map_key_hex(b"SubnetTAO", netuid):
+                        changes.append([key, _u64_storage_hex(pair[0])])
+                    elif key == map_key_hex(b"SubnetAlphaIn", netuid):
+                        changes.append([key, _u64_storage_hex(pair[1])])
+            return [{"block": "0xblock", "changes": changes}], "ok"
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: (members, "ok")
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
+    clock = [time.monotonic()]
+
+    def fake_call_deadline(self, method, params):
+        if method == "state_queryStorageAt":
+            keys, _ = params
+            if map_key_hex(b"SubnetTAO", 129) in keys:
+                clock[0] = deadline + 0.01
+        return fake_call(self, method, params)
+
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call_deadline)
     monkeypatch.setenv("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", str(deadline))
-    batch = client.get_subnet_price_rows_batch([1, 2, 3])
+    batch = _fetch_snapshot_batch(monkeypatch, members, deadline=deadline)
     from internal.live_subnets_fetch_child import fetch_meta_from_batch
 
     meta = fetch_meta_from_batch(
-        [1, 2, 3],
+        members,
         batch["rows"],
         batch_expired=batch["batch_expired"],
         netuid_outcomes=batch["netuid_outcomes"],
     )
     assert meta["refresh_complete"] is False
-    assert sorted(meta["missing_netuids"]) == sorted(
-        [n for n in (1, 2, 3) if batch["netuid_outcomes"].get(n) != "ok"]
-    )
+    assert sorted(meta["missing_netuids"]) == [129, 130]
 
 
 def test_batched_reserve_price_matches_swap_fixture():
@@ -567,7 +626,7 @@ def test_snapshot_membership_request_ignores_inactive_universe_slots(monkeypatch
     _install_storage_batch_rpc_mock(monkeypatch, members, reserves)
     client = ChainClient()
     universe = members + [200, 201]
-    batch = client.get_subnet_price_rows_batch(universe)
+    batch = _fetch_snapshot_batch(monkeypatch,universe)
     assert batch["netuid_outcomes"].get(200) == "not_member"
     assert batch["netuid_outcomes"].get(201) == "not_member"
     assert len(batch["rows"]) == 128
@@ -625,5 +684,213 @@ def test_price_chunk_provider_follows_fallback(monkeypatch):
             return "0xblock", "ok"
 
     monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.ChainReader", _Reader)
-    batch = client.get_subnet_price_rows_batch([1])
+    batch = _fetch_snapshot_batch(monkeypatch, [1])
     assert batch["rows"][0]["source"] == "blockmachine"
+
+
+def test_snapshot_membership_rpc_error_not_not_member(monkeypatch):
+    import json
+
+    from internal.live_subnets_fetch_child import collect_chain_rows
+
+    monkeypatch.setenv("LIVE_SUBNETS_TEST_REQUESTED_NETUIDS", json.dumps(list(range(1, 166))))
+
+    def fail_members(_call, _at_hash):
+        return [], "rpc_error"
+
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", fail_members)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", fail_members)
+    rows, _active, meta = collect_chain_rows()
+    assert rows == []
+    assert meta["refresh_complete"] is False
+    assert meta["degraded_reason"] == "membership:rpc_error"
+    assert "not_member" not in meta.get("netuid_outcomes", {}).values()
+
+
+def test_snapshot_slow_head_pin_hits_deadline(monkeypatch):
+    deadline = time.monotonic() + 0.05
+    clock = [time.monotonic()]
+
+    def slow_pin(self):
+        clock[0] = deadline + 0.01
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", slow_pin)
+    batch = _fetch_snapshot_batch(monkeypatch, [1], deadline=deadline)
+    assert batch["membership_resolved"] is False
+    assert batch["failure"] == "membership:deadline"
+
+
+def test_snapshot_slow_membership_hits_deadline(monkeypatch):
+    deadline = time.monotonic() + 0.05
+    clock = [time.monotonic()]
+
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def slow_members(_call, _at_hash):
+        clock[0] = deadline + 0.01
+        return list(range(1, 5)), "ok"
+
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", slow_members)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", slow_members)
+    batch = _fetch_snapshot_batch(monkeypatch, [1, 2, 3, 4], deadline=deadline)
+    assert batch["membership_resolved"] is False
+    assert batch["failure"] == "membership:deadline"
+
+
+def test_finney_read_timeout_falls_back_to_blockmachine(monkeypatch):
+    from internal.chain_price.reader import ChainReader
+
+    calls = []
+
+    class _FinneyClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://finney.example"
+
+        def _call_typed(self, method, params):
+            calls.append(("finney", method))
+            raise ChainRpcError("timeout", "read timed out")
+
+    class _BmClient:
+        timeout = 4.0
+        retries = 1
+        endpoint = "https://bm.example"
+
+        def _call_typed(self, method, params):
+            calls.append(("blockmachine", method))
+            if method == "chain_getFinalizedHead":
+                return "0xabc"
+            return []
+
+    reader = ChainReader([("finney", _FinneyClient()), ("blockmachine", _BmClient())])
+    block_hash, outcome = reader.pin_finalized_head()
+    assert outcome == "ok"
+    assert block_hash == "0xabc"
+    assert reader.provider_served == "blockmachine"
+    assert calls[0] == ("finney", "chain_getFinalizedHead")
+    assert any(c[0] == "blockmachine" for c in calls)
+
+
+def test_storage_short_changes_row_yields_parse_not_crash(monkeypatch):
+    members = [1]
+
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def fake_call(self, method, params):
+        if method == "state_queryStorageAt":
+            tao_key = map_key_hex(b"SubnetTAO", 1)
+            return [{"block": "0xblock", "changes": [[tao_key]]}], "ok"
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: (members, "ok")
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
+    batch = _fetch_snapshot_batch(monkeypatch, members)
+    assert batch["netuid_outcomes"][1] == "parse"
+    assert batch["rows"] == []
+
+
+def test_storage_truncated_u64_rejected_not_padded(monkeypatch):
+    members = [1]
+
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def fake_call(self, method, params):
+        if method == "state_queryStorageAt":
+            tao_key = map_key_hex(b"SubnetTAO", 1)
+            alpha_key = map_key_hex(b"SubnetAlphaIn", 1)
+            return [
+                {
+                    "block": "0xblock",
+                    "changes": [
+                        [tao_key, "0x01"],
+                        [alpha_key, _u64_storage_hex(1_000_000_000)],
+                    ],
+                }
+            ], "ok"
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: (members, "ok")
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
+    batch = _fetch_snapshot_batch(monkeypatch, members)
+    assert batch["netuid_outcomes"][1] == "parse"
+    assert batch["rows"] == []
+
+
+def test_storage_unrequested_key_yields_invalid(monkeypatch):
+    members = [1]
+
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def fake_call(self, method, params):
+        if method == "state_queryStorageAt":
+            extra = map_key_hex(b"SubnetTAO", 99)
+            return [{"block": "0xblock", "changes": [[extra, _u64_storage_hex(1)]]}], "ok"
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: (members, "ok")
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_call)
+    batch = _fetch_snapshot_batch(monkeypatch, members)
+    assert batch["netuid_outcomes"][1] == "invalid"
+    assert batch["rows"] == []
+
+
+def test_storage_rpc_return_after_deadline_not_ok(monkeypatch):
+    members = [1]
+    deadline = time.monotonic() + 10.0
+    clock = [time.monotonic()]
+
+    def fake_pin(self):
+        self.provider_served = "finney"
+        return "0xblock", "ok"
+
+    def fake_storage(self, method, params):
+        if method == "state_queryStorageAt":
+            clock[0] = deadline + 1.0
+            keys, _ = params
+            changes = [
+                [map_key_hex(b"SubnetTAO", 1), _u64_storage_hex(1_000_000_000)],
+                [map_key_hex(b"SubnetAlphaIn", 1), _u64_storage_hex(1_000_000_000)],
+            ]
+            return [{"block": "0xblock", "changes": changes}], "ok"
+        if method == "chain_getFinalizedHead":
+            return "0xblock", "ok"
+        return None, "rpc_error"
+
+    member_fn = lambda _call, _at_hash: (members, "ok")
+    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr("internal.chain_price.membership.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.live_subnet_snapshot.get_member_netuids", member_fn)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.pin_finalized_head", fake_pin)
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader.call", fake_storage)
+    batch = _fetch_snapshot_batch(monkeypatch, members, deadline=deadline)
+    assert batch["netuid_outcomes"][1] == "batch_expired"
+    assert batch["rows"] == []
+    assert batch["batch_expired"] is True

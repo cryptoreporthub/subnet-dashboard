@@ -1,8 +1,9 @@
 {
-  "netuid": 42,
-  "tao_raw": 5000000000,
-  "alpha_raw": 2000000000,
-  "swap_scaled": 2500000000,
-  "block_hash": "0xdeadbeef",
-  "note": "Captured-style fixture: swap_scaled / 1e9 should match tao_raw/alpha_raw / 1e9"
+  "block_number": 9333114,
+  "block_hash": "0xad6c62944bb0ccfd8251cdaf645322f7d351883655502374060e119f53abf6b4",
+  "netuid": 80,
+  "tao_raw": 5944271863785,
+  "alpha_raw": 258210196197381,
+  "swap_scaled": 23021086,
+  "note": "Finney pinned reads at block #9333114; SN80 was worst-case parity (max rel ~1.22e-6) in MC proof."
 }
