@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 council_router = APIRouter()
 
-JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "20"))
+JUDGES_SCORING_UNIVERSE = int(os.environ.get("JUDGES_SCORING_UNIVERSE", "256"))
 JUDGES_HANDLER_TIMEOUT = float(os.environ.get("JUDGES_HANDLER_TIMEOUT_SECONDS", "3"))
 _JUDGES_TTL = float(os.environ.get("JUDGES_CACHE_SECONDS", "60"))
 _JUDGES_LOCK = threading.Lock()

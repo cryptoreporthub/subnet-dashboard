@@ -55,8 +55,8 @@ def _env_int(name: str, default: int) -> int:
 
 
 def _scheduler_cap_limit() -> int:
-    top = _env_int("TOP_SCORING_UNIVERSE", 40)
-    sched = _env_int("PICK_SCHEDULER_UNIVERSE_CAP", 24)
+    top = _env_int("TOP_SCORING_UNIVERSE", 256)
+    sched = _env_int("PICK_SCHEDULER_UNIVERSE_CAP", 256)
     return min(sched, top)
 
 

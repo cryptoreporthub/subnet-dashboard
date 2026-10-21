@@ -52,7 +52,7 @@ def _snapshot_subnet_cap() -> int:
         from internal.run_mode import is_worker_mode
 
         if is_worker_mode():
-            return int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+            return int(os.environ.get("TOP_SCORING_UNIVERSE", "256"))
     except Exception:
         pass
     return 0

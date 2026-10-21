@@ -206,8 +206,8 @@ def _subnets_for_pick_creation(subnets: List[Dict[str, Any]]) -> List[Dict[str, 
     """Same scoring universe as pick_scheduler — never select_daily_pick on full hydrate list."""
     from internal.subnets.scoring_cap import cap_subnets_for_scoring
 
-    sched_cap = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "24"))
-    top = int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
+    sched_cap = int(os.environ.get("PICK_SCHEDULER_UNIVERSE_CAP", "256"))
+    top = int(os.environ.get("TOP_SCORING_UNIVERSE", "256"))
     limit = min(sched_cap, top)
     return cap_subnets_for_scoring(subnets, limit=limit)
 

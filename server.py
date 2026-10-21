@@ -644,7 +644,7 @@ async def add_cors_headers(request: Request, call_next):
 
 HOMEPAGE_BUILD_TIMEOUT = int(os.environ.get("HOMEPAGE_BUILD_TIMEOUT", "12"))
 HOMEPAGE_SHELL_CACHE_SECONDS = float(os.environ.get("HOMEPAGE_SHELL_CACHE_SECONDS", "45"))
-TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "20"))
+TOP_SCORING_UNIVERSE = int(os.environ.get("TOP_SCORING_UNIVERSE", "256"))
 PICK_HANDLER_TIMEOUT = float(os.environ.get("PICK_HANDLER_TIMEOUT_SECONDS", "8"))
 # Hydrate GET must not wait on the scoring pool. Sequential prod #1058 burned
 # the full 8s PICK_HANDLER_TIMEOUT on a queued/stuck _build.
