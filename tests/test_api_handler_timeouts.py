@@ -411,6 +411,33 @@ def test_simivision_bg_success_clears_flag(monkeypatch):
     assert srv._SIMIVISION_CACHE.get("payload") == warm
 
 
+def test_simivision_bg_refresh_build_may_read_cached_rows(monkeypatch):
+    """A build that reads the cache (spotlight weighing rows) must not wait on itself."""
+    import threading
+
+    import server as srv
+
+    srv._SIMIVISION_CACHE["payload"] = None
+    srv._SIMIVISION_CACHE["at"] = 0.0
+    srv._SIMIVISION_BG_REFRESHING = False
+    monkeypatch.setattr(srv, "_SIMIVISION_LOCK", threading.Lock())
+    warm = {"status": "success", "data": {"top": [], "meta": {"count": 0, "source": "test"}}}
+
+    def _build():
+        srv._simivision_weighing_rows_cached()
+        return warm
+
+    monkeypatch.setattr(srv, "_simivision_build_inner", _build)
+
+    srv._kick_simivision_background_refresh()
+    deadline = time.time() + 3
+    while time.time() < deadline and srv._SIMIVISION_BG_REFRESHING:
+        time.sleep(0.05)
+
+    assert srv._SIMIVISION_BG_REFRESHING is False
+    assert srv._SIMIVISION_CACHE.get("payload") == warm
+
+
 def test_score_universe_avoids_soul_map_deepcopy_storm(tmp_path, monkeypatch):
     """Scoring 20 subnets must not deepcopy soul_map hundreds of times."""
     import copy
