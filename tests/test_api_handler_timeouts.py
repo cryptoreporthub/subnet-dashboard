@@ -1077,9 +1077,9 @@ def test_simivision_concurrent_kicks_start_one_build(monkeypatch):
 
     import server as srv
 
-    srv._SIMIVISION_CACHE["payload"] = None
-    srv._SIMIVISION_CACHE["at"] = 0.0
-    srv._SIMIVISION_BG_REFRESHING = False
+    monkeypatch.setitem(srv._SIMIVISION_CACHE, "payload", None)
+    monkeypatch.setitem(srv._SIMIVISION_CACHE, "at", 0.0)
+    monkeypatch.setattr(srv, "_SIMIVISION_BG_REFRESHING", False)
     builds = []
     started, gate = threading.Event(), threading.Event()
 
