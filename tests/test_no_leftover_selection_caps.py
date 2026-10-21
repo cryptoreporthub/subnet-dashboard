@@ -1,5 +1,3 @@
-"""The rotation and the spotlight read the whole registry, not a fixed head of it."""
-
 from __future__ import annotations
 
 import json
