@@ -30,6 +30,11 @@ AB_BENCHMARK_INTERVAL_MINUTES = max(
     15, min(int(os.environ.get("AB_BENCHMARK_INTERVAL_MINUTES", "180")), 24 * 60)
 )
 AB_BENCHMARK_MINIMUM_DAYS = 7
+# A row the feed marks live=False carries the registry's stored price, not a market quote.
+# Settlement waits this long for a live quote before recording the entry as stale.
+AB_STALE_EXIT_GRACE_HOURS = max(
+    0, int(os.environ.get("AB_STALE_EXIT_GRACE_HOURS", "24"))
+)
 
 
 def _now_iso() -> str:
@@ -256,7 +261,11 @@ def _return_for(entry: Any, exit_price: Any, direction: str) -> Optional[float]:
 
 
 def _settle_rows(
-    rows: List[Dict[str, Any]], current_by_netuid: Dict[int, Dict[str, Any]], settled_at: str
+    rows: List[Dict[str, Any]],
+    current_by_netuid: Dict[int, Dict[str, Any]],
+    settled_at: str,
+    *,
+    stale_grace_over: bool = False,
 ) -> int:
     changed = 0
     for row in rows:
@@ -268,10 +277,23 @@ def _settle_rows(
         result = _return_for(row.get("entry_price"), exit_price, str(row.get("direction") or "neutral"))
         if result is None:
             continue
-        row["exit_price"] = exit_price
+        # live is False only for a registry-fallback price. A missing key is unknown, not stale,
+        # and an unchanged live quote is a real flat move that grades like any other.
+        registry_fallback = (current or {}).get("live") is False
+        if registry_fallback and not stale_grace_over:
+            continue  # retry next cycle with a live quote instead of grading a stored price
         row["settled_at"] = settled_at
-        row["return_pct"] = round(result * 100.0, 4)
-        row["result"] = "neutral" if row.get("direction") == "neutral" else ("hit" if result > 0 else "miss")
+        if registry_fallback:
+            row["exit_price"] = None
+            row["return_pct"] = None
+            row["result"] = "stale"
+        else:
+            row["exit_price"] = exit_price
+            row["return_pct"] = round(result * 100.0, 4)
+            if row.get("direction") == "neutral":
+                row["result"] = "neutral"
+            else:
+                row["result"] = "hit" if result > 0 else "miss"
         changed += 1
     return changed
 
@@ -297,8 +319,13 @@ def settle_due_snapshots(
         if not captured or current_time < captured + timedelta(hours=AB_BENCHMARK_HORIZON_HOURS):
             continue
         settled_at = current_time.isoformat().replace("+00:00", "Z")
-        changed += _settle_rows(snapshot.get("daily_model") or [], current_by_netuid, settled_at)
-        changed += _settle_rows(snapshot.get("judge_council") or [], current_by_netuid, settled_at)
+        grace_over = current_time >= captured + timedelta(
+            hours=AB_BENCHMARK_HORIZON_HOURS + AB_STALE_EXIT_GRACE_HOURS
+        )
+        for key in ("daily_model", "judge_council"):
+            changed += _settle_rows(
+                snapshot.get(key) or [], current_by_netuid, settled_at, stale_grace_over=grace_over
+            )
         all_rows = (snapshot.get("daily_model") or []) + (snapshot.get("judge_council") or [])
         snapshot["status"] = "settled" if all(row.get("result") is not None for row in all_rows) else "partial"
         snapshot["settled_at"] = settled_at
@@ -312,20 +339,35 @@ def _model_metrics(snapshots: List[Dict[str, Any]], key: str) -> Dict[str, Any]:
         row
         for snapshot in snapshots
         for row in (snapshot.get(key) or [])
-        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral")
+        if isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral", "stale")
     ]
-    directional = [row for row in rows if row.get("direction") in ("long", "short")]
+    stale = [row for row in rows if row.get("result") == "stale"]
+    directional = [
+        row for row in rows if row.get("direction") in ("long", "short") and row.get("result") != "stale"
+    ]
     returns = [_number(row.get("return_pct")) for row in directional]
     returns = [value for value in returns if value is not None]
     hits = sum(1 for row in directional if row.get("result") == "hit")
     return {
         "settled_entries": len(rows),
+        "stale_exit_entries": len(stale),
         "directional_entries": len(directional),
         "hit_rate": round(hits / len(directional), 4) if directional else None,
         "equal_weight_return_pct": round(sum(returns) / len(returns), 4) if returns else None,
         "best_return_pct": round(max(returns), 4) if returns else None,
         "worst_return_pct": round(min(returns), 4) if returns else None,
     }
+
+
+COMPARISON_ARMS = ("daily_model", "judge_council")
+
+
+def _arm_has_scored_outcome(snapshot: Dict[str, Any], arm: str) -> bool:
+    """True when this arm holds at least one graded (non-stale) row in the snapshot."""
+    return any(
+        isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral")
+        for row in (snapshot.get(arm) or [])
+    )
 
 
 def comparison(
@@ -341,18 +383,25 @@ def comparison(
     all_snapshots.sort(key=lambda row: str(row.get("captured_at") or ""))
     snapshots = all_snapshots[-max(1, min(int(limit), 90)) :]
     settled_snapshots = [row for row in all_snapshots if row.get("status") == "settled"]
+    scored_by_arm = {
+        arm: sum(1 for row in settled_snapshots if _arm_has_scored_outcome(row, arm))
+        for arm in COMPARISON_ARMS
+    }
+    scored_observations = min(scored_by_arm.values())
     observations_per_day = max(
         1, (24 * 60 + AB_BENCHMARK_INTERVAL_MINUTES - 1) // AB_BENCHMARK_INTERVAL_MINUTES
     )
     minimum_recommended_snapshots = AB_BENCHMARK_MINIMUM_DAYS * observations_per_day
     return {
         "status": "ok",
-        "research_ready": len(settled_snapshots) >= minimum_recommended_snapshots,
+        "research_ready": scored_observations >= minimum_recommended_snapshots,
         "minimum_recommended_days": AB_BENCHMARK_MINIMUM_DAYS,
         "minimum_recommended_snapshots": minimum_recommended_snapshots,
         "observation_interval_minutes": AB_BENCHMARK_INTERVAL_MINUTES,
         "observation_count": len(all_snapshots),
         "settled_observation_count": len(settled_snapshots),
+        "scored_observation_count": scored_observations,
+        "scored_observation_count_by_arm": scored_by_arm,
         "observation_day_count": len({str(row.get("date")) for row in all_snapshots if row.get("date")}),
         "horizon_hours": AB_BENCHMARK_HORIZON_HOURS,
         "snapshot_count": len(all_snapshots),
@@ -360,13 +409,14 @@ def comparison(
         "judge_council": _model_metrics(all_snapshots, "judge_council"),
         "snapshots": snapshots,
         "note": (
-            f"Early comparison — {len(settled_snapshots)} of at least "
-            f"{minimum_recommended_snapshots} observations have settled. "
+            f"Early comparison — {scored_observations} of at least "
+            f"{minimum_recommended_snapshots} observations have a scored outcome in every arm "
+            f"({len(settled_snapshots)} settled in all). "
             f"{len(all_snapshots)} immutable observations across "
             f"{len({str(row.get('date')) for row in all_snapshots if row.get('date')})} day(s). "
             f"Observations are captured every {AB_BENCHMARK_INTERVAL_MINUTES} minutes "
             "because the rankings are dynamic."
-            if len(settled_snapshots) < minimum_recommended_snapshots
+            if scored_observations < minimum_recommended_snapshots
             else "Historical comparison uses immutable recurring observations and a shared 24h horizon."
         ),
     }
