@@ -16,7 +16,7 @@ Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20).
 
 - Every Rev 3 line number in §2, §3 and §6 is five lines high. The §2a table holds the right values. Correct values: `fly.toml` 89–93 (not 94–98); `server.py` `TOP_SCORING_UNIVERSE` 647 (not 652); `_cap_subnets_for_scoring` 925–932 (not 930–937); the shell cap at 1066 and the hourly cap at 3363 (not 1071 and 3368); `score_snapshots.py` `_snapshot_subnet_cap()` 45–60 and its call site 667–676 (not 672–681); `pick_scheduler.py` `_load_capped_subnets` 151–161 and `_scheduler_cap_limit` 57–60; `daily_pick_engine.py` `_subnets_for_pick_creation` from 205.
 - Cause: raw read output starts with a five-line header (Title, blank, URL Source, blank, Markdown Content). Numbering raw output shifts every citation by +5.
-- The cap-site table rows are at 1925–1932 and the door table rows at 2830–2831. The earlier pointers, 1883–1888 and 2788–2789, land on other headings.
+- The cap-site table rows are at 1925–1932 and the door table rows at 2830–2835. The earlier pointers, 1883–1888 and 2788–2789, land on other content.
 - §6 cites `pick_selection_audit.py` lines 55–80. The cap assignments are at 57–60 and the docstring claim is at line 6.
 - Correct at the pin: `score_snapshots.py:263-268` (`_key`) and `state_vector.py:1893` (calibration block).
 
@@ -34,7 +34,7 @@ Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20).
 
 **Not corrected here**
 
-- The Fix A and Fix B premises (gauge behaviour, the same-process claim) are not confirmed by the review. Treat them as open.
+- The same-process claim in §7.6 is false at the pin. The worker is a second process, so its metrics do not reach web `/metrics`. §7.6, §5.4 and the scorecard row 7 carry the correction. The Fix A premise is checked in §10.1.
 - Every `/metrics` reading in Part III §7 is a scrape-time value. The code that produces it is verified; the readings are not.
 - The review verdict is KEEP with one condition: §2, §3 and §6 must be renumbered before §3 is used as an edit list. This block is the interim fix.
 
@@ -1510,9 +1510,9 @@ This is the most serious defect in the audit, and it is a few lines of dashboard
 
 `fly.toml`: single `[processes] web = "sh ./scripts/fly_web_entrypoint.sh"`, `min_machines_running = 1`, with an explicit comment that a Fly worker process group would spawn a second machine and split the volume. `Procfile`: `uvicorn asgi_entry:app` — no `--workers`, so one worker. `server.py` imports `internal.metrics`, so it loads at start.
 
-**Confirmed:** single process, single default registry, no `PROMETHEUS_MULTIPROC_DIR` needed. The open question in §5.4 is closed — the counters would actually be scraped.
+**Corrected in rev 6:** the web machine runs a second Python process. `scripts/fly_web_entrypoint.sh:34` starts the inline worker with `nice -n 10 env RUN_MODE=worker … python -m internal.worker &`. That is a separate interpreter with its own default registry. Web `/metrics` is served by the web process alone, and `PROMETHEUS_MULTIPROC_DIR` is not set, so the worker's counters are never scraped. The open question in §5.4 is open again.
 
-Consequence: the worker runs inline in the same process, so guard counters will include background loads too. That is the point — it is the only way Tier 2's real traffic becomes visible.
+Consequence: the guard counters below show request-path loads from the web process only. Background loads that run in the worker do not appear on `/metrics` until the worker's registry is exported some other way. That is a design change, not a caveat.
 
 ---
 
@@ -1583,7 +1583,7 @@ A metric has three states, and the code must never collapse two of them:
 
 #### 10.1 Fix A — three-state gauges (`internal/metrics.py`)
 
-**Defect:** `metrics.py:217` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:198` (sync running), `:201` (sync last ok), `:223` (failures), `:231-232` (apscheduler). And `_set_optional` at `:157-163` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie.
+**Defect:** `metrics.py:212` reads `set(1 if info.get("running") else 0)`. A missing key and a stopped scheduler both produce `0`. Same at `:193` (sync running), `:196` (sync last ok), `:218` (failures), `:226-227` (apscheduler). And `_set_optional` at `:160-166` **returns early on None**, so every age gauge pins its last value indefinitely — the `soul_map` 51.5-day zombie. **Premise check (rev 6).** The code claim holds at the pin: a missing key and a stopped scheduler both emit `0` (`metrics.py:212`, `:226`). The live zeros in §7.4 (lines 1470–1477) do not support the meaning the packet gives them. The web process runs with `BACKGROUND_ON_WEB=off` (`fly.toml:35`) and does not own the scheduler or sync state, so those zeros mean 'not running in this process', not 'stopped' or 'failing'. For `subnet_sync_last_ok`, the gauge is set only when the key is present (`metrics.py:195–196`), so the `0` may be the gauge's untouched default. Fix A's `UNAVAILABLE = -1` for an absent state would make that absence visible. It would not put the worker's state on web. That needs the separate change §7.6 describes.
 
 ```diff
 @@ internal/metrics.py
@@ -1749,7 +1749,7 @@ A metric has three states, and the code must never collapse two of them:
 
 **Why this answers the original Tier 2 question better than any benchmark:** after one day you can read the hit rate, the p99 load duration, and the timeout count *for every Tier 2 consumer*, from production, without touching `build_cost` or guessing at overhead.
 
-**Caveat to state plainly:** because the worker runs inline in the same process (§7.6), these counters include background loads as well as request-path loads. That is a feature — it is the only way the background Tier 2 cost becomes visible at all — but the `outcome` label cannot separate the two, and I am not inventing a label to pretend otherwise.
+**Caveat to state plainly:** the worker is a separate process (§7.6), so these counters show request-path loads from the web process only. The background Tier 2 cost stays invisible until the worker's registry is exported. The `outcome` label would not separate the two in any case, and I am not inventing a label to pretend otherwise.
 
 #### 10.3 Fix C — make `build_cost` dual-mode (`internal/build_cost.py`)
 
@@ -2925,7 +2925,7 @@ Kept so the packet does not depend on the conversation that produced it.
 | 4 | Most rows fail the `conviction >= 60` gate | §2 | **Refuted — my error** | 1,817 of 5,812 = 31.3% pass |
 | 5 | A TTL cache on the status endpoint is needed | §3 | **Dropped** | 15.5 ms observed; traffic absent |
 | 6 | Scheduler gauges are trustworthy | §4 | **Refuted** | All read `0` while readiness builds at 15.8 s age |
-| 7 | The patch might never be scraped (multiprocess) | §5.4 | **Closed — fine** | Single `web` process, no `--workers` |
+| 7 | The patch might never be scraped (multiprocess) | §5.4 | **Reopened in rev 6 — worker not scraped** | `scripts/fly_web_entrypoint.sh:34` starts the worker as a second process; no multiprocess dir |
 | 8 | The hourly horizon metric looks broken | — | **Retracted — by design** | `snapshot_coverage.py:464-467` |
 | 9 | The repo needs a full overhaul | §9 | **Rejected** | 61.7 s build vs 8 ms publish; the defect is truth, not structure |
 
