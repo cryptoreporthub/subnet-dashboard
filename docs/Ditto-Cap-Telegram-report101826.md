@@ -16,7 +16,7 @@ Checked against the pin `3a65d34a` by an independent review (Ditto, 2026-10-20).
 
 - Every Rev 3 line number in §2, §3 and §6 is five lines high. The §2a table holds the right values. Correct values: `fly.toml` 89–93 (not 94–98); `server.py` `TOP_SCORING_UNIVERSE` 647 (not 652); `_cap_subnets_for_scoring` 925–932 (not 930–937); the shell cap at 1066 and the hourly cap at 3363 (not 1071 and 3368); `score_snapshots.py` `_snapshot_subnet_cap()` 45–60 and its call site 667–676 (not 672–681); `pick_scheduler.py` `_load_capped_subnets` 151–161 and `_scheduler_cap_limit` 57–60; `daily_pick_engine.py` `_subnets_for_pick_creation` from 205.
 - Cause: raw read output starts with a five-line header (Title, blank, URL Source, blank, Markdown Content). Numbering raw output shifts every citation by +5.
-- The table rows near 1883–1888 and the door table near 2788–2789 carry the same offset.
+- The cap-site table rows are at 1925–1932 and the door table rows at 2830–2831. The earlier pointers, 1883–1888 and 2788–2789, land on other headings.
 - §6 cites `pick_selection_audit.py` lines 55–80. The cap assignments are at 57–60 and the docstring claim is at line 6.
 - Correct at the pin: `score_snapshots.py:263-268` (`_key`) and `state_vector.py:1893` (calibration block).
 
@@ -2176,7 +2176,7 @@ Second design pass. The first ([Scoring Universe Contract](scoring-universe-cont
 
 ### What the 3,000 is
 
-    # rollup.py:1068
+    # rollup.py:1068 (_conviction_rows); LIMIT 3000 at 1096
     SELECT m.id, m.source, ..., a.entities_json, v.verdict, v.conviction, ...
            ps.tao_usd_price, po.price_24h, po.price_24h_recorded_at
     FROM messages m
