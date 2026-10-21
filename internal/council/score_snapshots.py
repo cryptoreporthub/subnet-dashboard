@@ -199,37 +199,24 @@ def _patch_score_snapshot_coverage_locked(
         }
 
 
-def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
-    snap = snapshot if snapshot is not None else load_score_snapshot()
-    if not snap:
-        return {}
-    out: Dict[int, float] = {}
-    for row in snap.get("day") or []:
-        if not isinstance(row, dict):
-            continue
-        try:
-            netuid = int(row.get("netuid"))
-            out[netuid] = float(row.get("total_score") or 0)
-        except (TypeError, ValueError):
-            continue
-    return out
-
-
-def rank_subnets_by_snapshot(
-    subnets: List[Dict[str, Any]],
-    *,
-    horizon: str = "day",
-    max_age_seconds: Optional[int] = None,
+def _read_complete_snapshot(
     path: Optional[str] = None,
-) -> Optional[List[Dict[str, Any]]]:
-    """Return subnets sorted by snapshot score, or None if snapshot missing/stale."""
+    max_age_seconds: Optional[int] = None,
+) -> Optional[Tuple[Dict[str, Any], float]]:
     age = snapshot_age_seconds(path)
-    limit = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    if age is None or age > limit:
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    if age is None or age > ttl:
         return None
     snap = load_score_snapshot(path)
     if not snap:
         return None
+    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
+    return (snap, age) if coverage.get("complete") is True else None
+
+
+def _rank_by_scores(
+    snap: Dict[str, Any], subnets: List[Dict[str, Any]], horizon: str
+) -> Optional[List[Dict[str, Any]]]:
     scores: Dict[int, float] = {}
     for row in snap.get(horizon) or snap.get("day") or []:
         if not isinstance(row, dict):
@@ -249,6 +236,18 @@ def rank_subnets_by_snapshot(
         return (scores.get(netuid, -1.0), float(s.get("emission") or 0))
 
     return sorted(subnets, key=_key, reverse=True)
+
+
+def rank_subnets_by_snapshot(
+    subnets: List[Dict[str, Any]],
+    *,
+    horizon: str = "day",
+    max_age_seconds: Optional[int] = None,
+    path: Optional[str] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Return subnets sorted by snapshot score, or None if the snapshot is missing, stale or partial."""
+    got = _read_complete_snapshot(path, max_age_seconds)
+    return _rank_by_scores(got[0], subnets, horizon) if got else None
 
 
 def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
@@ -319,18 +318,10 @@ def build_top_picks_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Read top hour/day picks from disk snapshot — no scoring on the request path."""
-    age = snapshot_age_seconds(path)
-    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    if age is None or age > ttl:
+    got = _read_complete_snapshot(path, max_age_seconds)
+    if got is None:
         return None
-    snap = load_score_snapshot(path)
-    if not snap:
-        return None
-    # Partial captures (timeout, membership-gated skip) publish complete=False.
-    # Serving them would present a partial universe as the full ranking.
-    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
-    if coverage.get("complete") is not True:
-        return None
+    snap, age = got
     hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
     day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
     if not hour_rows and not day_rows:
@@ -365,13 +356,12 @@ def day_scored_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
     """Join tradable subnets to day scores from snapshot (minimal score payloads)."""
-    ranked = rank_subnets_by_snapshot(
-        subnets, horizon="day", max_age_seconds=max_age_seconds, path=path
-    )
-    if ranked is None:
+    got = _read_complete_snapshot(path, max_age_seconds)
+    if got is None:
         return None
-    snap = load_score_snapshot(path)
-    if not snap:
+    snap = got[0]
+    ranked = _rank_by_scores(snap, subnets, "day")
+    if ranked is None:
         return None
     scores: Dict[int, Dict[str, Any]] = {}
     for row in snap.get("day") or []:

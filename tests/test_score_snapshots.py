@@ -15,6 +15,7 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     payload = {
         "written_at": "2026-07-26T00:00:00Z",
+        "coverage": {"complete": True},
         "count": 3,
         "hour": [],
         "day": [
@@ -35,7 +36,7 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
 def test_stale_snapshot_returns_none(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     snaps.save_score_snapshot(
-        {"day": [{"netuid": 1, "total_score": 1.0}], "hour": []},
+        {"coverage": {"complete": True}, "day": [{"netuid": 1, "total_score": 1.0}], "hour": []},
         str(path),
     )
     # Force mtime into the past
