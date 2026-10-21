@@ -359,18 +359,14 @@ def _model_metrics(snapshots: List[Dict[str, Any]], key: str) -> Dict[str, Any]:
     }
 
 
-def _has_scored_outcome(snapshot: Dict[str, Any]) -> bool:
-    """True when every arm that holds rows has at least one graded (non-stale) row.
+COMPARISON_ARMS = ("daily_model", "judge_council")
 
-    A snapshot whose rows all settled as stale has terminal results but no observation to score.
-    """
-    arms = [
-        [row for row in (snapshot.get(key) or []) if isinstance(row, dict)]
-        for key in ("daily_model", "judge_council")
-    ]
-    populated = [arm for arm in arms if arm]
-    return bool(populated) and all(
-        any(row.get("result") in ("hit", "miss", "neutral") for row in arm) for arm in populated
+
+def _arm_has_scored_outcome(snapshot: Dict[str, Any], arm: str) -> bool:
+    """True when this arm holds at least one graded (non-stale) row in the snapshot."""
+    return any(
+        isinstance(row, dict) and row.get("result") in ("hit", "miss", "neutral")
+        for row in (snapshot.get(arm) or [])
     )
 
 
@@ -387,20 +383,25 @@ def comparison(
     all_snapshots.sort(key=lambda row: str(row.get("captured_at") or ""))
     snapshots = all_snapshots[-max(1, min(int(limit), 90)) :]
     settled_snapshots = [row for row in all_snapshots if row.get("status") == "settled"]
-    scored_snapshots = [row for row in settled_snapshots if _has_scored_outcome(row)]
+    scored_by_arm = {
+        arm: sum(1 for row in settled_snapshots if _arm_has_scored_outcome(row, arm))
+        for arm in COMPARISON_ARMS
+    }
+    scored_observations = min(scored_by_arm.values())
     observations_per_day = max(
         1, (24 * 60 + AB_BENCHMARK_INTERVAL_MINUTES - 1) // AB_BENCHMARK_INTERVAL_MINUTES
     )
     minimum_recommended_snapshots = AB_BENCHMARK_MINIMUM_DAYS * observations_per_day
     return {
         "status": "ok",
-        "research_ready": len(scored_snapshots) >= minimum_recommended_snapshots,
+        "research_ready": scored_observations >= minimum_recommended_snapshots,
         "minimum_recommended_days": AB_BENCHMARK_MINIMUM_DAYS,
         "minimum_recommended_snapshots": minimum_recommended_snapshots,
         "observation_interval_minutes": AB_BENCHMARK_INTERVAL_MINUTES,
         "observation_count": len(all_snapshots),
         "settled_observation_count": len(settled_snapshots),
-        "scored_observation_count": len(scored_snapshots),
+        "scored_observation_count": scored_observations,
+        "scored_observation_count_by_arm": scored_by_arm,
         "observation_day_count": len({str(row.get("date")) for row in all_snapshots if row.get("date")}),
         "horizon_hours": AB_BENCHMARK_HORIZON_HOURS,
         "snapshot_count": len(all_snapshots),
@@ -408,14 +409,14 @@ def comparison(
         "judge_council": _model_metrics(all_snapshots, "judge_council"),
         "snapshots": snapshots,
         "note": (
-            f"Early comparison — {len(scored_snapshots)} of at least "
-            f"{minimum_recommended_snapshots} observations have settled with a scored outcome "
+            f"Early comparison — {scored_observations} of at least "
+            f"{minimum_recommended_snapshots} observations have a scored outcome in every arm "
             f"({len(settled_snapshots)} settled in all). "
             f"{len(all_snapshots)} immutable observations across "
             f"{len({str(row.get('date')) for row in all_snapshots if row.get('date')})} day(s). "
             f"Observations are captured every {AB_BENCHMARK_INTERVAL_MINUTES} minutes "
             "because the rankings are dynamic."
-            if len(scored_snapshots) < minimum_recommended_snapshots
+            if scored_observations < minimum_recommended_snapshots
             else "Historical comparison uses immutable recurring observations and a shared 24h horizon."
         ),
     }

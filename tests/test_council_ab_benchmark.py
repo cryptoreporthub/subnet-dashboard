@@ -198,31 +198,44 @@ def test_row_without_a_live_flag_is_graded_as_before(tmp_path):
     assert settled["snapshots"][0]["daily_model"][0]["result"] == "miss"
 
 
-def _settled_snapshots(path, count, result):
+def _settled_snapshots(path, count, daily="hit", judge="hit", judge_scored=None):
+    """Write ``count`` settled snapshots. ``judge`` of None leaves that arm empty;
+    ``judge_scored`` limits how many snapshots carry a ``judge`` row (the rest are empty)."""
     from internal.council import ab_benchmark
 
     base = datetime.now(timezone.utc) - timedelta(days=30)
     snapshots = []
     for index in range(count):
-        row = {"netuid": 1, "direction": "long", "entry_price": 10, "result": result}
+        def arm(result):
+            if result is None:
+                return []
+            return [{"netuid": 1, "direction": "long", "entry_price": 10, "result": result}]
+
+        carries_judge = judge_scored is None or index < judge_scored
         snapshots.append(
             {
                 "captured_at": (base + timedelta(minutes=index)).isoformat().replace("+00:00", "Z"),
                 "date": "2026-09-01",
                 "status": "settled",
-                "daily_model": [dict(row)],
-                "judge_council": [],
+                "daily_model": arm(daily),
+                "judge_council": arm(judge if carries_judge else None),
             }
         )
     ab_benchmark._save({"snapshots": snapshots}, path)
+
+
+def _needed(path):
+    from internal.council import ab_benchmark
+
+    return ab_benchmark.comparison(path=path)["minimum_recommended_snapshots"]
 
 
 def test_stale_only_snapshots_do_not_make_the_comparison_research_ready(tmp_path):
     from internal.council import ab_benchmark
 
     path = str(tmp_path / "ab.json")
-    needed = ab_benchmark.comparison(path=path)["minimum_recommended_snapshots"]
-    _settled_snapshots(path, needed, "stale")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, daily="stale", judge="stale")
 
     result = ab_benchmark.comparison(path=path)
     assert result["settled_observation_count"] == needed
@@ -232,12 +245,37 @@ def test_stale_only_snapshots_do_not_make_the_comparison_research_ready(tmp_path
     assert result["research_ready"] is False
 
 
-def test_scored_snapshots_make_the_comparison_research_ready(tmp_path):
+def test_both_arms_scored_make_the_comparison_research_ready(tmp_path):
     from internal.council import ab_benchmark
 
     path = str(tmp_path / "ab.json")
-    needed = ab_benchmark.comparison(path=path)["minimum_recommended_snapshots"]
-    _settled_snapshots(path, needed, "hit")
+    needed = _needed(path)
+    _settled_snapshots(path, needed)
     result = ab_benchmark.comparison(path=path)
     assert result["scored_observation_count"] == needed
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": needed}
     assert result["research_ready"] is True
+
+
+def test_an_empty_arm_is_not_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, judge=None)
+    result = ab_benchmark.comparison(path=path)
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": 0}
+    assert result["research_ready"] is False
+
+
+def test_a_sparsely_scored_arm_is_not_research_ready(tmp_path):
+    from internal.council import ab_benchmark
+
+    path = str(tmp_path / "ab.json")
+    needed = _needed(path)
+    _settled_snapshots(path, needed, judge_scored=1)
+    result = ab_benchmark.comparison(path=path)
+    assert result["scored_observation_count_by_arm"] == {"daily_model": needed, "judge_council": 1}
+    assert result["scored_observation_count"] == 1
+    assert result["judge_council"]["directional_entries"] == 1
+    assert result["research_ready"] is False
