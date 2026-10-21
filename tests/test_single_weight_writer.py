@@ -62,6 +62,26 @@ def _tracked_python_files():
     return [REPO_ROOT / name for name in listing]
 
 
+def _called_writers(tree, calls):
+    """Names from ``calls`` that this module calls, including ``from x import writer as alias``."""
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for item in node.names:
+                if item.name in calls and item.asname:
+                    aliases[item.asname] = item.name
+    found = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
+        name = aliases.get(name, name)
+        if name in calls:
+            found.add(name)
+    return found
+
+
 def _writer_modules(calls=None):
     calls = WRITER_CALLS if calls is None else calls
     found = {}
@@ -73,14 +93,19 @@ def _writer_modules(calls=None):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(rel))
         except (SyntaxError, UnicodeDecodeError):
             continue
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            func = node.func
-            name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", None)
-            if name in calls:
-                found.setdefault(rel.as_posix(), set()).add(name)
+        names = _called_writers(tree, calls)
+        if names:
+            found[rel.as_posix()] = names
     return found
+
+
+def test_guard_sees_aliased_writer_imports():
+    aliased = ast.parse("from internal.council.weights import nudge_expert as nx\nnx('quant', True)\n")
+    assert _called_writers(aliased, WRITER_CALLS) == {"nudge_expert"}
+    module_alias = ast.parse("import internal.council.weights as w\nw.nudge_expert('quant', True)\n")
+    assert _called_writers(module_alias, WRITER_CALLS) == {"nudge_expert"}
+    unrelated = ast.parse("def nx():\n    pass\nnx()\n")
+    assert _called_writers(unrelated, WRITER_CALLS) == set()
 
 
 def test_only_allowlisted_modules_write_weights():
@@ -92,7 +117,6 @@ def test_only_allowlisted_modules_write_weights():
 
 
 def test_only_allowlisted_modules_write_scenario_memory():
-    # ponytail: matches by call name, so an aliased import (`import x as y`; `y()`) would evade it.
     found = _writer_modules(SCENARIO_CALLS)
     # scenario_memory.py defines add_scenario; calls inside it are internal.
     found.pop("internal/council/scenario_memory.py", None)
