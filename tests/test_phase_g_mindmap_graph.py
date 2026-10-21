@@ -67,6 +67,10 @@ def test_mindmap_graph_empty_state_success(monkeypatch):
 
     monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
+    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus_netuid: [])
+    monkeypatch.setattr(
+        graph_mod, "_load_whale_and_rugger_alerts", lambda focus_netuid: {"rugger_alerts": [], "follow_alerts": []}
+    )
 
     graph = get_mindmap_graph()
     assert graph["status"] == "success"
