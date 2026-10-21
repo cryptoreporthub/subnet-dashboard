@@ -14,6 +14,7 @@ Swap volume detection uses pool reserve deltas:
 This is more reliable than parsing raw SCALE events without chain metadata.
 """
 
+import json
 import logging
 import os
 import sqlite3
@@ -423,8 +424,14 @@ class ChainClient:
             "id": int(time.time() * 1000) % 2147483647,
         }
         last_error: Optional[BaseException] = None
+        deadline_mono = getattr(self, "_rpc_deadline_mono", None)
         for attempt in range(self.retries + 1):
             try:
+                if deadline_mono is not None:
+                    remaining = deadline_mono - time.monotonic()
+                    if remaining <= 0:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded")
+                    self.timeout = min(float(self.timeout), max(0.01, remaining))
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
@@ -462,7 +469,11 @@ class ChainClient:
                         code=response.status_code,
                     )
                 response.raise_for_status()
-                data = response.json()
+                try:
+                    data = response.json()
+                except json.JSONDecodeError as exc:
+                    _record_chain_rpc(self.endpoint, method, "error")
+                    raise ChainRpcError("parse", str(exc))
                 if "error" in data:
                     kind = classify_jsonrpc_error(data["error"])
                     err = data["error"]
@@ -478,18 +489,28 @@ class ChainClient:
                 return data.get("result")
             except ChainRpcError:
                 raise
+            except requests.exceptions.Timeout as exc:
+                _record_chain_rpc(self.endpoint, method, "error")
+                raise ChainRpcError("timeout", str(exc))
+            except requests.exceptions.ConnectionError as exc:
+                _record_chain_rpc(self.endpoint, method, "error")
+                raise ChainRpcError("connection", str(exc))
             except requests.RequestException as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("typed RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
+                    if deadline_mono is not None and time.monotonic() + sleep_for > deadline_mono:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded before retry")
                     time.sleep(sleep_for)
             except Exception as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 if attempt < self.retries:
+                    if deadline_mono is not None and time.monotonic() + sleep_for > deadline_mono:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded before retry")
                     time.sleep(sleep_for)
         if isinstance(last_error, ChainRpcError):
             raise last_error
@@ -879,31 +900,6 @@ class ChainClient:
                                 "source": "blockmachine", "degraded": True})
         logger.info("get_all_subnet_data: fetched %d subnets from Blockmachine", len(subnets))
         return subnets
-
-    def get_subnet_price_rows(self, netuids):
-        """Fast path for live_subnets cache with price and pool reserves."""
-        return self.get_subnet_price_rows_batch(netuids)["rows"]
-
-    def get_subnet_price_rows_batch(self, netuids):
-        """Batched storage snapshot (Finney-first); ``netuids`` only marks non-members."""
-        from internal.chain_price.live_subnet_snapshot import (
-            fetch_live_subnet_snapshot,
-            snapshot_batch_result,
-        )
-
-        deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
-        if deadline_mono:
-            deadline = float(deadline_mono)
-        else:
-            budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-            deadline = time.monotonic() + budget
-
-        snapshot = fetch_live_subnet_snapshot(deadline)
-        return snapshot_batch_result(
-            snapshot,
-            universe_netuids=sorted({int(n) for n in (netuids or [])}),
-        )
-
 
 _default_client = None
 

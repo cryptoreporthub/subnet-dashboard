@@ -296,6 +296,7 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
             rows=[{"netuid": 1, "price": 1.0, "source": "finney"}],
             netuid_outcomes={1: "ok"},
             requested_netuids=[1],
+            membership_resolved=True,
         )
 
     from internal.chain_price.live_subnet_snapshot import LiveSubnetSnapshot
@@ -461,6 +462,7 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
             netuid_outcomes={1: "ok", 2: "batch_expired"},
             batch_expired=True,
             requested_netuids=[1, 2],
+            membership_resolved=True,
         )
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
@@ -507,6 +509,7 @@ def test_fetch_chain_data_carries_netuid_outcomes_on_no_price(monkeypatch):
             netuid_outcomes={1: "ok", 2: "no_price"},
             batch_expired=False,
             requested_netuids=[1, 2],
+            membership_resolved=True,
         )
 
     with patch(

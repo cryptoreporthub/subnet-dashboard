@@ -60,9 +60,48 @@ def _run_case(label: str, *, finney_url: str | None, blockmachine_url: str) -> d
     }
 
 
+def _parity_at_pinned_block(finney_url: str, block_hash: str, netuid: int) -> dict[str, Any]:
+    from internal.chain_client import PRICE_SCALE, ChainClient, _row_from_subnet_reserves
+    from internal.chain_price.storage_keys import map_key_hex
+
+    client = ChainClient(finney_url, init_volume_db=False, retries=1)
+    keys = [
+        map_key_hex(b"SubnetTAO", netuid),
+        map_key_hex(b"SubnetAlphaIn", netuid),
+    ]
+    batch = client.query_storage_at(keys, block_hash)
+    entry = batch[0] if batch else {}
+    by_key = {row[0]: row[1] for row in entry.get("changes") or [] if row and len(row) >= 2}
+    tao_raw = int.from_bytes(bytes.fromhex(by_key[keys[0]][2:]), "little")
+    alpha_raw = int.from_bytes(bytes.fromhex(by_key[keys[1]][2:]), "little")
+    row = _row_from_subnet_reserves(netuid, tao_raw, alpha_raw, "finney")
+    swap_scaled = client._call_typed("swap_currentAlphaPrice", [netuid, block_hash])
+    swap_price = int(swap_scaled) / PRICE_SCALE
+    rel = abs(swap_price - row["price"]) / swap_price if swap_price else 0.0
+    return {
+        "block_hash": block_hash,
+        "netuid": netuid,
+        "rel_err": rel,
+        "row_price": row["price"],
+        "swap_price": swap_price,
+    }
+
+
 def main() -> int:
     finney = os.environ.get("FINNEY_RPC_URL", "https://entrypoint-finney.opentensor.ai").strip()
     bm = os.environ.get("BLOCKMACHINE_RPC_URL", "https://rpc.blockmachine.io").strip()
+    if os.environ.get("PARITY_ONLY", "").strip() == "1":
+        from internal.chain_price.live_subnet_snapshot import fetch_live_subnet_snapshot
+
+        netuid = int(os.environ.get("PARITY_NETUID", "80"))
+        snap = fetch_live_subnet_snapshot(time.monotonic() + 85.0)
+        block_hash = os.environ.get("PARITY_BLOCK_HASH", "").strip() or snap.block_hash
+        p = _parity_at_pinned_block(finney, block_hash, netuid)
+        print(
+            f"parity: block={p['block_hash'][:18]}… SN{p['netuid']} "
+            f"rel={p['rel_err']:.2e} row={p['row_price']} swap={p['swap_price']}"
+        )
+        return 0
     cases = [
         _run_case("finney_first", finney_url=finney, blockmachine_url=bm),
         _run_case("blockmachine_only", finney_url=None, blockmachine_url=bm),
