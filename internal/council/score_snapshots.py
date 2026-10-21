@@ -310,6 +310,19 @@ def _top_pick_row(
     }
 
 
+def _load_complete_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """Snapshot only when its capture is proven complete.
+
+    Partial captures (timeout, membership-gated skip) publish complete=False.
+    Serving them would present a partial universe as the full ranking.
+    """
+    snap = load_score_snapshot(path)
+    if not snap:
+        return None
+    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
+    return snap if coverage.get("complete") is True else None
+
+
 def build_top_picks_from_snapshot(
     subnets: Optional[List[Dict[str, Any]]] = None,
     *,
@@ -322,13 +335,8 @@ def build_top_picks_from_snapshot(
     ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
     if age is None or age > ttl:
         return None
-    snap = load_score_snapshot(path)
+    snap = _load_complete_snapshot(path)
     if not snap:
-        return None
-    # Partial captures (timeout, membership-gated skip) publish complete=False.
-    # Serving them would present a partial universe as the full ranking.
-    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
-    if coverage.get("complete") is not True:
         return None
     hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
     day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
@@ -369,7 +377,7 @@ def day_scored_from_snapshot(
     )
     if ranked is None:
         return None
-    snap = load_score_snapshot(path)
+    snap = _load_complete_snapshot(path)
     if not snap:
         return None
     scores: Dict[int, Dict[str, Any]] = {}
