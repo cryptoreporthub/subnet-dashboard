@@ -186,19 +186,29 @@ def _entrypoint_library_src(entrypoint_src: str) -> str:
     for i, line in enumerate(lines):
         if line.startswith('case "${ENABLE_INLINE_WORKER'):
             return "".join(lines[:i])
-    return entrypoint_src
+    raise ValueError("entrypoint boot marker missing")
 
 
-def _inline_worker_group_live(pgid: str, entrypoint_src: str) -> bool:
+def _inline_worker_group_live(
+    pgid: str,
+    entrypoint_src: str,
+    *,
+    entrypoint_is_library: bool = False,
+) -> bool:
     if not pgid:
         return False
+    lib = (
+        entrypoint_src
+        if entrypoint_is_library
+        else _entrypoint_library_src(entrypoint_src)
+    )
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".sh",
         encoding="utf-8",
         delete=False,
     ) as script:
-        script.write(_entrypoint_library_src(entrypoint_src))
+        script.write(lib)
         script_path = script.name
     try:
         proc = subprocess.run(
@@ -380,6 +390,7 @@ def _run_churn_group_live_checks(
     target: str,
     iterations: int,
     assert_stable_with: str | None = None,
+    entrypoint_is_library: bool = False,
 ) -> int:
     worker = subprocess.Popen(["setsid", "sleep", target])
     churn = subprocess.Popen(
@@ -391,12 +402,16 @@ def _run_churn_group_live_checks(
         time.sleep(0.3)
         pgid = str(worker.pid)
         os.kill(worker.pid, 0)
-        stable_src = assert_stable_with if assert_stable_with is not None else entrypoint_src
+        stable_src = assert_stable_with if assert_stable_with is not None else _repo_entrypoint_text()
         assert _inline_worker_group_live(pgid, stable_src), (
             "stable worker group not visible before churn"
         )
         for _ in range(iterations):
-            if not _inline_worker_group_live(pgid, entrypoint_src):
+            if not _inline_worker_group_live(
+                pgid,
+                entrypoint_src,
+                entrypoint_is_library=entrypoint_is_library,
+            ):
                 false_dead += 1
     finally:
         for proc in (worker, churn):
@@ -421,12 +436,34 @@ def test_proc_pgid_scan_mawk_no_false_dead_under_churn():
     )
 
 
+def test_entrypoint_library_src_raises_without_boot_marker():
+    with pytest.raises(ValueError, match="entrypoint boot marker missing"):
+        _entrypoint_library_src("#!/bin/sh\necho hi\n")
+
+
+def test_fetch_child_rss_heartbeat_uses_fetch_child_role():
+    repo = Path(__file__).resolve().parents[1]
+    proc = subprocess.run(
+        [sys.executable, str(repo / "tests" / "spawn_fetch_child_rss_label_probe.py")],
+        cwd=str(repo),
+        env={k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"},
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    combined = proc.stdout + proc.stderr
+    assert proc.returncode == 0, combined
+    assert "rss-heartbeat role=live_subnets_fetch_child" in combined, combined
+    assert "rss-heartbeat run_mode=worker" not in combined, combined
+
+
 def test_proc_pgid_scan_mawk_churn_false_dead_without_cat_snapshot():
     false_dead = _run_churn_group_live_checks(
         _pre_cat_mawk_scan_entrypoint(),
         target="61999009890",
         iterations=120,
         assert_stable_with=_repo_entrypoint_text(),
+        entrypoint_is_library=True,
     )
     assert false_dead >= 1, (
         "pre-cat awk-on-glob scan should false-negative under /proc churn"
