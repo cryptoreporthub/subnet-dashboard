@@ -664,7 +664,8 @@ _SUBNETS_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _SUBNETS_BG_LOCK = threading.Lock()
 _SUBNETS_BG_REFRESHING = False
 _SIMIVISION_TTL = float(os.environ.get("SIMIVISION_CACHE_SECONDS", "60"))
-_SIMIVISION_LOCK = threading.Lock()
+_SIMIVISION_LOCK = threading.Lock()  # guards the cache pair only; never held across a build
+_SIMIVISION_BUILD_LOCK = threading.Lock()  # single-flight build
 _SIMIVISION_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _SIMIVISION_HANDLER_TIMEOUT = float(os.environ.get("SIMIVISION_HANDLER_TIMEOUT_SECONDS", "3"))
 _SIMIVISION_BG_LOCK = threading.Lock()
@@ -2959,7 +2960,7 @@ def _kick_simivision_background_refresh() -> None:
     def _run() -> None:
         global _SIMIVISION_BG_REFRESHING
         try:
-            if not _SIMIVISION_LOCK.acquire(blocking=False):
+            if not _SIMIVISION_BUILD_LOCK.acquire(blocking=False):
                 return
             try:
                 # Direct build on this thread — no nested ThreadPoolExecutor.
@@ -2967,10 +2968,11 @@ def _kick_simivision_background_refresh() -> None:
                 # Soul-map read path is now copy_blob=False for scoring, so this
                 # finishes in seconds instead of hanging on deepcopy storms.
                 payload = _simivision_build_inner()
-                _SIMIVISION_CACHE["payload"] = payload
-                _SIMIVISION_CACHE["at"] = time.time()
+                with _SIMIVISION_LOCK:
+                    _SIMIVISION_CACHE["payload"] = payload
+                    _SIMIVISION_CACHE["at"] = time.time()
             finally:
-                _SIMIVISION_LOCK.release()
+                _SIMIVISION_BUILD_LOCK.release()
         except Exception as exc:
             logger.warning("simivision background refresh failed: %s", exc)
         finally:
