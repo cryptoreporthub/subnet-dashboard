@@ -150,9 +150,7 @@ def _default_probe_fetch(
                 break
             try:
                 price, outcome = client.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    observed[netuid] = None
-                elif outcome == "no_price":
+                if outcome != "ok":
                     observed[netuid] = None
                 else:
                     observed[netuid] = bool(price and float(price) > 0)

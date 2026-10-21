@@ -87,6 +87,19 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
         return duration
 
 
+def _classify_alpha_price_probe_error(exc: BaseException) -> str:
+    """Map RPC failures to live_subnets / universe outcome labels."""
+    from internal.chain_price.rpc import classify_rpc_error
+
+    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
+        if "cooldown" in str(exc).lower():
+            return "cooldown_skip"
+    labeled = classify_rpc_error(exc)
+    if labeled in ("timeout", "connection", "parse", "rate_limited", "rpc_error"):
+        return labeled
+    return "rpc_error"
+
+
 def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
     raw = (response.headers.get("Retry-After") or "").strip()
     if not raw:
@@ -286,6 +299,38 @@ def _hex_to_bytes(hex_str):
 
 def _encode_netuid_arg(netuid):
     return "0x" + struct.pack("<H", netuid).hex()
+
+
+def _decode_storage_u64(raw: Any) -> Optional[int]:
+    if raw is None or raw == "0x" or raw == "0x00":
+        return None
+    try:
+        return _decode_scale_u64(_hex_to_bytes(raw))
+    except (TypeError, ValueError):
+        return None
+
+
+def _storage_chunk_netuids(netuids: List[int], chunk_size: int) -> List[List[int]]:
+    size = max(1, chunk_size)
+    return [netuids[i : i + size] for i in range(0, len(netuids), size)]
+
+
+def _row_from_subnet_reserves(netuid: int, tao_raw: int, alpha_raw: int, source: str) -> dict:
+    tao_reserve = tao_raw / 1e9
+    alpha_reserve = alpha_raw / 1e9
+    price = tao_reserve / alpha_reserve if alpha_reserve > 0 else 0.0
+    return {
+        "netuid": netuid,
+        "name": f"SN{netuid}",
+        "price": price,
+        "source": source,
+        "liquidity": round(tao_reserve + (alpha_reserve * price), 6),
+        "total_tao": round(tao_reserve, 6),
+        "total_alpha": round(alpha_reserve, 6),
+        "taoLiquidity": round(tao_reserve, 6),
+        "tao_reserve_raw": int(tao_raw),
+        "alpha_reserve_raw": int(alpha_raw),
+    }
 
 
 def _normalize_block_hash(block_hash: str) -> str:
@@ -557,8 +602,14 @@ class ChainClient:
                 return None, "no_price"
             return float(result) / PRICE_SCALE, "ok"
         except Exception as exc:
-            logger.debug("swap_currentAlphaPrice failed for netuid %s: %s", netuid, exc)
-            return None, "rpc_error"
+            outcome = _classify_alpha_price_probe_error(exc)
+            logger.debug(
+                "swap_currentAlphaPrice failed for netuid %s (%s): %s",
+                netuid,
+                outcome,
+                exc,
+            )
+            return None, outcome
 
     def get_alpha_price(self, netuid):
         price, _outcome = self.get_alpha_price_probed(netuid)
@@ -834,100 +885,24 @@ class ChainClient:
         return self.get_subnet_price_rows_batch(netuids)["rows"]
 
     def get_subnet_price_rows_batch(self, netuids):
-        """Lite price fetch with per-netuid outcomes and batch_expired flag."""
-        # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
-        if not self.is_healthy():
-            logger.warning("RPC health false-negative — attempting lite price fetch anyway")
-
-        def _one(netuid: int):
-            """Return row + outcome; caller alone records outcomes (no shared mutable dict)."""
-            try:
-                price, outcome = self.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    return None, "rpc_error"
-                if outcome == "no_price" or price is None:
-                    return None, "no_price"
-                row = {
-                    "netuid": netuid,
-                    "name": f"SN{netuid}",
-                    "price": price,
-                    "source": "blockmachine",
-                }
-                pool = self.get_pool_state(netuid)
-                if pool:
-                    row.update(
-                        {
-                            "liquidity": pool.get("liquidity"),
-                            "total_tao": pool.get("total_tao"),
-                            "total_alpha": pool.get("total_alpha"),
-                            "taoLiquidity": pool.get("total_tao"),
-                            "tao_reserve_raw": pool.get("tao_reserve_raw"),
-                            "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
-                        }
-                    )
-                return row, "ok"
-            except Exception as exc:
-                logger.debug("price fetch netuid %d: %s", netuid, exc)
-                return None, "rpc_error"
-
-        try:
-            workers = int(os.environ.get("LIVE_SUBNETS_LITE_WORKERS", "8"))
-        except ValueError:
-            workers = 8
-        workers = max(1, min(workers, 16, len(netuids) or 1))
-
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
+        """Batched storage snapshot (Finney-first); ``netuids`` only marks non-members."""
+        from internal.chain_price.live_subnet_snapshot import (
+            fetch_live_subnet_snapshot,
+            snapshot_batch_result,
+        )
 
         deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
         if deadline_mono:
             deadline = float(deadline_mono)
-            batch_budget = max(0.0, deadline - time.monotonic())
         else:
-            batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-            deadline = time.monotonic() + batch_budget
+            budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+            deadline = time.monotonic() + budget
 
-        rows = []
-        outcomes: dict[int, str] = {}
-        pool = ThreadPoolExecutor(max_workers=workers)
-        try:
-            futures = {pool.submit(_one, n): n for n in netuids}
-            remaining = set(futures.keys())
-            while remaining and time.monotonic() < deadline:
-                try:
-                    slice_timeout = max(0.0, min(0.25, deadline - time.monotonic()))
-                    for fut in as_completed(remaining, timeout=slice_timeout):
-                        remaining.discard(fut)
-                        row, outcome = fut.result()
-                        outcomes[futures[fut]] = outcome
-                        if row:
-                            rows.append(row)
-                except _FutureTimeout:
-                    if time.monotonic() >= deadline:
-                        break
-            for fut in remaining:
-                outcomes[futures[fut]] = "batch_expired"
-                fut.cancel()
-        finally:
-            shutdown_wait = max(0.0, deadline - time.monotonic())
-            pool.shutdown(wait=False, cancel_futures=True)
-            if shutdown_wait > 0:
-                end = time.monotonic() + shutdown_wait
-                for t in pool._threads:
-                    t.join(timeout=max(0.0, end - time.monotonic()))
-        rows.sort(key=lambda r: r["netuid"])
-        batch_expired = any(v == "batch_expired" for v in outcomes.values())
-        logger.info(
-            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs, batch_expired=%s)",
-            len(rows),
-            workers,
-            batch_budget,
-            batch_expired,
+        snapshot = fetch_live_subnet_snapshot(deadline)
+        return snapshot_batch_result(
+            snapshot,
+            universe_netuids=sorted({int(n) for n in (netuids or [])}),
         )
-        return {
-            "rows": rows,
-            "batch_expired": batch_expired,
-            "netuid_outcomes": dict(outcomes),
-        }
 
 
 _default_client = None
