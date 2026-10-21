@@ -318,6 +318,7 @@ def build_coverage_block(
     day_attempted: Optional[List[int]] = None,
     hour_attempted: Optional[List[int]] = None,
     hour_copied_from_day: bool,
+    capped_out: int,
     selection_policy: str,
     subnet_source: str,
     published: bool,
@@ -354,6 +355,7 @@ def build_coverage_block(
         published
         and membership_ok
         and horizons_complete
+        and capped_out == 0
     )
     return {
         "membership": receipt,
@@ -361,6 +363,7 @@ def build_coverage_block(
         "root_netuid_in_scoring_set": 0 in scoring_set,
         "day": day_block,
         "hour": hour_block,
+        "capped_out": capped_out,
         "selection_policy": selection_policy,
         "subnet_load_source": subnet_source,
         "published": published,
@@ -472,6 +475,7 @@ def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "published": coverage.get("published"),
         "complete": coverage.get("complete"),
+        "capped_out": coverage.get("capped_out"),
         "selection_policy": coverage.get("selection_policy"),
         "subnet_load_source": coverage.get("subnet_load_source"),
         "timing": dict(coverage.get("timing") or {}),

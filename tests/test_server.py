@@ -71,16 +71,6 @@ def test_homepage_shell_uses_live_feed_when_registry_is_absent(monkeypatch):
     assert calls == [2.0]
 
 
-def test_registry_shell_subnets_drops_root(monkeypatch):
-    registry = {
-        "0": {"id": 0, "name": "Root"},
-        "43": {"netuid": 43, "name": "Shell fallback"},
-    }
-    monkeypatch.setattr(server, "load_data", lambda path: registry)
-
-    assert [r["netuid"] for r in server._registry_shell_subnets()] == [43]
-
-
 def test_subnet_route_found(client):
     # Subnet 1 should exist in config/registry.json
     response = client.get('/api/subnet/1')

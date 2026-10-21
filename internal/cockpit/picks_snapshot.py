@@ -13,6 +13,7 @@ from internal.council.publish_gate import publish_gate_fraction, publish_gate_la
 _last_lead_netuid: Optional[int] = None
 _SNAPSHOT_CACHE: Dict[str, Any] = {"at": 0.0, "payload": None}
 _SNAPSHOT_TTL = int(os.environ.get("COCKPIT_PICKS_CACHE_TTL", "60"))
+_REGISTRY_HOUR_CAP = int(os.environ.get("COCKPIT_PICKS_REGISTRY_CAP", "24"))
 
 
 def _emitted_at_z() -> str:
@@ -76,7 +77,7 @@ def _registry_subnets_for_hour() -> List[Dict[str, Any]]:
         from internal.subnet_names import enrich_subnet_rows
 
         rows = enrich_subnet_rows(list(data.values()))
-        return rows
+        return rows[: max(1, _REGISTRY_HOUR_CAP)]
     except Exception:
         return []
 

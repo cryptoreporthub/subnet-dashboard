@@ -15,7 +15,6 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     payload = {
         "written_at": "2026-07-26T00:00:00Z",
-        "coverage": {"complete": True},
         "count": 3,
         "hour": [],
         "day": [
@@ -36,7 +35,7 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
 def test_stale_snapshot_returns_none(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     snaps.save_score_snapshot(
-        {"coverage": {"complete": True}, "day": [{"netuid": 1, "total_score": 1.0}], "hour": []},
+        {"day": [{"netuid": 1, "total_score": 1.0}], "hour": []},
         str(path),
     )
     # Force mtime into the past
@@ -75,6 +74,31 @@ def test_build_snapshot_scores_all(monkeypatch):
     assert out["count"] == 2
     assert out["day"][0]["netuid"] == 8
     assert out["hour"][0]["netuid"] == 8
+
+
+def test_cap_prefers_snapshot(monkeypatch, tmp_path):
+    path = tmp_path / "score_snapshots.json"
+    snaps.save_score_snapshot(
+        {
+            "day": [
+                {"netuid": 77, "total_score": 99},
+                {"netuid": 2, "total_score": 1},
+            ],
+            "hour": [],
+        },
+        str(path),
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setenv("SCORE_SNAPSHOTS_PATH", str(path))
+
+    # Many low-volume rows; snapshot should promote 77 into the cap.
+    rows = [{"netuid": i, "price": 1.0, "volume_24h": 1.0, "emission": 0.01} for i in range(1, 50)]
+    rows.append({"netuid": 77, "price": 1.0, "volume_24h": 0.0, "emission": 0.0})
+
+    from server import _cap_subnets_for_scoring
+
+    capped = _cap_subnets_for_scoring(rows, limit=5)
+    assert capped[0]["netuid"] == 77
 
 
 def test_boot_wires_snapshot_scheduler():
@@ -229,6 +253,13 @@ def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
     out = snaps.write_full_universe_snapshot()
     assert out["ok"] is True
     assert path.is_file()
+
+
+def test_snapshot_subnet_cap_defaults_on_worker(monkeypatch):
+    monkeypatch.delenv("SCORE_SNAPSHOT_MAX_SUBNETS", raising=False)
+    monkeypatch.setenv("TOP_SCORING_UNIVERSE", "5")
+    monkeypatch.setattr("internal.run_mode.is_worker_mode", lambda: True)
+    assert snaps._snapshot_subnet_cap() == 5
 
 
 def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):

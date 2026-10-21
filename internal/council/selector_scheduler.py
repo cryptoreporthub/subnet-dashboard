@@ -91,7 +91,7 @@ class SelectorScheduler:
                     key=lambda s: float(s.get("emission", 0) or 0),
                     reverse=True,
                 )
-                subnet_ids = [s.get("netuid") for s in ranked if s.get("netuid") is not None]
+                subnet_ids = [s.get("netuid") for s in ranked[:24] if s.get("netuid") is not None]
             except Exception:
                 subnet_ids = None
             rotation = orch.run_daily_rotation(subnet_ids=subnet_ids)

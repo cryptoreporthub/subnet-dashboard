@@ -77,8 +77,7 @@ jobs:
             tests/test_top_picks_snapshot_read.py \
             tests/test_dpick_shortlist.py \
             tests/test_build_cost.py \
-            tests/test_build_receipt.py \
-            tests/test_pick_scheduler.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_build_receipt.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true

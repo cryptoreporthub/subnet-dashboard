@@ -10,7 +10,8 @@ import internal.council.pick_audit_scheduler as sched
 
 def test_classify_pass_when_primary_matches():
     oracles = {
-        audit.POLICY_FULL: {"pick": {"netuid": 40, "name": "Chunking", "final_confidence": 0.52}},
+        audit.PRIMARY_POLICY: {"pick": {"netuid": 40, "name": "Chunking", "final_confidence": 0.52}},
+        audit.POLICY_FULL: {"pick": {"netuid": 78, "name": "SN78", "final_confidence": 0.57}},
     }
     row = {"action": "LONG", "pick": {"subnet": {"netuid": 40, "name": "Chunking"}}}
     verdict, category = audit.classify_miss(40, "pick", row, oracles)
@@ -18,11 +19,14 @@ def test_classify_pass_when_primary_matches():
     assert category == audit._CATEGORY_PASS
 
 
-def test_classify_universe_mismatch_when_published_differs_from_full_oracle():
-    """Published SN78 differs from the full-universe oracle (SN40)."""
+def test_classify_universe_mismatch_sn78_pattern():
+    """2026-07-27 prod: published 78 on full universe; scheduler oracle 40."""
     oracles = {
-        audit.POLICY_FULL: {
+        audit.PRIMARY_POLICY: {
             "pick": {"netuid": 40, "name": "Chunking", "final_confidence": 0.52, "tie_break": None},
+        },
+        audit.POLICY_FULL: {
+            "pick": {"netuid": 78, "name": "SN78", "final_confidence": 0.57, "tie_break": None},
         },
     }
     row = {
@@ -36,26 +40,33 @@ def test_classify_universe_mismatch_when_published_differs_from_full_oracle():
 
 def test_discovery_questions_universe_mismatch():
     oracles = {
-        audit.POLICY_FULL: {"pick": {"netuid": 40, "name": "Chunking", "final_confidence": 0.52}},
+        audit.PRIMARY_POLICY: {"pick": {"netuid": 40, "name": "Chunking", "final_confidence": 0.52}},
+        audit.POLICY_FULL: {"pick": {"netuid": 78, "name": "SN78", "final_confidence": 0.57}},
     }
     row = {"action": "LONG", "pick": {"subnet": {"netuid": 78, "name": "SN78"}}}
     q = audit.discovery_questions(
         audit._CATEGORY_UNIVERSE, 78, row, oracles
     )
-    assert "full_universe" in q["what"]
-    assert "Chunking" in q["what"]
+    assert "scheduler_cap_24" in q["what"] or "Chunking" in q["what"]
+    assert "full" in q["why"].lower() or "cap" in q["why"].lower()
     assert q["rule"]
 
 
-def test_universe_for_policy_full_universe_drops_only_root():
-    subnets = [{"netuid": i, "name": f"SN{i}"} for i in range(0, 50)]
-    out = audit.universe_for_policy(subnets, audit.POLICY_FULL)
-    assert [s["netuid"] for s in out] == list(range(1, 50))
+def test_universe_for_policy_scheduler_cap(monkeypatch):
+    subnets = [{"netuid": i, "name": f"SN{i}", "marketcap_rank": i} for i in range(1, 50)]
+    monkeypatch.setenv("PICK_SCHEDULER_UNIVERSE_CAP", "24")
+    monkeypatch.setenv("TOP_SCORING_UNIVERSE", "40")
+    monkeypatch.setenv("SCORING_CAP_MEGA_CEILING_RANK", "10")
+    out = audit.universe_for_policy(subnets, audit.PRIMARY_POLICY)
+    assert len(out) <= 24
 
 
 def test_audit_row_miss_writes_questions(monkeypatch):
     def _fake_oracle(subnets, ctx, policy):
-        picks = {audit.POLICY_FULL: 40}
+        picks = {
+            audit.PRIMARY_POLICY: 40,
+            audit.POLICY_FULL: 78,
+        }
         nu = picks.get(policy, 1)
         return {
             "policy": policy,
@@ -113,7 +124,7 @@ def test_pick_audit_run_once(monkeypatch, tmp_path):
             "verdict": "PASS",
             "category": "pass",
             "published_netuid": 1,
-            "oracles": {"full_universe": {"pick": {"netuid": 1}}},
+            "oracles": {"scheduler_cap_24": {"pick": {"netuid": 1}}},
             "pick_date": "2026-07-27",
         },
     )

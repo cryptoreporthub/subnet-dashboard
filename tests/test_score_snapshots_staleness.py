@@ -35,7 +35,6 @@ def test_legacy_written_at_snapshot_stays_valid(tmp_path):
     snaps.save_score_snapshot(
         {
             "written_at": "2026-09-22T12:00:00Z",
-            "coverage": {"complete": True},
             "day": [{"netuid": 4, "total_score": 8.0}],
             "hour": [],
         },

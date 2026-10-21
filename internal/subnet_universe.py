@@ -17,7 +17,6 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
 REFRESH_INTERVAL_SECONDS = 300
@@ -330,6 +329,10 @@ def _compute_membership(
             validity_map[key] = entry
 
     netuids = sorted(int(k) for k in validity_map.keys())
+    if len(netuids) > MAX_NETUIDS:
+        cap_reached = True
+        netuids = netuids[:MAX_NETUIDS]
+        validity_map = {str(n): validity_map[str(n)] for n in netuids}
 
     # Forbidden shrink: retain prior members unless explicitly removed after grace.
     for netuid in prior_netuids:
@@ -339,10 +342,18 @@ def _compute_membership(
         entry = prior_map.get(key) or _validity_entry(validity="unobserved", refresh_incomplete=True)
         if _eligible_for_removal(entry, now):
             continue
+        if len(netuids) >= MAX_NETUIDS:
+            cap_reached = True
+            break
         validity_map[key] = dict(entry)
         validity_map[key]["refresh_incomplete"] = True
         netuids.append(netuid)
         netuids = sorted(set(netuids))
+
+    if len(netuids) > MAX_NETUIDS:
+        cap_reached = True
+        netuids = sorted(netuids)[:MAX_NETUIDS]
+        validity_map = {str(n): validity_map[str(n)] for n in netuids if str(n) in validity_map}
 
     return netuids, validity_map, cap_reached, refresh_incomplete
 
@@ -602,6 +613,8 @@ class SnapshotBuilder:
         rows = _build_rows(netuids, tmc_rows)
         degraded = not (tmc_complete and probe_complete) or refresh_incomplete
         status = "degraded" if degraded else "ok"
+        if cap_reached:
+            logger.warning("subnet_universe reached MAX_NETUIDS=%d cap", MAX_NETUIDS)
         return UniverseSnapshot(
             netuids=tuple(netuids),
             rows=tuple(rows),

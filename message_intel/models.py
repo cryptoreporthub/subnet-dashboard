@@ -148,8 +148,6 @@ class Database:
                 CREATE INDEX IF NOT EXISTS idx_messages_author ON messages(author_id);
                 CREATE INDEX IF NOT EXISTS idx_verdicts_message ON message_verdicts(message_id);
                 CREATE INDEX IF NOT EXISTS idx_outcomes_message ON price_outcomes(message_id);
-                CREATE INDEX IF NOT EXISTS idx_analysis_message ON message_analysis(message_id);
-                CREATE INDEX IF NOT EXISTS idx_snapshots_message ON price_snapshots(message_id);
             """)
         self._migrate_schema()
 

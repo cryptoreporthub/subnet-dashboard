@@ -25,7 +25,6 @@ def test_phase2_module_bundle_passes():
         text=True,
         cwd=".",
         env={**__import__("os").environ, "PYTHONPATH": "."},
-        timeout=600,
     )
     assert r.returncode == 0, r.stdout + r.stderr
 

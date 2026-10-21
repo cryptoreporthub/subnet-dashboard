@@ -113,10 +113,8 @@ and a phantom dangling pointer, all three caught only by re-reading at a pinned 
   with its routes added to the contract test.
 
 ### Deploy (Fly.io)
-- `.github/workflows/fly.yml` deploys only via `workflow_dispatch` (push-to-main was
-  disabled after the 2026-08-19 incident; see the comment at the top of `fly.yml`). A
-  Deploy Guard (static checks + the endpoint-contract test) gates
-  `flyctl deploy --remote-only --no-cache --yes`.
+- `.github/workflows/fly.yml` deploys on push to `main`: a Deploy Guard (static
+  checks + the endpoint-contract test) gates `flyctl deploy --remote-only --no-cache --yes`.
 - `fly.toml` declares the persistent `[mounts]` `data_volume` → `/app/data`
   (soul-map / predictions / learning state + SQLite). Keep it declared so deploys
   reuse the volume. `flyctl` needs `FLY_API_TOKEN` (GitHub Actions secret); the
