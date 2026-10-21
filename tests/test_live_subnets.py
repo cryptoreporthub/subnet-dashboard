@@ -257,26 +257,20 @@ def test_fetch_chain_data_falls_back_to_registry_on_get_netuids_exception(monkey
     """Verify _fetch_chain_data falls back to _registry_netuids when get_netuids raises."""
     from internal import live_subnets
 
-    netuids_path = tmp_path / "netuids.json"
-
-    class _Client:
-        def get_subnet_price_rows(self, netuids):
-            netuids_path.write_text(json.dumps(netuids), encoding="utf-8")
-            return [{"netuid": 42, "price": 1.0}]
-
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 5.0)
+    monkeypatch.setenv(
+        "LIVE_SUBNETS_TEST_ROWS_JSON",
+        json.dumps([{"netuid": 42, "price": 1.0}]),
+    )
 
     with (
-        patch("internal.chain_client.get_default_client", return_value=_Client()),
         patch("internal.subnet_universe.get_netuids", side_effect=RuntimeError("Snapshot corrupt")),
         patch("internal.live_subnets_fetch_child._registry_netuids", return_value=[42]),
     ):
         out = live_subnets._fetch_chain_data()
 
     assert _fetch_rows(out) and _fetch_rows(out)[0]["netuid"] == 42
-    assert json.loads(netuids_path.read_text(encoding="utf-8")) == [42]
 
 
 def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_path):
@@ -288,22 +282,31 @@ def test_fetch_hung_child_killed_second_sync_proceeds(monkeypatch, caplog, tmp_p
     counter.write_text("0", encoding="utf-8")
     hang = threading.Event()
     hang.set()
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "0.25")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 0.25)
 
-    class _Client:
-        def get_subnet_price_rows(self, netuids):
-            n = int(counter.read_text(encoding="utf-8")) + 1
-            counter.write_text(str(n), encoding="utf-8")
-            if n == 1:
-                hang.clear()
-                hang.wait(timeout=30)
-            return [{"netuid": 1, "price": 1.0}]
+    def _slow_snapshot(_deadline):
+        n = int(counter.read_text(encoding="utf-8")) + 1
+        counter.write_text(str(n), encoding="utf-8")
+        if n == 1:
+            hang.clear()
+            hang.wait(timeout=30)
+        return LiveSubnetSnapshot(
+            block_hash="0xblock",
+            provider="finney",
+            rows=[{"netuid": 1, "price": 1.0, "source": "finney"}],
+            netuid_outcomes={1: "ok"},
+            requested_netuids=[1],
+        )
+
+    from internal.chain_price.live_subnet_snapshot import LiveSubnetSnapshot
 
     try:
         with (
-            patch("internal.chain_client.get_default_client", return_value=_Client()),
+            patch(
+                "internal.chain_price.live_subnet_snapshot.fetch_live_subnet_snapshot",
+                _slow_snapshot,
+            ),
             patch("internal.subnet_universe.get_netuids", return_value=[1]),
         ):
             first = live_subnets._fetch_chain_data()
@@ -450,34 +453,31 @@ def test_parent_sends_rpc_deadline_monotonic_after_ready(monkeypatch):
 
 
 def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
-    """Slow lite batch exceeds inner batch window; parent still gets partial rows."""
+    """Partial snapshot fetch still returns rows within parent RPC margin."""
     from internal import live_subnets
-    from internal.chain_client import ChainClient
+    from internal.chain_price.live_subnet_snapshot import LiveSubnetSnapshot
 
-    inner = ChainClient.__new__(ChainClient)
-    inner.is_healthy = lambda: True
-    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
-
-    def price(netuid):
-        if netuid == 2:
-            time.sleep(1.0)
-        return float(netuid)
-
-    inner.get_alpha_price = price
-
-    class _Client:
-        def get_subnet_price_rows_batch(self, netuids):
-            return inner.get_subnet_price_rows_batch(netuids)
+    def _fake_snapshot(_deadline):
+        return LiveSubnetSnapshot(
+            block_hash="0xblock",
+            provider="finney",
+            rows=[{"netuid": 1, "name": "SN1", "price": 1.0, "source": "finney"}],
+            netuid_outcomes={1: "ok", 2: "batch_expired"},
+            batch_expired=True,
+            requested_netuids=[1, 2],
+        )
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS", "0.35")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "1.1")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 1.1)
 
     t0 = time.monotonic()
     with (
-        patch("internal.chain_client.get_default_client", return_value=_Client()),
+        patch(
+            "internal.chain_price.live_subnet_snapshot.fetch_live_subnet_snapshot",
+            _fake_snapshot,
+        ),
         patch("internal.subnet_universe.get_netuids", return_value=[2, 1]),
     ):
         out = live_subnets._fetch_chain_data()
@@ -495,40 +495,45 @@ def test_parent_recv_gets_partial_rows_within_rpc_margin(monkeypatch):
 
 def test_fetch_chain_data_carries_netuid_outcomes_on_no_price(monkeypatch):
     from internal import live_subnets
+    from internal.chain_price.live_subnet_snapshot import LiveSubnetSnapshot
 
     monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
-    monkeypatch.setenv("LIVE_SUBNETS_FETCH_MODE", "lite")
     monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "2")
     monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 2.0)
     monkeypatch.setenv("LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS", "0.35")
-    monkeypatch.setenv("LIVE_SUBNETS_LITE_WORKERS", "2")
     monkeypatch.setenv("LIVE_SUBNETS_TEST_REQUESTED_NETUIDS", json.dumps([2, 1]))
-    monkeypatch.setenv(
-        "LIVE_SUBNETS_TEST_ROWS_JSON",
-        json.dumps([{"netuid": 1, "price": 1.0}]),
-    )
 
-    class _Client:
-        def get_subnet_price_rows_batch(self, netuids):
-            from internal.chain_client import ChainClient
+    def _fake_snapshot(_deadline):
+        return LiveSubnetSnapshot(
+            block_hash="0xblock",
+            provider="finney",
+            rows=[{"netuid": 1, "name": "SN1", "price": 1.0, "source": "finney"}],
+            netuid_outcomes={1: "ok", 2: "no_price"},
+            batch_expired=False,
+            requested_netuids=[1, 2],
+        )
 
-            inner = ChainClient.__new__(ChainClient)
-            inner.is_healthy = lambda: True
-
-            def price(netuid):
-                if netuid == 2:
-                    return None
-                return float(netuid)
-
-            inner.get_alpha_price = price
-            return inner.get_subnet_price_rows_batch(netuids)
-
-    with patch("internal.chain_client.get_default_client", return_value=_Client()):
+    with patch(
+        "internal.chain_price.live_subnet_snapshot.fetch_live_subnet_snapshot",
+        _fake_snapshot,
+    ):
         out = live_subnets._fetch_chain_data()
     assert out is not None
     assert out.get("degraded_reason") == "fetch_errors"
     assert out.get("netuid_outcomes", {}).get(2) == "no_price"
     assert out.get("batch_expired") is False
+
+
+def test_fetch_logs_timing_when_spawn_grace_exceeded(caplog, monkeypatch):
+    from internal import live_subnets
+
+    caplog.set_level(logging.INFO, logger="live_subnets")
+    monkeypatch.setenv("LIVE_SUBNETS_MP_CONTEXT", "fork")
+    monkeypatch.setenv("LIVE_SUBNETS_SPAWN_GRACE_SECONDS", "0.001")
+    monkeypatch.setenv("LIVE_SUBNETS_SYNC_TIMEOUT_SECONDS", "1")
+    monkeypatch.setattr(live_subnets, "SYNC_TIMEOUT_SECONDS", 1.0)
+    assert live_subnets._fetch_chain_data() is None
+    assert any("live_subnets fetch timing" in r.message for r in caplog.records)
 
 
 def test_ready_sleep_uses_spawn_grace_not_rpc_budget(monkeypatch):

@@ -1,0 +1,8 @@
+{
+  "netuid": 42,
+  "tao_raw": 5000000000,
+  "alpha_raw": 2000000000,
+  "swap_scaled": 2500000000,
+  "block_hash": "0xdeadbeef",
+  "note": "Captured-style fixture: swap_scaled / 1e9 should match tao_raw/alpha_raw / 1e9"
+}

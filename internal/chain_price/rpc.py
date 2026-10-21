@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Callable, Optional, Tuple
 
@@ -22,6 +23,12 @@ def classify_rpc_error(exc: BaseException) -> RpcOutcome:
                 return "invalid"
             return exc.kind  # type: ignore[return-value]
         return "rpc_error"
+    if isinstance(exc, (TimeoutError, requests.exceptions.Timeout)):
+        return "timeout"  # type: ignore[return-value]
+    if isinstance(exc, (requests.exceptions.ConnectionError, requests.exceptions.ConnectTimeout)):
+        return "connection"  # type: ignore[return-value]
+    if isinstance(exc, (json.JSONDecodeError, ValueError, KeyError, TypeError)):
+        return "parse"  # type: ignore[return-value]
     if isinstance(exc, requests.HTTPError):
         if exc.response is not None and exc.response.status_code == 429:
             return "rate_limited"

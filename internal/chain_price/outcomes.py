@@ -25,6 +25,9 @@ RpcOutcome = Literal[
     "archive_miss",
     "rate_limited",
     "rpc_error",
+    "timeout",
+    "connection",
+    "parse",
 ]
 
 
