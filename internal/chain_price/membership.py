@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.chain_price.outcomes import RpcOutcome
@@ -11,6 +13,7 @@ from internal.chain_price.storage_keys import (
     total_networks_key_hex,
 )
 
+from internal.chain_read import ChainRead
 from internal.chain_rpc_errors import storage_block_matches
 
 
@@ -102,3 +105,16 @@ def get_member_netuids(
     if total_networks != member_count_incl_root:
         return [], "invalid"
     return sorted(set(netuids)), "ok"
+
+
+def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]:
+    at_hash, outcome = reader.pin_finalized_head()
+    if outcome != "ok" or not at_hash:
+        return None, outcome if outcome != "ok" else "absent"
+    members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+    if outcome != "ok":
+        return None, outcome
+    chain = ChainRead.parse({"block_hash": str(at_hash).lower(), "netuids": members})
+    if chain is None:
+        return None, "invalid"
+    return chain, "ok"
