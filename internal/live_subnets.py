@@ -258,6 +258,9 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     except (TypeError, ValueError):
                         pass
             merged["source"] = "blockmachine"
+            rpc_provider = lv.get("rpc_provider") or lv.get("source")
+            if rpc_provider:
+                merged["rpc_provider"] = rpc_provider
             merged["live"] = True
         else:
             merged["live"] = False

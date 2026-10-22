@@ -56,6 +56,37 @@ def test_sentinel_partial_cache_still_blockmachine_with_live_rows(tmp_path, monk
     assert info.get("live_row_count") == 1
 
 
+def test_merge_finney_row_keeps_blockmachine_source_for_display_name(monkeypatch):
+    from internal.live_subnets import _merge_into_registry
+    from internal.subnet_names import display_name_for_netuid
+
+    monkeypatch.setattr("internal.subnet_names._load_name_overrides", lambda: {})
+    monkeypatch.setattr(
+        "internal.subnet_names.resolve_subnet_name",
+        lambda n, **kwargs: "CanonName",
+    )
+    monkeypatch.setattr(
+        "internal.subnet_names.enrich_subnet_row",
+        lambda row, **kwargs: dict(row),
+    )
+    monkeypatch.setattr(
+        "internal.live_subnets._registry_list",
+        lambda: [{"netuid": 1, "name": "LiveFeedName"}],
+    )
+    merged = _merge_into_registry(
+        [{"netuid": 1, "name": "LiveFeedName", "source": "finney", "price": 1.0}],
+    )
+    row = next(r for r in merged if r.get("netuid") == 1)
+    assert row.get("source") == "blockmachine"
+    assert row.get("rpc_provider") == "finney"
+    name = display_name_for_netuid(1, subnet_row=row, use_taostats_fallback=False)
+    assert name == "LiveFeedName"
+    mislabeled = dict(row)
+    mislabeled["source"] = "finney"
+    mislabeled.pop("rpc_provider", None)
+    assert display_name_for_netuid(1, subnet_row=mislabeled, use_taostats_fallback=False) == "CanonName"
+
+
 def test_merge_chain_only_netuid_is_live_for_market_desk(tmp_path, monkeypatch):
     from internal.live_subnets import _merge_into_registry
 
