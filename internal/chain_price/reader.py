@@ -35,6 +35,9 @@ class ChainReader:
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
         self._deadline_monotonic = deadline_monotonic
+        if deadline_monotonic is not None:
+            for _, client in self._providers:
+                client._rpc_deadline_monotonic = deadline_monotonic
 
     def _past_deadline(self) -> bool:
         deadline = self._deadline_monotonic

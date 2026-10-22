@@ -259,6 +259,33 @@ def _fake_membership_call(members_incl_root: int, total_networks: int, *, at_has
     return _call
 
 
+def _fake_membership_call_with_total_raw(total_raw):
+    from internal.chain_price.storage_keys import map_key_hex
+
+    network_keys = [map_key_hex(b"NetworksAdded", 0), map_key_hex(b"NetworksAdded", 1)]
+    total_key = total_networks_key_hex()
+
+    def _call(method, params):
+        if method == "state_getKeysPaged":
+            return network_keys, "ok"
+        if method == "state_queryStorageAt":
+            keys, block = params[0], params[1]
+            changes = [[k, "0x01"] for k in network_keys] + [[total_key, total_raw]]
+            return [{"block": block, "changes": changes}], "ok"
+        return None, "rpc_error"
+
+    return _call
+
+
+@pytest.mark.parametrize("total_raw", [None, "0x81"])
+def test_total_networks_null_or_wrong_width_is_invalid_not_absence(total_raw):
+    """M3b: missing or wrong-width TotalNetworks must fail closed (never partial members)."""
+    call = _fake_membership_call_with_total_raw(total_raw)
+    netuids, outcome = get_member_netuids(call, PINNED_HASH)
+    assert netuids == []
+    assert outcome == "invalid"
+
+
 @pytest.mark.parametrize("members_incl_root", [128, 130])
 def test_members_disagreeing_with_total_networks_is_a_failed_read_not_absence(members_incl_root):
     """TotalNetworks mismatch (fewer or more than NetworksAdded) is a failed read, not absence."""

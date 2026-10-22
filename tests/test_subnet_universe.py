@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import requests
 
 from internal.subnet_universe import (
     MAX_NETUIDS,
@@ -888,6 +889,49 @@ def test_chain_member_at_netuid_200_enters_when_outside_probe_range(monkeypatch)
     assert built.validity_map["200"]["validity"] == "positive"
 
 
+def test_probe_fetch_deadline_blocks_second_provider_and_stays_incomplete(monkeypatch):
+    """D2/D3: reader deadline on clients; slow provider burns budget, fast never contacted."""
+    import internal.chain_client as chain_client_mod
+    import internal.chain_price.reader as reader_mod
+    from internal.chain_client import ChainClient
+    from internal.chain_price.reader import ChainReader
+
+    slow = ChainClient(endpoint="https://slow.example", init_volume_db=False)
+    fast = ChainClient(endpoint="https://fast.example", init_volume_db=False)
+    posts: list[str] = []
+
+    def fake_post(endpoint, payload, timeout):
+        posts.append(endpoint)
+        time.sleep(timeout)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(chain_client_mod, "_timed_post", fake_post)
+    monkeypatch.setattr(
+        reader_mod.cfg,
+        "rpc_provider_clients",
+        lambda: [("slow", slow), ("fast", fast)],
+    )
+    budget = 0.15
+    deadline = time.monotonic() + budget
+    reader_deadlines: list = []
+    real_init = ChainReader.__init__
+
+    def _capture_deadline(self, *args, **kwargs):
+        reader_deadlines.append(kwargs.get("deadline_monotonic"))
+        return real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(ChainReader, "__init__", _capture_deadline)
+    started = time.monotonic()
+    observed, complete = _default_probe_fetch([1], deadline=deadline)
+    elapsed = time.monotonic() - started
+    assert reader_deadlines == [deadline]
+    assert observed == {}
+    assert complete is False
+    assert elapsed <= budget + 0.2
+    assert not any("fast.example" in ep for ep in posts)
+    assert any("slow.example" in ep for ep in posts)
+
+
 def test_probe_fetch_incomplete_when_deadline_expires_during_read(monkeypatch):
     from internal.chain_price.reader import ChainReader
 
@@ -901,6 +945,45 @@ def test_probe_fetch_incomplete_when_deadline_expires_during_read(monkeypatch):
         lambda call, at_hash: ([1], "ok"),
     )
     observed, complete = _default_probe_fetch([1], deadline=time.monotonic() + 0.005)
+    assert observed == {}
+    assert complete is False
+
+
+@pytest.mark.parametrize("total_raw", [None, "0x81"])
+def test_total_networks_invalid_makes_probe_incomplete(monkeypatch, total_raw):
+    """M3b at probe layer: invalid membership batch → incomplete probe, no observations."""
+    from internal.chain_price.storage_keys import map_key_hex, total_networks_key_hex
+
+    total_key = total_networks_key_hex()
+    net_key = map_key_hex(b"NetworksAdded", 1)
+
+    class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
+        def pin_finalized_head(self):
+            return "0xabc", "ok"
+
+        def call_fn(self):
+            def _call(method, params):
+                if method == "state_getKeysPaged":
+                    return [net_key], "ok"
+                if method == "state_queryStorageAt":
+                    block = params[1]
+                    keys = params[0]
+                    assert total_key in keys
+                    return [
+                        {
+                            "block": block,
+                            "changes": [[net_key, "0x01"], [total_key, total_raw]],
+                        }
+                    ], "ok"
+                return None, "rpc_error"
+
+            return _call
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    observed, complete = _default_probe_fetch([1])
     assert observed == {}
     assert complete is False
 
