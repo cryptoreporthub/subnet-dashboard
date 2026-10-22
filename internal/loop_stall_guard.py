@@ -5,10 +5,10 @@ process only when the worker heartbeat goes stale. A live process whose
 internal scheduler threads have died still touches the heartbeat, so the
 supervisor never restarts it and data goes stale overnight.
 
-This guard runs inside the worker process and watches the artifact the
-council score snapshot scheduler is supposed to produce —
-``data/score_snapshots.json`` (probe: ``loop_health._snapshot_age_seconds``,
-producer: ``internal.council.score_snapshots``):
+This guard runs inside the worker process and watches the score snapshot
+producer through its cycle receipt, or the served snapshot while no receipt
+exists (probe: ``_snapshot_age_seconds``, producer:
+``internal.council.score_snapshots``):
 
   * every tick it logs the observed snapshot age (diagnosable),
   * on the first stale observation it attempts a safe in-place revive via
@@ -201,7 +201,7 @@ def _guard_loop() -> None:
 
         if age is None:
             consecutive_stale = 0
-            logger.info("loop stall guard: no snapshot age signal (boot/feature-off), resetting")
+            logger.info("loop stall guard: not the snapshot producer or scheduler frozen, resetting")
             continue
 
         if age <= MAX_SNAPSHOT_AGE_SECONDS:
