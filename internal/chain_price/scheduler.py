@@ -126,6 +126,5 @@ def recorder_state() -> Dict[str, Any]:
         "enabled": cfg.forward_record_enabled(),
         "active": _active,
         "db_path": cfg.CHAIN_PRICE_DB_PATH,
-        "provider_served": reader.provider_served,
         "providers": providers,
     }
