@@ -5,12 +5,34 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from internal.chain_price.outcomes import RpcOutcome
+from internal.chain_client import _decode_scale_compact, _hex_to_bytes
 from internal.chain_price.storage_keys import (
     netuid_from_networks_added_key,
     networks_added_prefix_hex,
+    total_networks_key_hex,
 )
 
 from internal.chain_rpc_errors import storage_block_matches
+
+
+def decode_total_networks(raw: Any) -> Optional[int]:
+    """SCALE compact count from SubtensorModule.TotalNetworks."""
+    if not isinstance(raw, str) or not raw.startswith("0x"):
+        return None
+    try:
+        data = _hex_to_bytes(raw)
+    except Exception:
+        return None
+    if not data:
+        return None
+    # On Finney/Blockmachine, TotalNetworks is stored as u16 LE (129 -> 0x8100).
+    if len(data) == 2:
+        value = int.from_bytes(data, "little")
+        return value if value > 0 else None
+    value, _consumed = _decode_scale_compact(data)
+    if value < 0:
+        return None
+    return int(value)
 
 
 def decode_networks_added_bool(raw: Any) -> Optional[bool]:
@@ -76,4 +98,20 @@ def get_member_netuids(
         netuid = netuid_from_networks_added_key(key)
         if flag and netuid != 0:
             netuids.append(netuid)
+    member_count_incl_root = len(netuids) + 1
+    total_key = total_networks_key_hex()
+    total_batch, outcome = call("state_queryStorageAt", [[total_key], at_hash])
+    if outcome != "ok":
+        return [], outcome
+    if not total_batch or not storage_block_matches(total_batch[0], at_hash):
+        return [], "invalid"
+    total_changes = total_batch[0].get("changes") if isinstance(total_batch[0], dict) else None
+    if not isinstance(total_changes, list) or len(total_changes) != 1:
+        return [], "invalid"
+    row = total_changes[0]
+    if not isinstance(row, (list, tuple)) or len(row) != 2:
+        return [], "invalid"
+    total_networks = decode_total_networks(row[1])
+    if total_networks is None or total_networks != member_count_incl_root:
+        return [], "invalid"
     return sorted(set(netuids)), "ok"

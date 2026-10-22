@@ -15,7 +15,12 @@ from internal.chain_price import config as cfg
 from internal.chain_price import db as price_db
 from internal.chain_price.bars import get_chain_bar, max_staleness_seconds, series_key
 from internal.chain_price.block_resolve import clear_block_cache, resolve_block_at
-from internal.chain_price.membership import decode_networks_added_bool, get_member_netuids
+from internal.chain_price.membership import (
+    decode_networks_added_bool,
+    decode_total_networks,
+    get_member_netuids,
+)
+from internal.chain_price.storage_keys import total_networks_key_hex
 from internal.chain_price.reader import ChainReader
 from internal.chain_price.sampler import run_forward_sample
 from internal.integrations.status import build_integrations_status, clear_status_cache
@@ -218,6 +223,10 @@ def test_schema_version_v2_samples(fixture_client, tmp_path):
     assert row[2] and row[2].startswith("chain:v2:64:")
 
 
+def test_decode_total_networks_u16_le():
+    assert decode_total_networks("0x8100") == 129
+
+
 def test_member_netuids_excludes_false_bool(fixture_client):
     client, _ = fixture_client
     reader = ChainReader([("blockmachine", client)])
@@ -225,6 +234,35 @@ def test_member_netuids_excludes_false_bool(fixture_client):
     assert outcome == "ok"
     assert 64 in netuids
     assert 0 not in netuids
+
+
+@pytest.mark.parametrize("member_count,total_networks", [(127, 129)])
+def test_members_disagreeing_with_total_networks_is_a_failed_read_not_absence(
+    member_count, total_networks
+):
+    """Truncated NetworksAdded must not mark subnets absent when TotalNetworks disagrees."""
+
+    def _call(method, params):
+        if method == "state_getKeysPaged":
+            prefix = params[0]
+            keys = [f"{prefix}0001", f"{prefix}0002"]
+            return keys[:member_count], "ok"
+        if method == "state_queryStorageAt":
+            keys, at_hash = params[0], params[1]
+            if len(keys) == 1 and keys[0] == total_networks_key_hex():
+                return [
+                    {
+                        "block": at_hash,
+                        "changes": [[total_networks_key_hex(), "0x8100"]],
+                    }
+                ], "ok"
+            changes = [[key, "0x01"] for key in keys]
+            return [{"block": at_hash, "changes": changes}], "ok"
+        return None, "rpc_error"
+
+    netuids, outcome = get_member_netuids(_call, PINNED_HASH)
+    assert netuids == []
+    assert outcome == "invalid"
 
 
 def test_rate_limited_does_not_trigger_schema_miss_cancel(monkeypatch):

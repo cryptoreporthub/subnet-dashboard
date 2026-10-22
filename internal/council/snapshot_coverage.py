@@ -65,22 +65,15 @@ def load_membership_receipt() -> Dict[str, Any]:
     try:
         from internal.subnet_universe import get_snapshot, universe_snapshot_feed_meta
 
-        from internal.subnets.tradable import subnet_netuid
-
         snap = get_snapshot()
         feed = universe_snapshot_feed_meta(snap)
         netuids = tuple(int(n) for n in snap.netuids if int(n) > 0)
-        empty_slots = {
-            subnet_netuid(row)
-            for row in snap.rows
-            if isinstance(row, dict) and row.get("source") == "none"
-        }
         negative = {
             int(key)
             for key, entry in (snap.validity_map or {}).items()
             if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
         }
-        inactive = [n for n in netuids if n in empty_slots and n in negative]
+        inactive = [n for n in netuids if n in negative]
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),

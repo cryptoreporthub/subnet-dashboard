@@ -133,37 +133,35 @@ def _default_probe_fetch(
     *,
     deadline: Optional[float] = None,
 ) -> Tuple[Dict[int, Optional[bool]], bool]:
-    """Map netuid -> True/False (positive probe), or None when that netuid is unobserved.
+    """Map netuid -> True/False from the chain's NetworksAdded registration map.
 
-    Per-netuid ``None`` means ``no_price``, ``rpc_error``, or the netuid was not reached
-    before ``deadline`` — it does not by itself mark the probe pass incomplete.
-    The returned ``complete`` flag is False only on deadline truncation or fetch failure.
+    The price call cannot tell a registered subnet from an unregistered one, because the
+    chain answers 1.0 for both an unseeded pool and an unregistered netuid. Registration is
+    read directly instead, at one pinned finalized block. When that read does not succeed,
+    nothing is observed and ``complete`` is False, so the universe keeps its prior members.
+
+    ``deadline`` is checked on entry only. Each HTTP attempt is bounded by the client
+    request timeout; with retries, backoff and provider fallback, one reader call can run
+    well past it, and so can the three calls of a pass.
     """
-    observed: Dict[int, Optional[bool]] = {}
-    complete = True
-    try:
-        from internal.chain_client import get_default_client
-
-        client = get_default_client()
-        for netuid in netuids:
-            if deadline is not None and time.monotonic() >= deadline:
-                complete = False
-                break
-            try:
-                price, outcome = client.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    observed[netuid] = None
-                elif outcome == "no_price":
-                    observed[netuid] = None
-                else:
-                    observed[netuid] = bool(price and float(price) > 0)
-            except Exception:
-                observed[netuid] = None
-                complete = False
-    except Exception as exc:
-        logger.warning("subnet_universe probe fetch failed: %s", exc)
+    if deadline is not None and time.monotonic() >= deadline:
         return {}, False
-    return observed, complete
+    try:
+        from internal.chain_price.membership import get_member_netuids
+        from internal.chain_price.reader import ChainReader
+
+        reader = ChainReader()
+        at_hash, outcome = reader.pin_finalized_head()
+        if outcome != "ok" or not at_hash:
+            return {}, False
+        members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+    except Exception as exc:
+        logger.warning("subnet_universe registration read failed: %s", exc)
+        return {}, False
+    if outcome != "ok":
+        return {}, False
+    registered = set(members)
+    return {n: n == 0 or n in registered for n in netuids}, True
 
 
 def _validity_entry(
@@ -525,7 +523,8 @@ class SnapshotBuilder:
         if not tmc_complete and not prior_map:
             probe_candidates = list(range(MAX_NETUIDS))
         elif not tmc_complete and prior_map:
-            probe_candidates = sorted(prior_keys)
+            # Registration read is batch RPC; still discover chain members when TMC is incomplete.
+            probe_candidates = list(range(MAX_NETUIDS))
         else:
             if tmc_complete:
                 candidates |= set(range(MAX_NETUIDS))

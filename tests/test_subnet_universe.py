@@ -18,6 +18,7 @@ from internal.subnet_universe import (
     SubnetUniverseProvider,
     UniverseSnapshot,
     _build_rows,
+    _default_probe_fetch,
     _reset_provider_for_tests,
     _shrink_allowed,
     _validity_entry,
@@ -599,13 +600,7 @@ def test_aged_negative_retained_when_probe_rpc_error(universe_tmp, monkeypatch):
         },
     )
 
-    class _Client:
-        def get_alpha_price_probed(self, netuid):
-            if netuid == 105:
-                return None, "rpc_error"
-            return 1.0, "ok"
-
-    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, [], read="rpc_error")
 
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, False),
@@ -802,3 +797,96 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     assert 100 in result.netuids
     assert result.refresh_incomplete is True
     assert provider.get_snapshot().netuids == result.netuids
+
+
+def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
+    class _Reader:
+        def pin_finalized_head(self):
+            return pin
+
+        def call_fn(self):
+            return lambda method, params: (None, "ok")
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: (list(members) if read == "ok" else [], read),
+    )
+
+
+def test_registration_read_marks_registered_netuids_positive(monkeypatch):
+    _patch_registration(monkeypatch, [1, 2])
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {0: True, 1: True, 2: True, 129: False}
+    assert complete is True
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"read": "rate_limited"}, {"read": "invalid"}, {"pin": (None, "rpc_error")}],
+)
+def test_registration_read_failure_observes_nothing(monkeypatch, kwargs):
+    _patch_registration(monkeypatch, [1, 2], **kwargs)
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {}
+    assert complete is False
+
+
+def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1])
+    prior = _prior_snapshot([1, 129])
+    prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+
+    built = builder.build(prior)
+    entry = built.validity_map["129"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"]
+    assert 129 in built.netuids
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    aged = UniverseSnapshot(
+        netuids=built.netuids,
+        rows=built.rows,
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
+    )
+    rebuilt = builder.build(aged)
+    assert 129 not in rebuilt.netuids
+    assert 1 in rebuilt.netuids
+    assert 129 not in builder.build(rebuilt).netuids
+
+
+def test_registered_netuid_missing_from_tmc_stays_positive(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1, 130])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+    built = builder.build(_prior_snapshot([1]))
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_enters_when_tmc_incomplete_and_prior_snapshot(universe_tmp, monkeypatch):
+    """Replit gap 1: incomplete TaoStats must not hide chain-registered members."""
+    _patch_registration(monkeypatch, list(range(1, 131)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1, 2, 3]))
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_default_price_one_does_not_imply_registration(monkeypatch):
+    """Fail-first: a 1.0 price on an unregistered netuid must not count as positive."""
+
+    class _Client:
+        def get_alpha_price_probed(self, netuid):
+            return 1.0, "ok"
+
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, list(range(1, 129)))
+
+    observed, complete = _default_probe_fetch(list(range(200)))
+    assert complete is True
+    assert observed.get(129) is False
+    assert observed.get(128) is True

@@ -2258,5 +2258,16 @@
         ]
       ]
     }
+  ],
+  "state_queryStorageAt|[[\"0x658faa385070e074c85bf6b568cf05555f3bb7bcd0a076a48abf8c256d221721\"], \"0x9df0d42a0637e3e4628ccef850f8792b28cf0c7a1695bae73e6a9c6de989fb8c\"]": [
+    {
+      "block": "0x9df0d42a0637e3e4628ccef850f8792b28cf0c7a1695bae73e6a9c6de989fb8c",
+      "changes": [
+        [
+          "0x658faa385070e074c85bf6b568cf05555f3bb7bcd0a076a48abf8c256d221721",
+          "0x8100"
+        ]
+      ]
+    }
   ]
 }
