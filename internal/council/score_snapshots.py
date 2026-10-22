@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from internal.council.scorer_identity import current_scorer_digest, stamp_scorer_fields, scorer_fields_match
 
 from internal import build_cost
+from internal.chain_read import ChainRead
 from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -163,49 +164,38 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _parse_netuids(values: Any) -> Optional[List[int]]:
-    if not isinstance(values, (list, tuple, set)):
+def _row_ids(rows: Any) -> Optional[List[int]]:
+    if not isinstance(rows, list):
         return None
-    parsed: List[int] = []
-    for value in values:
-        if isinstance(value, bool):
+    ids: List[int] = []
+    for row in rows:
+        if not isinstance(row, dict):
             return None
-        try:
-            parsed.append(int(value))
-        except (TypeError, ValueError):
+        netuid = row.get("netuid")
+        if type(netuid) is not int or netuid <= 0:
             return None
-    return parsed
+        ids.append(netuid)
+    return ids
 
 
 def is_complete_snapshot(snap: Any) -> bool:
-    """Single domain predicate for publish and serve (#1479)."""
+    """Single domain predicate for publish and serve (#1479). Total: never raises."""
     if not isinstance(snap, dict):
         return False
     coverage = snap.get("coverage")
     if not isinstance(coverage, dict) or coverage.get("complete") is not True:
         return False
-    day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
-    if not day_rows:
-        return False
     if not scorer_fields_match(snap):
         return False
-    have = _parse_netuids([r.get("netuid") for r in day_rows])
-    if have is None or len(have) != len(set(have)):
-        return False
-    expected: List[int] = []
-    day_block = coverage.get("day")
-    if isinstance(day_block, dict) and day_block.get("expected"):
-        parsed = _parse_netuids(day_block["expected"])
-        if parsed is None:
-            return False
-        expected = parsed
     membership = coverage.get("membership")
-    if not expected and isinstance(membership, dict) and membership.get("expected_netuids"):
-        parsed = _parse_netuids(membership["expected_netuids"])
-        if parsed is None:
-            return False
-        expected = [n for n in parsed if n > 0]
-    return bool(expected) and set(have) == set(expected)
+    chain = ChainRead.parse(membership.get("chain")) if isinstance(membership, dict) else None
+    if chain is None:
+        return False
+    day = _row_ids(snap.get("day"))
+    if day is None or sorted(day) != list(chain.netuids):
+        return False
+    hour = _row_ids(snap.get("hour"))
+    return hour is not None and len(hour) == len(set(hour)) and set(hour) <= set(chain.netuids)
 
 
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
