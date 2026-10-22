@@ -54,12 +54,22 @@ TRUTH_TABLE_ENV = [
     ),
     (
         "v2 worker group",
-        {"RUN_MODE": "worker", "WORKER_HEAVY": "essential", "WORKER_SPLIT_V2": "on"},
+        {"RUN_MODE": "worker", "WORKER_SPLIT_V2": "on"},
         True,
     ),
     (
         "hop worker",
         {"RUN_MODE": "worker", "STAGE2_HOP": "1", "WORKER_HEAVY": "off"},
+        False,
+    ),
+    (
+        "hop worker with essential heavy",
+        {"RUN_MODE": "worker", "STAGE2_HOP": "1", "WORKER_HEAVY": "essential"},
+        False,
+    ),
+    (
+        "worker with WORKER_HEAVY=off and no hop",
+        {"RUN_MODE": "worker", "WORKER_HEAVY": "off"},
         False,
     ),
     (
@@ -119,10 +129,10 @@ def _role_envs(fly_path: str, worker_overlay: dict[str, str] | None) -> list[tup
 @pytest.mark.parametrize(
     "fly_path,worker_overlay",
     [
-        ("fly.toml", {"RUN_MODE": "worker", "WORKER_HEAVY": "essential"}),
+        ("fly.toml", {"RUN_MODE": "worker"}),
         (
             "fly.worker-v2.toml",
-            {"RUN_MODE": "worker", "WORKER_HEAVY": "essential", "WORKER_SPLIT_V2": "on"},
+            {"RUN_MODE": "worker", "WORKER_SPLIT_V2": "on"},
         ),
     ],
 )
