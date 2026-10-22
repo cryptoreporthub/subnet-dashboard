@@ -70,11 +70,34 @@ KILL_ENABLED = _env_bool("LOOP_STALL_GUARD_KILL", True)
 
 
 def _snapshot_age_seconds() -> Optional[float]:
-    """Age in seconds of score_snapshots.json (None if unknown)."""
-    try:
-        from internal.learning.loop_health import _snapshot_age_seconds as _age
+    """Producer liveness for the score-snapshot owner; None (idle) everywhere else.
 
-        return _age()
+    * Not the producer (hop, WORKER_HEAVY=off, web) or the freeze lever is off:
+      None. Those processes never write a receipt, so any age would restart-loop.
+    * Owner with a cycle receipt: receipt age (published, refused or gated).
+    * Owner with no receipt: age of whatever readers serve right now, volume or
+      seed, whether or not the volume file exists. A young served file means the
+      producer is publishing (receipt write may have failed); an old one means
+      the producer never ran.
+    * Owner with no receipt and nothing servable: stale on the first check.
+    """
+    try:
+        from internal.council.score_snapshots import (
+            _enabled,
+            producer_cycle_age_seconds,
+            read_served_snapshot,
+        )
+        from internal.run_mode import score_snapshot_producer_enabled
+
+        if not _enabled() or not score_snapshot_producer_enabled():
+            return None
+        cycle_age = producer_cycle_age_seconds()
+        if cycle_age is not None:
+            return cycle_age
+        served = read_served_snapshot()
+        if served.servable and served.age_seconds is not None:
+            return served.age_seconds
+        return float(MAX_SNAPSHOT_AGE_SECONDS + 1)
     except Exception as exc:
         logger.warning("loop stall guard: snapshot age probe failed: %s", exc)
         return None
