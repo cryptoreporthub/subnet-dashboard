@@ -23,12 +23,22 @@ logger = logging.getLogger(__name__)
 class ChainReader:
     """Ordered RPC providers; pin each tick to one block hash."""
 
-    def __init__(self, clients: Optional[List[Tuple[str, ChainClient]]] = None):
+    def __init__(
+        self,
+        clients: Optional[List[Tuple[str, ChainClient]]] = None,
+        *,
+        deadline_monotonic: Optional[float] = None,
+    ):
         self._providers: List[Tuple[str, ChainClient]] = clients or cfg.rpc_provider_clients()
         self._pinned_hash: Optional[str] = None
         self.provider_served: Optional[str] = None
         self.fallback_count: int = 0
         self.rate_limit_events: List[Dict[str, Any]] = []
+        self._deadline_monotonic = deadline_monotonic
+
+    def _past_deadline(self) -> bool:
+        deadline = self._deadline_monotonic
+        return deadline is not None and time.monotonic() >= deadline
 
     def reset_probe_diagnostics(self) -> None:
         """Clear per-run probe counters (Step 4 live harness)."""
@@ -82,6 +92,8 @@ class ChainReader:
         return not storage_block_matches(result[0], params[1])
 
     def call(self, method: str, params: list) -> Tuple[Optional[Any], RpcOutcome]:
+        if self._past_deadline():
+            return None, "rpc_error"
         providers = self._available_providers()
         if not providers:
             self.rate_limit_events.append(
@@ -90,6 +102,8 @@ class ChainReader:
             return None, "rate_limited"
         last_outcome: RpcOutcome = "rpc_error"
         for idx, (label, client) in enumerate(providers):
+            if self._past_deadline():
+                return None, "rpc_error"
             result, outcome = rpc_call(client, method, params)
             if outcome == "ok" and self._echo_mismatch(method, params, result):
                 outcome = "invalid"

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 
@@ -12,8 +12,10 @@ import internal.subnet_universe as universe_mod
 from internal.subnet_universe import (
     SubnetUniverseProvider,
     UniverseSnapshot,
+    _default_probe_fetch,
     _reset_provider_for_tests,
     _validity_entry,
+    registration_probe_reader,
 )
 
 
@@ -49,17 +51,15 @@ def _bind_provider(provider: SubnetUniverseProvider) -> None:
     universe_mod.get_snapshot = provider.get_snapshot  # type: ignore[method-assign]
 
 
-def _run_provider(label: str, finney_url: str, blockmachine_url: str) -> dict:
+def _run_provider(label: str, finney_url: str, blockmachine_url: str, data_dir: str) -> dict:
     if finney_url:
         os.environ["FINNEY_RPC_URL"] = finney_url
     else:
         os.environ.pop("FINNEY_RPC_URL", None)
     os.environ["BLOCKMACHINE_RPC_URL"] = blockmachine_url
-    from internal.chain_price.reader import ChainReader
-
-    reader = ChainReader()
+    os.environ["DATA_DIR"] = data_dir
     provider = SubnetUniverseProvider(
-        persist_file=os.path.join(os.environ.get("DATA_DIR", "data"), f"proof_{label}.json")
+        persist_file=os.path.join(data_dir, f"proof_{label}.json")
     )
     _bind_provider(provider)
     provider.replace_snapshot_for_tests(_prod_like_prior())
@@ -82,9 +82,11 @@ def _run_provider(label: str, finney_url: str, blockmachine_url: str) -> dict:
     assert receipt1["expected_netuids"] == expected
     assert receipt2["expected_netuids"] == expected
     assert list(snap1.netuids) == list(snap2.netuids)
+    reader = registration_probe_reader()
+    provider_served = reader.provider_served if reader is not None else None
     return {
         "label": label,
-        "provider": reader.provider_served,
+        "provider": provider_served,
         "elapsed_s": round(elapsed, 2),
         "expected": len(receipt1["expected_netuids"]),
         "rows_1": len(snap1.netuids),
@@ -93,11 +95,12 @@ def _run_provider(label: str, finney_url: str, blockmachine_url: str) -> dict:
     }
 
 
-def _run_fault() -> dict:
+def _run_fault(data_dir: str) -> dict:
     os.environ["FINNEY_RPC_URL"] = "http://127.0.0.1:9"
     os.environ["BLOCKMACHINE_RPC_URL"] = "http://127.0.0.1:9"
+    os.environ["DATA_DIR"] = data_dir
     provider = SubnetUniverseProvider(
-        persist_file=os.path.join(os.environ.get("DATA_DIR", "data"), "proof_fault.json")
+        persist_file=os.path.join(data_dir, "proof_fault.json")
     )
     _bind_provider(provider)
     prior = _prod_like_prior()
@@ -115,14 +118,25 @@ def _run_fault() -> dict:
     snap = provider.refresh_once()
     elapsed = time.monotonic() - t0
     receipt = cov.load_membership_receipt()
+    expected_before = len([n for n in prior.netuids if n > 0])
+    expected_after = len(receipt.get("expected_netuids") or [])
+    observed, complete = _default_probe_fetch(list(range(10)), deadline=time.monotonic() + 0.05)
+    assert observed == {}
+    assert complete is False
+    assert snap.degraded is True
+    assert snap.refresh_incomplete is True
+    assert len(snap.netuids) == len(prior.netuids)
+    assert expected_after == expected_before
+    assert sum(1 for e in snap.validity_map.values() if e.get("validity") == "negative") == 0
     return {
         "label": "fault_dead_rpc",
         "elapsed_s": round(elapsed, 2),
         "rows_kept": len(snap.netuids),
-        "negative": sum(1 for e in snap.validity_map.values() if e.get("validity") == "negative"),
-        "expected_before": len([n for n in prior.netuids if n > 0]),
-        "expected_after": len(receipt.get("expected_netuids") or []),
+        "negative": 0,
+        "expected_before": expected_before,
+        "expected_after": expected_after,
         "degraded": snap.degraded,
+        "probe_complete": complete,
     }
 
 
@@ -130,10 +144,11 @@ def main() -> None:
     os.environ.setdefault("RUN_MODE", "worker")
     finney = os.environ.get("FINNEY_PROOF_URL", "https://entrypoint-finney.opentensor.ai")
     blockmachine = os.environ.get("BLOCKMACHINE_PROOF_URL", "https://rpc.blockmachine.io")
-    rows = []
-    rows.append(_run_provider("finney_only", finney, finney))
-    rows.append(_run_provider("blockmachine_only", "", blockmachine))
-    rows.append(_run_fault())
+    rows: list[dict] = []
+    with tempfile.TemporaryDirectory(prefix="proof_1461_") as data_dir:
+        rows.append(_run_provider("finney_only", finney, finney, data_dir))
+        rows.append(_run_provider("blockmachine_only", "", blockmachine, data_dir))
+        rows.append(_run_fault(data_dir))
     print("label|provider|elapsed_s|expected|rows|negative|notes")
     for r in rows:
         print(

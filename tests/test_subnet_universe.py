@@ -801,6 +801,9 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
 
 def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
     class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
         def pin_finalized_head(self):
             return pin
 
@@ -874,6 +877,32 @@ def test_chain_member_enters_when_tmc_incomplete_and_prior_snapshot(universe_tmp
     built = builder.build(_prior_snapshot([1, 2, 3]))
     assert 130 in built.netuids
     assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_at_netuid_200_enters_when_outside_probe_range(monkeypatch):
+    """Registration positives must enter membership even above MAX_NETUIDS-1 probe list."""
+    _patch_registration(monkeypatch, [1, 200])
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1]))
+    assert 200 in built.netuids
+    assert built.validity_map["200"]["validity"] == "positive"
+
+
+def test_probe_fetch_incomplete_when_deadline_expires_during_read(monkeypatch):
+    from internal.chain_price.reader import ChainReader
+
+    def slow_pin(self):
+        time.sleep(0.03)
+        return "0xabc", "ok"
+
+    monkeypatch.setattr(ChainReader, "pin_finalized_head", slow_pin)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: ([1], "ok"),
+    )
+    observed, complete = _default_probe_fetch([1], deadline=time.monotonic() + 0.005)
+    assert observed == {}
+    assert complete is False
 
 
 def test_default_price_one_does_not_imply_registration(monkeypatch):
