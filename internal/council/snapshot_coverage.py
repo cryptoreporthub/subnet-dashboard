@@ -65,9 +65,22 @@ def load_membership_receipt() -> Dict[str, Any]:
     try:
         from internal.subnet_universe import get_snapshot, universe_snapshot_feed_meta
 
+        from internal.subnets.tradable import subnet_netuid
+
         snap = get_snapshot()
         feed = universe_snapshot_feed_meta(snap)
         netuids = tuple(int(n) for n in snap.netuids if int(n) > 0)
+        empty_slots = {
+            subnet_netuid(row)
+            for row in snap.rows
+            if isinstance(row, dict) and row.get("source") == "none"
+        }
+        negative = {
+            int(key)
+            for key, entry in (snap.validity_map or {}).items()
+            if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
+        }
+        inactive = [n for n in netuids if n in empty_slots and n in negative]
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),
@@ -76,7 +89,8 @@ def load_membership_receipt() -> Dict[str, Any]:
             "degraded": bool(snap.degraded),
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
-            "expected_netuids": list(netuids),
+            "expected_netuids": [n for n in netuids if n not in inactive],
+            "inactive_netuids": inactive,
             "fresh": membership_fresh(snap.resolved_at),
             "root_netuid_in_membership": 0 in snap.netuids,
             "message": snap.message,
@@ -318,7 +332,6 @@ def build_coverage_block(
     day_attempted: Optional[List[int]] = None,
     hour_attempted: Optional[List[int]] = None,
     hour_copied_from_day: bool,
-    capped_out: int,
     selection_policy: str,
     subnet_source: str,
     published: bool,
@@ -355,7 +368,6 @@ def build_coverage_block(
         published
         and membership_ok
         and horizons_complete
-        and capped_out == 0
     )
     return {
         "membership": receipt,
@@ -363,7 +375,6 @@ def build_coverage_block(
         "root_netuid_in_scoring_set": 0 in scoring_set,
         "day": day_block,
         "hour": hour_block,
-        "capped_out": capped_out,
         "selection_policy": selection_policy,
         "subnet_load_source": subnet_source,
         "published": published,
@@ -475,7 +486,6 @@ def coverage_counts_summary(coverage: Dict[str, Any]) -> Dict[str, Any]:
     out: Dict[str, Any] = {
         "published": coverage.get("published"),
         "complete": coverage.get("complete"),
-        "capped_out": coverage.get("capped_out"),
         "selection_policy": coverage.get("selection_policy"),
         "subnet_load_source": coverage.get("subnet_load_source"),
         "timing": dict(coverage.get("timing") or {}),

@@ -107,9 +107,14 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
     scheduled = []
+    captured = []
     pump_snapshot = MagicMock()
 
-    monkeypatch.setattr("internal.background_boot.defer_boot", lambda name, fn, delay=0: scheduled.append(name))
+    def _defer(name, fn, delay=0):
+        scheduled.append(name)
+        captured.append((name, fn))
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr(
         "internal.background_boot._start_pump_desk_snapshot_scheduler",
@@ -133,10 +138,25 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
 
     from internal.background_boot import start_background_workers
 
+    start_sync = MagicMock()
+    bootstrap = MagicMock()
+    monkeypatch.setattr("internal.live_subnets.registry_ready", lambda: True)
+    monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", bootstrap)
+    monkeypatch.setattr("internal.live_subnets.start_live_subnets_sync", start_sync)
+
     start_background_workers()
-    assert "live-subnets-boot" not in scheduled
+    assert "live-subnets-boot" in scheduled
     assert "tmp-reaper-hourly" in scheduled
     pump_snapshot.assert_called_once()
+    boot_fn = next(fn for name, fn in captured if name == "live-subnets-boot")
+    boot_fn()
+    bootstrap.assert_called_once()
+    start_sync.assert_called_once()
+    assert "score-snapshot-ensure" in scheduled
+    ensure = MagicMock()
+    monkeypatch.setattr("internal.council.score_snapshots.ensure_complete_snapshot", ensure)
+    next(fn for name, fn in captured if name == "score-snapshot-ensure")()
+    ensure.assert_called_once()
     for name in (
         "_warm_judges_cache",
         "_start_score_snapshot_scheduler",
@@ -149,15 +169,17 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
 
 
 def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
-    live = MagicMock()
-    bootstrap = MagicMock(return_value=True)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "full")
+    bootstrap = MagicMock()
+    start_sync = MagicMock()
     scheduled = {}
 
     def _defer(name, fn, delay=0):
         scheduled[name] = fn
 
-    monkeypatch.setattr("internal.live_subnets.get_live_subnets", live)
     monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", bootstrap)
+    monkeypatch.setattr("internal.live_subnets.start_live_subnets_sync", start_sync)
     monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_pump_ladder", MagicMock())
     monkeypatch.setattr("internal.background_boot._start_resolver", MagicMock())
@@ -171,7 +193,7 @@ def test_start_background_workers_heavy_bootstraps_live_subnets(monkeypatch):
     assert "live-subnets-boot" in scheduled
     scheduled["live-subnets-boot"]()
     bootstrap.assert_called_once()
-    live.assert_called_once()
+    start_sync.assert_called_once()
 
 
 def test_start_background_workers_starts_resolver(monkeypatch):

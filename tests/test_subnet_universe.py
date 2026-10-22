@@ -114,16 +114,16 @@ def test_t3_source_failure_serves_lkg_not_registry_only(universe_tmp):
   assert lkg.status != "emergency_registry"
 
 
-def test_t4_cap_at_max_netuids(universe_tmp):
-  """Builder stops at MAX_NETUIDS=200 with cap_reached."""
+def test_t4_no_truncation_above_max_netuids(universe_tmp):
+  """Membership keeps every netuid the sources return; MAX_NETUIDS bounds the probe only."""
   big = list(range(250))
   builder = SnapshotBuilder(
       tmc_fetch=lambda: (set(big), {n: {"netuid": n} for n in big}, True),
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
   )
   built = builder.build(None)
-  assert len(built.netuids) == MAX_NETUIDS
-  assert built.cap_reached is True
+  assert len(built.netuids) == 250
+  assert built.cap_reached is False
 
 
 def test_t5_corrupt_persistence_emergency_registry(universe_tmp, caplog):

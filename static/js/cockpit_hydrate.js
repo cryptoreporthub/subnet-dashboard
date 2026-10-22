@@ -231,6 +231,22 @@
     empty.classList.add('empty--quiet');
   }
 
+  function picksViewFor(payload, connected) {
+    var PICKS_EMPTY_MESSAGES = {
+      pending_snapshot: 'Score snapshot is missing or out of date. Picks are hidden until a fresh build publishes.',
+      busy: 'Picks are being built for another viewer. Reopen shortly.',
+      timeout: 'Picks timed out. Reopen shortly.'
+    };
+    if (connected) return { state: 'skip' };
+    if (!payload || !Object.keys(payload).length) return { state: 'fallback' };
+    var hasPicks = (payload.hour_picks || []).length || (payload.day_picks || []).length;
+    if (hasPicks) return { state: 'render' };
+    var message = payload.error
+      ? 'Picks failed to load. Reopen shortly.'
+      : PICKS_EMPTY_MESSAGES[payload.status] || 'No picks available right now.';
+    return { state: 'message', message: message };
+  }
+
   function pickNetuidFromPayload(payload) {
     if (!payload || typeof payload !== 'object') return null;
     var pick = payload.pick || payload.candidate;
@@ -4899,7 +4915,12 @@
       // sections, and replay evidence are already available.
       picksRequest.then(function (pickPayload) {
         pickPayload = safePayload(pickPayload);
-        if (pickPayload && Object.keys(pickPayload).length && !cockpitPicksConnected) {
+        var picksView = picksViewFor(pickPayload, cockpitPicksConnected);
+        if (picksView.state === 'message') {
+          markSectionFailed('section-picks', picksView.message);
+          return;
+        }
+        if (picksView.state === 'render') {
           hourPicks = pickPayload.hour_picks || [];
           dayPicks = pickPayload.day_picks || [];
           renderHourDayPicks(hourPicks, dayPicks);
@@ -4907,7 +4928,7 @@
           paintCharts();
           return;
         }
-        if (cockpitPicksConnected) return;
+        if (picksView.state === 'skip') return;
         return Promise.all([
           fetchJsonRetry('/api/top-pick/hour', 18000, 1),
           fetchJsonRetry('/api/top-pick/day', 18000, 1),

@@ -329,6 +329,10 @@ def _fetch_chain_data():
     (default 3s) so executor shutdown and framed IPC send fit inside the parent's
     recv/terminate window. Parent keeps the full ``rpc_deadline`` for recv.
     """
+    if not _sync_owner_process():
+        logger.warning("live_subnets fetch child refused: not sync owner process")
+        return None
+
     from internal.live_subnets_fetch_child import run_fetch_child
     from internal.live_subnets_ipc import recv_message
 
@@ -456,6 +460,10 @@ def _sync_once() -> bool:
         return False
     _record_boot_status(phase="sync_start")
     try:
+        if not _sync_owner_process():
+            logger.info("live_subnets sync skipped — not sync owner process")
+            _record_boot_status(phase="sync_done", ok=False, reason="not_owner")
+            return False
         if not registry_ready():
             _record_boot_status(
                 phase="deferred",
@@ -537,9 +545,21 @@ def _sync_once() -> bool:
         _sync_lock.release()
 
 
+def _sync_owner_process() -> bool:
+    from internal.run_mode import live_subnets_sync_owner_enabled
+
+    return live_subnets_sync_owner_enabled()
+
+
+def _sync_scheduling_allowed() -> bool:
+    if not AUTO_SYNC:
+        return False
+    return _sync_owner_process()
+
+
 def bootstrap_live_subnets_cache() -> bool:
     """One-shot chain sync on dedicated worker boot (LIVE_SUBNETS_BOOT_IMMEDIATE=on)."""
-    if not AUTO_SYNC:
+    if not _sync_scheduling_allowed():
         return False
     if _in_ci_or_test:
         return False
@@ -568,40 +588,32 @@ def get_live_subnets() -> List[Dict[str, Any]]:
                 data = json.load(f)
             subnets = data.get("subnets", [])
             if subnets:
-                _maybe_schedule_sync(data)
                 return subnets
     except Exception:
         pass
-    _maybe_schedule_sync(None)
     return _registry_list()
 
 
-def _maybe_schedule_sync(cache_data):
-    if not AUTO_SYNC:
+def start_live_subnets_sync() -> None:
+    """Owner-only entry: start the background sync loop (idempotent)."""
+    if not _sync_scheduling_allowed():
         return
-    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("GITHUB_ACTIONS") or os.environ.get("CI"):
+    if _in_ci_or_test:
         return
-    stale = True
-    if cache_data and cache_data.get("synced_at"):
-        try:
-            age = (datetime.now(timezone.utc) - datetime.fromisoformat(cache_data["synced_at"])).total_seconds()
-            stale = age > MAX_STALE_SECONDS
-        except Exception:
-            stale = True
-    if stale:
-        _ensure_sync_loop()
+    _ensure_sync_loop()
 
 
 def _ensure_sync_loop() -> None:
     global _sync_loop_running
-    if not AUTO_SYNC:
+    if not _sync_scheduling_allowed():
         return
-    if os.environ.get("PYTEST_CURRENT_TEST") or os.environ.get("GITHUB_ACTIONS") or os.environ.get("CI"):
+    if _in_ci_or_test:
         return
     with _lock:
         if _sync_loop_running:
             return
         _sync_loop_running = True
+    logger.info("live_subnets sync loop starting (owner process)")
     t = threading.Thread(target=_sync_loop, daemon=True, name="live-subnets-sync")
     t.start()
 

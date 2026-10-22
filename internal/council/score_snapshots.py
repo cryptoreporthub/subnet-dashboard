@@ -35,29 +35,10 @@ SCORE_SNAPSHOT_STUCK_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_STUCK_SECONDS"
 SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS = int(
     os.environ.get("SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", "600")
 )
-SCORE_SNAPSHOT_MAX_SUBNETS = env_int("SCORE_SNAPSHOT_MAX_SUBNETS", 0)
-SCORE_SNAPSHOT_SCORE_WORKERS = max(
-    1, int(os.environ.get("SCORE_SNAPSHOT_SCORE_WORKERS", "4"))
-)
+SCORE_SNAPSHOT_SCORE_WORKERS = max(1, env_int("SCORE_SNAPSHOT_SCORE_WORKERS", 1))
+SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS = env_int("SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS", 15)
 JOB_ID = "score-snapshot-scheduler"
 
-
-def _snapshot_subnet_cap() -> int:
-    """Cap scoring universe on small VMs; worker defaults to TOP_SCORING_UNIVERSE."""
-    raw = os.environ.get("SCORE_SNAPSHOT_MAX_SUBNETS")
-    if raw is not None and str(raw).strip() != "":
-        try:
-            return max(0, int(raw))
-        except ValueError:
-            return 0
-    try:
-        from internal.run_mode import is_worker_mode
-
-        if is_worker_mode():
-            return int(os.environ.get("TOP_SCORING_UNIVERSE", "40"))
-    except Exception:
-        pass
-    return 0
 
 _lock = threading.Lock()
 _TICK_ACTIVE = False
@@ -218,37 +199,24 @@ def _patch_score_snapshot_coverage_locked(
         }
 
 
-def day_scores_by_netuid(snapshot: Optional[Dict[str, Any]] = None) -> Dict[int, float]:
-    snap = snapshot if snapshot is not None else load_score_snapshot()
-    if not snap:
-        return {}
-    out: Dict[int, float] = {}
-    for row in snap.get("day") or []:
-        if not isinstance(row, dict):
-            continue
-        try:
-            netuid = int(row.get("netuid"))
-            out[netuid] = float(row.get("total_score") or 0)
-        except (TypeError, ValueError):
-            continue
-    return out
-
-
-def rank_subnets_by_snapshot(
-    subnets: List[Dict[str, Any]],
-    *,
-    horizon: str = "day",
-    max_age_seconds: Optional[int] = None,
+def _read_complete_snapshot(
     path: Optional[str] = None,
-) -> Optional[List[Dict[str, Any]]]:
-    """Return subnets sorted by snapshot score, or None if snapshot missing/stale."""
+    max_age_seconds: Optional[int] = None,
+) -> Optional[Tuple[Dict[str, Any], float]]:
     age = snapshot_age_seconds(path)
-    limit = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    if age is None or age > limit:
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    if age is None or age > ttl:
         return None
     snap = load_score_snapshot(path)
     if not snap:
         return None
+    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
+    return (snap, age) if coverage.get("complete") is True else None
+
+
+def _rank_by_scores(
+    snap: Dict[str, Any], subnets: List[Dict[str, Any]], horizon: str
+) -> Optional[List[Dict[str, Any]]]:
     scores: Dict[int, float] = {}
     for row in snap.get(horizon) or snap.get("day") or []:
         if not isinstance(row, dict):
@@ -270,6 +238,18 @@ def rank_subnets_by_snapshot(
     return sorted(subnets, key=_key, reverse=True)
 
 
+def rank_subnets_by_snapshot(
+    subnets: List[Dict[str, Any]],
+    *,
+    horizon: str = "day",
+    max_age_seconds: Optional[int] = None,
+    path: Optional[str] = None,
+) -> Optional[List[Dict[str, Any]]]:
+    """Return subnets sorted by snapshot score, or None if the snapshot is missing, stale or partial."""
+    got = _read_complete_snapshot(path, max_age_seconds)
+    return _rank_by_scores(got[0], subnets, horizon) if got else None
+
+
 def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any]]:
     out: Dict[int, Dict[str, Any]] = {}
     for sn in subnets:
@@ -277,6 +257,27 @@ def _subnets_by_netuid(subnets: List[Dict[str, Any]]) -> Dict[int, Dict[str, Any
             out[int(sn.get("netuid") or sn.get("id") or 0)] = sn
         except (TypeError, ValueError):
             continue
+    return out
+
+
+def _confidence_fields(source: Dict[str, Any]) -> Dict[str, Any]:
+    """Real 0-1 confidence and scenario tags from a day score or snapshot row.
+
+    A field the source does not have, or a confidence outside 0 to 1, is left out.
+    Never default confidence to the 0-100 score, because the cockpit would show it
+    as a different quantity.
+    """
+    out: Dict[str, Any] = {}
+    confidence = source.get("confidence")
+    if (
+        isinstance(confidence, (int, float))
+        and not isinstance(confidence, bool)
+        and 0.0 <= confidence <= 1.0
+    ):
+        out["confidence"] = float(confidence)
+    tags = source.get("scenario_tags")
+    if isinstance(tags, dict):
+        out["scenario_tags"] = tags
     return out
 
 
@@ -295,7 +296,6 @@ def _top_pick_row(
         "name": sn.get("name") or row.get("name"),
         "symbol": sn.get("symbol"),
         "score": total,
-        "confidence": total,
         "expert_contributions": {},
         "signals": {
             "price_change_24h": sn.get("price_change_24h"),
@@ -306,6 +306,7 @@ def _top_pick_row(
         },
         "scenario_tags": {},
         "recovery_context": row.get("recovery_context"),
+        **_confidence_fields(row),
     }
 
 
@@ -317,13 +318,10 @@ def build_top_picks_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Read top hour/day picks from disk snapshot — no scoring on the request path."""
-    age = snapshot_age_seconds(path)
-    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    if age is None or age > ttl:
+    got = _read_complete_snapshot(path, max_age_seconds)
+    if got is None:
         return None
-    snap = load_score_snapshot(path)
-    if not snap:
-        return None
+    snap, age = got
     hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
     day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
     if not hour_rows and not day_rows:
@@ -358,13 +356,12 @@ def day_scored_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
     """Join tradable subnets to day scores from snapshot (minimal score payloads)."""
-    ranked = rank_subnets_by_snapshot(
-        subnets, horizon="day", max_age_seconds=max_age_seconds, path=path
-    )
-    if ranked is None:
+    got = _read_complete_snapshot(path, max_age_seconds)
+    if got is None:
         return None
-    snap = load_score_snapshot(path)
-    if not snap:
+    snap = got[0]
+    ranked = _rank_by_scores(snap, subnets, "day")
+    if ranked is None:
         return None
     scores: Dict[int, Dict[str, Any]] = {}
     for row in snap.get("day") or []:
@@ -390,11 +387,11 @@ def day_scored_from_snapshot(
                 "subnet": sn,
                 "score": {
                     "total_score": total,
-                    "confidence": total,
                     "expert_contributions": {},
                     "scenario_tags": {},
                     "recovery_context": row.get("recovery_context"),
                     "reasons": [],
+                    **_confidence_fields(row),
                 },
             }
         )
@@ -478,6 +475,7 @@ def build_full_universe_snapshot(
                     "total_score": float(h.get("total_score") or 0),
                     "name": sn.get("name"),
                     "recovery_context": h.get("recovery_context"),
+                    **_confidence_fields(h),
                 }
                 out["hour_ok"] = True
             except Exception as exc:
@@ -495,6 +493,7 @@ def build_full_universe_snapshot(
                 "total_score": float(d.get("total_score") or 0),
                 "name": sn.get("name"),
                 "recovery_context": d.get("recovery_context"),
+                **_confidence_fields(d),
             }
             out["day_ok"] = True
         except Exception as exc:
@@ -530,18 +529,24 @@ def build_full_universe_snapshot(
         _record_slowest(float(res.get("day_elapsed") or 0), netuid)
 
     workers = SCORE_SNAPSHOT_SCORE_WORKERS if not score_hour else 1
+    last_progress = time.monotonic()
+
+    def _maybe_progress(done: int) -> None:
+        nonlocal last_progress
+        if progress_cb and total and time.monotonic() - last_progress >= SCORE_SNAPSHOT_PROGRESS_MIN_SECONDS:
+            last_progress = time.monotonic()
+            progress_cb(done, total)
+
     if workers <= 1:
         for idx, sn in enumerate(rows):
             _apply_score_result(_score_one(sn))
-            if progress_cb and total and (idx + 1) % 20 == 0:
-                progress_cb(idx + 1, total)
+            _maybe_progress(idx + 1)
     else:
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="snap-score") as pool:
             results = list(pool.map(_score_one, rows))
         for idx, res in enumerate(results):
             _apply_score_result(res)
-            if progress_cb and total and (idx + 1) % 20 == 0:
-                progress_cb(idx + 1, total)
+            _maybe_progress(idx + 1)
 
     hour_copied_from_day = False
     if not score_hour and day_rows:
@@ -614,6 +619,24 @@ def _score_hour_enabled() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
+def _receipt_line(build_id: str, timing: Dict[str, Any], outcome: Dict[str, Any]) -> str:
+    # previous_publish_wall_seconds belongs to the prior build; leave it off this build's line.
+    body = {k: v for k, v in timing.items() if k != "previous_publish_wall_seconds"}
+    return "score snapshot build receipt build_id=%s %s" % (
+        build_id,
+        json.dumps({**body, **outcome}, default=str, sort_keys=True),
+    )
+
+
+def _log_build_receipt(build_id: str, timing: Dict[str, Any], **outcome: Any) -> None:
+    """One INFO line with the timing block and the publish outcome. Never raises:
+    a logging problem must not suppress a snapshot that was already written."""
+    try:
+        logger.info(_receipt_line(build_id, timing, outcome))
+    except Exception:
+        logger.warning("score snapshot build receipt could not be logged", exc_info=True)
+
+
 def write_full_universe_snapshot(
     progress_cb: Optional[Callable[[int, int], None]] = None,
 ) -> Dict[str, Any]:
@@ -664,16 +687,7 @@ def write_full_universe_snapshot(
             prep_meta.get("excluded_feed_only_count") or 0
         )
 
-        cap = _snapshot_subnet_cap()
-        capped_out = 0
         selection_policy = str(prep_meta.get("selection_basis") or "full")
-        pre_cap_len = len(subnets or [])
-        if cap > 0 and subnets and len(subnets) > cap:
-            from server import _cap_subnets_for_scoring
-
-            subnets = _cap_subnets_for_scoring(subnets, limit=cap)
-            capped_out = max(0, pre_cap_len - len(subnets or []))
-            selection_policy = "rank_cap"
         ctx_started = time.monotonic()
         from internal.council.scoring_context import enrich_scoring_market_context
 
@@ -690,7 +704,7 @@ def write_full_universe_snapshot(
     except Exception as exc:
         return {"ok": False, "error": f"subnet load: {exc}"}
 
-    def _build_and_save() -> Dict[str, Any]:
+    def _build_and_save(build_id: str) -> Dict[str, Any]:
         from internal.council.snapshot_coverage import (
             build_coverage_block,
             coverage_capture_deadline_seconds,
@@ -704,7 +718,7 @@ def write_full_universe_snapshot(
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
         build_started = time.monotonic()
-        build_cost.begin(build_started_wall)
+        build_cost.begin(build_id)
         try:
             payload = build_full_universe_snapshot(
                 subnets or [],
@@ -722,7 +736,8 @@ def write_full_universe_snapshot(
             "capture_elapsed_seconds": round(time.monotonic() - capture_started, 6),
         }
         timing.update(write_stage_timing)
-        timing["build_cost"] = cost
+        if cost:
+            timing["build_cost"] = cost
         if isinstance(stage_timing, dict):
             timing.update(stage_timing)
         try:
@@ -736,7 +751,6 @@ def write_full_universe_snapshot(
                 day_attempted=list(inputs.get("day_attempted") or []),
                 hour_attempted=list(inputs.get("hour_attempted") or []),
                 hour_copied_from_day=bool(inputs.get("hour_copied_from_day")),
-                capped_out=capped_out,
                 selection_policy=selection_policy,
                 subnet_source=str(source),
                 published=True,
@@ -821,6 +835,13 @@ def write_full_universe_snapshot(
             publish_metrics(coverage)
         except Exception:
             pass
+        _log_build_receipt(
+            build_id,
+            timing_for_metrics,
+            published=published,
+            complete=bool(coverage.get("complete")),
+            count=payload.get("count"),
+        )
         payload["source"] = source
         payload["coverage"] = coverage
         out: Dict[str, Any] = {
@@ -840,7 +861,7 @@ def write_full_universe_snapshot(
     timeout = SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS
     if timeout <= 0:
         try:
-            return _build_and_save()
+            return _build_and_save(_now_iso())
         except Exception as exc:
             logger.warning("score snapshot write failed: %s", exc)
             return {"ok": False, "error": str(exc)}
@@ -856,7 +877,7 @@ def write_full_universe_snapshot(
             _write_executor = ThreadPoolExecutor(
                 max_workers=1, thread_name_prefix="score-snap-write"
             )
-        fut = _write_executor.submit(_build_and_save)
+        fut = _write_executor.submit(_build_and_save, build_started_wall)
         _write_future = fut
     fut.add_done_callback(_release_write_future)
 
@@ -1280,6 +1301,12 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
         "age_seconds": snapshot_age_seconds(),
         "liveness": snap,
     }
+
+
+def ensure_complete_snapshot() -> Dict[str, Any]:
+    if _read_complete_snapshot() is not None:
+        return {"ensured": False, "reason": "complete_snapshot_present"}
+    return {"ensured": True, **revive_score_snapshot_scheduler()}
 
 
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:

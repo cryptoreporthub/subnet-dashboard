@@ -1,18 +1,9 @@
-"""Daily pick creation uses scheduler cap universe (not full hydrate list)."""
+"""Daily pick regen hands the full tradable universe to select_daily_pick."""
 
 from internal.council import daily_pick_engine
 
 
-def test_subnets_for_pick_creation_caps(monkeypatch):
-    subnets = [{"netuid": i, "marketcap_rank": i, "price": 1.0} for i in range(1, 60)]
-    monkeypatch.setenv("PICK_SCHEDULER_UNIVERSE_CAP", "24")
-    monkeypatch.setenv("TOP_SCORING_UNIVERSE", "40")
-    monkeypatch.setenv("SCORING_CAP_MEGA_CEILING_RANK", "10")
-    capped = daily_pick_engine._subnets_for_pick_creation(subnets)
-    assert len(capped) <= 24
-
-
-def test_regen_calls_select_on_capped_universe(monkeypatch, tmp_path):
+def test_regen_calls_select_on_full_universe(monkeypatch, tmp_path):
     path = str(tmp_path / "daily_picks.json")
     daily_pick_engine.DAILY_PICKS_PATH = path
     today = daily_pick_engine._today_str()
@@ -32,14 +23,9 @@ def test_regen_calls_select_on_capped_universe(monkeypatch, tmp_path):
     with open(path, "w") as f:
         json.dump([stale], f)
 
-    full = [{"netuid": i, "name": f"SN{i}", "price": 1.0, "marketcap_rank": i} for i in range(1, 60)]
-    capped = full[:24]
-    monkeypatch.setattr(daily_pick_engine, "_subnets_for_pick_creation", lambda s: capped)
-
     select_args = {}
 
     def _fake_select(subnets, ctx):
-        select_args["n"] = len(subnets)
         select_args["netuids"] = [s.get("netuid") for s in subnets]
         return {
             "subnet": {"netuid": 40, "name": "Chunking"},
@@ -55,9 +41,10 @@ def test_regen_calls_select_on_capped_universe(monkeypatch, tmp_path):
         lambda *a, **k: {"id": "p1"},
     )
 
+    full = [{"netuid": i, "name": f"SN{i}", "price": 1.0, "marketcap_rank": i} for i in range(1, 60)]
     hydrated = [{"netuid": 78, "name": "SN78", "price": 1.0, "marketcap_rank": 78}]
     out = daily_pick_engine.get_or_create_today_pick(hydrated + full, {}, force=False)
 
-    assert select_args["n"] == 24
+    assert sorted(select_args["netuids"]) == sorted(s["netuid"] for s in hydrated + full)
     assert out["action"] == "long"
     assert (out.get("pick") or {}).get("subnet", {}).get("netuid") == 40

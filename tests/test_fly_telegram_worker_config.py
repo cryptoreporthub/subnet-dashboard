@@ -280,8 +280,8 @@ def test_fresh_volume_optional_state_fallbacks(tmp_path, monkeypatch):
     assert registry_subnet_rows() == []
 
 
-def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
-    """Deploy is workflow_dispatch or owner `fly-deploy` label; push-to-main stays off.
+def test_fly_yml_dispatch_only_not_push():
+    """Deploy is workflow_dispatch only; push-to-main and the label path stay off (#1459).
 
     #1185: the deploy checkout ref resolves at runtime via the deploy_ref step
     (steps.deploy_ref.outputs.ref). Merged docs-only vehicles under
@@ -292,16 +292,10 @@ def test_fly_yml_dispatch_or_fly_deploy_label_not_push():
     yml = _fly_yml()
     on_block = yml.split("jobs:", 1)[0]
     assert "workflow_dispatch:" in on_block
-    assert "pull_request:" in on_block
-    assert "types: [labeled]" in on_block
+    assert "pull_request:" not in on_block
+    assert "types: [labeled]" not in on_block
     assert "\n  push:" not in on_block
-    gate = (
-        "github.event_name == 'workflow_dispatch' || "
-        "(github.event_name == 'pull_request' && "
-        "github.event.label.name == 'fly-deploy' && "
-        "github.event.pull_request.head.repo.full_name == github.repository && "
-        "github.actor == 'cryptoreporthub')"
-    )
+    gate = "if: ${{ github.event_name == 'workflow_dispatch' }}"
     assert yml.count(gate) == 2
     # #1185: ref-resolve step replaced the inline head.sha || github.sha expression.
     assert "steps.deploy_ref.outputs.ref" in yml
@@ -521,7 +515,7 @@ def _run_web_entrypoint_skip_only(env: dict[str, str]) -> str:
     """Run only _start_inline_worker from fly_web_entrypoint.sh (no supervise/uvicorn)."""
     src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
     # Drop supervise (infinite loop when ENABLE=1) and uvicorn exec.
-    marker = "_start_inline_worker\n_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
+    marker = "_supervise_inline_worker\nexec python scripts/run_web_with_guard.py"
     assert marker in src, "entrypoint tail changed — update this test"
     stub = src.replace(
         marker,
@@ -551,6 +545,28 @@ def test_web_entrypoint_logs_skip_under_v2_enable_inline_off():
     )
     assert "skipping inline worker" in out.lower()
     assert "starting inline" not in out.lower()
+
+
+def test_web_entrypoint_supervise_logs_skip_under_v2_enable_inline_off():
+    """Full entrypoint path: _supervise_inline_worker must log skip for v2 gate."""
+    src = Path("scripts/fly_web_entrypoint.sh").read_text(encoding="utf-8")
+    stub = src.replace(
+        "exec python scripts/run_web_with_guard.py",
+        "exit 0\n",
+    )
+    merged = dict(os.environ)
+    merged.update({"ENABLE_INLINE_WORKER": "0", "WORKER_SPLIT_V2": "off"})
+    proc = subprocess.run(
+        ["sh", "-s"],
+        input=stub,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=merged,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "skipping inline worker" in proc.stdout.lower()
 
 
 def test_web_entrypoint_logs_skip_when_split_v2_on():
@@ -669,3 +685,25 @@ def test_machine_process_group_counts_v1():
         if pg in counts:
             counts[pg] += 1
     assert counts == {"web": 1, "worker": 0}
+
+
+def test_fly_toml_keeps_snapshot_scoring_workers_low():
+    """Prod is one 1 GB shared-cpu machine; more than 2 scoring threads blurs the cost read and risks the box."""
+    match = re.search(r'^\s*SCORE_SNAPSHOT_SCORE_WORKERS\s*=\s*"(\d+)"', _fly_toml(), re.MULTILINE)
+    assert match, "fly.toml [env] must set SCORE_SNAPSHOT_SCORE_WORKERS"
+    assert int(match.group(1)) <= 2
+
+
+def test_snapshot_scoring_workers_default_is_serial_without_env(monkeypatch):
+    """The code default must stay 1 so a deploy without the fly.toml entry does not reinstate 4."""
+    import importlib
+
+    from internal.council import score_snapshots
+
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCORE_WORKERS", raising=False)
+    try:
+        reloaded = importlib.reload(score_snapshots)
+        assert reloaded.SCORE_SNAPSHOT_SCORE_WORKERS == 1
+    finally:
+        monkeypatch.undo()
+        importlib.reload(score_snapshots)
