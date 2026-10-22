@@ -163,6 +163,20 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _parse_netuids(values: Any) -> Optional[List[int]]:
+    if not isinstance(values, (list, tuple, set)):
+        return None
+    parsed: List[int] = []
+    for value in values:
+        if isinstance(value, bool):
+            return None
+        try:
+            parsed.append(int(value))
+        except (TypeError, ValueError):
+            return None
+    return parsed
+
+
 def is_complete_snapshot(snap: Any) -> bool:
     """Single domain predicate for publish and serve (#1479)."""
     if not isinstance(snap, dict):
@@ -175,19 +189,24 @@ def is_complete_snapshot(snap: Any) -> bool:
         return False
     if not scorer_fields_match(snap):
         return False
+    have_list = _parse_netuids([r["netuid"] for r in day_rows if "netuid" in r])
+    if have_list is None:
+        return False
     expected: List[int] = []
     day_block = coverage.get("day")
     if isinstance(day_block, dict) and day_block.get("expected"):
-        expected = [int(n) for n in day_block["expected"]]
+        parsed = _parse_netuids(day_block["expected"])
+        if parsed is None:
+            return False
+        expected = parsed
     membership = coverage.get("membership")
-    if not expected and isinstance(membership, dict):
-        expected = [
-            int(n)
-            for n in (membership.get("expected_netuids") or [])
-            if str(n).isdigit() and int(n) > 0
-        ]
+    if not expected and isinstance(membership, dict) and membership.get("expected_netuids"):
+        parsed = _parse_netuids(membership["expected_netuids"])
+        if parsed is None:
+            return False
+        expected = [n for n in parsed if n > 0]
     if expected:
-        have = {int(r["netuid"]) for r in day_rows if "netuid" in r}
+        have = set(have_list)
         return all(n in have for n in expected)
     return True
 
