@@ -528,8 +528,6 @@ def _sync_once() -> bool:
             return False
         rows = fetch.get("rows") or []
         outcome_counts = _summarize_rpc_outcomes(fetch.get("netuid_outcomes") or {})
-        if outcome_counts:
-            logger.info("live_subnets sync rpc outcomes: %s", outcome_counts)
         if not rows:
             degraded = fetch.get("degraded_reason")
             if degraded:
