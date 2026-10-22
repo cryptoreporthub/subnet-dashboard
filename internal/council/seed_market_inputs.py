@@ -13,7 +13,6 @@ REGISTRY_REL = Path("config") / "registry.json"
 PRICE_CACHE_REL = Path("data") / "price_cache.json"
 UNIVERSE_REL = Path("data") / "subnet_universe.json"
 COMMITTED_ROWS_REL = Path("data_seeds") / "authoritative_universe_rows.json"
-IMAGE_SEED_NETUIDS = tuple(range(1, 129))
 
 
 def _sha256_file(path: Path) -> str:
@@ -136,9 +135,7 @@ def _rows_from_live_universe(
     return rows, market_provenance
 
 
-def refresh_committed_authoritative_rows(
-    netuids: Tuple[int, ...] = IMAGE_SEED_NETUIDS,
-) -> Path:
+def refresh_committed_authoritative_rows(netuids: Tuple[int, ...]) -> Path:
     """Regenerate data_seeds/authoritative_universe_rows.json from live universe files."""
     root = repo_root()
     rows, prov = _rows_from_live_universe(
@@ -153,8 +150,24 @@ def refresh_committed_authoritative_rows(
     return out
 
 
+def _committed_rows_for(
+    committed: Path, netuids: Tuple[int, ...]
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    payload = json.loads(committed.read_text(encoding="utf-8"))
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    prov = payload.get("market_inputs") if isinstance(payload, dict) else None
+    if not isinstance(rows, list) or not isinstance(prov, dict):
+        raise ValueError(f"{COMMITTED_ROWS_REL} is malformed")
+    by_netuid = {row["netuid"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("netuid"), int)}
+    missing = [n for n in netuids if n not in by_netuid]
+    if missing:
+        raise ValueError(f"authoritative inputs missing netuids: {missing[:8]}")
+    selected = [by_netuid[n] for n in netuids]
+    return selected, {**prov, "netuid_count": len(selected), "hydrate_row_count": len(selected)}
+
+
 def build_authoritative_hydrate_rows(
-    netuids: Tuple[int, ...] = IMAGE_SEED_NETUIDS,
+    netuids: Tuple[int, ...],
     *,
     universe_path: Optional[Path] = None,
     registry_path: Optional[Path] = None,
@@ -164,11 +177,7 @@ def build_authoritative_hydrate_rows(
     root = repo_root()
     committed = root / COMMITTED_ROWS_REL
     if universe_path is None and registry_path is None and price_cache_path is None and committed.is_file():
-        payload = json.loads(committed.read_text(encoding="utf-8"))
-        rows = payload.get("rows")
-        prov = payload.get("market_inputs")
-        if isinstance(rows, list) and isinstance(prov, dict) and len(rows) == len(netuids):
-            return rows, prov
+        return _committed_rows_for(committed, netuids)
 
     uni_path = universe_path or (root / UNIVERSE_REL)
     reg_path = registry_path or (root / REGISTRY_REL)

@@ -13,6 +13,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+from internal.chain_price.membership import read_chain_membership  # noqa: E402
+from internal.chain_price.reader import ChainReader  # noqa: E402
 from internal.council.build_seed_snapshot import build_image_seed_snapshot  # noqa: E402
 from internal.council.seed_market_inputs import refresh_committed_authoritative_rows  # noqa: E402
 from internal.council.score_snapshots import is_complete_snapshot, publish_complete_snapshot  # noqa: E402
@@ -33,20 +35,24 @@ def main() -> int:
         help="Seed path (default: data_seeds/score_snapshots.json)",
     )
     parser.add_argument(
-        "--build-128",
+        "--build",
         action="store_true",
-        help="Run real 128/128 scorer build into --dest (ignores source path)",
+        help="Read membership from the chain and run the real scorer build into --dest (ignores source path)",
     )
     args = parser.parse_args()
-    if args.build_128:
+    if args.build:
+        chain, outcome = read_chain_membership(ChainReader())
+        if chain is None:
+            print(f"chain membership read failed: {outcome}", file=sys.stderr)
+            return 2
         try:
-            refresh_committed_authoritative_rows()
+            refresh_committed_authoritative_rows(chain.netuids)
         except (OSError, ValueError) as exc:
             print(f"WARN: could not refresh authoritative_universe_rows: {exc}", file=sys.stderr)
         with tempfile.TemporaryDirectory() as tmp:
             volume = os.path.join(tmp, "build.json")
             cycle = os.path.join(tmp, "cycle.json")
-            out = build_image_seed_snapshot(volume_path=volume, cycle_path=cycle)
+            out = build_image_seed_snapshot(chain=chain, volume_path=volume, cycle_path=cycle)
             if not out.get("published"):
                 print(f"build failed: {out}", file=sys.stderr)
                 return 2
