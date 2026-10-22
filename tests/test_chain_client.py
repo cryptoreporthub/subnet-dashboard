@@ -96,6 +96,23 @@ def clear_endpoint_rate_limits():
         _RL_STEP.clear()
 
 
+
+def test_clamp_client_rpc_timeout_respects_floor_and_original():
+    import time
+
+    from internal.chain_client import ChainClient, clamp_client_rpc_timeout
+
+    client = ChainClient("https://clamp.example", timeout=30.0, init_volume_db=False, retries=0)
+    originals: dict = {}
+    clamp_client_rpc_timeout(client, time.monotonic() + 0.001, originals)
+    assert client.timeout == 0.01
+
+    client2 = ChainClient("https://clamp2.example", timeout=4.0, init_volume_db=False, retries=0)
+    originals2: dict = {}
+    clamp_client_rpc_timeout(client2, time.monotonic() + 100.0, originals2)
+    assert client2.timeout == 4.0
+
+
 def test_shared_endpoint_cooldown_blocks_second_client(clear_endpoint_rate_limits):
     from internal.chain_client import ChainClient
 

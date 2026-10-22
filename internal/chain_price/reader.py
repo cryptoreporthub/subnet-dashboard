@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from internal.chain_client import (
     ChainClient,
     _clear_rate_limit_step,
+    clamp_client_rpc_timeout,
     note_rate_limit,
     rate_limited_until,
 )
@@ -43,13 +44,7 @@ class ChainReader:
 
     def _prepare_client(self, client: ChainClient) -> None:
         """Clamp per-request timeout and attach absolute RPC deadline for retries."""
-        rem = self._deadline_remaining()
-        setattr(client, "_rpc_deadline_mono", self.rpc_deadline_mono)
-        if rem is None:
-            return
-        if client not in self._timeout_originals:
-            self._timeout_originals[client] = float(client.timeout)
-        client.timeout = min(self._timeout_originals[client], max(0.01, rem))
+        clamp_client_rpc_timeout(client, self.rpc_deadline_mono, self._timeout_originals)
 
     def reset_probe_diagnostics(self) -> None:
         """Clear per-run probe counters (Step 4 live harness)."""
