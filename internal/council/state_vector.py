@@ -1903,6 +1903,7 @@ def score_subnet_for_day(
             calibration_health_snapshot=(market_context or {}).get(
                 "telegram_calibration_health"
             ),
+            conviction_index=(market_context or {}).get("telegram_conviction_index"),
         )
         total = min(100.0, max(0.0, round(total + telegram_calibration["adjustment_points"], 2)))
     except Exception:

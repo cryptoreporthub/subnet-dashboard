@@ -21,6 +21,13 @@ def enrich_scoring_market_context(
             ctx["telegram_conviction_rows"] = _conviction_rows()
         except Exception:
             ctx["telegram_conviction_rows"] = None
+    if "telegram_conviction_index" not in ctx and ctx.get("telegram_conviction_rows") is not None:
+        try:
+            from internal.message_intel.calibration import index_conviction_calls
+
+            ctx["telegram_conviction_index"] = index_conviction_calls(ctx["telegram_conviction_rows"])
+        except Exception:
+            ctx["telegram_conviction_index"] = None
     if "telegram_calibration_health" not in ctx and ctx.get("telegram_conviction_rows") is not None:
         try:
             from internal.message_intel.calibration import calibration_health

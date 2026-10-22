@@ -63,6 +63,10 @@ def _seed(db, *, author_name="Nick", author_username="nick_tg", author_id=None,
         if price_24h is not None:
             fields["price_24h"] = price_24h
         db.save_price_outcome(mid, fields)
+    # The read cache serves the leaderboard for up to 30 s after a write.
+    from internal.message_intel.load_guard import clear_message_intel_load_cache
+
+    clear_message_intel_load_cache()
     return mid
 
 
