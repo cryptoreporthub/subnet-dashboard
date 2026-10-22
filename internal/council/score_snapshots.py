@@ -1111,6 +1111,7 @@ class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
         self._tick_active = False
+        self._armed = False
         self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
@@ -1128,20 +1129,25 @@ class ScoreSnapshotScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        already = self.liveness.snapshot().get("lifecycle") == "started"
+        if self._armed:
+            return {"started": False, "reason": "already_armed"}
+        resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
+        self._armed = True
         self.liveness.start()
+        armed = "immediate" if immediate else "deferred"
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
         else:
-            # After pick schedulers; full score is the heavy job.
-            # Persisted lifecycle=started is not proof a DateTrigger is armed
-            # (new process generation after prior boot).
             schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-        if already:
-            return {"started": False, "reason": "already running"}
-        return {"started": True, "refresh_minutes": self.refresh_minutes}
+        return {
+            "started": True,
+            "armed": armed,
+            "resumed_lifecycle": resumed_lifecycle,
+            "refresh_minutes": self.refresh_minutes,
+        }
 
     def stop(self) -> Dict[str, Any]:
+        self._armed = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
@@ -1456,12 +1462,6 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
         "age_seconds": snapshot_age_seconds(),
         "liveness": snap,
     }
-
-
-def ensure_complete_snapshot() -> Dict[str, Any]:
-    if read_served_snapshot().servable:
-        return {"ensured": False, "reason": "complete_snapshot_present"}
-    return {"ensured": True, **revive_score_snapshot_scheduler()}
 
 
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
