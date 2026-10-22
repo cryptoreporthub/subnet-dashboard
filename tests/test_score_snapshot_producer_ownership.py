@@ -1,8 +1,4 @@
-"""PR-A scaffold (MC #1479 D1) — ownership predicate + fly truth table.
-
-Full producer boot wiring and ensure-job deletion wait on multi-model design
-challenge (#1479) + MC decision. Predicate + table rows match locked MC part 1.
-"""
+"""PR-A / MC #1479 D1 — ownership predicate + fly truth table."""
 
 from __future__ import annotations
 
@@ -133,7 +129,7 @@ def _role_envs(fly_path: str, worker_overlay: dict[str, str] | None) -> list[tup
 def test_fly_topology_truth_table_exactly_one_producer(
     fly_path, worker_overlay, monkeypatch
 ):
-    """Skeleton: prod fly declarations → one owning role per topology (predicate only)."""
+    """Prod fly declarations → one owning role per topology."""
     owners = 0
     for _role, env in _role_envs(fly_path, worker_overlay):
         _apply_env(monkeypatch, env)
@@ -142,7 +138,6 @@ def test_fly_topology_truth_table_exactly_one_producer(
     assert owners == 1, f"{fly_path}: expected one producer role, saw {owners}"
 
 
-@pytest.mark.skip(reason="PR-A: hop overlay inventory only until MC challenge closes")
 def test_fly_worker_v2_hop_topology_has_zero_producers(monkeypatch):
     env = _parse_fly_env("fly.worker-v2-hop.toml")
     _apply_env(monkeypatch, env)
