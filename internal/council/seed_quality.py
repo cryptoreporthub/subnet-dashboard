@@ -8,13 +8,17 @@ from typing import Any, Dict, List, Optional, Tuple
 from internal.council.score_snapshots import is_complete_snapshot
 
 _PLACEHOLDER_NAME = re.compile(r"^S\d+$", re.IGNORECASE)
+_FABRICATED_ALPHA_NAME = re.compile(r"^Alpha Subnet \d+$", re.IGNORECASE)
 _REQUIRED_EXPERT_KEYS = ("quant", "hype", "dark_horse", "technical")
 
 
 def is_placeholder_seed_name(name: Any) -> bool:
     if not isinstance(name, str) or not name.strip():
         return True
-    return bool(_PLACEHOLDER_NAME.match(name.strip()))
+    stripped = name.strip()
+    if _PLACEHOLDER_NAME.match(stripped):
+        return True
+    return bool(_FABRICATED_ALPHA_NAME.match(stripped))
 
 
 def seed_build_provenance(snap: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -40,6 +44,17 @@ def validate_shipped_seed(snap: Any) -> Tuple[bool, str]:
         return False, "bad_provenance_counts"
     if expected < 1 or succeeded != expected:
         return False, "partial_build"
+    market = prov.get("market_inputs")
+    if not isinstance(market, dict):
+        return False, "missing_market_inputs"
+    for key in ("universe_sha256", "price_cache_sha256", "universe_path", "price_cache_path"):
+        if not market.get(key):
+            return False, f"bad_market_inputs_{key}"
+    try:
+        if int(market.get("hydrate_row_count") or 0) != int(market.get("netuid_count") or 0):
+            return False, "market_inputs_row_mismatch"
+    except (TypeError, ValueError):
+        return False, "bad_market_inputs_counts"
     day_rows: List[Dict[str, Any]] = [
         r for r in (snap.get("day") or []) if isinstance(r, dict)
     ]

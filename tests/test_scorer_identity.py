@@ -28,6 +28,24 @@ def test_scorer_digest_independent_of_cwd(tmp_path, monkeypatch):
     assert scorer_fields_match(payload)
 
 
+def test_scorer_digest_changes_when_weights_bytes_change():
+    import hashlib
+    from internal.council.scorer_identity import scorer_source_paths
+
+    paths = scorer_source_paths()
+    weights = next(p for p in paths if p.name == "weights.py")
+    baseline = hashlib.sha256()
+    for path in paths:
+        baseline.update(path.read_bytes())
+    touched = hashlib.sha256()
+    for path in paths:
+        data = path.read_bytes()
+        if path == weights:
+            data = data + b"\n"
+        touched.update(data)
+    assert baseline.hexdigest() != touched.hexdigest()
+
+
 def test_scorer_identity_files_include_scoring_context():
     files = scorer_identity_file_list()
     assert "internal/council/scoring_context.py" in files

@@ -14,6 +14,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from internal.council.build_seed_snapshot import build_image_seed_snapshot  # noqa: E402
+from internal.council.seed_market_inputs import refresh_committed_authoritative_rows  # noqa: E402
 from internal.council.score_snapshots import is_complete_snapshot, publish_complete_snapshot  # noqa: E402
 from internal.council.seed_quality import validate_shipped_seed  # noqa: E402
 
@@ -38,6 +39,10 @@ def main() -> int:
     )
     args = parser.parse_args()
     if args.build_128:
+        try:
+            refresh_committed_authoritative_rows()
+        except (OSError, ValueError) as exc:
+            print(f"WARN: could not refresh authoritative_universe_rows: {exc}", file=sys.stderr)
         with tempfile.TemporaryDirectory() as tmp:
             volume = os.path.join(tmp, "build.json")
             cycle = os.path.join(tmp, "cycle.json")

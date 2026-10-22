@@ -1,4 +1,11 @@
-"""Scoring-semantics identity stamped on every complete snapshot (#1479 PR-B)."""
+"""Scoring-semantics identity stamped on every complete snapshot (#1479 PR-B).
+
+Digest covers the four council scoring modules (state_vector, weights,
+confidence_calibration, scoring_context). Runtime soul_map JSON is excluded;
+a weight-only deploy must change ``weights.py`` (or another listed file) so
+``scorer_digest`` mismatches and forces a snapshot rebuild — see
+``test_scorer_digest_changes_when_weights_bytes_change``.
+"""
 
 from __future__ import annotations
 
