@@ -33,6 +33,7 @@ from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
 from internal.chain_rpc_errors import (
     ChainRpcError,
+    EndpointRpcCooldownActive,
     PinnedBlockMismatch,
     classify_http_status,
     classify_jsonrpc_error,
@@ -104,14 +105,12 @@ def clamp_client_rpc_timeout(
     client.timeout = min(originals[client], cap)
 
 
-
 def _classify_alpha_price_probe_error(exc: BaseException) -> str:
     """Map RPC failures to live_subnets / universe outcome labels."""
     from internal.chain_price.rpc import classify_rpc_error
 
-    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
-        if "cooldown" in str(exc).lower():
-            return "cooldown_skip"
+    if isinstance(exc, EndpointRpcCooldownActive):
+        return "cooldown_skip"
     labeled = classify_rpc_error(exc)
     if labeled in ("timeout", "connection", "parse", "rate_limited", "rpc_error"):
         return labeled
@@ -392,7 +391,7 @@ class ChainClient:
             try:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
-                    raise ChainRpcError("rate_limited", "cooldown")
+                    raise EndpointRpcCooldownActive()
                 response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
@@ -446,7 +445,7 @@ class ChainClient:
                     clamp_client_rpc_timeout(self, deadline_mono, originals)
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
-                    raise ChainRpcError("rate_limited", "cooldown")
+                    raise EndpointRpcCooldownActive()
                 response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     retry_after = _parse_retry_after_header(response)
