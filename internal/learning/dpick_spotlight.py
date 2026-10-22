@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from internal.council.publish_gate import directional_publish_guard
 
 
-def _registry_subnets_for_spotlight(limit: int = 96) -> List[Dict[str, Any]]:
+def _registry_subnets_for_spotlight() -> List[Dict[str, Any]]:
     """Registry-only subnet rows for weighing on the lite read path."""
     import json
     import os
@@ -19,7 +19,7 @@ def _registry_subnets_for_spotlight(limit: int = 96) -> List[Dict[str, Any]]:
         with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
         rows = tradable_subnets(list(data.values()) if isinstance(data, dict) else [])
-        return rows[:limit]
+        return rows
     except Exception:
         return []
 

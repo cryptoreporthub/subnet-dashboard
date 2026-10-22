@@ -457,6 +457,15 @@ def _start_score_snapshot_scheduler() -> None:
     defer_boot("score-snapshots", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
 
 
+def _ensure_complete_snapshot() -> None:
+    def _run() -> None:
+        from internal.council.score_snapshots import ensure_complete_snapshot
+
+        _log_scheduler_start("score_snapshot_ensure", ensure_complete_snapshot())
+
+    defer_boot("score-snapshot-ensure", _run, delay=max(BOOT_DEFER_SECONDS + 45, 90))
+
+
 def _start_pick_audit_scheduler() -> None:
     """Nightly selection oracle replay (evidence loop — Python only)."""
 
@@ -686,6 +695,8 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
         _start_outcome_snapshot_scheduler()
         _start_calibration_snapshot_scheduler()
         _start_dev_radar_github_scheduler()
+    elif is_worker_mode():
+        _ensure_complete_snapshot()
 
     if live_subnets_sync_owner_enabled():
         try:

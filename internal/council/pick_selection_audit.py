@@ -3,7 +3,7 @@
 Evidence loop (not LLM): replay ``select_daily_pick`` under locked universe policies
 and compare to today's persisted row in ``data/daily_picks.json``.
 
-Primary PASS gate: ``scheduler_cap_24`` (matches pick_scheduler universe).
+Primary PASS gate: ``full_universe`` (every tradable subnet the daily pick scores).
 """
 
 from __future__ import annotations
@@ -16,17 +16,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from internal.council.daily_pick import select_daily_pick
 from internal.council.publish_gate import publish_gate_fraction, publish_gate_percent
-from internal.subnets.scoring_cap import cap_subnets_for_scoring
 from internal.subnets.tradable import tradable_subnets, subnet_netuid
 
 logger = logging.getLogger(__name__)
 
-POLICY_SCHEDULER_24 = "scheduler_cap_24"
-POLICY_SNAPSHOT_40 = "snapshot_cap_40"
 POLICY_FULL = "full_universe"
-PRIMARY_POLICY = POLICY_SCHEDULER_24
+PRIMARY_POLICY = POLICY_FULL
 
-ALL_POLICIES = (POLICY_SCHEDULER_24, POLICY_SNAPSHOT_40, POLICY_FULL)
+ALL_POLICIES = (POLICY_FULL,)
 
 PICK_AUDITS_DIR = os.environ.get("PICK_AUDITS_DIR", os.path.join("data", "pick_audits"))
 DAILY_PICKS_PATH = os.path.join("data", "daily_picks.json")
@@ -47,29 +44,12 @@ def _today_str() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
-def _env_int(name: str, default: int) -> int:
-    try:
-        return int(os.environ.get(name, str(default)))
-    except ValueError:
-        return default
-
-
-def _scheduler_cap_limit() -> int:
-    top = _env_int("TOP_SCORING_UNIVERSE", 40)
-    sched = _env_int("PICK_SCHEDULER_UNIVERSE_CAP", 24)
-    return min(sched, top)
-
-
 def universe_for_policy(
     subnets: List[Dict[str, Any]],
     policy: str,
 ) -> List[Dict[str, Any]]:
     """Return subnet rows scored for a replay policy."""
     rows = tradable_subnets(subnets)
-    if policy == POLICY_SCHEDULER_24:
-        return cap_subnets_for_scoring(rows, limit=_scheduler_cap_limit())
-    if policy == POLICY_SNAPSHOT_40:
-        return cap_subnets_for_scoring(rows, limit=min(40, _env_int("TOP_SCORING_UNIVERSE", 40)))
     if policy == POLICY_FULL:
         return rows
     raise ValueError(f"unknown policy: {policy}")
@@ -161,20 +141,6 @@ def classify_miss(
     if published_nu is None:
         return "MISS", _CATEGORY_NO_PUBLISH
 
-    full_nu = (oracles.get(POLICY_FULL, {}).get("pick") or {}).get("netuid")
-    try:
-        full_nu = int(full_nu) if full_nu is not None else None
-    except (TypeError, ValueError):
-        full_nu = None
-
-    if (
-        full_nu is not None
-        and int(published_nu) == full_nu
-        and primary_nu is not None
-        and int(published_nu) != primary_nu
-    ):
-        return "MISS", _CATEGORY_UNIVERSE
-
     if _has_stale_data_signals(published_row):
         return "MISS", _CATEGORY_STALE_DATA
 
@@ -210,7 +176,6 @@ def discovery_questions(
 ) -> Dict[str, str]:
     """Rule-based what/why/rule/devil — same shape as judge postmortems."""
     primary = oracles.get(PRIMARY_POLICY, {}).get("pick") or {}
-    full = oracles.get(POLICY_FULL, {}).get("pick") or {}
     p_nu = primary.get("netuid")
     p_name = primary.get("name") or f"SN{p_nu}"
     pub_name = None
@@ -221,7 +186,7 @@ def discovery_questions(
     if category == _CATEGORY_PASS:
         return {
             "what": f"Published {pub_name} matched oracle under {PRIMARY_POLICY}.",
-            "why": "Selection replay aligned with locked scheduler universe.",
+            "why": "Selection replay aligned with the full tradable universe.",
             "rule": "No change required.",
             "devil": "A different universe policy would have chosen another name.",
         }
@@ -229,25 +194,11 @@ def discovery_questions(
     if category == _CATEGORY_UNIVERSE:
         what = (
             f"Published {pub_name} (SN{published_nu}) was not oracle under {PRIMARY_POLICY}; "
-            f"{p_name} (SN{p_nu}) led scheduler cap-24."
+            f"{p_name} (SN{p_nu}) led the full tradable universe."
         )
-        if full.get("netuid") == published_nu:
-            why = (
-                "Pick regen or hydrate likely scored the full tradable universe "
-                f"while scheduler uses cap-{_scheduler_cap_limit()}."
-            )
-            rule = (
-                "Cap get_or_create_today_pick regen to the same universe as pick_scheduler; "
-                "document locked oracle policy in pick-audit-lock.md."
-            )
-            devil = (
-                f"To justify SN{published_nu}, adopt full_universe as primary policy "
-                "and accept micro-cap flow tilt."
-            )
-        else:
-            why = "Oracle rankings diverged across universe policies or red-team reorder."
-            rule = "Replay all three policies nightly; fix scorer only when primary oracle disagrees."
-            devil = "Manual pick_explain on both netuids before changing weights."
+        why = "Oracle rankings diverged after stale-data, tie-break and gate checks were ruled out."
+        rule = "Replay the full universe nightly; fix scorer only when primary oracle disagrees."
+        devil = "Manual pick_explain on both netuids before changing weights."
         return {"what": what, "why": why, "rule": rule, "devil": devil}
 
     if category == _CATEGORY_STALE_DATA:
@@ -255,7 +206,7 @@ def discovery_questions(
             "what": f"Published/candidate SN{published_nu} had missing-field audit at pick time.",
             "why": "Subnet hydrate lag — pick written before price/volume landed.",
             "rule": "Regen stale HOLD once prices exist; block persist when critical fields missing.",
-            "devil": "If data were complete, oracle might still differ on universe cap.",
+            "devil": "If data were complete, oracle might still differ on universe membership.",
         }
 
     if category == _CATEGORY_GATE_REORDER:

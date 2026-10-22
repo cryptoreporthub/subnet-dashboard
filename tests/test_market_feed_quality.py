@@ -4,7 +4,7 @@ from fetchers.taomarketcap import _overlay_market_fields, _rows_have_market_fiel
 from internal.council.daily_pick import select_daily_pick
 from internal.council.red_team import audit_daily_pick
 from internal.council.state_vector import pick_reasons
-from server import _cap_subnets_for_scoring, _safe_simivision_payload
+from server import _safe_simivision_payload
 
 
 def test_rows_without_price_fail_market_check():
@@ -44,20 +44,6 @@ def test_get_all_subnets_overlays_market_when_registry_cold():
         pytest.skip("TaoMarketCap unreachable — cannot assert market overlay")
     assert len(priced) >= 10
     assert all((r.get("netuid") or 0) != 0 or r.get("id") == 0 for r in rows[:5]) or True
-
-
-def test_cap_prefers_volume_over_stale_emission(monkeypatch):
-    monkeypatch.setattr(
-        "internal.council.score_snapshots.rank_subnets_by_snapshot",
-        lambda *args, **kwargs: None,
-    )
-    rows = [
-        {"netuid": 1, "name": "HighEmit", "emission": 99, "volume": 10},
-        {"netuid": 2, "name": "Active", "emission": 1, "volume": 50_000, "market_cap": 2e6},
-        {"netuid": 3, "name": "Mid", "emission": 50, "volume": 100},
-    ]
-    capped = _cap_subnets_for_scoring(rows, limit=1)
-    assert capped[0]["netuid"] == 2
 
 
 def test_redteam_alpha_volume_thresholds():

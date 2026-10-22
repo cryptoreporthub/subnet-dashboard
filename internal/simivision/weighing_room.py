@@ -74,7 +74,7 @@ def _judge_long_rows(
         return []
     scored: List[Dict[str, Any]] = []
     try:
-        from internal.judges.council_routes import _cap_subnets_for_judges, _load_judges_cache_file
+        from internal.judges.council_routes import _load_judges_cache_file
         from internal.judges.subnet_judges import score_all_subnets
 
         cached = _load_judges_cache_file()
@@ -82,8 +82,7 @@ def _judge_long_rows(
         if isinstance(judges, list) and judges:
             scored = judges
         else:
-            capped = _cap_subnets_for_judges(list(subnets))
-            scored = score_all_subnets(capped, use_chain=False)
+            scored = score_all_subnets(list(subnets), use_chain=False)
     except Exception:
         return []
 

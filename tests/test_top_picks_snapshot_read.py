@@ -12,6 +12,7 @@ def test_build_top_picks_from_snapshot(tmp_path, monkeypatch):
     snap_path = tmp_path / "score_snapshots.json"
     payload = {
         "written_at": "2026-10-17T00:00:00Z",
+        "coverage": {"complete": True},
         "hour": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
         "day": [
             {"netuid": 2, "total_score": 90.0, "name": "A"},
@@ -33,6 +34,82 @@ def test_build_top_picks_from_snapshot(tmp_path, monkeypatch):
     assert out["meta"]["source"] == "score_snapshot"
 
 
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"coverage": {"complete": False, "capture_reason": "capture_timeout"}}],
+    ids=["no_coverage_block", "incomplete_capture"],
+)
+def test_build_top_picks_refuses_snapshots_not_proven_complete(tmp_path, monkeypatch, extra):
+    from internal.council import score_snapshots as snaps
+
+    snap_path = tmp_path / "score_snapshots.json"
+    payload = {
+        "written_at": "2026-10-17T00:00:00Z",
+        "hour": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
+        "day": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
+        **extra,
+    }
+    snap_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
+
+    subnets = [{"netuid": 2, "name": "A", "symbol": "A", "emission": 1.0}]
+    assert snaps.build_top_picks_from_snapshot(subnets) is None
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [{}, {"coverage": {"complete": False, "capture_reason": "capture_timeout"}}, {"coverage": {"complete": True}}],
+    ids=["no_coverage_block", "incomplete_capture", "complete_control"],
+)
+@pytest.mark.parametrize("reader", ["build_top_picks", "day_scored", "rank"])
+def test_scored_readers_refuse_snapshots_not_proven_complete(tmp_path, monkeypatch, extra, reader):
+    from internal.council import score_snapshots as snaps
+
+    snap_path = tmp_path / "score_snapshots.json"
+    rows = [{"netuid": 2, "total_score": 90.0, "name": "A"}]
+    snap_path.write_text(
+        json.dumps({"written_at": "2026-10-17T00:00:00Z", "hour": rows, "day": rows, **extra}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
+    subnets = [{"netuid": 2, "name": "A", "symbol": "A"}]
+    read = {
+        "build_top_picks": snaps.build_top_picks_from_snapshot,
+        "day_scored": snaps.day_scored_from_snapshot,
+        "rank": snaps.rank_subnets_by_snapshot,
+    }[reader]
+    if extra.get("coverage", {}).get("complete") is True:
+        assert read(subnets) is not None
+    else:
+        assert read(subnets) is None
+
+
+def test_deliberation_shortlist_says_pending_for_partial_snapshot(tmp_path, monkeypatch):
+    from internal.council import score_snapshots as snaps
+    from internal.learning.dpick_shortlist import build_deliberation_shortlist
+
+    snap_path = tmp_path / "score_snapshots.json"
+    snap_path.write_text(
+        json.dumps(
+            {
+                "written_at": "2026-10-17T00:00:00Z",
+                "coverage": {"complete": False, "capture_reason": "capture_timeout"},
+                "hour": [],
+                "day": [{"netuid": 2, "total_score": 90.0, "name": "A"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_MAX_AGE_SECONDS", 7200)
+
+    out = build_deliberation_shortlist([{"netuid": 2, "name": "A", "symbol": "A", "emission": 1.0}])
+    assert out.get("status") == "pending_snapshot"
+    assert out["total_considered"] == 0
+
+
 def test_build_top_picks_server_uses_snapshot_not_score_universe(tmp_path, monkeypatch):
     from internal.council import score_snapshots as snaps
     from server import _build_top_picks
@@ -41,6 +118,7 @@ def test_build_top_picks_server_uses_snapshot_not_score_universe(tmp_path, monke
     snap_path.write_text(
         json.dumps(
             {
+                "coverage": {"complete": True},
                 "hour": [{"netuid": 5, "total_score": 77.0}],
                 "day": [{"netuid": 5, "total_score": 77.0}],
             }
@@ -69,7 +147,14 @@ def _write_snapshot(tmp_path, monkeypatch, day_rows):
 
     snap_path = tmp_path / "score_snapshots.json"
     snap_path.write_text(
-        json.dumps({"written_at": "2026-10-17T00:00:00Z", "hour": day_rows, "day": day_rows}),
+        json.dumps(
+            {
+                "written_at": "2026-10-17T00:00:00Z",
+                "coverage": {"complete": True},
+                "hour": day_rows,
+                "day": day_rows,
+            }
+        ),
         encoding="utf-8",
     )
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(snap_path))

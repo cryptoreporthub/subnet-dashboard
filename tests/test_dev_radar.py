@@ -57,3 +57,28 @@ def test_dev_radar_api_contract():
     assert "subnets" in body
     assert "summary" in body
     assert len(body["subnets"]) <= 5
+
+
+def _many_subnets(count):
+    return [{"netuid": n, "name": f"S{n}", "emission": float(n)} for n in range(1, count + 1)]
+
+
+def test_dev_radar_rows_are_not_truncated_by_default(monkeypatch):
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.load_predictions",
+        lambda: {"predictions": [], "resolved": []},
+    )
+    assert len(build_dev_radar_rows(_many_subnets(300))) == 300
+
+
+def test_dev_radar_payload_returns_every_subnet_by_default(monkeypatch):
+    import internal.dev_radar.service as svc
+
+    monkeypatch.setattr(
+        "internal.learning.predictions_store.load_predictions",
+        lambda: {"predictions": [], "resolved": []},
+    )
+    monkeypatch.setattr(svc, "_load_registry_subnets", lambda: _many_subnets(300))
+    monkeypatch.setattr(svc, "_CACHE", {"at": 0.0, "payload": None})
+    assert len(build_dev_radar_payload()["subnets"]) == 300
+    assert len(build_dev_radar_payload(limit=5)["subnets"]) == 5
