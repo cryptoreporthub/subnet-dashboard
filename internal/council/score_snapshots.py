@@ -13,10 +13,15 @@ import logging
 import os
 import time
 import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+
+from internal.council.scorer_identity import current_scorer_digest, stamp_scorer_fields, scorer_fields_match
 
 from internal import build_cost
 from internal.council.snapshot_coverage import env_int
@@ -28,6 +33,19 @@ logger = logging.getLogger(__name__)
 SCORE_SNAPSHOTS_PATH = os.environ.get(
     "SCORE_SNAPSHOTS_PATH", os.path.join("data", "score_snapshots.json")
 )
+SCORE_SNAPSHOT_SEED_PATH = os.environ.get(
+    "SCORE_SNAPSHOT_SEED_PATH", os.path.join("data_seeds", "score_snapshots.json")
+)
+
+
+def _score_snapshot_cycle_path() -> str:
+    override = os.environ.get("SCORE_SNAPSHOT_CYCLE_PATH")
+    if override:
+        return override
+    return os.path.join(os.path.dirname(SCORE_SNAPSHOTS_PATH) or ".", "score_snapshot_cycle.json")
+
+
+_served_parse_cache: Dict[Tuple[str, int, int], Dict[str, Any]] = {}
 SCORE_SNAPSHOT_REFRESH_MINUTES = int(os.environ.get("SCORE_SNAPSHOT_REFRESH_MINUTES", "30"))
 SCORE_SNAPSHOT_MAX_AGE_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_MAX_AGE_SECONDS", "7200"))
 SCORE_SNAPSHOT_FIRST_DELAY_SECONDS = int(os.environ.get("SCORE_SNAPSHOT_FIRST_DELAY_SECONDS", "90"))
@@ -85,22 +103,21 @@ def _snapshot_stamp(payload: Optional[Dict[str, Any]]) -> Optional[datetime]:
 
 
 def snapshot_age_seconds(path: Optional[str] = None) -> Optional[float]:
-    """Age for the 7200s freshness gate.
+    """Age of the volume snapshot when present; None if the volume file is absent.
 
-    A snapshot that records build_started_at is as old as the scoring run,
-    not as young as the file mtime of a late publish. Legacy files without
-    that field keep the mtime clock so an old written_at on a fresh file
-    stays readable.
+    Pick readers use ``read_served_snapshot`` (volume or seed). Ops probes that
+    pass an explicit path keep the legacy soul_map fallback when the volume file
+    is missing.
     """
-    snap_path = path or SCORE_SNAPSHOTS_PATH
-    snap = load_score_snapshot(snap_path)
-    started = _parse_iso((snap or {}).get("build_started_at")) if snap else None
-    if started is not None:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - started.timestamp())
+    volume_path = path or SCORE_SNAPSHOTS_PATH
     try:
-        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(snap_path))
+        os.stat(volume_path)
     except OSError:
         return None
+    served = read_served_snapshot(path=volume_path)
+    if served.origin == "seed":
+        return served.age_seconds
+    return served.age_seconds if served.servable else None
 
 
 @contextmanager
@@ -130,25 +147,97 @@ def _locked_score_snapshot(snap_path: str, timeout_seconds: float = 5.0) -> Iter
 def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
     snap_path = path or SCORE_SNAPSHOTS_PATH
     try:
+        st = os.stat(snap_path)
+        key = (snap_path, st.st_mtime_ns, st.st_size)
+        cached = _served_parse_cache.get(key)
+        if cached is not None:
+            return cached
         with open(snap_path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
-        return data if isinstance(data, dict) else None
+        if not isinstance(data, dict):
+            return None
+        _served_parse_cache.clear()
+        _served_parse_cache[key] = data
+        return data
     except Exception:
         return None
 
 
+def is_complete_snapshot(snap: Any) -> bool:
+    """Single domain predicate for publish and serve (#1479)."""
+    if not isinstance(snap, dict):
+        return False
+    coverage = snap.get("coverage")
+    if not isinstance(coverage, dict) or coverage.get("complete") is not True:
+        return False
+    day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
+    if not day_rows:
+        return False
+    if not scorer_fields_match(snap):
+        return False
+    expected: List[int] = []
+    day_block = coverage.get("day")
+    if isinstance(day_block, dict) and day_block.get("expected"):
+        expected = [int(n) for n in day_block["expected"]]
+    membership = coverage.get("membership")
+    if not expected and isinstance(membership, dict):
+        expected = [
+            int(n)
+            for n in (membership.get("expected_netuids") or [])
+            if str(n).isdigit() and int(n) > 0
+        ]
+    if expected:
+        have = {int(r["netuid"]) for r in day_rows if "netuid" in r}
+        return all(n in have for n in expected)
+    return True
+
+
+def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    tmp = os.path.join(directory, f".{os.path.basename(path)}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        dir_fd = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(dir_fd)
+        except OSError as exc:
+            logger.debug("score snapshot dir fsync skipped: %s", exc)
+        finally:
+            os.close(dir_fd)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
 def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
+    """Publish only complete snapshots; atomic durable write."""
     snap_path = path or SCORE_SNAPSHOTS_PATH
+    stamped = stamp_scorer_fields(payload)
+    if not is_complete_snapshot(stamped):
+        return {
+            "published": False,
+            "skipped_older": False,
+            "refused": "incomplete",
+            "timing": {"publish_wall_seconds": 0.0},
+        }
     os.makedirs(os.path.dirname(snap_path) or ".", exist_ok=True)
     with _locked_score_snapshot(snap_path):
         publish_started = time.monotonic()
         current = load_score_snapshot(snap_path)
-        incoming = _snapshot_stamp(payload)
-        on_disk = _snapshot_stamp(current)
+        incoming = _snapshot_stamp(stamped)
+        on_disk = _snapshot_stamp(current) if is_complete_snapshot(current or {}) else None
         if incoming is not None and on_disk is not None and incoming < on_disk:
             logger.info(
                 "score snapshot publish skipped: incoming %s is older than on-disk %s",
-                payload.get("build_started_at") or payload.get("written_at"),
+                stamped.get("build_started_at") or stamped.get("written_at"),
                 (current or {}).get("build_started_at") or (current or {}).get("written_at"),
             )
             publish_wall = time.monotonic() - publish_started
@@ -157,10 +246,8 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
                 "skipped_older": True,
                 "timing": {"publish_wall_seconds": round(publish_wall, 6)},
             }
-        tmp = snap_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(payload, handle, indent=2)
-        os.replace(tmp, snap_path)
+        _atomic_write_json(snap_path, stamped)
+        _served_parse_cache.clear()
         publish_wall = time.monotonic() - publish_started
         return {
             "published": True,
@@ -169,49 +256,140 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
         }
 
 
-def _patch_score_snapshot_coverage_locked(
-    snap_path: str,
-    coverage_patch: Dict[str, Any],
-) -> Dict[str, Any]:
-    """One locked os.replace: merge coverage only; scored day/hour rows unchanged (#1361)."""
-    with _locked_score_snapshot(snap_path):
-        publish_started = time.monotonic()
-        current = load_score_snapshot(snap_path)
-        if not isinstance(current, dict):
-            publish_wall = time.monotonic() - publish_started
-            return {
-                "published": False,
-                "skipped_older": False,
-                "timing": {"publish_wall_seconds": round(publish_wall, 6)},
-            }
-        merged_coverage = dict(current.get("coverage") or {})
-        merged_coverage.update(coverage_patch)
-        current = {**current, "coverage": merged_coverage}
-        tmp = snap_path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(current, handle, indent=2)
-        os.replace(tmp, snap_path)
-        publish_wall = time.monotonic() - publish_started
-        return {
-            "published": False,
-            "skipped_older": False,
-            "timing": {"publish_wall_seconds": round(publish_wall, 6)},
+publish_complete_snapshot = save_score_snapshot
+
+
+def record_cycle_receipt(
+    coverage: Dict[str, Any],
+    *,
+    outcome: str,
+    path: Optional[str] = None,
+) -> None:
+    """Per-cycle producer receipt — never served to pick readers."""
+    cycle_path = path or _score_snapshot_cycle_path()
+    day_block = coverage.get("day") if isinstance(coverage.get("day"), dict) else {}
+    receipt = {
+        "attempted_at": _now_iso(),
+        "outcome": outcome,
+        "complete": bool(coverage.get("complete")),
+        "capture_reason": coverage.get("capture_reason"),
+        "membership_admission_allowed": coverage.get("membership_admission_allowed"),
+        "membership_admission_gate_reason": coverage.get("membership_admission_gate_reason"),
+        "day": {
+            "expected": day_block.get("expected_count"),
+            "succeeded": day_block.get("succeeded_count"),
+            "failed": day_block.get("failed_count"),
+        },
+    }
+    try:
+        _atomic_write_json(cycle_path, receipt)
+    except Exception as exc:
+        logger.warning("score snapshot cycle receipt write failed: %s", exc)
+
+
+def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
+    cycle_path = path or _score_snapshot_cycle_path()
+    try:
+        with open(cycle_path, "r", encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return None
+    if not isinstance(data, dict):
+        return None
+    parsed = _parse_iso(data.get("attempted_at"))
+    if parsed is None:
+        return None
+    return max(0.0, datetime.now(timezone.utc).timestamp() - parsed.timestamp())
+
+
+class ServedState(str, Enum):
+    FRESH = "fresh"
+    AGED = "aged"
+    SEED = "seed"
+    NONE = "none"
+
+
+@dataclass(frozen=True)
+class ServedSnapshot:
+    state: ServedState
+    snapshot: Optional[Dict[str, Any]]
+    age_seconds: Optional[float]
+    origin: Optional[str]
+    reason: Optional[str]
+
+    @property
+    def servable(self) -> bool:
+        return self.state is not ServedState.NONE
+
+    def label(self, *, max_age_seconds: Optional[int] = None) -> Dict[str, Any]:
+        ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+        stale_alert = self.state in (ServedState.AGED, ServedState.SEED)
+        if self.state is ServedState.FRESH and self.age_seconds is not None and ttl > 0:
+            stale_alert = self.age_seconds > ttl
+        if self.state is ServedState.SEED:
+            stale_alert = True
+        out: Dict[str, Any] = {
+            "snapshot_state": self.state.value,
+            "snapshot_origin": self.origin,
+            "snapshot_age_seconds": round(self.age_seconds, 3) if self.age_seconds is not None else None,
+            "stale_alert": stale_alert,
         }
+        if self.reason:
+            out["reason"] = self.reason
+        return out
 
 
-def _read_complete_snapshot(
+def _snapshot_age_for_path(path: str, snap: Optional[Dict[str, Any]]) -> Optional[float]:
+    started = _parse_iso((snap or {}).get("build_started_at")) if snap else None
+    if started is not None:
+        return max(0.0, datetime.now(timezone.utc).timestamp() - started.timestamp())
+    try:
+        return max(0.0, datetime.now(timezone.utc).timestamp() - os.path.getmtime(path))
+    except OSError:
+        return None
+
+
+def read_served_snapshot(
+    path: Optional[str] = None,
+    seed_path: Optional[str] = None,
+    max_age_seconds: Optional[int] = None,
+) -> ServedSnapshot:
+    """Newest complete snapshot from volume, else compatible seed; never serves partials."""
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    volume_path = path or SCORE_SNAPSHOTS_PATH
+    seed = seed_path or SCORE_SNAPSHOT_SEED_PATH
+
+    def _classify(snap: Dict[str, Any], origin: str, snap_path: str, *, seed_origin: bool) -> ServedSnapshot:
+        age = _snapshot_age_for_path(snap_path, snap)
+        if seed_origin:
+            return ServedSnapshot(ServedState.SEED, snap, age, "seed", None)
+        if age is not None and ttl > 0 and age <= ttl:
+            return ServedSnapshot(ServedState.FRESH, snap, age, origin, None)
+        return ServedSnapshot(ServedState.AGED, snap, age, origin, None)
+
+    volume_snap = load_score_snapshot(volume_path)
+    if volume_snap and is_complete_snapshot(volume_snap):
+        return _classify(volume_snap, "volume", volume_path, seed_origin=False)
+
+    seed_snap = load_score_snapshot(seed)
+    if seed_snap and is_complete_snapshot(seed_snap):
+        reason = "volume_not_complete" if volume_snap else "volume_missing"
+        return _classify(seed_snap, "seed", seed, seed_origin=True)
+
+    if volume_snap and not is_complete_snapshot(volume_snap):
+        return ServedSnapshot(ServedState.NONE, None, None, None, "volume_not_complete")
+    return ServedSnapshot(ServedState.NONE, None, None, None, "seed_unavailable")
+
+
+def _served_snapshot_tuple(
     path: Optional[str] = None,
     max_age_seconds: Optional[int] = None,
-) -> Optional[Tuple[Dict[str, Any], float]]:
-    age = snapshot_age_seconds(path)
-    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    if age is None or age > ttl:
+) -> Optional[Tuple[Dict[str, Any], float, ServedSnapshot]]:
+    served = read_served_snapshot(path=path, max_age_seconds=max_age_seconds)
+    if not served.servable or served.snapshot is None:
         return None
-    snap = load_score_snapshot(path)
-    if not snap:
-        return None
-    coverage = snap.get("coverage") if isinstance(snap.get("coverage"), dict) else {}
-    return (snap, age) if coverage.get("complete") is True else None
+    age = served.age_seconds if served.age_seconds is not None else 0.0
+    return served.snapshot, age, served
 
 
 def _rank_by_scores(
@@ -245,8 +423,8 @@ def rank_subnets_by_snapshot(
     max_age_seconds: Optional[int] = None,
     path: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
-    """Return subnets sorted by snapshot score, or None if the snapshot is missing, stale or partial."""
-    got = _read_complete_snapshot(path, max_age_seconds)
+    """Return subnets sorted by snapshot score, or None if no complete snapshot is servable."""
+    got = _served_snapshot_tuple(path, max_age_seconds)
     return _rank_by_scores(got[0], subnets, horizon) if got else None
 
 
@@ -318,10 +496,10 @@ def build_top_picks_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Read top hour/day picks from disk snapshot — no scoring on the request path."""
-    got = _read_complete_snapshot(path, max_age_seconds)
+    got = _served_snapshot_tuple(path, max_age_seconds)
     if got is None:
         return None
-    snap, age = got
+    snap, age, served = got
     hour_rows = [r for r in (snap.get("hour") or []) if isinstance(r, dict)]
     day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
     if not hour_rows and not day_rows:
@@ -345,6 +523,7 @@ def build_top_picks_from_snapshot(
             "snapshot_age_seconds": round(age, 3),
             "count_hour": len(hour_rows),
             "count_day": len(day_rows),
+            **served.label(max_age_seconds=max_age_seconds),
         },
     }
 
@@ -356,7 +535,7 @@ def day_scored_from_snapshot(
     path: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
     """Join tradable subnets to day scores from snapshot (minimal score payloads)."""
-    got = _read_complete_snapshot(path, max_age_seconds)
+    got = _served_snapshot_tuple(path, max_age_seconds)
     if got is None:
         return None
     snap = got[0]
@@ -782,42 +961,17 @@ def write_full_universe_snapshot(
         # MC: previous_publish_wall_seconds is embedded here — one locked os.replace only.
         disk_timing = coverage_timing_for_disk(timing)
         coverage["timing"] = disk_timing
-        gated_empty = (
-            prep_meta.get("membership_admission_allowed") is False
-            and not (payload.get("day") or payload.get("hour"))
-        )
-        existing_on_disk = load_score_snapshot(SCORE_SNAPSHOTS_PATH) if gated_empty else None
-        retain_prior = bool(
-            gated_empty
-            and existing_on_disk
-            and (existing_on_disk.get("day") or existing_on_disk.get("hour"))
-        )
-        if retain_prior:
-            coverage["capture_reason"] = "membership_gated_skip_publish"
+        candidate = stamp_scorer_fields({**payload, "source": source, "coverage": coverage})
+        if not coverage.get("complete"):
             coverage["published"] = False
-            coverage["complete"] = False
-            prior_timing = dict(
-                ((existing_on_disk or {}).get("coverage") or {}).get("timing") or {}
-            )
-            prior_timing.update(disk_timing)
-            coverage["timing"] = prior_timing
-            coverage_patch: Dict[str, Any] = {
-                "complete": False,
+            publish_result = {
                 "published": False,
-                "membership_admission_allowed": False,
-                "capture_reason": "membership_gated_skip_publish",
-                "timing": prior_timing,
+                "skipped_older": False,
+                "refused": "incomplete",
+                "timing": {"publish_wall_seconds": 0.0},
             }
-            if gate_reason:
-                coverage_patch["membership_admission_gate_reason"] = str(gate_reason)
-            publish_result = _patch_score_snapshot_coverage_locked(
-                SCORE_SNAPSHOTS_PATH,
-                coverage_patch,
-            )
         else:
-            publish_result = save_score_snapshot(
-                {**payload, "source": source, "coverage": coverage}
-            )
+            publish_result = save_score_snapshot(candidate)
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
         publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
@@ -829,8 +983,9 @@ def write_full_universe_snapshot(
         coverage["timing"] = timing_for_metrics
         if not published:
             coverage["published"] = False
-            coverage["complete"] = False
+        outcome = "published" if published else ("skipped_older" if skipped_older else "incomplete")
         note_cycle(coverage)
+        record_cycle_receipt(coverage, outcome=outcome)
         try:
             publish_metrics(coverage)
         except Exception:
@@ -1304,7 +1459,7 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
 
 
 def ensure_complete_snapshot() -> Dict[str, Any]:
-    if _read_complete_snapshot() is not None:
+    if read_served_snapshot().servable:
         return {"ensured": False, "reason": "complete_snapshot_present"}
     return {"ensured": True, **revive_score_snapshot_scheduler()}
 

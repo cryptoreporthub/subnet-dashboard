@@ -8,22 +8,22 @@ import time
 from pathlib import Path
 
 from internal.council import score_snapshots as snaps
+from tests.score_snapshot_testutil import complete_snapshot_payload
 
 
 def test_save_load_and_rank(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    payload = {
-        "written_at": "2026-07-26T00:00:00Z",
-        "coverage": {"complete": True},
-        "count": 3,
-        "hour": [],
-        "day": [
+    payload = complete_snapshot_payload(
+        day_rows=[
             {"netuid": 99, "total_score": 90.0},
             {"netuid": 1, "total_score": 10.0},
             {"netuid": 50, "total_score": 50.0},
         ],
-    }
+        hour_rows=[],
+        written_at="2026-07-26T00:00:00Z",
+    )
+    payload["count"] = 3
     snaps.save_score_snapshot(payload, str(path))
     ranked = snaps.rank_subnets_by_snapshot(
         [{"netuid": 1}, {"netuid": 50}, {"netuid": 99}, {"netuid": 7}],
@@ -33,22 +33,26 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
     assert [r["netuid"] for r in ranked[:3]] == [99, 50, 1]
 
 
-def test_stale_snapshot_returns_none(tmp_path, monkeypatch):
+def test_stale_snapshot_is_still_served_as_aged(tmp_path, monkeypatch):
+    from tests.score_snapshot_testutil import complete_snapshot_payload
+
     path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     snaps.save_score_snapshot(
-        {"coverage": {"complete": True}, "day": [{"netuid": 1, "total_score": 1.0}], "hour": []},
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 1, "total_score": 1.0}],
+            written_at="2020-01-01T00:00:00Z",
+        ),
         str(path),
     )
-    # Force mtime into the past
-    old = time.time() - 10_000
-    os_utime = __import__("os").utime
-    os_utime(path, (old, old))
     ranked = snaps.rank_subnets_by_snapshot(
         [{"netuid": 1}],
         path=str(path),
         max_age_seconds=60,
     )
-    assert ranked is None
+    assert ranked is not None
+    served = snaps.read_served_snapshot(path=str(path), max_age_seconds=60)
+    assert served.state.value == "aged"
 
 
 def test_build_snapshot_scores_all(monkeypatch):
@@ -206,7 +210,9 @@ def test_build_snapshot_day_only_skips_hour_scoring(monkeypatch):
 def test_write_snapshot_prefers_registry_when_enabled(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    hydrate = [{"netuid": 5, "name": "Five"}]
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    hydrate = [{"netuid": 5, "name": "Five", "price": 1.0, "volume": 1000.0}]
+    _patch_write_membership(monkeypatch, [5])
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
 
     def _live_fail(**_kwargs):
@@ -237,11 +243,13 @@ def test_immediate_write_completion_no_deadlock(monkeypatch, tmp_path):
 
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 30)
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    _patch_write_membership(monkeypatch, [1])
     monkeypatch.setattr(
         "server._get_subnets_hydrate",
-        lambda: ([{"netuid": 1, "name": "One"}], "registry-fallback"),
+        lambda: ([{"netuid": 1, "name": "One", "price": 1.0, "volume": 1000.0}], "registry-fallback"),
     )
     monkeypatch.setattr(
         "internal.council.state_vector.score_subnet_for_hour",
@@ -323,14 +331,51 @@ def _wire_scheduler_paths(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
     monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_WRITE_TIMEOUT_SECONDS", 1)
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
     monkeypatch.setattr(
         "server._get_subnets_hydrate",
-        lambda: ([{"netuid": 1, "name": "One"}], "registry-fallback"),
+        lambda: (
+            [{"netuid": 1, "name": "One", "price": 1.0, "volume": 1000.0}],
+            "registry-fallback",
+        ),
+    )
+    monkeypatch.setattr(
+        "internal.council.snapshot_coverage.load_membership_receipt",
+        lambda: {
+            "expected_netuids": [1],
+            "fresh": True,
+            "degraded": False,
+            "cap_reached": False,
+            "refresh_incomplete": False,
+        },
     )
     return path
+
+
+def _patch_write_membership(monkeypatch, netuids):
+    monkeypatch.setattr(
+        "internal.council.snapshot_coverage.load_membership_receipt",
+        lambda: {
+            "expected_netuids": list(netuids),
+            "fresh": True,
+            "degraded": False,
+            "cap_reached": False,
+            "refresh_incomplete": False,
+        },
+    )
+
+
+def _published_payload(**kwargs):
+    base = complete_snapshot_payload(
+        day_rows=kwargs.pop("day_rows", [{"netuid": 1, "total_score": 1.0}]),
+        written_at=kwargs.pop("written_at", "2026-08-21T00:00:00Z"),
+    )
+    base.update(kwargs)
+    return base
 
 
 def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
@@ -341,12 +386,7 @@ def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
     def _slow_build(*_args, **_kwargs):
         write_calls["n"] += 1
         time.sleep(3)
-        payload = {
-            "written_at": "2026-08-21T00:00:00Z",
-            "count": 1,
-            "hour": [],
-            "day": [{"netuid": 1, "total_score": 1.0}],
-        }
+        payload = _published_payload(count=1)
         snaps.save_score_snapshot(payload, str(path))
         return payload
 
@@ -379,12 +419,7 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     def _slow_build(*_args, **_kwargs):
         write_calls["n"] += 1
         time.sleep(2)
-        payload = {
-            "written_at": "2026-08-21T00:00:00Z",
-            "count": 1,
-            "hour": [],
-            "day": [{"netuid": 1, "total_score": 1.0}],
-        }
+        payload = _published_payload(count=1)
         snaps.save_score_snapshot(payload, str(path))
         return payload
 
@@ -401,16 +436,11 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     assert path.is_file()
     assert not snaps._scoring_write_in_progress()
 
-    def _fast_build(*_args, **_kwargs):
+    real_build = snaps.build_full_universe_snapshot
+
+    def _fast_build(subnets, market_context, **kwargs):
         write_calls["n"] += 1
-        payload = {
-            "written_at": "2026-08-21T01:00:00Z",
-            "count": 2,
-            "hour": [],
-            "day": [{"netuid": 2, "total_score": 2.0}],
-        }
-        snaps.save_score_snapshot(payload, str(path))
-        return payload
+        return real_build(subnets, market_context, **kwargs)
 
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _fast_build)
     third = sched.run_once()
@@ -458,12 +488,7 @@ def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_pat
     def _slow_build(*_args, **_kwargs):
         write_calls["n"] += 1
         time.sleep(2)
-        payload = {
-            "written_at": "2026-08-21T00:00:00Z",
-            "count": 1,
-            "hour": [],
-            "day": [{"netuid": 1, "total_score": 1.0}],
-        }
+        payload = _published_payload(count=1)
         snaps.save_score_snapshot(payload, str(path))
         return payload
 
@@ -710,10 +735,12 @@ def test_day_scoring_seconds_excludes_hour_latency(monkeypatch):
 def test_write_snapshot_includes_stage_timing(monkeypatch, tmp_path):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    _patch_write_membership(monkeypatch, [2])
     monkeypatch.setattr(
         "server._get_subnets_hydrate",
-        lambda: ([{"netuid": 2, "name": "Two"}], "registry-fallback"),
+        lambda: ([{"netuid": 2, "name": "Two", "price": 1.0, "volume": 1000.0}], "registry-fallback"),
     )
     monkeypatch.setattr(
         "internal.council.state_vector.score_subnet_for_hour",

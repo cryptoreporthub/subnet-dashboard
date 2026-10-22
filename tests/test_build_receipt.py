@@ -13,11 +13,22 @@ def isolated_build(tmp_path, monkeypatch):
     from internal.council import score_snapshots as snaps
 
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "score_snapshots.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: ([{"netuid": 1, "name": "A"}], "test"))
     monkeypatch.setattr(
         "server._get_subnets_with_source", lambda timeout=4.0: ([{"netuid": 1, "name": "A"}], "test")
     )
     monkeypatch.setattr("server._market_context_with_weights", lambda subnets: {})
+    monkeypatch.setattr(
+        "internal.council.snapshot_coverage.load_membership_receipt",
+        lambda: {
+            "expected_netuids": [1],
+            "fresh": True,
+            "degraded": False,
+            "cap_reached": False,
+            "refresh_incomplete": False,
+        },
+    )
     build_cost.end()
     yield snaps
     build_cost.end()

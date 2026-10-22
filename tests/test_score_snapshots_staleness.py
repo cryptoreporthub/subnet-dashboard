@@ -1,28 +1,25 @@
-"""Late snapshot publication must not replace a newer build."""
+"""Late snapshot publication must not replace a newer complete build."""
 
 from __future__ import annotations
 
 from internal.council import score_snapshots as snaps
+from tests.score_snapshot_testutil import complete_snapshot_payload
 
 
 def test_late_build_does_not_clobber_fresher_snapshot(tmp_path):
     path = tmp_path / "score_snapshots.json"
     snaps.save_score_snapshot(
-        {
-            "build_started_at": "2026-09-22T12:00:00Z",
-            "written_at": "2026-09-22T12:05:00Z",
-            "day": [{"netuid": 2, "total_score": 20.0}],
-            "hour": [],
-        },
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 2, "total_score": 20.0}],
+            written_at="2026-09-22T12:00:00Z",
+        ),
         str(path),
     )
     snaps.save_score_snapshot(
-        {
-            "build_started_at": "2026-09-22T11:00:00Z",
-            "written_at": "2026-09-22T12:10:00Z",
-            "day": [{"netuid": 1, "total_score": 1.0}],
-            "hour": [],
-        },
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 1, "total_score": 1.0}],
+            written_at="2026-09-22T11:00:00Z",
+        ),
         str(path),
     )
     saved = snaps.load_score_snapshot(str(path))
@@ -33,12 +30,10 @@ def test_late_build_does_not_clobber_fresher_snapshot(tmp_path):
 def test_legacy_written_at_snapshot_stays_valid(tmp_path):
     path = tmp_path / "score_snapshots.json"
     snaps.save_score_snapshot(
-        {
-            "written_at": "2026-09-22T12:00:00Z",
-            "coverage": {"complete": True},
-            "day": [{"netuid": 4, "total_score": 8.0}],
-            "hour": [],
-        },
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 4, "total_score": 8.0}],
+            written_at="2026-09-22T12:00:00Z",
+        ),
         str(path),
     )
     ranked = snaps.rank_subnets_by_snapshot(
