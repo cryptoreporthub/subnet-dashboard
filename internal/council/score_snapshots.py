@@ -1303,6 +1303,12 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
     }
 
 
+def ensure_complete_snapshot() -> Dict[str, Any]:
+    if _read_complete_snapshot() is not None:
+        return {"ensured": False, "reason": "complete_snapshot_present"}
+    return {"ensured": True, **revive_score_snapshot_scheduler()}
+
+
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:
     """In-process state; web workers see soul_map via loop_health cross-process merge."""
     with _lock:
