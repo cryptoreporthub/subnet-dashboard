@@ -61,16 +61,16 @@ def test_mindmap_graph_focus_scopes_trail(monkeypatch):
     assert subnet_ids == {"subnet:42"}
 
 
-def test_mindmap_graph_empty_state_success(monkeypatch):
+def test_mindmap_graph_empty_state_success(monkeypatch, tmp_path):
     import internal.learning.mindmap_aggregator as agg
     import internal.mindmap.graph as graph_mod
+    from internal.whales.service import WhaleIntelligenceService
 
     monkeypatch.setattr(agg, "collect_trail_events", lambda limit=100: [])
     monkeypatch.setattr(graph_mod, "_load_dispositions", lambda: [])
-    monkeypatch.setattr(graph_mod, "_load_indicator_alerts", lambda focus_netuid: [])
-    monkeypatch.setattr(
-        graph_mod, "_load_whale_and_rugger_alerts", lambda focus_netuid: {"rugger_alerts": [], "follow_alerts": []}
-    )
+    monkeypatch.setenv("INDICATOR_STATE_PATH", str(tmp_path / "indicator_state.json"))
+    monkeypatch.setenv("WHALES_DATA_PATH", str(tmp_path / "whale_intelligence.json"))
+    monkeypatch.setattr(WhaleIntelligenceService, "_singleton", None)
 
     graph = get_mindmap_graph()
     assert graph["status"] == "success"
