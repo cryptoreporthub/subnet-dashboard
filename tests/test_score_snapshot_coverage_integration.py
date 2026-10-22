@@ -10,10 +10,12 @@ import pytest
 from internal.council import score_snapshots as snaps
 from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
+from tests.score_snapshot_testutil import complete_snapshot_payload
 
 
 @pytest.fixture(autouse=True)
-def _reset_phase1_state():
+def _reset_phase1_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     cov.reset_phase1_cycle_state_for_tests()
     yield
     cov.reset_phase1_cycle_state_for_tests()
@@ -23,10 +25,15 @@ def _ok_membership_snapshot() -> UniverseSnapshot:
     resolved = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     return UniverseSnapshot(
         netuids=(1, 2),
-        rows=({"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}),
+        rows=(
+            {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0, "source": "taomarketcap"},
+            {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0, "source": "taomarketcap"},
+        ),
         resolved_at=resolved,
         status="ok",
         degraded=False,
+        cap_reached=False,
+        refresh_incomplete=False,
         validity_map={
             "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
             "2": _validity_entry(validity="positive", sources=["taomarketcap"]),
@@ -49,7 +56,10 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     out = snaps.write_full_universe_snapshot()
@@ -75,23 +85,18 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
 def test_skipped_older_publish_sets_ok_false(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    snaps.save_score_snapshot(
-        {
-            "build_started_at": "2026-09-22T12:00:00Z",
-            "written_at": "2026-09-22T12:05:00Z",
-            "day": [{"netuid": 2, "total_score": 2.0}],
-            "hour": [],
-        },
+    snaps.publish_complete_snapshot(
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 2, "total_score": 2.0}],
+            written_at="2026-09-22T12:00:00Z",
+        ),
         str(path),
     )
-    result = snaps.save_score_snapshot(
-        {
-            "build_started_at": "2026-09-22T11:00:00Z",
-            "written_at": "2026-09-22T12:10:00Z",
-            "day": [{"netuid": 1, "total_score": 1.0}],
-            "hour": [],
-            "coverage": {"complete": True},
-        },
+    result = snaps.publish_complete_snapshot(
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 1, "total_score": 1.0}],
+            written_at="2026-09-22T11:00:00Z",
+        ),
         str(path),
     )
     assert result.get("published") is False
@@ -113,7 +118,10 @@ def test_metrics_endpoint_shows_coverage_after_disk_snapshot(tmp_path, monkeypat
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     worker = __import__("multiprocessing").get_context("spawn").Process(
@@ -180,13 +188,10 @@ def test_metrics_green_to_stale_resets_gauges(tmp_path, monkeypatch):
     fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     path.write_text(
         json.dumps(
-            {
-                "written_at": fresh,
-                "build_started_at": fresh,
-                "day": [{"netuid": 1, "total_score": 1.0}],
-                "hour": [],
-                "coverage": {"complete": True, "published": True, "day": {"succeeded": [1]}},
-            }
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=fresh,
+            )
         ),
         encoding="utf-8",
     )
@@ -197,13 +202,10 @@ def test_metrics_green_to_stale_resets_gauges(tmp_path, monkeypatch):
     old = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat().replace("+00:00", "Z")
     path.write_text(
         json.dumps(
-            {
-                "written_at": old,
-                "build_started_at": old,
-                "day": [],
-                "hour": [],
-                "coverage": {"complete": True, "published": True},
-            }
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=old,
+            )
         ),
         encoding="utf-8",
     )
@@ -223,13 +225,10 @@ def test_metrics_green_to_missing_disk_resets_gauges(tmp_path, monkeypatch):
     fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     path.write_text(
         json.dumps(
-            {
-                "written_at": fresh,
-                "build_started_at": fresh,
-                "day": [],
-                "hour": [],
-                "coverage": {"complete": True, "published": True},
-            }
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=fresh,
+            )
         ),
         encoding="utf-8",
     )
@@ -252,18 +251,10 @@ def test_metrics_stale_in_process_reads_fresher_disk(tmp_path, monkeypatch):
     fresh = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     path.write_text(
         json.dumps(
-            {
-                "written_at": fresh,
-                "build_started_at": fresh,
-                "day": [{"netuid": 1, "total_score": 1.0}],
-                "hour": [],
-                "coverage": {
-                    "complete": True,
-                    "published": True,
-                    "day": {"succeeded": [1]},
-                    "hour": {"succeeded": [1]},
-                },
-            }
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=fresh,
+            )
         ),
         encoding="utf-8",
     )
@@ -289,7 +280,10 @@ def test_scoring_exception_counts_as_attempted(tmp_path, monkeypatch):
 
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     out = snaps.write_full_universe_snapshot()
@@ -350,7 +344,10 @@ def test_stale_scrape_resets_coverage_but_keeps_process_publish_wall(tmp_path, m
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     snaps.write_full_universe_snapshot()
@@ -412,27 +409,15 @@ def test_scrape_reads_previous_publish_from_snapshot_not_soul_map(tmp_path, monk
     monkeypatch.setattr("internal.council.weights._load_raw", _forbid_soul_map)
     path = tmp_path / "score_snapshots.json"
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    path.write_text(
-        json.dumps(
-            {
-                "written_at": now,
-                "build_started_at": now,
-                "day": [{"netuid": 1, "total_score": 1.0}],
-                "hour": [],
-                "coverage": {
-                    "published": True,
-                    "complete": False,
-                    "timing": {
-                        "build_wall_seconds": 1.0,
-                        "previous_publish_wall_seconds": 0.015,
-                    },
-                    "day": {"succeeded": [1], "complete": False},
-                    "hour": {"succeeded": [], "complete": False},
-                },
-            }
-        ),
-        encoding="utf-8",
+    payload = complete_snapshot_payload(
+        day_rows=[{"netuid": 1, "total_score": 1.0}],
+        written_at=now,
     )
+    payload["coverage"]["timing"] = {
+        "build_wall_seconds": 1.0,
+        "previous_publish_wall_seconds": 0.015,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     cov.reset_phase1_cycle_state_for_tests()
     refresh_from_state()
@@ -454,7 +439,10 @@ def test_second_write_persists_previous_publish_one_cycle_behind(tmp_path, monke
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     first = snaps.write_full_universe_snapshot()
@@ -512,7 +500,10 @@ def test_hour_copied_horizon_gauges_on_scrape(tmp_path, monkeypatch):
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": 1, "name": "A"}, {"netuid": 2, "name": "B"}]
+    hydrate = [
+        {"netuid": 1, "name": "A", "price": 1.0, "volume": 1000.0},
+        {"netuid": 2, "name": "B", "price": 1.0, "volume": 1000.0},
+    ]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
 
     snaps.write_full_universe_snapshot()
@@ -531,32 +522,22 @@ def test_legacy_disk_hour_without_status_infers_copied_on_scrape(tmp_path, monke
 
     path = tmp_path / "score_snapshots.json"
     now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    path.write_text(
-        json.dumps(
-            {
-                "written_at": now,
-                "build_started_at": now,
-                "day": [{"netuid": 1, "total_score": 1.0}, {"netuid": 2, "total_score": 2.0}],
-                "hour": [],
-                "coverage": {
-                    "published": True,
-                    "complete": True,
-                    "timing": {"build_wall_seconds": 1.0},
-                    "day": {
-                        "succeeded": [1, 2],
-                        "complete": True,
-                    },
-                    "hour": {
-                        "succeeded": [1, 2],
-                        "hour_copied_from_day": True,
-                        "attempted": 0,
-                        "complete": True,
-                    },
-                },
-            }
-        ),
-        encoding="utf-8",
+    payload = complete_snapshot_payload(
+        day_rows=[
+            {"netuid": 1, "total_score": 1.0},
+            {"netuid": 2, "total_score": 2.0},
+        ],
+        written_at=now,
     )
+    payload["coverage"]["timing"] = {"build_wall_seconds": 1.0}
+    payload["coverage"]["hour"] = {
+        "succeeded": [1, 2],
+        "hour_copied_from_day": True,
+        "attempted": 0,
+        "complete": True,
+        "status": "copied",
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
     cov.reset_phase1_cycle_state_for_tests()
     refresh_from_state()
