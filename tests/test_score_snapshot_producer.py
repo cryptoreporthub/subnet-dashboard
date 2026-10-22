@@ -30,6 +30,58 @@ def _reset_score_snapshot_scheduler():
     cancel_job(snaps.JOB_ID)
 
 
+def test_essential_worker_boot_arms_scheduler_not_ensure(monkeypatch, tmp_path):
+    """Replit #1484 P1: essential WORKER_HEAVY must arm producer, not score-snapshot-ensure."""
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DATA_DIR_IS_VOLUME", "on")
+    monkeypatch.setenv("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off")
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    defer_names: list[str] = []
+    scheduled_jobs: list[str] = []
+
+    def _defer(name, fn, delay=0):
+        defer_names.append(name)
+        if name == "score-snapshots":
+            fn()
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    monkeypatch.setattr("internal.freshness.start_background_sync", MagicMock())
+    monkeypatch.setattr(
+        "internal.background_boot._start_pump_desk_snapshot_scheduler",
+        MagicMock(),
+    )
+    for name in (
+        "_start_pump_ladder",
+        "_start_resolver",
+        "_start_whale_warm_scheduler",
+        "_start_pick_schedulers",
+        "_maybe_start_message_intel",
+        "_maybe_start_summary_bot",
+        "_warm_judges_cache",
+        "_start_pick_audit_scheduler",
+        "_start_outcome_snapshot_scheduler",
+        "_start_calibration_snapshot_scheduler",
+        "_start_dev_radar_github_scheduler",
+    ):
+        monkeypatch.setattr(f"internal.background_boot.{name}", MagicMock())
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, _fn, _sec: scheduled_jobs.append(job_id))
+    monkeypatch.setattr("internal.live_subnets.registry_ready", lambda: True)
+    monkeypatch.setattr("internal.live_subnets.bootstrap_live_subnets_cache", MagicMock())
+    monkeypatch.setattr("internal.live_subnets.start_live_subnets_sync", MagicMock())
+
+    from internal.background_boot import start_background_workers
+
+    start_background_workers()
+    assert "score-snapshot-ensure" not in defer_names
+    assert "score-snapshots" in defer_names
+    assert snaps._scheduler is not None
+    assert scheduled_jobs == [snaps.JOB_ID]
+
+
 def test_second_start_in_process_does_not_spawn_a_second_tick(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
