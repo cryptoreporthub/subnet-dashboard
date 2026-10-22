@@ -27,15 +27,21 @@ def _placeholder_row(n):
     return {"netuid": n, "id": n, "source": "none", "sources": ["none"]}
 
 
-def _membership(active=ACTIVE, placeholders=PLACEHOLDERS) -> UniverseSnapshot:
+def _deregistered():
+    return _validity_entry(validity="negative", negative_since="2026-10-20T00:00:00+00:00")
+
+
+def _membership(active=ACTIVE, placeholders=PLACEHOLDERS, placeholder_validity=_deregistered) -> UniverseSnapshot:
     netuids = tuple(sorted(active + placeholders))
+    validity = {str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in active}
+    validity.update({str(n): placeholder_validity() for n in placeholders})
     return UniverseSnapshot(
         netuids=netuids,
         rows=tuple(_active_row(n) for n in active) + tuple(_placeholder_row(n) for n in placeholders),
         resolved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         status="ok",
         degraded=False,
-        validity_map={str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in netuids},
+        validity_map=validity,
     )
 
 
@@ -98,3 +104,62 @@ def test_receipt_expects_the_subnets_that_have_data():
         universe.get_snapshot = original
     assert receipt["expected_netuids"] == list(ACTIVE)
     assert receipt["inactive_netuids"] == list(PLACEHOLDERS)
+
+
+def _receipt_for(membership):
+    import internal.subnet_universe as universe
+
+    original = universe.get_snapshot
+    universe.get_snapshot = lambda: membership
+    try:
+        return cov.load_membership_receipt()
+    finally:
+        universe.get_snapshot = original
+
+
+@pytest.mark.parametrize(
+    "validity",
+    [
+        lambda: _validity_entry(validity="positive", sources=["blockmachine_probe"], disputed=True),
+        lambda: _validity_entry(validity="positive", sources=["taomarketcap"], refresh_incomplete=True),
+        lambda: _validity_entry(validity="unobserved", refresh_incomplete=True),
+    ],
+    ids=["probe_positive", "retained_positive", "unobserved"],
+)
+def test_a_member_without_row_data_stays_expected_unless_established_inactive(validity):
+    receipt = _receipt_for(_membership(placeholders=PLACEHOLDERS, placeholder_validity=validity))
+    assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
+    assert receipt["inactive_netuids"] == []
+
+
+def test_a_member_with_no_validity_entry_stays_expected():
+    membership = _membership()
+    membership = UniverseSnapshot(
+        netuids=membership.netuids,
+        rows=membership.rows,
+        resolved_at=membership.resolved_at,
+        status="ok",
+        degraded=False,
+        validity_map={},
+    )
+    receipt = _receipt_for(membership)
+    assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
+
+
+def test_a_negative_member_that_still_has_row_data_stays_expected():
+    membership = _membership(active=ACTIVE, placeholders=())
+    stale = tuple(ACTIVE[:3])
+    validity = dict(membership.validity_map)
+    validity.update({str(n): _deregistered() for n in stale})
+    receipt = _receipt_for(
+        UniverseSnapshot(
+            netuids=membership.netuids,
+            rows=membership.rows,
+            resolved_at=membership.resolved_at,
+            status="ok",
+            degraded=False,
+            validity_map=validity,
+        )
+    )
+    assert receipt["expected_netuids"] == list(ACTIVE)
+    assert receipt["inactive_netuids"] == []
