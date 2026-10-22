@@ -15,6 +15,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from internal.chain_read import ChainRead
+
 logger = logging.getLogger(__name__)
 
 # Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
@@ -129,49 +131,54 @@ def _default_tmc_fetch() -> Tuple[Set[int], Dict[int, Dict[str, Any]], bool]:
         return set(), {}, False
 
 
-def _default_probe_fetch(
-    netuids: List[int],
-    *,
-    deadline: Optional[float] = None,
-) -> Tuple[Dict[int, Optional[bool]], bool]:
-    """Map netuid -> True/False from the chain's NetworksAdded registration map.
+def _read_chain(deadline: Optional[float] = None) -> Optional[ChainRead]:
+    """One pinned NetworksAdded read, or None when it did not succeed within ``deadline``.
 
     The price call cannot tell a registered subnet from an unregistered one, because the
-    chain answers 1.0 for both an unseeded pool and an unregistered netuid. Registration is
-    read directly instead, at one pinned finalized block. When that read does not succeed,
-    nothing is observed and ``complete`` is False, so the universe keeps its prior members.
-
-    ``deadline`` is enforced on entry, before each RPC attempt/fallback in ``ChainReader``,
-    and again before returning — a pass that finishes after expiry is incomplete.
+    chain answers 1.0 for both an unseeded pool and an unregistered netuid, so registration
+    is read directly. ``deadline`` is enforced on entry, before each RPC attempt/fallback in
+    ``ChainReader``, and again before returning: a pass that finishes after expiry is None.
     """
     if deadline is not None and time.monotonic() >= deadline:
-        return {}, False
+        return None
     try:
-        from internal.chain_price.membership import get_member_netuids
+        from internal.chain_price.membership import read_chain_membership
         from internal.chain_price.reader import ChainReader
 
         reader = ChainReader(deadline_monotonic=deadline)
         global _last_registration_probe_reader
         _last_registration_probe_reader = reader
-        at_hash, outcome = reader.pin_finalized_head()
-        if outcome != "ok" or not at_hash:
-            return {}, False
-        members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+        chain, _ = read_chain_membership(reader)
     except Exception as exc:
         logger.warning("subnet_universe registration read failed: %s", exc)
-        return {}, False
-    if outcome != "ok":
-        return {}, False
+        return None
+    if chain is None:
+        return None
     if deadline is not None and time.monotonic() >= deadline:
-        return {}, False
-    registered = set(members)
+        return None
+    return chain
+
+
+def _observed_from_chain(netuids: List[int], chain: ChainRead) -> Dict[int, Optional[bool]]:
+    registered = set(chain.netuids)
     observed: Dict[int, Optional[bool]] = {
         n: n in registered for n in netuids if n != ROOT_NETUID
     }
     for n in registered:
         if n not in observed:
             observed[n] = True
-    return observed, True
+    return observed
+
+
+def _default_probe_fetch(
+    netuids: List[int],
+    *,
+    deadline: Optional[float] = None,
+) -> Tuple[Dict[int, Optional[bool]], bool]:
+    chain = _read_chain(deadline)
+    if chain is None:
+        return {}, False
+    return _observed_from_chain(netuids, chain), True
 
 
 def _validity_entry(
@@ -462,6 +469,7 @@ class UniverseSnapshot:
     cap_reached: bool = False
     refresh_incomplete: bool = False
     message: str = ""
+    chain: Optional[ChainRead] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -475,6 +483,7 @@ class UniverseSnapshot:
             "cap_reached": self.cap_reached,
             "refresh_incomplete": self.refresh_incomplete,
             "message": self.message,
+            "chain": self.chain.to_dict() if self.chain else None,
         }
 
     @classmethod
@@ -492,6 +501,7 @@ class UniverseSnapshot:
             cap_reached=bool(payload.get("cap_reached")),
             refresh_incomplete=bool(payload.get("refresh_incomplete")),
             message=str(payload.get("message") or ""),
+            chain=ChainRead.parse(payload.get("chain")),
         )
 
     @classmethod
@@ -560,10 +570,15 @@ class SnapshotBuilder:
             candidates |= set(range(MAX_NETUIDS))
             probe_candidates = sorted(candidates)
         deadline = time.monotonic() + self._probe_budget_seconds
+        chain: Optional[ChainRead] = None
         if self._probe_fetch is not None:
             probe_map, probe_complete = self._probe_fetch(probe_candidates, deadline)
         else:
-            probe_map, probe_complete = _default_probe_fetch(probe_candidates, deadline=deadline)
+            chain = _read_chain(deadline)
+            if chain is None:
+                probe_map, probe_complete = {}, False
+            else:
+                probe_map, probe_complete = _observed_from_chain(probe_candidates, chain), True
 
         if not tmc_complete and not probe_complete and not prior_map:
             return MembershipBuild(UniverseSnapshot.emergency_registry(reason="refresh_unresolvable"))
@@ -631,6 +646,7 @@ class SnapshotBuilder:
             cap_reached=cap_reached,
             refresh_incomplete=refresh_incomplete,
             message="" if not degraded else "Refresh incomplete or source degraded",
+            chain=chain,
         )
         return MembershipBuild(snapshot, dropped)
 
