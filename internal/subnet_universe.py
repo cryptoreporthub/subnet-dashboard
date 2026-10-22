@@ -520,14 +520,10 @@ class SnapshotBuilder:
 
         prior_keys = {int(k) for k in prior_map if str(k).isdigit()}
         candidates = set(tmc_positive) | prior_keys
-        if not tmc_complete and not prior_map:
-            probe_candidates = list(range(MAX_NETUIDS))
-        elif not tmc_complete and prior_map:
-            # Registration read is batch RPC; still discover chain members when TMC is incomplete.
+        if not tmc_complete:
             probe_candidates = list(range(MAX_NETUIDS))
         else:
-            if tmc_complete:
-                candidates |= set(range(MAX_NETUIDS))
+            candidates |= set(range(MAX_NETUIDS))
             probe_candidates = sorted(candidates)
         deadline = time.monotonic() + self._probe_budget_seconds
         if self._probe_fetch is not None:

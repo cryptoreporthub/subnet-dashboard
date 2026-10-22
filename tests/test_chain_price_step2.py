@@ -225,6 +225,8 @@ def test_schema_version_v2_samples(fixture_client, tmp_path):
 
 def test_decode_total_networks_u16_le():
     assert decode_total_networks("0x8100") == 129
+    assert decode_total_networks("0x05") is None
+    assert decode_total_networks("0x810000") is None
 
 
 def test_member_netuids_excludes_false_bool(fixture_client):
@@ -236,31 +238,33 @@ def test_member_netuids_excludes_false_bool(fixture_client):
     assert 0 not in netuids
 
 
-@pytest.mark.parametrize("member_count,total_networks", [(127, 129)])
-def test_members_disagreeing_with_total_networks_is_a_failed_read_not_absence(
-    member_count, total_networks
-):
-    """Truncated NetworksAdded must not mark subnets absent when TotalNetworks disagrees."""
+def _fake_membership_call(members_incl_root: int, total_networks: int, *, at_hash: str = PINNED_HASH):
+    from internal.chain_price.storage_keys import map_key_hex
+
+    non_root = members_incl_root - 1
+    network_keys = [map_key_hex(b"NetworksAdded", n) for n in range(non_root + 1)]
+    total_key = total_networks_key_hex()
+    total_hex = "0x" + int(total_networks).to_bytes(2, "little").hex()
 
     def _call(method, params):
         if method == "state_getKeysPaged":
-            prefix = params[0]
-            keys = [f"{prefix}0001", f"{prefix}0002"]
-            return keys[:member_count], "ok"
+            return network_keys, "ok"
         if method == "state_queryStorageAt":
-            keys, at_hash = params[0], params[1]
-            if len(keys) == 1 and keys[0] == total_networks_key_hex():
-                return [
-                    {
-                        "block": at_hash,
-                        "changes": [[total_networks_key_hex(), "0x8100"]],
-                    }
-                ], "ok"
-            changes = [[key, "0x01"] for key in keys]
-            return [{"block": at_hash, "changes": changes}], "ok"
+            keys, block = params[0], params[1]
+            assert total_key in keys
+            changes = [[k, "0x01"] for k in network_keys] + [[total_key, total_hex]]
+            return [{"block": block, "changes": changes}], "ok"
         return None, "rpc_error"
 
-    netuids, outcome = get_member_netuids(_call, PINNED_HASH)
+    return _call
+
+
+@pytest.mark.parametrize("members_incl_root", [128, 130])
+def test_members_disagreeing_with_total_networks_is_a_failed_read_not_absence(members_incl_root):
+    """TotalNetworks mismatch (fewer or more than NetworksAdded) is a failed read, not absence."""
+    netuids, outcome = get_member_netuids(
+        _fake_membership_call(members_incl_root, 129), PINNED_HASH
+    )
     assert netuids == []
     assert outcome == "invalid"
 
