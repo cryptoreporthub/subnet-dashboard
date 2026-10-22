@@ -292,16 +292,77 @@ def _normalize_block_hash(block_hash: str) -> str:
     return normalize_block_hash(block_hash)
 
 
-def _timed_post(endpoint: str, payload: Dict[str, Any], timeout: float) -> requests.Response:
-    """One RPC HTTP attempt, timed for the active snapshot build."""
+def _set_stream_read_timeout(response: requests.Response, remaining: float) -> None:
+    """Cap the next blocking socket read to ``remaining`` seconds (slow-drip safe)."""
+    if remaining <= 0:
+        return
+    raw = getattr(response, "raw", None)
+    if raw is None:
+        return
+    conn = getattr(raw, "connection", None)
+    sock = getattr(conn, "sock", None) if conn is not None else getattr(raw, "sock", None)
+    if sock is not None:
+        sock.settimeout(remaining)
+
+
+def _timed_post(
+    endpoint: str,
+    payload: Dict[str, Any],
+    timeout: float,
+    *,
+    deadline_monotonic: Optional[float] = None,
+) -> requests.Response:
+    """One RPC HTTP attempt, timed for the active snapshot build.
+
+    When ``deadline_monotonic`` is set, total wall-clock for connect + body read
+    is capped (slow-drip responses cannot outlive the probe budget).
+    """
     started = time.perf_counter()
     try:
-        return requests.post(
+        if deadline_monotonic is None:
+            return requests.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=timeout,
+            )
+        remaining = deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise requests.Timeout("rpc deadline exceeded")
+        slice_timeout = min(timeout, remaining)
+        response = requests.post(
             endpoint,
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=timeout,
+            timeout=(slice_timeout, slice_timeout),
+            stream=True,
         )
+        try:
+            body = bytearray()
+            chunks = response.iter_content(chunk_size=1)
+            while True:
+                remaining = deadline_monotonic - time.monotonic()
+                if remaining <= 0:
+                    raise requests.Timeout("rpc deadline exceeded")
+                _set_stream_read_timeout(response, remaining)
+                try:
+                    chunk = next(chunks)
+                except StopIteration:
+                    break
+                if time.monotonic() >= deadline_monotonic:
+                    raise requests.Timeout("rpc deadline exceeded")
+                if chunk:
+                    body.extend(chunk)
+            if time.monotonic() >= deadline_monotonic:
+                raise requests.Timeout("rpc deadline exceeded")
+            response._content = bytes(body)
+            return response
+        except requests.Timeout:
+            response.close()
+            raise
+        except Exception:
+            response.close()
+            raise
     finally:
         build_cost.record("rpc", time.perf_counter() - started)
 
@@ -369,7 +430,12 @@ class ChainClient:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = _timed_post(self.endpoint, payload, self._per_attempt_timeout())
+                response = _timed_post(
+                    self.endpoint,
+                    payload,
+                    self._per_attempt_timeout(),
+                    deadline_monotonic=getattr(self, "_rpc_deadline_monotonic", None),
+                )
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
                     _record_chain_rpc(self.endpoint, method, "rate_limited")
@@ -377,6 +443,7 @@ class ChainClient:
                         "rate_limited", "HTTP 429", code=429, http_status=429
                     )
                 response.raise_for_status()
+                self._check_rpc_deadline()
                 data = response.json()
                 if "error" in data:
                     _record_chain_rpc(self.endpoint, method, "error")
@@ -415,7 +482,12 @@ class ChainClient:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = _timed_post(self.endpoint, payload, self._per_attempt_timeout())
+                response = _timed_post(
+                    self.endpoint,
+                    payload,
+                    self._per_attempt_timeout(),
+                    deadline_monotonic=getattr(self, "_rpc_deadline_monotonic", None),
+                )
                 if response.status_code == 429:
                     retry_after = _parse_retry_after_header(response)
                     note_rate_limit(self.endpoint, retry_after)
@@ -448,6 +520,7 @@ class ChainClient:
                         code=response.status_code,
                     )
                 response.raise_for_status()
+                self._check_rpc_deadline()
                 data = response.json()
                 if "error" in data:
                     kind = classify_jsonrpc_error(data["error"])

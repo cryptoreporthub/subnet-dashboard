@@ -26,7 +26,7 @@ def test_call_typed_blackhole_budget_not_full_retry_wall_clock(monkeypatch):
     client._rpc_deadline_monotonic = deadline
     attempt_starts: list[float] = []
 
-    def hanging_post(endpoint, payload, timeout):
+    def hanging_post(endpoint, payload, timeout, **kwargs):
         attempt_starts.append(time.monotonic())
         time.sleep(timeout)
         raise requests.ConnectTimeout("timed out")
@@ -52,7 +52,7 @@ def test_retry_backoff_not_run_after_deadline_budget(monkeypatch):
     )
     client._rpc_deadline_monotonic = time.monotonic() + 0.05
 
-    def fail_post(endpoint, payload, timeout):
+    def fail_post(endpoint, payload, timeout, **kwargs):
         raise requests.ConnectionError("down")
 
     monkeypatch.setattr(chain_client_mod, "_timed_post", fail_post)
@@ -67,7 +67,7 @@ def test_chain_reader_propagates_deadline_to_provider_clients(monkeypatch):
     fast = ChainClient(endpoint="https://fast.example", init_volume_db=False)
     posts: list[str] = []
 
-    def fake_post(endpoint, payload, timeout):
+    def fake_post(endpoint, payload, timeout, **kwargs):
         posts.append(endpoint)
         time.sleep(timeout)
         raise requests.ConnectionError("down")
@@ -88,3 +88,65 @@ def test_chain_reader_propagates_deadline_to_provider_clients(monkeypatch):
     assert result is None
     assert elapsed <= budget + 0.25
     assert not any("fast.example" in ep for ep in posts)
+
+
+def _install_slow_drip_requests_post(monkeypatch, *, chunk_delay: float = 0.03) -> None:
+    body = b'{"jsonrpc":"2.0","id":1,"result":"0xabc"}'
+
+    def fake_post(endpoint, json=None, headers=None, timeout=None, stream=False):
+        if not stream:
+            return chain_client_mod.requests.post(
+                endpoint, json=json, headers=headers, timeout=timeout
+            )
+        resp = requests.Response()
+        resp.status_code = 200
+        offset = 0
+
+        def iter_content(chunk_size=4096):
+            nonlocal offset
+            while offset < len(body):
+                time.sleep(chunk_delay)
+                piece = body[offset : offset + 1]
+                offset += 1
+                yield piece
+
+        resp.iter_content = iter_content
+        resp.close = lambda: None
+        return resp
+
+    monkeypatch.setattr(chain_client_mod.requests, "post", fake_post)
+
+
+def test_timed_post_slow_drip_aborts_at_absolute_deadline(monkeypatch):
+    """P2: per-read timeout alone allows slow-drip past probe budget."""
+    _install_slow_drip_requests_post(monkeypatch, chunk_delay=0.03)
+    budget = 0.15
+    deadline = time.monotonic() + budget
+    started = time.monotonic()
+    with pytest.raises(requests.Timeout):
+        chain_client_mod._timed_post("http://drip.example", {}, 10.0, deadline_monotonic=deadline)
+    elapsed = time.monotonic() - started
+    assert elapsed <= budget + 0.08
+
+
+def test_probe_slow_drip_stays_incomplete_within_budget(monkeypatch):
+    """Probe registration read must not decode success after transport budget expires."""
+    import internal.chain_price.reader as reader_mod
+    from internal.chain_client import ChainClient
+
+    _install_slow_drip_requests_post(monkeypatch, chunk_delay=0.03)
+    slow = ChainClient(endpoint="https://slow.example", init_volume_db=False)
+    monkeypatch.setattr(
+        reader_mod.cfg,
+        "rpc_provider_clients",
+        lambda: [("slow", slow)],
+    )
+    budget = 0.15
+    started = time.monotonic()
+    from internal.subnet_universe import _default_probe_fetch
+
+    observed, complete = _default_probe_fetch([1], deadline=time.monotonic() + budget)
+    elapsed = time.monotonic() - started
+    assert observed == {}
+    assert complete is False
+    assert elapsed <= budget + 0.12

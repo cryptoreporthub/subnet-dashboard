@@ -900,7 +900,7 @@ def test_probe_fetch_deadline_blocks_second_provider_and_stays_incomplete(monkey
     fast = ChainClient(endpoint="https://fast.example", init_volume_db=False)
     posts: list[str] = []
 
-    def fake_post(endpoint, payload, timeout):
+    def fake_post(endpoint, payload, timeout, **kwargs):
         posts.append(endpoint)
         time.sleep(timeout)
         raise requests.ConnectionError("down")
