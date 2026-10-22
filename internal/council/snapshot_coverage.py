@@ -75,7 +75,12 @@ def load_membership_receipt() -> Dict[str, Any]:
             for row in snap.rows
             if isinstance(row, dict) and row.get("source") == "none"
         }
-        inactive = [n for n in netuids if n in empty_slots]
+        negative = {
+            int(key)
+            for key, entry in (snap.validity_map or {}).items()
+            if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
+        }
+        inactive = [n for n in netuids if n in empty_slots and n in negative]
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),
@@ -84,7 +89,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "degraded": bool(snap.degraded),
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
-            "expected_netuids": [n for n in netuids if n not in empty_slots],
+            "expected_netuids": [n for n in netuids if n not in inactive],
             "inactive_netuids": inactive,
             "fresh": membership_fresh(snap.resolved_at),
             "root_netuid_in_membership": 0 in snap.netuids,
