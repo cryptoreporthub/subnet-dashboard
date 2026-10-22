@@ -144,3 +144,22 @@ def test_a_member_with_no_validity_entry_stays_expected():
     )
     receipt = _receipt_for(membership)
     assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
+
+
+def test_a_negative_member_that_still_has_row_data_stays_expected():
+    membership = _membership(active=ACTIVE, placeholders=())
+    stale = tuple(ACTIVE[:3])
+    validity = dict(membership.validity_map)
+    validity.update({str(n): _deregistered() for n in stale})
+    receipt = _receipt_for(
+        UniverseSnapshot(
+            netuids=membership.netuids,
+            rows=membership.rows,
+            resolved_at=membership.resolved_at,
+            status="ok",
+            degraded=False,
+            validity_map=validity,
+        )
+    )
+    assert receipt["expected_netuids"] == list(ACTIVE)
+    assert receipt["inactive_netuids"] == []
