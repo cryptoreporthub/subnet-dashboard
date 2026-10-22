@@ -330,3 +330,11 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-10-22 — PR-A #1486 MC MODIFY gate act-on @ `8cf5eb77`
+
+- **Gate:** [comment 6335904497](https://github.com/cryptoreporthub/subnet-dashboard/pull/1486#issuecomment-6335904497) — evidence posted [6336249449](https://github.com/cryptoreporthub/subnet-dashboard/pull/1486#issuecomment-6336249449) (+ SHA fix [6336251825](https://github.com/cryptoreporthub/subnet-dashboard/pull/1486#issuecomment-6336251825)).
+- **SHAs:** main `a172e42365c0ab072117cb040d209e15da5144ef`; PR-B base `2cfe5c879c1d9ad94bb52a765dc3a9da15d26b18`; review `8cf5eb7756e8d94a86a1455e66b4097d905c8c8d`; tip `5f4ed638d614bcea1e9b8bf69d5ce783c3e9da0e` (live script).
+- **Live (no Fly):** `scripts/score_snapshot_producer_mc_live_table.py` + `scripts/score_snapshot_lifecycle_live_table.py`; Finney/BM RPC ok.
+- **JUnit vs main:** per-commit `93421750` / `bb2f44b2` / `8cf5eb77`; NEW fail IDs **0** at feat head (`8cf5eb77`).
+- **Status:** full MC review requested; **no merge / no deploy**.
