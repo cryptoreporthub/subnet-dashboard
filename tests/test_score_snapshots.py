@@ -436,13 +436,21 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     assert path.is_file()
     assert not snaps._scoring_write_in_progress()
 
-    real_build = snaps.build_full_universe_snapshot
-
-    def _fast_build(subnets, market_context, **kwargs):
+    def _fast_write(**_kwargs):
         write_calls["n"] += 1
-        return real_build(subnets, market_context, **kwargs)
+        payload = _published_payload(count=1)
+        pub = snaps.save_score_snapshot(payload, str(path))
+        return {
+            "ok": True,
+            "published": pub.get("published"),
+            "complete": True,
+            "count": 1,
+            "path": str(path),
+            "written_at": payload.get("written_at"),
+            "coverage": payload.get("coverage"),
+        }
 
-    monkeypatch.setattr(snaps, "build_full_universe_snapshot", _fast_build)
+    monkeypatch.setattr(snaps, "write_full_universe_snapshot", _fast_write)
     third = sched.run_once()
     assert third.get("ok") is True
     assert write_calls["n"] == 2

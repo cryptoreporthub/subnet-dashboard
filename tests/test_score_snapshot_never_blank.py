@@ -112,3 +112,50 @@ def test_stamped_snapshots_carry_current_scorer_fields():
     payload = stamp_scorer_fields({"day": [{"netuid": 1, "total_score": 1.0}]})
     assert payload["scorer_revision"] == SCORER_REVISION
     assert payload["scorer_digest"] == current_scorer_digest()
+
+
+def test_ci_seed_check_rejects_incompatible_seed(tmp_path):
+    import subprocess
+    import sys
+
+    bad = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
+    bad["scorer_digest"] = "deadbeef00000000"
+    bad_path = tmp_path / "bad_seed.json"
+    bad_path.write_text(json.dumps(bad), encoding="utf-8")
+    env = {**os.environ, "SCORE_SNAPSHOT_SEED_PATH": str(bad_path)}
+    proc = subprocess.run(
+        [sys.executable, "scripts/check_score_snapshot_seed.py"],
+        cwd=os.path.dirname(os.path.dirname(__file__)),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode == 2
+
+
+from tests.score_snapshot_invariant_harness import (
+    InvariantWorld,
+    pair_cases,
+    random_sequences,
+)
+
+
+@pytest.mark.parametrize("start,e1,e2", pair_cases(), ids=[f"{s}:{a}+{b}" for s, a, b in pair_cases()])
+def test_every_pair_of_events_keeps_picks_complete_and_non_empty(tmp_path, monkeypatch, start, e1, e2):
+    world = InvariantWorld(tmp_path, monkeypatch)
+    world.start(start)
+    world.assert_invariant()
+    world.apply(e1)
+    world.assert_invariant()
+    world.apply(e2)
+    world.assert_invariant()
+
+
+@pytest.mark.parametrize("seq", random_sequences(), ids=[f"rand{i}" for i in range(25)])
+def test_random_long_interleavings_keep_the_invariant(tmp_path, monkeypatch, seq):
+    world = InvariantWorld(tmp_path, monkeypatch)
+    world.start("complete_on_volume")
+    world.assert_invariant()
+    for event in seq:
+        world.apply(event)
+        world.assert_invariant()

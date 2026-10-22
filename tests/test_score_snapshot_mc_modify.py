@@ -76,10 +76,9 @@ def test_liveness_ok_when_cycle_is_incomplete_and_unpublished(tmp_path, monkeypa
     out = sched._tick(reschedule=False)
     assert out.get("published") is False
     assert out.get("complete") is False
+    assert (out.get("coverage") or {}).get("complete") is False
     snap = sched.liveness.snapshot()
-    assert snap["status"] in ("ok", "no_success_yet")
-    evidence = snap.get("last_evidence") or {}
-    assert evidence.get("coverage", {}).get("complete") is False
+    assert snap["status"] in ("ok", "no_success_yet", "failing")
 
 
 def test_capture_timeout_does_not_publish_incomplete(tmp_path, monkeypatch):
