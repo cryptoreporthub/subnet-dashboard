@@ -8,6 +8,7 @@ import pytest
 
 from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
+from tests.score_snapshot_testutil import chain_read
 
 
 @pytest.fixture(autouse=True)
@@ -309,6 +310,7 @@ def test_load_membership_receipt_from_snapshot(monkeypatch):
         resolved_at="2026-10-11T00:00:00Z",
         status="ok",
         degraded=False,
+        chain=chain_read((1, 2)),
         validity_map={
             "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
             "2": _validity_entry(validity="positive", sources=["taomarketcap"]),

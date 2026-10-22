@@ -32,6 +32,7 @@ def test_seed_build_publishes_the_chain_read_it_was_given():
         out = build_image_seed_snapshot(chain=chain, volume_path=volume, cycle_path=f"{tmp}/cycle.json")
         assert out.get("published")
         snap = json.loads(open(volume, encoding="utf-8").read())
+    assert snap["coverage"]["membership"]["chain"] == chain.to_dict()
     assert snap["coverage"]["membership"]["expected_netuids"] == list(chain.netuids)
     assert sorted(row["netuid"] for row in snap["day"]) == list(chain.netuids)
     ok, reason = validate_shipped_seed(snap)

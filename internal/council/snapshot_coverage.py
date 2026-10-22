@@ -7,6 +7,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from internal.chain_read import ChainRead
 from internal.subnets.tradable import subnet_netuid
 
 
@@ -67,15 +68,9 @@ def load_membership_receipt() -> Dict[str, Any]:
 
         snap = get_snapshot()
         feed = universe_snapshot_feed_meta(snap)
-        netuids = tuple(int(n) for n in snap.netuids if int(n) > 0)
-        negative = {
-            int(key)
-            for key, entry in (snap.validity_map or {}).items()
-            if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
-        }
-        # Owner rule: a netuid the chain reports unregistered leaves expected at once, even while its
-        # row stays in ``snap.netuids`` for the 48h grace. Do not require an empty-slot row here.
-        inactive = [n for n in netuids if n in negative]
+        # Owner rule: expected is exactly the pinned chain read, so a chain-unregistered netuid is
+        # out at once even while its row stays in ``snap.netuids`` for the 48h grace.
+        chain = snap.chain
         return {
             "source": feed.get("source"),
             "sources": list(feed.get("sources") or []),
@@ -84,8 +79,8 @@ def load_membership_receipt() -> Dict[str, Any]:
             "degraded": bool(snap.degraded),
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
-            "expected_netuids": [n for n in netuids if n not in inactive],
-            "inactive_netuids": inactive,
+            "expected_netuids": list(chain.netuids) if chain else [],
+            "chain": chain.to_dict() if chain else None,
             "fresh": membership_fresh(snap.resolved_at),
             "root_netuid_in_membership": 0 in snap.netuids,
             "message": snap.message,
@@ -100,6 +95,7 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": False,
             "refresh_incomplete": True,
             "expected_netuids": [],
+            "chain": None,
             "fresh": False,
             "root_netuid_in_membership": False,
             "message": str(exc),
@@ -290,6 +286,8 @@ def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
         return False
     if receipt.get("refresh_incomplete"):
         return False
+    if ChainRead.parse(receipt.get("chain")) is None:
+        return False
     return True
 
 
@@ -309,6 +307,8 @@ def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
         return "cap_reached"
     if receipt.get("refresh_incomplete"):
         return "refresh_incomplete"
+    if ChainRead.parse(receipt.get("chain")) is None:
+        return "no_chain_read"
     return "membership_not_admissible"
 
 

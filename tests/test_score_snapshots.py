@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from internal.council import score_snapshots as snaps
-from tests.score_snapshot_testutil import complete_snapshot_payload
+from tests.score_snapshot_testutil import chain_dict, complete_snapshot_payload
 
 
 def test_save_load_and_rank(tmp_path, monkeypatch):
@@ -347,6 +347,7 @@ def _wire_scheduler_paths(tmp_path, monkeypatch):
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
             "expected_netuids": [1],
+            "chain": chain_dict([1]),
             "fresh": True,
             "degraded": False,
             "cap_reached": False,
@@ -361,6 +362,7 @@ def _patch_write_membership(monkeypatch, netuids):
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
             "expected_netuids": list(netuids),
+            "chain": chain_dict(netuids),
             "fresh": True,
             "degraded": False,
             "cap_reached": False,
