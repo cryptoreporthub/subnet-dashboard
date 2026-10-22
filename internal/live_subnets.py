@@ -528,6 +528,21 @@ def _sync_once() -> bool:
         if outcome_counts:
             logger.info("live_subnets sync rpc outcomes: %s", outcome_counts)
         if not rows:
+            degraded = fetch.get("degraded_reason")
+            if degraded:
+                reason = f"failed:{degraded}"
+                logger.warning(
+                    "live_subnets sync: chain fetch unavailable (%s)",
+                    reason,
+                )
+                _record_boot_status(
+                    phase="sync_done",
+                    ok=False,
+                    reason=reason,
+                    rows=0,
+                    unavailable=True,
+                )
+                return False
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)
