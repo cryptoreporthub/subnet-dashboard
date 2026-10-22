@@ -31,6 +31,20 @@ BAD_SHAPES = {
     "expected_text": lambda p: p["coverage"]["day"].update(expected=["abc"]),
     "row_netuid_text": lambda p: p.update(day=[{"netuid": "x", "total_score": 1.0}]),
     "row_netuid_null": lambda p: p.update(day=[{"netuid": None, "total_score": 1.0}]),
+    "empty_expected": lambda p: (
+        p["coverage"]["day"].update(expected=[]),
+        p["coverage"]["membership"].update(expected_netuids=[]),
+        p.update(day=[{"netuid": 999, "total_score": 1.0}]),
+    ),
+    "extra_row": lambda p: p.update(
+        day=[{"netuid": 1, "total_score": 5.0}, {"netuid": 999, "total_score": 1.0}]
+    ),
+    "duplicate_row": lambda p: p.update(
+        day=[{"netuid": 1, "total_score": 5.0}, {"netuid": 1, "total_score": 4.0}]
+    ),
+    "row_without_netuid": lambda p: p.update(
+        day=[{"netuid": 1, "total_score": 5.0}, {"total_score": 1.0}]
+    ),
     "membership_text": lambda p: p["coverage"].update(day={}, membership={"expected_netuids": ["7", "x"]}),
 }
 

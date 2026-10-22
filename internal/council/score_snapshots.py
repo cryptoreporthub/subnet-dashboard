@@ -189,8 +189,8 @@ def is_complete_snapshot(snap: Any) -> bool:
         return False
     if not scorer_fields_match(snap):
         return False
-    have_list = _parse_netuids([r["netuid"] for r in day_rows if "netuid" in r])
-    if have_list is None:
+    have = _parse_netuids([r.get("netuid") for r in day_rows])
+    if have is None or len(have) != len(set(have)):
         return False
     expected: List[int] = []
     day_block = coverage.get("day")
@@ -205,10 +205,7 @@ def is_complete_snapshot(snap: Any) -> bool:
         if parsed is None:
             return False
         expected = [n for n in parsed if n > 0]
-    if expected:
-        have = set(have_list)
-        return all(n in have for n in expected)
-    return True
+    return bool(expected) and set(have) == set(expected)
 
 
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
