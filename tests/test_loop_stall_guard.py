@@ -460,3 +460,47 @@ def test_revive_recycled_on_stopped_lifecycle_with_degraded_status(tmp_path, mon
             assert out["recycled"] is True, degraded
         finally:
             snaps.stop_score_snapshot_scheduler()
+
+
+def _owner_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.setenv("WORKER_HEAVY", "essential")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    monkeypatch.delenv("SCORE_SNAPSHOT_SCHEDULER_ENABLED", raising=False)
+    monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "volume.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "seed.json"))
+
+
+def test_owner_without_receipt_reads_a_young_seed_as_young(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    (tmp_path / "seed.json").write_text(
+        json.dumps(
+            complete_snapshot_payload(
+                day_rows=[{"netuid": 1, "total_score": 1.0}],
+                written_at=snaps._now_iso(),
+            )
+        ),
+        encoding="utf-8",
+    )
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age < MAX_SNAPSHOT_AGE_SECONDS
+
+
+def test_owner_with_old_receipt_is_stale_even_when_the_volume_is_young(tmp_path, monkeypatch):
+    _owner_env(monkeypatch, tmp_path)
+    snaps.publish_complete_snapshot(
+        complete_snapshot_payload(
+            day_rows=[{"netuid": 1, "total_score": 1.0}],
+            written_at=snaps._now_iso(),
+        ),
+        str(tmp_path / "volume.json"),
+    )
+    (tmp_path / "cycle.json").write_text(
+        json.dumps({"attempted_at": "2020-01-01T00:00:00Z", "outcome": "published"}),
+        encoding="utf-8",
+    )
+    age = loop_stall_guard._snapshot_age_seconds()
+    assert age is not None
+    assert age > MAX_SNAPSHOT_AGE_SECONDS
