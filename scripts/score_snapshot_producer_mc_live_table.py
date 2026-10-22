@@ -114,7 +114,7 @@ def _row_a_cold_seed_producer_not_blocked(data: Path) -> Row:
         payload = complete_snapshot_payload(
             day_rows=[{"netuid": 1, "total_score": 1.0}, {"netuid": 2, "total_score": 2.0}],
         )
-        snaps.save_score_snapshot(payload, str(volume))
+        snaps.publish_complete_snapshot(payload, str(volume))
         producer_ran["ok"] = True
 
     # Seed serves readers while producer path can run (no ensure gate).
@@ -144,7 +144,7 @@ def _row_b_kill9(data: Path, seed_path: Path) -> Row:
     snaps.SCORE_SNAPSHOTS_PATH = str(volume)
     snaps.SCORE_SNAPSHOT_SEED_PATH = str(seed_path)
     good = complete_snapshot_payload(day_rows=[{"netuid": 9, "total_score": 9.0}])
-    snaps.save_score_snapshot(good, str(volume))
+    snaps.publish_complete_snapshot(good, str(volume))
     if volume.exists():
         volume.unlink()
     _run_kill_mid_write(volume, seed_path)

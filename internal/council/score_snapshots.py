@@ -398,22 +398,6 @@ def read_served_snapshot(
     return ServedSnapshot(ServedState.NONE, None, None, None, "seed_unavailable")
 
 
-def volume_has_fresh_complete_snapshot(
-    path: Optional[str] = None,
-    max_age_seconds: Optional[int] = None,
-) -> bool:
-    """Producer gate: fresh complete on volume only — seed/aged do not block ensure."""
-    volume_path = path or SCORE_SNAPSHOTS_PATH
-    snap = load_score_snapshot(volume_path)
-    if not snap or not is_complete_snapshot(snap):
-        return False
-    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    age = _snapshot_age_for_path(volume_path, snap)
-    if age is None:
-        return False
-    return ttl <= 0 or age <= ttl
-
-
 def _served_snapshot_tuple(
     path: Optional[str] = None,
     max_age_seconds: Optional[int] = None,
