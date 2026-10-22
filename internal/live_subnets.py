@@ -258,6 +258,9 @@ def _merge_into_registry(live: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     except (TypeError, ValueError):
                         pass
             merged["source"] = "blockmachine"
+            rpc_provider = lv.get("rpc_provider") or lv.get("source")
+            if rpc_provider:
+                merged["rpc_provider"] = rpc_provider
             merged["live"] = True
         else:
             merged["live"] = False
@@ -525,9 +528,22 @@ def _sync_once() -> bool:
             return False
         rows = fetch.get("rows") or []
         outcome_counts = _summarize_rpc_outcomes(fetch.get("netuid_outcomes") or {})
-        if outcome_counts:
-            logger.info("live_subnets sync rpc outcomes: %s", outcome_counts)
         if not rows:
+            degraded = fetch.get("degraded_reason")
+            if degraded:
+                reason = f"failed:{degraded}"
+                logger.warning(
+                    "live_subnets sync: chain fetch unavailable (%s)",
+                    reason,
+                )
+                _record_boot_status(
+                    phase="sync_done",
+                    ok=False,
+                    reason=reason,
+                    rows=0,
+                    unavailable=True,
+                )
+                return False
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
             _record_boot_status(phase="sync_done", ok=False, reason=empty_reason, rows=0)

@@ -33,6 +33,7 @@ from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
 from internal.chain_rpc_errors import (
     ChainRpcError,
+    EndpointRpcCooldownActive,
     PinnedBlockMismatch,
     classify_http_status,
     classify_jsonrpc_error,
@@ -88,13 +89,28 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
         return duration
 
 
+def clamp_client_rpc_timeout(
+    client: Any,
+    deadline_mono: Optional[float],
+    originals: Dict[Any, float],
+) -> None:
+    """Cap per-request timeout to remaining RPC deadline budget (shared by reader + client)."""
+    setattr(client, "_rpc_deadline_mono", deadline_mono)
+    if deadline_mono is None:
+        return
+    remaining = deadline_mono - time.monotonic()
+    cap = 0.01 if remaining <= 0 else max(0.01, remaining)
+    if client not in originals:
+        originals[client] = float(client.timeout)
+    client.timeout = min(originals[client], cap)
+
+
 def _classify_alpha_price_probe_error(exc: BaseException) -> str:
     """Map RPC failures to live_subnets / universe outcome labels."""
     from internal.chain_price.rpc import classify_rpc_error
 
-    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
-        if "cooldown" in str(exc).lower():
-            return "cooldown_skip"
+    if isinstance(exc, EndpointRpcCooldownActive):
+        return "cooldown_skip"
     labeled = classify_rpc_error(exc)
     if labeled in ("timeout", "connection", "parse", "rate_limited", "rpc_error"):
         return labeled
@@ -375,7 +391,7 @@ class ChainClient:
             try:
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
-                    raise ChainRpcError("rate_limited", "cooldown")
+                    raise EndpointRpcCooldownActive()
                 response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
@@ -422,10 +438,14 @@ class ChainClient:
                     remaining = deadline_mono - time.monotonic()
                     if remaining <= 0:
                         raise ChainRpcError("timeout", "rpc deadline exceeded")
-                    self.timeout = min(float(self.timeout), max(0.01, remaining))
+                    originals = getattr(self, "_rpc_clamp_originals", None)
+                    if originals is None:
+                        self._rpc_clamp_originals = {}
+                        originals = self._rpc_clamp_originals
+                    clamp_client_rpc_timeout(self, deadline_mono, originals)
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
-                    raise ChainRpcError("rate_limited", "cooldown")
+                    raise EndpointRpcCooldownActive()
                 response = _timed_post(self.endpoint, payload, self.timeout)
                 if response.status_code == 429:
                     retry_after = _parse_retry_after_header(response)

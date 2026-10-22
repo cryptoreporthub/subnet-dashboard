@@ -8,7 +8,12 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from internal.chain_client import _hex_to_bytes, _row_from_subnet_reserves, _storage_chunk_netuids
+from internal.chain_client import (
+    _hex_to_bytes,
+    _row_from_subnet_reserves,
+    _storage_chunk_netuids,
+    clamp_client_rpc_timeout,
+)
 from internal.chain_price import config as chain_price_cfg
 from internal.chain_price.membership import get_member_netuids
 from internal.chain_price.outcomes import RpcOutcome
@@ -144,15 +149,16 @@ def _clamp_reader_timeouts(reader: ChainReader, seconds: float):
     """Temporarily cap per-provider HTTP timeouts to the remaining budget."""
     if seconds <= 0:
         seconds = 0.01
-    originals: List[Tuple[Any, float]] = []
+    deadline = time.monotonic() + seconds
+    originals: Dict[Any, float] = {}
     for _label, client in reader._providers:
-        originals.append((client, float(client.timeout)))
-        client.timeout = min(float(client.timeout), seconds)
+        clamp_client_rpc_timeout(client, deadline, originals)
     try:
         yield
     finally:
-        for client, original in originals:
+        for client, original in originals.items():
             client.timeout = original
+            setattr(client, "_rpc_deadline_mono", None)
 
 
 def fetch_live_subnet_snapshot(deadline: float) -> LiveSubnetSnapshot:

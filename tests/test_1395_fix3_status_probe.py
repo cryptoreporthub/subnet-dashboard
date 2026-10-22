@@ -137,7 +137,6 @@ def test_recorder_state_reports_provider_cooldown_after_rate_limit():
     client = ChainClient("https://finney.example/rpc", init_volume_db=False)
     reader = ChainReader([("finney", client)])
     reset_shared_reader()
-    reader.provider_served = "finney"
     with patch("internal.chain_price.scheduler.get_shared_reader", return_value=reader):
         ep = client.endpoint
         with _RL_LOCK:
@@ -147,6 +146,6 @@ def test_recorder_state_reports_provider_cooldown_after_rate_limit():
         with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
             note_rate_limit(ep)
             state = recorder_state()
-    assert state["provider_served"] == "finney"
+    assert "provider_served" not in state
     finney_row = next(p for p in state["providers"] if p["label"] == "finney")
     assert finney_row["cooldown_remaining_s"] >= 60.0

@@ -138,6 +138,48 @@ def test_sync_empty_registry_has_distinct_boot_reason(monkeypatch, tmp_path):
     assert status["ok"] is False
 
 
+
+def test_sync_failed_snapshot_not_recorded_as_empty(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from internal import live_subnets
+
+    fetch = {
+        "rows": [],
+        "degraded_reason": "membership_unavailable",
+        "refresh_complete": False,
+        "netuid_outcomes": {},
+    }
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=fetch),
+    ):
+        assert live_subnets._sync_once() is False
+
+    status = json.loads((tmp_path / "live_subnets_boot.json").read_text())
+    assert status["reason"] == "failed:membership_unavailable"
+    assert status.get("unavailable") is True
+
+
+
+def test_sync_does_not_log_duplicate_rpc_outcome_summary(monkeypatch, tmp_path, caplog):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from internal import live_subnets
+
+    fetch = {
+        "rows": [{"netuid": 1, "price": 1.0, "source": "finney"}],
+        "refresh_complete": True,
+        "netuid_outcomes": {1: "ok"},
+    }
+    with (
+        patch.object(live_subnets, "registry_ready", return_value=True),
+        patch.object(live_subnets, "_fetch_chain_data", return_value=fetch),
+        caplog.at_level(logging.INFO),
+    ):
+        assert live_subnets._sync_once() is True
+
+    assert not any("sync rpc outcomes" in r.getMessage() for r in caplog.records)
+
+
 def test_sync_normal_path_records_boot_ok(monkeypatch, tmp_path):
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     from internal import live_subnets

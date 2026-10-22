@@ -96,6 +96,33 @@ def clear_endpoint_rate_limits():
         _RL_STEP.clear()
 
 
+
+def test_clamp_client_rpc_timeout_respects_floor_and_original():
+    import time
+
+    from internal.chain_client import ChainClient, clamp_client_rpc_timeout
+
+    client = ChainClient("https://clamp.example", timeout=30.0, init_volume_db=False, retries=0)
+    originals: dict = {}
+    clamp_client_rpc_timeout(client, time.monotonic() + 0.001, originals)
+    assert client.timeout == 0.01
+
+    client2 = ChainClient("https://clamp2.example", timeout=4.0, init_volume_db=False, retries=0)
+    originals2: dict = {}
+    clamp_client_rpc_timeout(client2, time.monotonic() + 100.0, originals2)
+    assert client2.timeout == 4.0
+
+
+
+def test_cooldown_skip_classification_uses_local_exception_not_wire_code():
+    from internal.chain_client import _classify_alpha_price_probe_error
+    from internal.chain_rpc_errors import ChainRpcError, EndpointRpcCooldownActive
+
+    assert _classify_alpha_price_probe_error(EndpointRpcCooldownActive()) == "cooldown_skip"
+    wire = ChainRpcError("rate_limited", "server", code=-32098)
+    assert _classify_alpha_price_probe_error(wire) != "cooldown_skip"
+
+
 def test_shared_endpoint_cooldown_blocks_second_client(clear_endpoint_rate_limits):
     from internal.chain_client import ChainClient
 
@@ -110,9 +137,10 @@ def test_shared_endpoint_cooldown_blocks_second_client(clear_endpoint_rate_limit
             first._call_typed("chain_getBlockHash", [])
         assert exc.value.kind == "rate_limited"
         assert post.call_count == 1
-        with pytest.raises(ChainRpcError) as exc2:
+        from internal.chain_rpc_errors import EndpointRpcCooldownActive
+
+        with pytest.raises(EndpointRpcCooldownActive):
             second._call_typed("chain_getBlockHash", [])
-        assert str(exc2.value) == "cooldown"
         assert post.call_count == 1
 
 
@@ -158,9 +186,10 @@ def test_traffic_resumes_after_cooldown_expires(clear_endpoint_rate_limits):
     with patch("internal.chain_client.time.monotonic", side_effect=lambda: clock[0]):
         note_rate_limit(client.endpoint, 5.0)
         clock[0] = 4.9
-        with pytest.raises(ChainRpcError) as exc:
+        from internal.chain_rpc_errors import EndpointRpcCooldownActive
+
+        with pytest.raises(EndpointRpcCooldownActive):
             client._call_typed("chain_getBlockHash", [])
-        assert str(exc.value) == "cooldown"
         clock[0] = 5.1
         good = MagicMock()
         good.status_code = 200

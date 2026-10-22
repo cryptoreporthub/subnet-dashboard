@@ -36,6 +36,13 @@ class ChainRpcError(Exception):
         super().__init__(message or kind)
 
 
+class EndpointRpcCooldownActive(ChainRpcError):
+    """Local-only: endpoint is in client cooldown; never assigned from JSON-RPC wire."""
+
+    def __init__(self, message: str = "endpoint RPC cooldown active"):
+        super().__init__("rate_limited", message)
+
+
 class PinnedBlockMismatch(ChainRpcError):
     """``state_queryStorageAt`` returned a different block than requested."""
 
