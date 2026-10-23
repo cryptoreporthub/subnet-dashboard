@@ -350,12 +350,15 @@ def _fetch_chain_data():
         name="live-subnets-fetch",
         daemon=True,
     )
+    spawn_mono = time.monotonic()
     proc.start()
     child_sock.close()
     msg: Any = None
     killed = False
+    ready_mono: Optional[float] = None
+    result: Any = None
     try:
-        boot_deadline = time.monotonic() + spawn_grace
+        boot_deadline = spawn_mono + spawn_grace
         boot = recv_message(parent_sock, boot_deadline)
         if not isinstance(boot, dict) or boot.get("phase") != "ready":
             logger.warning(
@@ -365,6 +368,7 @@ def _fetch_chain_data():
             killed = True
             _terminate_fetch_process(proc)
             return None
+        ready_mono = time.monotonic()
         from internal.live_subnets_ipc import send_message
 
         rpc_deadline = time.monotonic() + rpc_budget
@@ -391,7 +395,43 @@ def _fetch_chain_data():
             killed = True
             _terminate_fetch_process(proc)
             return None
+        if killed or not isinstance(msg, dict):
+            logger.warning("live_subnets sync failed: invalid child response")
+            return None
+        if not msg.get("ok"):
+            logger.warning("live_subnets sync failed: %s", msg.get("exc"))
+            return None
+        rows = msg.get("data")
+        if not isinstance(rows, list):
+            return None
+        result = {
+            "rows": rows,
+            "requested_netuids": list(msg.get("requested_netuids") or []),
+            "completed_netuids": list(msg.get("completed_netuids") or []),
+            "missing_netuids": list(msg.get("missing_netuids") or []),
+            "refresh_complete": bool(msg.get("refresh_complete", not msg.get("missing_netuids"))),
+            "degraded_reason": msg.get("degraded_reason"),
+            "batch_expired": bool(msg.get("batch_expired")),
+            "netuid_outcomes": {
+                int(k): str(v)
+                for k, v in (msg.get("netuid_outcomes") or {}).items()
+            },
+        }
+        return result
     finally:
+        done_mono = time.monotonic()
+        if ready_mono is not None:
+            logger.info(
+                "live_subnets fetch timing: spawn_to_ready=%.2fs rpc_window=%.2fs total=%.2fs",
+                ready_mono - spawn_mono,
+                done_mono - ready_mono,
+                done_mono - spawn_mono,
+            )
+        else:
+            logger.info(
+                "live_subnets fetch timing: spawn_to_ready=n/a rpc_window=n/a total=%.2fs",
+                done_mono - spawn_mono,
+            )
         try:
             parent_sock.close()
         except Exception:
@@ -399,29 +439,6 @@ def _fetch_chain_data():
         proc.join(timeout=1.0)
         if proc.is_alive():
             _terminate_fetch_process(proc)
-
-    if killed or not isinstance(msg, dict):
-        logger.warning("live_subnets sync failed: invalid child response")
-        return None
-    if not msg.get("ok"):
-        logger.warning("live_subnets sync failed: %s", msg.get("exc"))
-        return None
-    rows = msg.get("data")
-    if not isinstance(rows, list):
-        return None
-    return {
-        "rows": rows,
-        "requested_netuids": list(msg.get("requested_netuids") or []),
-        "completed_netuids": list(msg.get("completed_netuids") or []),
-        "missing_netuids": list(msg.get("missing_netuids") or []),
-        "refresh_complete": bool(msg.get("refresh_complete", not msg.get("missing_netuids"))),
-        "degraded_reason": msg.get("degraded_reason"),
-        "batch_expired": bool(msg.get("batch_expired")),
-        "netuid_outcomes": {
-            int(k): str(v)
-            for k, v in (msg.get("netuid_outcomes") or {}).items()
-        },
-    }
 
 
 def _boot_status_path() -> str:
@@ -453,11 +470,30 @@ def _read_boot_status() -> Dict[str, Any]:
     return {}
 
 
+def _summarize_rpc_outcomes(outcomes: Dict[int, str]) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for outcome in outcomes.values():
+        counts[outcome] = counts.get(outcome, 0) + 1
+    return counts
+
+
+def _missing_netuids_log_label(missing: List[int]) -> str:
+    if not missing:
+        return "[]"
+    ordered = sorted({int(n) for n in missing})
+    if len(ordered) <= 12:
+        return str(ordered)
+    if ordered[-1] - ordered[0] + 1 == len(ordered):
+        return f"{ordered[0]}-{ordered[-1]} ({len(ordered)} netuids)"
+    return f"{ordered[:3]}…{ordered[-3:]} ({len(ordered)} netuids)"
+
+
 def _sync_once() -> bool:
     # ponytail: bootstrap + sync loop can both call _sync_once — one guard here.
     if not _sync_lock.acquire(blocking=False):
         logger.debug("live_subnets sync skipped — already in flight")
         return False
+    sync_started_mono = time.monotonic()
     _record_boot_status(phase="sync_start")
     try:
         if not _sync_owner_process():
@@ -474,11 +510,23 @@ def _sync_once() -> bool:
             logger.info("live_subnets sync deferred until registry is ready")
             return False
         fetch = _normalize_fetch_result(_fetch_chain_data())
+        fetch_elapsed = time.monotonic() - sync_started_mono
         if fetch is None:
-            logger.warning("live_subnets sync: chain fetch failed or timed out")
-            _record_boot_status(phase="sync_done", ok=False, reason="timeout")
+            logger.warning(
+                "live_subnets sync: chain fetch failed or timed out after %.1fs",
+                fetch_elapsed,
+            )
+            _record_boot_status(
+                phase="sync_done",
+                ok=False,
+                reason="timeout",
+                sync_elapsed_seconds=round(fetch_elapsed, 2),
+            )
             return False
         rows = fetch.get("rows") or []
+        outcome_counts = _summarize_rpc_outcomes(fetch.get("netuid_outcomes") or {})
+        if outcome_counts:
+            logger.info("live_subnets sync rpc outcomes: %s", outcome_counts)
         if not rows:
             empty_reason = "empty_netuids" if not _registry_netuids() else "empty"
             logger.warning("live_subnets sync: chain fetch returned 0 subnets (%s)", empty_reason)
@@ -517,11 +565,13 @@ def _sync_once() -> bool:
                 )
                 return True
             reason = fetch.get("degraded_reason") or "partial_fetch"
+            missing = fetch.get("missing_netuids") or []
             logger.warning(
-                "live_subnets partial sync: %d live rows, %d merged, missing=%s",
+                "live_subnets partial sync: %d live rows, %d merged, missing=%s refresh_complete=false (%.1fs)",
                 len(rows),
                 len(merged),
-                fetch.get("missing_netuids"),
+                _missing_netuids_log_label(missing),
+                fetch_elapsed,
             )
             _record_boot_status(
                 phase="sync_done",
@@ -530,7 +580,9 @@ def _sync_once() -> bool:
                 rows=len(merged),
                 live_rows=len(rows),
                 refresh_complete=False,
-                missing_netuids=fetch.get("missing_netuids") or [],
+                missing_netuids=missing,
+                sync_elapsed_seconds=round(fetch_elapsed, 2),
+                rpc_outcomes=outcome_counts,
             )
             return False
         except Exception as exc:

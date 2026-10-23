@@ -81,7 +81,11 @@ def fetch_meta_from_batch(
     completed = sorted(
         {n for n in (_row_netuid(r) for r in rows) if n is not None}
     )
-    missing = [n for n in requested_netuids if n not in set(completed)]
+    missing = [
+        n
+        for n in requested_netuids
+        if n not in set(completed) and netuid_outcomes.get(n) != "not_member"
+    ]
     refresh_complete = not missing
     if refresh_complete:
         degraded_reason = None
@@ -136,46 +140,60 @@ def collect_chain_rows() -> tuple[List[dict[str, Any]], List[int], dict[str, Any
         )
         return rows, requested, meta
 
-    from internal.chain_client import get_default_client
+    import time
 
-    client = get_default_client()
-    mode = os.environ.get("LIVE_SUBNETS_FETCH_MODE", "lite").strip().lower()
-    if mode in ("lite", "price"):
-        if hasattr(client, "get_subnet_price_rows_batch"):
-            batch = client.get_subnet_price_rows_batch(requested)
-        else:
-            rows = client.get_subnet_price_rows(requested)
-            outcomes: dict[int, str] = {}
-            for row in rows:
-                n = _row_netuid(row)
-                if n is not None:
-                    outcomes[int(n)] = "ok"
-            for n in requested:
-                outcomes.setdefault(int(n), "no_price")
-            batch = {
-                "rows": rows,
-                "batch_expired": False,
-                "netuid_outcomes": outcomes,
-            }
-        meta = fetch_meta_from_batch(
-            requested,
-            batch["rows"],
-            batch_expired=bool(batch.get("batch_expired")),
-            netuid_outcomes=dict(batch.get("netuid_outcomes") or {}),
+    from internal.chain_price.live_subnet_snapshot import fetch_live_subnet_snapshot
+
+    deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
+    if deadline_mono:
+        deadline = float(deadline_mono)
+    else:
+        budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
+        deadline = time.monotonic() + budget
+
+    rpc_started = time.monotonic()
+    snapshot = fetch_live_subnet_snapshot(deadline)
+    rpc_elapsed = time.monotonic() - rpc_started
+    if not snapshot.membership_resolved:
+        degraded = snapshot.failure or "membership_unavailable"
+        logger.warning(
+            "live_subnets child snapshot fetch failed: %s (elapsed=%.1fs)",
+            degraded,
+            rpc_elapsed,
         )
-        return batch["rows"], requested, meta
-    rows = client.get_all_subnet_data(netuids=requested or None)
-    outcomes = {int(n): "ok" for n in (_row_netuid(r) for r in rows) if n is not None}
+        meta = fetch_meta_from_batch(
+            [],
+            [],
+            batch_expired=snapshot.batch_expired,
+            netuid_outcomes={},
+        )
+        meta["refresh_complete"] = False
+        meta["degraded_reason"] = degraded
+        return [], [], meta
+    outcomes = dict(snapshot.netuid_outcomes)
     for n in requested:
-        if int(n) not in outcomes:
-            outcomes[int(n)] = "fetch_errors"
+        if n not in snapshot.requested_netuids:
+            outcomes[int(n)] = "not_member"
+    active_requested = list(snapshot.requested_netuids)
+    counts: dict[str, int] = {}
+    for outcome in outcomes.values():
+        counts[str(outcome)] = counts.get(str(outcome), 0) + 1
+    logger.info(
+        "live_subnets child snapshot fetch: provider=%s members=%d rows=%d elapsed=%.1fs outcomes=%s batch_expired=%s",
+        snapshot.provider,
+        len(active_requested),
+        len(snapshot.rows),
+        rpc_elapsed,
+        counts,
+        snapshot.batch_expired,
+    )
     meta = fetch_meta_from_batch(
-        requested,
-        rows,
-        batch_expired=False,
+        active_requested,
+        snapshot.rows,
+        batch_expired=snapshot.batch_expired,
         netuid_outcomes=outcomes,
     )
-    return rows, requested, meta
+    return snapshot.rows, active_requested, meta
 
 
 def _rpc_return_margin_seconds() -> float:

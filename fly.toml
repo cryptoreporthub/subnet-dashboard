@@ -59,8 +59,6 @@ primary_region = "sjc"
   LIVE_SUBNETS_BATCH_DEADLINE_SECONDS = "85"
   # Child batch uses parent rpc_deadline minus LIVE_SUBNETS_RPC_RETURN_MARGIN_SECONDS (default 3)
   # so partial rows can be sent before the parent's 90s recv budget expires.
-  # Prod web + inline worker: lite price rows only (full get_all_subnet_data >>90s).
-  LIVE_SUBNETS_FETCH_MODE = "lite"
   # Fix live-subnet wedge 2026-08-12: fail fast per RPC so the 75-subnet price batch
   # finishes inside the sync budget instead of each stuck subnet burning ~47s and
   # piling up overlapping AUTO-sync daemon threads that hammer Blockmachine.
