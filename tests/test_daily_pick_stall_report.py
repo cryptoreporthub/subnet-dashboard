@@ -80,11 +80,14 @@ def tick(tmp_path, monkeypatch):
     monkeypatch.setattr(pick_scheduler, "_load_subnets", lambda: _rows())
     monkeypatch.setattr(pick_scheduler, "_market_context", lambda subnets: {})
     monkeypatch.setattr(pick_scheduler, "_record_ab_benchmark", lambda *a, **k: None)
-    monkeypatch.setattr(pick_scheduler, "_write_scheduler_state", lambda state: None)
+    monkeypatch.setattr(
+        pick_scheduler, "PICK_SCHEDULER_STATE_PATH", str(tmp_path / "pick_scheduler_state.json")
+    )
     monkeypatch.setattr(pick_scheduler, "DAILY_PICK_TICK_TIMEOUT_SECONDS", 5)
 
     def run():
         scheduler = pick_scheduler.DailyPickScheduler()
+        monkeypatch.setattr(pick_scheduler, "_daily", scheduler)
         result = scheduler._tick(reschedule=False)
         return scheduler, result
 
@@ -112,9 +115,10 @@ def test_stalled_prewarm_is_named_in_the_timeout_error(tick, monkeypatch):
         release.set()
     _drain(scheduler)
 
-    assert "timed out" in result["error"]
-    assert "tmc_prewarm" in result["error"]
-    assert "hang_in_prewarm" in result["error"]
+    reported = scheduler.state()["last_run_error"]
+    assert "timed out" in reported
+    assert "tmc_prewarm" in reported
+    assert "hang_in_prewarm" in reported
     assert "enrich_context" in result["stages"]["done"]
     assert "tmc_prewarm" in result["stages"]["running"]
 
@@ -131,9 +135,10 @@ def test_a_held_cache_lock_is_named_in_the_timeout_error(tick, tmp_path):
         holder.close()
     _drain(scheduler)
 
-    assert "timed out" in result["error"]
-    assert "cache_begin" in result["error"]
-    assert "_with_file_lock" in result["error"]
+    reported = scheduler.state()["last_run_error"]
+    assert "timed out" in reported
+    assert "cache_begin" in reported
+    assert "_with_file_lock" in reported
 
 
 def test_a_finished_tick_reports_every_stage_it_ran(tick):
@@ -145,3 +150,51 @@ def test_a_finished_tick_reports_every_stage_it_ran(tick):
         assert stage in done
         assert done[stage] >= 0.0
     assert result["stages"]["running"] == {}
+
+
+def test_the_published_hold_carries_no_stall_detail(tick, monkeypatch, tmp_path):
+    release = threading.Event()
+
+    def hang_in_prewarm():
+        release.wait(timeout=30)
+        return True
+
+    monkeypatch.setattr("internal.indicators.tmc_singleflight.prewarm", hang_in_prewarm)
+    scheduler = None
+    try:
+        scheduler, result = tick()
+    finally:
+        release.set()
+    _drain(scheduler)
+
+    rows = json.loads((tmp_path / "daily_picks.json").read_text(encoding="utf-8"))
+    hold = [row for row in rows if row.get("scheduler_hold")][-1]
+    assert hold["reason"] == "daily pick tick timed out after 5s"
+    assert result["error"] == hold["reason"]
+
+
+def test_learning_health_route_shows_the_stalled_stage(tick, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    import server
+    from internal.learning import routes
+
+    monkeypatch.setattr(routes, "_LEARNING_HEALTH_CACHE", {"at": 0.0, "payload": None})
+    release = threading.Event()
+
+    def hang_in_prewarm():
+        release.wait(timeout=30)
+        return True
+
+    monkeypatch.setattr("internal.indicators.tmc_singleflight.prewarm", hang_in_prewarm)
+    scheduler = None
+    try:
+        scheduler, _ = tick()
+    finally:
+        release.set()
+    _drain(scheduler)
+
+    body = TestClient(server.app).get("/api/learning/health").json()
+    daily = body["pick_scheduler"]["daily"]
+    assert "tmc_prewarm" in daily["last_run_error"]
+    assert "tmc_prewarm" in body["pick_scheduler"]["last_tick"]["stages"]["running"]
