@@ -30,6 +30,7 @@ from internal.council.state_vector import (
     unpack_score_learning_fields,
 )
 from internal.council.red_team import audit_daily_pick
+from internal.council.stage_trace import stage
 from internal.subnets.tradable import tradable_subnets
 
 try:
@@ -117,7 +118,8 @@ def select_daily_pick(
     market_context.setdefault("weights", _weights_for_context(market_context))
     from internal.council.scoring_context import enrich_scoring_market_context
 
-    market_context = enrich_scoring_market_context(market_context)
+    with stage("enrich_context"):
+        market_context = enrich_scoring_market_context(market_context)
     subnets = tradable_subnets(subnets)
 
     if not subnets:
@@ -148,7 +150,9 @@ def select_daily_pick(
         from internal.indicators.tmc_singleflight import install_once, prewarm
 
         install_once()
-        if not prewarm():
+        with stage("tmc_prewarm"):
+            warmed = prewarm()
+        if not warmed:
             logger.warning("dpick: TMC pre-warm failed; continuing (workers fetch lazily)")
     except Exception as exc:
         logger.warning("dpick: tmc_singleflight unavailable (%s); continuing", exc)
@@ -159,7 +163,8 @@ def select_daily_pick(
     try:
         from internal.council import pick_score_cache
 
-        cache_session = pick_score_cache.begin_session(market_context)
+        with stage("cache_begin"):
+            cache_session = pick_score_cache.begin_session(market_context)
     except Exception as exc:
         logger.warning("dpick: pick_score_cache unavailable (%s); scoring without cache", exc)
 
@@ -211,7 +216,8 @@ def select_daily_pick(
     score_wall_t0 = time.perf_counter()
     executor = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="dpick-score")
     try:
-        results = list(executor.map(_score_one, subnets))
+        with stage("score"):
+            results = list(executor.map(_score_one, subnets))
     finally:
         # ponytail: wait=False — scorer failure must not block on peer I/O (scheduler timeout).
         executor.shutdown(wait=False, cancel_futures=True)
@@ -221,7 +227,8 @@ def select_daily_pick(
         try:
             from internal.council import pick_score_cache
 
-            pick_score_cache.end_session(cache_session)
+            with stage("cache_end"):
+                pick_score_cache.end_session(cache_session)
         except Exception as exc:
             logger.warning("dpick: pick_score_cache persist failed (%s)", exc)
 
@@ -245,7 +252,8 @@ def select_daily_pick(
                 score_payload = runner_up["score"]
 
     audit_candidate = {**candidate, "confidence": score_payload["confidence"]}
-    audit = audit_daily_pick(audit_candidate, subnets)
+    with stage("audit"):
+        audit = audit_daily_pick(audit_candidate, subnets)
     final_confidence = audit["adjusted_confidence"]
     learning = unpack_score_learning_fields(score_payload)
     from internal.learning.pick_horizon import day_horizon_hours
