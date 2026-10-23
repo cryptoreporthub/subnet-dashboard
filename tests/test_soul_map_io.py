@@ -177,6 +177,40 @@ def test_write_soul_map_waits_for_file_lock(tmp_path):
     assert (tmp_path / "soul_map.json.lock").exists()
 
 
+def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    read_soul_map(str(soul_path))
+    started = threading.Event()
+    release = threading.Event()
+
+    def hold():
+        with soul_map_io._locked_soul_map_file(str(soul_path)):
+            started.set()
+            release.wait(timeout=10)
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert started.wait(timeout=5)
+    writer = threading.Thread(
+        target=write_soul_map,
+        args=(lambda blob: blob.__setitem__("v", 2),),
+        kwargs={"path": str(soul_path)},
+    )
+    writer.start()
+    time.sleep(0.3)
+
+    read_at = time.monotonic()
+    blob = read_soul_map(str(soul_path), copy_blob=False)
+    waited = time.monotonic() - read_at
+
+    release.set()
+    writer.join(timeout=10)
+    holder.join(timeout=10)
+    assert blob["v"] == 1
+    assert waited < 0.5
+
+
 def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
     soul_path = tmp_path / "soul_map.json"
     write_soul_map(lambda blob: blob.update({"v": 1}), path=str(soul_path))
