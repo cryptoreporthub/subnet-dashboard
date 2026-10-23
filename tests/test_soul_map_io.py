@@ -203,11 +203,14 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     holder = threading.Thread(target=hold)
     holder.start()
     assert started.wait(timeout=5)
-    writer = threading.Thread(
-        target=write_soul_map,
-        args=(lambda blob: blob.__setitem__("v", 2),),
-        kwargs={"path": str(soul_path)},
-    )
+    written = {}
+
+    def write():
+        written["blob"] = write_soul_map(
+            lambda blob: blob.__setitem__("v", 2), path=str(soul_path)
+        )
+
+    writer = threading.Thread(target=write)
     writer.start()
     assert writer_blocked.wait(timeout=5)
 
@@ -220,6 +223,8 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     holder.join(timeout=10)
     assert blob["v"] == 1
     assert waited < 0.5
+    assert written["blob"] == {"v": 2}
+    assert read_soul_map(str(soul_path))["v"] == 2
 
 
 def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
