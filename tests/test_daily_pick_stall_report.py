@@ -141,7 +141,7 @@ def test_a_finished_tick_reports_every_stage_it_ran(tick):
 
     assert result["ok"] is True
     done = result["stages"]["done"]
-    for stage in ("enrich_context", "tmc_prewarm", "cache_begin", "score", "cache_end", "publish_save"):
+    for stage in ("enrich_context", "tmc_prewarm", "cache_begin", "score", "cache_end", "audit", "save", "record_prediction"):
         assert stage in done
         assert done[stage] >= 0.0
     assert result["stages"]["running"] == {}
