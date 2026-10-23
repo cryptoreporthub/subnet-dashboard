@@ -146,7 +146,8 @@ def test_a_member_with_no_validity_entry_stays_expected():
     assert receipt["expected_netuids"] == sorted(ACTIVE + PLACEHOLDERS)
 
 
-def test_a_negative_member_that_still_has_row_data_stays_expected():
+def test_a_negative_member_that_still_has_row_data_leaves_expected_immediately():
+    """Chain-deregistered members drop from expected_netuids at once; rows may linger 48h."""
     membership = _membership(active=ACTIVE, placeholders=())
     stale = tuple(ACTIVE[:3])
     validity = dict(membership.validity_map)
@@ -161,5 +162,5 @@ def test_a_negative_member_that_still_has_row_data_stays_expected():
             validity_map=validity,
         )
     )
-    assert receipt["expected_netuids"] == list(ACTIVE)
-    assert receipt["inactive_netuids"] == []
+    assert receipt["expected_netuids"] == sorted(set(ACTIVE) - set(stale))
+    assert receipt["inactive_netuids"] == sorted(stale)

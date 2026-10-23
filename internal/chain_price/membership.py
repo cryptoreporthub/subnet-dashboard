@@ -8,9 +8,27 @@ from internal.chain_price.outcomes import RpcOutcome
 from internal.chain_price.storage_keys import (
     netuid_from_networks_added_key,
     networks_added_prefix_hex,
+    total_networks_key_hex,
 )
 
 from internal.chain_rpc_errors import storage_block_matches
+
+
+def decode_total_networks(raw: Any) -> Optional[int]:
+    """SubtensorModule.TotalNetworks: exactly 2 bytes, u16 little-endian."""
+    if not isinstance(raw, str) or not raw.startswith("0x"):
+        return None
+    hex_body = raw[2:]
+    if len(hex_body) != 4:
+        return None
+    try:
+        data = bytes.fromhex(hex_body)
+    except ValueError:
+        return None
+    if len(data) != 2:
+        return None
+    value = int.from_bytes(data, "little")
+    return value if value > 0 else None
 
 
 def decode_networks_added_bool(raw: Any) -> Optional[bool]:
@@ -47,33 +65,40 @@ def get_member_netuids(
     if not keys:
         return [], "absent"
 
-    batch, outcome = call("state_queryStorageAt", [keys, at_hash])
+    total_key = total_networks_key_hex()
+    query_keys = list(keys) + [total_key]
+    batch, outcome = call("state_queryStorageAt", [query_keys, at_hash])
     if outcome != "ok":
         return [], outcome
-    # Fail closed: the netuid list is derived from this response, so it must echo at_hash.
     if not batch or not storage_block_matches(batch[0], at_hash):
         return [], "invalid"
     changes = batch[0].get("changes") if isinstance(batch[0], dict) else None
-    # Keys were enumerated at at_hash, so an empty value set is a malformed response, not absence.
     if not isinstance(changes, list) or not changes:
         return [], "invalid"
-    expected = {key.lower() for key in keys}
+    expected = {key.lower() for key in query_keys}
     by_key: Dict[str, Any] = {}
     for row in changes:
         if not isinstance(row, (list, tuple)) or len(row) != 2 or not isinstance(row[0], str):
             return [], "invalid"
         key = row[0].lower()
-        # A duplicate or unrequested key means the response is not a one-to-one answer to the enumeration.
         if key in by_key or key not in expected:
             return [], "invalid"
         by_key[key] = row[1]
+
+    total_networks = decode_total_networks(by_key.get(total_key.lower()))
+    if total_networks is None:
+        return [], "invalid"
+
     netuids: List[int] = []
     for key in keys:
-        # Every enumerated key needs a decodable bool; a missing or malformed value is never "false".
         flag = decode_networks_added_bool(by_key.get(key.lower()))
         if flag is None:
             return [], "invalid"
         netuid = netuid_from_networks_added_key(key)
         if flag and netuid != 0:
             netuids.append(netuid)
+
+    member_count_incl_root = len(netuids) + 1
+    if total_networks != member_count_incl_root:
+        return [], "invalid"
     return sorted(set(netuids)), "ok"

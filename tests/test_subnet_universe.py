@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import requests
 
 from internal.subnet_universe import (
     MAX_NETUIDS,
@@ -18,6 +19,7 @@ from internal.subnet_universe import (
     SubnetUniverseProvider,
     UniverseSnapshot,
     _build_rows,
+    _default_probe_fetch,
     _reset_provider_for_tests,
     _shrink_allowed,
     _validity_entry,
@@ -599,13 +601,7 @@ def test_aged_negative_retained_when_probe_rpc_error(universe_tmp, monkeypatch):
         },
     )
 
-    class _Client:
-        def get_alpha_price_probed(self, netuid):
-            if netuid == 105:
-                return None, "rpc_error"
-            return 1.0, "ok"
-
-    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, [], read="rpc_error")
 
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, False),
@@ -802,3 +798,207 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     assert 100 in result.netuids
     assert result.refresh_incomplete is True
     assert provider.get_snapshot().netuids == result.netuids
+
+
+def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
+    class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
+        def pin_finalized_head(self):
+            return pin
+
+        def call_fn(self):
+            return lambda method, params: (None, "ok")
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: (list(members) if read == "ok" else [], read),
+    )
+
+
+def test_registration_read_marks_registered_netuids_positive(monkeypatch):
+    _patch_registration(monkeypatch, [1, 2])
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {0: True, 1: True, 2: True, 129: False}
+    assert complete is True
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"read": "rate_limited"}, {"read": "invalid"}, {"pin": (None, "rpc_error")}],
+)
+def test_registration_read_failure_observes_nothing(monkeypatch, kwargs):
+    _patch_registration(monkeypatch, [1, 2], **kwargs)
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {}
+    assert complete is False
+
+
+def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1])
+    prior = _prior_snapshot([1, 129])
+    prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+
+    built = builder.build(prior)
+    entry = built.validity_map["129"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"]
+    assert 129 in built.netuids
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    aged = UniverseSnapshot(
+        netuids=built.netuids,
+        rows=built.rows,
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
+    )
+    rebuilt = builder.build(aged)
+    assert 129 not in rebuilt.netuids
+    assert 1 in rebuilt.netuids
+    assert 129 not in builder.build(rebuilt).netuids
+
+
+def test_registered_netuid_missing_from_tmc_stays_positive(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1, 130])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+    built = builder.build(_prior_snapshot([1]))
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_enters_when_tmc_incomplete_and_prior_snapshot(universe_tmp, monkeypatch):
+    """Replit gap 1: incomplete TaoStats must not hide chain-registered members."""
+    _patch_registration(monkeypatch, list(range(1, 131)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1, 2, 3]))
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_at_netuid_200_enters_when_outside_probe_range(monkeypatch):
+    """Registration positives must enter membership even above MAX_NETUIDS-1 probe list."""
+    _patch_registration(monkeypatch, [1, 200])
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1]))
+    assert 200 in built.netuids
+    assert built.validity_map["200"]["validity"] == "positive"
+
+
+def test_probe_fetch_deadline_blocks_second_provider_and_stays_incomplete(monkeypatch):
+    """D2/D3: reader deadline on clients; slow provider burns budget, fast never contacted."""
+    import internal.chain_client as chain_client_mod
+    import internal.chain_price.reader as reader_mod
+    from internal.chain_client import ChainClient
+    from internal.chain_price.reader import ChainReader
+
+    slow = ChainClient(endpoint="https://slow.example", init_volume_db=False)
+    fast = ChainClient(endpoint="https://fast.example", init_volume_db=False)
+    posts: list[str] = []
+
+    def fake_post(endpoint, payload, timeout, **kwargs):
+        posts.append(endpoint)
+        time.sleep(timeout)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(chain_client_mod, "_timed_post", fake_post)
+    monkeypatch.setattr(
+        reader_mod.cfg,
+        "rpc_provider_clients",
+        lambda: [("slow", slow), ("fast", fast)],
+    )
+    budget = 0.15
+    deadline = time.monotonic() + budget
+    reader_deadlines: list = []
+    real_init = ChainReader.__init__
+
+    def _capture_deadline(self, *args, **kwargs):
+        reader_deadlines.append(kwargs.get("deadline_monotonic"))
+        return real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(ChainReader, "__init__", _capture_deadline)
+    started = time.monotonic()
+    observed, complete = _default_probe_fetch([1], deadline=deadline)
+    elapsed = time.monotonic() - started
+    assert reader_deadlines == [deadline]
+    assert observed == {}
+    assert complete is False
+    assert elapsed <= budget + 0.2
+    assert not any("fast.example" in ep for ep in posts)
+    assert any("slow.example" in ep for ep in posts)
+
+
+def test_probe_fetch_incomplete_when_deadline_expires_during_read(monkeypatch):
+    from internal.chain_price.reader import ChainReader
+
+    def slow_pin(self):
+        time.sleep(0.03)
+        return "0xabc", "ok"
+
+    monkeypatch.setattr(ChainReader, "pin_finalized_head", slow_pin)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: ([1], "ok"),
+    )
+    observed, complete = _default_probe_fetch([1], deadline=time.monotonic() + 0.005)
+    assert observed == {}
+    assert complete is False
+
+
+@pytest.mark.parametrize("total_raw", [None, "0x81"])
+def test_total_networks_invalid_makes_probe_incomplete(monkeypatch, total_raw):
+    """M3b at probe layer: invalid membership batch → incomplete probe, no observations."""
+    from internal.chain_price.storage_keys import map_key_hex, total_networks_key_hex
+
+    total_key = total_networks_key_hex()
+    net_key = map_key_hex(b"NetworksAdded", 1)
+
+    class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
+        def pin_finalized_head(self):
+            return "0xabc", "ok"
+
+        def call_fn(self):
+            def _call(method, params):
+                if method == "state_getKeysPaged":
+                    return [net_key], "ok"
+                if method == "state_queryStorageAt":
+                    block = params[1]
+                    keys = params[0]
+                    assert total_key in keys
+                    return [
+                        {
+                            "block": block,
+                            "changes": [[net_key, "0x01"], [total_key, total_raw]],
+                        }
+                    ], "ok"
+                return None, "rpc_error"
+
+            return _call
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    observed, complete = _default_probe_fetch([1])
+    assert observed == {}
+    assert complete is False
+
+
+def test_default_price_one_does_not_imply_registration(monkeypatch):
+    """Fail-first: a 1.0 price on an unregistered netuid must not count as positive."""
+
+    class _Client:
+        def get_alpha_price_probed(self, netuid):
+            return 1.0, "ok"
+
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, list(range(1, 129)))
+
+    observed, complete = _default_probe_fetch(list(range(200)))
+    assert complete is True
+    assert observed.get(129) is False
+    assert observed.get(128) is True
