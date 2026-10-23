@@ -46,6 +46,7 @@ jobs:
           test ! -d server
           test ! -f server_original.py
           python -c "import json; json.load(open('.cursor/mcp.json'))"
+          python scripts/check_score_snapshot_seed.py
       - name: Compile server entrypoint
         run: python -m py_compile server.py
       - name: Restless OpenAPI spec sync

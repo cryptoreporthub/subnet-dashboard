@@ -3003,6 +3003,31 @@ async def api_simivision():
         return {"top": [], "meta": {"count": 0, "source": "error"}}
 
 
+def _pending_top_picks() -> Dict[str, Any]:
+    return {
+        "hour_picks": [],
+        "day_picks": [],
+        "status": "pending_snapshot",
+        "meta": {"source": "score_snapshot", "reason": "missing_or_stale"},
+    }
+
+
+def _snapshot_only_top_picks(status: str) -> Dict[str, Any]:
+    """Disk-only top picks for busy/timeout/error — no subnet hydrate."""
+    from internal.council.score_snapshots import build_top_picks_from_snapshot
+
+    payload = build_top_picks_from_snapshot(None)
+    if payload is not None and (payload.get("day_picks") or payload.get("hour_picks")):
+        meta = dict(payload.get("meta") or {})
+        meta["fallback_status"] = status
+        meta["live_join"] = False
+        payload = {**payload, "meta": meta}
+        return payload
+    pending = _pending_top_picks()
+    pending["meta"] = {**(pending.get("meta") or {}), "fallback_status": status}
+    return pending
+
+
 def _build_top_picks() -> Dict[str, Any]:
     """Snapshot read only — full-universe scoring stays on the snapshot worker."""
     from internal.council.score_snapshots import build_top_picks_from_snapshot
@@ -3014,12 +3039,15 @@ def _build_top_picks() -> Dict[str, Any]:
     payload = build_top_picks_from_snapshot(subnets)
     if payload is not None:
         return payload
-    return {
-        "hour_picks": [],
-        "day_picks": [],
-        "status": "pending_snapshot",
-        "meta": {"source": "score_snapshot", "reason": "missing_or_stale"},
-    }
+    return _pending_top_picks()
+
+
+def _top_picks_cacheable(payload: Dict[str, Any]) -> bool:
+    if payload.get("status") == "pending_snapshot":
+        return False
+    if payload.get("error"):
+        return False
+    return bool(payload.get("day_picks") or payload.get("hour_picks"))
 
 
 def _kick_top_picks_background_refresh() -> None:
@@ -3036,7 +3064,7 @@ def _kick_top_picks_background_refresh() -> None:
                 return
             try:
                 payload = _build_top_picks()
-                if not payload.get("error"):
+                if _top_picks_cacheable(payload):
                     _TOP_PICKS_CACHE.update(payload=payload, at=time.time())
             finally:
                 _TOP_PICKS_LOCK.release()
@@ -3053,18 +3081,19 @@ def _build_top_picks_cached() -> Dict[str, Any]:
     now = time.time()
     cached = _TOP_PICKS_CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_TOP_PICKS_CACHE.get("at") or 0) < _TOP_PICKS_TTL:
-        return cached
-    if isinstance(cached, dict):
+        if _top_picks_cacheable(cached):
+            return cached
+    elif isinstance(cached, dict) and _top_picks_cacheable(cached):
         _kick_top_picks_background_refresh()
         return cached
     # A single cold caller earns a bounded real build so the first visible
     # horizon panel stays populated. Everyone else gets an honest busy
     # shape while that build is in flight rather than piling onto scoring.
     if not _TOP_PICKS_LOCK.acquire(blocking=False):
-        return {"hour_picks": [], "day_picks": [], "status": "busy"}
+        return _snapshot_only_top_picks("busy")
     try:
         payload = _build_top_picks()
-        if not payload.get("error"):
+        if _top_picks_cacheable(payload):
             _TOP_PICKS_CACHE.update(payload=payload, at=time.time())
         return payload
     finally:
@@ -3080,12 +3109,14 @@ async def api_top_picks():
     except asyncio.TimeoutError:
         logger.warning("top-picks timed out after %.1fs", PICK_HANDLER_TIMEOUT)
         cached = _TOP_PICKS_CACHE.get("payload")
-        if isinstance(cached, dict):
+        if isinstance(cached, dict) and _top_picks_cacheable(cached):
             return cached
-        return {"hour_picks": [], "day_picks": [], "status": "timeout"}
+        return _snapshot_only_top_picks("timeout")
     except Exception as exc:
         logger.warning("top-picks failed: %s", exc)
-        return {"hour_picks": [], "day_picks": [], "error": str(exc)}
+        out = _snapshot_only_top_picks("error")
+        out["error"] = str(exc)
+        return out
 
 
 def _pick_netuid_from_daily_payload(payload: Any) -> Optional[int]:
