@@ -8,6 +8,7 @@ from typing import Any, Dict, Iterator, List, Optional
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _WORKER_THREAD_PREFIXES = ("daily-pick-work", "dpick-score")
 _MAX_FRAME_LABELS = 4
+_SOUL_MAP_IO_FILE = os.path.join(_ROOT, "internal", "store", "soul_map_io.py")
 
 
 class StageTrace:
@@ -88,6 +89,27 @@ def worker_frames() -> List[str]:
     return labels[:_MAX_FRAME_LABELS]
 
 
+def soul_map_threads() -> List[str]:
+    frames = sys._current_frames()
+    labels: List[str] = []
+    for thread in threading.enumerate():
+        cursor = frames.get(thread.ident)
+        while cursor is not None and os.path.abspath(cursor.f_code.co_filename) != _SOUL_MAP_IO_FILE:
+            cursor = cursor.f_back
+        if cursor is None:
+            continue
+        outer = cursor.f_back
+        while outer is not None and os.path.abspath(outer.f_code.co_filename) == _SOUL_MAP_IO_FILE:
+            outer = outer.f_back
+        caller = f" from {_frame_label(outer)}" if outer is not None else ""
+        labels.append(f"{thread.name} in soul_map_io.py:{cursor.f_lineno} {cursor.f_code.co_name}{caller}")
+    return labels[:_MAX_FRAME_LABELS]
+
+
 def describe_stall(trace: StageTrace) -> str:
     running = ",".join(trace.report()["running"]) or "none"
-    return f"stage={running} at {'; '.join(worker_frames()) or 'no worker frames'}"
+    stall = f"stage={running} at {'; '.join(worker_frames()) or 'no worker frames'}"
+    soul_map = soul_map_threads()
+    if soul_map:
+        stall += f" | soul_map: {'; '.join(soul_map)}"
+    return stall
