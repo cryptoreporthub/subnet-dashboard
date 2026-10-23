@@ -103,7 +103,7 @@ def soul_map_threads() -> List[str]:
             outer = outer.f_back
         caller = f" from {_frame_label(outer)}" if outer is not None else ""
         labels.append(f"{thread.name} in soul_map_io.py:{cursor.f_lineno} {cursor.f_code.co_name}{caller}")
-    return labels[:_MAX_FRAME_LABELS]
+    return labels
 
 
 def describe_stall(trace: StageTrace) -> str:
