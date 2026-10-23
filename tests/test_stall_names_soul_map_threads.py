@@ -73,6 +73,46 @@ def test_every_thread_inside_the_soul_map_is_named_not_just_the_first_few(tmp_pa
         assert name in stall
 
 
+def test_the_holder_is_listed_first_so_a_truncated_stall_still_names_it(tmp_path):
+    soul_path = str(tmp_path / "soul_map.json")
+    inside = threading.Event()
+    release = threading.Event()
+
+    def mutate(blob):
+        inside.set()
+        release.wait(timeout=10)
+
+    holder = threading.Thread(
+        target=soul_map_io.write_soul_map,
+        args=(mutate,),
+        kwargs={"path": soul_path},
+        name="the-lock-holder",
+    )
+    holder.start()
+    assert inside.wait(timeout=5)
+    waiters = [
+        threading.Thread(
+            target=soul_map_io.read_soul_map, args=(soul_path,), name=f"a-long-waiter-name-{i}"
+        )
+        for i in range(8)
+    ]
+    for waiter in waiters:
+        waiter.start()
+    try:
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline and len(stage_trace.soul_map_threads()) < 9:
+            time.sleep(0.01)
+        stall = stage_trace.describe_stall(stage_trace.StageTrace())
+    finally:
+        release.set()
+        holder.join(timeout=10)
+        for waiter in waiters:
+            waiter.join(timeout=10)
+
+    assert stall.startswith("soul_map: the-lock-holder")
+    assert "the-lock-holder" in stall[:200]
+
+
 def test_a_stall_without_soul_map_threads_does_not_mention_them():
     stall = stage_trace.describe_stall(stage_trace.StageTrace())
 
