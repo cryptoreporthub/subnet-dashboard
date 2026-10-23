@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 from contextlib import contextmanager
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _WORKER_THREAD_PREFIXES = ("daily-pick-work", "dpick-score")
@@ -91,7 +91,7 @@ def worker_frames() -> List[str]:
 
 def soul_map_threads() -> List[str]:
     frames = sys._current_frames()
-    labels: List[str] = []
+    found: List[Tuple[str, str]] = []
     for thread in threading.enumerate():
         cursor = frames.get(thread.ident)
         while cursor is not None and cursor.f_globals.get("__name__") != _SOUL_MAP_IO_MODULE:
@@ -102,8 +102,11 @@ def soul_map_threads() -> List[str]:
         while outer is not None and outer.f_globals.get("__name__") == _SOUL_MAP_IO_MODULE:
             outer = outer.f_back
         caller = f" from {_frame_label(outer)}" if outer is not None else ""
-        labels.append(f"{thread.name} in soul_map_io.py:{cursor.f_lineno} {cursor.f_code.co_name}{caller}")
-    return labels
+        where = f"soul_map_io.py:{cursor.f_lineno} {cursor.f_code.co_name}{caller}"
+        found.append((where, f"{thread.name} in {where}"))
+    shared = {where: sum(1 for w, _ in found if w == where) for where, _ in found}
+    found.sort(key=lambda item: shared[item[0]])
+    return [label for _, label in found]
 
 
 def describe_stall(trace: StageTrace) -> str:
@@ -111,5 +114,5 @@ def describe_stall(trace: StageTrace) -> str:
     stall = f"stage={running} at {'; '.join(worker_frames()) or 'no worker frames'}"
     soul_map = soul_map_threads()
     if soul_map:
-        stall += f" | soul_map: {'; '.join(soul_map)}"
+        stall = f"soul_map: {'; '.join(soul_map)} | {stall}"
     return stall
