@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterator, List, Optional
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _WORKER_THREAD_PREFIXES = ("daily-pick-work", "dpick-score")
 _MAX_FRAME_LABELS = 4
-_SOUL_MAP_IO_FILE = os.path.join(_ROOT, "internal", "store", "soul_map_io.py")
+_SOUL_MAP_IO_MODULE = "internal.store.soul_map_io"
 
 
 class StageTrace:
@@ -94,12 +94,12 @@ def soul_map_threads() -> List[str]:
     labels: List[str] = []
     for thread in threading.enumerate():
         cursor = frames.get(thread.ident)
-        while cursor is not None and os.path.abspath(cursor.f_code.co_filename) != _SOUL_MAP_IO_FILE:
+        while cursor is not None and cursor.f_globals.get("__name__") != _SOUL_MAP_IO_MODULE:
             cursor = cursor.f_back
         if cursor is None:
             continue
         outer = cursor.f_back
-        while outer is not None and os.path.abspath(outer.f_code.co_filename) == _SOUL_MAP_IO_FILE:
+        while outer is not None and outer.f_globals.get("__name__") == _SOUL_MAP_IO_MODULE:
             outer = outer.f_back
         caller = f" from {_frame_label(outer)}" if outer is not None else ""
         labels.append(f"{thread.name} in soul_map_io.py:{cursor.f_lineno} {cursor.f_code.co_name}{caller}")
