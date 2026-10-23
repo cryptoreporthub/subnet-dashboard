@@ -227,6 +227,35 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     assert read_soul_map(str(soul_path))["v"] == 2
 
 
+def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monkeypatch, tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"n": 0}), encoding="utf-8")
+    real_lock = soul_map_io._locked_soul_map_file
+
+    def short_timeout(path, timeout_seconds=0.3):
+        return real_lock(path, timeout_seconds=timeout_seconds)
+
+    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", short_timeout)
+    errors = []
+
+    def write():
+        try:
+            write_soul_map(lambda blob: blob.update(n=blob["n"] + 1), path=str(soul_path))
+        except Exception as exc:
+            errors.append(exc)
+
+    writers = [threading.Thread(target=write) for _ in range(3)]
+    with soul_map_io._lock_for(str(soul_path)):
+        for writer in writers:
+            writer.start()
+        time.sleep(1.0)
+    for writer in writers:
+        writer.join(timeout=10)
+
+    assert errors == []
+    assert read_soul_map(str(soul_path))["n"] == 3
+
+
 def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
     soul_path = tmp_path / "soul_map.json"
     write_soul_map(lambda blob: blob.update({"v": 1}), path=str(soul_path))
