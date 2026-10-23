@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import internal.store.soul_map_io as soul_map_io
@@ -231,9 +234,16 @@ def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monk
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"n": 0}), encoding="utf-8")
     real_lock = soul_map_io._locked_soul_map_file
+    timed_out = threading.Event()
 
+    @contextmanager
     def short_timeout(path, timeout_seconds=0.3):
-        return real_lock(path, timeout_seconds=timeout_seconds)
+        try:
+            with real_lock(path, timeout_seconds=timeout_seconds):
+                yield
+        except TimeoutError:
+            timed_out.set()
+            raise
 
     monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", short_timeout)
     errors = []
@@ -248,12 +258,56 @@ def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monk
     with soul_map_io._lock_for(str(soul_path)):
         for writer in writers:
             writer.start()
-        time.sleep(1.0)
+        timed_out.wait(timeout=2)
     for writer in writers:
         writer.join(timeout=10)
 
     assert errors == []
     assert read_soul_map(str(soul_path))["n"] == 3
+
+
+WRITER_IN_OTHER_PROCESS = """
+import sys
+import internal.store.soul_map_io as m
+real = m._locked_soul_map_file
+m._locked_soul_map_file = lambda p, timeout_seconds=2.0: real(p, timeout_seconds=timeout_seconds)
+m.write_soul_map(lambda b: b.update(b=1), path=sys.argv[1])
+"""
+
+
+def test_a_writer_in_another_process_is_not_starved_by_a_slow_reader(monkeypatch, tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"a": 0}), encoding="utf-8")
+    real_lock = soul_map_io._locked_soul_map_file
+    flock_taken = threading.Event()
+
+    @contextmanager
+    def signalling(path, timeout_seconds=2.0):
+        with real_lock(path, timeout_seconds=timeout_seconds):
+            flock_taken.set()
+            yield
+
+    monkeypatch.setattr(soul_map_io, "_locked_soul_map_file", signalling)
+    writer_a = threading.Thread(
+        target=write_soul_map,
+        args=(lambda blob: blob.update(a=1),),
+        kwargs={"path": str(soul_path)},
+    )
+    slow_reader = soul_map_io._lock_for(str(soul_path))
+    with slow_reader:
+        writer_a.start()
+        assert flock_taken.wait(timeout=5)
+        other = subprocess.run(
+            [sys.executable, "-c", WRITER_IN_OTHER_PROCESS, str(soul_path)],
+            cwd=Path(__file__).resolve().parents[1],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    writer_a.join(timeout=10)
+
+    assert other.returncode == 0, other.stderr
+    assert json.loads(soul_path.read_text(encoding="utf-8")) == {"a": 1, "b": 1}
 
 
 def test_write_soul_map_failed_io_does_not_poison_cache(monkeypatch, tmp_path):
