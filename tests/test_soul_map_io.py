@@ -177,12 +177,23 @@ def test_write_soul_map_waits_for_file_lock(tmp_path):
     assert (tmp_path / "soul_map.json.lock").exists()
 
 
-def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(tmp_path):
+def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
     read_soul_map(str(soul_path))
     started = threading.Event()
     release = threading.Event()
+    writer_blocked = threading.Event()
+    real_flock = soul_map_io.fcntl.flock
+
+    def flock_signalling_contention(fd, operation):
+        try:
+            return real_flock(fd, operation)
+        except OSError:
+            writer_blocked.set()
+            raise
+
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
 
     def hold():
         with soul_map_io._locked_soul_map_file(str(soul_path)):
@@ -198,7 +209,7 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(tmp_path):
         kwargs={"path": str(soul_path)},
     )
     writer.start()
-    time.sleep(0.3)
+    assert writer_blocked.wait(timeout=5)
 
     read_at = time.monotonic()
     blob = read_soul_map(str(soul_path), copy_blob=False)
