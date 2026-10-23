@@ -69,6 +69,23 @@ def _locked_soul_map_file(path: str, timeout_seconds: float = 5.0) -> Iterator[N
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+_READER_LOCK_WAIT_SECONDS = 0.05
+
+
+@contextmanager
+def _file_and_reader_locks(path: str) -> Iterator[None]:
+    reader = _lock_for(path)
+    while True:
+        with _locked_soul_map_file(path):
+            if reader.acquire(timeout=_READER_LOCK_WAIT_SECONDS):
+                try:
+                    yield
+                finally:
+                    reader.release()
+                return
+        time.sleep(_READER_LOCK_WAIT_SECONDS)
+
+
 def _read_blob(path: str) -> Dict[str, Any]:
     try:
         with open(path, "r") as f:
@@ -140,8 +157,8 @@ def write_soul_map(
     always sees the new data.
     """
     resolved = _resolve_path(path)
-    with _lock_for(resolved + ".writers"), _locked_soul_map_file(resolved):
-        with _lock_for(resolved):
+    with _lock_for(resolved + ".writers"):
+        with _file_and_reader_locks(resolved):
             now = time.monotonic()
             cached = _cache_get_fresh(resolved, now)
             # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
