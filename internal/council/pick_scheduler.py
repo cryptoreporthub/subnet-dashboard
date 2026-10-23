@@ -348,10 +348,8 @@ class DailyPickScheduler:
             except FuturesTimeoutError:
                 with self._work_lock:
                     self._work_generation += 1
-                result["error"] = (
-                    f"daily pick tick timed out after {timeout}s | "
-                    f"{stage_trace.describe_stall(trace)}"
-                )
+                result["error"] = f"daily pick tick timed out after {timeout}s"
+                result["stall"] = stage_trace.describe_stall(trace)
                 logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
@@ -412,7 +410,10 @@ class DailyPickScheduler:
         if tick_ok:
             self.liveness.record_success(evidence=evidence)
         else:
-            self.liveness.record_failure(error=str(result.get("error") or "today pick not ready"))
+            failure = str(result.get("error") or "today pick not ready")
+            if result.get("stall"):
+                failure = f"{failure} | {result['stall']}"
+            self.liveness.record_failure(error=failure)
 
         with _lock:
             self._last_result = {
