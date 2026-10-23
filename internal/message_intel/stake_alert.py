@@ -629,6 +629,7 @@ def build_stake_alert_ops_summary() -> Dict[str, Any]:
     effective_age = age if age is not None else failure_age
     return {
         "enabled": enabled,
+        "ops_telegram": stake_alert_ops_telegram_enabled(),
         "last_ok_at": state.get("last_ok_at"),
         "last_ok_block": state.get("last_ok_block"),
         "last_ok_age_seconds": effective_age,
@@ -651,7 +652,19 @@ def _log_skip_once(state: Dict[str, Any], reason: str, detail: str = "") -> None
     logger.warning(msg)
 
 
+def stake_alert_ops_telegram_enabled() -> bool:
+    """Ops stale/recovery pushes (off by default — readiness/metrics still update)."""
+    return os.environ.get("STAKE_ALERT_OPS_TELEGRAM", "off").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
 def _maybe_ops_telegram(state: Dict[str, Any], *, recovered: bool) -> None:
+    if not stake_alert_ops_telegram_enabled():
+        return
     target = alert_chat_id()
     if not target:
         return
@@ -739,11 +752,6 @@ def check_stake_alerts(*, client: Any = None) -> Optional[Dict[str, Any]]:
         client = get_default_client()
 
     state = _read_state()
-
-    if not client.is_healthy():
-        state = _record_skip(state, "unhealthy_rpc")
-        _write_state(state)
-        return None
 
     try:
         hotkey_pub = ss58_to_pubkey(os.environ.get("STAKE_ALERT_HOTKEY", "").strip() or DEFAULT_HOTKEY)

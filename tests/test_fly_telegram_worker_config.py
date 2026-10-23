@@ -50,6 +50,7 @@ def test_fly_toml_telegram_gainers_and_stake_alerts_on():
     fly = _fly_toml()
     assert 'TELEGRAM_GAINERS_ALERT = "on"' in fly
     assert 'TELEGRAM_STAKE_ALERT = "on"' in fly
+    assert 'STAKE_ALERT_OPS_TELEGRAM = "off"' in fly
     assert 'TELEGRAM_SUMMARY_BOT = "on"' in fly
 
 
