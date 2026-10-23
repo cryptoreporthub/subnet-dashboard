@@ -140,8 +140,8 @@ def write_soul_map(
     always sees the new data.
     """
     resolved = _resolve_path(path)
-    with _lock_for(resolved):
-        with _locked_soul_map_file(resolved):
+    with _locked_soul_map_file(resolved):
+        with _lock_for(resolved):
             now = time.monotonic()
             cached = _cache_get_fresh(resolved, now)
             # Always copy before mutate — cache holds the live blob for copy_blob=False readers.
