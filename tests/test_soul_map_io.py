@@ -230,6 +230,55 @@ def test_a_writer_waiting_on_the_file_lock_does_not_block_readers(monkeypatch, t
     assert read_soul_map(str(soul_path))["v"] == 2
 
 
+def test_a_writer_completes_when_the_file_lock_is_held_past_the_poll(monkeypatch, tmp_path):
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps({"v": 1}), encoding="utf-8")
+    started = threading.Event()
+    writer_blocked = threading.Event()
+    real_flock = soul_map_io.fcntl.flock
+
+    def flock_signalling_contention(fd, operation):
+        try:
+            return real_flock(fd, operation)
+        except OSError:
+            writer_blocked.set()
+            raise
+
+    monkeypatch.setattr(soul_map_io.fcntl, "flock", flock_signalling_contention)
+
+    def hold():
+        with soul_map_io._locked_soul_map_file(str(soul_path)):
+            started.set()
+            if writer_blocked.wait(timeout=5):
+                time.sleep(6.0)
+
+    errors = []
+    written = {}
+
+    def write():
+        t0 = time.monotonic()
+        try:
+            written["blob"] = write_soul_map(
+                lambda blob: blob.__setitem__("v", 2), path=str(soul_path)
+            )
+        except Exception as exc:
+            errors.append(exc)
+        written["elapsed"] = time.monotonic() - t0
+
+    holder = threading.Thread(target=hold)
+    holder.start()
+    assert started.wait(timeout=5)
+    writer = threading.Thread(target=write)
+    writer.start()
+    assert writer_blocked.wait(timeout=5)
+    writer.join(timeout=15)
+    holder.join(timeout=15)
+    assert errors == []
+    assert written["elapsed"] > 5.0
+    assert written["blob"] == {"v": 2}
+    assert read_soul_map(str(soul_path))["v"] == 2
+
+
 def test_queued_writers_in_one_process_do_not_time_out_behind_a_slow_holder(monkeypatch, tmp_path):
     soul_path = tmp_path / "soul_map.json"
     soul_path.write_text(json.dumps({"n": 0}), encoding="utf-8")

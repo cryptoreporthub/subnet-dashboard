@@ -76,13 +76,20 @@ _READER_LOCK_WAIT_SECONDS = 0.05
 def _file_and_reader_locks(path: str) -> Iterator[None]:
     reader = _lock_for(path)
     while True:
-        with _locked_soul_map_file(path):
-            if reader.acquire(timeout=_READER_LOCK_WAIT_SECONDS):
-                try:
-                    yield
-                finally:
-                    reader.release()
-                return
+        acquired_reader = False
+        try:
+            with _locked_soul_map_file(path):
+                acquired_reader = reader.acquire(timeout=_READER_LOCK_WAIT_SECONDS)
+                if acquired_reader:
+                    try:
+                        yield
+                    finally:
+                        reader.release()
+                    return
+        except TimeoutError:
+            # 5s file-lock poll expired. Retry on this loop until the holder releases.
+            if acquired_reader:
+                raise
         time.sleep(_READER_LOCK_WAIT_SECONDS)
 
 
