@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from internal.council.weights import detect_regime
 
@@ -188,9 +188,22 @@ def stamp_outcome(
     return scenario
 
 
-def mutate_scenarios(mutator: Callable[[List[Dict[str, Any]]], int]) -> int:
+def list_scenarios() -> List[Dict[str, Any]]:
+    return _load().get("scenarios", [])
+
+
+def apply_stamps(stamps: List[Tuple[str, str, Dict[str, Any]]]) -> int:
     data = _load()
-    changed = mutator(data.get("scenarios", []))
+    by_id: Dict[Any, Dict[str, Any]] = {}
+    for scenario in data.get("scenarios", []):
+        by_id.setdefault(scenario.get("id"), scenario)
+    changed = 0
+    for scenario_id, outcome, metadata in stamps:
+        scenario = by_id.get(scenario_id)
+        if scenario is None or scenario.get("outcome") == outcome:
+            continue
+        stamp_outcome(scenario, outcome, metadata)
+        changed += 1
     if changed:
         _save(data)
     return changed

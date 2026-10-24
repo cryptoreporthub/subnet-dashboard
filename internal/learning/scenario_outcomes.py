@@ -115,7 +115,7 @@ class _PendingIndex:
                 return s
         return None
 
-    def stamp(self, pred: Dict[str, Any], label: str) -> bool:
+    def stamp(self, pred: Dict[str, Any], label: str) -> Optional[Tuple[str, str, Dict[str, Any]]]:
         """Stamp an existing blank scenario; never mint a new row during backfill."""
         meta = _metadata_from_prediction(pred)
         sid = pred.get("scenario_id")
@@ -123,10 +123,8 @@ class _PendingIndex:
             linked = self._by_id.get(str(sid))
             if linked is not None:
                 if linked.get("outcome") == label:
-                    return False
-                scenario_memory.stamp_outcome(linked, label, meta)
-                self._stamped.add(id(linked))
-                return True
+                    return None
+                return self._record(linked, label, meta)
 
         pid = pred.get("id")
         name = pred.get("name")
@@ -140,10 +138,18 @@ class _PendingIndex:
         if target is None and name is not None:
             target = self._latest_pending(self._by_name.get(name))
         if target is None:
-            return False
-        scenario_memory.stamp_outcome(target, label, meta)
-        self._stamped.add(id(target))
-        return True
+            return None
+        return self._record(target, label, meta)
+
+    def _record(
+        self, scenario: Dict[str, Any], label: str, meta: Dict[str, Any]
+    ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+        scenario_memory.stamp_outcome(scenario, label, meta)
+        self._stamped.add(id(scenario))
+        scenario_id = scenario.get("id")
+        if scenario_id is None:
+            return None
+        return str(scenario_id), label, meta
 
 
 def _preds_link_scenario(
@@ -253,11 +259,14 @@ def backfill_scenario_outcomes_from_predictions() -> Dict[str, Any]:
         if label
     ]
 
-    def stamp_all(scenarios: List[Dict[str, Any]]) -> int:
-        index = _PendingIndex(scenarios)
-        return sum(1 for pred, label in labelled if index.stamp(pred, label))
-
-    updated = scenario_memory.mutate_scenarios(stamp_all)
+    index = _PendingIndex(scenario_memory.list_scenarios())
+    stamps = [
+        stamp
+        for pred, label in labelled
+        for stamp in (index.stamp(pred, label),)
+        if stamp is not None
+    ]
+    updated = scenario_memory.apply_stamps(stamps)
 
     pending_after = _pending_scenario_count()
     unresolvable = list_unresolvable_scenarios()
