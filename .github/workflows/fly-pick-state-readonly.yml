@@ -63,6 +63,20 @@ jobs:
           cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null
           echo ===meminfo
           head -6 /proc/meminfo
+          echo ===counts
+          python - <<'PY'
+          import json, os
+          p = json.load(open("/app/data/predictions.json"))
+          res = p.get("resolved") or []
+          pend = p.get("predictions") or []
+          print("resolved", len(res), "pending", len(pend), "resolved_with_scenario_id", sum(1 for r in res if isinstance(r, dict) and r.get("scenario_id")))
+          sm = json.load(open("/app/data/scenario_memory.json"))
+          sc = sm.get("scenarios") or []
+          print("scenarios", len(sc), "pending_scenarios", sum(1 for s in sc if not s.get("outcome")))
+          print("scenario_oldest_pending", min((s.get("created_at") or s.get("timestamp") or "" for s in sc if not s.get("outcome")), default=None))
+          PY
+          ls -l /app/data/predictions_archive | tail -5
+          ls -l /app/data/scenario_memory.json /app/data/predictions.json /app/data/price_cache.json
           echo ===latency
           wc -l /app/data/pick_score_latency.jsonl
           tail -n 400 /app/data/pick_score_latency.jsonl
