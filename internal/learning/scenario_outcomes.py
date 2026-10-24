@@ -122,8 +122,6 @@ class _PendingIndex:
         if sid:
             linked = self._by_id.get(str(sid))
             if linked is not None:
-                if linked.get("outcome") == label:
-                    return None
                 return self._record(linked, label, meta)
 
         pid = pred.get("id")

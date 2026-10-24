@@ -475,6 +475,7 @@ def test_backfill_merges_new_metadata_when_the_outcome_is_unchanged(monkeypatch,
     _setup_paths(monkeypatch, tmp_path)
     scenario = scenario_memory.add_scenario("Meta", {"netuid": 5}, outcome=None, regime="bull")
     scenario_memory.update_outcome(scenario["id"], "correct", {"actual_pct": 1.0})
+    scenario_memory.add_scenario("Orphan", {"netuid": 99}, outcome=None, regime="bull")
     resolved_at = scenario_memory._load()["scenarios"][0]["resolved_at"]
     predictions_store.save_predictions(
         {

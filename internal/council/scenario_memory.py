@@ -63,7 +63,7 @@ def _exclusive_writer(fn: _F) -> _F:
                 try:
                     fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
-                except OSError:
+                except BlockingIOError:
                     if time.monotonic() >= deadline:
                         raise TimeoutError(
                             f"Timed out after {_LOCK_TIMEOUT_SECONDS}s waiting for {path}.lock"
@@ -215,11 +215,16 @@ def stamp_outcome(
 ) -> Dict[str, Any]:
     scenario["outcome"] = outcome
     scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    if metadata:
-        existing = scenario.get("metadata") or {}
-        existing.update(metadata)
-        scenario["metadata"] = existing
+    merge_metadata(scenario, metadata)
     return scenario
+
+
+def merge_metadata(scenario: Dict[str, Any], metadata: Optional[Dict[str, Any]]) -> bool:
+    existing = scenario.get("metadata") or {}
+    if not metadata or all(existing.get(k) == v for k, v in metadata.items()):
+        return False
+    scenario["metadata"] = {**existing, **metadata}
+    return True
 
 
 def list_scenarios() -> List[Dict[str, Any]]:
@@ -233,13 +238,18 @@ def apply_stamps(stamps: List[Tuple[str, str, Dict[str, Any]]]) -> int:
     for scenario in data.get("scenarios", []):
         by_id.setdefault(scenario.get("id"), scenario)
     changed = 0
-    latest = {scenario_id: (outcome, metadata) for scenario_id, outcome, metadata in stamps}
+    latest: Dict[Any, Tuple[str, Dict[str, Any]]] = {}
+    for scenario_id, outcome, metadata in stamps:
+        latest[scenario_id] = (outcome, {**latest.get(scenario_id, (outcome, {}))[1], **metadata})
     for scenario_id, (outcome, metadata) in latest.items():
         scenario = by_id.get(scenario_id)
-        if scenario is None or scenario.get("outcome") == outcome:
+        if scenario is None:
             continue
-        stamp_outcome(scenario, outcome, metadata)
-        changed += 1
+        if scenario.get("outcome") != outcome:
+            stamp_outcome(scenario, outcome, metadata)
+            changed += 1
+        elif merge_metadata(scenario, metadata):
+            changed += 1
     if changed:
         _save(data)
     return changed
