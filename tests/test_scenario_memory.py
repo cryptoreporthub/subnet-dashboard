@@ -228,3 +228,106 @@ def test_record_outcome_collapses_by_prediction_id(monkeypatch, tmp_path):
     assert result["id"] == pending["id"]
     assert result["outcome"] == "correct"
     assert len(scenario_memory.get_memory_snapshot()["scenarios"]) == 1
+
+
+def test_backfill_reads_scenario_memory_a_bounded_number_of_times(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    pending = scenario_memory.add_scenario(
+        "Chutes", {"netuid": 64, "direction": "up"}, outcome=None, regime="bull"
+    )
+    resolved = [
+        {
+            "id": f"pred_{i}",
+            "name": f"Other{i}",
+            "netuid": 1000 + i,
+            "correct": bool(i % 2),
+            "status": "resolved",
+        }
+        for i in range(200)
+    ]
+    resolved.append(
+        {
+            "id": "pred_match",
+            "name": "Chutes",
+            "netuid": 64,
+            "correct": True,
+            "status": "resolved",
+        }
+    )
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": resolved,
+            "stats": {"total": len(resolved), "correct": 0, "wrong": 0, "pending": 0},
+        }
+    )
+    reads = []
+    real_load = scenario_memory._load
+
+    def counting_load(path=None):
+        reads.append(1)
+        return real_load(path)
+
+    monkeypatch.setattr(scenario_memory, "_load", counting_load)
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    assert result["updated"] == 1
+    assert result["pending_after"] == 0
+    assert len(reads) <= 8
+    stamped = real_load()["scenarios"][0]
+    assert stamped["id"] == pending["id"]
+    assert stamped["outcome"] == "correct"
+
+
+def test_backfill_stamps_each_pending_scenario_once_in_one_pass(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    by_id = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    by_name_netuid = scenario_memory.add_scenario("B", {"netuid": 2}, outcome=None, regime="bear")
+    by_name = scenario_memory.add_scenario("C", {"netuid": 3}, outcome=None, regime="neutral")
+    untouched = scenario_memory.add_scenario("D", {"netuid": 4}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "scenario_id": by_id["id"], "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "B", "netuid": 2, "correct": False, "status": "resolved"},
+                {"id": "p3", "name": "C", "netuid": 99, "correct": True, "status": "resolved"},
+                {"id": "p4", "name": "C", "netuid": 98, "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 4, "correct": 2, "wrong": 2, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    outcomes = {s["id"]: s.get("outcome") for s in scenario_memory.get_memory_snapshot()["scenarios"]}
+    assert outcomes[by_id["id"]] == "correct"
+    assert outcomes[by_name_netuid["id"]] == "wrong"
+    assert outcomes[by_name["id"]] == "correct"
+    assert outcomes[untouched["id"]] is None
+    assert result["updated"] == 3
+    assert result["pending_after"] == 1
+
+
+def test_backfill_does_not_restamp_a_scenario_that_already_has_the_outcome(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    keep = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    scenario_memory.add_scenario("Pending", {"netuid": 2}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "scenario_id": keep["id"], "correct": True, "status": "resolved"},
+            ],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+    backfill_scenario_outcomes_from_predictions()
+    first = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s["id"] == keep["id"]][0]
+
+    again = backfill_scenario_outcomes_from_predictions()
+
+    second = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s["id"] == keep["id"]][0]
+    assert again["updated"] == 0
+    assert second["resolved_at"] == first["resolved_at"]
