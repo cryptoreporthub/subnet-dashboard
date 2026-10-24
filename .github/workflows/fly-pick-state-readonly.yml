@@ -28,6 +28,37 @@ jobs:
           head -1 /proc/stat
           python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
           python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
+          echo ===threads
+          python - <<'PY'
+          import os, time
+          def snap():
+              d = {}
+              for p in os.listdir("/proc"):
+                  if not p.isdigit():
+                      continue
+                  try:
+                      for t in os.listdir("/proc/%s/task" % p):
+                          s = open("/proc/%s/task/%s/stat" % (p, t)).read()
+                          f = s[s.rindex(")") + 2:].split()
+                          d[(p, t)] = int(f[11]) + int(f[12])
+                  except Exception:
+                      pass
+              return d
+          a = snap()
+          time.sleep(10)
+          b = snap()
+          per = {}
+          for k, v in b.items():
+              per[k[0]] = per.get(k[0], 0) + v - a.get(k, 0)
+          for p, v in sorted(per.items(), key=lambda x: -x[1])[:4]:
+              cmd = open("/proc/%s/cmdline" % p).read().replace("\0", " ")[:60]
+              print("pid", p, "cpu_ticks_10s", v, "threads", sum(1 for k in b if k[0] == p), cmd)
+          top = sorted(((v - a.get(k, 0), k) for k, v in b.items()), reverse=True)[:12]
+          for d, k in top:
+              print("tid", k[1], "pid", k[0], "cpu_ticks_10s", d)
+          PY
+          echo ===jobs
+          python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/jobs', timeout=10).read().decode()[:12000])" 2>&1
           echo ===pressure
           cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null
           echo ===meminfo
