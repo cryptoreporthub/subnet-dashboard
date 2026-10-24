@@ -331,3 +331,37 @@ def test_backfill_does_not_restamp_a_scenario_that_already_has_the_outcome(monke
     second = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s["id"] == keep["id"]][0]
     assert again["updated"] == 0
     assert second["resolved_at"] == first["resolved_at"]
+
+
+def test_backfill_keeps_a_scenario_added_while_it_is_matching(monkeypatch, tmp_path):
+    from internal.learning import scenario_outcomes
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    scenario_memory.add_scenario("B", {"netuid": 2}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "B", "netuid": 2, "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 2, "correct": 1, "wrong": 1, "pending": 0},
+        }
+    )
+    real_stamp = scenario_outcomes._PendingIndex.stamp
+    added = []
+
+    def stamp_while_worker_adds(self, pred, label):
+        if not added:
+            added.append(scenario_memory.add_scenario("Late", {"netuid": 3}, outcome=None, regime="bull"))
+        return real_stamp(self, pred, label)
+
+    monkeypatch.setattr(scenario_outcomes._PendingIndex, "stamp", stamp_while_worker_adds)
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    ids = {s["id"]: s.get("outcome") for s in scenario_memory.get_memory_snapshot()["scenarios"]}
+    assert result["updated"] == 2
+    assert added[0]["id"] in ids
+    assert ids[added[0]["id"]] is None
