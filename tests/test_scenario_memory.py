@@ -228,3 +228,324 @@ def test_record_outcome_collapses_by_prediction_id(monkeypatch, tmp_path):
     assert result["id"] == pending["id"]
     assert result["outcome"] == "correct"
     assert len(scenario_memory.get_memory_snapshot()["scenarios"]) == 1
+
+
+def _backfill_with_unmatched_predictions(monkeypatch, tmp_path, unmatched):
+    tmp_path.mkdir(exist_ok=True)
+    _setup_paths(monkeypatch, tmp_path)
+    pending = scenario_memory.add_scenario(
+        "Chutes", {"netuid": 64, "direction": "up"}, outcome=None, regime="bull"
+    )
+    resolved = [
+        {
+            "id": f"pred_{i}",
+            "name": f"Other{i}",
+            "netuid": 1000 + i,
+            "correct": bool(i % 2),
+            "status": "resolved",
+        }
+        for i in range(unmatched)
+    ]
+    resolved.append(
+        {
+            "id": "pred_match",
+            "name": "Chutes",
+            "netuid": 64,
+            "correct": True,
+            "status": "resolved",
+        }
+    )
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": resolved,
+            "stats": {"total": len(resolved), "correct": 0, "wrong": 0, "pending": 0},
+        }
+    )
+    reads = []
+    real_load = scenario_memory._load
+
+    def counting_load(path=None):
+        reads.append(1)
+        return real_load(path)
+
+    monkeypatch.setattr(scenario_memory, "_load", counting_load)
+    result = backfill_scenario_outcomes_from_predictions()
+    monkeypatch.setattr(scenario_memory, "_load", real_load)
+    return result, len(reads), pending, real_load()["scenarios"][0]
+
+
+def test_backfill_scenario_memory_reads_do_not_grow_with_prediction_count(monkeypatch, tmp_path):
+    small, small_reads, _, _ = _backfill_with_unmatched_predictions(
+        monkeypatch, tmp_path / "small", 5
+    )
+    large, large_reads, pending, stamped = _backfill_with_unmatched_predictions(
+        monkeypatch, tmp_path / "large", 400
+    )
+
+    assert large["updated"] == small["updated"] == 1
+    assert large["pending_after"] == 0
+    assert large_reads == small_reads
+    assert stamped["id"] == pending["id"]
+    assert stamped["outcome"] == "correct"
+
+
+def test_backfill_stamps_each_pending_scenario_once_in_one_pass(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    by_id = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    by_name_netuid = scenario_memory.add_scenario("B", {"netuid": 2}, outcome=None, regime="bear")
+    by_name = scenario_memory.add_scenario("C", {"netuid": 3}, outcome=None, regime="neutral")
+    untouched = scenario_memory.add_scenario("D", {"netuid": 4}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "scenario_id": by_id["id"], "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "B", "netuid": 2, "correct": False, "status": "resolved"},
+                {"id": "p3", "name": "C", "netuid": 99, "correct": True, "status": "resolved"},
+                {"id": "p4", "name": "C", "netuid": 98, "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 4, "correct": 2, "wrong": 2, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    outcomes = {s["id"]: s.get("outcome") for s in scenario_memory.get_memory_snapshot()["scenarios"]}
+    assert outcomes[by_id["id"]] == "correct"
+    assert outcomes[by_name_netuid["id"]] == "wrong"
+    assert outcomes[by_name["id"]] == "correct"
+    assert outcomes[untouched["id"]] is None
+    assert result["updated"] == 3
+    assert result["pending_after"] == 1
+
+
+def test_backfill_does_not_restamp_a_scenario_that_already_has_the_outcome(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    keep = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    scenario_memory.add_scenario("Pending", {"netuid": 2}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "scenario_id": keep["id"], "correct": True, "status": "resolved"},
+            ],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+    backfill_scenario_outcomes_from_predictions()
+    first = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s["id"] == keep["id"]][0]
+
+    again = backfill_scenario_outcomes_from_predictions()
+
+    second = [s for s in scenario_memory.get_memory_snapshot()["scenarios"] if s["id"] == keep["id"]][0]
+    assert again["updated"] == 0
+    assert second["resolved_at"] == first["resolved_at"]
+
+
+def test_backfill_keeps_a_scenario_added_while_it_is_matching(monkeypatch, tmp_path):
+    from internal.learning import scenario_outcomes
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    scenario_memory.add_scenario("B", {"netuid": 2}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "A", "netuid": 1, "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "B", "netuid": 2, "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 2, "correct": 1, "wrong": 1, "pending": 0},
+        }
+    )
+    real_stamp = scenario_outcomes._PendingIndex.stamp
+    added = []
+
+    def stamp_while_worker_adds(self, pred, label):
+        if not added:
+            added.append(scenario_memory.add_scenario("Late", {"netuid": 3}, outcome=None, regime="bull"))
+        return real_stamp(self, pred, label)
+
+    monkeypatch.setattr(scenario_outcomes._PendingIndex, "stamp", stamp_while_worker_adds)
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    ids = {s["id"]: s.get("outcome") for s in scenario_memory.get_memory_snapshot()["scenarios"]}
+    assert result["updated"] == 2
+    assert added[0]["id"] in ids
+    assert ids[added[0]["id"]] is None
+
+
+def test_apply_stamps_keeps_a_scenario_added_by_another_writer_mid_update(monkeypatch, tmp_path):
+    import threading
+
+    _setup_paths(monkeypatch, tmp_path)
+    target = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    writer = threading.Thread(
+        target=lambda: scenario_memory.add_scenario("Inside", {"netuid": 2}, outcome=None, regime="bull")
+    )
+    real_load = scenario_memory._load
+    started = []
+
+    def load_then_race(path=None):
+        data = real_load(path)
+        if not started:
+            started.append(1)
+            writer.start()
+            writer.join(timeout=0.5)
+        return data
+
+    monkeypatch.setattr(scenario_memory, "_load", load_then_race)
+
+    updated = scenario_memory.apply_stamps([(target["id"], "correct", {})])
+    writer.join()
+    monkeypatch.setattr(scenario_memory, "_load", real_load)
+
+    assert updated == 1
+    stored = {s["name"]: s.get("outcome") for s in real_load()["scenarios"]}
+    assert stored == {"A": "correct", "Inside": None}
+
+
+def test_backfill_converges_when_two_predictions_share_a_scenario_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Shared", {"netuid": 7}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "Shared", "netuid": 7, "scenario_id": scenario["id"], "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "Shared", "netuid": 7, "scenario_id": scenario["id"], "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 2, "correct": 1, "wrong": 1, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stamped_at = scenario_memory._load()["scenarios"][0]["resolved_at"]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert second["updated"] == 0
+    stored = scenario_memory._load()["scenarios"][0]
+    assert stored["outcome"] == "wrong"
+    assert stored["resolved_at"] == stamped_at
+
+
+def test_backfill_skips_a_scenario_without_an_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario_memory._save(
+        {
+            "scenarios": [{"name": "NoId", "features": {"netuid": 3}, "outcome": None, "regime": "bull"}],
+            "regimes": {},
+            "meta": {},
+        }
+    )
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [{"id": "p1", "name": "NoId", "netuid": 3, "correct": True, "status": "resolved"}],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    assert result["updated"] == 0
+    assert scenario_memory._load()["scenarios"][0]["outcome"] is None
+
+
+def test_writer_gives_up_with_a_timeout_when_the_lock_is_held(monkeypatch, tmp_path):
+    import fcntl
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    monkeypatch.setattr(scenario_memory, "_LOCK_TIMEOUT_SECONDS", 0.2)
+
+    with open(scenario_memory.SCENARIO_MEMORY_PATH + ".lock", "a+") as holder:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(TimeoutError):
+            scenario_memory.update_outcome(scenario["id"], "correct")
+
+    assert scenario_memory._load()["scenarios"][0]["outcome"] is None
+    assert scenario_memory.update_outcome(scenario["id"], "correct")["outcome"] == "correct"
+
+
+def test_backfill_merges_new_metadata_when_the_outcome_is_unchanged(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Meta", {"netuid": 5}, outcome=None, regime="bull")
+    scenario_memory.update_outcome(scenario["id"], "correct", {"actual_pct": 1.0})
+    scenario_memory.add_scenario("Orphan", {"netuid": 99}, outcome=None, regime="bull")
+    resolved_at = scenario_memory._load()["scenarios"][0]["resolved_at"]
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {
+                    "id": "p1",
+                    "name": "Meta",
+                    "netuid": 5,
+                    "scenario_id": scenario["id"],
+                    "correct": True,
+                    "status": "resolved",
+                    "actual_pct": 3.5,
+                }
+            ],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stored = scenario_memory._load()["scenarios"][0]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert stored["metadata"]["actual_pct"] == 3.5
+    assert stored["resolved_at"] == resolved_at
+    assert second["updated"] == 0
+    assert scenario_memory._load()["scenarios"][0]["resolved_at"] == resolved_at
+
+
+def test_backfill_keeps_the_later_metadata_when_predictions_share_a_scenario_and_label(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Shared", {"netuid": 6}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "Shared", "netuid": 6, "scenario_id": scenario["id"], "correct": True, "status": "resolved", "actual_pct": 1.0},
+                {"id": "p2", "name": "Shared", "netuid": 6, "scenario_id": scenario["id"], "correct": True, "status": "resolved", "actual_pct": 2.0},
+            ],
+            "stats": {"total": 2, "correct": 2, "wrong": 0, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stored = scenario_memory._load()["scenarios"][0]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert stored["metadata"]["actual_pct"] == 2.0
+    assert stored["metadata"]["prediction_id"] == "p2"
+    assert second["updated"] == 0
+
+
+def test_writer_propagates_a_lock_error_that_is_not_contention(monkeypatch, tmp_path):
+    import errno
+    import time
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+
+    def broken_flock(_fd, _op):
+        raise OSError(errno.EINVAL, "invalid argument")
+
+    monkeypatch.setattr(scenario_memory.fcntl, "flock", broken_flock)
+
+    started = time.monotonic()
+    with pytest.raises(OSError) as raised:
+        scenario_memory.update_outcome(scenario["id"], "correct")
+
+    assert not isinstance(raised.value, TimeoutError)
+    assert time.monotonic() - started < 1.0
+
