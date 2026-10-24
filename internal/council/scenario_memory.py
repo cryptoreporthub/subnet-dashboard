@@ -9,10 +9,12 @@ latency to the main dashboard.
 
 from __future__ import annotations
 
+import fcntl
+import functools
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from internal.council.weights import detect_regime
 
@@ -20,6 +22,8 @@ SCENARIO_MEMORY_PATH = os.path.join("data", "scenario_memory.json")
 
 # Canonical scenario buckets.
 REGIMES = {"bull", "bear", "volatile", "neutral"}
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 def _load(path: Optional[str] = None) -> Dict[str, Any]:
@@ -43,6 +47,21 @@ def _save(data: Dict[str, Any], path: Optional[str] = None) -> None:
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+
+
+def _exclusive_writer(fn: _F) -> _F:
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        path = SCENARIO_MEMORY_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path + ".lock", "a+") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    return wrapper  # type: ignore[return-value]
 
 
 def _normalize_regime(regime: Optional[str]) -> str:
@@ -99,6 +118,7 @@ def _find_scenario_by_prediction_id(
     return None
 
 
+@_exclusive_writer
 def add_scenario(
     name: str,
     features: Dict[str, Any],
@@ -150,6 +170,7 @@ def add_scenario(
     return scenario
 
 
+@_exclusive_writer
 def update_outcome(
     scenario_id: str,
     outcome: str,
@@ -192,6 +213,7 @@ def list_scenarios() -> List[Dict[str, Any]]:
     return _load().get("scenarios", [])
 
 
+@_exclusive_writer
 def apply_stamps(stamps: List[Tuple[str, str, Dict[str, Any]]]) -> int:
     data = _load()
     by_id: Dict[Any, Dict[str, Any]] = {}
