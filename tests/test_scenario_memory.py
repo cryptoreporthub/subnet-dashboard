@@ -405,3 +405,52 @@ def test_apply_stamps_keeps_a_scenario_added_by_another_writer_mid_update(monkey
     assert updated == 1
     stored = {s["name"]: s.get("outcome") for s in real_load()["scenarios"]}
     assert stored == {"A": "correct", "Inside": None}
+
+
+def test_backfill_converges_when_two_predictions_share_a_scenario_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Shared", {"netuid": 7}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "Shared", "netuid": 7, "scenario_id": scenario["id"], "correct": True, "status": "resolved"},
+                {"id": "p2", "name": "Shared", "netuid": 7, "scenario_id": scenario["id"], "correct": False, "status": "resolved"},
+            ],
+            "stats": {"total": 2, "correct": 1, "wrong": 1, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stamped_at = scenario_memory._load()["scenarios"][0]["resolved_at"]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert second["updated"] == 0
+    stored = scenario_memory._load()["scenarios"][0]
+    assert stored["outcome"] == "wrong"
+    assert stored["resolved_at"] == stamped_at
+
+
+def test_backfill_skips_a_scenario_without_an_id(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario_memory._save(
+        {
+            "scenarios": [{"name": "NoId", "features": {"netuid": 3}, "outcome": None, "regime": "bull"}],
+            "regimes": {},
+            "meta": {},
+        }
+    )
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [{"id": "p1", "name": "NoId", "netuid": 3, "correct": True, "status": "resolved"}],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+
+    result = backfill_scenario_outcomes_from_predictions()
+
+    assert result["updated"] == 0
+    assert scenario_memory._load()["scenarios"][0]["outcome"] is None
+
