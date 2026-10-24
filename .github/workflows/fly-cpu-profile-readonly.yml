@@ -23,7 +23,7 @@ jobs:
 
 
           def find(marker):
-              for p in os.listdir("/proc"):
+              for p in sorted(os.listdir("/proc")):
                   if p.isdigit():
                       try:
                           cmd = open("/proc/%s/cmdline" % p).read().replace("\0", " ")
@@ -78,7 +78,7 @@ jobs:
                   procs[name] = (
                       subprocess.Popen(
                           [SPY, "record", "--pid", pid, "--duration", str(SECONDS), "--rate", "50",
-                           "--format", "raw", "--threads", "--nonblocking", "--output", out],
+                           "--format", "raw", "--threads", "--nonblocking", "--full-filenames", "--output", out],
                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True),
                       out)
           for name, (proc, out) in procs.items():
