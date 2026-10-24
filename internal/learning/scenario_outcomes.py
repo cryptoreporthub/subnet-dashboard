@@ -239,9 +239,9 @@ def list_unresolvable_scenarios() -> List[Dict[str, Any]]:
 
 
 def backfill_scenario_outcomes_from_predictions() -> Dict[str, Any]:
-    """Stamp blank scenario rows from resolved predictions (idempotent).
+    """Stamp scenario rows from resolved predictions (idempotent).
 
-    Only updates existing pending scenarios — does not mint duplicate outcome rows.
+    Updates existing rows only and never mints duplicate outcome rows.
     """
     pending_before = _pending_scenario_count()
     if pending_before == 0:

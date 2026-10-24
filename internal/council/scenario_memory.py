@@ -220,7 +220,8 @@ def apply_stamps(stamps: List[Tuple[str, str, Dict[str, Any]]]) -> int:
     for scenario in data.get("scenarios", []):
         by_id.setdefault(scenario.get("id"), scenario)
     changed = 0
-    for scenario_id, outcome, metadata in stamps:
+    latest = {scenario_id: (outcome, metadata) for scenario_id, outcome, metadata in stamps}
+    for scenario_id, (outcome, metadata) in latest.items():
         scenario = by_id.get(scenario_id)
         if scenario is None or scenario.get("outcome") == outcome:
             continue
