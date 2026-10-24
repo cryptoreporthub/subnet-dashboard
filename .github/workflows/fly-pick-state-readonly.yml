@@ -22,6 +22,12 @@ jobs:
           echo ===cgroup
           for f in memory.current memory.max memory.peak memory.swap.current; do echo "$f $(cat /sys/fs/cgroup/$f 2>/dev/null)"; done
           grep -E "^(anon|file|kernel|shmem|slab|file_mapped|active_file|inactive_file|workingset_refault_file) " /sys/fs/cgroup/memory.stat 2>/dev/null
+          echo ===cpu
+          head -1 /proc/stat; cat /proc/loadavg; cat /sys/fs/cgroup/cpu.stat 2>/dev/null; cat /sys/fs/cgroup/cpu/cpu.stat 2>/dev/null
+          sleep 5
+          head -1 /proc/stat
+          python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
+          python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
           echo ===pressure
           cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null
           echo ===meminfo
