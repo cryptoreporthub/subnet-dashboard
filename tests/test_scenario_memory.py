@@ -454,3 +454,19 @@ def test_backfill_skips_a_scenario_without_an_id(monkeypatch, tmp_path):
     assert result["updated"] == 0
     assert scenario_memory._load()["scenarios"][0]["outcome"] is None
 
+
+def test_writer_gives_up_with_a_timeout_when_the_lock_is_held(monkeypatch, tmp_path):
+    import fcntl
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    monkeypatch.setattr(scenario_memory, "_LOCK_TIMEOUT_SECONDS", 0.2)
+
+    with open(scenario_memory.SCENARIO_MEMORY_PATH + ".lock", "a+") as holder:
+        fcntl.flock(holder.fileno(), fcntl.LOCK_EX)
+        with pytest.raises(TimeoutError):
+            scenario_memory.update_outcome(scenario["id"], "correct")
+
+    assert scenario_memory._load()["scenarios"][0]["outcome"] is None
+    assert scenario_memory.update_outcome(scenario["id"], "correct")["outcome"] == "correct"
+

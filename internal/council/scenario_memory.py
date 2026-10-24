@@ -13,6 +13,7 @@ import fcntl
 import functools
 import json
 import os
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
@@ -24,6 +25,8 @@ SCENARIO_MEMORY_PATH = os.path.join("data", "scenario_memory.json")
 REGIMES = {"bull", "bear", "volatile", "neutral"}
 
 _F = TypeVar("_F", bound=Callable[..., Any])
+
+_LOCK_TIMEOUT_SECONDS = 5.0
 
 
 def _load(path: Optional[str] = None) -> Dict[str, Any]:
@@ -55,7 +58,17 @@ def _exclusive_writer(fn: _F) -> _F:
         path = SCENARIO_MEMORY_PATH
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
         with open(path + ".lock", "a+") as lock_file:
-            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"Timed out after {_LOCK_TIMEOUT_SECONDS}s waiting for {path}.lock"
+                        )
+                    time.sleep(0.01)
             try:
                 return fn(*args, **kwargs)
             finally:
