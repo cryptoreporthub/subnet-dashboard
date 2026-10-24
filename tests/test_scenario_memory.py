@@ -230,7 +230,8 @@ def test_record_outcome_collapses_by_prediction_id(monkeypatch, tmp_path):
     assert len(scenario_memory.get_memory_snapshot()["scenarios"]) == 1
 
 
-def test_backfill_reads_scenario_memory_a_bounded_number_of_times(monkeypatch, tmp_path):
+def _backfill_with_unmatched_predictions(monkeypatch, tmp_path, unmatched):
+    tmp_path.mkdir(exist_ok=True)
     _setup_paths(monkeypatch, tmp_path)
     pending = scenario_memory.add_scenario(
         "Chutes", {"netuid": 64, "direction": "up"}, outcome=None, regime="bull"
@@ -243,7 +244,7 @@ def test_backfill_reads_scenario_memory_a_bounded_number_of_times(monkeypatch, t
             "correct": bool(i % 2),
             "status": "resolved",
         }
-        for i in range(200)
+        for i in range(unmatched)
     ]
     resolved.append(
         {
@@ -269,13 +270,22 @@ def test_backfill_reads_scenario_memory_a_bounded_number_of_times(monkeypatch, t
         return real_load(path)
 
     monkeypatch.setattr(scenario_memory, "_load", counting_load)
-
     result = backfill_scenario_outcomes_from_predictions()
+    monkeypatch.setattr(scenario_memory, "_load", real_load)
+    return result, len(reads), pending, real_load()["scenarios"][0]
 
-    assert result["updated"] == 1
-    assert result["pending_after"] == 0
-    assert len(reads) <= 8
-    stamped = real_load()["scenarios"][0]
+
+def test_backfill_scenario_memory_reads_do_not_grow_with_prediction_count(monkeypatch, tmp_path):
+    small, small_reads, _, _ = _backfill_with_unmatched_predictions(
+        monkeypatch, tmp_path / "small", 5
+    )
+    large, large_reads, pending, stamped = _backfill_with_unmatched_predictions(
+        monkeypatch, tmp_path / "large", 400
+    )
+
+    assert large["updated"] == small["updated"] == 1
+    assert large["pending_after"] == 0
+    assert large_reads == small_reads
     assert stamped["id"] == pending["id"]
     assert stamped["outcome"] == "correct"
 
