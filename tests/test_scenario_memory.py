@@ -375,3 +375,33 @@ def test_backfill_keeps_a_scenario_added_while_it_is_matching(monkeypatch, tmp_p
     assert result["updated"] == 2
     assert added[0]["id"] in ids
     assert ids[added[0]["id"]] is None
+
+
+def test_apply_stamps_keeps_a_scenario_added_by_another_writer_mid_update(monkeypatch, tmp_path):
+    import threading
+
+    _setup_paths(monkeypatch, tmp_path)
+    target = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+    writer = threading.Thread(
+        target=lambda: scenario_memory.add_scenario("Inside", {"netuid": 2}, outcome=None, regime="bull")
+    )
+    real_load = scenario_memory._load
+    started = []
+
+    def load_then_race(path=None):
+        data = real_load(path)
+        if not started:
+            started.append(1)
+            writer.start()
+            writer.join(timeout=0.5)
+        return data
+
+    monkeypatch.setattr(scenario_memory, "_load", load_then_race)
+
+    updated = scenario_memory.apply_stamps([(target["id"], "correct", {})])
+    writer.join()
+    monkeypatch.setattr(scenario_memory, "_load", real_load)
+
+    assert updated == 1
+    stored = {s["name"]: s.get("outcome") for s in real_load()["scenarios"]}
+    assert stored == {"A": "correct", "Inside": None}
