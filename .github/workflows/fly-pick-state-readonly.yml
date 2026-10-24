@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
 jobs:
   state:
-    name: pick scheduler state and machine memory
+    name: pick scheduler state, score latency and machine memory
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -15,7 +15,25 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           set +e
-          flyctl ssh console -a subnet-dashboard -C "sh -c 'date -u; free -m; ls -l /app/data; df -h /app/data; ps -eo pid,rss,etime,args --sort=-rss | head -8; echo ===state; cat /app/data/pick_scheduler_state.json'" 2>&1 | tee "$RUNNER_TEMP/pick-state.txt"
+          cat > "$RUNNER_TEMP/probe.sh" <<'EOS'
+          date -u
+          echo ===procs
+          for p in /proc/[0-9]*; do r=$(grep VmRSS $p/status 2>/dev/null); [ -n "$r" ] && echo "${p#/proc/} $r $(tr '\0' ' ' < $p/cmdline | cut -c1-90)"; done
+          echo ===cgroup
+          for f in memory.current memory.max memory.peak memory.swap.current; do echo "$f $(cat /sys/fs/cgroup/$f 2>/dev/null)"; done
+          grep -E "^(anon|file|kernel|shmem|slab|file_mapped|active_file|inactive_file|workingset_refault_file) " /sys/fs/cgroup/memory.stat 2>/dev/null
+          echo ===pressure
+          cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null
+          echo ===meminfo
+          head -6 /proc/meminfo
+          echo ===latency
+          wc -l /app/data/pick_score_latency.jsonl
+          tail -n 400 /app/data/pick_score_latency.jsonl
+          echo ===state
+          cat /app/data/pick_scheduler_state.json
+          EOS
+          B64=$(base64 -w0 "$RUNNER_TEMP/probe.sh")
+          flyctl ssh console -a subnet-dashboard -C "sh -c 'echo $B64 | base64 -d | sh'" 2>&1 | tee "$RUNNER_TEMP/pick-state.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
