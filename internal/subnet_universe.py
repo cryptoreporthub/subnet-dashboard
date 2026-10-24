@@ -133,37 +133,25 @@ def _default_probe_fetch(
     *,
     deadline: Optional[float] = None,
 ) -> Tuple[Dict[int, Optional[bool]], bool]:
-    """Map netuid -> True/False (positive probe), or None when that netuid is unobserved.
-
-    Per-netuid ``None`` means ``no_price``, ``rpc_error``, or the netuid was not reached
-    before ``deadline`` — it does not by itself mark the probe pass incomplete.
-    The returned ``complete`` flag is False only on deadline truncation or fetch failure.
-    """
-    observed: Dict[int, Optional[bool]] = {}
-    complete = True
-    try:
-        from internal.chain_client import get_default_client
-
-        client = get_default_client()
-        for netuid in netuids:
-            if deadline is not None and time.monotonic() >= deadline:
-                complete = False
-                break
-            try:
-                price, outcome = client.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    observed[netuid] = None
-                elif outcome == "no_price":
-                    observed[netuid] = None
-                else:
-                    observed[netuid] = bool(price and float(price) > 0)
-            except Exception:
-                observed[netuid] = None
-                complete = False
-    except Exception as exc:
-        logger.warning("subnet_universe probe fetch failed: %s", exc)
+    # Unregistered netuids price at exactly 1.0, so registration is read instead of price.
+    if deadline is not None and time.monotonic() >= deadline:
         return {}, False
-    return observed, complete
+    try:
+        from internal.chain_price.membership import get_member_netuids
+        from internal.chain_price.reader import ChainReader
+
+        reader = ChainReader()
+        at_hash, outcome = reader.pin_finalized_head()
+        if outcome != "ok" or not at_hash:
+            return {}, False
+        members, outcome = get_member_netuids(reader.call_fn(), at_hash)
+    except Exception as exc:
+        logger.warning("subnet_universe registration read failed: %s", exc)
+        return {}, False
+    if outcome != "ok":
+        return {}, False
+    registered = set(members)
+    return {n: n == 0 or n in registered for n in netuids}, True
 
 
 def _validity_entry(
