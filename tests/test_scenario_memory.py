@@ -470,3 +470,81 @@ def test_writer_gives_up_with_a_timeout_when_the_lock_is_held(monkeypatch, tmp_p
     assert scenario_memory._load()["scenarios"][0]["outcome"] is None
     assert scenario_memory.update_outcome(scenario["id"], "correct")["outcome"] == "correct"
 
+
+def test_backfill_merges_new_metadata_when_the_outcome_is_unchanged(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Meta", {"netuid": 5}, outcome=None, regime="bull")
+    scenario_memory.update_outcome(scenario["id"], "correct", {"actual_pct": 1.0})
+    resolved_at = scenario_memory._load()["scenarios"][0]["resolved_at"]
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {
+                    "id": "p1",
+                    "name": "Meta",
+                    "netuid": 5,
+                    "scenario_id": scenario["id"],
+                    "correct": True,
+                    "status": "resolved",
+                    "actual_pct": 3.5,
+                }
+            ],
+            "stats": {"total": 1, "correct": 1, "wrong": 0, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stored = scenario_memory._load()["scenarios"][0]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert stored["metadata"]["actual_pct"] == 3.5
+    assert stored["resolved_at"] == resolved_at
+    assert second["updated"] == 0
+    assert scenario_memory._load()["scenarios"][0]["resolved_at"] == resolved_at
+
+
+def test_backfill_keeps_the_later_metadata_when_predictions_share_a_scenario_and_label(monkeypatch, tmp_path):
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("Shared", {"netuid": 6}, outcome=None, regime="bull")
+    predictions_store.save_predictions(
+        {
+            "predictions": [],
+            "resolved": [
+                {"id": "p1", "name": "Shared", "netuid": 6, "scenario_id": scenario["id"], "correct": True, "status": "resolved", "actual_pct": 1.0},
+                {"id": "p2", "name": "Shared", "netuid": 6, "scenario_id": scenario["id"], "correct": True, "status": "resolved", "actual_pct": 2.0},
+            ],
+            "stats": {"total": 2, "correct": 2, "wrong": 0, "pending": 0},
+        }
+    )
+
+    first = backfill_scenario_outcomes_from_predictions()
+    stored = scenario_memory._load()["scenarios"][0]
+    second = backfill_scenario_outcomes_from_predictions()
+
+    assert first["updated"] == 1
+    assert stored["metadata"]["actual_pct"] == 2.0
+    assert stored["metadata"]["prediction_id"] == "p2"
+    assert second["updated"] == 0
+
+
+def test_writer_propagates_a_lock_error_that_is_not_contention(monkeypatch, tmp_path):
+    import errno
+    import time
+
+    _setup_paths(monkeypatch, tmp_path)
+    scenario = scenario_memory.add_scenario("A", {"netuid": 1}, outcome=None, regime="bull")
+
+    def broken_flock(_fd, _op):
+        raise OSError(errno.EINVAL, "invalid argument")
+
+    monkeypatch.setattr(scenario_memory.fcntl, "flock", broken_flock)
+
+    started = time.monotonic()
+    with pytest.raises(OSError) as raised:
+        scenario_memory.update_outcome(scenario["id"], "correct")
+
+    assert not isinstance(raised.value, TimeoutError)
+    assert time.monotonic() - started < 1.0
+
