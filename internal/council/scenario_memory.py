@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from internal.council.weights import detect_regime
 
@@ -168,15 +168,32 @@ def update_outcome(
     data = _load()
     for scenario in data.get("scenarios", []):
         if scenario.get("id") == scenario_id:
-            scenario["outcome"] = outcome
-            scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            if metadata:
-                existing = scenario.get("metadata") or {}
-                existing.update(metadata)
-                scenario["metadata"] = existing
+            stamp_outcome(scenario, outcome, metadata)
             _save(data)
             return scenario
     return None
+
+
+def stamp_outcome(
+    scenario: Dict[str, Any],
+    outcome: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    scenario["outcome"] = outcome
+    scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    if metadata:
+        existing = scenario.get("metadata") or {}
+        existing.update(metadata)
+        scenario["metadata"] = existing
+    return scenario
+
+
+def mutate_scenarios(mutator: Callable[[List[Dict[str, Any]]], int]) -> int:
+    data = _load()
+    changed = mutator(data.get("scenarios", []))
+    if changed:
+        _save(data)
+    return changed
 
 
 def record_outcome(
