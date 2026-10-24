@@ -1,0 +1,23 @@
+name: Fly pick state (read-only)
+on:
+  workflow_dispatch:
+jobs:
+  state:
+    name: pick scheduler state and machine memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Read state files and memory over fly ssh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set +e
+          flyctl ssh console -a subnet-dashboard -C "sh -c 'date -u; free -m; ls -l /app/data; df -h /app/data; ps -eo pid,rss,etime,args --sort=-rss | head -8; echo ===state; cat /app/data/pick_scheduler_state.json'" 2>&1 | tee "$RUNNER_TEMP/pick-state.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pick-state-${{ github.run_id }}
+          path: ${{ runner.temp }}/pick-state.txt
