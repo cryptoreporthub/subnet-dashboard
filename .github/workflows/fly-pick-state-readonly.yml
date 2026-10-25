@@ -66,6 +66,40 @@ jobs:
           echo ===latency
           wc -l /app/data/pick_score_latency.jsonl
           tail -n 400 /app/data/pick_score_latency.jsonl
+          echo ===smaps
+          for p in /proc/[0-9]*; do [ -r $p/smaps_rollup ] && grep -qE "uvicorn|python" $p/cmdline 2>/dev/null && { echo "pid ${p#/proc/}"; grep -E "^(Rss|Pss|Pss_Anon|Pss_File|Anonymous|Private_Dirty|Swap):" $p/smaps_rollup; }; done
+          echo ===universe
+          python - <<'PY'
+          import json, os, time
+          p = "/app/data/subnet_universe.json"
+          try:
+              d = json.load(open(p))
+          except Exception as e:
+              print("unreadable", p, e)
+              raise SystemExit
+          vm = d.get("validity_map") or {}
+          nets = [int(n) for n in d.get("netuids") or []]
+          print("file_age_s", int(time.time() - os.path.getmtime(p)), "bytes", os.path.getsize(p))
+          print("status", d.get("status"), "degraded", d.get("degraded"), "refresh_incomplete", d.get("refresh_incomplete"), "resolved_at", d.get("resolved_at"))
+          print("netuids", len(nets), "max", max(nets) if nets else None, "over_128", [n for n in nets if n > 128])
+          counts = {}
+          for e in vm.values():
+              k = (e.get("validity"), bool(e.get("refresh_incomplete")), bool(e.get("negative_since")))
+              counts[k] = counts.get(k, 0) + 1
+          for k, v in sorted(counts.items(), key=lambda x: -x[1]):
+              print("validity", k[0], "refresh_incomplete", k[1], "has_negative_since", k[2], "count", v)
+          now = time.time()
+          for n in sorted(int(k) for k in vm):
+              e = vm[str(n)]
+              ns = e.get("negative_since")
+              if ns:
+                  try:
+                      from datetime import datetime
+                      age_h = round((now - datetime.fromisoformat(ns).timestamp()) / 3600, 1)
+                  except Exception:
+                      age_h = "?"
+                  print("negative", n, "age_h", age_h, "validity", e.get("validity"), "refresh_incomplete", e.get("refresh_incomplete"))
+          PY
           echo ===state
           cat /app/data/pick_scheduler_state.json
           EOS
