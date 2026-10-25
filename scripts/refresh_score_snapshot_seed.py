@@ -13,15 +13,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from internal.chain_price.membership import read_chain_membership  # noqa: E402
-from internal.chain_price.reader import ChainReader  # noqa: E402
 from internal.council.build_seed_snapshot import build_image_seed_snapshot  # noqa: E402
-from internal.council.seed_market_inputs import refresh_committed_authoritative_rows  # noqa: E402
 from internal.council.score_snapshots import is_complete_snapshot, publish_complete_snapshot  # noqa: E402
 from internal.council.seed_quality import validate_shipped_seed  # noqa: E402
+from internal.subnet_universe import SnapshotBuilder  # noqa: E402
 
 
-def main() -> int:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "source",
@@ -35,26 +33,20 @@ def main() -> int:
         help="Seed path (default: data_seeds/score_snapshots.json)",
     )
     parser.add_argument(
-        "--build",
+        "--build-from-chain",
         action="store_true",
-        help="Read membership from the chain and run the real scorer build into --dest (ignores source path)",
+        help="Resolve membership with the real universe refresh (pinned chain read + TMC rows), then run "
+        "the real producer on exactly that membership (ignores source path)",
     )
-    args = parser.parse_args()
-    if args.build:
-        chain, outcome = read_chain_membership(ChainReader())
-        if chain is None:
-            print(f"chain membership read failed: {outcome}", file=sys.stderr)
-            return 2
-        try:
-            refresh_committed_authoritative_rows(chain.netuids)
-        except (OSError, ValueError) as exc:
-            print(f"WARN: could not refresh authoritative_universe_rows: {exc}", file=sys.stderr)
+    args = parser.parse_args(argv)
+    if args.build_from_chain:
+        membership = SnapshotBuilder().build(None).snapshot
         with tempfile.TemporaryDirectory() as tmp:
             volume = os.path.join(tmp, "build.json")
             cycle = os.path.join(tmp, "cycle.json")
-            out = build_image_seed_snapshot(chain=chain, volume_path=volume, cycle_path=cycle)
+            out = build_image_seed_snapshot(membership=membership, volume_path=volume, cycle_path=cycle)
             if not out.get("published"):
-                print(f"build failed: {out}", file=sys.stderr)
+                print(f"membership refused, seed unchanged: {out.get('refused') or out}", file=sys.stderr)
                 return 2
             with open(volume, "r", encoding="utf-8") as handle:
                 payload = json.load(handle)
