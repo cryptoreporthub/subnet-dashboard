@@ -1012,3 +1012,15 @@ def test_default_price_one_does_not_imply_registration(monkeypatch):
     assert complete is True
     assert observed.get(129) is False
     assert observed.get(128) is True
+
+
+def test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete(monkeypatch):
+    """Root is never in NetworksAdded; a cold snapshot must still contain it without claiming chain registration."""
+    _patch_registration(monkeypatch, list(range(1, 129)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(None).snapshot
+    assert 0 in built.netuids
+    assert set(range(1, 129)) <= set(built.netuids)
+    root = built.validity_map["0"]
+    assert "blockmachine_probe" not in root["sources"]
+    assert root["validity"] != "negative"
