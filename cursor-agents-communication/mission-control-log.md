@@ -330,3 +330,10 @@
 - **PR #1406** squash **`ed478a3b`** (review pin `40fb06c`); Replit APPROVE; `CHAIN_PRICE_FORWARD_RECORD` off.
 - **Fly:** vehicle [#1409](https://github.com/cryptoreporthub/subnet-dashboard/pull/1409) merged; deploy run [38629167563](https://github.com/cryptoreporthub/subnet-dashboard/actions/runs/38629167563) success; prod `/version` **`562982ba`**; `/health` 200.
 - **Issue [#1395](https://github.com/cryptoreporthub/subnet-dashboard/issues/1395#issuecomment-6177343902)** commented; Step 3 backfill + bracketed resolver deferred.
+
+## 2026-10-25 — PR-A #1486 finish-out (quota handoff)
+
+- **Pushed** (fast-forward from `3b05bf2678ed054b61fad382f9aa775d8de35781`): `34e9d238` (boot test asserts producer behavior, not the starter mock), `c5263e3f` (restart-arming boot test: fresh snapshot + persisted `lifecycle=started` must still arm — the served-FRESH early-return mutation now fails), `dca50507` + `c6247206` (red/fix: failed liveness start in immediate mode must not leave a live tick; liveness start moved before the un-cancellable tick thread), `a5a1a0d3` (docs: #1486 must not deploy without #1485 — non-owner + stale snapshot = `not_owner` revive → stall guard `os._exit(1)` → crash loop), `36dcd7c5` (dropped the stale 2026-10-22 gate entry @ `8cf5eb77`).
+- **Full-repo pytest (fresh worktrees, `DISABLE_BACKGROUND_SCANS=1`):** main `f6298a18` 175 failed / 3410 passed; head 176 failed / 3903 passed. New-vs-main failure IDs: 3 (`test_market_impact::test_daily_pick_attaches_impact_block`, `test_subnet_names::test_registry_and_subnets_names_agree`, `test_worker_volume_proxy::test_proxy_daily_pick_degraded_on_failure`) — all pass in isolation on head (timing/order flakes, same families as prior push notes). No PR-A regression.
+- **Affected tests:** producer/ownership/phase_f/snapshots/never_blank/loop-stall/boot = 414 passed. ci-smoke list = 484 passed.
+- **No merge / no deploy**; PR-B #1484 and PR-C #1485 untouched.
