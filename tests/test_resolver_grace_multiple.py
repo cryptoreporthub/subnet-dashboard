@@ -29,3 +29,10 @@ def test_explicit_grace_of_two_expires_at_two_horizons(resolver):
 
     assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=1.9), 2.0) is False
     assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=2), 2.0) is True
+
+
+def test_row_without_horizon_hours_keeps_the_24h_default_grace(resolver):
+    pred = {"horizon_type": "hour"}
+
+    assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=5)) is False
+    assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=96)) is True
