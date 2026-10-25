@@ -1165,16 +1165,22 @@ class ScoreSnapshotScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        if self._armed:
-            return {"started": False, "reason": "already_armed"}
-        resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
-        self._armed = True
-        self.liveness.start()
-        armed = "immediate" if immediate else "deferred"
-        if immediate:
-            threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
-        else:
-            schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+        with _lock:
+            if self._armed:
+                return {"started": False, "reason": "already_armed"}
+            self._armed = True
+        try:
+            resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
+            self.liveness.start()
+            armed = "immediate" if immediate else "deferred"
+            if immediate:
+                threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
+            else:
+                schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+        except Exception:
+            with _lock:
+                self._armed = False
+            raise
         return {
             "started": True,
             "armed": armed,
@@ -1462,6 +1468,10 @@ def _enabled() -> bool:
 def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not _enabled():
         return {"started": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"started": False, "reason": "not_owner"}
     global _scheduler
     with _lock:
         if _scheduler is None:
@@ -1527,6 +1537,10 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"revived": False, "reason": "not_owner"}
 
     age_before = snapshot_age_seconds()
     recycled = False

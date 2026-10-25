@@ -48,9 +48,9 @@ def _probe_rpc(url: str) -> str:
         return f"fail {exc}"
 
 
-def _run_kill_mid_write(volume: Path, seed_path: Path) -> None:
+def _run_kill_mid_write(volume: Path, seed_path: Path) -> int | None:
     code = f"""
-import json, os, signal, sys
+import json, os, signal, sys, tempfile
 sys.path.insert(0, {repr(str(REPO_ROOT))})
 from internal.council import score_snapshots as snaps
 from tests.score_snapshot_testutil import complete_snapshot_payload
@@ -59,18 +59,19 @@ snaps.SCORE_SNAPSHOT_SEED_PATH = {repr(str(seed_path))}
 payload = complete_snapshot_payload(day_rows=[{{"netuid": 1, "total_score": 1.0}}])
 directory = os.path.dirname(snaps.SCORE_SNAPSHOTS_PATH) or "."
 os.makedirs(directory, exist_ok=True)
-tmp = os.path.join(directory, ".crash.tmp")
-with open(tmp, "w", encoding="utf-8") as handle:
+fd, tmp = tempfile.mkstemp(dir=directory, prefix=".crash-", suffix=".tmp")
+with os.fdopen(fd, "w", encoding="utf-8") as handle:
     json.dump(payload, handle)
     handle.flush()
     os.kill(os.getpid(), signal.SIGKILL)
 """
     proc = subprocess.Popen([sys.executable, "-c", code])
     try:
-        proc.wait(timeout=5)
+        return proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait()
+        return None
 
 
 def _fly_worker_entrypoint_env() -> dict[str, str]:
@@ -147,7 +148,9 @@ def _row_b_kill9(data: Path, seed_path: Path) -> Row:
     snaps.publish_complete_snapshot(good, str(volume))
     if volume.exists():
         volume.unlink()
-    _run_kill_mid_write(volume, seed_path)
+    returncode = _run_kill_mid_write(volume, seed_path)
+    if returncode != -signal.SIGKILL:
+        raise RuntimeError(f"child was not SIGKILLed (returncode={returncode})")
     served = snaps.read_served_snapshot()
     picks = snaps.build_top_picks_from_snapshot(None)
     return Row(
@@ -344,7 +347,8 @@ def main() -> int:
             f"{r.served_state} | {r.day_rows} | {r.notes} |"
         )
 
-    bad = [r for r in rows if r.scenario.startswith("(b)") and r.served_state == "none"]
+    bad = [r for r in rows if r.scenario.startswith("(a)") and r.day_rows == 0]
+    bad += [r for r in rows if r.scenario.startswith("(b)") and r.served_state == "none"]
     bad += [r for r in rows if r.scenario.startswith("(c)") and r.producer_enabled != "exactly_one_per_topo"]
     bad += [r for r in rows if r.scenario.startswith("(d)") and r.producer_enabled != "False"]
     return 1 if bad else 0
