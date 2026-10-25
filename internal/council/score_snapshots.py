@@ -22,7 +22,13 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-from internal.council.scorer_identity import current_scorer_digest, stamp_scorer_fields, scorer_fields_match
+from internal.council.scorer_identity import (
+    compute_input_digest,
+    current_scorer_digest,
+    current_weights_digest,
+    scorer_fields_match,
+    stamp_scorer_fields,
+)
 
 from internal import build_cost
 from internal.chain_read import ChainRead
@@ -923,6 +929,8 @@ def write_full_universe_snapshot(
         )
 
         selection_policy = str(prep_meta.get("selection_basis") or "full")
+        # Taken once here: a weight edit during the build must show up as "changed", not be absorbed.
+        weights_digest = current_weights_digest()
         ctx_started = time.monotonic()
         from internal.council.scoring_context import enrich_scoring_market_context
 
@@ -1043,6 +1051,19 @@ def write_full_universe_snapshot(
                 "build_id": build_id,
                 "day_expected_count": len(expected),
                 "day_succeeded_count": len(list(inputs.get("day_succeeded") or [])),
+            }
+            candidate["provenance"] = {
+                "membership_generation": receipt.get("generation"),
+                "membership_block_hash": receipt.get("block_hash"),
+                "membership_rpc": receipt.get("rpc"),
+                "membership_resolved_at": receipt.get("resolved_at"),
+                "weights_digest": weights_digest,
+                "input_digest": compute_input_digest(
+                    str(receipt.get("generation")),
+                    current_scorer_digest(),
+                    list(inputs.get("tradable_rows") or []),
+                    ctx.get("weights") or {},
+                ),
             }
             publish_result = publish_complete_snapshot(candidate)
         published = bool(publish_result.get("published"))
