@@ -160,24 +160,39 @@ def test_admission_is_blocked_without_chain_provenance(monkeypatch, gap):
     assert cov.membership_allows_admission(_receipt_for(monkeypatch, _universe([1, 2, 3]))) is True
 
 
-def test_unprovenanced_membership_gates_the_producer_and_keeps_last_good(tmp_path, monkeypatch):
+def _producer_env(tmp_path, monkeypatch, universe, *, scorer=None):
+    """Real write_full_universe_snapshot over a fixed universe; scoring itself is stubbed."""
+    from internal.council import weights
+
+    soul = _write_soul_map(tmp_path / "soul" / "soul_map.json")
+    monkeypatch.setattr(weights, "SOUL_MAP_PATH", soul)
     volume = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(volume))
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    monkeypatch.setattr(su, "get_snapshot", lambda: universe)
+    hydrate = [{"netuid": n, "name": f"N{n}", "price": 1.0, "volume": 10.0} for n in universe.netuids]
+    monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
+    scored = []
+
+    def _score(sn, ctx):
+        scored.append((dict(sn), ctx))
+        if scorer:
+            scorer()
+        return {"total_score": float(sn["netuid"])}
+
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _score)
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+    return volume, soul, scored
+
+
+def test_unprovenanced_membership_gates_the_producer_and_keeps_last_good(tmp_path, monkeypatch):
+    pre_1483 = _with_chain(_universe([1, 2]), None)  # universe file written before the chain fields
+    volume, _, _ = _producer_env(tmp_path, monkeypatch, pre_1483)
     good = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 5.0, "name": "A"}])
     assert snaps.publish_complete_snapshot(good, str(volume))["published"]
     before = volume.read_bytes()
-
-    pre_1483 = _with_chain(_universe([1, 2]), None)  # universe file written before the chain fields
-    monkeypatch.setattr(su, "get_snapshot", lambda: pre_1483)
-    monkeypatch.setattr(
-        "server._get_subnets_hydrate",
-        lambda: ([{"netuid": n, "name": f"N{n}", "price": 1.0, "volume": 10.0} for n in (1, 2)], "registry-fallback"),
-    )
-    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", lambda sn, ctx: {"total_score": 1.0})
-    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
 
     out = snaps.write_full_universe_snapshot()
 
@@ -187,6 +202,58 @@ def test_unprovenanced_membership_gates_the_producer_and_keeps_last_good(tmp_pat
     assert volume.read_bytes() == before
     served = snaps.read_served_snapshot()
     assert served.servable and served.state.value in ("fresh", "aged")
+
+
+def test_complete_build_carries_exactly_the_six_provenance_fields(tmp_path, monkeypatch):
+    from internal.council.scorer_identity import compute_input_digest, current_scorer_digest, current_weights_digest
+
+    universe = _universe([1, 2, 3], block="cd", rpc="blockmachine")
+    volume, soul, scored = _producer_env(tmp_path, monkeypatch, universe)
+
+    assert snaps.write_full_universe_snapshot()["published"] is True
+
+    prov = json.loads(volume.read_text())["provenance"]
+    generation = cov.membership_generation([1, 2, 3])
+    assert set(prov) == {
+        "membership_generation",
+        "membership_block_hash",
+        "membership_rpc",
+        "membership_resolved_at",
+        "weights_digest",
+        "input_digest",
+    }
+    assert prov["membership_generation"] == generation
+    assert prov["membership_block_hash"] == "0x" + "cd" * 32
+    assert prov["membership_rpc"] == "blockmachine"
+    assert prov["membership_resolved_at"] == universe.resolved_at
+    assert prov["weights_digest"] == current_weights_digest(soul)
+    # The digest covers what the scorer was actually handed: its rows and its ctx weights.
+    rows = [row for row, _ in scored]
+    assert sorted(r["netuid"] for r in rows) == [1, 2, 3]
+    assert prov["input_digest"] == compute_input_digest(
+        generation, current_scorer_digest(), rows, scored[0][1]["weights"]
+    )
+
+
+def test_weights_digest_is_the_one_taken_at_build_start(tmp_path, monkeypatch):
+    from internal.council.scorer_identity import current_weights_digest
+    from internal.store.soul_map_io import write_soul_map
+
+    universe = _universe([1, 2])
+    soul_holder = {}
+
+    def _edit_weights_mid_build():
+        blob = {"adversarial_state": {"council_weights": {"quant": 1.9, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
+        write_soul_map(lambda b: (b.clear(), b.update(blob)), soul_holder["path"])
+
+    volume, soul, _ = _producer_env(tmp_path, monkeypatch, universe, scorer=_edit_weights_mid_build)
+    soul_holder["path"] = soul
+    at_start = current_weights_digest(soul)
+
+    assert snaps.write_full_universe_snapshot()["published"] is True
+
+    assert json.loads(volume.read_text())["provenance"]["weights_digest"] == at_start
+    assert current_weights_digest(soul) != at_start  # the edit really happened
 
 
 REPO = Path(__file__).resolve().parents[1]
