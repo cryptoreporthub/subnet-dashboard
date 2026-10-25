@@ -15,6 +15,8 @@ import requests
 from internal.subnet_universe import (
     MAX_NETUIDS,
     STALE_GRACE_SECONDS,
+    DropEvidence,
+    MembershipBuild,
     SnapshotBuilder,
     SubnetUniverseProvider,
     UniverseSnapshot,
@@ -75,7 +77,7 @@ def test_t1_empty_state_emergency_registry(universe_tmp):
   built = SnapshotBuilder(
       tmc_fetch=lambda: ({1, 2, 3}, {1: {"netuid": 1}, 2: {"netuid": 2}, 3: {"netuid": 3}}, True),
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
-  ).build(None)
+  ).build(None).snapshot
   assert built.status == "ok"
   assert len(built.netuids) == MAX_NETUIDS
   assert built.netuids[:4] == (0, 1, 2, 3)
@@ -122,7 +124,7 @@ def test_t4_no_truncation_above_max_netuids(universe_tmp):
       tmc_fetch=lambda: (set(big), {n: {"netuid": n} for n in big}, True),
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
   )
-  built = builder.build(None)
+  built = builder.build(None).snapshot
   assert len(built.netuids) == 250
   assert built.cap_reached is False
 
@@ -198,7 +200,7 @@ def test_t8_partial_refresh_does_not_start_removal_clock(universe_tmp):
       tmc_fetch=lambda: (set(), {}, False),
       probe_fetch=lambda netuids, deadline: ({10: None, 11: None, 12: None}, False),
   )
-  built = builder.build(prior)
+  built = builder.build(prior).snapshot
   assert built.refresh_incomplete is True
   for netuid in (10, 11, 12):
       entry = built.validity_map[str(netuid)]
@@ -213,7 +215,7 @@ def test_t9_source_disagreement_retains_member(universe_tmp):
       tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
       probe_fetch=lambda netuids, deadline: ({42: False}, True),
   )
-  built = builder.build(prior)
+  built = builder.build(prior).snapshot
   assert 42 in built.netuids
   entry = built.validity_map["42"]
   assert entry["disputed"] is True
@@ -241,7 +243,7 @@ def test_negative_validity_removal_after_grace(universe_tmp):
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({99: False}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 99 not in built.netuids
 
 
@@ -326,7 +328,7 @@ def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
     built = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({}, True),
-    ).build(None)
+    ).build(None).snapshot
     assert built.status == "emergency_registry"
     assert len(built.netuids) == 0
     assert built.refresh_incomplete is True
@@ -382,7 +384,7 @@ def test_build_probes_full_range_when_tmc_complete():
         tmc_fetch=lambda: (set(range(75)), {n: {"netuid": n} for n in range(75)}, True),
         probe_fetch=probe_fetch,
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert max(probed) >= MAX_NETUIDS - 1
     assert len(built.netuids) > 75
 
@@ -545,7 +547,11 @@ def test_shrink_allowed_incomplete_refresh_grace_eligible_ok():
         {"100": _validity_entry(validity="positive")},
         refresh_incomplete=True,
     )
-    assert _shrink_allowed(prior, built) is True
+    dropped = {
+        130: DropEvidence(tmc=False, probe=False, negative_since=old),
+        132: DropEvidence(tmc=False, probe=False, negative_since=old),
+    }
+    assert _shrink_allowed(prior, MembershipBuild(built, dropped)) is True
 
 
 def test_shrink_allowed_in_grace_blocked():
@@ -560,8 +566,12 @@ def test_shrink_allowed_in_grace_blocked():
     prior = _snapshot_with([130, 132, 100], validity)
     built_incomplete = _snapshot_with([100], {"100": validity["100"]}, refresh_incomplete=True)
     built_complete = _snapshot_with([100], {"100": validity["100"]})
-    assert _shrink_allowed(prior, built_incomplete) is False
-    assert _shrink_allowed(prior, built_complete) is False
+    dropped = {
+        130: DropEvidence(tmc=False, probe=False, negative_since=old),
+        132: DropEvidence(tmc=False, probe=False, negative_since=recent),
+    }
+    assert _shrink_allowed(prior, MembershipBuild(built_incomplete, dropped)) is False
+    assert _shrink_allowed(prior, MembershipBuild(built_complete, dropped)) is False
 
 
 def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
@@ -573,7 +583,7 @@ def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
 
     class _StubBuilder:
         def build(self, _prior):
-            return built
+            return MembershipBuild(built)
 
     provider.set_builder(_StubBuilder())  # type: ignore[arg-type]
     with caplog.at_level(logging.WARNING, logger="internal.subnet_universe"):
@@ -607,7 +617,7 @@ def test_aged_negative_retained_when_probe_rpc_error(universe_tmp, monkeypatch):
         tmc_fetch=lambda: (set(), {}, False),
         probe_fetch=None,
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 105 in built.netuids
     entry = built.validity_map["105"]
     assert entry["validity"] == "negative"
@@ -636,7 +646,7 @@ def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({106: None}, False),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 106 in built.netuids
 
 
@@ -682,7 +692,7 @@ def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_t
             True,
         ),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert built.refresh_incomplete is False
     assert built.message != "Refresh incomplete — retained last-known-good universe"
     assert built.netuids != prior.netuids
@@ -735,7 +745,7 @@ def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
         tmc_fetch=lambda: (set(), {}, False),
         probe_fetch=lambda netuids, deadline: ({201: None, 202: None}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 201 in built.netuids
     assert 202 in built.netuids
     assert built.validity_map["201"].get("refresh_incomplete") is True
@@ -768,7 +778,7 @@ def test_tmc_positive_without_price_retained(universe_tmp):
         tmc_fetch=lambda: ({77}, {77: {"netuid": 77, "name": "SN77"}}, True),
         probe_fetch=lambda netuids, deadline: ({77: None}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 77 in built.netuids
     assert built.validity_map["77"]["validity"] == "positive"
 
@@ -821,7 +831,7 @@ def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok")
 def test_registration_read_marks_registered_netuids_positive(monkeypatch):
     _patch_registration(monkeypatch, [1, 2])
     observed, complete = _default_probe_fetch([0, 1, 2, 129])
-    assert observed == {0: True, 1: True, 2: True, 129: False}
+    assert observed == {1: True, 2: True, 129: False}
     assert complete is True
 
 
@@ -842,7 +852,7 @@ def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, mon
     prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
     builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
 
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     entry = built.validity_map["129"]
     assert entry["validity"] == "negative"
     assert entry["negative_since"]
@@ -857,16 +867,16 @@ def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, mon
         degraded=False,
         validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
     )
-    rebuilt = builder.build(aged)
+    rebuilt = builder.build(aged).snapshot
     assert 129 not in rebuilt.netuids
     assert 1 in rebuilt.netuids
-    assert 129 not in builder.build(rebuilt).netuids
+    assert 129 not in builder.build(rebuilt).snapshot.netuids
 
 
 def test_registered_netuid_missing_from_tmc_stays_positive(universe_tmp, monkeypatch):
     _patch_registration(monkeypatch, [1, 130])
     builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
-    built = builder.build(_prior_snapshot([1]))
+    built = builder.build(_prior_snapshot([1])).snapshot
     assert 130 in built.netuids
     assert built.validity_map["130"]["validity"] == "positive"
 
@@ -875,7 +885,7 @@ def test_chain_member_enters_when_tmc_incomplete_and_prior_snapshot(universe_tmp
     """Replit gap 1: incomplete TaoStats must not hide chain-registered members."""
     _patch_registration(monkeypatch, list(range(1, 131)))
     builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
-    built = builder.build(_prior_snapshot([1, 2, 3]))
+    built = builder.build(_prior_snapshot([1, 2, 3])).snapshot
     assert 130 in built.netuids
     assert built.validity_map["130"]["validity"] == "positive"
 
@@ -884,7 +894,7 @@ def test_chain_member_at_netuid_200_enters_when_outside_probe_range(monkeypatch)
     """Registration positives must enter membership even above MAX_NETUIDS-1 probe list."""
     _patch_registration(monkeypatch, [1, 200])
     builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
-    built = builder.build(_prior_snapshot([1]))
+    built = builder.build(_prior_snapshot([1])).snapshot
     assert 200 in built.netuids
     assert built.validity_map["200"]["validity"] == "positive"
 
@@ -1002,3 +1012,15 @@ def test_default_price_one_does_not_imply_registration(monkeypatch):
     assert complete is True
     assert observed.get(129) is False
     assert observed.get(128) is True
+
+
+def test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete(monkeypatch):
+    """Root is never in NetworksAdded; a cold snapshot must still contain it without claiming chain registration."""
+    _patch_registration(monkeypatch, list(range(1, 129)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(None).snapshot
+    assert 0 in built.netuids
+    assert set(range(1, 129)) <= set(built.netuids)
+    root = built.validity_map["0"]
+    assert "blockmachine_probe" not in root["sources"]
+    assert root["validity"] != "negative"
