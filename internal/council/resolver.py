@@ -529,18 +529,6 @@ def _restore_recently_expired_predictions(
     return restored
 
 
-def _horizon_hours(prediction: Dict[str, Any]) -> float:
-    try:
-        horizon = float(prediction.get("horizon_hours", 0) or 0)
-    except (TypeError, ValueError):
-        horizon = 0.0
-    if horizon > 0:
-        return horizon
-    if str(prediction.get("horizon_type") or "").lower() == "hour":
-        return 1.0
-    return _EXPIRY_DEFAULT_HORIZON_HOURS
-
-
 def _is_expired(
     prediction: Dict[str, Any],
     resolve_at: datetime,
