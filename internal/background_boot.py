@@ -594,13 +594,6 @@ def start_background_workers(*, heavy: Optional[bool] = None) -> None:
     except Exception as exc:
         logger.debug("tmp boot reaper skipped: %s", exc)
 
-    try:
-        from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
-
-        apply_resolver_semantics_patch()
-    except Exception as exc:
-        logger.warning("resolver retry semantics unavailable: %s", exc)
-
     from internal.run_mode import (
         background_heavy_on_web,
         is_worker_mode,

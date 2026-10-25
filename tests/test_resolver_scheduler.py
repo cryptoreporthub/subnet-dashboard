@@ -133,6 +133,8 @@ def test_expire_retires_predictions_past_grace_window():
                 "expert": "quant",
                 "horizon_hours": horizon,
                 "resolve_at": _iso(resolve_at),
+                # Retry cap spent, so expiry does not depend on the lookup retries.
+                "resolve_attempts": resolver._PRICE_RETRY_CAP,
             },
         ],
         "resolved": [],
@@ -234,6 +236,8 @@ def test_expire_skips_non_dict_records():
                 "netuid": 1,
                 "horizon_hours": 24,
                 "resolve_at": _iso(now - timedelta(hours=100)),
+                # Retry cap spent, so expiry does not depend on the lookup retries.
+                "resolve_attempts": resolver._PRICE_RETRY_CAP,
             },
         ],
         "resolved": [],
@@ -298,6 +302,8 @@ def test_resolve_due_predictions_expires_when_no_price(nudge_spy):
                 "expert": "quant",
                 "horizon_hours": horizon,
                 "resolve_at": _iso(now - timedelta(hours=grace + 5)),
+                # Retry cap spent, so expiry does not depend on the lookup retries.
+                "resolve_attempts": resolver._PRICE_RETRY_CAP,
             },
         ],
         "resolved": [],
@@ -443,6 +449,8 @@ def test_scheduler_run_once_expires_stale_predictions(fresh_scheduler):
                 "horizon_hours": horizon,
                 "expert": "quant",
                 "resolve_at": _iso(now - timedelta(hours=grace + 5)),
+                # Retry cap spent, so expiry does not depend on the lookup retries.
+                "resolve_attempts": resolver._PRICE_RETRY_CAP,
             },
         ],
         "resolved": [],

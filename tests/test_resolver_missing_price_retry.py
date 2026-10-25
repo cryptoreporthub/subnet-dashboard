@@ -6,12 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
-
 
 @pytest.fixture
 def resolver(monkeypatch):
-    apply_resolver_semantics_patch()
     import internal.council.resolver as resolver_mod
 
     monkeypatch.setattr(resolver_mod, "_load_json", lambda *args, **kwargs: {}, raising=False)
@@ -84,13 +81,29 @@ def test_real_snapshot_miss_grades_normally(resolver, monkeypatch):
 
 
 def test_expiry_grace_is_four_horizon_hours(resolver):
-    assert resolver._EXPIRY_GRACE_MULTIPLE == 4.0
-
     resolve_at = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
     pred = {"horizon_hours": 1}
 
-    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=3), 2.0) is False
-    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=5), 2.0) is True
+    # Default grace: 3h is still inside 4x1h, 5h is past it.
+    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=3)) is False
+    assert resolver._is_expired(pred, resolve_at, resolve_at + timedelta(hours=5)) is True
+
+
+def test_missing_price_retry_semantics_are_live(resolver, monkeypatch):
+    monkeypatch.setattr(
+        resolver,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ungradeable", 0.0, {"candles_in_window": 0, "price_source": None}),
+        raising=False,
+    )
+    now = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
+    pred = _prediction(now - timedelta(hours=6))
+
+    pred = resolver.resolve_prediction_at_horizon(pred, now=now, live_prices={})
+
+    assert pred["status"] == "pending"
+    assert pred["resolve_attempts"] == 1
+    assert pred["price_data_unavailable"] is True
 
 
 def test_stats_expose_council_and_pump_pending_separately(resolver):

@@ -6,12 +6,9 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
-
 
 @pytest.fixture
 def resolver():
-    apply_resolver_semantics_patch()
     import internal.council.resolver as resolver_mod
 
     return resolver_mod

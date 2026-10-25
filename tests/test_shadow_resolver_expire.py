@@ -32,6 +32,7 @@ def test_shadow_past_grace_expires_in_resolve_due_without_late_grade(tmp_path, m
         "shadow": True,
         "counterfactual": True,
         "price_data_unavailable": True,
+        "resolve_attempts": resolver._PRICE_RETRY_CAP,
     }
     path.write_text(json.dumps({"predictions": [pred], "resolved": [], "stats": {}}), encoding="utf-8")
     monkeypatch.setattr(resolver, "PREDICTIONS_PATH", str(path))

@@ -111,7 +111,10 @@ _LEARNING_DELTA_WRONG = -0.02
 _LEARNING_MIN_WEIGHT = 0.3
 _LEARNING_MAX_WEIGHT = 2.0
 
-_EXPIRY_GRACE_MULTIPLE = 2.0
+# Missing-price retry semantics (#885): rows with unavailable price data stay
+# pending for _PRICE_RETRY_CAP lookups before expiring, then get a 4x grace.
+_PRICE_RETRY_CAP = max(1, int(os.environ.get("RESOLVER_PRICE_RETRY_CAP", "3")))
+_EXPIRY_GRACE_MULTIPLE = float(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE", "4.0"))
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
 
 _replay_mode: ContextVar[bool] = ContextVar("resolver_replay_mode", default=False)
@@ -544,6 +547,15 @@ def _is_expired(
     now: datetime,
     grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
 ) -> bool:
+    # The second expiry check in one resolve pass must not consume the final
+    # retry; the next scheduler tick gets the bounded final attempt.
+    if prediction.pop("_price_lookup_attempted", False):
+        return False
+    # Give real ledger rows a bounded chance to obtain their historical price
+    # before classifying them as genuine expiry.
+    attempts = int(prediction.get("resolve_attempts") or 0)
+    if attempts < _PRICE_RETRY_CAP and ("id" in prediction or "resolve_at" in prediction):
+        return False
     if now < resolve_at:
         return False
     grace = timedelta(hours=_horizon_hours(prediction) * grace_multiple)
@@ -557,12 +569,11 @@ def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, A
     prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
     prediction["resolved_price"] = None
     prediction["actual_pct"] = None
-    prediction.setdefault(
-        "retirement_reason",
-        "missing_price_at_horizon"
-        if prediction.get("price_data_unavailable")
-        else "genuine_expiry",
-    )
+    if prediction.get("price_data_unavailable"):
+        prediction["expired_reason"] = "price_data_unavailable"
+        prediction["retirement_reason"] = "missing_price_at_horizon"
+    else:
+        prediction.setdefault("retirement_reason", "genuine_expiry")
     return prediction
 
 
@@ -586,7 +597,36 @@ def lookup_horizon_price(
     cache_path: Optional[str] = None,
     cache: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, float, Dict[str, Any]]:
-    """Return (status, price, meta). status: ok | ungradeable."""
+    """Return (status, price, meta). status: ok | ungradeable.
+
+    A miss counts one resolve attempt and flags ``price_data_unavailable``.
+    """
+    status, price, meta = _lookup_horizon_price(
+        prediction,
+        resolve_at=resolve_at,
+        now=now,
+        live_prices=live_prices,
+        cache_path=cache_path,
+        cache=cache,
+    )
+    if status == "ok" and price > 0:
+        prediction.pop("price_data_unavailable", None)
+        return status, price, meta
+    prediction["resolve_attempts"] = int(prediction.get("resolve_attempts") or 0) + 1
+    prediction["price_data_unavailable"] = True
+    prediction["_price_lookup_attempted"] = True
+    return status, price, meta
+
+
+def _lookup_horizon_price(
+    prediction: Dict[str, Any],
+    *,
+    resolve_at: datetime,
+    now: datetime,
+    live_prices: Optional[Dict[Any, float]] = None,
+    cache_path: Optional[str] = None,
+    cache: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, float, Dict[str, Any]]:
     cache = cache if cache is not None else _load_json(cache_path or PRICE_CACHE_PATH, {})
     status, price, meta = price_at_resolve_at(
         prediction.get("netuid"),
