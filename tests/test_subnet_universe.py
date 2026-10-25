@@ -1098,3 +1098,22 @@ def test_chain_unregistered_row_leaves_after_grace_even_if_tmc_is_down(universe_
         probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
     )
     assert 42 not in builder.build(prior).snapshot.netuids
+
+
+def test_failed_chain_read_does_not_undo_a_chain_negative(universe_tmp):
+    """A chain-negative netuid that TMC still lists must stay negative, with its grace clock, across a failed chain read."""
+    started = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+    prior = _prior_snapshot([42])
+    prior = replace(
+        prior,
+        validity_map={
+            "42": _validity_entry(validity="negative", sources=["taomarketcap"], disputed=True, negative_since=started),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({}, False),
+    )
+    entry = builder.build(prior).snapshot.validity_map["42"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"] == started
