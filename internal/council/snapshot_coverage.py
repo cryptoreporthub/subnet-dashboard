@@ -288,6 +288,11 @@ def _horizon_block(
     }
 
 
+def _has_chain_provenance(receipt: Dict[str, Any]) -> bool:
+    chain = ChainRead.parse(receipt.get("chain"))
+    return chain is not None and chain.rpc is not None
+
+
 def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
     """Fail closed — score only from fresh, non-emergency, complete membership."""
     if not receipt.get("fresh"):
@@ -301,9 +306,7 @@ def membership_allows_admission(receipt: Dict[str, Any]) -> bool:
         return False
     if receipt.get("refresh_incomplete"):
         return False
-    if ChainRead.parse(receipt.get("chain")) is None:
-        return False
-    return True
+    return _has_chain_provenance(receipt)
 
 
 def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
@@ -322,8 +325,8 @@ def membership_admission_block_reason(receipt: Dict[str, Any]) -> Optional[str]:
         return "cap_reached"
     if receipt.get("refresh_incomplete"):
         return "refresh_incomplete"
-    if ChainRead.parse(receipt.get("chain")) is None:
-        return "no_chain_read"
+    if not _has_chain_provenance(receipt):
+        return "membership_without_chain_provenance"
     return "membership_not_admissible"
 
 

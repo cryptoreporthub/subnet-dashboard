@@ -11,7 +11,7 @@ PINNED_HASH = "0x" + "ef" * 32
 
 
 def chain_read(netuids: Any) -> ChainRead:
-    return ChainRead(PINNED_HASH, tuple(sorted(int(n) for n in netuids)))
+    return ChainRead(PINNED_HASH, tuple(sorted(int(n) for n in netuids)), "finney")
 
 
 def chain_dict(netuids: Any) -> Dict[str, Any]:
