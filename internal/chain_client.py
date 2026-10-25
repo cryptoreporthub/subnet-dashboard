@@ -16,6 +16,7 @@ This is more reliable than parsing raw SCALE events without chain metadata.
 
 import logging
 import os
+import socket
 import sqlite3
 import struct
 import threading
@@ -26,6 +27,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
+import urllib3
+from requests.adapters import HTTPAdapter
 
 from internal import build_cost
 from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
@@ -305,6 +308,142 @@ def _set_stream_read_timeout(response: requests.Response, remaining: float) -> N
         sock.settimeout(remaining)
 
 
+class _SockHolder:
+    """Holds the live connection socket so a timer can hang up at the deadline."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._sock = None
+        self.expired = False
+
+    def register(self, sock) -> None:
+        with self._lock:
+            self._sock = sock
+            expired = self.expired
+        if expired:
+            self._hang_up(sock)
+
+    def expire(self) -> None:
+        with self._lock:
+            self.expired = True
+            sock = self._sock
+        if sock is not None:
+            self._hang_up(sock)
+
+    @staticmethod
+    def _hang_up(sock) -> None:
+        # shutdown, not close: close() from another thread does not reliably wake a blocked recv
+        try:
+            sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+
+
+_active_holder = threading.local()
+
+
+def _register_socket(sock) -> None:
+    holder = getattr(_active_holder, "holder", None)
+    if holder is not None:
+        holder.register(sock)
+
+
+class _SpyHTTPConnection(urllib3.connection.HTTPConnection):
+    def connect(self) -> None:
+        super().connect()
+        _register_socket(self.sock)
+
+
+class _SpyHTTPSConnection(urllib3.connection.HTTPSConnection):
+    def connect(self) -> None:
+        super().connect()
+        _register_socket(self.sock)
+
+
+class _SpyHTTPPool(urllib3.HTTPConnectionPool):
+    ConnectionCls = _SpyHTTPConnection
+
+
+class _SpyHTTPSPool(urllib3.HTTPSConnectionPool):
+    ConnectionCls = _SpyHTTPSConnection
+
+
+class _DeadlineAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        super().init_poolmanager(*args, **kwargs)
+        self.poolmanager.pool_classes_by_scheme = {"http": _SpyHTTPPool, "https": _SpyHTTPSPool}
+
+
+def _stream_post(
+    endpoint: str,
+    payload: Dict[str, Any],
+    timeout: float,
+    deadline_monotonic: float,
+) -> requests.Response:
+    """POST with a hard wall-clock cap over connect, status, headers and body.
+
+    ``requests.post`` blocks inside header parsing and its socket timeout restarts on
+    every received byte, so a slow header drip outlives any deadline checked after it
+    returns. A timer shuts the connection's socket down at the deadline instead, so the
+    blocked read ends and nothing outlives the deadline.
+    """
+    remaining = deadline_monotonic - time.monotonic()
+    if remaining <= 0:
+        raise requests.Timeout("rpc deadline exceeded")
+    slice_timeout = min(timeout, remaining)
+    holder = _SockHolder()
+    _active_holder.holder = holder
+    timer = threading.Timer(remaining, holder.expire)
+    timer.daemon = True
+    timer.start()
+    session = requests.Session()
+    adapter = _DeadlineAdapter()
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    response = None
+    try:
+        response = session.post(
+            endpoint,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=(slice_timeout, slice_timeout),
+            stream=True,
+        )
+        body = bytearray()
+        chunks = response.iter_content(chunk_size=1)
+        while True:
+            remaining = deadline_monotonic - time.monotonic()
+            if remaining <= 0:
+                raise requests.Timeout("rpc deadline exceeded")
+            _set_stream_read_timeout(response, remaining)
+            try:
+                chunk = next(chunks)
+            except StopIteration:
+                break
+            if time.monotonic() >= deadline_monotonic:
+                raise requests.Timeout("rpc deadline exceeded")
+            if chunk:
+                body.extend(chunk)
+        if time.monotonic() >= deadline_monotonic:
+            raise requests.Timeout("rpc deadline exceeded")
+        response._content = bytes(body)
+        return response
+    except requests.Timeout:
+        if response is not None:
+            response.close()
+        raise
+    except Exception as exc:
+        if response is not None:
+            response.close()
+        if holder.expired or time.monotonic() >= deadline_monotonic:
+            raise requests.Timeout("rpc deadline exceeded") from exc
+        raise
+    finally:
+        timer.cancel()
+        _active_holder.holder = None
+        session.close()
+
+
 def _timed_post(
     endpoint: str,
     payload: Dict[str, Any],
@@ -326,43 +465,7 @@ def _timed_post(
                 headers={"Content-Type": "application/json"},
                 timeout=timeout,
             )
-        remaining = deadline_monotonic - time.monotonic()
-        if remaining <= 0:
-            raise requests.Timeout("rpc deadline exceeded")
-        slice_timeout = min(timeout, remaining)
-        response = requests.post(
-            endpoint,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=(slice_timeout, slice_timeout),
-            stream=True,
-        )
-        try:
-            body = bytearray()
-            chunks = response.iter_content(chunk_size=1)
-            while True:
-                remaining = deadline_monotonic - time.monotonic()
-                if remaining <= 0:
-                    raise requests.Timeout("rpc deadline exceeded")
-                _set_stream_read_timeout(response, remaining)
-                try:
-                    chunk = next(chunks)
-                except StopIteration:
-                    break
-                if time.monotonic() >= deadline_monotonic:
-                    raise requests.Timeout("rpc deadline exceeded")
-                if chunk:
-                    body.extend(chunk)
-            if time.monotonic() >= deadline_monotonic:
-                raise requests.Timeout("rpc deadline exceeded")
-            response._content = bytes(body)
-            return response
-        except requests.Timeout:
-            response.close()
-            raise
-        except Exception:
-            response.close()
-            raise
+        return _stream_post(endpoint, payload, timeout, deadline_monotonic)
     finally:
         build_cost.record("rpc", time.perf_counter() - started)
 

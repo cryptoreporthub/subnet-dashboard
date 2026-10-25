@@ -114,7 +114,11 @@ def _install_slow_drip_requests_post(monkeypatch, *, chunk_delay: float = 0.03) 
         resp.close = lambda: None
         return resp
 
-    monkeypatch.setattr(chain_client_mod.requests, "post", fake_post)
+    monkeypatch.setattr(
+        chain_client_mod.requests.Session,
+        "post",
+        lambda self, endpoint, **kwargs: fake_post(endpoint, **kwargs),
+    )
 
 
 def test_timed_post_slow_drip_aborts_at_absolute_deadline(monkeypatch):
