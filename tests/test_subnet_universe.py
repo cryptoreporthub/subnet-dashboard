@@ -831,7 +831,7 @@ def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok")
 def test_registration_read_marks_registered_netuids_positive(monkeypatch):
     _patch_registration(monkeypatch, [1, 2])
     observed, complete = _default_probe_fetch([0, 1, 2, 129])
-    assert observed == {0: False, 1: True, 2: True, 129: False}
+    assert observed == {1: True, 2: True, 129: False}
     assert complete is True
 
 

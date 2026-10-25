@@ -165,7 +165,9 @@ def _default_probe_fetch(
     if deadline is not None and time.monotonic() >= deadline:
         return {}, False
     registered = set(members)
-    observed: Dict[int, Optional[bool]] = {n: n in registered for n in netuids}
+    observed: Dict[int, Optional[bool]] = {
+        n: n in registered for n in netuids if n != ROOT_NETUID
+    }
     for n in registered:
         if n not in observed:
             observed[n] = True
@@ -318,7 +320,10 @@ def _compute_membership(
 ) -> Tuple[List[int], Dict[str, Any], bool, bool, Dict[int, DropEvidence]]:
     """Resolve membership; a netuid leaves only on this cycle's evidence after the 48h grace."""
     now = datetime.now(timezone.utc)
-    candidates = set(prior_members) | set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
+    observed_members = set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
+    candidates = set(prior_members) | observed_members
+    if observed_members:
+        candidates.add(ROOT_NETUID)
     validity_map: Dict[str, Any] = {}
     dropped: Dict[int, DropEvidence] = {}
     refresh_incomplete = not (tmc_complete and probe_complete)
