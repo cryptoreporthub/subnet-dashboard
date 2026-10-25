@@ -501,3 +501,51 @@ def test_refresh_script_with_the_rpcs_down_exits_nonzero_and_leaves_the_seed(tmp
 
     assert rc != 0
     assert hashlib.sha256(dest.read_bytes()).hexdigest() == before
+
+
+def _edit(path, value):
+    """Return a mutator that sets the dotted ``path`` (``None`` value deletes the key)."""
+
+    def apply(snap):
+        node = snap
+        *parents, leaf = path.split(".")
+        for key in parents:
+            node = node[key]
+        if value is None:
+            node.pop(leaf)
+        else:
+            node[leaf] = value
+
+    return apply
+
+
+def _add_day_row(snap):
+    snap["day"].append({"netuid": 99, "total_score": 1.0, "name": "X"})
+    snap["hour"].append({"netuid": 99, "total_score": 1.0, "name": "X"})
+
+
+_INCONSISTENT = {
+    "missing_provenance": _edit("provenance", None),
+    "generation_mismatch": _edit("provenance.membership_generation", "mg1:0000000000000000"),
+    "receipt_generation_mismatch": _edit("coverage.membership.generation", "mg1:0000000000000000"),
+    "edited_expected_list": _edit("coverage.membership.expected_netuids", [1, 2, 3]),
+    "bad_block": _edit("provenance.membership_block_hash", "0x1234"),
+    "block_differs_from_chain": _edit("provenance.membership_block_hash", "0x" + "11" * 32),
+    "rpc_is_a_url": _edit("provenance.membership_rpc", "https://rpc.example/?key=k"),
+    "no_input_digest": _edit("provenance.input_digest", None),
+    "no_weights_digest": _edit("provenance.weights_digest", None),
+    "row_outside_membership": _add_day_row,
+    "no_expected_netuids_key": _edit("coverage.membership.expected_netuids", None),
+    "no_fresh_key": _edit("coverage.membership.fresh", None),
+}
+
+
+def test_complete_snapshot_with_consistent_provenance_is_complete():
+    assert snaps.is_complete_snapshot(complete_snapshot_payload()) is True
+
+
+@pytest.mark.parametrize("case", sorted(_INCONSISTENT))
+def test_complete_requires_consistent_provenance(case):
+    snap = complete_snapshot_payload()
+    _INCONSISTENT[case](snap)
+    assert snaps.is_complete_snapshot(snap) is False

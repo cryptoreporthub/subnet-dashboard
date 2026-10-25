@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from internal.chain_read import ChainRead
 from internal.council.scorer_identity import stamp_scorer_fields
+from internal.council.snapshot_coverage import membership_generation
 
 PINNED_HASH = "0x" + "ef" * 32
 
@@ -16,6 +17,31 @@ def chain_read(netuids: Any) -> ChainRead:
 
 def chain_dict(netuids: Any) -> Dict[str, Any]:
     return chain_read(netuids).to_dict()
+
+
+def receipt_provenance(netuids: Any) -> Dict[str, Any]:
+    """The chain-provenance fields a real membership receipt carries."""
+    chain = chain_read(netuids)
+    return {
+        "expected_netuids": list(chain.netuids),
+        "generation": membership_generation(chain.netuids),
+        "block_hash": chain.block_hash,
+        "rpc": chain.rpc,
+        "chain": chain.to_dict(),
+        "fresh": True,
+    }
+
+
+def snapshot_provenance(netuids: Any, *, resolved_at: str = "2026-10-17T00:00:00Z") -> Dict[str, Any]:
+    chain = chain_read(netuids)
+    return {
+        "membership_generation": membership_generation(chain.netuids),
+        "membership_block_hash": chain.block_hash,
+        "membership_rpc": chain.rpc,
+        "membership_resolved_at": resolved_at,
+        "weights_digest": "w" * 64,
+        "input_digest": "i" * 64,
+    }
 
 
 def complete_snapshot_rows(
@@ -42,10 +68,11 @@ def complete_snapshot_payload(
             "build_started_at": written_at,
             "hour": hour,
             "day": day,
+            "provenance": snapshot_provenance(expected),
             "coverage": {
                 "complete": True,
                 "published": True,
-                "membership": {"expected_netuids": expected, "chain": chain_dict(expected)},
+                "membership": receipt_provenance(expected),
                 "day": {
                     "complete": True,
                     "expected": expected,
