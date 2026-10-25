@@ -44,7 +44,7 @@ def _membership(active=ACTIVE, placeholders=PLACEHOLDERS, placeholder_validity=_
         status="ok",
         degraded=False,
         validity_map=validity,
-        chain=ChainRead(PINNED_HASH, tuple(sorted(active))) if active else None,
+        chain=ChainRead(PINNED_HASH, tuple(sorted(active)), "finney") if active else None,
     )
 
 
@@ -110,7 +110,7 @@ def _receipt_for(membership):
 def test_receipt_expects_exactly_the_chain_read():
     receipt = _receipt_for(_membership())
     assert receipt["expected_netuids"] == list(ACTIVE)
-    assert receipt["chain"] == {"block_hash": PINNED_HASH, "netuids": list(ACTIVE)}
+    assert receipt["chain"] == {"block_hash": PINNED_HASH, "netuids": list(ACTIVE), "rpc": "finney"}
 
 
 @pytest.mark.parametrize(
