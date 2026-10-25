@@ -202,3 +202,60 @@ def test_resolve_due_predictions_uses_one_cycle_price_snapshot(
 
     assert result["resolved_now"]
     _report_count("test_resolve_due_predictions_uses_one_cycle_price_snapshot", calls, 1)
+
+
+def test_past_grace_without_fetch_keeps_one_price_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A no-op hydrate must not parse price_cache once per past-grace row."""
+    calls = _price_counter(monkeypatch)
+    now = datetime.now(timezone.utc)
+    resolve_at = now - timedelta(hours=6)
+    pending = [
+        _prediction(f"past-grace-{netuid}", netuid, resolve_at, horizon_hours=1.0)
+        for netuid in (7, 8, 9)
+    ]
+    cache = {}
+    for netuid in (7, 8, 9):
+        cache.update(_cache(netuid, resolve_at))
+    _write_json(resolver.PREDICTIONS_PATH, {"predictions": pending, "resolved": [], "stats": {}})
+    _write_json(resolver.PRICE_CACHE_PATH, cache)
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *_args, **_kwargs: False)
+
+    result = resolver.resolve_due_predictions(
+        subnets=[{"netuid": netuid, "price": 110.0} for netuid in (7, 8, 9)]
+    )
+
+    assert len(result["resolved_now"]) == 3
+    _report_count("test_past_grace_without_fetch_keeps_one_price_snapshot", calls, 1)
+
+
+def test_past_grace_reloads_price_cache_after_dispatched_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = _price_counter(monkeypatch)
+    now = datetime.now(timezone.utc)
+    resolve_at = now - timedelta(hours=6)
+    pending = [
+        _prediction(f"fetched-{netuid}", netuid, resolve_at, horizon_hours=1.0)
+        for netuid in (7, 8, 9)
+    ]
+    cache = {}
+    for netuid in (7, 8, 9):
+        cache.update(_cache(netuid, resolve_at))
+    _write_json(resolver.PREDICTIONS_PATH, {"predictions": pending, "resolved": [], "stats": {}})
+    _write_json(resolver.PRICE_CACHE_PATH, cache)
+    monkeypatch.setattr(resolver, "_ensure_subnet_snapshot", lambda *_args, **_kwargs: False)
+    dispatched = {"n": 0}
+
+    def _hydrate(_uid):
+        dispatched["n"] += 1
+        return dispatched["n"] == 1
+
+    monkeypatch.setattr(resolver, "hydrate_candles_for_netuid", _hydrate)
+
+    resolver.resolve_due_predictions(
+        subnets=[{"netuid": netuid, "price": 110.0} for netuid in (7, 8, 9)]
+    )
+
+    _report_count("test_past_grace_reloads_price_cache_after_dispatched_fetch", calls, 2)

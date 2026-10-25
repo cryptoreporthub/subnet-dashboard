@@ -3081,8 +3081,9 @@ def _build_top_picks_cached() -> Dict[str, Any]:
     now = time.time()
     cached = _TOP_PICKS_CACHE.get("payload")
     if isinstance(cached, dict) and now - float(_TOP_PICKS_CACHE.get("at") or 0) < _TOP_PICKS_TTL:
-        return cached
-    if isinstance(cached, dict):
+        if _top_picks_cacheable(cached):
+            return cached
+    elif isinstance(cached, dict) and _top_picks_cacheable(cached):
         _kick_top_picks_background_refresh()
         return cached
     # A single cold caller earns a bounded real build so the first visible

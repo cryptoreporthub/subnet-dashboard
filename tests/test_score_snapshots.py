@@ -24,7 +24,7 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
         written_at="2026-07-26T00:00:00Z",
     )
     payload["count"] = 3
-    snaps.save_score_snapshot(payload, str(path))
+    snaps.publish_complete_snapshot(payload, str(path))
     ranked = snaps.rank_subnets_by_snapshot(
         [{"netuid": 1}, {"netuid": 50}, {"netuid": 99}, {"netuid": 7}],
         path=str(path),
@@ -38,7 +38,7 @@ def test_stale_snapshot_is_still_served_as_aged(tmp_path, monkeypatch):
 
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
-    snaps.save_score_snapshot(
+    snaps.publish_complete_snapshot(
         complete_snapshot_payload(
             day_rows=[{"netuid": 1, "total_score": 1.0}],
             written_at="2020-01-01T00:00:00Z",
@@ -387,7 +387,7 @@ def test_timeout_second_tick_skips_second_write(monkeypatch, tmp_path):
         write_calls["n"] += 1
         time.sleep(3)
         payload = _published_payload(count=1)
-        snaps.save_score_snapshot(payload, str(path))
+        snaps.publish_complete_snapshot(payload, str(path))
         return payload
 
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
@@ -420,7 +420,7 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
         write_calls["n"] += 1
         time.sleep(2)
         payload = _published_payload(count=1)
-        snaps.save_score_snapshot(payload, str(path))
+        snaps.publish_complete_snapshot(payload, str(path))
         return payload
 
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)
@@ -439,7 +439,7 @@ def test_timeout_deferred_completion_allows_later_tick(monkeypatch, tmp_path):
     def _fast_write(**_kwargs):
         write_calls["n"] += 1
         payload = _published_payload(count=1)
-        pub = snaps.save_score_snapshot(payload, str(path))
+        pub = snaps.publish_complete_snapshot(payload, str(path))
         return {
             "ok": True,
             "published": pub.get("published"),
@@ -497,7 +497,7 @@ def test_timeout_deferred_completion_rearms_when_registered(monkeypatch, tmp_pat
         write_calls["n"] += 1
         time.sleep(2)
         payload = _published_payload(count=1)
-        snaps.save_score_snapshot(payload, str(path))
+        snaps.publish_complete_snapshot(payload, str(path))
         return payload
 
     monkeypatch.setattr(snaps, "build_full_universe_snapshot", _slow_build)

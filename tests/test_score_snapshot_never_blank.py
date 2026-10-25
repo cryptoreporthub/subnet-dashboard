@@ -23,12 +23,16 @@ def _paths(tmp_path, monkeypatch, request):
 
 @pytest.mark.no_path_isolation
 def test_shipped_seed_is_a_complete_snapshot():
+    from internal.council.seed_quality import validate_shipped_seed
+
     path = snaps.SCORE_SNAPSHOT_SEED_PATH
     if not os.path.isfile(path):
         pytest.skip("seed not generated in this checkout")
     with open(path, encoding="utf-8") as handle:
         payload = json.load(handle)
     assert snaps.is_complete_snapshot(payload)
+    ok, reason = validate_shipped_seed(payload)
+    assert ok, reason
 
 
 @pytest.mark.no_path_isolation
@@ -42,10 +46,10 @@ def test_seed_is_outside_the_volume_mount_and_inside_the_image():
 
 def test_publish_refuses_an_incomplete_snapshot_and_leaves_the_served_file(tmp_path):
     good = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
-    snaps.save_score_snapshot(good, snaps.SCORE_SNAPSHOTS_PATH)
+    snaps.publish_complete_snapshot(good, snaps.SCORE_SNAPSHOTS_PATH)
     before = open(snaps.SCORE_SNAPSHOTS_PATH, "rb").read()
     bad = {"written_at": "2026-01-01T00:00:00Z", "day": [], "coverage": {"complete": False}}
-    result = snaps.save_score_snapshot(bad, snaps.SCORE_SNAPSHOTS_PATH)
+    result = snaps.publish_complete_snapshot(bad, snaps.SCORE_SNAPSHOTS_PATH)
     assert result.get("published") is False
     assert result.get("refused") == "incomplete"
     assert open(snaps.SCORE_SNAPSHOTS_PATH, "rb").read() == before
