@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -185,3 +187,70 @@ def test_unprovenanced_membership_gates_the_producer_and_keeps_last_good(tmp_pat
     assert volume.read_bytes() == before
     served = snaps.read_served_snapshot()
     assert served.servable and served.state.value in ("fresh", "aged")
+
+
+REPO = Path(__file__).resolve().parents[1]
+ROWS = [
+    {"netuid": 2, "name": "B", "price": 2.0, "volume": 20.0},
+    {"netuid": 1, "name": "A", "price": 1.0, "volume": 10.0},
+]
+
+
+def _write_soul_map(path, *, quant=1.0, signal_tweak=None):
+    blob = {"adversarial_state": {"council_weights": {"quant": quant, "hype": 1.0, "dark_horse": 1.0, "technical": 1.0}}}
+    if signal_tweak is not None:
+        blob["adversarial_state"]["signal_weights"] = {"day": signal_tweak}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(blob))
+    return str(path)
+
+
+_DIGEST_PROBE = """
+import json
+from internal.council.scorer_identity import compute_input_digest, current_scorer_digest, current_weights_digest
+rows = %r
+print(json.dumps([current_weights_digest(), compute_input_digest("mg1:x", current_scorer_digest(), rows, {"quant": 1.0})]))
+"""
+
+
+def _digests_from(cwd):
+    out = subprocess.run(
+        [sys.executable, "-c", _DIGEST_PROBE % (ROWS,)],
+        cwd=cwd,
+        env={**os.environ, "PYTHONPATH": str(REPO), "DISABLE_BACKGROUND_SCANS": "1"},
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return json.loads(out.stdout)
+
+
+def test_digests_are_cwd_independent(tmp_path):
+    # A decoy soul_map in the other cwd: a cwd-relative read would pick it up.
+    elsewhere = tmp_path / "elsewhere"
+    _write_soul_map(elsewhere / "data" / "soul_map.json", quant=1.7)
+    assert _digests_from(REPO) == _digests_from(elsewhere)
+
+
+def test_weights_digest_follows_council_and_signal_weights(tmp_path):
+    from internal.council.scorer_identity import current_weights_digest
+
+    base = current_weights_digest(_write_soul_map(tmp_path / "a.json"))
+    assert current_weights_digest(_write_soul_map(tmp_path / "a2.json")) == base
+    council = current_weights_digest(_write_soul_map(tmp_path / "b.json", quant=1.5))
+    signal = current_weights_digest(_write_soul_map(tmp_path / "c.json", signal_tweak={"rsi_crossover": 1.9}))
+    assert len({base, council, signal}) == 3
+
+
+def test_input_digest_covers_rows_and_weights():
+    from internal.council.scorer_identity import compute_input_digest
+
+    def digest(rows=ROWS, weights=None, generation="mg1:a", scorer="s1"):
+        return compute_input_digest(generation, scorer, rows, weights or {"quant": 1.0})
+
+    base = digest()
+    assert digest(rows=list(reversed(ROWS))) == base  # row order is not an input
+    assert digest(rows=[{**ROWS[0], "price": 9.0}, ROWS[1]]) != base
+    assert digest(weights={"quant": 1.1}) != base
+    assert digest(generation="mg1:b") != base
+    assert digest(scorer="s2") != base
