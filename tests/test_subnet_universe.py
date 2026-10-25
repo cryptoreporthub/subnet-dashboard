@@ -1068,3 +1068,33 @@ def test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete(m
     root = built.validity_map["0"]
     assert "blockmachine_probe" not in root["sources"]
     assert root["validity"] != "negative"
+
+
+def test_complete_chain_read_beats_a_failed_tmc_read(universe_tmp):
+    """Live gap: with TMC down and the chain read complete, a chain-unregistered netuid must still go negative."""
+    prior = _prior_snapshot([42, 43])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    built = builder.build(prior).snapshot
+    assert built.validity_map["42"]["validity"] == "negative"
+    assert built.validity_map["43"]["validity"] == "positive"
+    assert 42 in built.netuids
+
+
+def test_chain_unregistered_row_leaves_after_grace_even_if_tmc_is_down(universe_tmp):
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _prior_snapshot([42, 43])
+    prior = replace(
+        prior,
+        validity_map={
+            **prior.validity_map,
+            "42": _validity_entry(validity="negative", sources=[], negative_since=old),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    assert 42 not in builder.build(prior).snapshot.netuids
