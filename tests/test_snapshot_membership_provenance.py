@@ -7,6 +7,8 @@ TMC fetch are injected, replaying a recorded chain read.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -389,3 +391,113 @@ def test_producer_gate_not_current_after_membership_or_weights_change(tmp_path, 
     monkeypatch.setattr(su, "get_snapshot", lambda: _universe([1, 2]))
     assert snaps.volume_has_fresh_complete_snapshot() is False
     assert snaps.read_served_snapshot().servable
+
+
+def _tmc_for(netuids, extra=()):
+    ids = set(netuids) | set(extra)
+
+    def tmc():
+        rows = {n: {"netuid": n, "name": f"Net {n}", "price": 1.0 + n / 100, "volume": 1000.0 + n} for n in ids}
+        return ids, rows, True
+
+    return tmc
+
+
+@pytest.fixture
+def real_membership(recorded_providers):
+    """The universe that SnapshotBuilder resolves from the recorded chain read (a real refresh)."""
+    chain = su._read_chain()
+    built = su.SnapshotBuilder(tmc_fetch=_tmc_for(chain.netuids, extra=[9999])).build(None).snapshot
+    return built
+
+
+def _seed(tmp_path, membership):
+    from internal.council import build_seed_snapshot as seed_build
+
+    out = seed_build.build_image_seed_snapshot(
+        membership=membership, volume_path=str(tmp_path / "seed.json"), cycle_path=str(tmp_path / "cycle.json")
+    )
+    return out, tmp_path / "seed.json"
+
+
+def test_seed_scores_exactly_the_membership_result(tmp_path, monkeypatch, real_membership):
+    _write_soul_map(tmp_path / "soul" / "soul_map.json")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(tmp_path / "soul" / "soul_map.json"))
+    chain = real_membership.chain
+    dereg = chain.netuids[5]
+    # The chain no longer lists `dereg`; its universe row survives the 48h grace.
+    moved = dataclasses.replace(
+        real_membership,
+        chain=ChainRead(chain.block_hash, tuple(n for n in chain.netuids if n != dereg), chain.rpc),
+    )
+    assert dereg in {r["netuid"] for r in moved.rows}
+
+    out, path = _seed(tmp_path, moved)
+
+    assert out["published"] is True
+    snap = json.loads(path.read_text())
+    expected = [n for n in chain.netuids if n != dereg]
+    assert sorted(r["netuid"] for r in snap["day"]) == expected
+    assert 9999 not in {r["netuid"] for r in snap["day"]}
+    assert snap["provenance"]["membership_generation"] == cov.membership_generation(expected)
+    assert snap["provenance"]["membership_block_hash"] == chain.block_hash
+    assert snap["provenance"]["membership_rpc"] == chain.rpc
+
+
+_REFUSALS = {
+    "no_block": (lambda m: dataclasses.replace(m, chain=None), "membership_without_chain_provenance"),
+    "no_rpc": (
+        lambda m: dataclasses.replace(m, chain=ChainRead(m.chain.block_hash, m.chain.netuids, None)),
+        "membership_without_chain_provenance",
+    ),
+    "degraded": (lambda m: dataclasses.replace(m, status="degraded", degraded=True), "degraded"),
+    "emergency": (lambda m: dataclasses.replace(m, status="emergency_registry", degraded=True), "emergency_registry"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(_REFUSALS))
+def test_seed_refuses_unprovenanced_or_inadmissible_membership(tmp_path, real_membership, case):
+    mutate, reason = _REFUSALS[case]
+
+    out, path = _seed(tmp_path, mutate(real_membership))
+
+    assert out["published"] is False
+    assert out["refused"] == reason
+    assert not path.exists()
+
+
+def _load_refresh_script():
+    spec = importlib.util.spec_from_file_location("refresh_score_snapshot_seed", REPO / "scripts" / "refresh_score_snapshot_seed.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_refresh_script_builds_the_seed_from_the_chain_receipt_path(tmp_path, monkeypatch, recorded_providers):
+    _write_soul_map(tmp_path / "soul" / "soul_map.json")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(tmp_path / "soul" / "soul_map.json"))
+    chain = su._read_chain()
+    monkeypatch.setattr(su, "_default_tmc_fetch", _tmc_for(chain.netuids))
+    dest = tmp_path / "seed.json"
+
+    rc = _load_refresh_script().main(["--build-from-chain", "--dest", str(dest)])
+
+    assert rc == 0
+    seed = json.loads(dest.read_text())
+    assert [r["netuid"] for r in seed["day"]] and sorted(r["netuid"] for r in seed["day"]) == list(chain.netuids)
+    assert seed["provenance"]["membership_block_hash"] == RECORDED_HEAD
+    assert seed["provenance"]["membership_rpc"] == "blockmachine"
+    assert seed["provenance"]["membership_generation"] == "mg1:2324225a288eb818"
+
+
+def test_refresh_script_with_the_rpcs_down_exits_nonzero_and_leaves_the_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr(chain_cfg, "rpc_provider_clients", lambda: [("finney", _DeadClient()), ("blockmachine", _DeadClient())])
+    monkeypatch.setattr(su, "_default_tmc_fetch", _tmc_for(range(1, 20)))
+    dest = tmp_path / "seed.json"
+    dest.write_text('{"keep": "me"}')
+    before = hashlib.sha256(dest.read_bytes()).hexdigest()
+
+    rc = _load_refresh_script().main(["--build-from-chain", "--dest", str(dest)])
+
+    assert rc != 0
+    assert hashlib.sha256(dest.read_bytes()).hexdigest() == before
