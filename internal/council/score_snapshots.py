@@ -460,7 +460,13 @@ def volume_has_fresh_complete_snapshot(
     age = _snapshot_age_for_path(volume_path, snap)
     if age is None:
         return False
-    return ttl <= 0 or age <= ttl
+    if ttl > 0 and age > ttl:
+        return False
+    # Readers keep serving a moved snapshot; only the producer must rebuild it.
+    if snapshot_membership_current(snap) is False:
+        return False
+    built_with = (snap.get("provenance") or {}).get("weights_digest")
+    return built_with is None or built_with == current_weights_digest()
 
 
 def _served_snapshot_tuple(
