@@ -208,12 +208,12 @@ def _merge_sources(
     if probe_positive is True and "blockmachine_probe" not in sources:
         sources.append("blockmachine_probe")
 
-    if tmc_positive is True and probe_positive is False:
+    if probe_positive is False and tmc_positive is not False:
         # Owner rule: the chain wins. A complete chain read that does not list the netuid
-        # takes it out of expected now, whatever TaoMarketCap still says. The row keeps its grace.
+        # takes it out of expected now, whatever TaoMarketCap says or fails to say. The row keeps its grace.
         if not negative_since:
             negative_since = _now_iso()
-        return "negative", sources, True, negative_since, False
+        return "negative", sources, tmc_positive is True, negative_since, tmc_positive is None
 
     if tmc_positive is False and probe_positive is True:
         return "positive", sources, True, None, False
