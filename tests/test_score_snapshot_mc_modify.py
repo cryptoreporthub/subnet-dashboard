@@ -84,7 +84,7 @@ def test_liveness_ok_when_cycle_is_incomplete_and_unpublished(tmp_path, monkeypa
 def test_capture_timeout_does_not_publish_incomplete(tmp_path, monkeypatch):
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
     seed_rows = [{"netuid": 1, "total_score": 1.0}, {"netuid": 2, "total_score": 2.0}]
-    snaps.save_score_snapshot(complete_snapshot_payload(day_rows=seed_rows), str(path))
+    snaps.publish_complete_snapshot(complete_snapshot_payload(day_rows=seed_rows), str(path))
     before = path.read_bytes()
     monkeypatch.setattr(cov, "coverage_capture_deadline_seconds", lambda _start: False)
 
@@ -120,7 +120,7 @@ def test_skipped_older_does_not_poison_previous_publish_wall(tmp_path, monkeypat
     path = _wire_minimal_write(monkeypatch, tmp_path, _ok_membership_snapshot())
     snap_path = str(path)
     payloads_at_save: list[dict] = []
-    real_save = snaps.save_score_snapshot
+    real_save = snaps.publish_complete_snapshot
     save_calls = 0
 
     def _save_with_skip(payload, path_arg=None):
@@ -135,7 +135,7 @@ def test_skipped_older_does_not_poison_previous_publish_wall(tmp_path, monkeypat
             }
         return real_save(payload, path_arg or snap_path)
 
-    monkeypatch.setattr(snaps, "save_score_snapshot", _save_with_skip)
+    monkeypatch.setattr(snaps, "publish_complete_snapshot", _save_with_skip)
     first = snaps.write_full_universe_snapshot()
     first_pub = (first.get("coverage") or {}).get("timing", {}).get("publish_wall_seconds")
     assert first_pub is not None

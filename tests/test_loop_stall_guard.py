@@ -101,7 +101,7 @@ def _fake_write_that_saves(snap_path):
     def _fake_write(progress_cb=None):
         if progress_cb:
             progress_cb(1, 1)
-        snaps.save_score_snapshot(
+        snaps.publish_complete_snapshot(
             complete_snapshot_payload(
                 day_rows=[{"netuid": 1, "total_score": 1.0}],
                 written_at=snaps._now_iso(),
@@ -257,7 +257,7 @@ def test_revive_honest_when_tick_in_progress(tmp_path, monkeypatch):
 
 
 def test_revive_false_when_file_already_young_and_no_write(tmp_path, monkeypatch):
-    """Young mtime + ok tick without save_score_snapshot must not claim revived."""
+    """Young mtime + ok tick without publish_complete_snapshot must not claim revived."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     snap_path.write_text('{"day":[],"hour":[]}', encoding="utf-8")
     age_before = loop_health._snapshot_age_seconds(str(snap_path))
@@ -305,7 +305,7 @@ def test_revive_false_on_skip_or_ok_without_file_write(tmp_path, monkeypatch):
 
 
 def test_revive_false_on_ok_without_moving_mtime(tmp_path, monkeypatch):
-    """ok:True without save_score_snapshot must not count as revived."""
+    """ok:True without publish_complete_snapshot must not count as revived."""
     snap_path = _wire_snapshot_paths(tmp_path, monkeypatch)
     _make_stale_snapshot(snap_path, age_seconds=snaps.SCORE_SNAPSHOT_MAX_AGE_SECONDS + 100)
 

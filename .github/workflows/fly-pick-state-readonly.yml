@@ -1,0 +1,112 @@
+name: Fly pick state (read-only)
+on:
+  workflow_dispatch:
+jobs:
+  state:
+    name: pick scheduler state, score latency and machine memory
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Read state files and memory over fly ssh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set +e
+          cat > "$RUNNER_TEMP/probe.sh" <<'EOS'
+          date -u
+          echo ===procs
+          for p in /proc/[0-9]*; do r=$(grep VmRSS $p/status 2>/dev/null); [ -n "$r" ] && echo "${p#/proc/} $r $(tr '\0' ' ' < $p/cmdline | cut -c1-90)"; done
+          echo ===cgroup
+          for f in memory.current memory.max memory.peak memory.swap.current; do echo "$f $(cat /sys/fs/cgroup/$f 2>/dev/null)"; done
+          grep -E "^(anon|file|kernel|shmem|slab|file_mapped|active_file|inactive_file|workingset_refault_file) " /sys/fs/cgroup/memory.stat 2>/dev/null
+          echo ===cpu
+          head -1 /proc/stat; cat /proc/loadavg; cat /sys/fs/cgroup/cpu.stat 2>/dev/null; cat /sys/fs/cgroup/cpu/cpu.stat 2>/dev/null
+          sleep 5
+          head -1 /proc/stat
+          python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
+          python -c "import time;t=time.perf_counter();sum(i*i for i in range(3000000));print('py bench s',round(time.perf_counter()-t,3))"
+          echo ===threads
+          python - <<'PY'
+          import os, time
+          def snap():
+              d = {}
+              for p in os.listdir("/proc"):
+                  if not p.isdigit():
+                      continue
+                  try:
+                      for t in os.listdir("/proc/%s/task" % p):
+                          s = open("/proc/%s/task/%s/stat" % (p, t)).read()
+                          f = s[s.rindex(")") + 2:].split()
+                          d[(p, t)] = int(f[11]) + int(f[12])
+                  except Exception:
+                      pass
+              return d
+          a = snap()
+          time.sleep(10)
+          b = snap()
+          per = {}
+          for k, v in b.items():
+              per[k[0]] = per.get(k[0], 0) + v - a.get(k, 0)
+          for p, v in sorted(per.items(), key=lambda x: -x[1])[:4]:
+              cmd = open("/proc/%s/cmdline" % p).read().replace("\0", " ")[:60]
+              print("pid", p, "cpu_ticks_10s", v, "threads", sum(1 for k in b if k[0] == p), cmd)
+          top = sorted(((v - a.get(k, 0), k) for k, v in b.items()), reverse=True)[:12]
+          for d, k in top:
+              print("tid", k[1], "pid", k[0], "cpu_ticks_10s", d)
+          PY
+          echo ===jobs
+          python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8081/jobs', timeout=10).read().decode()[:12000])" 2>&1
+          echo ===pressure
+          cat /proc/pressure/cpu /proc/pressure/memory /proc/pressure/io 2>/dev/null
+          echo ===meminfo
+          head -6 /proc/meminfo
+          echo ===latency
+          wc -l /app/data/pick_score_latency.jsonl
+          tail -n 400 /app/data/pick_score_latency.jsonl
+          echo ===smaps
+          for p in /proc/[0-9]*; do [ -r $p/smaps_rollup ] && grep -qE "uvicorn|python" $p/cmdline 2>/dev/null && { echo "pid ${p#/proc/}"; grep -E "^(Rss|Pss|Pss_Anon|Pss_File|Anonymous|Private_Dirty|Swap):" $p/smaps_rollup; }; done
+          echo ===universe
+          python - <<'PY'
+          import json, os, time
+          p = "/app/data/subnet_universe.json"
+          try:
+              d = json.load(open(p))
+          except Exception as e:
+              print("unreadable", p, e)
+              raise SystemExit
+          vm = d.get("validity_map") or {}
+          nets = [int(n) for n in d.get("netuids") or []]
+          print("file_age_s", int(time.time() - os.path.getmtime(p)), "bytes", os.path.getsize(p))
+          print("status", d.get("status"), "degraded", d.get("degraded"), "refresh_incomplete", d.get("refresh_incomplete"), "resolved_at", d.get("resolved_at"))
+          print("netuids", len(nets), "max", max(nets) if nets else None, "over_128", [n for n in nets if n > 128])
+          counts = {}
+          for e in vm.values():
+              k = (e.get("validity"), bool(e.get("refresh_incomplete")), bool(e.get("negative_since")))
+              counts[k] = counts.get(k, 0) + 1
+          for k, v in sorted(counts.items(), key=lambda x: -x[1]):
+              print("validity", k[0], "refresh_incomplete", k[1], "has_negative_since", k[2], "count", v)
+          now = time.time()
+          for n in sorted(int(k) for k in vm):
+              e = vm[str(n)]
+              ns = e.get("negative_since")
+              if ns:
+                  try:
+                      from datetime import datetime
+                      age_h = round((now - datetime.fromisoformat(ns).timestamp()) / 3600, 1)
+                  except Exception:
+                      age_h = "?"
+                  print("negative", n, "age_h", age_h, "validity", e.get("validity"), "refresh_incomplete", e.get("refresh_incomplete"))
+          PY
+          echo ===state
+          cat /app/data/pick_scheduler_state.json
+          EOS
+          B64=$(base64 -w0 "$RUNNER_TEMP/probe.sh")
+          flyctl ssh console -a subnet-dashboard -C "sh -c 'echo $B64 | base64 -d | sh'" 2>&1 | tee "$RUNNER_TEMP/pick-state.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pick-state-${{ github.run_id }}
+          path: ${{ runner.temp }}/pick-state.txt

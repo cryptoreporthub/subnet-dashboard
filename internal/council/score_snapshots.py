@@ -201,6 +201,11 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
             json.dump(payload, handle, separators=(",", ":"))
             handle.flush()
             os.fsync(handle.fileno())
+        hook = os.environ.get("SCORE_SNAPSHOT_ATOMIC_TEST_HOOK")
+        if hook == "sigkill_after_tmp_write":
+            import signal
+
+            os.kill(os.getpid(), signal.SIGKILL)
         os.replace(tmp, path)
         dir_fd = os.open(directory, os.O_RDONLY)
         try:
@@ -217,7 +222,7 @@ def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
         raise
 
 
-def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
+def publish_complete_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> Dict[str, Any]:
     """Publish only complete snapshots; atomic durable write."""
     snap_path = path or SCORE_SNAPSHOTS_PATH
     stamped = stamp_scorer_fields(payload)
@@ -254,9 +259,6 @@ def save_score_snapshot(payload: Dict[str, Any], path: Optional[str] = None) -> 
             "skipped_older": False,
             "timing": {"publish_wall_seconds": round(publish_wall, 6)},
         }
-
-
-publish_complete_snapshot = save_score_snapshot
 
 
 def record_cycle_receipt(
@@ -379,6 +381,22 @@ def read_served_snapshot(
     if volume_snap and not is_complete_snapshot(volume_snap):
         return ServedSnapshot(ServedState.NONE, None, None, None, "volume_not_complete")
     return ServedSnapshot(ServedState.NONE, None, None, None, "seed_unavailable")
+
+
+def volume_has_fresh_complete_snapshot(
+    path: Optional[str] = None,
+    max_age_seconds: Optional[int] = None,
+) -> bool:
+    """Producer gate: fresh complete on volume only — seed/aged do not block ensure."""
+    volume_path = path or SCORE_SNAPSHOTS_PATH
+    snap = load_score_snapshot(volume_path)
+    if not snap or not is_complete_snapshot(snap):
+        return False
+    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+    age = _snapshot_age_for_path(volume_path, snap)
+    if age is None:
+        return False
+    return ttl <= 0 or age <= ttl
 
 
 def _served_snapshot_tuple(
@@ -654,6 +672,7 @@ def build_full_universe_snapshot(
                     "total_score": float(h.get("total_score") or 0),
                     "name": sn.get("name"),
                     "recovery_context": h.get("recovery_context"),
+                    "expert_contributions": dict(h.get("expert_contributions") or {}),
                     **_confidence_fields(h),
                 }
                 out["hour_ok"] = True
@@ -672,6 +691,7 @@ def build_full_universe_snapshot(
                 "total_score": float(d.get("total_score") or 0),
                 "name": sn.get("name"),
                 "recovery_context": d.get("recovery_context"),
+                "expert_contributions": dict(d.get("expert_contributions") or {}),
                 **_confidence_fields(d),
             }
             out["day_ok"] = True
@@ -881,6 +901,10 @@ def write_full_universe_snapshot(
             write_stage_timing.get("membership_expected_count"),
         )
     except Exception as exc:
+        record_cycle_receipt(
+            {"complete": False, "capture_reason": "subnet_load_error"},
+            outcome="error",
+        )
         return {"ok": False, "error": f"subnet load: {exc}"}
 
     def _build_and_save(build_id: str) -> Dict[str, Any]:
@@ -896,6 +920,7 @@ def write_full_universe_snapshot(
         )
 
         expected = membership_scoring_expected(list(receipt.get("expected_netuids") or []))
+        coverage: Dict[str, Any] = {"complete": False}
         build_started = time.monotonic()
         build_cost.begin(build_id)
         try:
@@ -904,6 +929,12 @@ def write_full_universe_snapshot(
                 ctx,
                 progress_cb=progress_cb,
             )
+        except Exception as exc:
+            record_cycle_receipt(
+                {"complete": False, "capture_reason": "build_raise", "build_error": str(exc)},
+                outcome="error",
+            )
+            raise
         finally:
             cost = build_cost.end()
         build_wall = time.monotonic() - build_started
@@ -971,7 +1002,13 @@ def write_full_universe_snapshot(
                 "timing": {"publish_wall_seconds": 0.0},
             }
         else:
-            publish_result = save_score_snapshot(candidate)
+            candidate["build_provenance"] = {
+                "source": "write_full_universe_snapshot",
+                "build_id": build_id,
+                "day_expected_count": len(expected),
+                "day_succeeded_count": len(list(inputs.get("day_succeeded") or [])),
+            }
+            publish_result = publish_complete_snapshot(candidate)
         published = bool(publish_result.get("published"))
         skipped_older = bool(publish_result.get("skipped_older"))
         publish_wall = (publish_result.get("timing") or {}).get("publish_wall_seconds")
@@ -1111,6 +1148,7 @@ class ScoreSnapshotScheduler:
     def __init__(self, refresh_minutes: int = SCORE_SNAPSHOT_REFRESH_MINUTES) -> None:
         self.refresh_minutes = max(10, min(int(refresh_minutes), 24 * 60))
         self._tick_active = False
+        self._armed = False
         self._last_tick_at: Optional[str] = None
         self._last_error: Optional[str] = None
         self._last_result: Dict[str, Any] = {}
@@ -1128,20 +1166,25 @@ class ScoreSnapshotScheduler:
     def start(self, immediate: bool = False) -> Dict[str, Any]:
         if not self._is_registered():
             return {"started": False, "reason": "not registered"}
-        already = self.liveness.snapshot().get("lifecycle") == "started"
+        if self._armed:
+            return {"started": False, "reason": "already_armed"}
+        resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
+        self._armed = True
         self.liveness.start()
+        armed = "immediate" if immediate else "deferred"
         if immediate:
             threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
         else:
-            # After pick schedulers; full score is the heavy job.
-            # Persisted lifecycle=started is not proof a DateTrigger is armed
-            # (new process generation after prior boot).
             schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-        if already:
-            return {"started": False, "reason": "already running"}
-        return {"started": True, "refresh_minutes": self.refresh_minutes}
+        return {
+            "started": True,
+            "armed": armed,
+            "resumed_lifecycle": resumed_lifecycle,
+            "refresh_minutes": self.refresh_minutes,
+        }
 
     def stop(self) -> Dict[str, Any]:
+        self._armed = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 
@@ -1456,12 +1499,6 @@ def _stopped_scheduler_state() -> Dict[str, Any]:
         "age_seconds": snapshot_age_seconds(),
         "liveness": snap,
     }
-
-
-def ensure_complete_snapshot() -> Dict[str, Any]:
-    if read_served_snapshot().servable:
-        return {"ensured": False, "reason": "complete_snapshot_present"}
-    return {"ensured": True, **revive_score_snapshot_scheduler()}
 
 
 def get_score_snapshot_scheduler_state() -> Dict[str, Any]:

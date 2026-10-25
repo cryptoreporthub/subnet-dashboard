@@ -1,0 +1,908 @@
+{
+  "rows": [
+    {
+      "netuid": 1,
+      "name": "Apex",
+      "price": 0.00643307,
+      "volume": 448.49,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 2,
+      "name": "DaniLabs",
+      "price": 0.00361397,
+      "volume": 1506.49,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 3,
+      "name": "Templar",
+      "price": 0.02274522,
+      "volume": 803.87,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 4,
+      "name": "Targon",
+      "price": 0.05251664,
+      "volume": 2114.76,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 5,
+      "name": "Hone",
+      "price": 0.01256378,
+      "volume": 180.08,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 6,
+      "name": "Numinous",
+      "price": 0.00218095,
+      "volume": 220.88,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 7,
+      "name": "Allways",
+      "price": 0.00219225,
+      "volume": 52.08,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 8,
+      "name": "Vanta",
+      "price": 0.03167391,
+      "volume": 4464.57,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 9,
+      "name": "iota",
+      "price": 0.02350193,
+      "volume": 1559.15,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 10,
+      "name": "Pareton",
+      "price": 0.00481407,
+      "volume": 1111.19,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 11,
+      "name": "TrajectoryRL",
+      "price": 0.00668279,
+      "volume": 372.53,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 12,
+      "name": "Compute Horde",
+      "price": 0.00478201,
+      "volume": 13.27,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 13,
+      "name": "Data Universe",
+      "price": 0.00415951,
+      "volume": 51.34,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 14,
+      "name": "Cacheon",
+      "price": 0.00869311,
+      "volume": 68.45,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 15,
+      "name": "ORO",
+      "price": 0.02012436,
+      "volume": 904.62,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 16,
+      "name": "Zero Hour",
+      "price": 0.00074193,
+      "volume": 26.4,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 17,
+      "name": "404\u2014GEN",
+      "price": 0.00746409,
+      "volume": 151.79,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 18,
+      "name": "Zeus",
+      "price": 0.00374013,
+      "volume": 235.5,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 19,
+      "name": "blockmachine",
+      "price": 0.00917045,
+      "volume": 526.71,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 20,
+      "name": "Witness",
+      "price": 0.00231627,
+      "volume": 14.35,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 21,
+      "name": "AdTAO",
+      "price": 0.00462278,
+      "volume": 2364.36,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 22,
+      "name": "Desearch",
+      "price": 0.00293694,
+      "volume": 133.68,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 23,
+      "name": "Trishool",
+      "price": 0.00545341,
+      "volume": 8662.45,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 24,
+      "name": "Quasar",
+      "price": 0.00739341,
+      "volume": 1631.9,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 25,
+      "name": "UR",
+      "price": 0.00553675,
+      "volume": 764.7,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 26,
+      "name": "Perturb",
+      "price": 0.00154464,
+      "volume": 144.95,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 27,
+      "name": "Orion",
+      "price": 0.00230866,
+      "volume": 1314.15,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 28,
+      "name": "SayGM",
+      "price": 0.03323066,
+      "volume": 10984.11,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 29,
+      "name": "ho\u03c4floa\u03c4",
+      "price": 0.00256766,
+      "volume": 17.68,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 30,
+      "name": "Endure Network",
+      "price": 0.00328823,
+      "volume": 723.72,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 31,
+      "name": "rec4ll",
+      "price": 0.00381528,
+      "volume": 240.25,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 32,
+      "name": "ItsAI",
+      "price": 0.0025644,
+      "volume": 16.62,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 33,
+      "name": "ReadyAI",
+      "price": 0.00313342,
+      "volume": 182.68,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 34,
+      "name": "BitMind",
+      "price": 0.01240329,
+      "volume": 2555.6,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 35,
+      "name": "LogicNet",
+      "price": 0.00103886,
+      "volume": 14.91,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 36,
+      "name": "Epago",
+      "price": 0.00103113,
+      "volume": 33.52,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 37,
+      "name": "Aurelius",
+      "price": 0.00275361,
+      "volume": 8.89,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 38,
+      "name": "ChronoLLM",
+      "price": 0.02071798,
+      "volume": 2024.3,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 39,
+      "name": "SN39 (deprecated)",
+      "price": 0.00862253,
+      "volume": 1198.82,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 40,
+      "name": "ralph",
+      "price": 0.00192492,
+      "volume": 19.49,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 41,
+      "name": "Almanac",
+      "price": 0.00765019,
+      "volume": 3378.46,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 42,
+      "name": "Real-Time Data by Masa",
+      "price": 0.00216994,
+      "volume": 256.62,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 43,
+      "name": "Graphite",
+      "price": 0.00393781,
+      "volume": 14.31,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 44,
+      "name": "Score",
+      "price": 0.03472188,
+      "volume": 4215.2,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 45,
+      "name": "AlphaRidge.ai",
+      "price": 0.00232016,
+      "volume": 85.86,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 46,
+      "name": "Instant",
+      "price": 0.00332715,
+      "volume": 616.26,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 47,
+      "name": "GPUForge",
+      "price": 0.00172724,
+      "volume": 5.09,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 48,
+      "name": "Quantum Compute",
+      "price": 0.00495438,
+      "volume": 304.96,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 49,
+      "name": "Nepher Robotics",
+      "price": 0.00693232,
+      "volume": 1268.29,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 50,
+      "name": "Synth",
+      "price": 0.00364599,
+      "volume": 551.79,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 51,
+      "name": "lium.io",
+      "price": 0.11240977,
+      "volume": 6836.25,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 52,
+      "name": "Dojo",
+      "price": 0.00605133,
+      "volume": 46.27,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 53,
+      "name": "engy",
+      "price": 0.03325991,
+      "volume": 22979.53,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 54,
+      "name": "Yanez",
+      "price": 0.00480918,
+      "volume": 909.84,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 55,
+      "name": "NIOME",
+      "price": 0.00245549,
+      "volume": 1027.3,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 56,
+      "name": "Gradients",
+      "price": 0.01491509,
+      "volume": 490.47,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 57,
+      "name": "Gaia",
+      "price": 0.00233442,
+      "volume": 5.08,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 58,
+      "name": "Attune",
+      "price": 0.00879715,
+      "volume": 796.62,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 59,
+      "name": "Agent Arena by Masa",
+      "price": 0.0131657,
+      "volume": 1653.39,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 60,
+      "name": "Bitsec.ai",
+      "price": 0.003523,
+      "volume": 1049.54,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 61,
+      "name": "RedTeam",
+      "price": 0.01206784,
+      "volume": 4941.7,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 62,
+      "name": "Ridges",
+      "price": 0.00855713,
+      "volume": 312.84,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 63,
+      "name": "Enigma",
+      "price": 0.00376498,
+      "volume": 30.04,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 64,
+      "name": "Chutes",
+      "price": 0.06724186,
+      "volume": 2571.11,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 65,
+      "name": "True Performance Network",
+      "price": 0.00234752,
+      "volume": 1921.3,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 66,
+      "name": "conjectures",
+      "price": 0.00245814,
+      "volume": 1983.39,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 67,
+      "name": "Harnyx",
+      "price": 0.00312183,
+      "volume": 57.38,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 68,
+      "name": "NOVA",
+      "price": 0.01689982,
+      "volume": 1806.06,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 69,
+      "name": "Herald",
+      "price": 0.00541799,
+      "volume": 28.81,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 70,
+      "name": "Consted 2.0",
+      "price": 0.00052016,
+      "volume": 53.12,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 71,
+      "name": "Leadpoet",
+      "price": 0.00414244,
+      "volume": 3233.58,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 72,
+      "name": "StreetVision by NATIX",
+      "price": 0.00214023,
+      "volume": 785.69,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 73,
+      "name": "Parked",
+      "price": 0.00306304,
+      "volume": 7.81,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 74,
+      "name": "Gittensor",
+      "price": 0.00287452,
+      "volume": 19.06,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 75,
+      "name": "Hippius",
+      "price": 0.01752032,
+      "volume": 1586.91,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 76,
+      "name": "Ormas",
+      "price": 0.00475661,
+      "volume": 8.71,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 77,
+      "name": "Liquidity",
+      "price": 0.00484794,
+      "volume": 30.99,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 78,
+      "name": "Umi",
+      "price": 0.00229012,
+      "volume": 252.91,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 79,
+      "name": "MVTRX",
+      "price": 0.00297897,
+      "volume": 118.01,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 80,
+      "name": "OpenRoboto",
+      "price": 0.02345792,
+      "volume": 3301.69,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 81,
+      "name": "Reliquary",
+      "price": 0.00503855,
+      "volume": 290.67,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 82,
+      "name": "Noah",
+      "price": 0.04702112,
+      "volume": 62.67,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 83,
+      "name": "CliqueAI",
+      "price": 0.00752702,
+      "volume": 42.03,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 84,
+      "name": "SN84",
+      "price": 0.00231585,
+      "volume": 43.54,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 85,
+      "name": "Vidaio",
+      "price": 0.00528981,
+      "volume": 2589.2,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 86,
+      "name": "OnSale",
+      "price": 0.00312881,
+      "volume": 87.95,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 87,
+      "name": "Provenonce",
+      "price": 0.00287988,
+      "volume": 68.38,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 88,
+      "name": "Investing",
+      "price": 0.00259053,
+      "volume": 212.22,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 89,
+      "name": "InfiniteQuant",
+      "price": 0.00297064,
+      "volume": 62.96,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 90,
+      "name": "KubeTEE",
+      "price": 0.01907409,
+      "volume": 1630.72,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 91,
+      "name": "cascade",
+      "price": 0.0038817,
+      "volume": 337.32,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 92,
+      "name": "REAX",
+      "price": 0.03442401,
+      "volume": 26275.12,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 93,
+      "name": "Bitcast",
+      "price": 0.01934965,
+      "volume": 2316.43,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 94,
+      "name": "Cathedral",
+      "price": 0.00439933,
+      "volume": 553.66,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 95,
+      "name": "Actual",
+      "price": 0.03608454,
+      "volume": 1086.56,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 96,
+      "name": "Verathos",
+      "price": 0.00361269,
+      "volume": 206.24,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 97,
+      "name": "Ingot",
+      "price": 0.01306768,
+      "volume": 1669.01,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 98,
+      "name": "NeverPlayAlone",
+      "price": 0.0022079,
+      "volume": 32.3,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 99,
+      "name": "Thirty Spokes",
+      "price": 0.00144602,
+      "volume": 81.01,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 100,
+      "name": "Cortex",
+      "price": 0.00290497,
+      "volume": 175.16,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 101,
+      "name": "Tag101",
+      "price": 0.00360539,
+      "volume": 8.49,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 102,
+      "name": "ConnitoAI",
+      "price": 0.00470902,
+      "volume": 638.09,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 103,
+      "name": "SN103",
+      "price": 0.00644856,
+      "volume": 8004.12,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 104,
+      "name": "TAOstatus",
+      "price": 0.0040899,
+      "volume": 8.42,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 105,
+      "name": "Beam",
+      "price": 0.00433586,
+      "volume": 884.83,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 106,
+      "name": "Nodexo",
+      "price": 0.00238956,
+      "volume": 826.32,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 107,
+      "name": "Minos",
+      "price": 0.03152633,
+      "volume": 1306.59,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 108,
+      "name": "ChipForge",
+      "price": 0.00636964,
+      "volume": 131.69,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 109,
+      "name": "Finsight",
+      "price": 0.00304086,
+      "volume": 62.51,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 110,
+      "name": "Green Compute",
+      "price": 0.02569979,
+      "volume": 5306.56,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 111,
+      "name": "Claims",
+      "price": 0.00407642,
+      "volume": 21.61,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 112,
+      "name": "THOR",
+      "price": 0.00894609,
+      "volume": 1620.04,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 113,
+      "name": "SN113",
+      "price": 0.00297563,
+      "volume": 510.7,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 114,
+      "name": "SOMA",
+      "price": 0.02097603,
+      "volume": 1259.04,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 115,
+      "name": "MoirAI",
+      "price": 0.00233376,
+      "volume": 126.28,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 116,
+      "name": "Carbon",
+      "price": 0.02346899,
+      "volume": 733.55,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 117,
+      "name": "everyframe.studio",
+      "price": 0.00217277,
+      "volume": 125.31,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 118,
+      "name": "Ditto",
+      "price": 0.00425277,
+      "volume": 844.7,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 119,
+      "name": "CapabilityForge Next",
+      "price": 0.0023316,
+      "volume": 19.94,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 120,
+      "name": "Affine",
+      "price": 0.04188713,
+      "volume": 3458.32,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 121,
+      "name": "sundae_bar",
+      "price": 0.00360876,
+      "volume": 154.41,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 122,
+      "name": "CookingTAO",
+      "price": 0.00344491,
+      "volume": 13.87,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 123,
+      "name": "MANTIS",
+      "price": 0.00229736,
+      "volume": 79.04,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 124,
+      "name": "Swarm",
+      "price": 0.00979177,
+      "volume": 650.69,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 125,
+      "name": "Refinery",
+      "price": 0.0024984,
+      "volume": 53.92,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 126,
+      "name": "Attelier",
+      "price": 0.00450007,
+      "volume": 218.04,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 127,
+      "name": "Astrid",
+      "price": 0.00209825,
+      "volume": 7.69,
+      "source": "taomarketcap"
+    },
+    {
+      "netuid": 128,
+      "name": "ByteLeap",
+      "price": 0.00277157,
+      "volume": 7.83,
+      "source": "taomarketcap"
+    }
+  ],
+  "market_inputs": {
+    "universe_path": "data/subnet_universe.json",
+    "price_cache_path": "data/price_cache.json",
+    "universe_sha256": "d478833e806cdbe604688120ac3d170330f831e2c7c39f37d96526fdff22c490",
+    "price_cache_sha256": "c5e8052e30f108fade4f5931a4a3945f0eb15ce18b53537106bcccba5d3cbf51",
+    "netuid_count": 128,
+    "hydrate_row_count": 128
+  }
+}

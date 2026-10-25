@@ -74,19 +74,23 @@ def worker_heavy_feeds_enabled() -> bool:
     return flag in ("1", "true", "yes", "on", "full")
 
 
-def score_snapshot_producer_enabled() -> bool:
-    """PR-A stand-in (locked predicate, comment 6333105592): one producer per volume."""
-    if stage2_hop_mode():
-        return False
-    if is_worker_mode():
-        flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
-        return flag not in ("0", "false", "no", "off")
-    return background_heavy_on_web() and not inline_worker_expected() and not split_worker_v2_enabled()
-
-
 def live_subnets_sync_owner_enabled() -> bool:
     """Worker owns live_subnets sync on prod split VMs; web is read-only unless combined."""
     if is_worker_mode():
         flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
         return flag not in ("0", "false", "no", "off")
     return background_heavy_on_web()
+
+
+def score_snapshot_producer_enabled() -> bool:
+    """Exactly one process per volume owns score_snapshots.json production."""
+    if stage2_hop_mode():
+        return False
+    if is_worker_mode():
+        flag = os.environ.get("WORKER_HEAVY", "essential").strip().lower()
+        return flag not in ("0", "false", "no", "off")
+    return (
+        background_heavy_on_web()
+        and not inline_worker_expected()
+        and not split_worker_v2_enabled()
+    )

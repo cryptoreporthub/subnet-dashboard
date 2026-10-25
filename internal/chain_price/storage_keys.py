@@ -9,11 +9,16 @@ from internal.message_intel.stake_alert import twox128
 
 _SUBTENSOR = twox128(b"SubtensorModule")
 _NETWORKS_ADDED = _SUBTENSOR + twox128(b"NetworksAdded")
+_TOTAL_NETWORKS = _SUBTENSOR + twox128(b"TotalNetworks")
 _TIMESTAMP_NOW = twox128(b"Timestamp") + twox128(b"Now")
 
 
 def networks_added_prefix_hex() -> str:
     return "0x" + _NETWORKS_ADDED.hex()
+
+
+def total_networks_key_hex() -> str:
+    return "0x" + _TOTAL_NETWORKS.hex()
 
 
 def timestamp_now_key_hex() -> str:

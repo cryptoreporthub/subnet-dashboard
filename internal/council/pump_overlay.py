@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any, Dict, Optional, Tuple
 
 _EARLY_PHASES = frozenset({"STIRRING", "ACCUMULATING"})
 _CONFIRMED_PHASES = frozenset({"PUMPING"})
+# One parsed ladder per mtime. Pick loops call this once per subnet; re-parsing
+# the whole file each time leaves the arena resident. A new mtime reloads.
+_ladder_memo_lock = threading.Lock()
+_ladder_memo: Dict[str, Any] = {"key": None, "data": None}
 
 
 def overlay_alpha() -> float:
@@ -18,6 +23,29 @@ def overlay_alpha() -> float:
     return max(0.0, min(0.25, alpha))
 
 
+def _readonly_ladder() -> Dict[str, Any]:
+    """Return the on-disk ladder, parsing it once per mtime and size."""
+    # Imported here: pump.state loads the signal fetcher, which imports this module.
+    from internal.pump.state import _resolve_path, load_state
+
+    path = _resolve_path(None)
+    try:
+        st = os.stat(path)
+        key = (path, st.st_mtime_ns, st.st_size)
+    except OSError:
+        key = None
+    with _ladder_memo_lock:
+        if key is not None and _ladder_memo.get("key") == key and isinstance(_ladder_memo.get("data"), dict):
+            return _ladder_memo["data"]
+        data = load_state()
+        if not isinstance(data, dict):
+            data = {}
+        if key is not None:
+            _ladder_memo["key"] = key
+            _ladder_memo["data"] = data
+        return data
+
+
 def pump_ladder_entry(
     netuid: int,
     pump_ladder_state: Optional[Dict[str, Any]] = None,
@@ -26,9 +54,7 @@ def pump_ladder_entry(
         if pump_ladder_state is not None:
             st = pump_ladder_state
         else:
-            from internal.pump.state import load_state
-
-            st = load_state()
+            st = _readonly_ladder()
         subnets = st.get("subnets") if isinstance(st, dict) else {}
         if not isinstance(subnets, dict):
             return None

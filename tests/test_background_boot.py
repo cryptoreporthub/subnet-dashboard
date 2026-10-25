@@ -152,14 +152,13 @@ def test_worker_essential_starts_pump_snapshot_but_skips_heavy_jobs(monkeypatch,
     boot_fn()
     bootstrap.assert_called_once()
     start_sync.assert_called_once()
-    assert "score-snapshot-ensure" in scheduled
-    ensure = MagicMock()
-    monkeypatch.setattr("internal.council.score_snapshots.ensure_complete_snapshot", ensure)
-    next(fn for name, fn in captured if name == "score-snapshot-ensure")()
-    ensure.assert_called_once()
+    score_snapshot = getattr(
+        __import__("internal.background_boot", fromlist=["_start_score_snapshot_scheduler"]),
+        "_start_score_snapshot_scheduler",
+    )
+    score_snapshot.assert_called_once()
     for name in (
         "_warm_judges_cache",
-        "_start_score_snapshot_scheduler",
         "_start_pick_audit_scheduler",
         "_start_outcome_snapshot_scheduler",
         "_start_calibration_snapshot_scheduler",

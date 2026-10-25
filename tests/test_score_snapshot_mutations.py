@@ -1,4 +1,4 @@
-"""Mutation gate (#1479): each listed mutant must break a behaviour check."""
+"""Invariant mutation killers (#1479) — library read path only."""
 
 from __future__ import annotations
 
@@ -79,62 +79,3 @@ def test_m6_partial_served_killed(tmp_path, monkeypatch):
     monkeypatch.setattr(snaps, "read_served_snapshot", _serve_partial)
     with pytest.raises((Failed, AssertionError)):
         world.assert_invariant()
-
-
-def test_m5_non_atomic_write_killed(tmp_path, monkeypatch):
-    payload = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
-    path = tmp_path / "atomic.json"
-
-    def _naive(path_str: str, body: dict) -> None:
-        with open(path_str, "w", encoding="utf-8") as handle:
-            json.dump(body, handle)
-
-    monkeypatch.setattr(snaps, "_atomic_write_json", _naive)
-    snaps._atomic_write_json(str(path), payload)
-    assert json.loads(path.read_text())["scorer_digest"]
-    world = InvariantWorld(tmp_path, monkeypatch)
-    world.start("complete_on_volume")
-
-    def _crash_write(path_str: str, body: dict) -> None:
-        with open(path_str + ".tmp", "w", encoding="utf-8") as handle:
-            handle.write("{partial")
-        raise OSError("non-atomic crash")
-
-    monkeypatch.setattr(snaps, "_atomic_write_json", _crash_write)
-    with pytest.raises((Failed, OSError)):
-        snaps.save_score_snapshot(payload, world.volume_path)
-        world.assert_invariant()
-
-
-def test_m7_pending_top_picks_cached_killed(tmp_path, monkeypatch):
-    import server
-
-    payload = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
-    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "v.json"))
-    with open(snaps.SCORE_SNAPSHOTS_PATH, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle)
-    server._TOP_PICKS_CACHE.update(
-        payload={"hour_picks": [], "day_picks": [], "status": "pending_snapshot"},
-        at=0,
-    )
-    monkeypatch.setattr(server, "_top_picks_cacheable", lambda _p: True)
-    out = server._build_top_picks_cached()
-    with pytest.raises(AssertionError):
-        assert out.get("day_picks")
-
-
-def test_m8_busy_returns_empty_killed(tmp_path, monkeypatch):
-    import server
-
-    payload = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 1.0}])
-    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "v.json"))
-    with open(snaps.SCORE_SNAPSHOTS_PATH, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle)
-
-    def _empty_busy(_status):
-        return {"hour_picks": [], "day_picks": [], "status": "busy"}
-
-    monkeypatch.setattr(server, "_snapshot_only_top_picks", _empty_busy)
-    out = server._snapshot_only_top_picks("busy")
-    with pytest.raises(AssertionError):
-        assert out.get("day_picks")

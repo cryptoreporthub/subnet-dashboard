@@ -94,7 +94,7 @@ class InvariantWorld:
         with open(self.seed_path, "w", encoding="utf-8") as handle:
             json.dump(seed, handle)
         if name == "complete_on_volume":
-            snaps.save_score_snapshot(seed, self.volume_path)
+            snaps.publish_complete_snapshot(seed, self.volume_path)
             self._allow_none = False
         elif name == "first_boot_with_seed":
             self._allow_none = False

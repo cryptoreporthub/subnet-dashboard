@@ -7,17 +7,22 @@ import logging
 import os
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import requests
 
 from internal.subnet_universe import (
     MAX_NETUIDS,
     STALE_GRACE_SECONDS,
+    DropEvidence,
+    MembershipBuild,
     SnapshotBuilder,
     SubnetUniverseProvider,
     UniverseSnapshot,
     _build_rows,
+    _default_probe_fetch,
     _reset_provider_for_tests,
     _shrink_allowed,
     _validity_entry,
@@ -73,7 +78,7 @@ def test_t1_empty_state_emergency_registry(universe_tmp):
   built = SnapshotBuilder(
       tmc_fetch=lambda: ({1, 2, 3}, {1: {"netuid": 1}, 2: {"netuid": 2}, 3: {"netuid": 3}}, True),
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
-  ).build(None)
+  ).build(None).snapshot
   assert built.status == "ok"
   assert len(built.netuids) == MAX_NETUIDS
   assert built.netuids[:4] == (0, 1, 2, 3)
@@ -120,7 +125,7 @@ def test_t4_no_truncation_above_max_netuids(universe_tmp):
       tmc_fetch=lambda: (set(big), {n: {"netuid": n} for n in big}, True),
       probe_fetch=lambda netuids, deadline: ({n: True for n in netuids}, True),
   )
-  built = builder.build(None)
+  built = builder.build(None).snapshot
   assert len(built.netuids) == 250
   assert built.cap_reached is False
 
@@ -196,7 +201,7 @@ def test_t8_partial_refresh_does_not_start_removal_clock(universe_tmp):
       tmc_fetch=lambda: (set(), {}, False),
       probe_fetch=lambda netuids, deadline: ({10: None, 11: None, 12: None}, False),
   )
-  built = builder.build(prior)
+  built = builder.build(prior).snapshot
   assert built.refresh_incomplete is True
   for netuid in (10, 11, 12):
       entry = built.validity_map[str(netuid)]
@@ -204,18 +209,61 @@ def test_t8_partial_refresh_does_not_start_removal_clock(universe_tmp):
       assert entry.get("negative_since") in (None, "")
 
 
-def test_t9_source_disagreement_retains_member(universe_tmp):
-  """Conflicting sources retain member with disputed=true."""
+def test_t9_chain_unregistered_beats_tmc_listing(universe_tmp):
+  """Owner rule (2026-10-25): the chain wins. Unregistered on chain leaves expected now; the row keeps its 48h grace."""
   prior = _prior_snapshot([42])
   builder = SnapshotBuilder(
       tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
       probe_fetch=lambda netuids, deadline: ({42: False}, True),
   )
-  built = builder.build(prior)
+  built = builder.build(prior).snapshot
   assert 42 in built.netuids
   entry = built.validity_map["42"]
+  assert entry["validity"] == "negative"
   assert entry["disputed"] is True
-  assert entry["validity"] == "positive"
+  assert entry["negative_since"]
+
+
+def test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone(universe_tmp):
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _prior_snapshot([42, 43])
+    prior = replace(
+        prior,
+        validity_map={
+            **prior.validity_map,
+            "42": _validity_entry(validity="negative", sources=["taomarketcap"], disputed=True, negative_since=old),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42, 43}, {42: {"netuid": 42}, 43: {"netuid": 43}}, True),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    first = builder.build(prior)
+    assert 42 not in first.snapshot.netuids
+    assert 43 in first.snapshot.netuids
+    second = builder.build(first.snapshot).snapshot
+    assert 42 not in second.netuids
+
+
+def test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative(universe_tmp):
+    prior = _prior_snapshot([42])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({}, False),
+    )
+    built = builder.build(prior).snapshot
+    assert built.validity_map["42"]["validity"] != "negative"
+
+
+def test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered(universe_tmp):
+    prior = _prior_snapshot([0, 42])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({0, 42}, {0: {"netuid": 0}, 42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({0: False, 42: True}, True),
+    )
+    built = builder.build(prior).snapshot
+    assert 0 in built.netuids
+    assert built.validity_map["0"]["validity"] != "negative"
 
 
 def test_negative_validity_removal_after_grace(universe_tmp):
@@ -239,7 +287,7 @@ def test_negative_validity_removal_after_grace(universe_tmp):
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({99: False}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 99 not in built.netuids
 
 
@@ -324,7 +372,7 @@ def test_cold_start_empty_tmc_emergency_registry(universe_tmp):
     built = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({}, True),
-    ).build(None)
+    ).build(None).snapshot
     assert built.status == "emergency_registry"
     assert len(built.netuids) == 0
     assert built.refresh_incomplete is True
@@ -380,7 +428,7 @@ def test_build_probes_full_range_when_tmc_complete():
         tmc_fetch=lambda: (set(range(75)), {n: {"netuid": n} for n in range(75)}, True),
         probe_fetch=probe_fetch,
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert max(probed) >= MAX_NETUIDS - 1
     assert len(built.netuids) > 75
 
@@ -543,7 +591,11 @@ def test_shrink_allowed_incomplete_refresh_grace_eligible_ok():
         {"100": _validity_entry(validity="positive")},
         refresh_incomplete=True,
     )
-    assert _shrink_allowed(prior, built) is True
+    dropped = {
+        130: DropEvidence(tmc=False, probe=False, negative_since=old),
+        132: DropEvidence(tmc=False, probe=False, negative_since=old),
+    }
+    assert _shrink_allowed(prior, MembershipBuild(built, dropped)) is True
 
 
 def test_shrink_allowed_in_grace_blocked():
@@ -558,8 +610,12 @@ def test_shrink_allowed_in_grace_blocked():
     prior = _snapshot_with([130, 132, 100], validity)
     built_incomplete = _snapshot_with([100], {"100": validity["100"]}, refresh_incomplete=True)
     built_complete = _snapshot_with([100], {"100": validity["100"]})
-    assert _shrink_allowed(prior, built_incomplete) is False
-    assert _shrink_allowed(prior, built_complete) is False
+    dropped = {
+        130: DropEvidence(tmc=False, probe=False, negative_since=old),
+        132: DropEvidence(tmc=False, probe=False, negative_since=recent),
+    }
+    assert _shrink_allowed(prior, MembershipBuild(built_incomplete, dropped)) is False
+    assert _shrink_allowed(prior, MembershipBuild(built_complete, dropped)) is False
 
 
 def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
@@ -571,7 +627,7 @@ def test_unsafe_shrink_warning_logs_removed_netuids(universe_tmp, caplog):
 
     class _StubBuilder:
         def build(self, _prior):
-            return built
+            return MembershipBuild(built)
 
     provider.set_builder(_StubBuilder())  # type: ignore[arg-type]
     with caplog.at_level(logging.WARNING, logger="internal.subnet_universe"):
@@ -599,19 +655,13 @@ def test_aged_negative_retained_when_probe_rpc_error(universe_tmp, monkeypatch):
         },
     )
 
-    class _Client:
-        def get_alpha_price_probed(self, netuid):
-            if netuid == 105:
-                return None, "rpc_error"
-            return 1.0, "ok"
-
-    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, [], read="rpc_error")
 
     builder = SnapshotBuilder(
         tmc_fetch=lambda: (set(), {}, False),
         probe_fetch=None,
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 105 in built.netuids
     entry = built.validity_map["105"]
     assert entry["validity"] == "negative"
@@ -640,7 +690,7 @@ def test_aged_negative_not_removed_when_probe_unobserved_incomplete(universe_tmp
         tmc_fetch=lambda: (set(), {}, True),
         probe_fetch=lambda netuids, deadline: ({106: None}, False),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 106 in built.netuids
 
 
@@ -686,7 +736,7 @@ def test_no_price_on_one_positive_does_not_snapshot_freeze_membership(universe_t
             True,
         ),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert built.refresh_incomplete is False
     assert built.message != "Refresh incomplete — retained last-known-good universe"
     assert built.netuids != prior.netuids
@@ -739,7 +789,7 @@ def test_no_price_probe_does_not_match_rpc_error_membership(universe_tmp):
         tmc_fetch=lambda: (set(), {}, False),
         probe_fetch=lambda netuids, deadline: ({201: None, 202: None}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 201 in built.netuids
     assert 202 in built.netuids
     assert built.validity_map["201"].get("refresh_incomplete") is True
@@ -772,7 +822,7 @@ def test_tmc_positive_without_price_retained(universe_tmp):
         tmc_fetch=lambda: ({77}, {77: {"netuid": 77, "name": "SN77"}}, True),
         probe_fetch=lambda netuids, deadline: ({77: None}, True),
     )
-    built = builder.build(prior)
+    built = builder.build(prior).snapshot
     assert 77 in built.netuids
     assert built.validity_map["77"]["validity"] == "positive"
 
@@ -802,3 +852,268 @@ def test_refresh_once_publishes_grace_removal_despite_incomplete_refresh(univers
     assert 100 in result.netuids
     assert result.refresh_incomplete is True
     assert provider.get_snapshot().netuids == result.netuids
+
+
+def _patch_registration(monkeypatch, members, *, pin=("0xabc", "ok"), read="ok"):
+    class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
+        def pin_finalized_head(self):
+            return pin
+
+        def call_fn(self):
+            return lambda method, params: (None, "ok")
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: (list(members) if read == "ok" else [], read),
+    )
+
+
+def test_registration_read_marks_registered_netuids_positive(monkeypatch):
+    _patch_registration(monkeypatch, [1, 2])
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {1: True, 2: True, 129: False}
+    assert complete is True
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"read": "rate_limited"}, {"read": "invalid"}, {"pin": (None, "rpc_error")}],
+)
+def test_registration_read_failure_observes_nothing(monkeypatch, kwargs):
+    _patch_registration(monkeypatch, [1, 2], **kwargs)
+    observed, complete = _default_probe_fetch([0, 1, 2, 129])
+    assert observed == {}
+    assert complete is False
+
+
+def test_unregistered_netuid_leaves_after_grace_and_stays_gone(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1])
+    prior = _prior_snapshot([1, 129])
+    prior.validity_map["129"] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+
+    built = builder.build(prior).snapshot
+    entry = built.validity_map["129"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"]
+    assert 129 in built.netuids
+
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    aged = UniverseSnapshot(
+        netuids=built.netuids,
+        rows=built.rows,
+        resolved_at=datetime.now(timezone.utc).isoformat(),
+        status="ok",
+        degraded=False,
+        validity_map={**built.validity_map, "129": {**entry, "negative_since": old}},
+    )
+    rebuilt = builder.build(aged).snapshot
+    assert 129 not in rebuilt.netuids
+    assert 1 in rebuilt.netuids
+    assert 129 not in builder.build(rebuilt).snapshot.netuids
+
+
+def test_registered_netuid_missing_from_tmc_stays_positive(universe_tmp, monkeypatch):
+    _patch_registration(monkeypatch, [1, 130])
+    builder = SnapshotBuilder(tmc_fetch=lambda: ({1}, {1: {"netuid": 1}}, True))
+    built = builder.build(_prior_snapshot([1])).snapshot
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_enters_when_tmc_incomplete_and_prior_snapshot(universe_tmp, monkeypatch):
+    """Replit gap 1: incomplete TaoStats must not hide chain-registered members."""
+    _patch_registration(monkeypatch, list(range(1, 131)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1, 2, 3])).snapshot
+    assert 130 in built.netuids
+    assert built.validity_map["130"]["validity"] == "positive"
+
+
+def test_chain_member_at_netuid_200_enters_when_outside_probe_range(monkeypatch):
+    """Registration positives must enter membership even above MAX_NETUIDS-1 probe list."""
+    _patch_registration(monkeypatch, [1, 200])
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(_prior_snapshot([1])).snapshot
+    assert 200 in built.netuids
+    assert built.validity_map["200"]["validity"] == "positive"
+
+
+def test_probe_fetch_deadline_blocks_second_provider_and_stays_incomplete(monkeypatch):
+    """D2/D3: reader deadline on clients; slow provider burns budget, fast never contacted."""
+    import internal.chain_client as chain_client_mod
+    import internal.chain_price.reader as reader_mod
+    from internal.chain_client import ChainClient
+    from internal.chain_price.reader import ChainReader
+
+    slow = ChainClient(endpoint="https://slow.example", init_volume_db=False)
+    fast = ChainClient(endpoint="https://fast.example", init_volume_db=False)
+    posts: list[str] = []
+
+    def fake_post(endpoint, payload, timeout, **kwargs):
+        posts.append(endpoint)
+        time.sleep(timeout)
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(chain_client_mod, "_timed_post", fake_post)
+    monkeypatch.setattr(
+        reader_mod.cfg,
+        "rpc_provider_clients",
+        lambda: [("slow", slow), ("fast", fast)],
+    )
+    budget = 0.15
+    deadline = time.monotonic() + budget
+    reader_deadlines: list = []
+    real_init = ChainReader.__init__
+
+    def _capture_deadline(self, *args, **kwargs):
+        reader_deadlines.append(kwargs.get("deadline_monotonic"))
+        return real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(ChainReader, "__init__", _capture_deadline)
+    started = time.monotonic()
+    observed, complete = _default_probe_fetch([1], deadline=deadline)
+    elapsed = time.monotonic() - started
+    assert reader_deadlines == [deadline]
+    assert observed == {}
+    assert complete is False
+    assert elapsed <= budget + 0.2
+    assert not any("fast.example" in ep for ep in posts)
+    assert any("slow.example" in ep for ep in posts)
+
+
+def test_probe_fetch_incomplete_when_deadline_expires_during_read(monkeypatch):
+    from internal.chain_price.reader import ChainReader
+
+    def slow_pin(self):
+        time.sleep(0.03)
+        return "0xabc", "ok"
+
+    monkeypatch.setattr(ChainReader, "pin_finalized_head", slow_pin)
+    monkeypatch.setattr(
+        "internal.chain_price.membership.get_member_netuids",
+        lambda call, at_hash: ([1], "ok"),
+    )
+    observed, complete = _default_probe_fetch([1], deadline=time.monotonic() + 0.005)
+    assert observed == {}
+    assert complete is False
+
+
+@pytest.mark.parametrize("total_raw", [None, "0x81"])
+def test_total_networks_invalid_makes_probe_incomplete(monkeypatch, total_raw):
+    """M3b at probe layer: invalid membership batch → incomplete probe, no observations."""
+    from internal.chain_price.storage_keys import map_key_hex, total_networks_key_hex
+
+    total_key = total_networks_key_hex()
+    net_key = map_key_hex(b"NetworksAdded", 1)
+
+    class _Reader:
+        def __init__(self, *args, **kwargs):
+            self.provider_served = "fixture"
+
+        def pin_finalized_head(self):
+            return "0xabc", "ok"
+
+        def call_fn(self):
+            def _call(method, params):
+                if method == "state_getKeysPaged":
+                    return [net_key], "ok"
+                if method == "state_queryStorageAt":
+                    block = params[1]
+                    keys = params[0]
+                    assert total_key in keys
+                    return [
+                        {
+                            "block": block,
+                            "changes": [[net_key, "0x01"], [total_key, total_raw]],
+                        }
+                    ], "ok"
+                return None, "rpc_error"
+
+            return _call
+
+    monkeypatch.setattr("internal.chain_price.reader.ChainReader", _Reader)
+    observed, complete = _default_probe_fetch([1])
+    assert observed == {}
+    assert complete is False
+
+
+def test_default_price_one_does_not_imply_registration(monkeypatch):
+    """Fail-first: a 1.0 price on an unregistered netuid must not count as positive."""
+
+    class _Client:
+        def get_alpha_price_probed(self, netuid):
+            return 1.0, "ok"
+
+    monkeypatch.setattr("internal.chain_client.get_default_client", lambda: _Client())
+    _patch_registration(monkeypatch, list(range(1, 129)))
+
+    observed, complete = _default_probe_fetch(list(range(200)))
+    assert complete is True
+    assert observed.get(129) is False
+    assert observed.get(128) is True
+
+
+def test_cold_start_keeps_root_when_chain_lists_1_to_128_and_tmc_is_incomplete(monkeypatch):
+    """Root is never in NetworksAdded; a cold snapshot must still contain it without claiming chain registration."""
+    _patch_registration(monkeypatch, list(range(1, 129)))
+    builder = SnapshotBuilder(tmc_fetch=lambda: (set(), {}, False))
+    built = builder.build(None).snapshot
+    assert 0 in built.netuids
+    assert set(range(1, 129)) <= set(built.netuids)
+    root = built.validity_map["0"]
+    assert "blockmachine_probe" not in root["sources"]
+    assert root["validity"] != "negative"
+
+
+def test_complete_chain_read_beats_a_failed_tmc_read(universe_tmp):
+    """Live gap: with TMC down and the chain read complete, a chain-unregistered netuid must still go negative."""
+    prior = _prior_snapshot([42, 43])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    built = builder.build(prior).snapshot
+    assert built.validity_map["42"]["validity"] == "negative"
+    assert built.validity_map["43"]["validity"] == "positive"
+    assert 42 in built.netuids
+
+
+def test_chain_unregistered_row_leaves_after_grace_even_if_tmc_is_down(universe_tmp):
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _prior_snapshot([42, 43])
+    prior = replace(
+        prior,
+        validity_map={
+            **prior.validity_map,
+            "42": _validity_entry(validity="negative", sources=[], negative_since=old),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: (set(), {}, False),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    assert 42 not in builder.build(prior).snapshot.netuids
+
+
+def test_failed_chain_read_does_not_undo_a_chain_negative(universe_tmp):
+    """A chain-negative netuid that TMC still lists must stay negative, with its grace clock, across a failed chain read."""
+    started = (datetime.now(timezone.utc) - timedelta(hours=5)).isoformat()
+    prior = _prior_snapshot([42])
+    prior = replace(
+        prior,
+        validity_map={
+            "42": _validity_entry(validity="negative", sources=["taomarketcap"], disputed=True, negative_since=started),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({}, False),
+    )
+    entry = builder.build(prior).snapshot.validity_map["42"]
+    assert entry["validity"] == "negative"
+    assert entry["negative_since"] == started

@@ -643,6 +643,63 @@ def test_watchdog_stale_and_recovery(tmp_path, monkeypatch):
     assert summary["last_ok_age_seconds"] >= 60
 
 
+def test_stake_alert_ops_telegram_off_by_default(monkeypatch):
+    monkeypatch.delenv("STAKE_ALERT_OPS_TELEGRAM", raising=False)
+    assert sa.stake_alert_ops_telegram_enabled() is False
+    monkeypatch.setenv("STAKE_ALERT_OPS_TELEGRAM", "on")
+    assert sa.stake_alert_ops_telegram_enabled() is True
+
+
+def test_ops_telegram_skipped_when_disabled(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    monkeypatch.setenv("TELEGRAM_STAKE_ALERT", "on")
+    monkeypatch.setattr("internal.run_mode.stage2_hop_mode", lambda: False)
+    monkeypatch.setenv("STAKE_ALERT_OPS_TELEGRAM", "off")
+    monkeypatch.setattr(sa, "alert_chat_id", lambda: "-100")
+    sent = []
+    monkeypatch.setattr(
+        "internal.message_intel.summary_bot.send_message",
+        lambda chat, text, **kw: sent.append(text) or {"ok": True},
+    )
+    state = {
+        "initialized": True,
+        "baseline": {},
+        "hotkey": sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY).hex(),
+        "last_ok_at": "2020-01-01T00:00:00Z",
+        "consecutive_failures": 10,
+        "first_failure_at": "2020-01-01T00:00:00Z",
+    }
+    sa._record_skip(state, "incomplete_scan")
+    assert sent == []
+    assert not state.get("ops_stale_notified")
+
+
+def test_check_stake_alerts_scans_when_health_cache_unhealthy(tmp_path, monkeypatch):
+    state_file = tmp_path / "stake_alert_state.json"
+    monkeypatch.setattr(sa, "STATE_PATH", str(state_file))
+    pub = sa.ss58_to_pubkey(sa.DEFAULT_HOTKEY)
+    ck = bytes(range(32))
+    u64f64 = "0x" + ((5 * sa._RAO) << 64).to_bytes(16, "little").hex()
+    full = (
+        sa.alpha_storage_prefix("Alpha", pub)
+        + sa._blake2_concat(ck)
+        + (0).to_bytes(2, "little")
+    )
+    key = "0x" + full.hex()
+
+    class _Client(_FakeClient):
+        def is_healthy(self):
+            return False
+
+    client = _Client({key: u64f64})
+    result = sa.check_stake_alerts(client=client)
+    assert result == {"baseline": True, "entries": 1}
+    saved = json.loads(state_file.read_text(encoding="utf-8"))
+    assert saved.get("last_ok_at")
+    assert saved.get("last_skip_reason") is None
+
+
 def test_check_stake_alerts_hotkey_change_reinits_without_alert(tmp_path, monkeypatch):
     state_file = tmp_path / "stake_alert_state.json"
     monkeypatch.setattr(sa, "STATE_PATH", str(state_file))

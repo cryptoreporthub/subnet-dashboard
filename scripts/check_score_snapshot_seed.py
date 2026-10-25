@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CI gate: image seed must exist and pass is_complete_snapshot (#1479 PR-B)."""
+"""CI gate: image seed must exist and pass quality gates (#1479 PR-B)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from internal.council.score_snapshots import SCORE_SNAPSHOT_SEED_PATH, is_complete_snapshot  # noqa: E402
+from internal.council.seed_quality import validate_shipped_seed  # noqa: E402
 
 
 def main() -> int:
@@ -23,6 +24,10 @@ def main() -> int:
         payload = json.load(handle)
     if not is_complete_snapshot(payload):
         print(f"seed fails is_complete_snapshot: {path}", file=sys.stderr)
+        return 2
+    ok, reason = validate_shipped_seed(payload)
+    if not ok:
+        print(f"seed fails validate_shipped_seed ({reason}): {path}", file=sys.stderr)
         return 2
     if not path.startswith("data_seeds"):
         print(f"seed must live under data_seeds/, got {path}", file=sys.stderr)

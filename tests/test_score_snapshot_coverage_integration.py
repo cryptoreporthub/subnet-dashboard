@@ -85,14 +85,14 @@ def test_write_emits_publish_wall_seconds_and_coverage(tmp_path, monkeypatch):
 def test_skipped_older_publish_sets_ok_false(tmp_path, monkeypatch):
     path = tmp_path / "score_snapshots.json"
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    snaps.save_score_snapshot(
+    snaps.publish_complete_snapshot(
         complete_snapshot_payload(
             day_rows=[{"netuid": 2, "total_score": 2.0}],
             written_at="2026-09-22T12:00:00Z",
         ),
         str(path),
     )
-    result = snaps.save_score_snapshot(
+    result = snaps.publish_complete_snapshot(
         complete_snapshot_payload(
             day_rows=[{"netuid": 1, "total_score": 1.0}],
             written_at="2026-09-22T11:00:00Z",

@@ -1318,11 +1318,12 @@ def _resolve_due_predictions(
                 # Non-pump predictions past grace: attempt a candle-based late
                 # grade before retiring so a cold price_cache at the original
                 # deadline does not permanently lose a valid call.
-                # hydrate_candles_for_netuid is rate-limited; reload the shared
-                # cycle snapshot after dispatch before grading through the shim.
+                # Reload only after a dispatched fetch. A rate-limit or a zero
+                # hydration budget writes nothing, and parsing the whole cache
+                # again keeps the previous copy resident.
                 try:
-                    hydrate_candles_for_netuid(uid)
-                    cache = _load_json(PRICE_CACHE_PATH, {})
+                    if hydrate_candles_for_netuid(uid):
+                        cache = _load_json(PRICE_CACHE_PATH, {})
                     late_result = resolve_prediction_at_horizon(
                         pred,
                         now=now,
