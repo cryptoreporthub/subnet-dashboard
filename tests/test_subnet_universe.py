@@ -7,6 +7,7 @@ import logging
 import os
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -208,8 +209,8 @@ def test_t8_partial_refresh_does_not_start_removal_clock(universe_tmp):
       assert entry.get("negative_since") in (None, "")
 
 
-def test_t9_source_disagreement_retains_member(universe_tmp):
-  """Conflicting sources retain member with disputed=true."""
+def test_t9_chain_unregistered_beats_tmc_listing(universe_tmp):
+  """Owner rule (2026-10-25): the chain wins. Unregistered on chain leaves expected now; the row keeps its 48h grace."""
   prior = _prior_snapshot([42])
   builder = SnapshotBuilder(
       tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
@@ -218,8 +219,51 @@ def test_t9_source_disagreement_retains_member(universe_tmp):
   built = builder.build(prior).snapshot
   assert 42 in built.netuids
   entry = built.validity_map["42"]
+  assert entry["validity"] == "negative"
   assert entry["disputed"] is True
-  assert entry["validity"] == "positive"
+  assert entry["negative_since"]
+
+
+def test_chain_unregistered_tmc_listed_row_leaves_after_grace_and_stays_gone(universe_tmp):
+    old = (datetime.now(timezone.utc) - timedelta(seconds=STALE_GRACE_SECONDS + 60)).isoformat()
+    prior = _prior_snapshot([42, 43])
+    prior = replace(
+        prior,
+        validity_map={
+            **prior.validity_map,
+            "42": _validity_entry(validity="negative", sources=["taomarketcap"], disputed=True, negative_since=old),
+        },
+    )
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42, 43}, {42: {"netuid": 42}, 43: {"netuid": 43}}, True),
+        probe_fetch=lambda netuids, deadline: ({42: False, 43: True}, True),
+    )
+    first = builder.build(prior)
+    assert 42 not in first.snapshot.netuids
+    assert 43 in first.snapshot.netuids
+    second = builder.build(first.snapshot).snapshot
+    assert 42 not in second.netuids
+
+
+def test_partial_chain_read_never_marks_a_tmc_listed_netuid_negative(universe_tmp):
+    prior = _prior_snapshot([42])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({42}, {42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({}, False),
+    )
+    built = builder.build(prior).snapshot
+    assert built.validity_map["42"]["validity"] != "negative"
+
+
+def test_chain_never_removes_root_even_if_a_probe_reports_it_unregistered(universe_tmp):
+    prior = _prior_snapshot([0, 42])
+    builder = SnapshotBuilder(
+        tmc_fetch=lambda: ({0, 42}, {0: {"netuid": 0}, 42: {"netuid": 42}}, True),
+        probe_fetch=lambda netuids, deadline: ({0: False, 42: True}, True),
+    )
+    built = builder.build(prior).snapshot
+    assert 0 in built.netuids
+    assert built.validity_map["0"]["validity"] != "negative"
 
 
 def test_negative_validity_removal_after_grace(universe_tmp):
