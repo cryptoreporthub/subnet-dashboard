@@ -781,3 +781,21 @@ def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
         return snaps.ScoreSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+def test_load_score_snapshot_returns_an_independent_copy_on_every_read(tmp_path):
+    path = tmp_path / "snap.json"
+    payload = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 5.0}])
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    fresh_load = snaps.load_score_snapshot(str(path))
+    fresh_load["day"][0]["total_score"] = -1.0
+    fresh_load["coverage"]["day"]["expected"].append(999)
+
+    cache_hit = snaps.load_score_snapshot(str(path))
+    assert cache_hit["day"][0]["total_score"] == 5.0
+    assert cache_hit["coverage"]["day"]["expected"] == [1]
+
+    cache_hit["day"][0]["total_score"] = -2.0
+    again = snaps.load_score_snapshot(str(path))
+    assert again["day"][0]["total_score"] == 5.0
