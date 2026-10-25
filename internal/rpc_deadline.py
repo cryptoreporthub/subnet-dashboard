@@ -78,7 +78,7 @@ def _register_socket(sock) -> None:
 
 class _DeadlineHTTPConnection(urllib3.connection.HTTPConnection):
     def _new_conn(self):
-        # registered at TCP connect, so a TLS handshake or proxy exchange can be hung up too
+        # registered at TCP connect, so a proxy exchange (plain or CONNECT tunnel) can be hung up
         sock = super()._new_conn()
         _register_socket(sock)
         return sock
@@ -132,10 +132,12 @@ def stream_post(
     returns. The request runs on a daemon thread and the caller waits only until the
     deadline. Once an abandoned attempt has a connected socket (including the one to a proxy,
     and including a CONNECT tunnel) it is hung up at the deadline, or as soon as it gets one if
-    the resolver was still running. Two phases are not cancelled by a hang-up: name resolution
-    (a parked getaddrinfo cannot be interrupted) and the TCP connect itself, which is bounded by
-    the connect timeout per resolved address. At most four attempts can be stuck in those
-    phases at once; past that, new attempts fail closed.
+    the resolver was still running. A direct TLS handshake is not cut by the hang-up (the wrap
+    detaches the raw socket); it is bounded by the per-attempt timeout, capped to the remaining
+    deadline, which CPython applies to the whole handshake. Two phases are not cancelled at all:
+    name resolution (a parked getaddrinfo cannot be interrupted) and the TCP connect itself,
+    bounded by the connect timeout per resolved address. At most four attempts can be stuck in
+    those phases at once; past that, new attempts fail closed.
     """
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
