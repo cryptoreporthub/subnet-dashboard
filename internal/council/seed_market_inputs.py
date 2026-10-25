@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -21,6 +22,15 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1 << 20), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _finite(value: Any) -> Optional[float]:
+    """float(value) when it is a finite number, else None (NaN and inf count as missing)."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
 
 
 def _registry_records(path: Path) -> Dict[str, Any]:
@@ -47,10 +57,7 @@ def latest_close_from_price_cache(block: Any) -> Optional[float]:
     last = candles[-1]
     if not isinstance(last, dict):
         return None
-    try:
-        return float(last.get("close"))
-    except (TypeError, ValueError):
-        return None
+    return _finite(last.get("close"))
 
 
 def _universe_rows_by_netuid(path: Path) -> Dict[int, Dict[str, Any]]:
@@ -97,19 +104,16 @@ def _rows_from_live_universe(
         if not name:
             missing.append(netuid)
             continue
-        price = urow.get("price")
-        try:
-            price_f = float(price)
-        except (TypeError, ValueError):
+        price_f = _finite(urow.get("price"))
+        if price_f is None:
             block = cache.get(str(netuid)) or cache.get(netuid)
             close = latest_close_from_price_cache(block)
             if close is None:
                 missing.append(netuid)
                 continue
             price_f = close
-        try:
-            volume_f = float(urow.get("volume") or 0)
-        except (TypeError, ValueError):
+        volume_f = _finite(urow.get("volume") or 0)
+        if volume_f is None:
             volume_f = 0.0
         source = urow.get("source") or "taomarketcap"
         rows.append(
@@ -158,7 +162,14 @@ def _committed_rows_for(
     prov = payload.get("market_inputs") if isinstance(payload, dict) else None
     if not isinstance(rows, list) or not isinstance(prov, dict):
         raise ValueError(f"{COMMITTED_ROWS_REL} is malformed")
-    by_netuid = {row["netuid"]: row for row in rows if isinstance(row, dict) and isinstance(row.get("netuid"), int)}
+    by_netuid = {
+        row["netuid"]: row
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("netuid"), int)
+        and _finite(row.get("price")) is not None
+        and _finite(row.get("volume")) is not None
+    }
     missing = [n for n in netuids if n not in by_netuid]
     if missing:
         raise ValueError(f"authoritative inputs missing netuids: {missing[:8]}")
