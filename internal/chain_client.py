@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 import requests
 
 from internal import build_cost
+from internal.rpc_deadline import stream_post
 from internal.metrics import CHAIN_RPC_REQUESTS_TOTAL
 
 from internal.chain_rpc_errors import (
@@ -292,16 +293,28 @@ def _normalize_block_hash(block_hash: str) -> str:
     return normalize_block_hash(block_hash)
 
 
-def _timed_post(endpoint: str, payload: Dict[str, Any], timeout: float) -> requests.Response:
-    """One RPC HTTP attempt, timed for the active snapshot build."""
+def _timed_post(
+    endpoint: str,
+    payload: Dict[str, Any],
+    timeout: float,
+    *,
+    deadline_monotonic: Optional[float] = None,
+) -> requests.Response:
+    """One RPC HTTP attempt, timed for the active snapshot build.
+
+    When ``deadline_monotonic`` is set, total wall-clock for name resolution, connect and body read
+    is capped (slow-drip responses and slow name resolution cannot outlive the probe budget).
+    """
     started = time.perf_counter()
     try:
-        return requests.post(
-            endpoint,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-            timeout=timeout,
-        )
+        if deadline_monotonic is None:
+            return requests.post(
+                endpoint,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=timeout,
+            )
+        return stream_post(endpoint, payload, timeout, deadline_monotonic)
     finally:
         build_cost.record("rpc", time.perf_counter() - started)
 
@@ -325,6 +338,35 @@ class ChainClient:
         if init_volume_db:
             _init_volume_db()
 
+    def _check_rpc_deadline(self) -> None:
+        deadline = getattr(self, "_rpc_deadline_monotonic", None)
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ChainRpcError("rpc_error", "rpc deadline exceeded")
+
+    def _per_attempt_timeout(self) -> float:
+        deadline = getattr(self, "_rpc_deadline_monotonic", None)
+        if deadline is None:
+            return float(self.timeout)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ChainRpcError("rpc_error", "rpc deadline exceeded")
+        return min(float(self.timeout), remaining)
+
+    def _sleep_for_retry(self, attempt: int) -> None:
+        if attempt >= self.retries:
+            return
+        self._check_rpc_deadline()
+        sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
+        deadline = getattr(self, "_rpc_deadline_monotonic", None)
+        if deadline is not None:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ChainRpcError("rpc_error", "rpc deadline exceeded")
+            sleep_for = min(sleep_for, remaining)
+            if sleep_for <= 0:
+                raise ChainRpcError("rpc_error", "rpc deadline exceeded")
+        time.sleep(sleep_for)
+
     def _call(self, method, params=None):
         params = params or []
         payload = {
@@ -336,10 +378,16 @@ class ChainClient:
         last_error = None
         for attempt in range(self.retries + 1):
             try:
+                self._check_rpc_deadline()
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = _timed_post(self.endpoint, payload, self.timeout)
+                response = _timed_post(
+                    self.endpoint,
+                    payload,
+                    self._per_attempt_timeout(),
+                    deadline_monotonic=getattr(self, "_rpc_deadline_monotonic", None),
+                )
                 if response.status_code == 429:
                     note_rate_limit(self.endpoint, _parse_retry_after_header(response))
                     _record_chain_rpc(self.endpoint, method, "rate_limited")
@@ -347,6 +395,7 @@ class ChainClient:
                         "rate_limited", "HTTP 429", code=429, http_status=429
                     )
                 response.raise_for_status()
+                self._check_rpc_deadline()
                 data = response.json()
                 if "error" in data:
                     _record_chain_rpc(self.endpoint, method, "error")
@@ -357,15 +406,16 @@ class ChainClient:
             except ChainRpcError as exc:
                 if exc.kind == "rate_limited":
                     raise
+                if str(exc) == "rpc deadline exceeded":
+                    raise
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
             except Exception as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
-                sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
-                    time.sleep(sleep_for)
+                    self._sleep_for_retry(attempt)
         raise last_error or RuntimeError(f"RPC call to {method} failed")
 
     def _call_typed(self, method, params=None):
@@ -380,10 +430,16 @@ class ChainClient:
         last_error: Optional[BaseException] = None
         for attempt in range(self.retries + 1):
             try:
+                self._check_rpc_deadline()
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
-                response = _timed_post(self.endpoint, payload, self.timeout)
+                response = _timed_post(
+                    self.endpoint,
+                    payload,
+                    self._per_attempt_timeout(),
+                    deadline_monotonic=getattr(self, "_rpc_deadline_monotonic", None),
+                )
                 if response.status_code == 429:
                     retry_after = _parse_retry_after_header(response)
                     note_rate_limit(self.endpoint, retry_after)
@@ -402,9 +458,8 @@ class ChainClient:
                         f"HTTP {response.status_code}",
                         code=response.status_code,
                     )
-                    sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                     if attempt < self.retries:
-                        time.sleep(sleep_for)
+                        self._sleep_for_retry(attempt)
                         continue
                     raise last_error
                 # 408 (request timeout) is transient and falls through to the retry path below.
@@ -417,6 +472,7 @@ class ChainClient:
                         code=response.status_code,
                     )
                 response.raise_for_status()
+                self._check_rpc_deadline()
                 data = response.json()
                 if "error" in data:
                     kind = classify_jsonrpc_error(data["error"])
@@ -436,16 +492,14 @@ class ChainClient:
             except requests.RequestException as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
-                sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("typed RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
-                    time.sleep(sleep_for)
+                    self._sleep_for_retry(attempt)
             except Exception as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
-                sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 if attempt < self.retries:
-                    time.sleep(sleep_for)
+                    self._sleep_for_retry(attempt)
         if isinstance(last_error, ChainRpcError):
             raise last_error
         raise ChainRpcError("rpc_error", str(last_error or f"RPC call to {method} failed"))

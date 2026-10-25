@@ -7,7 +7,9 @@ from unittest.mock import patch
 
 import pytest
 
+import internal.council.pump_overlay as overlay
 from internal.learning.dpick_pump import attach_pump_chip_to_daily_pick, build_pump_chip
+from internal.pump.state import load_state
 
 
 def _subnet(netuid: int = 99, **extra) -> dict:
@@ -82,3 +84,32 @@ def test_attach_wires_hero_netuid_from_candidate():
 def test_self_check_lead_gate_constants():
     assert 0.55 <= 1.0
     assert build_pump_chip(None)["show"] is False
+
+
+def test_pump_ladder_entry_parses_file_once(tmp_path, monkeypatch):
+    """Scoring reads one subnet at a time. The file is parsed once per mtime."""
+    path = tmp_path / "pump_ladder.json"
+    path.write_text(
+        json.dumps({"subnets": {"7": {"netuid": 7, "phase": "STIRRING", "composite_score": 0.4}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("internal.pump.constants.STATE_PATH", str(path))
+    overlay._ladder_memo["key"] = None
+    overlay._ladder_memo["data"] = None
+    calls = {"n": 0}
+    real = load_state
+
+    def _wrapped(file_path=None):
+        calls["n"] += 1
+        return real(file_path)
+
+    monkeypatch.setattr("internal.pump.state.load_state", _wrapped)
+    assert overlay.pump_ladder_entry(7)["phase"] == "STIRRING"
+    assert overlay.pump_ladder_entry(7)["phase"] == "STIRRING"
+    assert calls["n"] == 1
+    path.write_text(
+        json.dumps({"subnets": {"7": {"netuid": 7, "phase": "PUMPING", "composite_score": 0.9}}}),
+        encoding="utf-8",
+    )
+    assert overlay.pump_ladder_entry(7)["phase"] == "PUMPING"
+    assert calls["n"] == 2

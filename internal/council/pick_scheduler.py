@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+from internal.council import stage_trace
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker, get_tracker
 
@@ -337,6 +338,7 @@ class DailyPickScheduler:
                 inflight = self._inflight_future
                 if inflight is not None and not inflight.done():
                     return self._refuse_inflight(reschedule)
+                trace = stage_trace.begin()
                 pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="daily-pick-work")
                 fut = pool.submit(_run_pick)
                 self._inflight_future = fut
@@ -347,9 +349,11 @@ class DailyPickScheduler:
                 with self._work_lock:
                     self._work_generation += 1
                 result["error"] = f"daily pick tick timed out after {timeout}s"
+                result["stall"] = stage_trace.describe_stall(trace)
                 logger.warning("%s (worker abandoned)", result["error"])
             finally:
                 pool.shutdown(wait=False, cancel_futures=True)
+            result["stages"] = trace.report()
             tick_succeeded = isinstance(payload, dict)
             if tick_succeeded:
                 result["ok"] = True
@@ -406,7 +410,10 @@ class DailyPickScheduler:
         if tick_ok:
             self.liveness.record_success(evidence=evidence)
         else:
-            self.liveness.record_failure(error=str(result.get("error") or "today pick not ready"))
+            failure = str(result.get("error") or "today pick not ready")
+            if result.get("stall"):
+                failure = f"{failure} | {result['stall']}"
+            self.liveness.record_failure(error=failure)
 
         with _lock:
             self._last_result = {
