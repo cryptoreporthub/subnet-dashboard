@@ -172,20 +172,8 @@ def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     )
 
 
-@pytest.mark.parametrize("seed_only", [False, True], ids=["stale_volume_file", "seed_only_no_volume_file"])
-def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch, seed_only):
-    netuids = range(1, 129)
-    membership = _membership_for_netuids(netuids)
-    path = tmp_path / "score_snapshots.json"
-    old_started = "2020-01-01T00:00:00Z"
-    seed_rows = [{"netuid": n, "total_score": float(n)} for n in (1, 2, 3)]
-    payload = complete_snapshot_payload(day_rows=seed_rows, hour_rows=seed_rows)
-    payload["build_started_at"] = old_started
-    seed_path = tmp_path / "seed.json" if seed_only else tmp_path / "no_seed.json"
-    (seed_path if seed_only else path).write_text(json.dumps(payload), encoding="utf-8")
-    assert path.exists() is not seed_only
-    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(seed_path))
+def _essential_worker_cycle_fixtures(tmp_path, monkeypatch, membership, seed_path, *, scheduled=None, soul=None):
+    """Shared fixture set so a real cycle can run without chain or heavy-job access."""
     monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
     monkeypatch.setenv("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off")
@@ -203,16 +191,42 @@ def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", _day)
     monkeypatch.setattr("internal.council.state_vector.score_subnet_for_hour", _day)
     monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
-    hydrate = [{"netuid": n, "name": f"s{n}", "price": 1.0, "volume": 1000.0} for n in netuids]
+    hydrate = [{"netuid": n, "name": f"s{n}", "price": 1.0, "volume": 1000.0} for n in membership.netuids]
     monkeypatch.setattr("server._get_subnets_hydrate", lambda: (hydrate, "registry-fallback"))
-    soul = tmp_path / "soul_map.json"
-    soul.write_text(
-        json.dumps({"score_snapshot_scheduler": {"last_cycle": {"phase": "done", "ok": True}}}),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
-    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda *args, **kwargs: None)
+
+    def _capture(job_id, fn, seconds):
+        if scheduled is not None:
+            scheduled.append((job_id, fn))
+
+    monkeypatch.setattr(snaps, "schedule_in_seconds", _capture)
     monkeypatch.setattr(snaps.ScoreSnapshotScheduler, "_scoring_in_progress", lambda self: False)
+    soul_path = tmp_path / "soul_map.json"
+    soul_path.write_text(json.dumps(soul if soul is not None else {}), encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul_path))
+    return soul_path
+
+
+@pytest.mark.parametrize("seed_only", [False, True], ids=["stale_volume_file", "seed_only_no_volume_file"])
+def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch, seed_only):
+    netuids = range(1, 129)
+    membership = _membership_for_netuids(netuids)
+    path = tmp_path / "score_snapshots.json"
+    old_started = "2020-01-01T00:00:00Z"
+    seed_rows = [{"netuid": n, "total_score": float(n)} for n in (1, 2, 3)]
+    payload = complete_snapshot_payload(day_rows=seed_rows, hour_rows=seed_rows)
+    payload["build_started_at"] = old_started
+    seed_path = tmp_path / "seed.json" if seed_only else tmp_path / "no_seed.json"
+    (seed_path if seed_only else path).write_text(json.dumps(payload), encoding="utf-8")
+    assert path.exists() is not seed_only
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(seed_path))
+    _essential_worker_cycle_fixtures(
+        tmp_path,
+        monkeypatch,
+        membership,
+        seed_path,
+        soul={"score_snapshot_scheduler": {"last_cycle": {"phase": "done", "ok": True}}},
+    )
 
     score_boot_ran = {"n": 0}
 
@@ -235,6 +249,71 @@ def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch
     on_disk = json.loads(path.read_text(encoding="utf-8"))
     assert on_disk["coverage"]["complete"] is True
     assert on_disk.get("build_started_at") and on_disk["build_started_at"] != old_started
+    assert on_disk["count"] == len(netuids)
+
+
+def test_restart_with_fresh_snapshot_and_persisted_started_lifecycle_still_arms(tmp_path, monkeypatch):
+    """Replit P1 (restart arming): a fresh complete volume file plus a persisted
+    lifecycle=started must not keep the producer from re-arming after a restart.
+    The ``start()`` returns early when the served state is FRESH mutation must fail here."""
+    netuids = range(1, 129)
+    membership = _membership_for_netuids(netuids)
+    path = tmp_path / "score_snapshots.json"
+    fresh_started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    day_rows = [{"netuid": n, "total_score": float(n)} for n in netuids]
+    payload = complete_snapshot_payload(day_rows=day_rows, hour_rows=day_rows)
+    payload["build_started_at"] = fresh_started
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    seed_path = tmp_path / "no_seed.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(seed_path))
+    scheduled: list = []
+    _essential_worker_cycle_fixtures(
+        tmp_path,
+        monkeypatch,
+        membership,
+        seed_path,
+        scheduled=scheduled,
+        soul={
+            "liveness": {
+                "score_snapshot": {
+                    "last_success_epoch": datetime.now(timezone.utc).timestamp(),
+                    "last_event_epoch": datetime.now(timezone.utc).timestamp(),
+                    "lifecycle": "started",
+                    "consecutive_failures": 0,
+                    "consecutive_skips": 0,
+                    "last_error": None,
+                    "last_evidence": {"count": len(netuids), "op": "score_snapshot"},
+                    "updated_at": fresh_started,
+                }
+            },
+            "score_snapshot_scheduler": {"last_cycle": {"phase": "done", "ok": True}},
+        },
+    )
+
+    served = snaps.read_served_snapshot(path=str(path), seed_path=str(seed_path))
+    assert served.state is snaps.ServedState.FRESH
+    persisted = json.loads((tmp_path / "soul_map.json").read_text(encoding="utf-8"))
+    assert persisted["liveness"]["score_snapshot"]["lifecycle"] == "started"
+
+    def _defer(name, fn, delay=0):
+        if name == "score-snapshots":
+            fn()
+
+    monkeypatch.setattr("internal.background_boot.defer_boot", _defer)
+    from internal.background_boot import _start_score_snapshot_scheduler
+
+    _start_score_snapshot_scheduler()
+    sched = snaps._scheduler
+    assert sched is not None
+    assert [job_id for job_id, _ in scheduled] == [snaps.JOB_ID]
+    assert sched.state()["running"] is True
+
+    tick_fn = scheduled[0][1]
+    tick_fn()
+    on_disk = json.loads(path.read_text(encoding="utf-8"))
+    assert on_disk["coverage"]["complete"] is True
+    assert on_disk["build_started_at"] != fresh_started
     assert on_disk["count"] == len(netuids)
 
 
