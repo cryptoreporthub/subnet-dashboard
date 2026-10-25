@@ -376,10 +376,17 @@ def read_served_snapshot(
     volume_path = path or SCORE_SNAPSHOTS_PATH
     seed = seed_path or SCORE_SNAPSHOT_SEED_PATH
 
-    def _classify(snap: Dict[str, Any], origin: str, snap_path: str, *, seed_origin: bool) -> ServedSnapshot:
+    def _classify(
+        snap: Dict[str, Any],
+        origin: str,
+        snap_path: str,
+        *,
+        seed_origin: bool,
+        seed_reason: Optional[str] = None,
+    ) -> ServedSnapshot:
         age = _snapshot_age_for_path(snap_path, snap)
         if seed_origin:
-            return ServedSnapshot(ServedState.SEED, snap, age, "seed", None)
+            return ServedSnapshot(ServedState.SEED, snap, age, "seed", seed_reason)
         if age is not None and ttl > 0 and age <= ttl:
             return ServedSnapshot(ServedState.FRESH, snap, age, origin, None)
         return ServedSnapshot(ServedState.AGED, snap, age, origin, None)
@@ -391,7 +398,7 @@ def read_served_snapshot(
     seed_snap = load_score_snapshot(seed)
     if seed_snap and is_complete_snapshot(seed_snap):
         reason = "volume_not_complete" if volume_snap else "volume_missing"
-        return _classify(seed_snap, "seed", seed, seed_origin=True)
+        return _classify(seed_snap, "seed", seed, seed_origin=True, seed_reason=reason)
 
     if volume_snap and not is_complete_snapshot(volume_snap):
         return ServedSnapshot(ServedState.NONE, None, None, None, "volume_not_complete")
