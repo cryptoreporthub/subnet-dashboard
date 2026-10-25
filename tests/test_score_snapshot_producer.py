@@ -130,6 +130,35 @@ def test_failed_arm_leaves_scheduler_retryable(tmp_path, monkeypatch):
     assert scheduled[-1][0] == snaps.JOB_ID
 
 
+def test_failed_arm_rolls_back_even_when_cancel_raises(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    arms = []
+    cancels = []
+
+    def flaky_schedule(job_id, func, seconds):
+        arms.append(job_id)
+        if len(arms) == 1:
+            raise RuntimeError("scheduler unavailable")
+
+    def flaky_cancel(job_id):
+        cancels.append(job_id)
+        if len(cancels) == 1:
+            raise RuntimeError("cancel unavailable")
+
+    monkeypatch.setattr(snaps, "schedule_in_seconds", flaky_schedule)
+    monkeypatch.setattr(snaps, "cancel_job", flaky_cancel)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=False)
+    retry = sched.start(immediate=False)
+    assert retry["started"] is True
+    assert arms == [snaps.JOB_ID, snaps.JOB_ID]
+
+
 def test_failed_arm_does_not_report_running(tmp_path, monkeypatch):
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
