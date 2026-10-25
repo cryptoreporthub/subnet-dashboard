@@ -224,7 +224,7 @@ def test_cooldown_resets_after_success():
     finney = _Scripted(
         [
             ChainRpcError("rate_limited", "429"),  # 1000: cooldown 60s, until 1060
-            "0x01",  # 1700: after expiry, success clears the ladder
+            PINNED_HASH,  # 1700: after expiry, success clears the ladder
             ChainRpcError("rate_limited", "429"),  # 1700: next limit starts at 60s again
         ]
     )
@@ -239,7 +239,7 @@ def test_cooldown_resets_after_success():
         assert reader.call("chain_getFinalizedHead", []) == (None, "rate_limited")
         assert rate_limited_until(finney.endpoint) == 1060.0
         clock[0] = 1700.0
-        assert reader.call("chain_getFinalizedHead", []) == ("0x01", "ok")
+        assert reader.call("chain_getFinalizedHead", []) == (PINNED_HASH, "ok")
         assert reader.call("chain_getFinalizedHead", []) == (None, "rate_limited")
     assert _RL_STEP.get(finney.endpoint) == 120.0
     assert rate_limited_until(finney.endpoint) == 1760.0

@@ -14,6 +14,7 @@ Swap volume detection uses pool reserve deltas:
 This is more reliable than parsing raw SCALE events without chain metadata.
 """
 
+import json
 import logging
 import os
 import sqlite3
@@ -85,6 +86,19 @@ def note_rate_limit(endpoint: str, retry_after: Optional[float] = None) -> float
             _RL_STEP[ep] = min(step * 2.0, _RL_MAX_SECONDS)
         _RL_UNTIL[ep] = max(until, now + duration)
         return duration
+
+
+def _classify_alpha_price_probe_error(exc: BaseException) -> str:
+    """Map RPC failures to live_subnets / universe outcome labels."""
+    from internal.chain_price.rpc import classify_rpc_error
+
+    if isinstance(exc, ChainRpcError) and exc.kind == "rate_limited":
+        if "cooldown" in str(exc).lower():
+            return "cooldown_skip"
+    labeled = classify_rpc_error(exc)
+    if labeled in ("timeout", "connection", "parse", "rate_limited", "rpc_error"):
+        return labeled
+    return "rpc_error"
 
 
 def _parse_retry_after_header(response: requests.Response) -> Optional[float]:
@@ -288,6 +302,29 @@ def _encode_netuid_arg(netuid):
     return "0x" + struct.pack("<H", netuid).hex()
 
 
+def _storage_chunk_netuids(netuids: List[int], chunk_size: int) -> List[List[int]]:
+    size = max(1, chunk_size)
+    return [netuids[i : i + size] for i in range(0, len(netuids), size)]
+
+
+def _row_from_subnet_reserves(netuid: int, tao_raw: int, alpha_raw: int, source: str) -> dict:
+    tao_reserve = tao_raw / 1e9
+    alpha_reserve = alpha_raw / 1e9
+    price = tao_reserve / alpha_reserve if alpha_reserve > 0 else 0.0
+    return {
+        "netuid": netuid,
+        "name": f"SN{netuid}",
+        "price": price,
+        "source": source,
+        "liquidity": round(tao_reserve + (alpha_reserve * price), 6),
+        "total_tao": round(tao_reserve, 6),
+        "total_alpha": round(alpha_reserve, 6),
+        "taoLiquidity": round(tao_reserve, 6),
+        "tao_reserve_raw": int(tao_raw),
+        "alpha_reserve_raw": int(alpha_raw),
+    }
+
+
 def _normalize_block_hash(block_hash: str) -> str:
     return normalize_block_hash(block_hash)
 
@@ -378,8 +415,14 @@ class ChainClient:
             "id": int(time.time() * 1000) % 2147483647,
         }
         last_error: Optional[BaseException] = None
+        deadline_mono = getattr(self, "_rpc_deadline_mono", None)
         for attempt in range(self.retries + 1):
             try:
+                if deadline_mono is not None:
+                    remaining = deadline_mono - time.monotonic()
+                    if remaining <= 0:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded")
+                    self.timeout = min(float(self.timeout), max(0.01, remaining))
                 if time.monotonic() < rate_limited_until(self.endpoint):
                     _record_chain_rpc(self.endpoint, method, "cooldown_skip")
                     raise ChainRpcError("rate_limited", "cooldown")
@@ -417,7 +460,11 @@ class ChainClient:
                         code=response.status_code,
                     )
                 response.raise_for_status()
-                data = response.json()
+                try:
+                    data = response.json()
+                except json.JSONDecodeError as exc:
+                    _record_chain_rpc(self.endpoint, method, "error")
+                    raise ChainRpcError("parse", str(exc))
                 if "error" in data:
                     kind = classify_jsonrpc_error(data["error"])
                     err = data["error"]
@@ -433,18 +480,28 @@ class ChainClient:
                 return data.get("result")
             except ChainRpcError:
                 raise
+            except requests.exceptions.Timeout as exc:
+                _record_chain_rpc(self.endpoint, method, "error")
+                raise ChainRpcError("timeout", str(exc))
+            except requests.exceptions.ConnectionError as exc:
+                _record_chain_rpc(self.endpoint, method, "error")
+                raise ChainRpcError("connection", str(exc))
             except requests.RequestException as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 logger.debug("typed RPC %s attempt %d failed: %s", method, attempt, exc)
                 if attempt < self.retries:
+                    if deadline_mono is not None and time.monotonic() + sleep_for > deadline_mono:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded before retry")
                     time.sleep(sleep_for)
             except Exception as exc:
                 last_error = exc
                 _record_chain_rpc(self.endpoint, method, "error")
                 sleep_for = self.backoff[min(attempt, len(self.backoff) - 1)]
                 if attempt < self.retries:
+                    if deadline_mono is not None and time.monotonic() + sleep_for > deadline_mono:
+                        raise ChainRpcError("timeout", "rpc deadline exceeded before retry")
                     time.sleep(sleep_for)
         if isinstance(last_error, ChainRpcError):
             raise last_error
@@ -557,8 +614,14 @@ class ChainClient:
                 return None, "no_price"
             return float(result) / PRICE_SCALE, "ok"
         except Exception as exc:
-            logger.debug("swap_currentAlphaPrice failed for netuid %s: %s", netuid, exc)
-            return None, "rpc_error"
+            outcome = _classify_alpha_price_probe_error(exc)
+            logger.debug(
+                "swap_currentAlphaPrice failed for netuid %s (%s): %s",
+                netuid,
+                outcome,
+                exc,
+            )
+            return None, outcome
 
     def get_alpha_price(self, netuid):
         price, _outcome = self.get_alpha_price_probed(netuid)
@@ -828,107 +891,6 @@ class ChainClient:
                                 "source": "blockmachine", "degraded": True})
         logger.info("get_all_subnet_data: fetched %d subnets from Blockmachine", len(subnets))
         return subnets
-
-    def get_subnet_price_rows(self, netuids):
-        """Fast path for live_subnets cache with price and pool reserves."""
-        return self.get_subnet_price_rows_batch(netuids)["rows"]
-
-    def get_subnet_price_rows_batch(self, netuids):
-        """Lite price fetch with per-netuid outcomes and batch_expired flag."""
-        # ponytail: do not bail on cold-boot health TTL — lite fetch is the real probe.
-        if not self.is_healthy():
-            logger.warning("RPC health false-negative — attempting lite price fetch anyway")
-
-        def _one(netuid: int):
-            """Return row + outcome; caller alone records outcomes (no shared mutable dict)."""
-            try:
-                price, outcome = self.get_alpha_price_probed(netuid)
-                if outcome == "rpc_error":
-                    return None, "rpc_error"
-                if outcome == "no_price" or price is None:
-                    return None, "no_price"
-                row = {
-                    "netuid": netuid,
-                    "name": f"SN{netuid}",
-                    "price": price,
-                    "source": "blockmachine",
-                }
-                pool = self.get_pool_state(netuid)
-                if pool:
-                    row.update(
-                        {
-                            "liquidity": pool.get("liquidity"),
-                            "total_tao": pool.get("total_tao"),
-                            "total_alpha": pool.get("total_alpha"),
-                            "taoLiquidity": pool.get("total_tao"),
-                            "tao_reserve_raw": pool.get("tao_reserve_raw"),
-                            "alpha_reserve_raw": pool.get("alpha_reserve_raw"),
-                        }
-                    )
-                return row, "ok"
-            except Exception as exc:
-                logger.debug("price fetch netuid %d: %s", netuid, exc)
-                return None, "rpc_error"
-
-        try:
-            workers = int(os.environ.get("LIVE_SUBNETS_LITE_WORKERS", "8"))
-        except ValueError:
-            workers = 8
-        workers = max(1, min(workers, 16, len(netuids) or 1))
-
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as _FutureTimeout, as_completed
-
-        deadline_mono = os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_MONOTONIC", "").strip()
-        if deadline_mono:
-            deadline = float(deadline_mono)
-            batch_budget = max(0.0, deadline - time.monotonic())
-        else:
-            batch_budget = float(os.environ.get("LIVE_SUBNETS_BATCH_DEADLINE_SECONDS", "85"))
-            deadline = time.monotonic() + batch_budget
-
-        rows = []
-        outcomes: dict[int, str] = {}
-        pool = ThreadPoolExecutor(max_workers=workers)
-        try:
-            futures = {pool.submit(_one, n): n for n in netuids}
-            remaining = set(futures.keys())
-            while remaining and time.monotonic() < deadline:
-                try:
-                    slice_timeout = max(0.0, min(0.25, deadline - time.monotonic()))
-                    for fut in as_completed(remaining, timeout=slice_timeout):
-                        remaining.discard(fut)
-                        row, outcome = fut.result()
-                        outcomes[futures[fut]] = outcome
-                        if row:
-                            rows.append(row)
-                except _FutureTimeout:
-                    if time.monotonic() >= deadline:
-                        break
-            for fut in remaining:
-                outcomes[futures[fut]] = "batch_expired"
-                fut.cancel()
-        finally:
-            shutdown_wait = max(0.0, deadline - time.monotonic())
-            pool.shutdown(wait=False, cancel_futures=True)
-            if shutdown_wait > 0:
-                end = time.monotonic() + shutdown_wait
-                for t in pool._threads:
-                    t.join(timeout=max(0.0, end - time.monotonic()))
-        rows.sort(key=lambda r: r["netuid"])
-        batch_expired = any(v == "batch_expired" for v in outcomes.values())
-        logger.info(
-            "get_subnet_price_rows: %d subnets (workers=%d, budget=%.0fs, batch_expired=%s)",
-            len(rows),
-            workers,
-            batch_budget,
-            batch_expired,
-        )
-        return {
-            "rows": rows,
-            "batch_expired": batch_expired,
-            "netuid_outcomes": dict(outcomes),
-        }
-
 
 _default_client = None
 

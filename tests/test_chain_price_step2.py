@@ -95,6 +95,51 @@ def test_block_mismatch_does_not_write(fixture_client, tmp_path):
     conn.close()
 
 
+def _reader_fallback_case(kind: str):
+    from internal.chain_rpc_errors import ChainRpcError
+
+    class _FailClient:
+        def _call_typed(self, method, params=None):
+            raise ChainRpcError(kind, "down")
+
+        def _call(self, method, params=None):
+            raise ChainRpcError(kind, "down")
+
+        def query_storage_at(self, keys, at_hash):
+            raise ChainRpcError(kind, "down")
+
+    class _OkClient:
+        def _call_typed(self, method, params=None):
+            if method == "chain_getFinalizedHead":
+                return PINNED_HASH
+            return {}
+
+        def _call(self, method, params=None):
+            return self._call_typed(method, params)
+
+        def query_storage_at(self, keys, at_hash):
+            return [{"block": at_hash, "changes": []}]
+
+    reader = ChainReader([("finney", _FailClient()), ("blockmachine", _OkClient())])
+    h, outcome = reader.pin_finalized_head()
+    assert outcome == "ok"
+    assert h == PINNED_HASH
+    assert reader.provider_served == "blockmachine"
+    assert reader.fallback_count == 1
+
+
+def test_reader_fallback_finney_to_blockmachine_on_timeout():
+    _reader_fallback_case("timeout")
+
+
+def test_reader_fallback_finney_to_blockmachine_on_connection():
+    _reader_fallback_case("connection")
+
+
+def test_reader_fallback_finney_to_blockmachine_on_parse():
+    _reader_fallback_case("parse")
+
+
 def test_reader_fallback_finney_to_blockmachine(tmp_path):
     from internal.chain_rpc_errors import ChainRpcError
 
@@ -111,7 +156,7 @@ def test_reader_fallback_finney_to_blockmachine(tmp_path):
     class _OkClient:
         def _call_typed(self, method, params=None):
             if method == "chain_getFinalizedHead":
-                return "0x01"
+                return PINNED_HASH
             return {}
 
         def _call(self, method, params=None):
@@ -123,7 +168,7 @@ def test_reader_fallback_finney_to_blockmachine(tmp_path):
     reader = ChainReader([("finney", _FailClient()), ("blockmachine", _OkClient())])
     h, outcome = reader.pin_finalized_head()
     assert outcome == "ok"
-    assert h == "0x01"
+    assert h == PINNED_HASH
     assert reader.provider_served == "blockmachine"
 
 

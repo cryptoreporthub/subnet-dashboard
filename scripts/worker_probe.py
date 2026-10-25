@@ -2,7 +2,6 @@ import json, os, time, threading
 from internal.live_subnets import _cache_path, live_data_freshness, _sync_once
 from internal.run_mode import background_on_web, is_worker_mode, inline_worker_expected
 print('RUN_MODE=', os.environ.get('RUN_MODE'))
-print('FETCH_MODE=', os.environ.get('LIVE_SUBNETS_FETCH_MODE'))
 print('INLINE_WORKER=', os.environ.get('INLINE_WORKER'))
 print('inline_worker_expected=', inline_worker_expected())
 print('background_on_web=', background_on_web())
