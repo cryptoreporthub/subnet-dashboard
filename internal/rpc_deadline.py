@@ -113,11 +113,11 @@ def stream_post(
     ``requests.post`` blocks inside header parsing and its socket timeout restarts on
     every received byte, so a slow header drip outlives any deadline checked after it
     returns. The request runs on a daemon thread and the caller waits only until the
-    deadline. An abandoned attempt is hung up at the deadline, or as soon as its socket
-    registers if the resolver was still running. The window between registration points
-    (TCP connect and the TLS handshake after a slow resolve) and proxy-routed
-    connections, which bypass the connection classes, are bounded by the per-attempt
-    timeout instead.
+    deadline. An abandoned attempt whose socket is registered is hung up at the deadline, or
+    as soon as it registers if the resolver was still running. An abandoned attempt that never
+    registers a socket (proxy-routed, or still in the TLS handshake) keeps reading until the
+    peer stops sending; each read is limited only by the per-read timeout, which restarts on
+    every byte. At most four such attempts can be in flight; past that, new attempts fail closed.
     """
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
