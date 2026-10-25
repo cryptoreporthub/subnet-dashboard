@@ -94,16 +94,18 @@ def test_a_well_formed_snapshot_is_complete():
 
 
 @pytest.mark.parametrize("hour", [[], [{"netuid": 1}]])
-def test_the_hour_horizon_may_be_empty_or_a_subset_of_the_chain_read(hour):
-    assert snaps.is_complete_snapshot(_payload(lambda p: p.update(hour=hour), ids=(1, 2)))
+def test_the_hour_horizon_must_cover_the_chain_read(hour):
+    # The producer only marks coverage complete when every expected netuid has an hour row
+    # (copied from day or scored), so an empty or partial hour panel is never a complete state.
+    assert not snaps.is_complete_snapshot(_payload(lambda p: p.update(hour=hour), ids=(1, 2)))
 
 
-def test_self_declared_expected_lists_do_not_decide_completeness():
+def test_self_declared_expected_lists_must_agree_with_the_chain_read():
     def tamper(p):
         p["coverage"]["day"]["expected"] = [1, 999]
         p["coverage"]["membership"]["expected_netuids"] = [999]
 
-    assert snaps.is_complete_snapshot(_payload(tamper))
+    assert not snaps.is_complete_snapshot(_payload(tamper))
     assert not snaps.is_complete_snapshot(_payload(lambda p: (tamper(p), p.update(day=[{"netuid": 999}]))))
 
 

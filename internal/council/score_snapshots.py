@@ -200,11 +200,25 @@ def is_complete_snapshot(snap: Any) -> bool:
     chain = ChainRead.parse(membership.get("chain")) if isinstance(membership, dict) else None
     if chain is None:
         return False
+    # The pinned chain read is the only membership truth: every other list must agree with it.
+    expected = list(chain.netuids)
+    if declared is not None and sorted(declared) != expected:
+        return False
+    listed = membership.get("expected_netuids")
+    if listed is not None and (
+        not isinstance(listed, list) or any(type(n) is not int for n in listed) or sorted(listed) != expected
+    ):
+        return False
+    if (
+        any(membership.get(flag) for flag in ("refresh_incomplete", "degraded", "cap_reached"))
+        or membership.get("fresh") is False
+    ):
+        return False
     day = _row_ids(snap.get("day"))
-    if day is None or sorted(day) != list(chain.netuids):
+    if day is None or sorted(day) != expected:
         return False
     hour = _row_ids(snap.get("hour"))
-    return hour is not None and len(hour) == len(set(hour)) and set(hour) <= set(chain.netuids)
+    return hour is not None and sorted(hour) == expected
 
 
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:

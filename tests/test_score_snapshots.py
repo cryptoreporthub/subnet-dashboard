@@ -20,7 +20,6 @@ def test_save_load_and_rank(tmp_path, monkeypatch):
             {"netuid": 1, "total_score": 10.0},
             {"netuid": 50, "total_score": 50.0},
         ],
-        hour_rows=[],
         written_at="2026-07-26T00:00:00Z",
     )
     payload["count"] = 3
