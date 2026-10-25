@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -194,3 +196,56 @@ def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch
     assert on_disk["coverage"]["complete"] is True
     assert on_disk.get("build_started_at") and on_disk["build_started_at"] != old_started
     assert on_disk["count"] == len(netuids)
+
+
+def _stale_volume_file(tmp_path, monkeypatch) -> Path:
+    path = tmp_path / "score_snapshots.json"
+    payload = complete_snapshot_payload()
+    payload["build_started_at"] = "2020-01-01T00:00:00Z"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    return path
+
+
+@pytest.mark.parametrize(
+    "env,revived",
+    [
+        ({"WORKER_HEAVY": "off"}, False),
+        ({"STAGE2_HOP": "1", "WORKER_HEAVY": "essential"}, False),
+        ({"WORKER_HEAVY": "essential"}, True),
+    ],
+    ids=["heavy_off", "hop", "essential_owner"],
+)
+def test_revive_runs_only_on_the_producer_owner(tmp_path, monkeypatch, env, revived):
+    """MC blocker: stall-guard revive must not make a non-owner worker produce."""
+    path = _stale_volume_file(tmp_path, monkeypatch)
+    monkeypatch.setenv("RUN_MODE", "worker")
+    monkeypatch.delenv("STAGE2_HOP", raising=False)
+    for key, value in env.items():
+        monkeypatch.setenv(key, value)
+    before = hashlib.sha256(path.read_bytes()).hexdigest()
+    ticks: list[int] = []
+    monkeypatch.setattr(
+        snaps.ScoreSnapshotScheduler,
+        "run_once",
+        lambda self: ticks.append(1) or {"ok": True, "skipped": True},
+    )
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda *a, **k: None)
+
+    out = snaps.revive_score_snapshot_scheduler()
+
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before
+    if revived:
+        assert ticks == [1]
+        assert out["start"]["started"] is True
+    else:
+        assert ticks == []
+        assert out["revived"] is False
+        assert out["reason"] == "not_owner"
+        assert snaps._scheduler is None
+        assert snaps.start_score_snapshot_scheduler()["reason"] == "not_owner"
