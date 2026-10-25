@@ -218,6 +218,10 @@ def _merge_sources(
     if tmc_positive is False and probe_positive is True:
         return "positive", sources, True, None, False
 
+    if probe_positive is None and prior.get("validity") == "negative" and tmc_positive is not False:
+        # A failed chain read does not undo an earlier chain verdict or restart its grace clock.
+        return "negative", sources, bool(prior.get("disputed")), negative_since, True
+
     if tmc_positive is True or probe_positive is True:
         return "positive", sources, False, None, False
 
