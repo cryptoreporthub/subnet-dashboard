@@ -88,3 +88,31 @@ def test_read_chain_membership_never_returns_an_empty_set(monkeypatch):
     chain, outcome = read_chain_membership(FakeReader((HASH, "ok")))
     assert chain is None
     assert outcome != "ok"
+
+
+def test_recorded_chain_membership_parses_to_a_chain_read_without_root():
+    import json
+    from pathlib import Path
+
+    from internal.chain_price.membership import read_chain_membership
+
+    data = json.loads((Path(__file__).parent / "fixtures" / "chain" / "bm_9280796.json").read_text())
+    block_hash = "0x72a82add74d481216a2f4b8f77e7729f88b2abf0654a9c6be89a3cf10f7cedd0"
+
+    class _Reader:
+        def pin_finalized_head(self):
+            return block_hash, "ok"
+
+        def call_fn(self):
+            def call(method, params=None):
+                return data[f"{method}|{json.dumps(params or [])}"], "ok"
+
+            return call
+
+    chain, outcome = read_chain_membership(_Reader())
+
+    assert outcome == "ok"
+    assert chain is not None
+    assert chain.block_hash == block_hash
+    assert 0 not in chain.netuids
+    assert len(chain.netuids) > 50
