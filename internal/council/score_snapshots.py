@@ -7,6 +7,7 @@ Request handlers must never call full-universe scoring — they read this file
 
 from __future__ import annotations
 
+import copy
 import fcntl
 import json
 import logging
@@ -152,14 +153,14 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         key = (snap_path, st.st_mtime_ns, st.st_size)
         cached = _served_parse_cache.get(key)
         if cached is not None:
-            return cached
+            return copy.deepcopy(cached)
         with open(snap_path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
         if not isinstance(data, dict):
             return None
         _served_parse_cache.clear()
         _served_parse_cache[key] = data
-        return data
+        return copy.deepcopy(data)
     except Exception:
         return None
 
