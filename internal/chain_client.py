@@ -308,6 +308,10 @@ def _set_stream_read_timeout(response: requests.Response, remaining: float) -> N
         sock.settimeout(remaining)
 
 
+# Byte-at-a-time reads cost ~2.7 us of GIL-held CPU per byte; the hang-up timer already bounds a drip.
+_BODY_CHUNK_BYTES = 16384
+
+
 class _SockHolder:
     """Holds the live connection socket so a timer can hang up at the deadline."""
 
@@ -440,7 +444,7 @@ def _stream_post_worker(
             stream=True,
         )
         body = bytearray()
-        chunks = response.iter_content(chunk_size=1)
+        chunks = response.iter_content(chunk_size=_BODY_CHUNK_BYTES)
         while True:
             remaining = deadline_monotonic - time.monotonic()
             if remaining <= 0:

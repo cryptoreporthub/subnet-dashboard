@@ -110,3 +110,20 @@ def test_slow_name_resolution_returns_at_deadline_and_leaves_no_connection(tls, 
     assert elapsed < deadline_s + 0.15, f"returned {elapsed:.2f}s after a {deadline_s}s deadline"
     assert server.finished.wait(4.0)
     assert server.closed_at is not None, "the late connection was left open"
+
+
+def test_dripping_proxy_returns_at_deadline(monkeypatch):
+    proxy = _DripServer(per_byte=0.05, total_bytes=60)
+    monkeypatch.setenv("HTTP_PROXY", f"http://127.0.0.1:{proxy.port}")
+    monkeypatch.setenv("NO_PROXY", "")
+    deadline_s = 0.3
+    started = time.monotonic()
+    with pytest.raises(requests.Timeout):
+        _timed_post(
+            "http://rpc.example.invalid/",
+            {"jsonrpc": "2.0", "id": 1, "method": "x", "params": []},
+            10.0,
+            deadline_monotonic=started + deadline_s,
+        )
+    elapsed = time.monotonic() - started
+    assert elapsed < deadline_s + 0.15, f"returned {elapsed:.2f}s after a {deadline_s}s deadline"
