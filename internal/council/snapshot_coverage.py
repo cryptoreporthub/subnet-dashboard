@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import os
 import time
 from datetime import datetime, timezone
@@ -62,6 +64,13 @@ def membership_fresh(
     return age >= 0 and age <= limit
 
 
+def membership_generation(expected_netuids: Any) -> str:
+    """Content id of the scored set. Block and rpc stay out: every refresh pins a new block."""
+    body = {"v": 1, "expected_netuids": membership_scoring_expected(list(expected_netuids))}
+    digest = hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    return "mg1:" + digest.hexdigest()[:16]
+
+
 def load_membership_receipt() -> Dict[str, Any]:
     try:
         from internal.subnet_universe import get_snapshot, universe_snapshot_feed_meta
@@ -80,6 +89,9 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": bool(snap.cap_reached),
             "refresh_incomplete": bool(snap.refresh_incomplete),
             "expected_netuids": list(chain.netuids) if chain else [],
+            "generation": membership_generation(chain.netuids if chain else []),
+            "block_hash": chain.block_hash if chain else None,
+            "rpc": chain.rpc if chain else None,
             "chain": chain.to_dict() if chain else None,
             "fresh": membership_fresh(snap.resolved_at),
             "root_netuid_in_membership": 0 in snap.netuids,
@@ -95,6 +107,9 @@ def load_membership_receipt() -> Dict[str, Any]:
             "cap_reached": False,
             "refresh_incomplete": True,
             "expected_netuids": [],
+            "generation": membership_generation([]),
+            "block_hash": None,
+            "rpc": None,
             "chain": None,
             "fresh": False,
             "root_netuid_in_membership": False,
