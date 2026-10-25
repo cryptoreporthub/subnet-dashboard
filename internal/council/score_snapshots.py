@@ -339,6 +339,26 @@ def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
     return max(0.0, datetime.now(timezone.utc).timestamp() - parsed.timestamp())
 
 
+def snapshot_membership_current(snap: Optional[Dict[str, Any]]) -> Optional[bool]:
+    """Does the snapshot's scored set still match the live membership? None when that cannot be said.
+
+    Readers only label this; refusing a moved snapshot would blank picks on the first deregistration.
+    """
+    if not snap:
+        return None
+    from internal.council.snapshot_coverage import (
+        load_membership_receipt,
+        membership_allows_admission,
+        membership_generation,
+    )
+
+    receipt = load_membership_receipt()
+    if not membership_allows_admission(receipt):
+        return None
+    membership = ((snap.get("coverage") or {}).get("membership")) or {}
+    return receipt.get("generation") == membership_generation(membership.get("expected_netuids") or [])
+
+
 class ServedState(str, Enum):
     FRESH = "fresh"
     AGED = "aged"
@@ -360,16 +380,18 @@ class ServedSnapshot:
 
     def label(self, *, max_age_seconds: Optional[int] = None) -> Dict[str, Any]:
         ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+        membership_current = snapshot_membership_current(self.snapshot)
         stale_alert = self.state in (ServedState.AGED, ServedState.SEED)
         if self.state is ServedState.FRESH and self.age_seconds is not None and ttl > 0:
             stale_alert = self.age_seconds > ttl
-        if self.state is ServedState.SEED:
+        if self.state is ServedState.SEED or membership_current is False:
             stale_alert = True
         out: Dict[str, Any] = {
             "snapshot_state": self.state.value,
             "snapshot_origin": self.origin,
             "snapshot_age_seconds": round(self.age_seconds, 3) if self.age_seconds is not None else None,
             "stale_alert": stale_alert,
+            "membership_current": membership_current,
         }
         if self.reason:
             out["reason"] = self.reason
