@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import ExitStack
 from datetime import datetime, timezone
 from typing import Any, Dict
+from unittest import mock
 
 from internal.council import score_snapshots as snaps
 from internal.chain_read import ChainRead
@@ -44,23 +46,25 @@ def build_image_seed_snapshot(
 ) -> Dict[str, Any]:
     """Score the chain's subnets with the real scorer and receipt code; returns write result."""
     hydrate, market_provenance = build_authoritative_hydrate_rows(chain.netuids)
-    os.environ["SCORE_SNAPSHOT_CYCLE_PATH"] = cycle_path
-    os.environ["SCORE_SNAPSHOT_REGISTRY_ONLY"] = "on"
-    snaps.SCORE_SNAPSHOTS_PATH = volume_path
-    snaps.SCORE_SNAPSHOT_SEED_PATH = volume_path + ".unused-seed"
     membership = _membership_from_authoritative_rows(hydrate, chain)
 
     import internal.subnet_universe as su
     import server
 
-    prev_get = su.get_snapshot
-    prev_hydrate = server._get_subnets_hydrate
-    prev_hour = snaps._score_hour_enabled
-
-    su.get_snapshot = lambda: membership  # type: ignore[method-assign]
-    server._get_subnets_hydrate = lambda: (list(membership.rows), "registry-fallback")  # type: ignore[method-assign]
-    snaps._score_hour_enabled = lambda: False  # type: ignore[method-assign]
-    try:
+    with ExitStack() as patched:
+        patched.enter_context(
+            mock.patch.dict(
+                os.environ,
+                {"SCORE_SNAPSHOT_CYCLE_PATH": cycle_path, "SCORE_SNAPSHOT_REGISTRY_ONLY": "on"},
+            )
+        )
+        patched.enter_context(mock.patch.object(snaps, "SCORE_SNAPSHOTS_PATH", volume_path))
+        patched.enter_context(mock.patch.object(snaps, "SCORE_SNAPSHOT_SEED_PATH", volume_path + ".unused-seed"))
+        patched.enter_context(mock.patch.object(su, "get_snapshot", lambda: membership))
+        patched.enter_context(
+            mock.patch.object(server, "_get_subnets_hydrate", lambda: (list(membership.rows), "registry-fallback"))
+        )
+        patched.enter_context(mock.patch.object(snaps, "_score_hour_enabled", lambda: False))
         out = snaps.write_full_universe_snapshot()
         if out.get("published") and os.path.isfile(volume_path):
             with open(volume_path, "r", encoding="utf-8") as handle:
@@ -72,7 +76,3 @@ def build_image_seed_snapshot(
                 snap["build_provenance"] = prov
                 snaps.publish_complete_snapshot(snap, volume_path)
         return out
-    finally:
-        su.get_snapshot = prev_get  # type: ignore[method-assign]
-        server._get_subnets_hydrate = prev_hydrate  # type: ignore[method-assign]
-        snaps._score_hour_enabled = prev_hour  # type: ignore[method-assign]
