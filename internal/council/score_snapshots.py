@@ -1201,7 +1201,8 @@ class ScoreSnapshotScheduler:
         }
 
     def stop(self) -> Dict[str, Any]:
-        self._armed = False
+        with _lock:
+            self._armed = False
         cancel_job(JOB_ID)
         return {"stopped": True}
 

@@ -348,7 +348,11 @@ def main() -> int:
         )
 
     bad = [r for r in rows if r.scenario.startswith("(a)") and r.day_rows == 0]
-    bad += [r for r in rows if r.scenario.startswith("(b)") and r.served_state == "none"]
+    bad += [
+        r for r in rows
+        if r.scenario.startswith("(b)")
+        and (r.served_state not in {"seed", "fresh", "aged"} or r.day_rows == 0)
+    ]
     bad += [r for r in rows if r.scenario.startswith("(c)") and r.producer_enabled != "exactly_one_per_topo"]
     bad += [r for r in rows if r.scenario.startswith("(d)") and r.producer_enabled != "False"]
     return 1 if bad else 0
