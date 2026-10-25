@@ -1173,10 +1173,15 @@ class ScoreSnapshotScheduler:
             resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
             armed = "immediate" if immediate else "deferred"
             if immediate:
+                # A started tick thread cannot be cancelled; a liveness
+                # failure must abort before the thread exists. Deferred mode
+                # stays schedule-first so a failed schedule leaves the
+                # lifecycle unchanged (cancel_job covers that path).
+                self.liveness.start()
                 threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
             else:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
-            self.liveness.start()
+                self.liveness.start()
         except Exception:
             cancel_job(JOB_ID)
             with _lock:
