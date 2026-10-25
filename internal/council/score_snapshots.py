@@ -185,6 +185,14 @@ def is_complete_snapshot(snap: Any) -> bool:
     coverage = snap.get("coverage")
     if not isinstance(coverage, dict) or coverage.get("complete") is not True:
         return False
+    day_cov = coverage.get("day")
+    if not isinstance(day_cov, dict):
+        return False
+    declared = day_cov.get("expected")
+    if declared is not None and (
+        not isinstance(declared, list) or any(type(n) is not int for n in declared)
+    ):
+        return False
     if not scorer_fields_match(snap):
         return False
     membership = coverage.get("membership")

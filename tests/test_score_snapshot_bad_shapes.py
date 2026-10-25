@@ -153,5 +153,5 @@ def test_malformed_day_coverage_is_incomplete_and_reading_it_does_not_raise(name
     assert snaps.is_complete_snapshot(payload) is False
     volume = tmp_path / "explicit_volume.json"
     volume.write_text(json.dumps(payload), encoding="utf-8")
-    served = snaps.read_served_snapshot(str(volume), str(tmp_path / "seed.json"))
+    served = snaps.read_served_snapshot(str(volume), SEED)
     assert served.state is snaps.ServedState.SEED
