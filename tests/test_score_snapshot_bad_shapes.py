@@ -45,6 +45,9 @@ CHAIN_AND_ROW_SHAPES = {
     "missing_row": lambda p: _set_chain(p, [1, 2]),
     "extra_row": lambda p: p.update(day=[{"netuid": 1}, {"netuid": 999}]),
     "duplicate_row": lambda p: p.update(day=[{"netuid": 1}, {"netuid": 1}]),
+    "day_expected_junk_strings": lambda p: p["coverage"]["day"].update(expected=["bad"]),
+    "day_expected_not_a_list": lambda p: p["coverage"]["day"].update(expected="bad"),
+    "coverage_day_not_a_dict": lambda p: p["coverage"].update(day=["bad"]),
     "row_netuid_text": lambda p: p.update(day=[{"netuid": "x"}]),
     "row_netuid_numeric_string": lambda p: p.update(day=[{"netuid": "1"}]),
     "row_netuid_null": lambda p: p.update(day=[{"netuid": None}]),
@@ -139,3 +142,16 @@ def test_the_predicate_is_total_over_the_real_seed_under_junk_injection():
             snaps.is_complete_snapshot(_replace(seed, path, junk))
             checked += 1
     assert checked > 500
+
+
+MALFORMED_DAY_COVERAGE = ["day_expected_junk_strings", "day_expected_not_a_list", "coverage_day_not_a_dict"]
+
+
+@pytest.mark.parametrize("name", MALFORMED_DAY_COVERAGE)
+def test_malformed_day_coverage_is_incomplete_and_reading_it_does_not_raise(name, tmp_path):
+    payload = _payload(CHAIN_AND_ROW_SHAPES[name])
+    assert snaps.is_complete_snapshot(payload) is False
+    volume = tmp_path / "explicit_volume.json"
+    volume.write_text(json.dumps(payload), encoding="utf-8")
+    served = snaps.read_served_snapshot(str(volume), str(tmp_path / "seed.json"))
+    assert served.state is snaps.ServedState.SEED
