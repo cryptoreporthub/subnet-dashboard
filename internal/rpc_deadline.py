@@ -31,6 +31,9 @@ def _set_stream_read_timeout(response: requests.Response, remaining: float) -> N
 
 # Byte-at-a-time reads cost ~2.7 us of GIL-held CPU per byte; the hang-up timer already bounds a drip.
 _BODY_CHUNK_BYTES = 16384
+# A thread parked in getaddrinfo cannot be cancelled. Past this many in flight, new attempts fail closed.
+_MAX_INFLIGHT = 4
+_inflight = threading.BoundedSemaphore(_MAX_INFLIGHT)
 
 
 class _SockHolder:
@@ -119,6 +122,8 @@ def stream_post(
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
         raise requests.Timeout("rpc deadline exceeded")
+    if not _inflight.acquire(blocking=False):
+        raise requests.Timeout("rpc deadline exceeded: too many abandoned attempts still in flight")
     holder = _SockHolder()
     outcome: Dict[str, Any] = {}
     done = threading.Event()
@@ -133,9 +138,14 @@ def stream_post(
             outcome["error"] = exc
         finally:
             _active_holder.holder = None
+            _inflight.release()
             done.set()
 
-    threading.Thread(target=work, daemon=True, name="rpc-deadline-post").start()
+    try:
+        threading.Thread(target=work, daemon=True, name="rpc-deadline-post").start()
+    except BaseException:
+        _inflight.release()
+        raise
     if not done.wait(max(0.0, deadline_monotonic - time.monotonic())):
         holder.expire()
         raise requests.Timeout("rpc deadline exceeded")

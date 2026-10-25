@@ -73,6 +73,8 @@ def load_membership_receipt() -> Dict[str, Any]:
             for key, entry in (snap.validity_map or {}).items()
             if str(key).isdigit() and isinstance(entry, dict) and entry.get("validity") == "negative"
         }
+        # Owner rule: a netuid the chain reports unregistered leaves expected at once, even while its
+        # row stays in ``snap.netuids`` for the 48h grace. Do not require an empty-slot row here.
         inactive = [n for n in netuids if n in negative]
         return {
             "source": feed.get("source"),
