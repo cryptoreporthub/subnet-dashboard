@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -144,6 +145,47 @@ def test_failed_arm_does_not_report_running(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError):
         sched.start(immediate=False)
     assert sched.state()["running"] is False
+
+
+def test_failed_liveness_start_in_immediate_mode_runs_no_tick(tmp_path, monkeypatch):
+    """Caveat on 3b05bf26: in immediate mode the tick thread starts before
+    liveness.start(). If the liveness write raises, cancel_job cannot stop a
+    thread that is already running, so a failed arm may still leave a live tick."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    path = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
+    scheduled: list = []
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, sec: scheduled.append((job_id, fn)))
+    ticks: list = []
+    monkeypatch.setattr(
+        snaps.ScoreSnapshotScheduler,
+        "_tick",
+        lambda self, reschedule=True: ticks.append(1) or {"ok": False, "skipped": "test"},
+    )
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    liveness_calls = {"n": 0}
+
+    def failing_start():
+        liveness_calls["n"] += 1
+        if liveness_calls["n"] == 1:
+            time.sleep(0.05)  # widen the window for an (incorrectly) started tick thread
+            raise RuntimeError("liveness persist unavailable")
+
+    monkeypatch.setattr(sched.liveness, "start", failing_start)
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=True)
+
+    time.sleep(0.5)
+    assert ticks == []
+    assert path.exists() is False
+    assert sched.state()["running"] is False
+    retry = sched.start(immediate=False)
+    assert retry["started"] is True
+    assert [job_id for job_id, _ in scheduled] == [snaps.JOB_ID]
 
 
 def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
