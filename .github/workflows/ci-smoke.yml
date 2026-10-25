@@ -79,7 +79,9 @@ jobs:
             tests/test_dpick_shortlist.py \
             tests/test_build_cost.py \
             tests/test_build_receipt.py \
-            tests/test_pick_scheduler.py -q 2>&1 | tee ci-test-output.txt
+            tests/test_pick_scheduler.py \
+            tests/test_subnet_universe.py \
+            tests/test_universe_stale_stamp.py -q 2>&1 | tee ci-test-output.txt
       - name: Upload test output artifact
         if: failure()
         continue-on-error: true
