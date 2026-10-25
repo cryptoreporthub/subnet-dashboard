@@ -12,6 +12,7 @@ import pytest
 
 from internal.subnet_universe import (
     STALE_GRACE_SECONDS,
+    MembershipBuild,
     SnapshotBuilder,
     SubnetUniverseProvider,
     UniverseSnapshot,
@@ -175,7 +176,7 @@ def test_swap_that_drops_an_in_grace_netuid_is_refused(tmp_path):
     class _SwapBuilder:
         def build(self, snapshot):
             kept = tuple(n for n in snapshot.netuids if n != PHANTOM) + (200,)
-            return replace(snapshot, netuids=tuple(sorted(kept)))
+            return MembershipBuild(replace(snapshot, netuids=tuple(sorted(kept))))
 
     provider.set_builder(_SwapBuilder())
     result = provider.refresh_once()

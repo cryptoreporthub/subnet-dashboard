@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
+ROOT_NETUID = 0
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -164,9 +165,7 @@ def _default_probe_fetch(
     if deadline is not None and time.monotonic() >= deadline:
         return {}, False
     registered = set(members)
-    observed: Dict[int, Optional[bool]] = {
-        n: (n == 0 or n in registered) for n in netuids
-    }
+    observed: Dict[int, Optional[bool]] = {n: n in registered for n in netuids}
     for n in registered:
         if n not in observed:
             observed[n] = True
@@ -241,16 +240,30 @@ def _merge_sources(
     return str(prior.get("validity") or "unobserved"), sources, bool(prior.get("disputed")), negative_since, refresh_incomplete
 
 
-def _eligible_for_removal(entry: Dict[str, Any], now: datetime) -> bool:
-    if str(entry.get("validity")) != "negative":
+@dataclass(frozen=True)
+class DropEvidence:
+    """What this cycle observed about a netuid it removed from membership."""
+
+    tmc: Optional[bool]
+    probe: Optional[bool]
+    negative_since: Optional[str]
+
+
+@dataclass(frozen=True)
+class MembershipBuild:
+    snapshot: UniverseSnapshot
+    dropped: Dict[int, DropEvidence] = field(default_factory=dict)
+
+
+def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:
+    if netuid == ROOT_NETUID:
         return False
-    if entry.get("refresh_incomplete"):
+    if evidence.tmc is not False or evidence.probe is not False:
         return False
-    negative_since = entry.get("negative_since")
-    if not negative_since:
+    if not evidence.negative_since:
         return False
     try:
-        started = datetime.fromisoformat(str(negative_since))
+        started = datetime.fromisoformat(str(evidence.negative_since))
         if started.tzinfo is None:
             started = started.replace(tzinfo=timezone.utc)
     except Exception:
@@ -270,24 +283,28 @@ def is_universe_refresh_writer() -> bool:
         return False
 
 
-def _shrink_allowed(prior: UniverseSnapshot, built: UniverseSnapshot) -> bool:
-    """True when a smaller built snapshot may replace prior (grace removals only).
-
-    A refresh_incomplete build may still shrink when every removed netuid is a
-    grace-eligible negative; blocking on refresh_incomplete alone would pin
-    confirmed-removed netuids forever whenever a source degrades.
-    """
-    if not prior.netuids or len(built.netuids) >= len(prior.netuids):
-        return True
-    removed = set(prior.netuids) - set(built.netuids)
-    if not removed:
-        return True
+def _shrink_allowed(prior: UniverseSnapshot, build: MembershipBuild) -> bool:
+    """True when every netuid dropped from prior carries this cycle's removal evidence."""
     now = datetime.now(timezone.utc)
-    for netuid in removed:
-        entry = prior.validity_map.get(str(netuid)) or {}
-        if not _eligible_for_removal(entry, now):
+    for netuid in set(prior.netuids) - set(build.snapshot.netuids):
+        evidence = build.dropped.get(netuid)
+        if evidence is None or not _eligible_for_removal(netuid, evidence, now):
             return False
     return True
+
+
+def _hold_prior(prior: UniverseSnapshot, status: str, message: str) -> UniverseSnapshot:
+    return UniverseSnapshot(
+        netuids=prior.netuids,
+        rows=prior.rows,
+        resolved_at=prior.resolved_at,
+        status=status,
+        degraded=True,
+        validity_map=dict(prior.validity_map),
+        cap_reached=prior.cap_reached,
+        refresh_incomplete=True,
+        message=message,
+    )
 
 
 def _compute_membership(
@@ -297,12 +314,13 @@ def _compute_membership(
     tmc_complete: bool,
     probe_map: Dict[int, Optional[bool]],
     probe_complete: bool,
-) -> Tuple[List[int], Dict[str, Any], bool, bool]:
-    """Resolve membership with no-shrink and 48h removal rules."""
+) -> Tuple[List[int], Dict[str, Any], bool, bool, Dict[int, DropEvidence]]:
+    """Resolve membership; a netuid leaves only on this cycle's evidence after the 48h grace."""
     now = datetime.now(timezone.utc)
     prior_netuids = sorted(int(k) for k in prior_map.keys() if str(k).isdigit())
     candidates = set(prior_netuids) | set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
     validity_map: Dict[str, Any] = {}
+    dropped: Dict[int, DropEvidence] = {}
     refresh_incomplete = not (tmc_complete and probe_complete)
     cap_reached = False
 
@@ -330,28 +348,14 @@ def _compute_membership(
             negative_since=negative_since,
             refresh_incomplete=entry_incomplete,
         )
-        include = validity == "positive" or validity == "unobserved"
-        if validity == "negative" and not _eligible_for_removal(entry, now):
-            include = True
-        if include:
+        evidence = DropEvidence(tmc=tmc_val, probe=probe_val, negative_since=negative_since)
+        if validity == "negative" and _eligible_for_removal(netuid, evidence, now):
+            dropped[netuid] = evidence
+        else:
             validity_map[key] = entry
 
     netuids = sorted(int(k) for k in validity_map.keys())
-
-    # Forbidden shrink: retain prior members unless explicitly removed after grace.
-    for netuid in prior_netuids:
-        if netuid in netuids:
-            continue
-        key = str(netuid)
-        entry = prior_map.get(key) or _validity_entry(validity="unobserved", refresh_incomplete=True)
-        if _eligible_for_removal(entry, now):
-            continue
-        validity_map[key] = dict(entry)
-        validity_map[key]["refresh_incomplete"] = True
-        netuids.append(netuid)
-        netuids = sorted(set(netuids))
-
-    return netuids, validity_map, cap_reached, refresh_incomplete
+    return netuids, validity_map, cap_reached, refresh_incomplete, dropped
 
 
 def _build_rows(netuids: List[int], tmc_rows: Dict[int, Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -523,7 +527,7 @@ class SnapshotBuilder:
         self._probe_fetch = probe_fetch
         self._probe_budget_seconds = probe_budget_seconds
 
-    def build(self, prior: Optional[UniverseSnapshot]) -> UniverseSnapshot:
+    def build(self, prior: Optional[UniverseSnapshot]) -> MembershipBuild:
         prior_map = dict((prior.validity_map if prior else {}) or {})
         tmc_positive, tmc_rows, tmc_complete = self._tmc_fetch()
 
@@ -541,9 +545,9 @@ class SnapshotBuilder:
             probe_map, probe_complete = _default_probe_fetch(probe_candidates, deadline=deadline)
 
         if not tmc_complete and not probe_complete and not prior_map:
-            return UniverseSnapshot.emergency_registry(reason="refresh_unresolvable")
+            return MembershipBuild(UniverseSnapshot.emergency_registry(reason="refresh_unresolvable"))
 
-        netuids, validity_map, cap_reached, refresh_incomplete = _compute_membership(
+        netuids, validity_map, cap_reached, refresh_incomplete, dropped = _compute_membership(
             prior_map,
             tmc_positive=tmc_positive,
             tmc_complete=tmc_complete,
@@ -564,49 +568,38 @@ class SnapshotBuilder:
                         if prior.status == "emergency_registry"
                         else "degraded"
                     )
-                    return UniverseSnapshot(
-                        netuids=prior.netuids,
-                        rows=prior.rows,
-                        resolved_at=prior.resolved_at,
-                        status=retain_status,
-                        degraded=True,
-                        validity_map=dict(prior.validity_map),
-                        cap_reached=prior.cap_reached,
-                        refresh_incomplete=True,
-                        message="Empty membership from sources — retained prior universe",
+                    return MembershipBuild(
+                        _hold_prior(prior, retain_status, "Empty membership from sources — retained prior universe")
                     )
-                return UniverseSnapshot.emergency_registry(
-                    "Empty membership from sources — emergency registry fallback",
-                    reason="empty_membership",
+                return MembershipBuild(
+                    UniverseSnapshot.emergency_registry(
+                        "Empty membership from sources — emergency registry fallback",
+                        reason="empty_membership",
+                    )
                 )
             if prior and prior.netuids and refresh_incomplete:
-                return UniverseSnapshot(
-                    netuids=prior.netuids,
-                    rows=prior.rows,
-                    resolved_at=prior.resolved_at,
+                return MembershipBuild(
+                    _hold_prior(prior, "degraded", "Refresh incomplete — retained last-known-good universe")
+                )
+            return MembershipBuild(
+                UniverseSnapshot(
+                    netuids=tuple(),
+                    rows=tuple(),
+                    resolved_at=_now_iso(),
                     status="degraded",
                     degraded=True,
-                    validity_map=dict(prior.validity_map),
-                    cap_reached=prior.cap_reached,
-                    refresh_incomplete=True,
-                    message="Refresh incomplete — retained last-known-good universe",
-                )
-            return UniverseSnapshot(
-                netuids=tuple(),
-                rows=tuple(),
-                resolved_at=_now_iso(),
-                status="degraded",
-                degraded=True,
-                validity_map=validity_map,
-                cap_reached=cap_reached,
-                refresh_incomplete=False,
-                message="Membership resolved empty after validation",
+                    validity_map=validity_map,
+                    cap_reached=cap_reached,
+                    refresh_incomplete=False,
+                    message="Membership resolved empty after validation",
+                ),
+                dropped,
             )
 
         rows = _build_rows(netuids, tmc_rows)
         degraded = not (tmc_complete and probe_complete) or refresh_incomplete
         status = "degraded" if degraded else "ok"
-        return UniverseSnapshot(
+        snapshot = UniverseSnapshot(
             netuids=tuple(netuids),
             rows=tuple(rows),
             resolved_at=_now_iso(),
@@ -617,6 +610,7 @@ class SnapshotBuilder:
             refresh_incomplete=refresh_incomplete,
             message="" if not degraded else "Refresh incomplete or source degraded",
         )
+        return MembershipBuild(snapshot, dropped)
 
 
 class SubnetUniverseProvider:
@@ -697,37 +691,22 @@ class SubnetUniverseProvider:
         if not self._refresh_lock.acquire(blocking=False):
             return self._snapshot
         try:
-            built = self._builder.build(self._snapshot)
+            build = self._builder.build(self._snapshot)
+            built = build.snapshot
             if built.status == "emergency_registry" and self._snapshot.status != "emergency_registry":
                 logger.warning("subnet_universe refresh produced emergency — retaining LKG")
-                built = UniverseSnapshot(
-                    netuids=self._snapshot.netuids,
-                    rows=self._snapshot.rows,
-                    resolved_at=self._snapshot.resolved_at,
-                    status="degraded",
-                    degraded=True,
-                    validity_map=dict(self._snapshot.validity_map),
-                    cap_reached=self._snapshot.cap_reached,
-                    refresh_incomplete=True,
-                    message="Refresh failed — retained last-known-good universe",
+                built = _hold_prior(
+                    self._snapshot, "degraded", "Refresh failed — retained last-known-good universe"
                 )
-            elif not _shrink_allowed(self._snapshot, built):
+            elif not _shrink_allowed(self._snapshot, build):
                 logger.warning(
                     "subnet_universe unsafe shrink blocked (%d -> %d) removed=%s",
                     len(self._snapshot.netuids),
                     len(built.netuids),
                     sorted(set(self._snapshot.netuids) - set(built.netuids)),
                 )
-                built = UniverseSnapshot(
-                    netuids=self._snapshot.netuids,
-                    rows=self._snapshot.rows,
-                    resolved_at=self._snapshot.resolved_at,
-                    status="degraded",
-                    degraded=True,
-                    validity_map=dict(self._snapshot.validity_map),
-                    cap_reached=self._snapshot.cap_reached,
-                    refresh_incomplete=True,
-                    message="Unsafe shrink blocked — retained last-known-good universe",
+                built = _hold_prior(
+                    self._snapshot, "degraded", "Unsafe shrink blocked — retained last-known-good universe"
                 )
             self._publish(built)
             return built
