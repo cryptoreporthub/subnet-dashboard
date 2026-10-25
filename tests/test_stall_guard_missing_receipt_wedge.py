@@ -31,7 +31,17 @@ class _Stop(Exception):
     pass
 
 
-def _wire(tmp_path, monkeypatch, *, seed=REPO_SEED):
+def _aged_real_seed(tmp_path, *, age_seconds=8 * 86400) -> str:
+    snap = json.loads(Path(REPO_SEED).read_text(encoding="utf-8"))
+    stamp = datetime.fromtimestamp(time.time() - age_seconds, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    snap["written_at"] = snap["build_started_at"] = stamp
+    out = tmp_path / "aged_seed.json"
+    out.write_text(json.dumps(snap), encoding="utf-8")
+    return str(out)
+
+
+def _wire(tmp_path, monkeypatch, *, seed=None):
+    seed = seed or _aged_real_seed(tmp_path)
     vol = tmp_path / "score_snapshots.json"
     soul = tmp_path / "soul_map.json"
     soul.write_text("{}", encoding="utf-8")
