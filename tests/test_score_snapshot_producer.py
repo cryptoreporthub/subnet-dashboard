@@ -217,6 +217,42 @@ def test_failed_liveness_start_in_immediate_mode_runs_no_tick(tmp_path, monkeypa
     assert [job_id for job_id, _ in scheduled] == [snaps.JOB_ID]
 
 
+def test_failed_tick_thread_start_in_immediate_mode_does_not_leave_started_lifecycle(tmp_path, monkeypatch):
+    """Liveness is marked started before the tick thread exists. If the thread
+    cannot start, the lifecycle must not stay ``started``: revive reads that as
+    a running scheduler with no tick behind it."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(tmp_path / "score_snapshots.json"))
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, sec: None)
+    ticks: list = []
+    monkeypatch.setattr(
+        snaps.ScoreSnapshotScheduler,
+        "_tick",
+        lambda self, reschedule=True: ticks.append(1) or {"ok": False, "skipped": "test"},
+    )
+    real_thread = snaps.threading.Thread
+
+    class TickThreadCannotStart(real_thread):
+        def start(self):
+            if self.name == "score-snap-tick":
+                raise RuntimeError("cannot start thread")
+            super().start()
+
+    monkeypatch.setattr(snaps.threading, "Thread", TickThreadCannotStart)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=True)
+
+    assert ticks == []
+    assert sched.liveness.snapshot()["lifecycle"] == "stopped"
+    assert sched.state()["running"] is False
+
+
 def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     resolved = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     rows = tuple(
