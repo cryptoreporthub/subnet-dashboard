@@ -127,3 +127,31 @@ def test_dripping_proxy_returns_at_deadline(monkeypatch):
         )
     elapsed = time.monotonic() - started
     assert elapsed < deadline_s + 0.15, f"returned {elapsed:.2f}s after a {deadline_s}s deadline"
+
+
+def test_hung_resolver_cannot_pile_up_worker_threads(monkeypatch):
+    release = threading.Event()
+    real_getaddrinfo = socket.getaddrinfo
+
+    def hung_getaddrinfo(*args, **kwargs):
+        release.wait(10)
+        return real_getaddrinfo(*args, **kwargs)
+
+    monkeypatch.setattr(socket, "getaddrinfo", hung_getaddrinfo)
+    payload = {"jsonrpc": "2.0", "id": 1, "method": "x", "params": []}
+    try:
+        for _ in range(12):
+            started = time.monotonic()
+            with pytest.raises(requests.Timeout):
+                _timed_post(
+                    "http://127.0.0.1:9/",
+                    payload,
+                    10.0,
+                    deadline_monotonic=started + 0.05,
+                )
+            assert time.monotonic() - started < 0.25
+        alive = [t for t in threading.enumerate() if t.name == "rpc-deadline-post"]
+        assert len(alive) <= 4, f"{len(alive)} abandoned worker threads are still parked in the resolver"
+    finally:
+        release.set()
+        time.sleep(0.2)
