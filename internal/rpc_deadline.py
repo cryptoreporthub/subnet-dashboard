@@ -41,12 +41,12 @@ class _SockHolder:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._sock = None
+        self._socks: list = []
         self.expired = False
 
     def register(self, sock) -> None:
         with self._lock:
-            self._sock = sock
+            self._socks.append(sock)
             expired = self.expired
         if expired:
             self._hang_up(sock)
@@ -54,8 +54,8 @@ class _SockHolder:
     def expire(self) -> None:
         with self._lock:
             self.expired = True
-            sock = self._sock
-        if sock is not None:
+            socks = list(self._socks)
+        for sock in socks:
             self._hang_up(sock)
 
     @staticmethod
@@ -77,14 +77,22 @@ def _register_socket(sock) -> None:
 
 
 class _DeadlineHTTPConnection(urllib3.connection.HTTPConnection):
-    def connect(self) -> None:
-        super().connect()
-        _register_socket(self.sock)
+    def _new_conn(self):
+        # registered at TCP connect, so a TLS handshake or proxy exchange can be hung up too
+        sock = super()._new_conn()
+        _register_socket(sock)
+        return sock
 
 
 class _DeadlineHTTPSConnection(urllib3.connection.HTTPSConnection):
+    def _new_conn(self):
+        sock = super()._new_conn()
+        _register_socket(sock)
+        return sock
+
     def connect(self) -> None:
         super().connect()
+        # the TLS wrap detaches the raw socket; the wrapped one is what a blocked read sits on
         _register_socket(self.sock)
 
 
@@ -96,10 +104,19 @@ class _DeadlineHTTPSPool(urllib3.HTTPSConnectionPool):
     ConnectionCls = _DeadlineHTTPSConnection
 
 
+_POOL_CLASSES = {"http": _DeadlineHTTPPool, "https": _DeadlineHTTPSPool}
+
+
 class _DeadlineAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
         super().init_poolmanager(*args, **kwargs)
-        self.poolmanager.pool_classes_by_scheme = {"http": _DeadlineHTTPPool, "https": _DeadlineHTTPSPool}
+        self.poolmanager.pool_classes_by_scheme = _POOL_CLASSES
+
+    def proxy_manager_for(self, proxy, **proxy_kwargs):
+        manager = super().proxy_manager_for(proxy, **proxy_kwargs)
+        if hasattr(manager, "pool_classes_by_scheme"):
+            manager.pool_classes_by_scheme = _POOL_CLASSES
+        return manager
 
 
 def stream_post(
@@ -113,11 +130,12 @@ def stream_post(
     ``requests.post`` blocks inside header parsing and its socket timeout restarts on
     every received byte, so a slow header drip outlives any deadline checked after it
     returns. The request runs on a daemon thread and the caller waits only until the
-    deadline. An abandoned attempt whose socket is registered is hung up at the deadline, or
-    as soon as it registers if the resolver was still running. An abandoned attempt that never
-    registers a socket (proxy-routed, or still in the TLS handshake) keeps reading until the
-    peer stops sending; each read is limited only by the per-read timeout, which restarts on
-    every byte. At most four such attempts can be in flight; past that, new attempts fail closed.
+    deadline. Once an abandoned attempt has a connected socket (including the one to a proxy,
+    and including a CONNECT tunnel) it is hung up at the deadline, or as soon as it gets one if
+    the resolver was still running. Two phases are not cancelled by a hang-up: name resolution
+    (a parked getaddrinfo cannot be interrupted) and the TCP connect itself, which is bounded by
+    the connect timeout per resolved address. At most four attempts can be stuck in those
+    phases at once; past that, new attempts fail closed.
     """
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
