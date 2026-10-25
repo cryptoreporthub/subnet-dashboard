@@ -22,12 +22,12 @@ from internal.subnet_universe import (
 def _prod_like_prior() -> UniverseSnapshot:
     active = list(range(1, 129))
     phantoms = [129, 131] + list(range(133, 168))
-    netuids = sorted(active + phantoms)
-    validity = {str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in active}
+    netuids = sorted([0] + active + phantoms)
+    validity = {str(n): _validity_entry(validity="positive", sources=["taomarketcap"]) for n in [0] + active}
     for n in phantoms:
         validity[str(n)] = _validity_entry(validity="positive", sources=["blockmachine_probe"])
     rows = []
-    for n in active:
+    for n in [0] + active:
         rows.append({"netuid": n, "id": n, "source": "taomarketcap", "sources": ["taomarketcap"]})
     for n in phantoms:
         rows.append({"netuid": n, "id": n, "source": "none", "sources": ["none"]})
