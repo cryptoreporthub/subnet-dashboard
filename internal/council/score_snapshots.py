@@ -1178,7 +1178,11 @@ class ScoreSnapshotScheduler:
                 # stays schedule-first so a failed schedule leaves the
                 # lifecycle unchanged (cancel_job covers that path).
                 self.liveness.start()
-                threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
+                try:
+                    threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
+                except Exception:
+                    self.liveness.stop()
+                    raise
             else:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
                 self.liveness.start()

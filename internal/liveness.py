@@ -274,6 +274,12 @@ class LivenessTracker:
             self._lifecycle = "started"
         self._save()
 
+    def stop(self) -> None:
+        """Mark lifecycle stopped. NEVER touches health."""
+        with self._lock:
+            self._lifecycle = "stopped"
+        self._save()
+
     # -- recording -----------------------------------------------------
 
     def record_skip(self, reason: str) -> None:
