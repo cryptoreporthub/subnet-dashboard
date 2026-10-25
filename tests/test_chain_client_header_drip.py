@@ -278,3 +278,30 @@ def test_repeated_drips_never_exhaust_the_slots_and_a_later_call_succeeds(route,
         f"http://127.0.0.1:{ok.port}/", payload_rpc, 5.0, deadline_monotonic=time.monotonic() + 5.0
     )
     assert response.json()["result"] == "ok"
+
+
+def test_direct_tls_handshake_drip_never_exhausts_the_slots_and_a_later_call_succeeds():
+    # a TLS record header, then one byte per 50 ms: the client stays inside the handshake
+    drip = _RepeatDripServer(b"\x16\x03\x03\x40\x00" + b"a" * 400, per_byte=0.05)
+    payload_rpc = {"jsonrpc": "2.0", "id": 1, "method": "x", "params": []}
+    try:
+        for _ in range(7):
+            started = time.monotonic()
+            with pytest.raises(requests.Timeout) as err:
+                _timed_post(
+                    f"https://127.0.0.1:{drip.port}/", payload_rpc, 10.0, deadline_monotonic=started + 0.25
+                )
+            assert time.monotonic() - started < 0.4
+            assert "too many abandoned" not in str(err.value)
+            time.sleep(0.1)
+        end = time.monotonic() + 2.0
+        while _abandoned_workers() and time.monotonic() < end:
+            time.sleep(0.05)
+        assert not _abandoned_workers(), "a worker is still inside the TLS handshake after its deadline"
+    finally:
+        drip.close()
+    ok = _OkServer()
+    response = _timed_post(
+        f"http://127.0.0.1:{ok.port}/", payload_rpc, 5.0, deadline_monotonic=time.monotonic() + 5.0
+    )
+    assert response.json()["result"] == "ok"
