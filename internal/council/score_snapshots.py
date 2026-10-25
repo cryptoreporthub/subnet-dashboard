@@ -1171,13 +1171,14 @@ class ScoreSnapshotScheduler:
             self._armed = True
         try:
             resumed_lifecycle = self.liveness.snapshot().get("lifecycle") == "started"
-            self.liveness.start()
             armed = "immediate" if immediate else "deferred"
             if immediate:
                 threading.Thread(target=self._tick, daemon=True, name="score-snap-tick").start()
             else:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
+            self.liveness.start()
         except Exception:
+            cancel_job(JOB_ID)
             with _lock:
                 self._armed = False
             raise
