@@ -1462,6 +1462,10 @@ def _enabled() -> bool:
 def start_score_snapshot_scheduler(immediate: bool = False) -> Dict[str, Any]:
     if not _enabled():
         return {"started": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"started": False, "reason": "not_owner"}
     global _scheduler
     with _lock:
         if _scheduler is None:
@@ -1527,6 +1531,10 @@ def revive_score_snapshot_scheduler() -> Dict[str, Any]:
     """
     if not _enabled():
         return {"revived": False, "reason": "disabled"}
+    from internal.run_mode import score_snapshot_producer_enabled
+
+    if not score_snapshot_producer_enabled():
+        return {"revived": False, "reason": "not_owner"}
 
     age_before = snapshot_age_seconds()
     recycled = False
