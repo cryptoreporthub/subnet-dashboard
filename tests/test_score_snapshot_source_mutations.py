@@ -19,16 +19,14 @@ from tests.score_snapshot_testutil import complete_snapshot_payload
 
 
 @pytest.fixture(autouse=True)
-def _reset_top_picks_cache():
+def _reset_top_picks_cache(monkeypatch):
     import server
 
+    # A fresh lock per test: never release a lock this fixture did not acquire.
+    monkeypatch.setattr(server, "_TOP_PICKS_LOCK", threading.Lock())
     server._TOP_PICKS_CACHE.update(at=0.0, payload=None)
-    if server._TOP_PICKS_LOCK.locked():
-        server._TOP_PICKS_LOCK.release()
     yield
     server._TOP_PICKS_CACHE.update(at=0.0, payload=None)
-    if server._TOP_PICKS_LOCK.locked():
-        server._TOP_PICKS_LOCK.release()
 
 
 @pytest.fixture
