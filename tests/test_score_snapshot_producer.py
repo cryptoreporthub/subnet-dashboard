@@ -128,7 +128,8 @@ def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     )
 
 
-def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch):
+@pytest.mark.parametrize("seed_only", [False, True], ids=["stale_volume_file", "seed_only_no_volume_file"])
+def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch, seed_only):
     netuids = range(1, 129)
     membership = _membership_for_netuids(netuids)
     path = tmp_path / "score_snapshots.json"
@@ -136,9 +137,11 @@ def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch
     seed_rows = [{"netuid": n, "total_score": float(n)} for n in (1, 2, 3)]
     payload = complete_snapshot_payload(day_rows=seed_rows, hour_rows=seed_rows)
     payload["build_started_at"] = old_started
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    seed_path = tmp_path / "seed.json" if seed_only else tmp_path / "no_seed.json"
+    (seed_path if seed_only else path).write_text(json.dumps(payload), encoding="utf-8")
+    assert path.exists() is not seed_only
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(path))
-    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(seed_path))
     monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
     monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
     monkeypatch.setenv("SCORE_SNAPSHOT_BOOT_IMMEDIATE", "off")
@@ -181,6 +184,7 @@ def test_essential_worker_boot_publishes_complete_snapshot(tmp_path, monkeypatch
     assert score_boot_ran["n"] == 1
     sched = snaps._scheduler
     assert sched is not None
+    assert sched.liveness.snapshot().get("lifecycle") == "started"
     out = sched.run_once()
     assert out.get("ok") is True
     assert out.get("complete") is True
