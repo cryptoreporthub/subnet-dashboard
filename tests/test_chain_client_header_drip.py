@@ -83,8 +83,13 @@ def test_header_drip_returns_at_deadline_and_closes_the_connection(tls, tmp_path
     )
 
 
-def test_slow_name_resolution_returns_at_deadline_and_leaves_no_connection(monkeypatch):
-    server = _DripServer(per_byte=0.05, total_bytes=60)
+@pytest.mark.parametrize("tls", [False, True], ids=["http", "https"])
+def test_slow_name_resolution_returns_at_deadline_and_leaves_no_connection(tls, tmp_path, monkeypatch):
+    if tls and shutil.which("openssl") is None:
+        pytest.skip("openssl not available")
+    server = _DripServer(per_byte=0.05, total_bytes=60, tls_dir=tmp_path if tls else None)
+    if tls:
+        monkeypatch.setenv("REQUESTS_CA_BUNDLE", server.cert)
     real_getaddrinfo = socket.getaddrinfo
 
     def slow_getaddrinfo(*args, **kwargs):
@@ -96,7 +101,7 @@ def test_slow_name_resolution_returns_at_deadline_and_leaves_no_connection(monke
     started = time.monotonic()
     with pytest.raises(requests.Timeout):
         _timed_post(
-            f"http://127.0.0.1:{server.port}",
+            f"{'https' if tls else 'http'}://127.0.0.1:{server.port}",
             {"jsonrpc": "2.0", "id": 1, "method": "x", "params": []},
             10.0,
             deadline_monotonic=started + deadline_s,

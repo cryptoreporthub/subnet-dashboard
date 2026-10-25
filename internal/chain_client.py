@@ -348,30 +348,30 @@ def _register_socket(sock) -> None:
         holder.register(sock)
 
 
-class _SpyHTTPConnection(urllib3.connection.HTTPConnection):
+class _DeadlineHTTPConnection(urllib3.connection.HTTPConnection):
     def connect(self) -> None:
         super().connect()
         _register_socket(self.sock)
 
 
-class _SpyHTTPSConnection(urllib3.connection.HTTPSConnection):
+class _DeadlineHTTPSConnection(urllib3.connection.HTTPSConnection):
     def connect(self) -> None:
         super().connect()
         _register_socket(self.sock)
 
 
-class _SpyHTTPPool(urllib3.HTTPConnectionPool):
-    ConnectionCls = _SpyHTTPConnection
+class _DeadlineHTTPPool(urllib3.HTTPConnectionPool):
+    ConnectionCls = _DeadlineHTTPConnection
 
 
-class _SpyHTTPSPool(urllib3.HTTPSConnectionPool):
-    ConnectionCls = _SpyHTTPSConnection
+class _DeadlineHTTPSPool(urllib3.HTTPSConnectionPool):
+    ConnectionCls = _DeadlineHTTPSConnection
 
 
 class _DeadlineAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
         super().init_poolmanager(*args, **kwargs)
-        self.poolmanager.pool_classes_by_scheme = {"http": _SpyHTTPPool, "https": _SpyHTTPSPool}
+        self.poolmanager.pool_classes_by_scheme = {"http": _DeadlineHTTPPool, "https": _DeadlineHTTPSPool}
 
 
 def _stream_post(
@@ -380,14 +380,16 @@ def _stream_post(
     timeout: float,
     deadline_monotonic: float,
 ) -> requests.Response:
-    """POST with a hard wall-clock cap over name resolution, connect, headers and body.
+    """POST that returns to the caller by the deadline, whatever the server or resolver does.
 
     ``requests.post`` blocks inside header parsing and its socket timeout restarts on
     every received byte, so a slow header drip outlives any deadline checked after it
     returns. The request runs on a daemon thread and the caller waits only until the
-    deadline. At the deadline the connection's socket is shut down, which ends a blocked
-    read, and a socket that appears later (after a slow resolver) is shut down on
-    arrival, so nothing the caller abandoned stays connected.
+    deadline. An abandoned attempt is hung up at the deadline, or as soon as its socket
+    registers if the resolver was still running. The window between registration points
+    (TCP connect and the TLS handshake after a slow resolve) and proxy-routed
+    connections, which bypass the connection classes, are bounded by the per-attempt
+    timeout instead.
     """
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
