@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
-ROOT_NETUID = 0  # never in NetworksAdded: membership adds it, the probe never reports on it
+ROOT_NETUID = 0  # NetworksAdded lists root but get_member_netuids drops it: membership adds it, the probe never reports on it
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
@@ -208,9 +208,14 @@ def _merge_sources(
     if probe_positive is True and "blockmachine_probe" not in sources:
         sources.append("blockmachine_probe")
 
-    if (tmc_positive is True and probe_positive is False) or (
-        tmc_positive is False and probe_positive is True
-    ):
+    if tmc_positive is True and probe_positive is False:
+        # Owner rule: the chain wins. A complete chain read that does not list the netuid
+        # takes it out of expected now, whatever TaoMarketCap still says. The row keeps its grace.
+        if not negative_since:
+            negative_since = _now_iso()
+        return "negative", sources, True, negative_since, False
+
+    if tmc_positive is False and probe_positive is True:
         return "positive", sources, True, None, False
 
     if tmc_positive is True or probe_positive is True:
@@ -260,7 +265,7 @@ class MembershipBuild:
 def _eligible_for_removal(netuid: int, evidence: DropEvidence, now: datetime) -> bool:
     if netuid == ROOT_NETUID:
         return False
-    if evidence.tmc is not False or evidence.probe is not False:
+    if evidence.probe is not False:
         return False
     if not evidence.negative_since:
         return False
@@ -320,7 +325,9 @@ def _compute_membership(
 ) -> Tuple[List[int], Dict[str, Any], bool, bool, Dict[int, DropEvidence]]:
     """Resolve membership; a netuid leaves only on this cycle's evidence after the 48h grace."""
     now = datetime.now(timezone.utc)
-    observed_members = set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
+    observed_members = {n for n in tmc_positive if probe_map.get(n) is not False} | {
+        n for n, v in probe_map.items() if v is True
+    }
     candidates = set(prior_members) | observed_members
     if observed_members:
         candidates.add(ROOT_NETUID)
@@ -339,6 +346,8 @@ def _compute_membership(
             tmc_val = netuid in tmc_positive
         probe_val = probe_map.get(netuid)
         if not probe_complete and netuid not in probe_map:
+            probe_val = None
+        if netuid == ROOT_NETUID:
             probe_val = None
 
         validity, sources, disputed, negative_since, entry_incomplete = _merge_sources(
