@@ -10,8 +10,10 @@ a weight-only deploy must change ``weights.py`` (or another listed file) so
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 SCORER_REVISION = 1
 
@@ -48,6 +50,45 @@ def current_scorer_digest() -> str:
         except OSError:
             digest.update(b"missing")
     return digest.hexdigest()[:16]
+
+
+def _canonical_digest(body: Any) -> str:
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()
+
+
+def current_weights_digest(path: Optional[str] = None) -> str:
+    """Digest of the runtime soul_map council + signal weights.
+
+    ``weights.SOUL_MAP_PATH`` is cwd-relative; anchoring it to the repo root keeps the identity
+    the same from any cwd (production cwd /app, volume mounted at /app/data).
+    """
+    from internal.council import weights
+
+    soul = path or weights.SOUL_MAP_PATH
+    if not os.path.isabs(soul):
+        soul = str(_REPO_ROOT / soul)
+    return _canonical_digest(
+        {"council": weights.load_weights(soul), "signal": weights.load_signal_weights(soul)}
+    )
+
+
+def compute_input_digest(
+    membership_generation: str,
+    scorer_digest: str,
+    rows: Iterable[Dict[str, Any]],
+    weights: Dict[str, Any],
+) -> str:
+    """Value digest of everything a build scored from; no paths, so no cwd dependence."""
+    ordered = sorted(rows, key=lambda row: int(row["netuid"]))
+    return _canonical_digest(
+        {
+            "v": 1,
+            "generation": membership_generation,
+            "scorer_digest": scorer_digest,
+            "rows": ordered,
+            "weights": weights,
+        }
+    )
 
 
 def stamp_scorer_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
