@@ -106,6 +106,29 @@ def test_second_start_in_process_does_not_spawn_a_second_tick(tmp_path, monkeypa
     assert len(scheduled) == 1
 
 
+def test_failed_arm_leaves_scheduler_retryable(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    scheduled = []
+
+    def flaky_schedule(job_id, func, seconds):
+        if not scheduled:
+            scheduled.append("failed")
+            raise RuntimeError("scheduler unavailable")
+        scheduled.append((job_id, seconds))
+
+    monkeypatch.setattr(snaps, "schedule_in_seconds", flaky_schedule)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=False)
+    retry = sched.start(immediate=False)
+    assert retry["started"] is True
+    assert scheduled[-1][0] == snaps.JOB_ID
+
+
 def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     resolved = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     rows = tuple(
