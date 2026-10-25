@@ -70,7 +70,7 @@ def _tmc():
 
 
 def _clean_read(netuids, deadline):
-    return {**{n: True for n in REGISTERED if n != 0}, 0: True, PHANTOM: False}, True
+    return {**{n: True for n in REGISTERED if n != 0}, PHANTOM: False}, True
 
 
 def _failed_read(netuids, deadline):
@@ -168,6 +168,23 @@ def test_root_is_never_removed_even_when_both_sources_say_false(tmp_path):
     result = _cycle(provider, probe_root_false, tmc=tmc_without_root)
     assert 0 in result.netuids
 
+
+def test_root_survives_when_the_probe_has_no_opinion_on_it(tmp_path):
+    snap = _snapshot(_ago(STALE_GRACE_SECONDS + 60))
+    validity = dict(snap.validity_map)
+    validity["0"] = _validity_entry(validity="negative", sources=[], negative_since=_ago(STALE_GRACE_SECONDS + 60))
+    provider = _provider(tmp_path, replace(snap, validity_map=validity))
+
+    def tmc_without_root():
+        ids = set(REGISTERED) - {0}
+        return ids, {n: {"netuid": n, "name": f"SN{n}"} for n in ids}, True
+
+    def probe_without_root(netuids, deadline):
+        return {1: True, 2: True, 5: True, PHANTOM: False}, True
+
+    result = _cycle(provider, probe_without_root, tmc=tmc_without_root)
+    assert 0 in result.netuids
+    assert PHANTOM not in result.netuids
 
 def test_swap_that_drops_an_in_grace_netuid_is_refused(tmp_path):
     prior = _snapshot(_ago(STALE_GRACE_SECONDS - 3600))

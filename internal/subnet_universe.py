@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # Netuid scan width for TMC-pagination gap probes. Bounds discovery, not membership.
 MAX_NETUIDS = 200
 STALE_GRACE_SECONDS = 172800  # 48h
-ROOT_NETUID = 0
+ROOT_NETUID = 0  # never in NetworksAdded: membership adds it, the probe never reports on it
 REFRESH_INTERVAL_SECONDS = 300
 PERSIST_VERSION = 1
 
