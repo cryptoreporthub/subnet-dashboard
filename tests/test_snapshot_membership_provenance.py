@@ -7,10 +7,14 @@ TMC fetch are injected, replaying a recorded chain read.
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+from internal.council import score_snapshots as snaps
+from tests.score_snapshot_testutil import complete_snapshot_payload
 
 from internal.chain_price import config as chain_cfg
 from internal.chain_read import ChainRead
@@ -126,3 +130,58 @@ def test_generation_moves_at_dereg_not_block_or_grace_expiry(monkeypatch):
     # Grace expires: the row leaves the universe, the chain set is unchanged.
     expired = _receipt_for(monkeypatch, _universe([1, 2, 78]))
     assert expired["generation"] == dereg["generation"]
+
+
+_PROVENANCE_GAPS = {
+    "no_rpc": lambda u: _with_chain(u, ChainRead("0x" + "ab" * 32, (1, 2, 3), None)),
+    "no_chain_read": lambda u: _with_chain(u, None),
+}
+
+
+def _with_chain(universe, chain):
+    return su.UniverseSnapshot(
+        netuids=universe.netuids,
+        rows=universe.rows,
+        resolved_at=universe.resolved_at,
+        status=universe.status,
+        degraded=False,
+        chain=chain,
+    )
+
+
+@pytest.mark.parametrize("gap", sorted(_PROVENANCE_GAPS))
+def test_admission_is_blocked_without_chain_provenance(monkeypatch, gap):
+    universe = _PROVENANCE_GAPS[gap](_universe([1, 2, 3]))
+    receipt = _receipt_for(monkeypatch, universe)
+    assert cov.membership_allows_admission(receipt) is False
+    assert cov.membership_admission_block_reason(receipt) == "membership_without_chain_provenance"
+    assert cov.membership_allows_admission(_receipt_for(monkeypatch, _universe([1, 2, 3]))) is True
+
+
+def test_unprovenanced_membership_gates_the_producer_and_keeps_last_good(tmp_path, monkeypatch):
+    volume = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(volume))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
+    monkeypatch.setenv("SCORE_SNAPSHOT_REGISTRY_ONLY", "on")
+    good = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 5.0, "name": "A"}])
+    assert snaps.publish_complete_snapshot(good, str(volume))["published"]
+    before = volume.read_bytes()
+
+    pre_1483 = _with_chain(_universe([1, 2]), None)  # universe file written before the chain fields
+    monkeypatch.setattr(su, "get_snapshot", lambda: pre_1483)
+    monkeypatch.setattr(
+        "server._get_subnets_hydrate",
+        lambda: ([{"netuid": n, "name": f"N{n}", "price": 1.0, "volume": 10.0} for n in (1, 2)], "registry-fallback"),
+    )
+    monkeypatch.setattr("internal.council.state_vector.score_subnet_for_day", lambda sn, ctx: {"total_score": 1.0})
+    monkeypatch.setattr(snaps, "_score_hour_enabled", lambda: False)
+
+    out = snaps.write_full_universe_snapshot()
+
+    assert out["published"] is False
+    cycle = json.loads((tmp_path / "cycle.json").read_text())
+    assert cycle["membership_admission_gate_reason"] == "membership_without_chain_provenance"
+    assert volume.read_bytes() == before
+    served = snaps.read_served_snapshot()
+    assert served.servable and served.state.value in ("fresh", "aged")

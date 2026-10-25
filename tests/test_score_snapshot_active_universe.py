@@ -159,5 +159,5 @@ def test_a_universe_without_a_chain_read_expects_nothing_and_blocks_admission():
     assert receipt["expected_netuids"] == []
     assert receipt["chain"] is None
     assert cov.membership_allows_admission(receipt) is False
-    assert cov.membership_admission_block_reason(receipt) == "no_chain_read"
+    assert cov.membership_admission_block_reason(receipt) == "membership_without_chain_provenance"
     assert cov.membership_allows_admission(_receipt_for(membership)) is True
