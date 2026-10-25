@@ -9,10 +9,13 @@ latency to the main dashboard.
 
 from __future__ import annotations
 
+import fcntl
+import functools
 import json
 import os
+import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple, TypeVar
 
 from internal.council.weights import detect_regime
 
@@ -20,6 +23,10 @@ SCENARIO_MEMORY_PATH = os.path.join("data", "scenario_memory.json")
 
 # Canonical scenario buckets.
 REGIMES = {"bull", "bear", "volatile", "neutral"}
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+
+_LOCK_TIMEOUT_SECONDS = 5.0
 
 
 def _load(path: Optional[str] = None) -> Dict[str, Any]:
@@ -43,6 +50,31 @@ def _save(data: Dict[str, Any], path: Optional[str] = None) -> None:
     with open(tmp, "w") as f:
         json.dump(data, f, indent=2)
     os.replace(tmp, path)
+
+
+def _exclusive_writer(fn: _F) -> _F:
+    @functools.wraps(fn)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        path = SCENARIO_MEMORY_PATH
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        with open(path + ".lock", "a+") as lock_file:
+            deadline = time.monotonic() + _LOCK_TIMEOUT_SECONDS
+            while True:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(
+                            f"Timed out after {_LOCK_TIMEOUT_SECONDS}s waiting for {path}.lock"
+                        )
+                    time.sleep(0.01)
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    return wrapper  # type: ignore[return-value]
 
 
 def _normalize_regime(regime: Optional[str]) -> str:
@@ -99,6 +131,7 @@ def _find_scenario_by_prediction_id(
     return None
 
 
+@_exclusive_writer
 def add_scenario(
     name: str,
     features: Dict[str, Any],
@@ -150,6 +183,7 @@ def add_scenario(
     return scenario
 
 
+@_exclusive_writer
 def update_outcome(
     scenario_id: str,
     outcome: str,
@@ -168,15 +202,57 @@ def update_outcome(
     data = _load()
     for scenario in data.get("scenarios", []):
         if scenario.get("id") == scenario_id:
-            scenario["outcome"] = outcome
-            scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            if metadata:
-                existing = scenario.get("metadata") or {}
-                existing.update(metadata)
-                scenario["metadata"] = existing
+            stamp_outcome(scenario, outcome, metadata)
             _save(data)
             return scenario
     return None
+
+
+def stamp_outcome(
+    scenario: Dict[str, Any],
+    outcome: str,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    scenario["outcome"] = outcome
+    scenario["resolved_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    merge_metadata(scenario, metadata)
+    return scenario
+
+
+def merge_metadata(scenario: Dict[str, Any], metadata: Optional[Dict[str, Any]]) -> bool:
+    existing = scenario.get("metadata") or {}
+    if not metadata or all(existing.get(k) == v for k, v in metadata.items()):
+        return False
+    scenario["metadata"] = {**existing, **metadata}
+    return True
+
+
+def list_scenarios() -> List[Dict[str, Any]]:
+    return _load().get("scenarios", [])
+
+
+@_exclusive_writer
+def apply_stamps(stamps: List[Tuple[str, str, Dict[str, Any]]]) -> int:
+    data = _load()
+    by_id: Dict[Any, Dict[str, Any]] = {}
+    for scenario in data.get("scenarios", []):
+        by_id.setdefault(scenario.get("id"), scenario)
+    changed = 0
+    latest: Dict[Any, Tuple[str, Dict[str, Any]]] = {}
+    for scenario_id, outcome, metadata in stamps:
+        latest[scenario_id] = (outcome, {**latest.get(scenario_id, (outcome, {}))[1], **metadata})
+    for scenario_id, (outcome, metadata) in latest.items():
+        scenario = by_id.get(scenario_id)
+        if scenario is None:
+            continue
+        if scenario.get("outcome") != outcome:
+            stamp_outcome(scenario, outcome, metadata)
+            changed += 1
+        elif merge_metadata(scenario, metadata):
+            changed += 1
+    if changed:
+        _save(data)
+    return changed
 
 
 def record_outcome(

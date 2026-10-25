@@ -88,40 +88,66 @@ def _netuid_of(scenario: Dict[str, Any]) -> Any:
     return feats.get("netuid", meta.get("netuid"))
 
 
-def _stamp_pending_from_prediction(pred: Dict[str, Any], label: str) -> bool:
-    """Stamp an existing blank scenario; never mint a new row during backfill."""
-    meta = _metadata_from_prediction(pred)
-    sid = pred.get("scenario_id")
-    if sid and scenario_memory.update_outcome(str(sid), label, meta):
-        return True
+class _PendingIndex:
+    def __init__(self, scenarios: List[Dict[str, Any]]) -> None:
+        self._by_id: Dict[Any, Dict[str, Any]] = {}
+        self._by_pid: Dict[Any, List[Dict[str, Any]]] = {}
+        self._by_name_netuid: Dict[Any, List[Dict[str, Any]]] = {}
+        self._by_name: Dict[Any, List[Dict[str, Any]]] = {}
+        self._stamped: set = set()
+        for s in scenarios:
+            self._by_id.setdefault(s.get("id"), s)
+            if s.get("outcome"):
+                continue
+            pid = (s.get("metadata") or {}).get("prediction_id")
+            if pid:
+                self._by_pid.setdefault(pid, []).append(s)
+            name = s.get("name")
+            if name is not None:
+                self._by_name.setdefault(name, []).append(s)
+                netuid = _netuid_of(s)
+                if netuid is not None:
+                    self._by_name_netuid.setdefault((name, netuid), []).append(s)
 
-    pending = _pending_scenarios()
-    if not pending:
-        return False
+    def _latest_pending(self, bucket: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
+        for s in reversed(bucket or []):
+            if id(s) not in self._stamped:
+                return s
+        return None
 
-    pid = pred.get("id")
-    name = pred.get("name")
-    netuid = pred.get("netuid")
+    def stamp(self, pred: Dict[str, Any], label: str) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+        """Stamp an existing blank scenario; never mint a new row during backfill."""
+        meta = _metadata_from_prediction(pred)
+        sid = pred.get("scenario_id")
+        if sid:
+            linked = self._by_id.get(str(sid))
+            if linked is not None:
+                return self._record(linked, label, meta)
 
-    # 1) metadata.prediction_id already linked
-    if pid:
-        for s in reversed(pending):
-            if (s.get("metadata") or {}).get("prediction_id") == pid:
-                return bool(scenario_memory.update_outcome(str(s["id"]), label, meta))
+        pid = pred.get("id")
+        name = pred.get("name")
+        netuid = pred.get("netuid")
 
-    # 2) name + netuid (regime-agnostic — fixes N2 regime-mismatch gap)
-    if name is not None and netuid is not None:
-        for s in reversed(pending):
-            if s.get("name") == name and _netuid_of(s) == netuid:
-                return bool(scenario_memory.update_outcome(str(s["id"]), label, meta))
+        target = None
+        if pid:
+            target = self._latest_pending(self._by_pid.get(pid))
+        if target is None and name is not None and netuid is not None:
+            target = self._latest_pending(self._by_name_netuid.get((name, netuid)))
+        if target is None and name is not None:
+            target = self._latest_pending(self._by_name.get(name))
+        if target is None:
+            return None
+        return self._record(target, label, meta)
 
-    # 3) name only
-    if name is not None:
-        for s in reversed(pending):
-            if s.get("name") == name:
-                return bool(scenario_memory.update_outcome(str(s["id"]), label, meta))
-
-    return False
+    def _record(
+        self, scenario: Dict[str, Any], label: str, meta: Dict[str, Any]
+    ) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+        scenario_memory.stamp_outcome(scenario, label, meta)
+        self._stamped.add(id(scenario))
+        scenario_id = scenario.get("id")
+        if scenario_id is None:
+            return None
+        return str(scenario_id), label, meta
 
 
 def _preds_link_scenario(
@@ -211,9 +237,9 @@ def list_unresolvable_scenarios() -> List[Dict[str, Any]]:
 
 
 def backfill_scenario_outcomes_from_predictions() -> Dict[str, Any]:
-    """Stamp blank scenario rows from resolved predictions (idempotent).
+    """Stamp scenario rows from resolved predictions (idempotent).
 
-    Only updates existing pending scenarios — does not mint duplicate outcome rows.
+    Updates existing rows only and never mints duplicate outcome rows.
     """
     pending_before = _pending_scenario_count()
     if pending_before == 0:
@@ -224,13 +250,21 @@ def backfill_scenario_outcomes_from_predictions() -> Dict[str, Any]:
             "unresolvable_count": 0,
         }
 
-    updated = 0
-    for pred in _resolved_predictions():
-        label = _outcome_label(pred)
-        if not label:
-            continue
-        if _stamp_pending_from_prediction(pred, label):
-            updated += 1
+    labelled = [
+        (pred, label)
+        for pred in _resolved_predictions()
+        for label in (_outcome_label(pred),)
+        if label
+    ]
+
+    index = _PendingIndex(scenario_memory.list_scenarios())
+    stamps = [
+        stamp
+        for pred, label in labelled
+        for stamp in (index.stamp(pred, label),)
+        if stamp is not None
+    ]
+    updated = scenario_memory.apply_stamps(stamps)
 
     pending_after = _pending_scenario_count()
     unresolvable = list_unresolvable_scenarios()

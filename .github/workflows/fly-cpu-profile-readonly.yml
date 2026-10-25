@@ -1,0 +1,102 @@
+name: Fly CPU profile (read-only)
+on:
+  workflow_dispatch:
+jobs:
+  profile:
+    name: sample which repo code uses the CPU
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+        with:
+          version: latest
+      - name: Sample web and worker stacks with py-spy over fly ssh
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set +e
+          cat > "$RUNNER_TEMP/prof.py" <<'EOS'
+          import collections, os, subprocess, sys, time
+
+          SPY = "/tmp/pyspy/bin/py-spy"
+          SECONDS = 30
+
+
+          def find(marker):
+              for p in os.listdir("/proc"):
+                  if p.isdigit():
+                      try:
+                          cmd = open("/proc/%s/cmdline" % p).read().replace("\0", " ")
+                      except Exception:
+                          continue
+                      if marker in cmd and "py-spy" not in cmd and "prof.py" not in cmd:
+                          return p
+              return None
+
+
+          def summarize(name, path):
+              threads = collections.Counter()
+              leaf = collections.Counter()
+              app_leaf = collections.Counter()
+              app_root = collections.Counter()
+              total = 0
+              for line in open(path):
+                  stack, _, n = line.rstrip("\n").rpartition(" ")
+                  try:
+                      n = int(n)
+                  except ValueError:
+                      continue
+                  frames = stack.split(";")
+                  total += n
+                  threads[frames[0]] += n
+                  leaf[frames[-1]] += n
+                  app = [f for f in frames if "/app/" in f and "site-packages" not in f]
+                  if app:
+                      app_leaf[app[-1]] += n
+                      app_root[app[0]] += n
+              print("=== %s samples=%d" % (name, total))
+              print("-- threads")
+              for k, v in threads.most_common(8):
+                  print(v, k)
+              print("-- leaf frames")
+              for k, v in leaf.most_common(15):
+                  print(v, k)
+              print("-- deepest repo frame")
+              for k, v in app_leaf.most_common(25):
+                  print(v, k)
+              print("-- outermost repo frame")
+              for k, v in app_root.most_common(15):
+                  print(v, k)
+
+
+          targets = {"worker": find("-m internal.worker"), "web": find("run_web_with_guard.py")}
+          print("pids", targets)
+          procs = {}
+          for name, pid in targets.items():
+              if pid:
+                  out = "/tmp/prof_%s.raw" % name
+                  procs[name] = (
+                      subprocess.Popen(
+                          [SPY, "record", "--pid", pid, "--duration", str(SECONDS), "--rate", "50",
+                           "--format", "raw", "--threads", "--nonblocking", "--output", out],
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True),
+                      out)
+          for name, (proc, out) in procs.items():
+              text = proc.communicate()[0]
+              print(name, "py-spy exit", proc.returncode, text[-300:].strip())
+              if os.path.exists(out):
+                  summarize(name, out)
+          EOS
+          cat > "$RUNNER_TEMP/probe.sh" <<'EOS'
+          pip install -q --no-cache-dir --target /tmp/pyspy py-spy 2>&1 | tail -2
+          echo "$PROF_B64" | base64 -d > /tmp/prof.py
+          python /tmp/prof.py
+          EOS
+          PROF_B64=$(base64 -w0 "$RUNNER_TEMP/prof.py")
+          B64=$(printf 'PROF_B64=%s\n' "$PROF_B64" | cat - "$RUNNER_TEMP/probe.sh" | base64 -w0)
+          flyctl ssh console -a subnet-dashboard -C "sh -c 'echo $B64 | base64 -d | sh'" 2>&1 | tee "$RUNNER_TEMP/cpu-profile.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cpu-profile-${{ github.run_id }}
+          path: ${{ runner.temp }}/cpu-profile.txt

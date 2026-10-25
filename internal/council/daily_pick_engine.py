@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional
 import fcntl
 
 from internal.council.daily_pick import select_daily_pick
+from internal.council.stage_trace import stage
 from internal.council.scenario_memory import classify_regime
 from internal.council.rotation_tracker import get_rotation_summary
 from internal.council.publish_gate import (
@@ -367,7 +368,9 @@ def get_or_create_today_pick(
     if is_cancelled is not None and is_cancelled():
         logger.warning("daily pick aborted before save: worker was cancelled or timed out")
         return None
-    if not _save(records):
+    with stage("save"):
+        saved = _save(records)
+    if not saved:
         return _find_today(_load()) or payload
 
     if stored_pick is not None:
@@ -378,12 +381,13 @@ def get_or_create_today_pick(
             netuid = sn.get("netuid")
             subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
             if subnet_row and float(subnet_row.get("price", 0) or 0) > 0:
-                record_pick_prediction(
-                    stored_pick,
-                    subnet_row,
-                    horizon_type="day",
-                    market_context=market_context,
-                )
+                with stage("record_prediction"):
+                    record_pick_prediction(
+                        stored_pick,
+                        subnet_row,
+                        horizon_type="day",
+                        market_context=market_context,
+                    )
         except Exception as exc:
             logger.warning(
                 "record_pick_prediction failed for daily pick netuid=%s: %s",
@@ -401,13 +405,14 @@ def get_or_create_today_pick(
                 netuid = sn.get("netuid") or candidate.get("netuid")
                 if netuid is not None:
                     subnet_row = next((s for s in subnets if s.get("netuid") == netuid), None)
-            record_hold_decision(
-                candidate=candidate,
-                reason=reason,
-                horizon_type="day",
-                subnet=subnet_row,
-                market_context=market_context,
-            )
+            with stage("record_prediction"):
+                record_hold_decision(
+                    candidate=candidate,
+                    reason=reason,
+                    horizon_type="day",
+                    subnet=subnet_row,
+                    market_context=market_context,
+                )
         except Exception as exc:
             logger.warning("record_hold_decision failed: %s", exc)
 
