@@ -6,6 +6,7 @@ TMC fetch are injected, replaying a recorded chain read.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -321,3 +322,48 @@ def test_input_digest_covers_rows_and_weights():
     assert digest(weights={"quant": 1.1}) != base
     assert digest(generation="mg1:b") != base
     assert digest(scorer="s2") != base
+
+
+def _now_iso():
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _serve_fresh_volume(tmp_path, monkeypatch, netuids):
+    """A fresh complete snapshot on the volume for ``netuids``."""
+    volume = tmp_path / "score_snapshots.json"
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOTS_PATH", str(volume))
+    monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    payload = complete_snapshot_payload(
+        day_rows=[{"netuid": n, "total_score": float(n), "name": f"N{n}"} for n in netuids],
+        written_at=_now_iso(),
+    )
+    assert snaps.publish_complete_snapshot(payload, str(volume))["published"]
+    return volume
+
+
+def test_reader_keeps_serving_and_labels_membership_moved(tmp_path, monkeypatch):
+    _serve_fresh_volume(tmp_path, monkeypatch, [1, 2, 3])
+
+    monkeypatch.setattr(su, "get_snapshot", lambda: _universe([1, 2, 3]))
+    same = snaps.build_top_picks_from_snapshot(None)["meta"]
+    assert same["membership_current"] is True
+    assert same["stale_alert"] is False
+
+    monkeypatch.setattr(su, "get_snapshot", lambda: _universe([1, 2]))  # netuid 3 deregistered
+    served = snaps.read_served_snapshot()
+    assert served.servable and served.state.value == "fresh"
+    picks = snaps.build_top_picks_from_snapshot(None)
+    assert picks["day_picks"]
+    assert picks["meta"]["membership_current"] is False
+    assert picks["meta"]["stale_alert"] is True
+
+
+def test_membership_current_is_null_when_membership_is_not_admissible(tmp_path, monkeypatch):
+    _serve_fresh_volume(tmp_path, monkeypatch, [1, 2, 3])
+    degraded = dataclasses.replace(_universe([1, 2]), status="degraded", degraded=True)
+    monkeypatch.setattr(su, "get_snapshot", lambda: degraded)
+
+    meta = snaps.build_top_picks_from_snapshot(None)["meta"]
+
+    assert meta["membership_current"] is None
+    assert meta["stale_alert"] is False  # nothing is known to have moved
