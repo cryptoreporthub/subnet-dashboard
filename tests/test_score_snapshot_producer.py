@@ -129,6 +129,23 @@ def test_failed_arm_leaves_scheduler_retryable(tmp_path, monkeypatch):
     assert scheduled[-1][0] == snaps.JOB_ID
 
 
+def test_failed_arm_does_not_report_running(tmp_path, monkeypatch):
+    soul = tmp_path / "soul_map.json"
+    soul.write_text("{}", encoding="utf-8")
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+
+    def failing_schedule(job_id, func, seconds):
+        raise RuntimeError("scheduler unavailable")
+
+    monkeypatch.setattr(snaps, "schedule_in_seconds", failing_schedule)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+    with pytest.raises(RuntimeError):
+        sched.start(immediate=False)
+    assert sched.state()["running"] is False
+
+
 def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     resolved = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     rows = tuple(
