@@ -10,7 +10,7 @@ import pytest
 from internal.council import score_snapshots as snaps
 from internal.council import snapshot_coverage as cov
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
-from tests.score_snapshot_testutil import complete_snapshot_payload
+from tests.score_snapshot_testutil import chain_read, complete_snapshot_payload
 
 
 @pytest.fixture(autouse=True)
@@ -34,6 +34,7 @@ def _ok_membership_snapshot() -> UniverseSnapshot:
         degraded=False,
         cap_reached=False,
         refresh_incomplete=False,
+        chain=chain_read((1, 2)),
         validity_map={
             "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
             "2": _validity_entry(validity="positive", sources=["taomarketcap"]),
@@ -151,6 +152,7 @@ def test_integration_feed_only_extra_not_scored(tmp_path, monkeypatch):
         resolved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         status="ok",
         degraded=False,
+        chain=chain_read((1, 2)),
         validity_map={
             "1": _validity_entry(validity="positive", sources=["taomarketcap"]),
             "2": _validity_entry(validity="positive", sources=["taomarketcap"]),

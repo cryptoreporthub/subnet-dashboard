@@ -6,6 +6,7 @@ import logging
 import pytest
 
 from internal import build_cost
+from tests.score_snapshot_testutil import chain_dict
 
 
 @pytest.fixture
@@ -23,6 +24,7 @@ def isolated_build(tmp_path, monkeypatch):
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
             "expected_netuids": [1],
+            "chain": chain_dict([1]),
             "fresh": True,
             "degraded": False,
             "cap_reached": False,

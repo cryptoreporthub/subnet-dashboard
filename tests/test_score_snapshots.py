@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 from internal.council import score_snapshots as snaps
-from tests.score_snapshot_testutil import complete_snapshot_payload
+from tests.score_snapshot_testutil import chain_dict, complete_snapshot_payload
 
 
 def test_save_load_and_rank(tmp_path, monkeypatch):
@@ -347,6 +347,7 @@ def _wire_scheduler_paths(tmp_path, monkeypatch):
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
             "expected_netuids": [1],
+            "chain": chain_dict([1]),
             "fresh": True,
             "degraded": False,
             "cap_reached": False,
@@ -361,6 +362,7 @@ def _patch_write_membership(monkeypatch, netuids):
         "internal.council.snapshot_coverage.load_membership_receipt",
         lambda: {
             "expected_netuids": list(netuids),
+            "chain": chain_dict(netuids),
             "fresh": True,
             "degraded": False,
             "cap_reached": False,
@@ -781,3 +783,21 @@ def test_score_snapshot_tracker_is_liveness_compliant(monkeypatch, tmp_path):
         return snaps.ScoreSnapshotScheduler().liveness
 
     assert_liveness_compliant(factory)
+
+
+def test_load_score_snapshot_returns_an_independent_copy_on_every_read(tmp_path):
+    path = tmp_path / "snap.json"
+    payload = complete_snapshot_payload(day_rows=[{"netuid": 1, "total_score": 5.0}])
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    fresh_load = snaps.load_score_snapshot(str(path))
+    fresh_load["day"][0]["total_score"] = -1.0
+    fresh_load["coverage"]["day"]["expected"].append(999)
+
+    cache_hit = snaps.load_score_snapshot(str(path))
+    assert cache_hit["day"][0]["total_score"] == 5.0
+    assert cache_hit["coverage"]["day"]["expected"] == [1]
+
+    cache_hit["day"][0]["total_score"] = -2.0
+    again = snaps.load_score_snapshot(str(path))
+    assert again["day"][0]["total_score"] == 5.0

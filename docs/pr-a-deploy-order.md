@@ -1,21 +1,18 @@
-# PR-A deploy order (MC #1479)
+# Snapshot producer deploy order (MC #1479)
 
-**Do not deploy PR-B (#1484) alone on a new or wiped volume** without PR-A (#1485 stack).
+**Do not deploy the complete-only reader (#1484) alone on a new or wiped volume** without the producer owner change (#1486).
 
 ## Why
 
-PR-B serves only **complete** snapshots and falls back to the **image seed** when the volume file is missing or not servable. The essential worker today boots `score-snapshot-ensure` (disk-keyed revive), not the periodic producer. On an empty volume:
+#1484 serves only **complete** snapshots and falls back to the **image seed** when the volume file is missing or not servable. Without #1486 the essential worker still boots the disk-keyed `score-snapshot-ensure` path, which does not arm the periodic producer. On an empty volume:
 
-- Readers can serve the **seed** (`fresh` / `aged` / `seed` states).
-- The **producer does not arm** until PR-A wires `score_snapshot_producer_enabled()` → `_start_score_snapshot_scheduler()`.
-- `ensure_complete_snapshot()` does not replace a durable volume publish when the served state is already seed-servable — so the volume can stay empty while prod relies on seed-only service.
+- Readers serve the **seed** (`seed` state), never a blank response.
+- No process writes a fresh volume snapshot, so the volume stays empty and prod relies on the seed alone.
 
-Repro script (Project store): `internal/1479-mc-design-decision/prb_alone_seed_gap.py` on PR-B head.
+#1486 wires `score_snapshot_producer_enabled()` to `_start_score_snapshot_scheduler()` and deletes the ensure boot path.
 
-## Merge / deploy order
+## Merge and deploy order
 
-1. **PR-B** — complete-only writer, seed, readers (draft; merge when green).
-2. **PR-A** — essential-worker producer; delete ensure boot path (this change).
-3. Deploy **PR-B + PR-A together** (or PR-A on top of merged PR-B) before expecting volume-backed fresh snapshots on a new machine.
-
-PR-C (stall guard on cycle receipt) and PR-D (pick endpoints) follow MC stack; not required to fix the seed-only gap alone.
+1. #1483 membership from chain (alone).
+2. #1484 complete-only snapshots, #1486 producer owner, #1485 stall guard, deployed together.
+3. PR-D readers after.

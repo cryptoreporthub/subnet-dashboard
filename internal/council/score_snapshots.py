@@ -7,6 +7,7 @@ Request handlers must never call full-universe scoring — they read this file
 
 from __future__ import annotations
 
+import copy
 import fcntl
 import json
 import logging
@@ -24,6 +25,7 @@ from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 from internal.council.scorer_identity import current_scorer_digest, stamp_scorer_fields, scorer_fields_match
 
 from internal import build_cost
+from internal.chain_read import ChainRead
 from internal.council.snapshot_coverage import env_int
 from internal.job_scheduler import cancel_job, schedule_in_seconds
 from internal.liveness import LivenessTracker
@@ -151,45 +153,58 @@ def load_score_snapshot(path: Optional[str] = None) -> Optional[Dict[str, Any]]:
         key = (snap_path, st.st_mtime_ns, st.st_size)
         cached = _served_parse_cache.get(key)
         if cached is not None:
-            return cached
+            return copy.deepcopy(cached)
         with open(snap_path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
         if not isinstance(data, dict):
             return None
         _served_parse_cache.clear()
         _served_parse_cache[key] = data
-        return data
+        return copy.deepcopy(data)
     except Exception:
         return None
 
 
+def _row_ids(rows: Any) -> Optional[List[int]]:
+    if not isinstance(rows, list):
+        return None
+    ids: List[int] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        netuid = row.get("netuid")
+        if type(netuid) is not int or netuid <= 0:
+            return None
+        ids.append(netuid)
+    return ids
+
+
 def is_complete_snapshot(snap: Any) -> bool:
-    """Single domain predicate for publish and serve (#1479)."""
+    """Single domain predicate for publish and serve (#1479). Total: never raises."""
     if not isinstance(snap, dict):
         return False
     coverage = snap.get("coverage")
     if not isinstance(coverage, dict) or coverage.get("complete") is not True:
         return False
-    day_rows = [r for r in (snap.get("day") or []) if isinstance(r, dict)]
-    if not day_rows:
+    day_cov = coverage.get("day")
+    if not isinstance(day_cov, dict):
+        return False
+    declared = day_cov.get("expected")
+    if declared is not None and (
+        not isinstance(declared, list) or any(type(n) is not int for n in declared)
+    ):
         return False
     if not scorer_fields_match(snap):
         return False
-    expected: List[int] = []
-    day_block = coverage.get("day")
-    if isinstance(day_block, dict) and day_block.get("expected"):
-        expected = [int(n) for n in day_block["expected"]]
     membership = coverage.get("membership")
-    if not expected and isinstance(membership, dict):
-        expected = [
-            int(n)
-            for n in (membership.get("expected_netuids") or [])
-            if str(n).isdigit() and int(n) > 0
-        ]
-    if expected:
-        have = {int(r["netuid"]) for r in day_rows if "netuid" in r}
-        return all(n in have for n in expected)
-    return True
+    chain = ChainRead.parse(membership.get("chain")) if isinstance(membership, dict) else None
+    if chain is None:
+        return False
+    day = _row_ids(snap.get("day"))
+    if day is None or sorted(day) != list(chain.netuids):
+        return False
+    hour = _row_ids(snap.get("hour"))
+    return hour is not None and len(hour) == len(set(hour)) and set(hour) <= set(chain.netuids)
 
 
 def _atomic_write_json(path: str, payload: Dict[str, Any]) -> None:
@@ -381,22 +396,6 @@ def read_served_snapshot(
     if volume_snap and not is_complete_snapshot(volume_snap):
         return ServedSnapshot(ServedState.NONE, None, None, None, "volume_not_complete")
     return ServedSnapshot(ServedState.NONE, None, None, None, "seed_unavailable")
-
-
-def volume_has_fresh_complete_snapshot(
-    path: Optional[str] = None,
-    max_age_seconds: Optional[int] = None,
-) -> bool:
-    """Producer gate: fresh complete on volume only — seed/aged do not block ensure."""
-    volume_path = path or SCORE_SNAPSHOTS_PATH
-    snap = load_score_snapshot(volume_path)
-    if not snap or not is_complete_snapshot(snap):
-        return False
-    ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
-    age = _snapshot_age_for_path(volume_path, snap)
-    if age is None:
-        return False
-    return ttl <= 0 or age <= ttl
 
 
 def _served_snapshot_tuple(

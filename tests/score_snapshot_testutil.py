@@ -4,7 +4,18 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from internal.chain_read import ChainRead
 from internal.council.scorer_identity import stamp_scorer_fields
+
+PINNED_HASH = "0x" + "ef" * 32
+
+
+def chain_read(netuids: Any) -> ChainRead:
+    return ChainRead(PINNED_HASH, tuple(sorted(int(n) for n in netuids)))
+
+
+def chain_dict(netuids: Any) -> Dict[str, Any]:
+    return chain_read(netuids).to_dict()
 
 
 def complete_snapshot_rows(
@@ -34,7 +45,7 @@ def complete_snapshot_payload(
             "coverage": {
                 "complete": True,
                 "published": True,
-                "membership": {"expected_netuids": expected},
+                "membership": {"expected_netuids": expected, "chain": chain_dict(expected)},
                 "day": {
                     "complete": True,
                     "expected": expected,

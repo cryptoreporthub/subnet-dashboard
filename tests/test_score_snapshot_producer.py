@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from internal.chain_read import ChainRead
 from internal.council import score_snapshots as snaps
 from internal.subnet_universe import UniverseSnapshot, _validity_entry
 from tests.score_snapshot_testutil import complete_snapshot_payload
@@ -125,6 +126,7 @@ def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
         cap_reached=False,
         refresh_incomplete=False,
         validity_map=validity,
+        chain=ChainRead.parse({"block_hash": "0x" + "ab" * 32, "netuids": sorted(netuids)}),
     )
 
 

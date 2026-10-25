@@ -58,13 +58,10 @@ def stamp_scorer_fields(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def scorer_fields_match(snap: Dict[str, Any]) -> bool:
-    try:
-        revision = int(snap.get("scorer_revision"))
-    except (TypeError, ValueError):
+    revision = snap.get("scorer_revision")
+    if type(revision) is not int or revision != SCORER_REVISION:
         return False
-    if revision != SCORER_REVISION:
-        return False
-    return str(snap.get("scorer_digest") or "") == current_scorer_digest()
+    return snap.get("scorer_digest") == current_scorer_digest()
 
 
 def scorer_identity_file_list() -> Tuple[str, ...]:
