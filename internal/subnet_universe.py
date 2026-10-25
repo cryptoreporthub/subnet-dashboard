@@ -221,7 +221,7 @@ def _merge_sources(
 
     if tmc_positive is False and probe_positive is None:
         refresh_incomplete = True
-        prior_validity = str(prior.get("validity") or "positive")
+        prior_validity = str(prior.get("validity") or "unobserved")
         if prior_validity == "negative":
             return prior_validity, sources, bool(prior.get("disputed")), negative_since, True
         if prior_validity in ("positive", "unobserved"):
@@ -230,7 +230,7 @@ def _merge_sources(
 
     if tmc_positive is None or probe_positive is None:
         refresh_incomplete = True
-        prior_validity = str(prior.get("validity") or "positive")
+        prior_validity = str(prior.get("validity") or "unobserved")
         if prior_validity == "negative":
             return prior_validity, sources, bool(prior.get("disputed")), negative_since, True
         if prior_validity in ("positive", "unobserved"):
@@ -308,6 +308,7 @@ def _hold_prior(prior: UniverseSnapshot, status: str, message: str) -> UniverseS
 
 
 def _compute_membership(
+    prior_members: Set[int],
     prior_map: Dict[str, Any],
     *,
     tmc_positive: Set[int],
@@ -317,8 +318,7 @@ def _compute_membership(
 ) -> Tuple[List[int], Dict[str, Any], bool, bool, Dict[int, DropEvidence]]:
     """Resolve membership; a netuid leaves only on this cycle's evidence after the 48h grace."""
     now = datetime.now(timezone.utc)
-    prior_netuids = sorted(int(k) for k in prior_map.keys() if str(k).isdigit())
-    candidates = set(prior_netuids) | set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
+    candidates = set(prior_members) | set(tmc_positive) | {n for n, v in probe_map.items() if v is True}
     validity_map: Dict[str, Any] = {}
     dropped: Dict[int, DropEvidence] = {}
     refresh_incomplete = not (tmc_complete and probe_complete)
@@ -354,6 +354,9 @@ def _compute_membership(
         else:
             validity_map[key] = entry
 
+    refresh_incomplete = refresh_incomplete or (
+        bool(validity_map) and all(e["refresh_incomplete"] for e in validity_map.values())
+    )
     netuids = sorted(int(k) for k in validity_map.keys())
     return netuids, validity_map, cap_reached, refresh_incomplete, dropped
 
@@ -531,8 +534,8 @@ class SnapshotBuilder:
         prior_map = dict((prior.validity_map if prior else {}) or {})
         tmc_positive, tmc_rows, tmc_complete = self._tmc_fetch()
 
-        prior_keys = {int(k) for k in prior_map if str(k).isdigit()}
-        candidates = set(tmc_positive) | prior_keys
+        prior_members = set(prior.netuids) if prior else set()
+        candidates = set(tmc_positive) | prior_members
         if not tmc_complete:
             probe_candidates = list(range(MAX_NETUIDS))
         else:
@@ -548,6 +551,7 @@ class SnapshotBuilder:
             return MembershipBuild(UniverseSnapshot.emergency_registry(reason="refresh_unresolvable"))
 
         netuids, validity_map, cap_reached, refresh_incomplete, dropped = _compute_membership(
+            prior_members,
             prior_map,
             tmc_positive=tmc_positive,
             tmc_complete=tmc_complete,
