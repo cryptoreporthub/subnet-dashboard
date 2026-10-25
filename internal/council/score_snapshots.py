@@ -1178,9 +1178,11 @@ class ScoreSnapshotScheduler:
                 schedule_in_seconds(JOB_ID, self._tick, SCORE_SNAPSHOT_FIRST_DELAY_SECONDS)
             self.liveness.start()
         except Exception:
-            cancel_job(JOB_ID)
-            with _lock:
-                self._armed = False
+            try:
+                cancel_job(JOB_ID)
+            finally:
+                with _lock:
+                    self._armed = False
             raise
         return {
             "started": True,
