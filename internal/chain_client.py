@@ -380,22 +380,50 @@ def _stream_post(
     timeout: float,
     deadline_monotonic: float,
 ) -> requests.Response:
-    """POST with a hard wall-clock cap over connect, status, headers and body.
+    """POST with a hard wall-clock cap over name resolution, connect, headers and body.
 
     ``requests.post`` blocks inside header parsing and its socket timeout restarts on
     every received byte, so a slow header drip outlives any deadline checked after it
-    returns. A timer shuts the connection's socket down at the deadline instead, so the
-    blocked read ends and nothing outlives the deadline.
+    returns. The request runs on a daemon thread and the caller waits only until the
+    deadline. At the deadline the connection's socket is shut down, which ends a blocked
+    read, and a socket that appears later (after a slow resolver) is shut down on
+    arrival, so nothing the caller abandoned stays connected.
     """
     remaining = deadline_monotonic - time.monotonic()
     if remaining <= 0:
         raise requests.Timeout("rpc deadline exceeded")
-    slice_timeout = min(timeout, remaining)
     holder = _SockHolder()
-    _active_holder.holder = holder
-    timer = threading.Timer(remaining, holder.expire)
-    timer.daemon = True
-    timer.start()
+    outcome: Dict[str, Any] = {}
+    done = threading.Event()
+
+    def work() -> None:
+        _active_holder.holder = holder
+        try:
+            outcome["response"] = _stream_post_worker(
+                endpoint, payload, min(timeout, remaining), deadline_monotonic, holder
+            )
+        except BaseException as exc:  # handed to the caller below
+            outcome["error"] = exc
+        finally:
+            _active_holder.holder = None
+            done.set()
+
+    threading.Thread(target=work, daemon=True, name="rpc-deadline-post").start()
+    if not done.wait(max(0.0, deadline_monotonic - time.monotonic())):
+        holder.expire()
+        raise requests.Timeout("rpc deadline exceeded")
+    if "error" in outcome:
+        raise outcome["error"]
+    return outcome["response"]
+
+
+def _stream_post_worker(
+    endpoint: str,
+    payload: Dict[str, Any],
+    slice_timeout: float,
+    deadline_monotonic: float,
+    holder: _SockHolder,
+) -> requests.Response:
     session = requests.Session()
     adapter = _DeadlineAdapter()
     session.mount("http://", adapter)
@@ -439,8 +467,6 @@ def _stream_post(
             raise requests.Timeout("rpc deadline exceeded") from exc
         raise
     finally:
-        timer.cancel()
-        _active_holder.holder = None
         session.close()
 
 
@@ -453,8 +479,8 @@ def _timed_post(
 ) -> requests.Response:
     """One RPC HTTP attempt, timed for the active snapshot build.
 
-    When ``deadline_monotonic`` is set, total wall-clock for connect + body read
-    is capped (slow-drip responses cannot outlive the probe budget).
+    When ``deadline_monotonic`` is set, total wall-clock for name resolution, connect and body read
+    is capped (slow-drip responses and slow name resolution cannot outlive the probe budget).
     """
     started = time.perf_counter()
     try:
