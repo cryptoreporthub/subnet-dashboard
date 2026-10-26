@@ -76,5 +76,12 @@ data/*.lock
 data/pick_score_cache.json
 data/pick_score_latency.jsonl
 
+# Runtime state rewritten on every app run (were tracked; untracked so the tree stays clean)
+data/alerts.json
+data/analytics_trail_cursor.json
+data/caution_cells_seen.json
+data/conviction_index.json
+data/signals.json
+
 # Pump desk snapshot history is runtime state, pruned to newest N on write
 data/pump_desk/snapshots/
