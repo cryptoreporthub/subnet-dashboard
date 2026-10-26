@@ -35,6 +35,17 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _iso_or_none(epoch: Optional[float]) -> Optional[str]:
+    """ISO time for an epoch, or None when it is unset or unconvertible
+    (NaN, inf, out of range) so one corrupt persisted value cannot raise."""
+    if epoch is None:
+        return None
+    try:
+        return datetime.fromtimestamp(epoch, timezone.utc).isoformat()
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def get_tracker(name: str) -> Optional["LivenessTracker"]:
     return _REGISTRY.get(name)
 
@@ -351,17 +362,10 @@ class LivenessTracker:
             age = None
             if self._last_success_epoch is not None:
                 age = round(max(0.0, now - self._last_success_epoch), 3)
-            lsa = None
-            if self._last_success_epoch is not None:
-                lsa = datetime.fromtimestamp(
-                    self._last_success_epoch, timezone.utc
-                ).isoformat()
-            lea = None
+            lsa = _iso_or_none(self._last_success_epoch)
+            lea = _iso_or_none(self._last_event_epoch)
             ea = None
             if self._last_event_epoch is not None:
-                lea = datetime.fromtimestamp(
-                    self._last_event_epoch, timezone.utc
-                ).isoformat()
                 ea = round(max(0.0, now - self._last_event_epoch), 3)
             return {
                 "name": self.name,
