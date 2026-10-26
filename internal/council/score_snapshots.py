@@ -22,7 +22,13 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
-from internal.council.scorer_identity import current_scorer_digest, stamp_scorer_fields, scorer_fields_match
+from internal.council.scorer_identity import (
+    compute_input_digest,
+    current_scorer_digest,
+    current_weights_digest,
+    scorer_fields_match,
+    stamp_scorer_fields,
+)
 
 from internal import build_cost
 from internal.chain_read import ChainRead
@@ -333,6 +339,26 @@ def producer_cycle_age_seconds(path: Optional[str] = None) -> Optional[float]:
     return max(0.0, datetime.now(timezone.utc).timestamp() - parsed.timestamp())
 
 
+def snapshot_membership_current(snap: Optional[Dict[str, Any]]) -> Optional[bool]:
+    """Does the snapshot's scored set still match the live membership? None when that cannot be said.
+
+    Readers only label this; refusing a moved snapshot would blank picks on the first deregistration.
+    """
+    if not snap:
+        return None
+    from internal.council.snapshot_coverage import (
+        load_membership_receipt,
+        membership_allows_admission,
+        membership_generation,
+    )
+
+    receipt = load_membership_receipt()
+    if not membership_allows_admission(receipt):
+        return None
+    membership = ((snap.get("coverage") or {}).get("membership")) or {}
+    return receipt.get("generation") == membership_generation(membership.get("expected_netuids") or [])
+
+
 class ServedState(str, Enum):
     FRESH = "fresh"
     AGED = "aged"
@@ -354,16 +380,18 @@ class ServedSnapshot:
 
     def label(self, *, max_age_seconds: Optional[int] = None) -> Dict[str, Any]:
         ttl = SCORE_SNAPSHOT_MAX_AGE_SECONDS if max_age_seconds is None else max_age_seconds
+        membership_current = snapshot_membership_current(self.snapshot)
         stale_alert = self.state in (ServedState.AGED, ServedState.SEED)
         if self.state is ServedState.FRESH and self.age_seconds is not None and ttl > 0:
             stale_alert = self.age_seconds > ttl
-        if self.state is ServedState.SEED:
+        if self.state is ServedState.SEED or membership_current is False:
             stale_alert = True
         out: Dict[str, Any] = {
             "snapshot_state": self.state.value,
             "snapshot_origin": self.origin,
             "snapshot_age_seconds": round(self.age_seconds, 3) if self.age_seconds is not None else None,
             "stale_alert": stale_alert,
+            "membership_current": membership_current,
         }
         if self.reason:
             out["reason"] = self.reason
@@ -432,7 +460,13 @@ def volume_has_fresh_complete_snapshot(
     age = _snapshot_age_for_path(volume_path, snap)
     if age is None:
         return False
-    return ttl <= 0 or age <= ttl
+    if ttl > 0 and age > ttl:
+        return False
+    # Readers keep serving a moved snapshot; only the producer must rebuild it.
+    if snapshot_membership_current(snap) is False:
+        return False
+    built_with = (snap.get("provenance") or {}).get("weights_digest")
+    return built_with is None or built_with == current_weights_digest()
 
 
 def _served_snapshot_tuple(
@@ -923,6 +957,8 @@ def write_full_universe_snapshot(
         )
 
         selection_policy = str(prep_meta.get("selection_basis") or "full")
+        # Taken once here: a weight edit during the build must show up as "changed", not be absorbed.
+        weights_digest = current_weights_digest()
         ctx_started = time.monotonic()
         from internal.council.scoring_context import enrich_scoring_market_context
 
@@ -1043,6 +1079,19 @@ def write_full_universe_snapshot(
                 "build_id": build_id,
                 "day_expected_count": len(expected),
                 "day_succeeded_count": len(list(inputs.get("day_succeeded") or [])),
+            }
+            candidate["provenance"] = {
+                "membership_generation": receipt.get("generation"),
+                "membership_block_hash": receipt.get("block_hash"),
+                "membership_rpc": receipt.get("rpc"),
+                "membership_resolved_at": receipt.get("resolved_at"),
+                "weights_digest": weights_digest,
+                "input_digest": compute_input_digest(
+                    str(receipt.get("generation")),
+                    current_scorer_digest(),
+                    list(inputs.get("tradable_rows") or []),
+                    ctx.get("weights") or {},
+                ),
             }
             publish_result = publish_complete_snapshot(candidate)
         published = bool(publish_result.get("published"))

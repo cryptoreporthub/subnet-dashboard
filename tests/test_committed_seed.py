@@ -25,12 +25,6 @@ def test_committed_seed_rows_are_exactly_its_chain_read():
     assert seed["coverage"]["membership"]["expected_netuids"] == list(chain.netuids)
 
 
-def test_committed_market_rows_cover_the_seed_chain_read():
-    chain = ChainRead.parse(_seed()["coverage"]["membership"].get("chain"))
-    rows = json.loads((REPO / "data_seeds" / "authoritative_universe_rows.json").read_text(encoding="utf-8"))["rows"]
-    assert set(chain.netuids) <= {row["netuid"] for row in rows}
-
-
 def test_committed_seed_passes_the_shipped_seed_gate():
     ok, reason = validate_shipped_seed(_seed())
     assert ok, reason

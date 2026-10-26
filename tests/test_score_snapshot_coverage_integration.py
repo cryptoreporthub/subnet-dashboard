@@ -16,6 +16,7 @@ from tests.score_snapshot_testutil import chain_read, complete_snapshot_payload
 @pytest.fixture(autouse=True)
 def _reset_phase1_state(tmp_path, monkeypatch):
     monkeypatch.setattr(snaps, "SCORE_SNAPSHOT_SEED_PATH", str(tmp_path / "no_seed.json"))
+    monkeypatch.setenv("SCORE_SNAPSHOT_CYCLE_PATH", str(tmp_path / "cycle.json"))
     cov.reset_phase1_cycle_state_for_tests()
     yield
     cov.reset_phase1_cycle_state_for_tests()

@@ -1128,7 +1128,7 @@ def test_build_carries_the_chain_read_it_resolved_from(universe_tmp, monkeypatch
     _patch_registration(monkeypatch, [1, 2, 3])
     builder = SnapshotBuilder(tmc_fetch=lambda: ({1, 2, 3}, {n: {"netuid": n} for n in (1, 2, 3)}, True))
     built = builder.build(_prior_snapshot([1, 2, 3])).snapshot
-    assert built.chain == ChainRead(PINNED_HASH, (1, 2, 3))
+    assert built.chain == ChainRead(PINNED_HASH, (1, 2, 3), "fixture")
 
 
 @pytest.mark.parametrize("kwargs", [{"read": "invalid"}, {"pin": (None, "rpc_error")}])

@@ -44,7 +44,7 @@ def _membership(active=ACTIVE, placeholders=PLACEHOLDERS, placeholder_validity=_
         status="ok",
         degraded=False,
         validity_map=validity,
-        chain=ChainRead(PINNED_HASH, tuple(sorted(active))) if active else None,
+        chain=ChainRead(PINNED_HASH, tuple(sorted(active)), "finney") if active else None,
     )
 
 
@@ -110,7 +110,7 @@ def _receipt_for(membership):
 def test_receipt_expects_exactly_the_chain_read():
     receipt = _receipt_for(_membership())
     assert receipt["expected_netuids"] == list(ACTIVE)
-    assert receipt["chain"] == {"block_hash": PINNED_HASH, "netuids": list(ACTIVE)}
+    assert receipt["chain"] == {"block_hash": PINNED_HASH, "netuids": list(ACTIVE), "rpc": "finney"}
 
 
 @pytest.mark.parametrize(
@@ -159,5 +159,5 @@ def test_a_universe_without_a_chain_read_expects_nothing_and_blocks_admission():
     assert receipt["expected_netuids"] == []
     assert receipt["chain"] is None
     assert cov.membership_allows_admission(receipt) is False
-    assert cov.membership_admission_block_reason(receipt) == "no_chain_read"
+    assert cov.membership_admission_block_reason(receipt) == "membership_without_chain_provenance"
     assert cov.membership_allows_admission(_receipt_for(membership)) is True

@@ -114,7 +114,13 @@ def read_chain_membership(reader: Any) -> Tuple[Optional[ChainRead], RpcOutcome]
     members, outcome = get_member_netuids(reader.call_fn(), at_hash)
     if outcome != "ok":
         return None, outcome
-    chain = ChainRead.parse({"block_hash": str(at_hash).lower(), "netuids": members})
+    chain = ChainRead.parse(
+        {
+            "block_hash": str(at_hash).lower(),
+            "netuids": members,
+            "rpc": getattr(reader, "provider_served", None),
+        }
+    )
     if chain is None:
         return None, "invalid"
     return chain, "ok"
