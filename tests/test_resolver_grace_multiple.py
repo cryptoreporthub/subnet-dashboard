@@ -50,7 +50,7 @@ def test_finite_huge_grace_does_not_overflow_the_expiry_window(resolver):
     assert resolver._is_expired(row, RESOLVE_AT, RESOLVE_AT + timedelta(days=365), 1e308) is False
 
 
-@pytest.mark.parametrize("raw_horizon", [float("inf"), float("nan"), "inf", "nan"])
+@pytest.mark.parametrize("raw_horizon", [float("inf"), float("nan"), "inf", "nan", 10**400])
 def test_non_finite_horizon_falls_back_to_the_default_horizon(resolver, raw_horizon):
     row = {"id": 1, "horizon_hours": raw_horizon, "resolve_attempts": resolver._PRICE_RETRY_CAP}
 
