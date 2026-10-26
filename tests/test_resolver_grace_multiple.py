@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
@@ -36,3 +42,37 @@ def test_row_without_horizon_hours_keeps_the_24h_default_grace(resolver):
 
     assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=5)) is False
     assert resolver._is_expired(pred, RESOLVE_AT, RESOLVE_AT + timedelta(hours=96)) is True
+
+
+def test_finite_huge_grace_does_not_overflow_the_expiry_window(resolver):
+    row = {"id": 1, "horizon_hours": 24, "resolve_attempts": resolver._PRICE_RETRY_CAP}
+
+    assert resolver._is_expired(row, RESOLVE_AT, RESOLVE_AT + timedelta(days=365), 1e308) is False
+
+
+def test_non_finite_horizon_falls_back_to_the_default_horizon(resolver):
+    row = {"id": 1, "horizon_hours": float("inf"), "resolve_attempts": resolver._PRICE_RETRY_CAP}
+
+    assert resolver._is_expired(row, RESOLVE_AT, RESOLVE_AT + timedelta(hours=95), 4.0) is False
+    assert resolver._is_expired(row, RESOLVE_AT, RESOLVE_AT + timedelta(hours=96), 4.0) is True
+
+
+def test_env_huge_grace_is_used_without_raising_on_a_ledger_row():
+    probe = (
+        "import internal.council.resolver as r;"
+        "from datetime import datetime, timedelta, timezone;"
+        "t = datetime(2026, 8, 9, 12, tzinfo=timezone.utc);"
+        "row = {'id': 1, 'horizon_hours': 24, 'resolve_attempts': r._PRICE_RETRY_CAP};"
+        "print(r._is_expired(row, t, t + timedelta(days=365)))"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=ROOT,
+        env={**os.environ, "RESOLVER_EXPIRY_GRACE_MULTIPLE": "1e308"},
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert done.returncode == 0, done.stderr[-800:]
+    assert done.stdout.strip().splitlines()[-1] == "False"
