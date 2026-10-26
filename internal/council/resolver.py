@@ -592,9 +592,9 @@ def _is_expired(
         horizon = float(prediction.get("horizon_hours", 0) or 0)
     except (TypeError, ValueError):
         horizon = 0.0
-    if horizon <= 0:
+    if not math.isfinite(horizon) or horizon <= 0:
         horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
-    return now >= resolve_at + timedelta(hours=horizon * grace_multiple)
+    return (now - resolve_at).total_seconds() >= horizon * grace_multiple * 3600.0
 
 
 def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
