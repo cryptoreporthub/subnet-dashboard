@@ -190,9 +190,20 @@ def build_pump_desk_snapshot() -> Dict[str, Any]:
     }
 
 
+def _snapshot_keep() -> int:
+    return max(1, int(os.environ.get("PUMP_DESK_SNAPSHOT_KEEP", "672")))
+
+
+def _prune_snapshots(history_dir: str, keep: int) -> None:
+    names = sorted(n for n in os.listdir(history_dir) if n.endswith(".json"))
+    for name in names[: max(0, len(names) - keep)]:
+        os.remove(os.path.join(history_dir, name))
+
+
 def save_snapshot(payload: Dict[str, Any]) -> str:
     desk = _desk_dir()
-    os.makedirs(os.path.join(desk, "snapshots"), exist_ok=True)
+    history_dir = os.path.join(desk, "snapshots")
+    os.makedirs(history_dir, exist_ok=True)
     path = _snapshot_path()
     latest = _latest_path()
     for target in (path, latest):
@@ -200,6 +211,7 @@ def save_snapshot(payload: Dict[str, Any]) -> str:
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
         os.replace(tmp, target)
+    _prune_snapshots(history_dir, _snapshot_keep())
     return path
 
 

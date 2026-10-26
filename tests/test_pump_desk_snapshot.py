@@ -85,6 +85,25 @@ def test_save_snapshot_writes_latest(tmp_path, monkeypatch):
     assert latest.is_file()
 
 
+def test_save_snapshot_keeps_only_newest_n(tmp_path, monkeypatch):
+    monkeypatch.setenv("PUMP_DESK_SNAPSHOT_DIR", str(tmp_path))
+    monkeypatch.setenv("PUMP_DESK_SNAPSHOT_KEEP", "3")
+    history = tmp_path / "snapshots"
+    history.mkdir()
+    for stamp in ("2026-01-01T000000Z", "2026-01-02T000000Z", "2026-01-03T000000Z", "2026-01-04T000000Z"):
+        (history / f"{stamp}.json").write_text("{}", encoding="utf-8")
+
+    snap.save_snapshot({"status": "ok", "alert_level": "ok"})
+
+    kept = sorted(p.name for p in history.glob("*.json"))
+    assert len(kept) == 3
+    assert "2026-01-01T000000Z.json" not in kept
+    assert "2026-01-02T000000Z.json" not in kept
+    assert "2026-01-03T000000Z.json" in kept
+    assert "2026-01-04T000000Z.json" in kept
+    assert (tmp_path / "latest.json").is_file()
+
+
 def test_scheduler_disabled(monkeypatch):
     monkeypatch.setenv("PUMP_DESK_SNAPSHOT_ENABLED", "off")
     out = sched.start_pump_desk_snapshot_scheduler()

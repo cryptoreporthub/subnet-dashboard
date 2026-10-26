@@ -75,3 +75,6 @@ config/watchlist.json
 data/*.lock
 data/pick_score_cache.json
 data/pick_score_latency.jsonl
+
+# Pump desk snapshot history is runtime state, pruned to newest N on write
+data/pump_desk/snapshots/
