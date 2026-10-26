@@ -211,7 +211,7 @@ def is_complete_snapshot(snap: Any) -> bool:
         return False
     if (
         any(membership.get(flag) for flag in ("refresh_incomplete", "degraded", "cap_reached"))
-        or membership.get("fresh") is False
+        or membership.get("fresh") is not True
     ):
         return False
     day = _row_ids(snap.get("day"))
