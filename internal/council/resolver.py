@@ -115,6 +115,11 @@ _LEARNING_MAX_WEIGHT = 2.0
 # pending for _PRICE_RETRY_CAP lookups before expiring, then get a 4x grace.
 _PRICE_RETRY_CAP_DEFAULT = 3
 _EXPIRY_GRACE_MULTIPLE_DEFAULT = 4.0
+# Env grace is bounded to a sane band; outside it falls back to the default
+# (MC B1, #1515 — astronomic values make the expiry threshold unreachable,
+# denormals make it effectively zero).
+_EXPIRY_GRACE_MULTIPLE_MIN = 1e-6
+_EXPIRY_GRACE_MULTIPLE_MAX = 1000.0
 
 
 def _parse_price_retry_cap(raw: Optional[str]) -> int:
@@ -152,6 +157,15 @@ def _parse_expiry_grace_multiple(raw: Optional[str]) -> float:
             default,
         )
         return default
+    if not (_EXPIRY_GRACE_MULTIPLE_MIN <= value <= _EXPIRY_GRACE_MULTIPLE_MAX):
+        logger.warning(
+            "RESOLVER_EXPIRY_GRACE_MULTIPLE=%r is outside [%g, %g]; using default %.1f",
+            raw,
+            _EXPIRY_GRACE_MULTIPLE_MIN,
+            _EXPIRY_GRACE_MULTIPLE_MAX,
+            default,
+        )
+        return default
     return value
 
 
@@ -185,6 +199,9 @@ def _parse_resolve_attempts(value: Any) -> int:
 _PRICE_RETRY_CAP = _parse_price_retry_cap(os.environ.get("RESOLVER_PRICE_RETRY_CAP"))
 _EXPIRY_GRACE_MULTIPLE = _parse_expiry_grace_multiple(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE"))
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
+# A finite-but-astronomic horizon would still compute an unreachable expiry
+# threshold; treat it like a bad horizon (MC B1, #1515).
+_EXPIRY_MAX_HORIZON_HOURS = 8760.0
 
 _replay_mode: ContextVar[bool] = ContextVar("resolver_replay_mode", default=False)
 
@@ -621,7 +638,7 @@ def _is_expired(
         # A JSON integer too large for float() raises OverflowError, same
         # abort-the-cycle class as a malformed resolve_attempts (M3, #1515).
         horizon = 0.0
-    if not math.isfinite(horizon) or horizon <= 0:
+    if not math.isfinite(horizon) or horizon <= 0 or horizon > _EXPIRY_MAX_HORIZON_HOURS:
         horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
     threshold = horizon * grace_multiple * 3600.0
     if not math.isfinite(threshold):
