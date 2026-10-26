@@ -623,7 +623,15 @@ def _is_expired(
         horizon = 0.0
     if not math.isfinite(horizon) or horizon <= 0:
         horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
-    return (now - resolve_at).total_seconds() >= horizon * grace_multiple * 3600.0
+    threshold = horizon * grace_multiple * 3600.0
+    if not math.isfinite(threshold):
+        # The product can overflow to inf for finite inputs (huge horizon
+        # or huge grace), which would compare elapsed >= inf and pin the
+        # row pending forever. Same fallback as a bad horizon: default
+        # 24h horizon x grace_multiple (semantics asserted by Claude,
+        # #1513 comment 6427370951).
+        threshold = _EXPIRY_DEFAULT_HORIZON_HOURS * grace_multiple * 3600.0
+    return (now - resolve_at).total_seconds() >= threshold
 
 
 def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
