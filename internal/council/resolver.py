@@ -114,6 +114,8 @@ _LEARNING_MAX_WEIGHT = 2.0
 # Missing-price retry semantics (#885): rows with unavailable price data stay
 # pending for _PRICE_RETRY_CAP lookups before expiring, then get a 4x grace.
 _PRICE_RETRY_CAP_DEFAULT = 3
+# An unbounded cap pends a row for that many lookups (MC A3, #1515).
+_PRICE_RETRY_CAP_MAX = 100
 _EXPIRY_GRACE_MULTIPLE_DEFAULT = 4.0
 # Env grace is bounded to a sane band; outside it falls back to the default
 # (MC B1, #1515 — astronomic values make the expiry threshold unreachable,
@@ -123,7 +125,7 @@ _EXPIRY_GRACE_MULTIPLE_MAX = 1000.0
 
 
 def _parse_price_retry_cap(raw: Optional[str]) -> int:
-    """Parse RESOLVER_PRICE_RETRY_CAP as a positive int; fall back to default on bad input."""
+    """Parse RESOLVER_PRICE_RETRY_CAP as an int in [1, _PRICE_RETRY_CAP_MAX]; fall back to default on bad input."""
     default = _PRICE_RETRY_CAP_DEFAULT
     if not raw:
         return default
@@ -131,10 +133,11 @@ def _parse_price_retry_cap(raw: Optional[str]) -> int:
         value = int(raw)
     except (TypeError, ValueError):
         value = 0
-    if value < 1:
+    if not 1 <= value <= _PRICE_RETRY_CAP_MAX:
         logger.warning(
-            "RESOLVER_PRICE_RETRY_CAP=%r is not a positive integer; using default %d",
+            "RESOLVER_PRICE_RETRY_CAP=%r is outside [1, %d]; using default %d",
             raw,
+            _PRICE_RETRY_CAP_MAX,
             default,
         )
         return default
@@ -701,7 +704,10 @@ def lookup_horizon_price(
     if status == "ok" and price > 0:
         prediction.pop("price_data_unavailable", None)
         return status, price, meta
-    prediction["resolve_attempts"] = _parse_resolve_attempts(prediction.get("resolve_attempts")) + 1
+    # Saturate at the cap: _is_expired only compares against it, so the count
+    # never needs to grow past it (MC A4, #1515).
+    attempts = _parse_resolve_attempts(prediction.get("resolve_attempts")) + 1
+    prediction["resolve_attempts"] = min(attempts, _PRICE_RETRY_CAP)
     prediction["price_data_unavailable"] = True
     prediction["_price_lookup_attempted"] = True
     return status, price, meta

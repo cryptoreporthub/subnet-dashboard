@@ -155,8 +155,8 @@ def test_late_recovery_million_grace_path_is_unchanged(resolver, tmp_path, monke
     assert len(expired) == 1
     row = expired[0]
     # The 1e6 late-recovery grace kept the row alive inside the helper long
-    # enough to burn one real lookup (attempts moved past the cap); the caller
-    # then retired it as a cold-cache miss, not a genuine expiry.
-    assert row["resolve_attempts"] == resolver._PRICE_RETRY_CAP + 1
+    # enough to burn one real lookup; the caller then retired it as a
+    # cold-cache miss, not a genuine expiry. The count saturates at the cap.
+    assert row["resolve_attempts"] == resolver._PRICE_RETRY_CAP
     assert row["expired_reason"] == "price_data_unavailable"
     assert row["retirement_reason"] == "missing_price_at_horizon"

@@ -51,7 +51,14 @@ def test_non_positive_retry_cap_falls_back_to_default(raw):
     assert cap == 3
 
 
-@pytest.mark.parametrize("raw", ["not-a-number", "nan", "inf", "-inf", "0", "-2"])
+@pytest.mark.parametrize("raw", ["101", "1000000"])
+def test_retry_cap_above_maximum_falls_back_to_default(raw):
+    cap, _ = _import_resolver(RESOLVER_PRICE_RETRY_CAP=raw)
+
+    assert cap == 3
+
+
+@pytest.mark.parametrize("raw", ["not-a-number", "nan", "inf", "-inf", "0", "-2", "1e-320", "1e6", "1000000"])
 def test_bad_grace_multiple_falls_back_to_default(raw):
     _, grace = _import_resolver(RESOLVER_EXPIRY_GRACE_MULTIPLE=raw)
 
@@ -62,3 +69,9 @@ def test_valid_settings_are_used():
     cap, grace = _import_resolver(RESOLVER_PRICE_RETRY_CAP="5", RESOLVER_EXPIRY_GRACE_MULTIPLE="2.5")
 
     assert (cap, grace) == (5, 2.5)
+
+
+def test_retry_cap_at_maximum_is_kept():
+    cap, _ = _import_resolver(RESOLVER_PRICE_RETRY_CAP="100")
+
+    assert cap == 100

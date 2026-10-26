@@ -60,6 +60,22 @@ def test_missing_price_stays_pending_and_expires_after_cap(resolver, monkeypatch
     assert expired["resolve_attempts"] == 3
 
 
+def test_missing_price_attempts_saturate_at_the_cap(resolver, monkeypatch):
+    now = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
+    resolve_at = now - timedelta(hours=6)
+    monkeypatch.setattr(
+        resolver,
+        "price_at_resolve_at",
+        lambda *args, **kwargs: ("ungradeable", 0.0, {"candles_in_window": 0, "price_source": None}),
+        raising=False,
+    )
+
+    pred = _prediction(resolve_at, resolve_attempts=resolver._PRICE_RETRY_CAP)
+    resolver.lookup_horizon_price(pred, resolve_at=resolve_at, now=now, live_prices={})
+
+    assert pred["resolve_attempts"] == resolver._PRICE_RETRY_CAP
+
+
 def test_real_snapshot_miss_grades_normally(resolver, monkeypatch):
     now = datetime(2026, 8, 9, 12, 0, tzinfo=timezone.utc)
     resolve_at = now - timedelta(hours=6)
