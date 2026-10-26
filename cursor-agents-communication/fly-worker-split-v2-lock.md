@@ -2,7 +2,7 @@
 
 **Status:** **ROLLED BACK to v1 canon** (2026-07-31)  
 **Prod canon:** `fly.toml` · one web machine · `data_volume` + **inline worker** · `WORKER_SPLIT_V2` unset  
-**v2:** opt-in only via `scripts/fly_enable_worker_v2.sh` / workflow Enable Worker Split v2  
+**v2:** opt-in only via `scripts/fly_enable_worker_v2.sh`  
 **Rollback:** `scripts/fly_disable_worker_v2.sh` · `split-v2-rollback-runbook.md`
 
 ## Why rolled back
@@ -35,4 +35,4 @@ split_v2 put volume APIs behind web→worker private HTTP. On this app that hop 
 
 1. Prove `scripts/fly_probe_worker_from_web.sh` from a temporary worker scale
 2. Human approve
-3. `./scripts/fly_enable_worker_v2.sh` or workflow **Enable Worker Split v2**
+3. `./scripts/fly_enable_worker_v2.sh`

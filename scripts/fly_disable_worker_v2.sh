@@ -129,4 +129,4 @@ fi
 echo ""
 echo "Done. Canon is v1 inline worker (fly.toml)."
 echo "Optional: MESSAGE_INTEL_LISTENER=auto after telegram session on volume."
-echo "Re-enable v2 only via workflow Enable Worker Split v2 / scripts/fly_enable_worker_v2.sh"
+echo "Re-enable v2 only via scripts/fly_enable_worker_v2.sh (the workflow was removed in #1519)"

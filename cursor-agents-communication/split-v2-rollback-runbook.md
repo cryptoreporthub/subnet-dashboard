@@ -44,8 +44,6 @@ fly secrets set MESSAGE_INTEL_LISTENER=auto --app subnet-dashboard
 Only after private HTTP is proven (probe from web machine succeeds for 24h):
 
 ```bash
-# workflow: Enable Worker Split v2 (confirm=enable)
-# or:
 ./scripts/fly_enable_worker_v2.sh
 ```
 
