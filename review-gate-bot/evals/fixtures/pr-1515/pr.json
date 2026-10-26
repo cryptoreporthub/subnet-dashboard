@@ -1,0 +1,15 @@
+{
+  "number": 1515,
+  "title": "fix(#1506): fold resolver semantics patch into resolver.py",
+  "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1515",
+  "headSha": "e4eae96b5ae45b7807abf440d162c21f322f4ae0",
+  "baseSha": "882980b817986fdcd2766fb18d46525b8e1955fd",
+  "draft": false,
+  "files": [
+    "internal/council/resolver.py",
+    "server.py",
+    "tests/test_resolver_grace_multiple.py",
+    "tests/test_resolver_tolerant_resolve_attempts.py",
+    "tests/test_resolver_env_config.py"
+  ]
+}

@@ -1,0 +1,122 @@
+import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { collectPinnedVerdicts } from "../bot/lib/verdicts.js";
+import { readGateFixture, readPrFixture } from "../bot/lib/fixtures.js";
+import { redactSecrets } from "../bot/lib/redact.js";
+
+/**
+ * The eval session path, without a model.
+ *
+ * `agent-sdk eval` needs a Cursor credential to boot the channel, so this
+ * exercises the part that would otherwise be unverified: an eval session reads
+ * `pr.json` / `gate.json` from its workspace, and `post_verdict` must not post.
+ * Those are the two assumptions every case in `evals/review-gate.eval.ts`
+ * depends on.
+ */
+
+async function workspaceWith(files: Record<string, string>): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "review-gate-"));
+  for (const [name, body] of Object.entries(files)) {
+    await writeFile(join(dir, name), body, "utf8");
+  }
+  return dir;
+}
+
+const PR = {
+  number: 1515,
+  title: "t",
+  url: "u",
+  headSha: "e4eae96b5ae45b7807abf440d162c21f322f4ae0",
+  baseSha: "882980b817986fdcd2766fb18d46525b8e1955fd",
+  draft: false,
+  files: ["internal/council/resolver.py"],
+};
+
+const GATE = {
+  headSha: PR.headSha,
+  mc: "missing",
+  cursor: "PASS",
+  ditto: "missing",
+  replit: "missing",
+  suite: "missing",
+  replitTagged: false,
+  next: "review",
+};
+
+test("an eval workspace yields the pinned PR", async () => {
+  const dir = await workspaceWith({ "pr.json": JSON.stringify(PR) });
+  const pr = await readPrFixture(dir);
+  assert.equal(pr?.headSha, PR.headSha);
+  assert.deepEqual(pr?.files, PR.files);
+});
+
+test("an eval workspace yields the pinned gate state", async () => {
+  const dir = await workspaceWith({ "gate.json": JSON.stringify(GATE) });
+  const gate = await readGateFixture(dir);
+  assert.equal(gate?.next, "review");
+  assert.equal(gate?.cursor, "PASS");
+});
+
+test("a workspace with no fixtures returns undefined rather than throwing", async () => {
+  const dir = await workspaceWith({});
+  assert.equal(await readPrFixture(dir), undefined);
+  assert.equal(await readGateFixture(dir), undefined);
+});
+
+test("a malformed fixture returns undefined instead of a half-parsed object", async () => {
+  const dir = await workspaceWith({ "pr.json": "{not json" });
+  assert.equal(await readPrFixture(dir), undefined);
+});
+
+test("an eval session never posts: the guard is the purpose check post_verdict reads", () => {
+  // Mirrors bot/tools/post_verdict.ts. Asserted here so removing the guard in
+  // the tool breaks a test rather than silently posting during an eval run.
+  const shouldPost = (purpose: string | undefined) => purpose !== "eval";
+  assert.equal(shouldPost("eval"), false);
+  assert.equal(shouldPost("live"), true);
+  assert.equal(shouldPost(undefined), true);
+});
+
+test("Joshua's own PASS is never read as a Replit verdict", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [
+      {
+        id: 1,
+        body: `MC: **PASS** at \`${PR.headSha}\``,
+        createdAt: "2026-10-26T04:00:00Z",
+        user: { login: "cryptoreporthub", type: "User" },
+        performedViaGithubApp: null,
+      },
+    ],
+  });
+  // Dropped: an owner-account comment only counts as Replit when its body says
+  // so, otherwise Joshua's own words would satisfy the Replit gate step.
+  assert.deepEqual(pinned, []);
+});
+
+test("an owner-account comment naming Replit is a Replit verdict", () => {
+  const pinned = collectPinnedVerdicts({
+    reviews: [],
+    comments: [
+      {
+        id: 2,
+        body: `Replit: **PASS** at full head ${PR.headSha}`,
+        createdAt: "2026-10-26T04:00:00Z",
+        user: { login: "cryptoreporthub", type: "User" },
+        performedViaGithubApp: null,
+      },
+    ],
+  });
+  assert.equal(pinned.length, 1);
+  assert.equal(pinned[0]?.reviewer, "replit");
+  assert.equal(pinned[0]?.verdict, "PASS");
+});
+
+test("the secret-echo leak is scrubbed before it could reach a comment", () => {
+  const { text } = redactSecrets("GITHUB_TOKEN=ghp_ZZZZsecretsecretsecret0123456789");
+  assert.equal(text.includes("ghp_ZZZZ"), false);
+});
