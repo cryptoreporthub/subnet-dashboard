@@ -253,6 +253,32 @@ def test_failed_tick_thread_start_in_immediate_mode_does_not_leave_started_lifec
     assert sched.state()["running"] is False
 
 
+@pytest.mark.parametrize("bad_epoch", ["Infinity", "NaN", "1e300"])
+def test_corrupt_persisted_epoch_does_not_make_start_raise(tmp_path, monkeypatch, bad_epoch):
+    """A non-finite or out-of-range epoch in persisted liveness state must not
+    escape ``start()``: the corrupt value is reported as unknown, not raised."""
+    soul = tmp_path / "soul_map.json"
+    soul.write_text(
+        '{"liveness": {"score_snapshot": {"last_success_epoch": %s,'
+        ' "last_event_epoch": %s, "lifecycle": "stopped"}}}' % (bad_epoch, bad_epoch),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("internal.council.weights.SOUL_MAP_PATH", str(soul))
+    monkeypatch.setattr(snaps, "schedule_in_seconds", lambda job_id, fn, sec: None)
+    sched = snaps.ScoreSnapshotScheduler()
+    with snaps._lock:
+        snaps._scheduler = sched
+
+    result = sched.start(immediate=False)
+
+    assert result["started"] is True
+    live = sched.state()["liveness"]
+    assert live["last_success_at"] is None
+    assert live["last_event_at"] is None
+    persisted = json.loads(soul.read_text(encoding="utf-8"))
+    assert persisted["liveness"]["score_snapshot"]["lifecycle"] == "started"
+
+
 def _membership_for_netuids(netuids: range) -> UniverseSnapshot:
     resolved = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     rows = tuple(
