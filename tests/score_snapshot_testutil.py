@@ -45,7 +45,7 @@ def complete_snapshot_payload(
             "coverage": {
                 "complete": True,
                 "published": True,
-                "membership": {"expected_netuids": expected, "chain": chain_dict(expected)},
+                "membership": {"expected_netuids": expected, "chain": chain_dict(expected), "fresh": True},
                 "day": {
                     "complete": True,
                     "expected": expected,

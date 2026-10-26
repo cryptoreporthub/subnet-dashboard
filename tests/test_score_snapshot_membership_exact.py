@@ -23,6 +23,8 @@ MUTATIONS = {
     "membership_degraded": lambda p: p["coverage"]["membership"].update(degraded=True),
     "membership_cap_reached": lambda p: p["coverage"]["membership"].update(cap_reached=True),
     "membership_not_fresh": lambda p: p["coverage"]["membership"].update(fresh=False),
+    "membership_fresh_absent": lambda p: p["coverage"]["membership"].pop("fresh"),
+    "membership_fresh_truthy_non_bool": lambda p: p["coverage"]["membership"].update(fresh=1),
     "hour_empty": lambda p: p.update(hour=[]),
     "hour_missing_a_chain_member": lambda p: p.update(hour=p["hour"][:-1]),
 }
