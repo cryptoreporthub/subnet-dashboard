@@ -155,6 +155,29 @@ def _parse_expiry_grace_multiple(raw: Optional[str]) -> float:
     return value
 
 
+def _parse_resolve_attempts(value: Any) -> int:
+    """Tolerantly parse a persisted ``resolve_attempts`` count; fall back to 0.
+
+    A malformed value on one ledger row must never abort a resolve cycle, so any
+    non-numeric or non-finite input yields 0 with a warning instead of raising.
+    """
+    if value is None or value == "":
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        pass
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        logger.warning("resolve_attempts=%r is not a number; treating as 0", value)
+        return 0
+    if not math.isfinite(number):
+        logger.warning("resolve_attempts=%r is not finite; treating as 0", value)
+        return 0
+    return int(number)
+
+
 _PRICE_RETRY_CAP = _parse_price_retry_cap(os.environ.get("RESOLVER_PRICE_RETRY_CAP"))
 _EXPIRY_GRACE_MULTIPLE = _parse_expiry_grace_multiple(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE"))
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
@@ -583,7 +606,7 @@ def _is_expired(
         return False
     # Give real ledger rows a bounded chance to obtain their historical price
     # before classifying them as genuine expiry.
-    attempts = int(prediction.get("resolve_attempts") or 0)
+    attempts = _parse_resolve_attempts(prediction.get("resolve_attempts"))
     if attempts < _PRICE_RETRY_CAP and ("id" in prediction or "resolve_at" in prediction):
         return False
     if now < resolve_at:
@@ -647,7 +670,7 @@ def lookup_horizon_price(
     if status == "ok" and price > 0:
         prediction.pop("price_data_unavailable", None)
         return status, price, meta
-    prediction["resolve_attempts"] = int(prediction.get("resolve_attempts") or 0) + 1
+    prediction["resolve_attempts"] = _parse_resolve_attempts(prediction.get("resolve_attempts")) + 1
     prediction["price_data_unavailable"] = True
     prediction["_price_lookup_attempted"] = True
     return status, price, meta
