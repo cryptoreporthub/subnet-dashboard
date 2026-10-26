@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -91,7 +92,6 @@ def _parse_cold_cache_alert_ratio(raw: Optional[str]) -> float:
             default,
         )
         return default
-    import math
     if not math.isfinite(value) or value < 0 or value > 1:
         logger.warning(
             "COLD_CACHE_ALERT_RATIO=%r is out of range [0, 1] or non-finite; using default %.4f",
@@ -113,8 +113,50 @@ _LEARNING_MAX_WEIGHT = 2.0
 
 # Missing-price retry semantics (#885): rows with unavailable price data stay
 # pending for _PRICE_RETRY_CAP lookups before expiring, then get a 4x grace.
-_PRICE_RETRY_CAP = max(1, int(os.environ.get("RESOLVER_PRICE_RETRY_CAP", "3")))
-_EXPIRY_GRACE_MULTIPLE = float(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE", "4.0"))
+_PRICE_RETRY_CAP_DEFAULT = 3
+_EXPIRY_GRACE_MULTIPLE_DEFAULT = 4.0
+
+
+def _parse_price_retry_cap(raw: Optional[str]) -> int:
+    """Parse RESOLVER_PRICE_RETRY_CAP as a positive int; fall back to default on bad input."""
+    default = _PRICE_RETRY_CAP_DEFAULT
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 0
+    if value < 1:
+        logger.warning(
+            "RESOLVER_PRICE_RETRY_CAP=%r is not a positive integer; using default %d",
+            raw,
+            default,
+        )
+        return default
+    return value
+
+
+def _parse_expiry_grace_multiple(raw: Optional[str]) -> float:
+    """Parse RESOLVER_EXPIRY_GRACE_MULTIPLE as a finite positive float; fall back to default on bad input."""
+    default = _EXPIRY_GRACE_MULTIPLE_DEFAULT
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = math.nan
+    if not math.isfinite(value) or value <= 0:
+        logger.warning(
+            "RESOLVER_EXPIRY_GRACE_MULTIPLE=%r is not a finite positive number; using default %.1f",
+            raw,
+            default,
+        )
+        return default
+    return value
+
+
+_PRICE_RETRY_CAP = _parse_price_retry_cap(os.environ.get("RESOLVER_PRICE_RETRY_CAP"))
+_EXPIRY_GRACE_MULTIPLE = _parse_expiry_grace_multiple(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE"))
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
 
 _replay_mode: ContextVar[bool] = ContextVar("resolver_replay_mode", default=False)
