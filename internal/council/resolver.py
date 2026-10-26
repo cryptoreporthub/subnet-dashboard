@@ -158,24 +158,28 @@ def _parse_expiry_grace_multiple(raw: Optional[str]) -> float:
 def _parse_resolve_attempts(value: Any) -> int:
     """Tolerantly parse a persisted ``resolve_attempts`` count; fall back to 0.
 
-    A malformed value on one ledger row must never abort a resolve cycle, so any
-    non-numeric or non-finite input yields 0 with a warning instead of raising.
+    A malformed value on one ledger row must never abort a resolve cycle, so
+    any non-numeric, non-finite or negative input yields 0 with a warning
+    instead of raising or buying unlimited retries.
     """
     if value is None or value == "":
         return 0
     try:
-        return int(value)
+        number = int(value)
     except (TypeError, ValueError, OverflowError):
-        pass
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        logger.warning("resolve_attempts=%r is not a number; treating as 0", value)
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            logger.warning("resolve_attempts=%r is not a number; treating as 0", value)
+            return 0
+        if not math.isfinite(number):
+            logger.warning("resolve_attempts=%r is not finite; treating as 0", value)
+            return 0
+        number = int(number)
+    if number < 0:
+        logger.warning("resolve_attempts=%r is negative; treating as 0", value)
         return 0
-    if not math.isfinite(number):
-        logger.warning("resolve_attempts=%r is not finite; treating as 0", value)
-        return 0
-    return int(number)
+    return number
 
 
 _PRICE_RETRY_CAP = _parse_price_retry_cap(os.environ.get("RESOLVER_PRICE_RETRY_CAP"))
@@ -613,7 +617,9 @@ def _is_expired(
         return False
     try:
         horizon = float(prediction.get("horizon_hours", 0) or 0)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # A JSON integer too large for float() raises OverflowError, same
+        # abort-the-cycle class as a malformed resolve_attempts (M3, #1515).
         horizon = 0.0
     if not math.isfinite(horizon) or horizon <= 0:
         horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
