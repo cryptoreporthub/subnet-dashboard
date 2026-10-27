@@ -61,7 +61,7 @@ export type AdvanceResult = {
  * One structured line for an ask that will not succeed. A silent failure here
  * used to mean Replit was never asked and nobody knew.
  */
-function logAsk(outcome: ReplitAskOutcome, pr: string, headSha: string): void {
+export function logAsk(outcome: ReplitAskOutcome, pr: string, headSha: string): void {
   if (outcome.asked || outcome.reason === "already-asked" || !outcome.persistent) {
     return;
   }

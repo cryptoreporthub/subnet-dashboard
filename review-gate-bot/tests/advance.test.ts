@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
-import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { commentTurn, logAsk, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
 import { suiteKey } from "../bot/lib/gh.js";
-import { replitAskKey, replitTagKey } from "../bot/lib/gate.js";
+import { prKey, replitAskKey, replitTagKey } from "../bot/lib/gate.js";
 import { LEASE_MS } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
 
@@ -290,4 +290,19 @@ test("a new head gets its own review turn, even inside the old head's lease", as
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
   w.live.head = NEW_HEAD;
   assert.equal(await pullRequestTurn(w.deps, { action: "synchronize", draft: false }), true);
+});
+
+test("a persistent Replit ask failure is logged under the repository-qualified PR key", () => {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    logAsk({ asked: false, reason: "error", detail: "timeout", attempts: 3, persistent: true }, prKey(REF), HEAD);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(lines.length, 1);
+  assert.equal(JSON.parse(lines[0] ?? "{}").pr, "cryptoreporthub/subnet-dashboard#1522");
 });
