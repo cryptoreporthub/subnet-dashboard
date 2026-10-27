@@ -20,7 +20,9 @@ const KEY = "cont:github-pr:cryptoreporthub/subnet-dashboard#1522";
 type Execute = (input: unknown, ctx: unknown) => Promise<unknown>;
 const run = (tool: unknown): Execute => (tool as { execute: Execute }).execute;
 
-function pr(options: { head?: string; base?: string; files?: object[]; compare?: object[] } = {}): Octokit {
+function pr(
+  options: { head?: string; base?: string; files?: object[]; compare?: object[]; side?: object[]; compares?: string[] } = {},
+): Octokit {
   const listFiles = () => {};
   return {
     paginate: async (fn: unknown) => (fn === listFiles ? (options.files ?? []) : []),
@@ -41,9 +43,13 @@ function pr(options: { head?: string; base?: string; files?: object[]; compare?:
       },
       issues: { listComments: () => {} },
       repos: {
-        compareCommitsWithBasehead: async () => ({
-          data: { files: options.compare ?? [], merge_base_commit: { sha: "d".repeat(40) } },
-        }),
+        // The head's own changes answer the carried-from...head compare; the merge-base
+        // side answers the merge-base...carried-from compare.
+        compareCommitsWithBasehead: async ({ basehead }: { basehead: string }) => {
+          options.compares?.push(basehead);
+          const files = basehead === `${OLD}...${HEAD}` ? (options.compare ?? []) : (options.side ?? []);
+          return { data: { files, merge_base_commit: { sha: "d".repeat(40) } } };
+        },
       },
       actions: {
         listWorkflowRuns: async () => ({ data: { workflow_runs: [] } }),
@@ -123,6 +129,30 @@ test("a carry-over whose carried-from SHA and head differ only in prose still ca
   )) as Record<string, unknown>;
   assert.equal(result.carried, true);
   assert.equal(result.clean, true);
+});
+
+test("a carry-over also reads the merge-base side, so a change only the carried-from SHA has still blocks it", async () => {
+  // A force-push can leave the head equal to the merge base: the code change exists only on the carried-from side.
+  const compares: string[] = [];
+  const octokit = pr({ side: [{ filename: "internal/x.py", status: "modified" }], compares });
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, false);
+  assert.equal(result.reason, "code-changed");
+  assert.deepEqual(compares, [`${OLD}...${HEAD}`, `${"d".repeat(40)}...${OLD}`]);
+});
+
+test("a carry-over whose compare is at GitHub's 300-file cap is refused, not read as complete", async () => {
+  const capped = Array.from({ length: 300 }, (_, i) => ({ filename: `docs/n${i}.md`, status: "modified" }));
+  const octokit = pr({ compare: capped });
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, false);
+  assert.equal(result.reason, "carry-diff-incomplete");
 });
 
 test("a rename's old path counts as changed, so x.py to x.md cannot look like prose", async () => {
