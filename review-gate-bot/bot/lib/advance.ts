@@ -137,7 +137,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
           level: "error",
           event: "gate_step_failed",
           step,
-          pr: ref.number,
+          pr: prKey(ref),
           head: headSha,
           error: error instanceof Error ? error.message : String(error),
         }),

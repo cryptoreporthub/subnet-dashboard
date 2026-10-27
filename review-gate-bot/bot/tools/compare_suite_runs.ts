@@ -1,3 +1,4 @@
+import type { Octokit } from "@octokit/rest";
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
@@ -10,6 +11,37 @@ import { carryDecision, diffJunit } from "../lib/suite.js";
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
 
 type Runner = ReturnType<typeof octokitRunner>;
+
+/** GitHub caps a compare's file list. A list at the cap may be cut short, so it proves nothing. */
+const COMPARE_FILE_CAP = 300;
+
+/**
+ * Every path whose content can differ between two commits, or undefined when a
+ * compare could not be read whole.
+ *
+ * A path that differs between `from` and `to` changed on one side of their merge
+ * base, so the changes on both sides together cover it. That is a superset: it can
+ * over-block a carry, never let an untested change through.
+ */
+async function changedBetween(octokit: Octokit, ref: PrRef, from: string, to: string): Promise<string[] | undefined> {
+  const { data: head } = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner: ref.owner,
+    repo: ref.repo,
+    basehead: `${from}...${to}`,
+  });
+  const { data: side } = await octokit.rest.repos.compareCommitsWithBasehead({
+    owner: ref.owner,
+    repo: ref.repo,
+    basehead: `${head.merge_base_commit.sha}...${from}`,
+  });
+  const complete = (files: readonly unknown[] | undefined) => files !== undefined && files.length < COMPARE_FILE_CAP;
+  if (!complete(head.files) || !complete(side.files)) {
+    return undefined;
+  }
+  return [...(head.files ?? []), ...(side.files ?? [])].flatMap((f) =>
+    f.previous_filename === undefined ? [f.filename] : [f.filename, f.previous_filename],
+  );
+}
 
 /**
  * The PR a recorded result belongs to. Recording without one would file the
@@ -103,8 +135,23 @@ export default defineTool({
         ? "clean"
         : ((await readSuiteRecord(ctx.host.kv, requirePr(prRef), input.carryFromSha))?.state ??
           "missing");
+      // What a suite can observe is what differs between the carried-from SHA and the head.
+      // The PR's diff against base is not that: a force-push can leave it prose-only while
+      // the code still differs from the SHA whose clean result is being carried.
+      const between = isEval
+        ? changedFiles
+        : await changedBetween(await ctx.host.github.getOctokit(), requirePr(prRef), input.carryFromSha, input.headSha);
+      if (between === undefined) {
+        return {
+          recorded: false,
+          reason: "carry-diff-incomplete",
+          carryFromSha: input.carryFromSha,
+          carried: false,
+          clean: false,
+        };
+      }
       const decision = carryDecision({
-        changedFiles,
+        changedFiles: between,
         recordedAtCarryFrom: prior,
       });
 

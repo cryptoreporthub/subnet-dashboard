@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
-import { readPr } from "../bot/lib/gh.js";
+import { readPr, suiteKey } from "../bot/lib/gh.js";
 import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
@@ -20,7 +20,7 @@ const KEY = "cont:github-pr:cryptoreporthub/subnet-dashboard#1522";
 type Execute = (input: unknown, ctx: unknown) => Promise<unknown>;
 const run = (tool: unknown): Execute => (tool as { execute: Execute }).execute;
 
-function pr(options: { head?: string; base?: string; files?: object[] } = {}): Octokit {
+function pr(options: { head?: string; base?: string; files?: object[]; compare?: object[] } = {}): Octokit {
   const listFiles = () => {};
   return {
     paginate: async (fn: unknown) => (fn === listFiles ? (options.files ?? []) : []),
@@ -40,6 +40,11 @@ function pr(options: { head?: string; base?: string; files?: object[] } = {}): O
         listReviews: () => {},
       },
       issues: { listComments: () => {} },
+      repos: {
+        compareCommitsWithBasehead: async () => ({
+          data: { files: options.compare ?? [], merge_base_commit: { sha: "d".repeat(40) } },
+        }),
+      },
       actions: {
         listWorkflowRuns: async () => ({ data: { workflow_runs: [] } }),
         listWorkflowRunArtifacts: async () => ({ data: { artifacts: [] } }),
@@ -48,8 +53,8 @@ function pr(options: { head?: string; base?: string; files?: object[] } = {}): O
   } as unknown as Octokit;
 }
 
-function toolContext(octokit: Octokit): unknown {
-  const store = new Map<string, unknown>();
+function toolContext(octokit: Octokit, seed: Record<string, unknown> = {}): unknown {
+  const store = new Map<string, unknown>(Object.entries(seed));
   return {
     session: { purpose: "live", continuationKey: KEY },
     host: {
@@ -91,6 +96,33 @@ test("compare_suite_runs takes its base from the PR, not from the model", async 
   assert.equal(result.recorded, false);
   assert.equal(result.reason, "base-mismatch");
   assert.equal(result.expected, BASE);
+});
+
+const PR_REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+
+test("a carry-over diffs the carried-from SHA against the head, so a code change between them blocks it", async () => {
+  // The live PR diff (against base) is prose only: the force-push removed the code change.
+  // The code still differs between OLD and HEAD, so the carry must be refused.
+  const octokit = pr({
+    files: [{ filename: "README.md", status: "modified" }],
+    compare: [{ filename: "internal/x.py", status: "modified" }],
+  });
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, false);
+  assert.equal(result.reason, "code-changed");
+});
+
+test("a carry-over whose carried-from SHA and head differ only in prose still carries", async () => {
+  const octokit = pr({ compare: [{ filename: "docs/notes.md", status: "modified" }] });
+  const result = (await run(compareSuiteRuns)(
+    { headSha: HEAD, baseSha: BASE, carryFromSha: OLD },
+    toolContext(octokit, { [suiteKey(PR_REF, OLD)]: { state: "clean" } }),
+  )) as Record<string, unknown>;
+  assert.equal(result.carried, true);
+  assert.equal(result.clean, true);
 });
 
 test("a rename's old path counts as changed, so x.py to x.md cannot look like prose", async () => {

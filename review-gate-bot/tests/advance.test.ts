@@ -324,3 +324,26 @@ test("a Replit ask that gives up is logged under the repository-qualified PR key
   assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
   assert.equal(w.asks(), 0);
 });
+
+test("a failed gate step is logged under the repository-qualified PR key", async () => {
+  const w = world({
+    checkFails: true,
+    comments: [mcPass],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+    seed: { [suiteKey(REF, HEAD)]: { state: "clean" } },
+  });
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await reviewEventTurn(w.deps);
+  } finally {
+    console.error = original;
+  }
+  const logged = lines.map((line) => JSON.parse(line)).filter((entry) => entry.event === "gate_step_failed");
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].step, "check");
+  assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
+});
