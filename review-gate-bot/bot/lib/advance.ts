@@ -1,0 +1,165 @@
+import type { Octokit } from "@octokit/rest";
+import type { HostMcpRegistry } from "@grok/agent-sdk";
+import type { HostKvApi } from "@grok/agent-sdk/kv";
+import { readGateState, type PrRef } from "./gh.js";
+import { gateActions } from "./gate.js";
+import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
+import { tagCursorAndDitto, tagReplit } from "./tag.js";
+
+/** What the gate needs from the host: plain handles, so it can run without the SDK. */
+export type GateDeps = { octokit: Octokit; kv: HostKvApi; mcp: HostMcpRegistry; ref: PrRef };
+
+/**
+ * PR actions that start a review turn.
+ *
+ * `synchronize` is included on purpose: a new head resets every verdict, so it
+ * must re-review. A duplicate delivery is harmless because the per-head lock
+ * refuses a second review of the same SHA.
+ */
+export const REVIEW_ACTIONS = new Set(["opened", "synchronize", "reopened", "ready_for_review"]);
+
+/**
+ * The head and draft flag, read live.
+ *
+ * Every hook re-reads this rather than trusting the delivery payload: a hook
+ * can fire on a draft, and a draft must never be tagged or reviewed — the
+ * reviewer round trip is for a PR that is actually asking for review.
+ */
+async function readHead(octokit: Octokit, ref: PrRef): Promise<{ headSha: string; draft: boolean }> {
+  const { data } = await octokit.rest.pulls.get({
+    owner: ref.owner,
+    repo: ref.repo,
+    pull_number: ref.number,
+  });
+  return { headSha: data.head.sha, draft: data.draft ?? false };
+}
+
+export type AdvanceResult = {
+  headSha: string;
+  draft: boolean;
+  next: string;
+  needsReviewTurn: boolean;
+  taggedCursorDitto: string;
+  taggedReplit: string;
+  replitAsk: string;
+};
+
+/**
+ * One structured line for an ask that will not succeed. A silent failure here
+ * used to mean Replit was never asked and nobody knew.
+ */
+function logAsk(outcome: ReplitAskOutcome, prNumber: number, headSha: string): void {
+  if (outcome.asked || outcome.reason === "already-asked" || !outcome.persistent) {
+    return;
+  }
+  console.error(
+    JSON.stringify({
+      level: "error",
+      event: "replit_ask_persistent_failure",
+      pr: prNumber,
+      head: headSha,
+      reason: outcome.reason,
+      attempts: outcome.attempts,
+      detail: outcome.detail,
+      effect:
+        "Replit was never successfully asked for this head. The gate does not advance on the ask: it still needs Replit's posted verdict, which will arrive only if the @replit tag reaches them.",
+    }),
+  );
+}
+
+function askLabel(outcome: ReplitAskOutcome): string {
+  if (outcome.asked) {
+    return "asked";
+  }
+  if (outcome.reason === "already-asked") {
+    return "already-asked";
+  }
+  return outcome.persistent ? `failed:persistent:${outcome.reason}` : `failed:${outcome.reason}`;
+}
+
+/**
+ * Re-read the gate for the PR's current head and post whatever tags it allows.
+ *
+ * No model turn and no judgement: `lib/gate.ts` decides (`gateActions`), this
+ * only delivers. Every post is lock-guarded per head, so a replay or a
+ * duplicate webhook runs this again without repeating a comment.
+ *
+ * **Draft guard.** A draft is returned before anything is posted or asked. The
+ * pull_request hook had this check; the comment and event hooks did not, so a
+ * comment on a draft PR tagged both reviewers. The decision lives in
+ * `gateActions`, so all three hooks refuse a draft the same way.
+ */
+export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
+  const { octokit, kv, mcp, ref } = deps;
+  const { headSha, draft } = await readHead(octokit, ref);
+
+  if (draft) {
+    return {
+      headSha,
+      draft,
+      next: "review",
+      needsReviewTurn: false,
+      taggedCursorDitto: "skipped:draft",
+      taggedReplit: "skipped:draft",
+      replitAsk: "skipped:draft",
+    };
+  }
+
+  const state = await readGateState({ octokit, kv, ref, headSha });
+  const actions = gateActions(state, false);
+
+  // The Cursor/Ditto tag is posted on every head, so the round trip starts
+  // immediately and does not wait for MC's verdict to be written down.
+  let taggedCursorDitto = "skipped";
+  if (actions.tagCursorDitto) {
+    const tag = await tagCursorAndDitto({ octokit, kv, ref, headSha, state });
+    taggedCursorDitto = tag.reason;
+  }
+
+  let taggedReplit = "skipped";
+  if (actions.tagReplit) {
+    const tag = await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: headSha });
+    taggedReplit = tag.reason;
+  }
+
+  let replitAsk = "skipped";
+  if (actions.askReplit) {
+    const ask = await askReplitOnce({ kv, mcp, prNumber: ref.number, headSha });
+    logAsk(ask, ref.number, headSha);
+    replitAsk = askLabel(ask);
+  }
+
+  return {
+    headSha,
+    draft,
+    next: state.next,
+    needsReviewTurn: actions.needsReviewTurn,
+    taggedCursorDitto,
+    taggedReplit,
+    replitAsk,
+  };
+}
+
+
+/** `pull_request` delivery: does it start a model turn? */
+export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draft: boolean }): Promise<boolean> {
+  if (pr.draft || !REVIEW_ACTIONS.has(pr.action)) {
+    return false;
+  }
+  // Tags first, in plain code, so they land even if the model turn fails.
+  await advanceGate(deps);
+  return true;
+}
+
+/** Comment delivery: does it start a model turn? */
+export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+  if (author === "subnet-review-gate") {
+    return false;
+  }
+  return (await advanceGate(deps)).needsReviewTurn;
+}
+
+/** `pull_request_review` delivery: does it start a model turn? */
+export async function reviewEventTurn(deps: GateDeps): Promise<boolean> {
+  return (await advanceGate(deps)).needsReviewTurn;
+}
