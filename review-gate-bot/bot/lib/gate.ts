@@ -209,3 +209,11 @@ export function replitTagKey(prNumber: number, headSha: string): string {
 export function replitAskKey(prNumber: number, headSha: string): string {
   return `ask:${prNumber}:${headSha}:replit`;
 }
+
+/**
+ * Key for the review-turn lease. One turn per (PR, head): a burst of deliveries
+ * reads the same missing verdict, and only the one that takes the lease runs it.
+ */
+export function reviewTurnKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
+  return `review-turn:${prKey(ref)}:${headSha}`;
+}

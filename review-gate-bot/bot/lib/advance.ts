@@ -3,7 +3,8 @@ import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { postGateCheck, type CreateCheck } from "./check.js";
 import { readGateState, type PrRef } from "./gh.js";
-import { gateActions } from "./gate.js";
+import { gateActions, reviewTurnKey } from "./gate.js";
+import { lease } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
 import { GATE_BOT_LOGIN } from "./verdicts.js";
@@ -16,6 +17,8 @@ export type GateDeps = {
   ref: PrRef;
   /** `ctx.github.createCheck`: opens the `review-gate` check run on a commit. */
   createCheck: CreateCheck;
+  /** The clock the review-turn lease reads. Defaults to `Date.now`. */
+  now?: () => number;
 };
 
 /**
@@ -100,7 +103,7 @@ function askLabel(outcome: ReplitAskOutcome): string {
  * `gateActions`, so all three hooks refuse a draft the same way.
  */
 export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
-  const { octokit, kv, mcp, ref, createCheck } = deps;
+  const { octokit, kv, mcp, ref, createCheck, now } = deps;
   const { headSha, draft } = await readHead(octokit, ref);
 
   if (draft) {
@@ -118,6 +121,10 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
 
   const state = await readGateState({ octokit, kv, ref, headSha });
   const actions = gateActions(state, false);
+
+  // Every delivery for this head reads the same missing verdict, so each would
+  // ask for a review turn. Only the one that takes the lease asks.
+  const reviewTurn = actions.needsReviewTurn && (await lease(kv, reviewTurnKey(ref, headSha), now));
 
   // A failing post must not lose the review turn that follows it, and must not
   // stop the next step: each is logged and reported, then the gate moves on.
@@ -171,7 +178,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     headSha,
     draft,
     next: state.next,
-    needsReviewTurn: actions.needsReviewTurn,
+    needsReviewTurn: reviewTurn,
     taggedCursorDitto,
     taggedReplit,
     replitAsk,

@@ -150,6 +150,18 @@ export async function exclusive<T>(key: string, body: () => Promise<T>): Promise
   }
 }
 
+/**
+ * Take a lease on `key`: true for one caller in each `LEASE_MS` window.
+ *
+ * A lease gates a decision, not an effect, so there is nothing to record and
+ * nothing to release. A caller that then fails leaves the key held until it
+ * expires. Callers in this process queue on `exclusive`, so exactly one wins;
+ * across processes it is best effort, as `ranOnce` is.
+ */
+export function lease(kv: HostKvApi, key: string, now: () => number = Date.now): Promise<boolean> {
+  return exclusive(key, () => claim(kv, key, nonce(), now()));
+}
+
 export function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {
   return exclusive(input.key, () => ranOnceExclusive(input));
 }

@@ -8,6 +8,7 @@ import { LEASE_MS } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
+const NEW_HEAD = "d".repeat(40);
 const ME = "simi-revision[bot]";
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
@@ -37,11 +38,12 @@ function world(
   const checks: CheckCall[] = [];
   const listComments = () => {};
   const listReviews = () => {};
+  const live = { head: HEAD };
   const octokit = {
     paginate: async (fn: unknown) => (fn === listComments ? comments : fn === listReviews ? (options.reviews ?? []) : []),
     rest: {
       pulls: {
-        get: async () => ({ data: { head: { sha: HEAD }, draft: options.draft ?? false } }),
+        get: async () => ({ data: { head: { sha: live.head }, draft: options.draft ?? false } }),
         listReviews,
       },
       issues: {
@@ -101,7 +103,7 @@ function world(
       };
     },
   };
-  return { deps, posted, comments, checks, store, asks: () => asks };
+  return { deps, posted, comments, checks, store, asks: () => asks, live };
 }
 
 const mcPass: Raw = {
@@ -126,7 +128,7 @@ test("a reopened PR whose head already has an MC verdict starts no second review
 test("a PR with no MC verdict yet starts a review turn and tags Cursor and Ditto once", async () => {
   const w = world();
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
-  assert.equal(await pullRequestTurn(w.deps, { action: "synchronize", draft: false }), true);
+  assert.equal(await pullRequestTurn(w.deps, { action: "synchronize", draft: false }), false, "a duplicate for this head starts no second turn");
   assert.equal(w.posted.length, 1);
   assert.ok(w.posted[0]?.includes("@cursor review"));
 });
@@ -137,7 +139,10 @@ test("the bot's own comments do not re-enter the gate", async () => {
   assert.equal(w.posted.length, 1);
   const own = w.comments[w.comments.length - 1];
   assert.equal(await commentTurn(w.deps, own?.user.login), false, "its own tag must not start a second turn");
-  assert.equal(await commentTurn(w.deps, "some-reviewer"), true, "another author still does, while MC is missing");
+});
+
+test("another author's comment starts the review turn while MC is missing", async () => {
+  assert.equal(await commentTurn(world().deps, "some-reviewer"), true);
 });
 
 test("a comment from the bare name 'simi-revision' is just a person", async () => {
@@ -146,10 +151,7 @@ test("a comment from the bare name 'simi-revision' is just a person", async () =
 });
 
 test("a comment from the owner's account is never the bot's, even one that carries a marker", async () => {
-  const w = world();
-  await pullRequestTurn(w.deps, { action: "opened", draft: false });
-  const ownTag = w.comments[w.comments.length - 1];
-  assert.equal(await commentTurn(w.deps, "cryptoreporthub"), true, "the owner account is shared, so it still runs the gate");
+  assert.equal(await commentTurn(world().deps, "cryptoreporthub"), true, "the owner account is shared, so it still runs the gate");
 });
 
 test("a failing tag post on a pull_request event does not lose the review turn", async () => {
@@ -260,4 +262,11 @@ test("a delivery inside the lease starts no second review turn, and one after it
   assert.equal(await reviewEventTurn(at(0)), true);
   assert.equal(await reviewEventTurn(at(LEASE_MS - 1)), false);
   assert.equal(await reviewEventTurn(at(LEASE_MS)), true, "the lease has expired, so its owner is presumed gone");
+});
+
+test("a new head gets its own review turn, even inside the old head's lease", async () => {
+  const w = world();
+  assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
+  w.live.head = NEW_HEAD;
+  assert.equal(await pullRequestTurn(w.deps, { action: "synchronize", draft: false }), true);
 });
