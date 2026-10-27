@@ -9,6 +9,7 @@ import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
+import listRepoFiles from "../bot/tools/list_repo_files.js";
 import readRepoFile from "../bot/tools/read_repo_file.js";
 
 const HEAD = "a".repeat(40);
@@ -159,4 +160,12 @@ test("an eval file read scrubs a secret before it is returned", async () => {
   const ctx = await repoEvalContext({ ".env": `GITHUB_TOKEN=${token}` });
   const file = await run(readRepoFile)({ at: "head", path: ".env" }, ctx);
   assert.ok(!JSON.stringify(file).includes(token));
+});
+
+test("an eval file listing past the cap is cut and flagged, as a live listing is", async () => {
+  const files = Object.fromEntries(Array.from({ length: 2_050 }, (_, i) => [`internal/f${i}.py`, ""]));
+  const ctx = await repoEvalContext(files);
+  const listing = (await run(listRepoFiles)({ at: "head" }, ctx)) as { paths: string[]; truncated: boolean };
+  assert.equal(listing.paths.length, 2_000);
+  assert.equal(listing.truncated, true);
 });
