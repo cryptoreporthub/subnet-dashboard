@@ -25,12 +25,27 @@ export function parseFlakeList(text: string, source = "known-flakes.txt"): Flake
   const ids: string[] = [];
   const errors: string[] = [];
   text.split(/\r?\n/).forEach((line, index) => {
-    const body = line.replace(/#.*$/, "").trim();
+    // `#` starts a comment at the start of a line or after whitespace, so a
+    // parameter id such as `test_a[#1]` keeps its `#`.
+    const body = line.replace(/(^|\s)#.*$/, "").trim();
     if (body === "") {
       return;
     }
-    if (!/^[\w./[\]=-]+::[\w./[\]= -]+$/.test(body)) {
+    // Structural, not a character class: pytest allows nearly anything inside
+    // a parameter id. Only the separator has to be there, with something on
+    // both sides.
+    const separator = body.indexOf("::");
+    if (separator <= 0 || separator === body.length - 2) {
       errors.push(`line ${index + 1}: ${JSON.stringify(body)} is not \`classname::name\``);
+      return;
+    }
+    // A file-path node id (`tests/test_x.py::test_a`) is what pytest prints, but
+    // JUnit reports the dotted classname, so that entry would never match.
+    const classname = body.slice(0, separator);
+    if (/[\s/]/.test(classname) || classname.endsWith(".py")) {
+      errors.push(
+        `line ${index + 1}: ${JSON.stringify(classname)} is not a JUnit classname (use \`tests.test_x\`, not a file path); it would never match`,
+      );
       return;
     }
     ids.push(body);

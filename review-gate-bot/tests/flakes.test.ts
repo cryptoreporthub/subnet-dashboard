@@ -31,6 +31,33 @@ test("a malformed line fails the load instead of being skipped", () => {
 });
 
 test("a parametrised test id with brackets and spaces is accepted", () => {
-  const list = parseFlakeList("tests/test_x.py::test_a[1 - 2]\n");
-  assert.deepEqual(list.ids, ["tests/test_x.py::test_a[1 - 2]"]);
+  const list = parseFlakeList("tests.test_x::test_a[1 - 2]\n");
+  assert.deepEqual(list.ids, ["tests.test_x::test_a[1 - 2]"]);
+});
+
+test("any punctuation pytest allows in a parameter id is accepted", () => {
+  for (const id of [
+    "tests.test_x::test_case[region:west]",
+    "tests.test_x::test_a[x,y]",
+    "tests.test_x::test_a[a|b]",
+    "tests.test_x::test_a[héllo]",
+    "tests.test_x::test_a[#1]",
+    "tests.test_x::test_a[1 - 2]::tail",
+  ]) {
+    assert.deepEqual(parseFlakeList(`${id}\n`).ids, [id], id);
+  }
+});
+
+test("a comment still ends a line, but a # inside an id does not", () => {
+  const list = parseFlakeList("tests.test_x::test_a[#1] # seen on run 123\n");
+  assert.deepEqual(list.ids, ["tests.test_x::test_a[#1]"]);
+});
+
+test("pytest's file-path node id can never match a JUnit classname, so it is refused with a hint", () => {
+  assert.throws(() => parseFlakeList("tests/test_x.py::test_a\n"), /classname/i);
+});
+
+test("an empty side of the separator is refused", () => {
+  assert.throws(() => parseFlakeList("::name\n"), /not `classname::name`/);
+  assert.throws(() => parseFlakeList("tests.test_x::\n"), /not `classname::name`/);
 });
