@@ -25,7 +25,12 @@ export default defineTool({
       if (fixture === undefined) {
         throw new Error("eval session without a seeded gate.json");
       }
-      return { ...fixture, headSha, source: "fixture" };
+      // The fixture pins its verdicts to one head. Relabelling them with another
+      // would present gate results as belonging to a head they were never about.
+      if (fixture.headSha !== headSha) {
+        throw new Error(`requested head ${headSha} does not match the fixture's head ${fixture.headSha}`);
+      }
+      return { ...fixture, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");

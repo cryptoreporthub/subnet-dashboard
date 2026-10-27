@@ -56,6 +56,17 @@ export async function alreadyPosted(
   return comments.some((c) => hasOwnMarker(c, slot, headSha, identity));
 }
 
+/**
+ * Has the PR moved off `headSha`? Asked of GitHub as the last thing before a
+ * write. The head a caller passes was read earlier, and reading the gate state
+ * is several round trips; a `@cursor review` posted after a push asks for a
+ * review of the new head on the strength of a gate decision about the old one.
+ */
+async function headMoved(octokit: Octokit, ref: PrRef, headSha: string): Promise<boolean> {
+  const { data: pr } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
+  return pr.head.sha !== headSha;
+}
+
 async function postComment(octokit: Octokit, ref: PrRef, body: string): Promise<number> {
   const { data } = await octokit.rest.issues.createComment({
     owner: ref.owner,
@@ -100,15 +111,23 @@ export async function tagCursorAndDitto(input: {
   }
 
   let commentId: number | undefined;
+  let superseded = false;
   const result = await ranOnce({
     kv,
     key: `tag:${ref.number}:${headSha}:cursor-ditto`,
     alreadyDone: () => alreadyPosted(octokit, ref, "cursor-ditto", headSha),
     run: async () => {
+      if (await headMoved(octokit, ref, headSha)) {
+        superseded = true;
+        return;
+      }
       commentId = await postComment(octokit, ref, `${marker("cursor-ditto", headSha)}\n${cursorDittoTagBody(headSha)}`);
     },
   });
 
+  if (superseded) {
+    return { posted: false, reason: "gate-not-ready", next: "blocked" };
+  }
   return {
     posted: result.ran,
     reason:
@@ -156,11 +175,7 @@ export async function tagReplit(input: {
     key: replitTagKey(ref.number, headSha),
     alreadyDone: () => alreadyPosted(octokit, ref, "replit", headSha),
     run: async () => {
-      // The caller's head was read before the gate state, and reading the gate
-      // state is several round trips. Ask GitHub once more, as the last thing
-      // before the write, so Replit is never asked to review a superseded head.
-      const { data: pr } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-      if (pr.head.sha !== headSha) {
+      if (await headMoved(octokit, ref, headSha)) {
         superseded = true;
         return;
       }
@@ -225,6 +240,7 @@ export async function postVerdictComment(input: {
 
   let commentId: number | undefined;
   let lostToRecheck = false;
+  let superseded = false;
 
   const result = await ranOnce({
     kv,
@@ -236,10 +252,17 @@ export async function postVerdictComment(input: {
         lostToRecheck = true;
         return;
       }
+      if (await headMoved(octokit, ref, headSha)) {
+        superseded = true;
+        return;
+      }
       commentId = await postComment(octokit, ref, `${marker("mc-verdict", headSha)}\n${body}`);
     },
   });
 
+  if (superseded) {
+    return { posted: false, reason: "stale-head" };
+  }
   if (lostToRecheck) {
     // Another turn posted between the claim and the write. Its comment is the
     // verdict; this one is a no-op, and the kv claim it holds is released by the
