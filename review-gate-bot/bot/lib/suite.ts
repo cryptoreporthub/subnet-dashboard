@@ -8,6 +8,10 @@
  * - **Zero testcases is a failure, not a pass.** An empty or truncated report
  *   parses to "no failures", which would read as `clean`. A suite that collected
  *   nothing proves nothing, so it is `zero-testcases` and blocks the gate.
+ * - **A report that is cut off is not a report.** A run killed mid-way leaves
+ *   complete `<testcase>` elements inside an unfinished document, so counting
+ *   them reads as a short but clean run. Either side failing to parse as one
+ *   whole document is `malformed-xml` and blocks the gate.
  * - **Carry-over is deny-by-default.** A new head may reuse a clean result only
  *   when every changed file is on an explicit non-code allowlist. Anything not
  *   on that list — `.html`, `.yml`, `.js`, `Dockerfile`, a `.json` fixture, an
@@ -15,6 +19,7 @@
  */
 
 import type { SuiteState } from "./gate.js";
+import { assertWellFormed, MalformedXmlError } from "./xml.js";
 
 export type JunitCase = {
   classname: string;
@@ -40,7 +45,7 @@ export type SuiteDiff = {
    * Why a comparison cannot be trusted at all. Present means `clean` is false
    * no matter what the failure lists say.
    */
-  invalid?: "zero-testcases";
+  invalid?: "zero-testcases" | "malformed-xml";
   /** Testcase counts, so a reader can see the report was real. */
   counts: { base: number; head: number };
 };
@@ -65,8 +70,17 @@ function attr(attrs: string, name: string): string | undefined {
  * A deliberately small reader: JUnit is the one format the cloud runner emits,
  * and a full XML parser would be a dependency for three tags. Nested
  * `<failure>` / `<error>` / `<skipped>` children decide the outcome.
+ *
+ * Throws `MalformedXmlError` when the document is not whole, before any case is
+ * read, so a partial report never yields a partial list.
  */
 export function parseJunit(xml: string): JunitCase[] {
+  assertWellFormed(xml);
+  return parseTestcases(xml);
+}
+
+/** The testcases a document contains, whether or not the document is whole. */
+function parseTestcases(xml: string): JunitCase[] {
   const cases: JunitCase[] = [];
   const testcase = /<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g;
   let match: RegExpExecArray | null = testcase.exec(xml);
@@ -110,21 +124,42 @@ export type DiffInput = {
   knownFlakes?: readonly string[];
 };
 
+/** Cases from a report, or the reason it cannot be trusted. */
+function readReport(xml: string): { cases: JunitCase[]; malformed: boolean } {
+  try {
+    return { cases: parseJunit(xml), malformed: false };
+  } catch (error) {
+    if (!(error instanceof MalformedXmlError)) {
+      throw error;
+    }
+    // The testcases are still counted so the audit line shows how far the run got.
+    return { cases: parseTestcases(xml), malformed: true };
+  }
+}
+
 export function diffJunit(input: DiffInput): SuiteDiff {
-  const baseCases = parseJunit(input.baseXml);
-  const headCases = parseJunit(input.headXml);
+  const baseReport = readReport(input.baseXml);
+  const headReport = readReport(input.headXml);
+  const baseCases = baseReport.cases;
+  const headCases = headReport.cases;
   const counts = { base: baseCases.length, head: headCases.length };
 
-  if (counts.head === 0) {
-    // A report with no testcases cannot show a regression, and it cannot show
-    // the absence of one either. Treat it as a failed run.
+  const invalid: SuiteDiff["invalid"] =
+    counts.head === 0
+      ? // A report with no testcases cannot show a regression, and it cannot show
+        // the absence of one either. Treat it as a failed run.
+        "zero-testcases"
+      : baseReport.malformed || headReport.malformed
+        ? "malformed-xml"
+        : undefined;
+  if (invalid !== undefined) {
     return {
       newFailures: [],
       fixed: [],
       flakyRetriedOk: [],
       preExisting: [],
       clean: false,
-      invalid: "zero-testcases",
+      invalid,
       counts,
     };
   }
