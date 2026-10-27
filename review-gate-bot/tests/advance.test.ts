@@ -306,3 +306,21 @@ test("a persistent Replit ask failure is logged under the repository-qualified P
   assert.equal(lines.length, 1);
   assert.equal(JSON.parse(lines[0] ?? "{}").pr, "cryptoreporthub/subnet-dashboard#1522");
 });
+
+test("a Replit ask that gives up is logged under the repository-qualified PR key, from the real turn", async () => {
+  const w = readyForReplit({ seed: { [replitAskKey(REF, HEAD)]: { at: 1, failedAttempts: 3, lastFailure: "error" } } });
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (line: string) => {
+    lines.push(line);
+  };
+  try {
+    await reviewEventTurn(w.deps);
+  } finally {
+    console.error = original;
+  }
+  const logged = lines.map((line) => JSON.parse(line)).filter((entry) => entry.event === "replit_ask_persistent_failure");
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0].pr, "cryptoreporthub/subnet-dashboard#1522");
+  assert.equal(w.asks(), 0);
+});
