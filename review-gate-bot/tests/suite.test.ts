@@ -108,6 +108,53 @@ test("a truncated report that lost every testcase cannot pass the gate", () => {
   assert.equal(diff.invalid, "zero-testcases");
 });
 
+// --- A report that is cut off after some testcases is not a report ---------
+
+const TRUNCATED_AFTER_PASSES =
+  '<?xml version="1.0"?><testsuites><testsuite name="pytest"><testcase classname="tests.test_x" name="a"/>';
+
+test("a head report cut off after passing testcases cannot pass the gate", () => {
+  const diff = diffJunit({ baseXml: junit([{ name: "a" }]), headXml: TRUNCATED_AFTER_PASSES });
+  assert.equal(diff.clean, false, "an incomplete run proves nothing");
+  assert.equal(diff.invalid, "malformed-xml");
+  assert.equal(diff.counts.head, 1, "the testcase was readable, the document was not");
+});
+
+test("a base report cut off after testcases is invalid too", () => {
+  const diff = diffJunit({ baseXml: TRUNCATED_AFTER_PASSES, headXml: junit([{ name: "a" }]) });
+  assert.equal(diff.clean, false);
+  assert.equal(diff.invalid, "malformed-xml");
+});
+
+test("parseJunit refuses a document with mismatched or unclosed elements", () => {
+  assert.throws(() => parseJunit(TRUNCATED_AFTER_PASSES), /malformed/i);
+  assert.throws(
+    () => parseJunit('<testsuite><testcase classname="t" name="a"></testsuite></testcase>'),
+    /malformed/i,
+  );
+  assert.throws(() => parseJunit('<testsuite><testcase classname="t" name="a"/></testsuite><testsuite/>'), /malformed/i);
+});
+
+test("a report cut off inside a tag is malformed", () => {
+  assert.throws(() => parseJunit('<testsuite><testcase classname="t" name="a"/></testsui'), /malformed/i);
+});
+
+test("valid XML features pytest can emit are not mistaken for damage", () => {
+  const xml =
+    '<?xml version="1.0" encoding="utf-8"?><!-- generated --><testsuites><testsuite name="pytest">' +
+    '<testcase classname="t" name="a"><failure message="x &gt; y &lt; z">a > b</failure>' +
+    "<system-out><![CDATA[1 < 2 && </testcase> ]]></system-out></testcase>" +
+    '<testcase classname="t" name="b"/></testsuite></testsuites>';
+  const cases = parseJunit(xml);
+  assert.deepEqual(
+    cases.map((c) => [c.name, c.outcome]),
+    [
+      ["a", "failed"],
+      ["b", "passed"],
+    ],
+  );
+});
+
 // --- Blocker 3: deny-by-default carry-over paths ---------------------------
 
 test("prose and images do not block a carry-over", () => {
