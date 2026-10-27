@@ -347,3 +347,30 @@ test("a verdict is not posted for a head the PR moved off between the check and 
   assert.equal(result.reason, "stale-head");
   assert.equal(octokit.created.length, 0);
 });
+
+test("a failed verdict post in one repo does not hold back the same PR number in another repo", async () => {
+  const store = kv();
+  const failing = fakeOctokit();
+  Object.assign(failing.rest.issues, {
+    createComment: async () => {
+      throw new Error("GitHub 502");
+    },
+  });
+  await assert.rejects(
+    postVerdictComment({ octokit: failing, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD, body: "MC: **PASS**" }),
+  );
+  // The failed claim stays live: with plain get/put there is no release. The same
+  // PR number and head in another repository must not queue behind it.
+  const octokit = fakeOctokit();
+  const other = { ...REF, owner: "someone-else" };
+  const result = await postVerdictComment({
+    octokit,
+    kv: store,
+    ref: other,
+    headSha: HEAD,
+    currentHeadSha: HEAD,
+    body: "MC: **PASS**",
+  });
+  assert.equal(result.posted, true);
+  assert.equal(octokit.created.length, 1);
+});
