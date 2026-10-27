@@ -38,7 +38,7 @@ def isolate_paths(tmp_path, monkeypatch):
 
 def test_late_resolve_expires_instead_of_wrong_price():
     resolve_at = datetime(2026, 7, 1, 12, 0, tzinfo=timezone.utc)
-    grace_end = resolve_at + timedelta(hours=2)  # 1h horizon × 2
+    grace_end = resolve_at + timedelta(hours=4)  # 1h horizon × 4
     now = grace_end + timedelta(minutes=1)
     pred = {
         "id": "late-1",
@@ -49,6 +49,7 @@ def test_late_resolve_expires_instead_of_wrong_price():
         "horizon_hours": 1,
         "resolve_at": resolve_at.isoformat().replace("+00:00", "Z"),
         "created_at": (resolve_at - timedelta(hours=1)).isoformat().replace("+00:00", "Z"),
+        "resolve_attempts": resolver._PRICE_RETRY_CAP,
     }
     _write_price_cache(resolver.PRICE_CACHE_PATH, 7, resolve_at, 150.0)
 
@@ -172,6 +173,7 @@ def test_ungradeable_stays_pending_until_grace():
     result = resolver.resolve_prediction_at_horizon(pred, now=now, live_prices={})
     assert result["status"] == "pending"
 
-    expired_now = resolve_at + timedelta(hours=2, minutes=1)
+    pred["resolve_attempts"] = resolver._PRICE_RETRY_CAP
+    expired_now = resolve_at + timedelta(hours=4, minutes=1)
     result2 = resolver.resolve_prediction_at_horizon(pred, now=expired_now, live_prices={})
     assert result2["status"] == "expired"

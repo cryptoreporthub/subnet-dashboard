@@ -122,9 +122,9 @@ def _make_pred(pred_id: str, netuid: int, resolve_at: str, **extra) -> dict:
 def test_cold_cache_expiry_marks_missing_price(monkeypatch):
     """Past-grace + no candles → retirement_reason=missing_price_at_horizon (not genuine_expiry)."""
     now = datetime.now(timezone.utc)
-    # 50h past horizon → past 48h grace window (horizon_hours=24 * grace_multiple=2)
-    resolve_at = (now - timedelta(hours=50)).isoformat().replace("+00:00", "Z")
-    pred = _make_pred("pred_cold_1", 99, resolve_at)
+    # 100h past horizon → past 96h grace window (horizon_hours=24 * grace_multiple=4)
+    resolve_at = (now - timedelta(hours=100)).isoformat().replace("+00:00", "Z")
+    pred = _make_pred("pred_cold_1", 99, resolve_at, resolve_attempts=resolver._PRICE_RETRY_CAP)
     _write_predictions({"predictions": [pred], "resolved": [], "stats": {}})
 
     # Suppress the rate-limited hydration attempt so no network call happens.

@@ -104,15 +104,6 @@ def main() -> None:
 
     heavy = worker_heavy_feeds_enabled()
 
-    # Resolver missing-price retry semantics (Ditto, #885): rows with
-    # unavailable price data stay pending until the retry cap before expiring.
-    try:
-        from internal.council.resolver_semantics_patch import apply_resolver_semantics_patch
-
-        apply_resolver_semantics_patch()
-    except Exception as exc:
-        logger.warning("resolver semantics patch failed to apply: %s", exc)
-
     start_background_workers(heavy=heavy)
     schedule_summary_bot_worker_watchdog()
     _start_job_inventory_http()

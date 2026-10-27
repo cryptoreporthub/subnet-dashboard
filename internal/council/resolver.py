@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -91,7 +92,6 @@ def _parse_cold_cache_alert_ratio(raw: Optional[str]) -> float:
             default,
         )
         return default
-    import math
     if not math.isfinite(value) or value < 0 or value > 1:
         logger.warning(
             "COLD_CACHE_ALERT_RATIO=%r is out of range [0, 1] or non-finite; using default %.4f",
@@ -111,8 +111,100 @@ _LEARNING_DELTA_WRONG = -0.02
 _LEARNING_MIN_WEIGHT = 0.3
 _LEARNING_MAX_WEIGHT = 2.0
 
-_EXPIRY_GRACE_MULTIPLE = 2.0
+# Missing-price retry semantics (#885): rows with unavailable price data stay
+# pending for _PRICE_RETRY_CAP lookups before expiring, then get a 4x grace.
+_PRICE_RETRY_CAP_DEFAULT = 3
+# An unbounded cap pends a row for that many lookups (MC A3, #1515).
+_PRICE_RETRY_CAP_MAX = 100
+_EXPIRY_GRACE_MULTIPLE_DEFAULT = 4.0
+# Env grace is bounded to a sane band; outside it falls back to the default
+# (MC B1, #1515 — astronomic values make the expiry threshold unreachable,
+# denormals make it effectively zero).
+_EXPIRY_GRACE_MULTIPLE_MIN = 1e-6
+_EXPIRY_GRACE_MULTIPLE_MAX = 1000.0
+
+
+def _parse_price_retry_cap(raw: Optional[str]) -> int:
+    """Parse RESOLVER_PRICE_RETRY_CAP as an int in [1, _PRICE_RETRY_CAP_MAX]; fall back to default on bad input."""
+    default = _PRICE_RETRY_CAP_DEFAULT
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = 0
+    if not 1 <= value <= _PRICE_RETRY_CAP_MAX:
+        logger.warning(
+            "RESOLVER_PRICE_RETRY_CAP=%r is outside [1, %d]; using default %d",
+            raw,
+            _PRICE_RETRY_CAP_MAX,
+            default,
+        )
+        return default
+    return value
+
+
+def _parse_expiry_grace_multiple(raw: Optional[str]) -> float:
+    """Parse RESOLVER_EXPIRY_GRACE_MULTIPLE as a finite positive float; fall back to default on bad input."""
+    default = _EXPIRY_GRACE_MULTIPLE_DEFAULT
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        value = math.nan
+    if not math.isfinite(value) or value <= 0:
+        logger.warning(
+            "RESOLVER_EXPIRY_GRACE_MULTIPLE=%r is not a finite positive number; using default %.1f",
+            raw,
+            default,
+        )
+        return default
+    if not (_EXPIRY_GRACE_MULTIPLE_MIN <= value <= _EXPIRY_GRACE_MULTIPLE_MAX):
+        logger.warning(
+            "RESOLVER_EXPIRY_GRACE_MULTIPLE=%r is outside [%g, %g]; using default %.1f",
+            raw,
+            _EXPIRY_GRACE_MULTIPLE_MIN,
+            _EXPIRY_GRACE_MULTIPLE_MAX,
+            default,
+        )
+        return default
+    return value
+
+
+def _parse_resolve_attempts(value: Any) -> int:
+    """Tolerantly parse a persisted ``resolve_attempts`` count; fall back to 0.
+
+    A malformed value on one ledger row must never abort a resolve cycle, so
+    any non-numeric, non-finite or negative input yields 0 with a warning
+    instead of raising or buying unlimited retries.
+    """
+    if value is None or value == "":
+        return 0
+    try:
+        number = int(value)
+    except (TypeError, ValueError, OverflowError):
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            logger.warning("resolve_attempts=%r is not a number; treating as 0", value)
+            return 0
+        if not math.isfinite(number):
+            logger.warning("resolve_attempts=%r is not finite; treating as 0", value)
+            return 0
+        number = int(number)
+    if number < 0:
+        logger.warning("resolve_attempts=%r is negative; treating as 0", value)
+        return 0
+    return number
+
+
+_PRICE_RETRY_CAP = _parse_price_retry_cap(os.environ.get("RESOLVER_PRICE_RETRY_CAP"))
+_EXPIRY_GRACE_MULTIPLE = _parse_expiry_grace_multiple(os.environ.get("RESOLVER_EXPIRY_GRACE_MULTIPLE"))
 _EXPIRY_DEFAULT_HORIZON_HOURS = 24.0
+# A finite-but-astronomic horizon would still compute an unreachable expiry
+# threshold; treat it like a bad horizon (MC B1, #1515).
+_EXPIRY_MAX_HORIZON_HOURS = 8760.0
 
 _replay_mode: ContextVar[bool] = ContextVar("resolver_replay_mode", default=False)
 
@@ -526,28 +618,40 @@ def _restore_recently_expired_predictions(
     return restored
 
 
-def _horizon_hours(prediction: Dict[str, Any]) -> float:
-    try:
-        horizon = float(prediction.get("horizon_hours", 0) or 0)
-    except (TypeError, ValueError):
-        horizon = 0.0
-    if horizon > 0:
-        return horizon
-    if str(prediction.get("horizon_type") or "").lower() == "hour":
-        return 1.0
-    return _EXPIRY_DEFAULT_HORIZON_HOURS
-
-
 def _is_expired(
     prediction: Dict[str, Any],
     resolve_at: datetime,
     now: datetime,
     grace_multiple: float = _EXPIRY_GRACE_MULTIPLE,
 ) -> bool:
+    # The second expiry check in one resolve pass must not consume the final
+    # retry; the next scheduler tick gets the bounded final attempt.
+    if prediction.pop("_price_lookup_attempted", False):
+        return False
+    # Give real ledger rows a bounded chance to obtain their historical price
+    # before classifying them as genuine expiry.
+    attempts = _parse_resolve_attempts(prediction.get("resolve_attempts"))
+    if attempts < _PRICE_RETRY_CAP and ("id" in prediction or "resolve_at" in prediction):
+        return False
     if now < resolve_at:
         return False
-    grace = timedelta(hours=_horizon_hours(prediction) * grace_multiple)
-    return now >= resolve_at + grace
+    try:
+        horizon = float(prediction.get("horizon_hours", 0) or 0)
+    except (TypeError, ValueError, OverflowError):
+        # A JSON integer too large for float() raises OverflowError, same
+        # abort-the-cycle class as a malformed resolve_attempts (M3, #1515).
+        horizon = 0.0
+    if not math.isfinite(horizon) or horizon <= 0 or horizon > _EXPIRY_MAX_HORIZON_HOURS:
+        horizon = _EXPIRY_DEFAULT_HORIZON_HOURS
+    threshold = horizon * grace_multiple * 3600.0
+    if not math.isfinite(threshold):
+        # The product can overflow to inf for finite inputs (huge horizon
+        # or huge grace), which would compare elapsed >= inf and pin the
+        # row pending forever. Same fallback as a bad horizon: default
+        # 24h horizon x grace_multiple (semantics asserted by Claude,
+        # #1513 comment 6427370951).
+        threshold = _EXPIRY_DEFAULT_HORIZON_HOURS * grace_multiple * 3600.0
+    return (now - resolve_at).total_seconds() >= threshold
 
 
 def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, Any]:
@@ -557,12 +661,11 @@ def _expire_prediction(prediction: Dict[str, Any], now: datetime) -> Dict[str, A
     prediction["resolved_at"] = now.isoformat().replace("+00:00", "Z")
     prediction["resolved_price"] = None
     prediction["actual_pct"] = None
-    prediction.setdefault(
-        "retirement_reason",
-        "missing_price_at_horizon"
-        if prediction.get("price_data_unavailable")
-        else "genuine_expiry",
-    )
+    if prediction.get("price_data_unavailable"):
+        prediction["expired_reason"] = "price_data_unavailable"
+        prediction["retirement_reason"] = "missing_price_at_horizon"
+    else:
+        prediction.setdefault("retirement_reason", "genuine_expiry")
     return prediction
 
 
@@ -586,7 +689,39 @@ def lookup_horizon_price(
     cache_path: Optional[str] = None,
     cache: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, float, Dict[str, Any]]:
-    """Return (status, price, meta). status: ok | ungradeable."""
+    """Return (status, price, meta). status: ok | ungradeable.
+
+    A miss counts one resolve attempt and flags ``price_data_unavailable``.
+    """
+    status, price, meta = _lookup_horizon_price(
+        prediction,
+        resolve_at=resolve_at,
+        now=now,
+        live_prices=live_prices,
+        cache_path=cache_path,
+        cache=cache,
+    )
+    if status == "ok" and price > 0:
+        prediction.pop("price_data_unavailable", None)
+        return status, price, meta
+    # Saturate at the cap: _is_expired only compares against it, so the count
+    # never needs to grow past it (MC A4, #1515).
+    attempts = _parse_resolve_attempts(prediction.get("resolve_attempts")) + 1
+    prediction["resolve_attempts"] = min(attempts, _PRICE_RETRY_CAP)
+    prediction["price_data_unavailable"] = True
+    prediction["_price_lookup_attempted"] = True
+    return status, price, meta
+
+
+def _lookup_horizon_price(
+    prediction: Dict[str, Any],
+    *,
+    resolve_at: datetime,
+    now: datetime,
+    live_prices: Optional[Dict[Any, float]] = None,
+    cache_path: Optional[str] = None,
+    cache: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, float, Dict[str, Any]]:
     cache = cache if cache is not None else _load_json(cache_path or PRICE_CACHE_PATH, {})
     status, price, meta = price_at_resolve_at(
         prediction.get("netuid"),
