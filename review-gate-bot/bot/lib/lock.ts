@@ -5,28 +5,26 @@ import { supportsKvCas } from "@grok/agent-sdk";
  * One-shot guard for a side effect that should happen once per
  * `(PR, head SHA)`.
  *
- * The kv store behind `ctx.host.kv` is documented as plain `get` / `put` /
- * `delete`: no compare-and-swap. `supportsKvCas` + `putIfAbsent` is used when
- * the store exposes the CAS superset, which narrows the race, but a store
- * without it does a last-writer-wins `put` and a read-back, and both writers can
- * read their own nonce.
+ * ## What is guaranteed, and where
  *
- * **So the guarantee is "at most once, best effort".** It used to be documented
- * as "a lost race costs at worst a duplicate read, never a duplicate post",
- * which was not true: `alreadyDone()` followed by `post` is a read-then-write,
- * and two turns can both pass the read.
- *
- * What actually makes a duplicate harmless is the destination, not this module:
- * every comment carries a marker, and the gate reads the first marker it finds.
- * So the honest claim is:
- *
- * - **Replays and duplicate deliveries never double-post** — `alreadyDone()`
- *   sees the first one.
- * - **A genuine simultaneous race can.** Two comments, same content, same
- *   marker; the gate is unaffected.
+ * - **Inside one process: exactly once.** Callers for the same key run one at a
+ *   time (`exclusive` below), so the second always runs its `alreadyDone()` after
+ *   the first one's effect has landed and finds it. This is the case that
+ *   matters: a webhook storm (an opened PR, then a comment, then a review in the
+ *   same second) lands in one running agent.
+ * - **Across processes: at most once, best effort.** `ctx.host.kv` is plain
+ *   `get` / `put` / `delete`; `supportsKvCas` is false for it in the hosted
+ *   runtime (measured against the SDK's `createHostKvApi`). A claim record with
+ *   a lease narrows the window, and the system of record closes it for replays:
+ *   every comment carries a marker, and the gate reads the latest one. A genuine
+ *   simultaneous race between two processes can still post twice, with the same
+ *   content and the same marker.
+ * - **A dead owner does not block for ever.** A claim older than `LEASE_MS` is
+ *   taken over. With compare-and-swap the takeover is conditional on the version
+ *   that was read, so two takers cannot both win.
  *
  * Callers that must not double-post re-read immediately before posting
- * (`postVerdictComment` does), which shrinks the window without closing it.
+ * (`postVerdictComment` does), which shrinks the cross-process window.
  */
 
 /** How long a claim is believed. Past this, its owner is presumed dead. */
@@ -76,27 +74,43 @@ function asClaim(value: unknown): ClaimRecord | undefined {
   return { state: record.state, nonce: record.nonce, at: record.at };
 }
 
+/** Is this a claim held by an owner presumed alive? */
+function isLive(record: ClaimRecord | undefined, now: number): boolean {
+  return record?.state === "claimed" && now - record.at < LEASE_MS;
+}
+
 /**
  * Claim the key, returning true when this caller may run.
  *
- * With CAS the claim is atomic. Without it, the write is a last-writer-wins
- * `put` followed by a read-back: a caller that finds its own nonce proceeds,
- * but both writers can. That is why the module's guarantee is "at most once,
- * best effort" and why `alreadyDone()` decides on replays.
+ * A live claim held by someone else loses. A `done` record, a stale claim and
+ * garbage are all replaceable: `alreadyDone()` is the authority on whether the
+ * effect happened, and it has just said no.
+ *
+ * With CAS the replacement is conditional on the version read, so exactly one
+ * taker wins. Without it the write is a `put` followed by a read-back, which
+ * two processes can both pass; that is the documented best-effort edge.
  */
-async function claim(kv: HostKvApi, key: string, token: string): Promise<boolean> {
-  const record: ClaimRecord = { state: "claimed", nonce: token, at: Date.now() };
+async function claim(kv: HostKvApi, key: string, token: string, now: number): Promise<boolean> {
+  const record: ClaimRecord = { state: "claimed", nonce: token, at: now };
   if (supportsKvCas(kv)) {
-    const result = await kv.putIfAbsent(key, record);
-    if (result.ok) {
+    const created = await kv.putIfAbsent(key, record);
+    if (created.ok) {
       return true;
     }
-    const existing = asClaim(result.current?.value);
-    return existing?.nonce === token;
+    const existing = asClaim(created.current?.value);
+    if (existing?.nonce === token) {
+      return true;
+    }
+    if (created.current === undefined || isLive(existing, now)) {
+      return false;
+    }
+    return (await kv.putIfVersion(key, record, created.current.version)).ok;
+  }
+  if (isLive(asClaim(await kv.get(key)), now)) {
+    return false;
   }
   await kv.put(key, record);
-  const readBack = asClaim(await kv.get(key));
-  return readBack?.nonce === token;
+  return asClaim(await kv.get(key))?.nonce === token;
 }
 
 async function release(kv: HostKvApi, key: string, token: string): Promise<void> {
@@ -106,18 +120,39 @@ async function release(kv: HostKvApi, key: string, token: string): Promise<void>
   }
 }
 
-export async function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {
+/** The tail of each key's queue. An entry lives only while a caller is in flight. */
+const queues = new Map<string, Promise<unknown>>();
+
+/** Run `body` after every earlier caller for `key` in this process has finished. */
+async function exclusive<T>(key: string, body: () => Promise<T>): Promise<T> {
+  const previous = queues.get(key) ?? Promise.resolve();
+  const mine = previous.then(body, body);
+  queues.set(key, mine);
+  try {
+    return await mine;
+  } finally {
+    if (queues.get(key) === mine) {
+      queues.delete(key);
+    }
+  }
+}
+
+export function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {
+  return exclusive(input.key, () => ranOnceExclusive(input));
+}
+
+async function ranOnceExclusive(input: RanOnceInput): Promise<RanOnceResult> {
+  const now = input.now ?? Date.now;
+
   // 1. The system of record decides. This is what makes a replay safe.
   if (await input.alreadyDone()) {
-    await input.kv.put(input.key, { state: "done", nonce: nonce(), at: Date.now() } satisfies ClaimRecord);
+    await remember(input.kv, input.key, nonce(), now());
     return { ran: false, reason: "already-done" };
   }
 
   const token = nonce();
-  const won = await claim(input.kv, input.key, token);
-
-  if (!won) {
-    // Another writer may have finished between our check and its post.
+  if (!(await claim(input.kv, input.key, token, now()))) {
+    // Another process may have finished between our check and its post.
     if (await input.alreadyDone()) {
       return { ran: false, reason: "already-done" };
     }
@@ -127,10 +162,23 @@ export async function ranOnce(input: RanOnceInput): Promise<RanOnceResult> {
   try {
     await input.run();
   } catch (error) {
-    await release(input.kv, input.key, token);
+    await release(input.kv, input.key, token).catch(() => undefined);
     throw error;
   }
 
-  await input.kv.put(input.key, { state: "done", nonce: token, at: Date.now() } satisfies ClaimRecord);
+  await remember(input.kv, input.key, token, now());
   return { ran: true, reason: "ran" };
+}
+
+/**
+ * Record that the effect is done. Bookkeeping only: GitHub is the record, so a
+ * failing write here must not turn a landed post into an error (the caller would
+ * retry the whole turn and post again).
+ */
+async function remember(kv: HostKvApi, key: string, token: string, at: number): Promise<void> {
+  try {
+    await kv.put(key, { state: "done", nonce: token, at } satisfies ClaimRecord);
+  } catch {
+    // A later call finds the marker on the PR and records it then.
+  }
 }
