@@ -237,7 +237,13 @@ def test_past_grace_reloads_price_cache_after_dispatched_fetch(
     now = datetime.now(timezone.utc)
     resolve_at = now - timedelta(hours=6)
     pending = [
-        _prediction(f"fetched-{netuid}", netuid, resolve_at, horizon_hours=1.0)
+        _prediction(
+            f"fetched-{netuid}",
+            netuid,
+            resolve_at,
+            horizon_hours=1.0,
+            resolve_attempts=resolver._PRICE_RETRY_CAP,
+        )
         for netuid in (7, 8, 9)
     ]
     cache = {}
