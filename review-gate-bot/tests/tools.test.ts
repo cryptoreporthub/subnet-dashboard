@@ -9,6 +9,7 @@ import { parseMarkers } from "../bot/lib/verdicts.js";
 import checkGateState from "../bot/tools/check_gate_state.js";
 import compareSuiteRuns from "../bot/tools/compare_suite_runs.js";
 import { composeVerdictBody } from "../bot/tools/post_verdict.js";
+import readRepoFile from "../bot/tools/read_repo_file.js";
 
 const HEAD = "a".repeat(40);
 const OLD = "b".repeat(40);
@@ -132,4 +133,30 @@ test("an eval gate state is the fixture's, for the head it pins", async () => {
 
 test("an eval gate state is not shown beside a PR head the fixture does not pin", async () => {
   await assert.rejects(run(checkGateState)({}, await evalContext(FIXTURE_GATE, OLD)), /pinned to/);
+});
+
+// --- An eval read is capped and scrubbed the way a live read is ---------------
+
+async function repoEvalContext(files: Record<string, string>): Promise<unknown> {
+  const dir = await mkdtemp(join(tmpdir(), "repo-eval-"));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: HEAD, baseSha: BASE, draft: false, files: [] }),
+  );
+  await writeFile(join(dir, "repo.json"), JSON.stringify({ files }));
+  return { session: { purpose: "eval" }, workspaceDir: dir };
+}
+
+test("an eval file read past the cap is cut and flagged, as a live read is", async () => {
+  const ctx = await repoEvalContext({ "big.txt": "y".repeat(100_000) });
+  const file = (await run(readRepoFile)({ at: "head", path: "big.txt" }, ctx)) as Record<string, unknown>;
+  assert.equal(file.truncated, true);
+  assert.ok(String(file.text).length <= 60_000);
+});
+
+test("an eval file read scrubs a secret before it is returned", async () => {
+  const token = "ghp_" + "Z9y8X7w6V5u4T3s2R1q0";
+  const ctx = await repoEvalContext({ ".env": `GITHUB_TOKEN=${token}` });
+  const file = await run(readRepoFile)({ at: "head", path: ".env" }, ctx);
+  assert.ok(!JSON.stringify(file).includes(token));
 });

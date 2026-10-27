@@ -171,6 +171,20 @@ test("text past the cap is cut and flagged", async () => {
   }
 });
 
+test("a secret straddling the cap is redacted whole, not cut down to its first characters", async () => {
+  const token = "ghp_" + "A1b2C3d4E5f6G7h8I9j0";
+  const text = "x".repeat(59_989) + " " + token + " tail";
+  const { octokit } = fake({
+    content: { type: "file", encoding: "base64", size: text.length, content: b64(text) },
+  });
+  const file = await readRepoFile(octokit, REF, HEAD, "log.txt", {});
+  assert.ok(file.ok);
+  if (file.ok) {
+    assert.equal(file.truncated, true);
+    assert.ok(!file.text.includes(token.slice(0, 10)), "the head of the token leaked past the cap");
+  }
+});
+
 test("a missing file is a plain refusal, not a crash", async () => {
   const error = Object.assign(new Error("Not Found"), { status: 404 });
   const { octokit } = fake({ contentError: error });
