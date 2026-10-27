@@ -25,8 +25,8 @@
  * | Review | `review.user.login === "ditto-code[bot]"` (no app field exists) |
  * | Anything else from `cryptoreporthub` | **Joshua** |
  *
- * A Ditto verdict is therefore never mistaken for Joshua's GO: the GO check
- * reads the app field first and refuses any comment that carries one.
+ * Nothing in this bot acts on a GO, so there is no Joshua check to confuse with
+ * Ditto: a Ditto comment is read as Ditto, and no comment is read as a GO.
  *
  * ## MC's own verdict
  *
@@ -213,18 +213,6 @@ export function isDittoReview(review: ReviewLike): boolean {
     return slug === DITTO_APP_SLUG;
   }
   return review.user?.login === DITTO_BOT_LOGIN;
-}
-
-/**
- * True when a timeline comment is Joshua acting as himself — the only GO that
- * counts. A comment carrying any App attribution is not Joshua, whichever
- * account it came from.
- */
-export function isJoshuaComment(comment: CommentLike): boolean {
-  if (comment.performedViaGithubApp !== null) {
-    return false;
-  }
-  return comment.user?.login === OWNER_LOGIN && comment.user?.type !== "Bot";
 }
 
 /** The first non-empty, non-marker line: where a verdict token must appear. */
@@ -530,9 +518,4 @@ function lastSaid(comment: CommentLike): string {
     return comment.createdAt;
   }
   return Date.parse(comment.updatedAt) > Date.parse(comment.createdAt) ? comment.updatedAt : comment.createdAt;
-}
-
-/** Does a comment claim a merge/deploy GO? Detection only, never an action. */
-export function claimsGo(body: string): boolean {
-  return /\b(?:GO|go-ahead|approved to (?:merge|deploy)|cleared to (?:merge|deploy))\b/.test(body);
 }

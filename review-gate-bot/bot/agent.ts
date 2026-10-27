@@ -20,7 +20,7 @@ export default defineAgent({
   },
   // An omitted allowlist means the full standard toolset, shell included, run
   // with whatever credentials the host holds. An empty one turns every built-in
-  // tool off; the bot's four tools reach the model over MCP, which the SDK adds.
+  // tool off; the bot's tools in `bot/tools/` reach the model over MCP, which the SDK adds.
   tools: [],
   concurrency: { maxRunningTurns: 4 },
 });

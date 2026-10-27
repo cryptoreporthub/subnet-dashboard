@@ -18,7 +18,7 @@ test("egress lists no host beyond GitHub, Replit and the Actions artifact storag
   ]);
 });
 
-test("the tool surface is the seven named tools, and the three that look at the repo only read", async () => {
+test("the tool surface is the six named tools, and the four that look at the PR or repo only read", async () => {
   const { readdir } = await import("node:fs/promises");
   const names = (await readdir(new URL("../bot/tools/", import.meta.url)))
     .filter((file) => file.endsWith(".ts"))
@@ -28,12 +28,11 @@ test("the tool surface is the seven named tools, and the three that look at the 
     "check_gate_state",
     "compare_suite_runs",
     "get_pr_diff",
-    "get_pr_head",
     "list_repo_files",
     "post_verdict",
     "read_repo_file",
   ]);
-  for (const name of ["get_pr_diff", "list_repo_files", "read_repo_file", "get_pr_head", "check_gate_state"]) {
+  for (const name of ["get_pr_diff", "list_repo_files", "read_repo_file", "check_gate_state"]) {
     const tool = (await import(`../bot/tools/${name}.js`)).default as { effect?: string };
     assert.equal(tool.effect, "read", name);
   }

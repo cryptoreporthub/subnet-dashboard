@@ -150,8 +150,7 @@ export default defineEval({
         t.calledTool("compare_suite_runs", { output: outputHas({ reason: "code-changed" }) }).gate();
 
         // A new head always needs fresh formal reviews.
-        t.calledTool("check_gate_state", { input: { headSha: p.headSha } }).gate();
-        t.calledTool("check_gate_state", { output: outputHas({ next: "await_cursor_ditto" }) }).gate();
+        t.calledTool("check_gate_state", { output: outputHas({ headSha: p.headSha, next: "await_cursor_ditto" }) }).gate();
         t.notCalledTool("post_verdict").gate();
 
         t.judge
@@ -268,8 +267,7 @@ export default defineEval({
 
         t.succeeded();
 
-        t.calledTool("check_gate_state", { input: { headSha: p.headSha } }).gate();
-        t.calledTool("check_gate_state", { output: outputHas({ next: "await_cursor_ditto" }) }).gate();
+        t.calledTool("check_gate_state", { output: outputHas({ headSha: p.headSha, next: "await_cursor_ditto" }) }).gate();
 
         // Tagging is host-side and the model has no tool for it. The one write
         // surface it does have is post_verdict, and nothing here asks it to post.

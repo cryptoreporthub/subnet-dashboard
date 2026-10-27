@@ -1,36 +1,34 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
-import { z } from "zod";
 import { readGateState, readPr } from "../lib/gh.js";
-import { readGateFixture } from "../lib/fixtures.js";
-
-const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
+import { readGateFixture, readPrFixture } from "../lib/fixtures.js";
 
 /**
- * The gate state at one head, and the one step it allows next.
+ * This session's pull request and the gate state at its head, in one read.
  *
  * The order itself lives in `bot/lib/gate.ts` and is unit-tested without a
- * model. This tool only gathers the inputs: reviewer verdicts pinned to the
- * SHA, and the recorded suite result. An eval session reads those from the
- * case's `gate.json` instead of GitHub.
+ * model. This tool only gathers the inputs: the PR, reviewer verdicts pinned to
+ * its head SHA, and the recorded suite result. The PR comes from the session's
+ * continuation key, never from a model-supplied identifier, so the model cannot
+ * point a review at another PR. An eval session reads the same fields from the
+ * case's `pr.json` and `gate.json` instead of GitHub.
  */
 export default defineTool({
   description:
-    "Gate state at one head SHA: each reviewer's formal verdict pinned to that exact SHA, the suite result, and the single next step the gate allows. Do not decide the order yourself.",
-  inputSchema: z.object({ headSha: Sha }),
+    "Read this session's pull request and the gate at its head: head SHA, base SHA, changed files, draft flag, each reviewer's formal verdict pinned to that exact SHA, the suite result, and the single next step the gate allows. Call this first and review only the head SHA it returns. Do not decide the order yourself.",
   effect: "read",
-  async execute({ headSha }, ctx) {
+  async execute(_input, ctx) {
     if (ctx.session.purpose === "eval") {
-      const fixture = await readGateFixture(ctx.workspaceDir);
-      if (fixture === undefined) {
-        throw new Error("eval session without a seeded gate.json");
+      const [pr, gate] = await Promise.all([readPrFixture(ctx.workspaceDir), readGateFixture(ctx.workspaceDir)]);
+      if (pr === undefined || gate === undefined) {
+        throw new Error("eval session without a seeded pr.json and gate.json");
       }
-      // The fixture pins its verdicts to one head. Relabelling them with another
+      // The fixture pins its verdicts to one head. Showing them beside another
       // would present gate results as belonging to a head they were never about.
-      if (fixture.headSha !== headSha) {
-        throw new Error(`requested head ${headSha} does not match the fixture's head ${fixture.headSha}`);
+      if (gate.headSha !== pr.headSha) {
+        throw new Error(`gate.json is pinned to ${gate.headSha}, not the PR head ${pr.headSha}`);
       }
-      return { ...fixture, source: "fixture" };
+      return { ...pr, fileCount: pr.files.length, ...gate, source: "fixture" };
     }
 
     const ref = parseGitHubPrContinuationKey(ctx.session.continuationKey ?? "");
@@ -38,23 +36,8 @@ export default defineTool({
       throw new Error("check_gate_state needs a GitHub pull request session");
     }
     const octokit = await ctx.host.github.getOctokit();
-    // A state for a head nobody is reviewing would be shown to the model, and
-    // reported by it, as the state of the PR.
-    const live = await readPr(octokit, ref);
-    if (live.headSha !== headSha) {
-      return { reason: "stale-head", requested: headSha, current: live.headSha };
-    }
-    const state = await readGateState({ octokit, kv: ctx.host.kv, ref, headSha });
-    return {
-      headSha: state.headSha,
-      mc: state.mc,
-      cursor: state.cursor,
-      ditto: state.ditto,
-      replit: state.replit,
-      suite: state.suite,
-      replitTagged: state.replitTagged,
-      next: state.next,
-      source: "github",
-    };
+    const pr = await readPr(octokit, ref);
+    const state = await readGateState({ octokit, kv: ctx.host.kv, ref, headSha: pr.headSha });
+    return { ...pr, fileCount: pr.files.length, ...state, source: "github" };
   },
 });

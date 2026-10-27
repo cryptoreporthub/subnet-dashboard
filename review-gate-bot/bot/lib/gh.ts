@@ -5,9 +5,6 @@ import { computeGate } from "./gate.js";
 import type { CommentLike, GateIdentity, ReviewLike } from "./verdicts.js";
 import { collectPinnedVerdicts, DEFAULT_IDENTITY, hasOwnMarker } from "./verdicts.js";
 
-export const OWNER = "cryptoreporthub";
-export const REPO = "subnet-dashboard";
-
 export type PrRef = { owner: string; repo: string; number: number };
 
 export type PrSnapshot = {

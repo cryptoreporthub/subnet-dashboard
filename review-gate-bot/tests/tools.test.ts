@@ -73,11 +73,13 @@ test("the verdict body carries no gate marker the model wrote", () => {
   assert.deepEqual(parseMarkers(body), [], "the only marker on a verdict comment is the one the poster adds");
 });
 
-test("check_gate_state refuses a head that is no longer the PR's head", async () => {
-  const result = (await run(checkGateState)({ headSha: OLD }, toolContext(pr({ head: HEAD })))) as Record<string, unknown>;
-  assert.equal(result.reason, "stale-head");
-  assert.equal(result.current, HEAD);
-  assert.equal(result.next, undefined, "no gate state for a head nobody is reviewing");
+test("check_gate_state reads the PR's live head, so the model never names one", async () => {
+  const result = (await run(checkGateState)({}, toolContext(pr({ head: HEAD, base: BASE })))) as Record<string, unknown>;
+  assert.equal(result.headSha, HEAD);
+  assert.equal(result.baseSha, BASE);
+  assert.equal(result.next, "review");
+  assert.equal(result.mc, "missing");
+  assert.equal(result.source, "github");
 });
 
 test("compare_suite_runs takes its base from the PR, not from the model", async () => {
@@ -100,9 +102,13 @@ test("a rename's old path counts as changed, so x.py to x.md cannot look like pr
 
 // --- An eval session answers for the head its fixture pins, and only that ---
 
-async function evalContext(gate: object): Promise<unknown> {
+async function evalContext(gate: object, prHead: string = HEAD): Promise<unknown> {
   const dir = await mkdtemp(join(tmpdir(), "gate-eval-"));
   await writeFile(join(dir, "gate.json"), JSON.stringify(gate));
+  await writeFile(
+    join(dir, "pr.json"),
+    JSON.stringify({ number: 1522, title: "t", url: "u", headSha: prHead, baseSha: BASE, draft: false, files: ["a.py"] }),
+  );
   return { session: { purpose: "eval" }, workspaceDir: dir };
 }
 
@@ -118,11 +124,13 @@ const FIXTURE_GATE = {
 };
 
 test("an eval gate state is the fixture's, for the head it pins", async () => {
-  const result = (await run(checkGateState)({ headSha: HEAD }, await evalContext(FIXTURE_GATE))) as Record<string, unknown>;
+  const result = (await run(checkGateState)({}, await evalContext(FIXTURE_GATE))) as Record<string, unknown>;
   assert.equal(result.headSha, HEAD);
+  assert.equal(result.next, "await_cursor_ditto");
+  assert.equal(result.fileCount, 1);
   assert.equal(result.source, "fixture");
 });
 
-test("an eval gate state is not relabelled with a head the fixture does not pin", async () => {
-  await assert.rejects(run(checkGateState)({ headSha: OLD }, await evalContext(FIXTURE_GATE)), /does not match|fixture/i);
+test("an eval gate state is not shown beside a PR head the fixture does not pin", async () => {
+  await assert.rejects(run(checkGateState)({}, await evalContext(FIXTURE_GATE, OLD)), /pinned to/);
 });

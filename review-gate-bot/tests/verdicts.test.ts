@@ -7,7 +7,6 @@ import {
   hasOwnMarker,
   isDittoComment,
   isDittoReview,
-  isJoshuaComment,
   isOwnComment,
   marker,
   parseMarkers,
@@ -50,18 +49,15 @@ test("a timeline comment from the ditto-code App is a Ditto verdict", () => {
     performedViaGithubApp: { slug: "ditto-code" },
   });
   assert.equal(isDittoComment(c), true);
-  assert.equal(isJoshuaComment(c), false);
 });
 
 test("a Ditto-App comment posted under Joshua's account is Ditto, not Joshua", () => {
   const c = comment({ user: { login: "cryptoreporthub", type: "User" }, performedViaGithubApp: { slug: "ditto-code" } });
   assert.equal(isDittoComment(c), true);
-  assert.equal(isJoshuaComment(c), false);
 });
 
-test("a plain owner-account comment is Joshua", () => {
+test("a plain owner-account comment is not Ditto", () => {
   const c = comment();
-  assert.equal(isJoshuaComment(c), true);
   assert.equal(isDittoComment(c), false);
 });
 

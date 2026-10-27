@@ -69,9 +69,6 @@ export function composeVerdictBody(input: {
  * anything leaves the process. The signature is fixed here rather than taken
  * from the model, so a post always says who posted it.
  *
- * The ledger row is written **only when the comment actually landed**. It used
- * to be written unconditionally, so a second call with a different verdict left
- * a ledger entry for a verdict the PR never showed.
  */
 export default defineTool({
   description:
@@ -119,24 +116,6 @@ export default defineTool({
       currentHeadSha: pr.headSha,
       body: text,
     });
-
-    if (result.posted) {
-      // Records only what GitHub now shows. A suppressed post leaves no row,
-      // so the ledger cannot claim a verdict the PR does not carry.
-      await ctx.artifacts.tag({
-        kind: "head-verdict",
-        key: `${ref.number}@${input.headSha}`,
-        title: `MC ${input.verdict} @ ${input.headSha.slice(0, 8)}`,
-        data: {
-          reviewer: "mc",
-          verdict: input.verdict,
-          headSha: input.headSha,
-          pr: `${ref.owner}/${ref.repo}#${ref.number}`,
-          commentId: result.commentId ?? null,
-          redactedNames,
-        },
-      });
-    }
 
     return {
       posted: result.posted,

@@ -2,11 +2,12 @@ import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import {
   cursorDittoTagBody,
+  cursorDittoTagKey,
   replitTagBody,
   replitTagKey,
   type GateState,
 } from "./gate.js";
-import { ranOnce } from "./lock.js";
+import { ranOnce, type RanOnceReason, type RanOnceResult } from "./lock.js";
 import { readComments, readGateState, resolveOwnIdentity, type PrRef } from "./gh.js";
 import {
   hasOwnMarker,
@@ -84,6 +85,63 @@ export type TagOutcome = {
   next: GateState["next"];
 };
 
+/** How a `ranOnce` result reads to a caller. Exhaustive over `RanOnceReason`. */
+const POST_REASON = {
+  ran: "posted",
+  "already-done": "already-posted",
+  "claim-lost": "claim-lost",
+  failed: "claim-lost",
+} as const satisfies Record<RanOnceReason, "posted" | "already-posted" | "claim-lost">;
+
+/**
+ * Post one marker comment for a head, once, under that slot's lock key.
+ *
+ * `superseded` means the PR moved off `headSha` between the gate read and the
+ * write, so nothing was posted: a tag for the old head would ask reviewers to
+ * look at code that is no longer the PR.
+ */
+async function postSlotOnce(input: {
+  octokit: Octokit;
+  kv: HostKvApi;
+  ref: PrRef;
+  headSha: string;
+  slot: TagSlot;
+  key: string;
+  body: string;
+}): Promise<{ superseded: boolean; result: RanOnceResult; commentId?: number }> {
+  const { octokit, kv, ref, headSha, slot, key, body } = input;
+  let commentId: number | undefined;
+  let superseded = false;
+  const result = await ranOnce({
+    kv,
+    key,
+    alreadyDone: () => alreadyPosted(octokit, ref, slot, headSha),
+    run: async () => {
+      if (await headMoved(octokit, ref, headSha)) {
+        superseded = true;
+        return;
+      }
+      commentId = await postComment(octokit, ref, `${marker(slot, headSha)}\n${body}`);
+    },
+  });
+  return { superseded, result, commentId };
+}
+
+function tagOutcome(
+  posted: { superseded: boolean; result: RanOnceResult; commentId?: number },
+  next: GateState["next"],
+): TagOutcome {
+  if (posted.superseded) {
+    return { posted: false, reason: "gate-not-ready", next: "blocked" };
+  }
+  return {
+    posted: posted.result.ran,
+    reason: POST_REASON[posted.result.reason],
+    commentId: posted.commentId,
+    next,
+  };
+}
+
 /**
  * Post exactly one `@cursor review` + `@ditto review` comment for this head.
  *
@@ -91,10 +149,8 @@ export type TagOutcome = {
  * one, so a Replit tag can be posted without suppressing the Cursor/Ditto tag
  * on a later head.
  *
- * `state` is the caller's already-read gate state. It used to be re-read here,
- * which meant every delivery fetched the comment list three times (gate state,
- * this, and `alreadyPosted`). The caller has just read it for the same head, so
- * passing it in removes one full paginated read per event.
+ * `state` is the caller's already-read gate state, so a delivery reads the
+ * comment list once for the gate rather than once per post.
  */
 export async function tagCursorAndDitto(input: {
   octokit: Octokit;
@@ -105,49 +161,27 @@ export async function tagCursorAndDitto(input: {
   state: GateState;
 }): Promise<TagOutcome> {
   const { octokit, kv, ref, headSha, state } = input;
-
   if (state.next === "blocked") {
     return { posted: false, reason: "gate-not-ready", next: state.next };
   }
-
-  let commentId: number | undefined;
-  let superseded = false;
-  const result = await ranOnce({
+  const posted = await postSlotOnce({
+    octokit,
     kv,
-    key: `tag:${ref.number}:${headSha}:cursor-ditto`,
-    alreadyDone: () => alreadyPosted(octokit, ref, "cursor-ditto", headSha),
-    run: async () => {
-      if (await headMoved(octokit, ref, headSha)) {
-        superseded = true;
-        return;
-      }
-      commentId = await postComment(octokit, ref, `${marker("cursor-ditto", headSha)}\n${cursorDittoTagBody(headSha)}`);
-    },
+    ref,
+    headSha,
+    slot: "cursor-ditto",
+    key: cursorDittoTagKey(ref.number, headSha),
+    body: cursorDittoTagBody(headSha),
   });
-
-  if (superseded) {
-    return { posted: false, reason: "gate-not-ready", next: "blocked" };
-  }
-  return {
-    posted: result.ran,
-    reason:
-      result.reason === "ran"
-        ? "posted"
-        : result.reason === "already-done"
-          ? "already-posted"
-          : "claim-lost",
-    commentId,
-    next: state.next,
-  };
+  return tagOutcome(posted, state.next);
 }
 
 /**
  * Post `@replit review` once for this head, and only when the gate allows it:
  * MC, Cursor and Ditto all PASS at this head and the suite is clean or carried.
  *
- * The gate state is passed in for the same reason as `tagCursorAndDitto`, and
- * the `next !== "tag_replit"` check is repeated here because this function is
- * also reachable from a tool, where the caller's state is not the authority.
+ * The gate is re-read here: this is the one tag whose precondition is the whole
+ * gate, so the caller's earlier state is not the authority.
  */
 export async function tagReplit(input: {
   octokit: Octokit;
@@ -158,45 +192,23 @@ export async function tagReplit(input: {
   currentHeadSha: string;
 }): Promise<TagOutcome> {
   const { octokit, kv, ref, headSha, currentHeadSha } = input;
-
   if (headSha !== currentHeadSha) {
     return { posted: false, reason: "gate-not-ready", next: "blocked" };
   }
-
   const state = await readGateState({ octokit, kv, ref, headSha });
   if (state.next !== "tag_replit") {
     return { posted: false, reason: "gate-not-ready", next: state.next };
   }
-
-  let commentId: number | undefined;
-  let superseded = false;
-  const result = await ranOnce({
+  const posted = await postSlotOnce({
+    octokit,
     kv,
+    ref,
+    headSha,
+    slot: "replit",
     key: replitTagKey(ref.number, headSha),
-    alreadyDone: () => alreadyPosted(octokit, ref, "replit", headSha),
-    run: async () => {
-      if (await headMoved(octokit, ref, headSha)) {
-        superseded = true;
-        return;
-      }
-      commentId = await postComment(octokit, ref, `${marker("replit", headSha)}\n${replitTagBody(headSha)}`);
-    },
+    body: replitTagBody(headSha),
   });
-
-  if (superseded) {
-    return { posted: false, reason: "gate-not-ready", next: "blocked" };
-  }
-  return {
-    posted: result.ran,
-    reason:
-      result.reason === "ran"
-        ? "posted"
-        : result.reason === "already-done"
-          ? "already-posted"
-          : "claim-lost",
-    commentId,
-    next: state.next,
-  };
+  return tagOutcome(posted, state.next);
 }
 
 export type VerdictPost = {
