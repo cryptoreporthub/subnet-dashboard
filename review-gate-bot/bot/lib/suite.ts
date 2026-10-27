@@ -86,7 +86,8 @@ function parseTestcases(document: string): JunitCase[] {
   // and a CDATA block holding `</testcase>` must not end its testcase early.
   const xml = document.replace(/<!--[\s\S]*?-->/g, "").replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
   const cases: JunitCase[] = [];
-  const testcase = /<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g;
+  // An attribute value may hold a `>`, so a tag ends at the first `>` outside quotes.
+  const testcase = /<testcase\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/>|>([\s\S]*?)<\/testcase>)/g;
   let match: RegExpExecArray | null = testcase.exec(xml);
   while (match !== null) {
     const attrs = match[1] ?? "";
@@ -99,7 +100,7 @@ function parseTestcases(document: string): JunitCase[] {
     let detail: string | undefined;
     // `<failure message="..." />` is the form pytest writes when there is no
     // traceback text, so the close tag is optional.
-    const failure = /<(failure|error)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/.exec(body);
+    const failure = /<(failure|error)\b((?:"[^"]*"|'[^']*'|[^>"'])*?)(?:\/>|>([\s\S]*?)<\/\1>)/.exec(body);
     if (failure !== null) {
       outcome = failure[1] === "error" ? "error" : "failed";
       const message = attr(failure[2] ?? "", "message");
