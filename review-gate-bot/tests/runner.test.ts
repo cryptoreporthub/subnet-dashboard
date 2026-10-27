@@ -238,3 +238,21 @@ test("a shard cut off before its closing root tag is refused, not repaired", () 
     /junit-1\.xml.*malformed/i,
   );
 });
+
+// --- Second review: which runs count, and how much a report may inflate ----
+
+test("a cancelled, timed-out or skipped run is not a result", () => {
+  for (const conclusion of ["cancelled", "timed_out", "skipped", "startup_failure", "action_required", "stale"]) {
+    assert.equal(pickRun([{ id: 7, conclusion }]), undefined, conclusion);
+  }
+});
+
+test("a run that finished, passing or failing, is a result; the newest comes first", () => {
+  assert.equal(pickRun([{ id: 9, conclusion: "cancelled" }, { id: 8, conclusion: "failure" }, { id: 7, conclusion: "success" }])?.id, 8);
+  assert.equal(pickRun([{ id: 7, conclusion: "neutral" }])?.id, 7);
+});
+
+test("an entry that declares more than the cap is refused before anything is inflated", () => {
+  const big = "0".repeat(70 * 1024 * 1024);
+  assert.throws(() => readZip(zip([{ name: "junit.xml", body: big }])), /too large|exceeds/i);
+});

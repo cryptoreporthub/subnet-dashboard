@@ -101,3 +101,39 @@ test("a real key-shaped value after a `key-` prefix is still redacted", () => {
   const { text } = redactSecrets("key-abcdefghijklmnop_qrstuvwx0123");
   assert.equal(text.includes("abcdefghijklmnop"), false);
 });
+
+// --- Second review: credential shapes that survived -----------------------
+
+test("a bearer token loses its value, not just the word Bearer", () => {
+  const { text } = redactSecrets("Authorization: Bearer ya29.a0AfH6SMBabcdefghijklmnopqrstuvwxyz0123");
+  assert.equal(text.includes("ya29"), false);
+});
+
+test("credentials inside a URL are removed", () => {
+  const { text } = redactSecrets("DATABASE at postgres://admin:hunter22@db.internal:5432/app is down");
+  assert.equal(text.includes("hunter22"), false);
+  assert.equal(text.includes("db.internal"), true, "the host stays; only the userinfo goes");
+});
+
+test("provider key shapes are removed without a variable name", () => {
+  for (const secret of [
+    "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWx",
+    "sk-proj-AbCdEfGhIjKlMnOpQrStUvWxYz012345",
+    "fo1_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789",
+    "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw0",
+  ]) {
+    assert.equal(redactSecrets(`found ${secret} in the log`).text.includes(secret), false, secret);
+  }
+});
+
+test("pass and pwd count as credential names, but bypass and passed do not", () => {
+  assert.equal(redactSecrets("DB_PASS=hunter22").text.includes("hunter22"), false);
+  assert.equal(redactSecrets("MY_PWD=hunter22").text.includes("hunter22"), false);
+  const prose = "BYPASS_CACHE=enabled\nTESTS_PASSED=forty-two";
+  assert.equal(redactSecrets(prose).text, prose);
+});
+
+test("a private key with no END line is removed to the end of the text", () => {
+  const { text } = redactSecrets("log:\n-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nmore");
+  assert.equal(text.includes("b3BlbnNz"), false);
+});
