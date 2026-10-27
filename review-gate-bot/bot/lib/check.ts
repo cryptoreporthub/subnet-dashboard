@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GitHubHandle } from "@grok/agent-sdk/channels/github";
-import type { GateState } from "./gate.js";
+import { prKey, type GateState } from "./gate.js";
 import type { PrRef } from "./gh.js";
 
 /** The merge-box check this bot owns. A branch rule can require it by this name. */
@@ -76,7 +76,7 @@ export async function postGateCheck(input: {
   createCheck: CreateCheck;
 }): Promise<CheckPost> {
   const { octokit, kv, ref, state, createCheck } = input;
-  const key = `check:${ref.number}:${state.headSha}`;
+  const key = `check:${prKey(ref)}:${state.headSha}`;
   const summary = summaryOf(state);
 
   if ((await kv.get(key)) === summary) {

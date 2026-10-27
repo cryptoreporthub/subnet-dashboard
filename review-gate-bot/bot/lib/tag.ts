@@ -3,6 +3,7 @@ import type { HostKvApi } from "@grok/agent-sdk/kv";
 import {
   cursorDittoTagBody,
   cursorDittoTagKey,
+  prKey,
   replitTagBody,
   replitTagKey,
   type GateState,
@@ -168,7 +169,7 @@ export async function tagCursorAndDitto(input: {
     ref,
     headSha,
     slot: "cursor-ditto",
-    key: cursorDittoTagKey(ref.number, headSha),
+    key: cursorDittoTagKey(ref, headSha),
     body: cursorDittoTagBody(headSha),
   });
   return tagOutcome(posted, state.next);
@@ -203,7 +204,7 @@ export async function tagReplit(input: {
     ref,
     headSha,
     slot: "replit",
-    key: replitTagKey(ref.number, headSha),
+    key: replitTagKey(ref, headSha),
     body: replitTagBody(headSha),
   });
   return tagOutcome(posted, state.next);
@@ -254,7 +255,7 @@ export async function postVerdictComment(input: {
 
   const result = await ranOnce({
     kv,
-    key: `verdict:${ref.number}:${headSha}`,
+    key: `verdict:${prKey(ref)}:${headSha}`,
     alreadyDone: () => alreadyPosted(octokit, ref, "mc-verdict", headSha),
     run: async () => {
       // Guard 3: re-read once more, immediately before the write.

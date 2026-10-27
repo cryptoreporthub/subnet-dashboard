@@ -2,6 +2,7 @@ import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { replitAskKey } from "./gate.js";
 import { exclusive } from "./lock.js";
+import type { PrRef } from "./gh.js";
 
 /**
  * The conditional Replit step.
@@ -114,22 +115,22 @@ export async function replitAvailable(mcp: HostMcpRegistry): Promise<boolean> {
 export function askReplitOnce(input: {
   kv: HostKvApi;
   mcp: HostMcpRegistry;
-  prNumber: number;
+  ref: PrRef;
   headSha: string;
 }): Promise<ReplitAskOutcome> {
   // One caller at a time per (PR, head): a read of the record followed by a
   // write is not a claim, so overlapping events used to all ask, and a late
   // failure could overwrite a recorded success.
-  return exclusive(replitAskKey(input.prNumber, input.headSha), () => askReplit(input));
+  return exclusive(replitAskKey(input.ref, input.headSha), () => askReplit(input));
 }
 
 async function askReplit(input: {
   kv: HostKvApi;
   mcp: HostMcpRegistry;
-  prNumber: number;
+  ref: PrRef;
   headSha: string;
 }): Promise<ReplitAskOutcome> {
-  const key = replitAskKey(input.prNumber, input.headSha);
+  const key = replitAskKey(input.ref, input.headSha);
   const previous = asAskRecord(await input.kv.get(key));
 
   if (previous?.askedAt !== undefined) {

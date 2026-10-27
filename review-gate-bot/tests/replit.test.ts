@@ -6,6 +6,7 @@ import { ASK_ATTEMPTS, askReplitOnce, REPLIT_QUESTION, REPLIT_TOOL } from "../bo
 import { replitAskKey } from "../bot/lib/gate.js";
 
 const HEAD = "c".repeat(40);
+const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1 };
 
 function kv(): HostKvApi & { store: Map<string, unknown> } {
   const store = new Map<string, unknown>();
@@ -50,11 +51,11 @@ function mcp(
 test("a successful ask records itself and is not repeated for the same head", async () => {
   const store = kv();
   const registry = mcp();
-  const first = await askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD });
+  const first = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
   assert.equal(first.asked, true);
-  assert.ok(store.store.has(replitAskKey(1, HEAD)));
+  assert.ok(store.store.has(replitAskKey(REF, HEAD)));
 
-  const second = await askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD });
+  const second = await askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD });
   assert.equal(second.asked, false);
   assert.equal(second.reason, "already-asked");
   assert.equal(registry.calls, 1, "one ask, not two");
@@ -62,7 +63,7 @@ test("a successful ask records itself and is not repeated for the same head", as
 
 test("a successful ask is never a review and never touches the gate", async () => {
   // There is no `reviewed` outcome at all: the type system is the assertion.
-  const outcome = await askReplitOnce({ kv: kv(), mcp: mcp(), prNumber: 1, headSha: HEAD });
+  const outcome = await askReplitOnce({ kv: kv(), mcp: mcp(), ref: REF, headSha: HEAD });
   assert.equal(outcome.asked, true);
   const keys = Object.keys(outcome);
   assert.equal(keys.includes("reviewed"), false, "an ask cannot be counted as a review");
@@ -76,7 +77,7 @@ test("the question sent is the literal X", () => {
 test("a failed ask is retried on the next call instead of being dropped", async () => {
   const store = kv();
   const failing = mcp({ throwOnCall: true });
-  const first = await askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD });
+  const first = await askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
   assert.equal(first.asked, false);
   assert.equal(first.reason, "error");
   if (!first.persistent) {
@@ -85,7 +86,7 @@ test("a failed ask is retried on the next call instead of being dropped", async 
 
   // The old behaviour: nothing recorded, nothing retried, silence. Now the
   // attempt is recorded and a later call tries again.
-  const retry = await askReplitOnce({ kv: store, mcp: mcp(), prNumber: 1, headSha: HEAD });
+  const retry = await askReplitOnce({ kv: store, mcp: mcp(), ref: REF, headSha: HEAD });
   assert.equal(retry.asked, true, "the retry must actually reach the connector");
 });
 
@@ -93,7 +94,7 @@ test("an unavailable connector is reported as a failure, not as success", async 
   const outcome = await askReplitOnce({
     kv: kv(),
     mcp: mcp({ available: false }),
-    prNumber: 1,
+    ref: REF,
     headSha: HEAD,
   });
   assert.equal(outcome.asked, false);
@@ -104,7 +105,7 @@ test("an MCP error result is a failure", async () => {
   const outcome = await askReplitOnce({
     kv: kv(),
     mcp: mcp({ isError: true }),
-    prNumber: 1,
+    ref: REF,
     headSha: HEAD,
   });
   assert.equal(outcome.asked, false);
@@ -114,9 +115,9 @@ test("an MCP error result is a failure", async () => {
 test("persistent failure surfaces after the attempt budget, and then stops trying", async () => {
   const store = kv();
   const failing = mcp({ throwOnCall: true });
-  let last = await askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD });
+  let last = await askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
   for (let i = 1; i < ASK_ATTEMPTS; i += 1) {
-    last = await askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD });
+    last = await askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
   }
   assert.equal(last.asked, false);
   if (last.asked === false && last.reason !== "already-asked") {
@@ -125,7 +126,7 @@ test("persistent failure surfaces after the attempt budget, and then stops tryin
   }
 
   const callsAfterBudget = failing.calls;
-  const after = await askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD });
+  const after = await askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
   assert.equal(after.asked, false);
   if (after.asked === false && after.reason !== "already-asked") {
     assert.equal(after.persistent, true);
@@ -136,9 +137,9 @@ test("persistent failure surfaces after the attempt budget, and then stops tryin
 test("attempts are per head, so a new head starts fresh", async () => {
   const store = kv();
   const failing = mcp({ throwOnCall: true });
-  await askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD });
+  await askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD });
   const newHead = "d".repeat(40);
-  const outcome = await askReplitOnce({ kv: store, mcp: mcp(), prNumber: 1, headSha: newHead });
+  const outcome = await askReplitOnce({ kv: store, mcp: mcp(), ref: REF, headSha: newHead });
   assert.equal(outcome.asked, true);
 });
 
@@ -168,7 +169,7 @@ test("overlapping calls for one head ask Replit once", async () => {
   const store = kv();
   const registry = slowMcp("ok");
   const outcomes = await Promise.all(
-    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD })),
+    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD })),
   );
   assert.equal(registry.calls, 1, "one ask, however many events arrived together");
   assert.equal(outcomes.filter((o) => o.asked).length, 1);
@@ -178,7 +179,7 @@ test("overlapping failing calls spend the attempt budget once, not once per call
   const store = kv();
   const registry = slowMcp("error");
   await Promise.all(
-    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, prNumber: 1, headSha: HEAD })),
+    Array.from({ length: 6 }, () => askReplitOnce({ kv: store, mcp: registry, ref: REF, headSha: HEAD })),
   );
   assert.equal(registry.calls, ASK_ATTEMPTS);
 });
@@ -186,12 +187,12 @@ test("overlapping failing calls spend the attempt budget once, not once per call
 test("a late failure can never overwrite a recorded success", async () => {
   const store = kv();
   const ok = slowMcp("ok");
-  await askReplitOnce({ kv: store, mcp: ok, prNumber: 1, headSha: HEAD });
+  await askReplitOnce({ kv: store, mcp: ok, ref: REF, headSha: HEAD });
   const failing = slowMcp("error");
   await Promise.all([
-    askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD }),
-    askReplitOnce({ kv: store, mcp: failing, prNumber: 1, headSha: HEAD }),
+    askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD }),
+    askReplitOnce({ kv: store, mcp: failing, ref: REF, headSha: HEAD }),
   ]);
   assert.equal(failing.calls, 0);
-  assert.ok((store.store.get(replitAskKey(1, HEAD)) as { askedAt?: number }).askedAt !== undefined);
+  assert.ok((store.store.get(replitAskKey(REF, HEAD)) as { askedAt?: number }).askedAt !== undefined);
 });

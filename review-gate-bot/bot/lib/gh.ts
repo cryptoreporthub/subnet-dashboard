@@ -1,7 +1,7 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import type { GateState, PinnedVerdict, SuiteState } from "./gate.js";
-import { computeGate } from "./gate.js";
+import { computeGate, prKey } from "./gate.js";
 import type { CommentLike, ReviewLike } from "./verdicts.js";
 import { collectPinnedVerdicts, hasOwnMarker } from "./verdicts.js";
 
@@ -43,8 +43,8 @@ export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> 
 }
 
 /** Head SHA the @replit tag was recorded for in kv, when it was. */
-export async function readReplitTaggedFor(kv: HostKvApi, prNumber: number): Promise<string | undefined> {
-  const raw = await kv.get(`replit-tag:${prNumber}`);
+export async function readReplitTaggedFor(kv: HostKvApi, ref: PrRef): Promise<string | undefined> {
+  const raw = await kv.get(`replit-tag:${prKey(ref)}`);
   if (typeof raw !== "object" || raw === null) {
     return undefined;
   }
@@ -115,8 +115,8 @@ export async function readReviews(octokit: Octokit, ref: PrRef): Promise<ReviewL
 }
 
 /** kv key for the recorded suite result at one head. */
-export function suiteKey(prNumber: number, headSha: string): string {
-  return `suite:${prNumber}:${headSha}`;
+export function suiteKey(ref: PrRef, headSha: string): string {
+  return `suite:${prKey(ref)}:${headSha}`;
 }
 
 export type RecordedSuite = {
@@ -131,10 +131,10 @@ export type RecordedSuite = {
 /** A recorded suite result, or undefined when this head has none. */
 export async function readSuiteRecord(
   kv: HostKvApi,
-  prNumber: number,
+  ref: PrRef,
   headSha: string,
 ): Promise<RecordedSuite | undefined> {
-  const raw = await kv.get(suiteKey(prNumber, headSha));
+  const raw = await kv.get(suiteKey(ref, headSha));
   if (typeof raw !== "object" || raw === null) {
     return undefined;
   }
@@ -146,12 +146,8 @@ export async function readSuiteRecord(
   return record;
 }
 
-export async function readSuiteState(
-  kv: HostKvApi,
-  prNumber: number,
-  headSha: string,
-): Promise<SuiteState> {
-  return (await readSuiteRecord(kv, prNumber, headSha))?.state ?? "missing";
+export async function readSuiteState(kv: HostKvApi, ref: PrRef, headSha: string): Promise<SuiteState> {
+  return (await readSuiteRecord(kv, ref, headSha))?.state ?? "missing";
 }
 
 /**
@@ -228,13 +224,13 @@ export async function readGateState(input: {
   ]);
 
   const fromGithub = replitTaggedIn(comments, input.headSha);
-  const kvTag = await readReplitTaggedFor(input.kv, input.ref.number);
+  const kvTag = await readReplitTaggedFor(input.kv, input.ref);
 
   return gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
-    suite: await readSuiteState(input.kv, input.ref.number, input.headSha),
+    suite: await readSuiteState(input.kv, input.ref, input.headSha),
     replitTaggedForSha: fromGithub ?? kvTag,
   });
 }

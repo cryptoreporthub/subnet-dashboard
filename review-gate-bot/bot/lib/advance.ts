@@ -164,7 +164,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
   const replitAsk =
     actions.askReplit && (!actions.tagReplit || tagConfirmed)
       ? await attempt("ask-replit", async () => {
-          const ask = await askReplitOnce({ kv, mcp, prNumber: ref.number, headSha });
+          const ask = await askReplitOnce({ kv, mcp, ref, headSha });
           logAsk(ask, ref.number, headSha);
           return askLabel(ask);
         })

@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { suiteKey } from "../bot/lib/gh.js";
 import { replitAskKey, replitTagKey } from "../bot/lib/gate.js";
 import { LEASE_MS } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
@@ -229,7 +230,7 @@ function readyForReplit(options: { createFails?: boolean; seed?: Record<string, 
   return world({
     comments: [mcPass, ...(options.comments ?? [])],
     reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
-    seed: { [`suite:1522:${HEAD}`]: { state: "clean" }, ...options.seed },
+    seed: { [suiteKey(REF, HEAD)]: { state: "clean" }, ...options.seed },
     createFails: options.createFails,
   });
 }
@@ -248,7 +249,7 @@ test("a tag that failed to post is not followed by the Replit ask", async () => 
 });
 
 test("a tag whose claim another process holds is not followed by the Replit ask", async () => {
-  const w = readyForReplit({ seed: { [replitTagKey(1522, HEAD)]: { state: "claimed", nonce: "other", at: Date.now() } } });
+  const w = readyForReplit({ seed: { [replitTagKey(REF, HEAD)]: { state: "claimed", nonce: "other", at: Date.now() } } });
   await reviewEventTurn(w.deps);
   assert.deepEqual(w.posted.filter((body) => body.includes("@replit review")), []);
   assert.equal(w.asks(), 0);
@@ -259,7 +260,7 @@ test("once the tag is on the PR, a later event still retries the ask", async () 
   await reviewEventTurn(w.deps);
   assert.equal(w.asks(), 1);
   // A failed ask would have recorded nothing; model that by forgetting the ask.
-  w.store.delete(replitAskKey(1522, HEAD));
+  w.store.delete(replitAskKey(REF, HEAD));
   await reviewEventTurn(w.deps);
   assert.equal(w.asks(), 2, "await_replit keeps asks enabled");
 });

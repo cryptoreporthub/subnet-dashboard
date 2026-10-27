@@ -1,7 +1,7 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
-import { readPr, readSuiteRecord, suiteKey } from "../lib/gh.js";
+import { readPr, readSuiteRecord, suiteKey, type PrRef } from "../lib/gh.js";
 import { readPrFixture } from "../lib/fixtures.js";
 import { knownFlakes } from "../lib/flakes.js";
 import { fetchJunit, octokitRunner } from "../lib/runner.js";
@@ -10,6 +10,17 @@ import { carryDecision, diffJunit } from "../lib/suite.js";
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
 
 type Runner = ReturnType<typeof octokitRunner>;
+
+/**
+ * The PR a recorded result belongs to. Recording without one would file the
+ * result under no PR, so a missing reference is an error, never a default.
+ */
+function requirePr(ref: PrRef | undefined): PrRef {
+  if (ref === undefined) {
+    throw new Error("compare_suite_runs needs a GitHub pull request session");
+  }
+  return ref;
+}
 
 /**
  * Flake-aware base-vs-head comparison of the full pytest suite, from the JUnit
@@ -90,7 +101,7 @@ export default defineTool({
     if (input.carryFromSha !== undefined) {
       const prior = isEval
         ? "clean"
-        : ((await readSuiteRecord(ctx.host.kv, prRef?.number ?? 0, input.carryFromSha))?.state ??
+        : ((await readSuiteRecord(ctx.host.kv, requirePr(prRef), input.carryFromSha))?.state ??
           "missing");
       const decision = carryDecision({
         changedFiles,
@@ -120,7 +131,7 @@ export default defineTool({
       }
 
       if (!isEval) {
-        await ctx.host.kv.put(suiteKey(prRef?.number ?? 0, input.headSha), {
+        await ctx.host.kv.put(suiteKey(requirePr(prRef), input.headSha), {
           state: "carried",
           carriedFrom: input.carryFromSha,
           at: Date.now(),
@@ -150,7 +161,8 @@ export default defineTool({
     }
 
     const octokit = await ctx.host.github.getOctokit();
-    const reader: Runner = octokitRunner(octokit, { owner: prRef?.owner ?? "", repo: prRef?.repo ?? "" });
+    const repoRef = requirePr(prRef);
+    const reader: Runner = octokitRunner(octokit, { owner: repoRef.owner, repo: repoRef.repo });
 
     const head = await fetchJunit(reader, input.headSha);
     if (!head.ok) {
@@ -167,7 +179,7 @@ export default defineTool({
     const flakes = knownFlakes();
     const diff = diffJunit({ baseXml, headXml, knownFlakes: flakes.ids });
 
-    await ctx.host.kv.put(suiteKey(prRef?.number ?? 0, input.headSha), {
+    await ctx.host.kv.put(suiteKey(repoRef, input.headSha), {
       state: diff.clean && diff.invalid === undefined ? "clean" : "regressed",
       newFailures: diff.newFailures,
       runId: runner.headRunId,

@@ -196,18 +196,18 @@ export function prKey(ref: { owner: string; repo: string; number: number }): str
 }
 
 /** Key for the cursor/ditto tag lock. One tag per (PR, head). */
-export function cursorDittoTagKey(prNumber: number, headSha: string): string {
-  return `tag:${prNumber}:${headSha}:cursor-ditto`;
+export function cursorDittoTagKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
+  return `tag:${prKey(ref)}:${headSha}:cursor-ditto`;
 }
 
 /** Key for the @replit tag lock. Deliberately separate from the cursor/ditto key. */
-export function replitTagKey(prNumber: number, headSha: string): string {
-  return `tag:${prNumber}:${headSha}:replit`;
+export function replitTagKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
+  return `tag:${prKey(ref)}:${headSha}:replit`;
 }
 
 /** Key for the Replit MCP ask. Sent once per head, after the @replit tag. */
-export function replitAskKey(prNumber: number, headSha: string): string {
-  return `ask:${prNumber}:${headSha}:replit`;
+export function replitAskKey(ref: { owner: string; repo: string; number: number }, headSha: string): string {
+  return `ask:${prKey(ref)}:${headSha}:replit`;
 }
 
 /**

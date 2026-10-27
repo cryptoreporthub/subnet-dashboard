@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
+import { suiteKey } from "../bot/lib/gh.js";
 import { alreadyPosted, postVerdictComment, tagCursorAndDitto, tagReplit } from "../bot/lib/tag.js";
 import { marker } from "../bot/lib/verdicts.js";
 
@@ -95,7 +96,7 @@ function fakeOctokit(
 function passesAtHead(): { comments: RawComment[]; reviews: RawReview[]; kv: HostKvApi } {
   const store = kv();
   // The suite result is part of the gate input; without it `next` is run_suite.
-  store.store.set(`suite:${REF.number}:${HEAD}`, { state: "clean", at: 1 });
+  store.store.set(suiteKey(REF, HEAD), { state: "clean", at: 1 });
   return {
     kv: store,
     comments: [ownComment(1, `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``)],
