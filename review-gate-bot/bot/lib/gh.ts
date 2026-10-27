@@ -42,16 +42,6 @@ export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> 
   };
 }
 
-/** Head SHA the @replit tag was recorded for in kv, when it was. */
-export async function readReplitTaggedFor(kv: HostKvApi, ref: PrRef): Promise<string | undefined> {
-  const raw = await kv.get(`replit-tag:${prKey(ref)}`);
-  if (typeof raw !== "object" || raw === null) {
-    return undefined;
-  }
-  const sha = (raw as { headSha?: unknown }).headSha;
-  return typeof sha === "string" ? sha : undefined;
-}
-
 /**
  * Normalize a raw GitHub API payload. Exported so a test can start from the
  * bytes GitHub actually returns and run the whole read path, instead of
@@ -196,11 +186,8 @@ export function gateStateFrom(input: {
  *
  * GitHub is the system of record: the tag comment carries
  * `<!-- subnet-review-gate:replit:<sha> -->`, so a tag posted by an earlier
- * process — or by an earlier deployment that has since lost its kv — is still
- * visible. Reading the comment rather than kv-only is what fixes the stall
- * where the tag already existed (posted by another turn, or before a redeploy)
- * and the gate sat on `tag_replit` forever because this process never wrote
- * `replit-tag:<pr>`.
+ * process, or before a redeploy, is still visible. Only the comment counts: no
+ * kv record stands in for one GitHub does not have.
  */
 export function replitTaggedIn(comments: readonly CommentLike[], headSha: string): string | undefined {
   return comments.some((c) => hasOwnMarker(c, "replit", headSha)) ? headSha : undefined;
@@ -223,14 +210,11 @@ export async function readGateState(input: {
     readReviews(input.octokit, input.ref),
   ]);
 
-  const fromGithub = replitTaggedIn(comments, input.headSha);
-  const kvTag = await readReplitTaggedFor(input.kv, input.ref);
-
   return gateStateFrom({
     headSha: input.headSha,
     comments,
     reviews,
     suite: await readSuiteState(input.kv, input.ref, input.headSha),
-    replitTaggedForSha: fromGithub ?? kvTag,
+    replitTaggedForSha: replitTaggedIn(comments, input.headSha),
   });
 }

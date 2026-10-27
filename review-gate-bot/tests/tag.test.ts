@@ -94,7 +94,7 @@ function fakeOctokit(
 }
 
 /** The three other passes at HEAD, so the gate sits on `tag_replit`. */
-function passesAtHead(): { comments: RawComment[]; reviews: RawReview[]; kv: HostKvApi } {
+function passesAtHead(): { comments: RawComment[]; reviews: RawReview[]; kv: HostKvApi & { store: Map<string, unknown> } } {
   const store = kv();
   // The suite result is part of the gate input; without it `next` is run_suite.
   store.store.set(suiteKey(REF, HEAD), { state: "clean", at: 1 });
