@@ -181,10 +181,10 @@ test("a failing tag post on a pull_request event does not lose the review turn",
 
 // --- The review-gate check run ------------------------------------------------
 
-test("a head still waiting on reviewers gets a neutral review-gate check, never a green one", async () => {
+test("a head still waiting on reviewers gets an action_required review-gate check, never a passing one", async () => {
   const w = world();
   await pullRequestTurn(w.deps, { action: "opened", draft: false });
-  assert.deepEqual(w.checks, [{ name: "review-gate", sha: HEAD, conclusion: "neutral" }]);
+  assert.deepEqual(w.checks, [{ name: "review-gate", sha: HEAD, conclusion: "action_required" }]);
 });
 
 test("a FAIL anywhere at the head posts a failing review-gate check", async () => {

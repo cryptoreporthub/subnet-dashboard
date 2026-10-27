@@ -23,18 +23,25 @@ function state(next: GateNext, overrides: Partial<GateState> = {}): GateState {
   };
 }
 
-test("only a mergeable gate is green, a FAIL is red, and everything still waiting is neutral", () => {
+test("only a mergeable gate is green, a FAIL is red, and everything still waiting needs action", () => {
   const expected: Record<GateNext, string> = {
-    review: "neutral",
-    await_cursor_ditto: "neutral",
-    run_suite: "neutral",
-    tag_replit: "neutral",
-    await_replit: "neutral",
+    review: "action_required",
+    await_cursor_ditto: "action_required",
+    run_suite: "action_required",
+    tag_replit: "action_required",
+    await_replit: "action_required",
     mergeable: "success",
     blocked: "failure",
   };
   for (const [next, conclusion] of Object.entries(expected)) {
     assert.equal(gateConclusion(state(next as GateNext)), conclusion, next);
+  }
+});
+
+test("a waiting head never reads as passed: not success, neutral or skipped, which branch rules count as passing", () => {
+  const waiting: GateNext[] = ["review", "await_cursor_ditto", "run_suite", "tag_replit", "await_replit"];
+  for (const next of waiting) {
+    assert.ok(!["success", "neutral", "skipped"].includes(gateConclusion(state(next))), next);
   }
 });
 
@@ -87,7 +94,7 @@ test("a head that moves after the check opens is never concluded green", async (
   const w = world([HEAD, MOVED]);
   await postGateCheck({ ...w.deps, state: state("mergeable") });
   assert.equal(w.checks.length, 1);
-  assert.equal(w.checks[0]?.conclusion, "neutral");
+  assert.equal(w.checks[0]?.conclusion, "cancelled");
   assert.match(w.checks[0]?.summary ?? "", /head moved/i);
 });
 
@@ -105,7 +112,7 @@ test("an unchanged gate state at the same head does not open another check; a ch
   assert.equal(await postGateCheck({ ...w.deps, state: state("await_cursor_ditto", { ditto: "missing" }) }), "posted");
   assert.equal(await postGateCheck({ ...w.deps, state: state("await_cursor_ditto", { ditto: "missing" }) }), "unchanged");
   assert.equal(await postGateCheck({ ...w.deps, state: state("mergeable") }), "posted");
-  assert.deepEqual(w.checks.map((c) => c.conclusion), ["neutral", "success"]);
+  assert.deepEqual(w.checks.map((c) => c.conclusion), ["action_required", "success"]);
 });
 
 test("a check that failed to open is retried by the next delivery", async () => {
