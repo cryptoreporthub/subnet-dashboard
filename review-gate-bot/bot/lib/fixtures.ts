@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { GateState } from "./gate.js";
 import type { PrSnapshot } from "./gh.js";
+import type { Diff } from "./repo.js";
 
 /**
  * Eval sessions have no GitHub PR behind them: `continuationKey` is absent, so
@@ -20,6 +21,8 @@ import type { PrSnapshot } from "./gh.js";
 
 export const PR_FIXTURE = "pr.json";
 export const GATE_FIXTURE = "gate.json";
+export const DIFF_FIXTURE = "diff.json";
+export const REPO_FIXTURE = "repo.json";
 
 async function readJson<T>(workspaceDir: string, name: string): Promise<T | undefined> {
   try {
@@ -48,4 +51,14 @@ export type GateFixture = {
 
 export function readGateFixture(workspaceDir: string): Promise<GateFixture | undefined> {
   return readJson<GateFixture>(workspaceDir, GATE_FIXTURE);
+}
+
+/** The PR's diff as the case pins it, or undefined when the case did not seed one. */
+export function readDiffFixture(workspaceDir: string): Promise<Diff | undefined> {
+  return readJson<Diff>(workspaceDir, DIFF_FIXTURE);
+}
+
+/** File contents at the pinned head: `{ "files": { "<path>": "<text>" } }`. */
+export function readRepoFixture(workspaceDir: string): Promise<{ files: Record<string, string> } | undefined> {
+  return readJson<{ files: Record<string, string> }>(workspaceDir, REPO_FIXTURE);
 }

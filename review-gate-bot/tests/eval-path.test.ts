@@ -30,7 +30,7 @@ const PR = {
   number: 1515,
   title: "t",
   url: "u",
-  headSha: "e4eae96b5ae45b7807abf440d162c21f322f4ae0",
+  headSha: "e001169a5ef03ef62660e26a902f8ac748c14433",
   baseSha: "882980b817986fdcd2766fb18d46525b8e1955fd",
   draft: false,
   files: ["internal/council/resolver.py"],

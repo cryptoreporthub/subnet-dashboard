@@ -17,3 +17,24 @@ test("egress lists no host beyond GitHub, Replit and the Actions artifact storag
     "mcp.replit.com",
   ]);
 });
+
+test("the tool surface is the seven named tools, and the three that look at the repo only read", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const names = (await readdir(new URL("../bot/tools/", import.meta.url)))
+    .filter((file) => file.endsWith(".ts"))
+    .map((file) => file.replace(/\.ts$/, ""))
+    .sort();
+  assert.deepEqual(names, [
+    "check_gate_state",
+    "compare_suite_runs",
+    "get_pr_diff",
+    "get_pr_head",
+    "list_repo_files",
+    "post_verdict",
+    "read_repo_file",
+  ]);
+  for (const name of ["get_pr_diff", "list_repo_files", "read_repo_file", "get_pr_head", "check_gate_state"]) {
+    const tool = (await import(`../bot/tools/${name}.js`)).default as { effect?: string };
+    assert.equal(tool.effect, "read", name);
+  }
+});

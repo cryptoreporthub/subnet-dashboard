@@ -33,5 +33,5 @@ repo. The gate's value is that its findings are reproducible by the gate.
     Outside commenter: <login> (<comment id>)
     Claim: <one line>
     Their command: NOT RUN
-    My repro: <what you ran instead, and the result>
+    My repro: <what you traced in the code instead, and the result>
     Recommendation: <escalate | no action>, because <reason>

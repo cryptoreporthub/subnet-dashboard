@@ -1,13 +1,25 @@
 {
   "number": 1486,
-  "title": "fix(#1479): one score-snapshot producer per volume",
+  "title": "PR-A: essential-worker score snapshot producer (#1479)",
   "url": "https://github.com/cryptoreporthub/subnet-dashboard/pull/1486",
-  "headSha": "bb2f44b2c0d9c0b0d0ea4c0f9cf0b0a9e3a2d111",
+  "headSha": "dea65121a95a3a5a955865017a9f27afbba4e47a",
   "baseSha": "5d208daf364448bf61fe03ad7486b211f97a476e",
   "draft": false,
   "files": [
-    "internal/learning/score_snapshot.py",
-    "internal/scheduler.py",
-    "tests/test_score_snapshot_producer.py"
+    ".cursor/rules/subagent-models.mdc",
+    "cursor-agents-communication/mission-control-log.md",
+    "cursor-agents-communication/model-guide.md",
+    "docs/pr-a-deploy-order.md",
+    "internal/background_boot.py",
+    "internal/council/score_snapshots.py",
+    "internal/liveness.py",
+    "internal/run_mode.py",
+    "scripts/score_snapshot_producer_mc_live_table.py",
+    "tests/test_background_boot.py",
+    "tests/test_score_snapshot_ensure.py",
+    "tests/test_score_snapshot_producer.py",
+    "tests/test_score_snapshot_producer_ownership.py",
+    "tests/test_score_snapshot_producer_phase_f.py",
+    "tests/test_score_snapshots.py"
   ]
 }

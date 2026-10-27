@@ -22,7 +22,7 @@ off.
 
 ## 2. Push extremes through the real entry point
 
-Not a helper, not the parse function alone: the function production calls.
+Not a helper, not the parse function alone: the function production calls. You cannot execute code, so open that function with `read_repo_file` and walk each value through it by hand. Label the result **inferred**.
 
 - `1e308`, `sys.float_info.max`, the denormal `5e-324`
 - huge integers: `10**400`, `2**63`
@@ -68,4 +68,5 @@ negative. Do not invent a finding to fill the slot.
 
 Every finding gets: severity (P0 blocks merge), the file and line, the value or
 path that triggers it, the consumer it reaches, and whether it is **measured**
-(you ran it) or **inferred** (you read it).
+(a tool returned it) or **inferred** (you read it). With no shell, nearly every
+behavioural finding is inferred.

@@ -23,6 +23,14 @@ shadow mode.
 - Refuses a second review or a second tag for the same head, including on
   duplicate webhooks and replays.
 
+### What it can read
+
+Three read-only tools let the bot see the change it reviews: `get_pr_diff`,
+`list_repo_files` and `read_repo_file`. Each is pinned to the PR its session is
+bound to, applies secret redaction, and caps its output. The built-in shell and
+file tools stay off (`tools: []`), so the bot reads code and cannot run it.
+Whatever it concludes about behaviour is labelled inferred.
+
 ### How a verdict is counted
 
 | Reviewer | Counts when |
@@ -220,6 +228,7 @@ does not.
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |
 | `bot/lib/verdicts.ts` | how each verdict is attributed, and the first-line-only token rule |
+| `bot/lib/repo.ts` | the read-only diff, file and listing helpers behind the three read tools |
 | `bot/lib/runner.ts` | JUnit from the runner artifact for an exact SHA |
 | `known-flakes.txt` | the committed flake list `compare_suite_runs` reads |
 | `bot/skills/` | on-demand procedures: adversarial review, owner rules, settled check, outside commenters |

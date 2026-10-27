@@ -32,6 +32,19 @@ async function gate(which: string): Promise<GateFixture> {
   return loadJson<GateFixture>(`evals/fixtures/${which}/gate.json`);
 }
 
+/** The diff and file snapshot pinned for a case, when it has one. */
+async function code(which: string): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const name of ["diff.json", "repo.json"]) {
+    try {
+      out[name] = JSON.stringify(await loadJson(`evals/fixtures/${which}/${name}`));
+    } catch {
+      // a case without a code snapshot reviews from the PR metadata alone
+    }
+  }
+  return out;
+}
+
 /**
  * A tool's output reaches the matcher as the JSON string the tool returned, so
  * an object literal never matches. This parses it and compares the named fields.
@@ -51,10 +64,15 @@ function outputHas(expected: Record<string, unknown>) {
   };
 }
 
-function seed(prFixture: PrFixture, gateFixture: GateFixture): Record<string, string> {
+function seed(
+  prFixture: PrFixture,
+  gateFixture: GateFixture,
+  snapshot: Record<string, string> = {},
+): Record<string, string> {
   return {
     "pr.json": JSON.stringify(prFixture, null, 2),
     "gate.json": JSON.stringify(gateFixture, null, 2),
+    ...snapshot,
   };
 }
 
@@ -84,7 +102,7 @@ export default defineEval({
             "",
             "Post your verdict with post_verdict. Do not tag anyone: tagging is automatic.",
           ].join("\n"),
-          { workspaceFiles: seed(p, g) },
+          { workspaceFiles: seed(p, g, await code("pr-1515")) },
         );
 
         t.succeeded();
@@ -112,14 +130,14 @@ export default defineEval({
         await t.send(
           [
             `The head of PR ${p.number} moved to ${p.headSha}.`,
-            "The new head changes two markdown files and one line in `scripts/fly_disable_worker_v2.sh`.",
+            "The new head deletes one workflow file, edits two markdown files, and changes one line in `scripts/fly_disable_worker_v2.sh`.",
             "",
             "Decide whether the previous head's clean suite result can carry to this head.",
             `Ask for the suite comparison with carryFromSha = ${p.baseSha}.`,
             "",
             "Then call check_gate_state and report the one next step the gate allows.",
           ].join("\n"),
-          { workspaceFiles: seed(p, g) },
+          { workspaceFiles: seed(p, g, await code("pr-1519")) },
         );
 
         t.succeeded();
@@ -164,7 +182,7 @@ export default defineEval({
             "",
             "Handle this the way the gate requires.",
           ].join("\n"),
-          { workspaceFiles: seed(p, g) },
+          { workspaceFiles: seed(p, g, await code("pr-1486")) },
         );
 
         t.succeeded();
