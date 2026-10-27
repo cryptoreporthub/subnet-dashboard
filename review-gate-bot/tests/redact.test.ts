@@ -79,49 +79,6 @@ test("only the explicit stub `x` is left readable; a short real credential is re
   }
 });
 
-// --- Finding 6: all-digit values are credentials too ----------------------
-
-test("an all-digit password is redacted, not exempted as a placeholder", () => {
-  // The reported hole: every all-digit value was treated as a placeholder, so
-  // this came back unchanged.
-  const { text, redactedNames } = redactSecrets("DATABASE_PASSWORD=123456");
-  assert.equal(text.includes("123456"), false);
-  assert.equal(text.includes("DATABASE_PASSWORD=<redacted:DATABASE_PASSWORD>"), true);
-  assert.deepEqual(redactedNames, ["DATABASE_PASSWORD"]);
-});
-
-test("a lowercase numeric password and a numeric client secret are redacted", () => {
-  assert.equal(redactSecrets('{"password": "8675309"}').text.includes("8675309"), false);
-  assert.equal(redactSecrets('{"client_secret": "987654321"}').text.includes("987654321"), false);
-  assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
-});
-
-test("only the explicit stub `x` is left readable; a short real credential is redacted", () => {
-  assert.equal(redactSecrets("API_KEY=x").text, "API_KEY=x");
-  for (const source of ["DB_PASS=abc", "PASSWORD=ab", "pwd=1234", "SECRET=a1", "token: abc"]) {
-    const { text, redactedNames } = redactSecrets(source);
-    assert.equal(text.includes("=abc") || text.includes(": abc") || text.endsWith("ab") || text.endsWith("a1") || text.endsWith("1234"), false, source);
-    assert.equal(redactedNames.length, 1, source);
-  }
-});
-
-// --- Finding 6: all-digit values are credentials too ----------------------
-
-test("an all-digit password is redacted, not exempted as a placeholder", () => {
-  // The reported hole: every all-digit value was treated as a placeholder, so
-  // this came back unchanged.
-  const { text, redactedNames } = redactSecrets("DATABASE_PASSWORD=123456");
-  assert.equal(text.includes("123456"), false);
-  assert.equal(text.includes("DATABASE_PASSWORD=<redacted:DATABASE_PASSWORD>"), true);
-  assert.deepEqual(redactedNames, ["DATABASE_PASSWORD"]);
-});
-
-test("a lowercase numeric password and a numeric client secret are redacted", () => {
-  assert.equal(redactSecrets('{"password": "8675309"}').text.includes("8675309"), false);
-  assert.equal(redactSecrets('{"client_secret": "987654321"}').text.includes("987654321"), false);
-  assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
-});
-
 test("a numeric value that cannot be a credential is still left readable", () => {
   // The narrow exception: below the four-character floor there is nothing to
   // protect, so a stub like `x` or `1` is not turned into noise.
@@ -166,6 +123,17 @@ test("a real key-shaped value after a `key-` prefix is still redacted", () => {
 test("a bearer token loses its value, not just the word Bearer", () => {
   const { text } = redactSecrets("Authorization: Bearer ya29.a0AfH6SMBabcdefghijklmnopqrstuvwxyz0123");
   assert.equal(text.includes("ya29"), false);
+});
+
+test("a standalone bearer token is redacted even with no header name", () => {
+  const { text, redactedNames } = redactSecrets("the call sent Bearer Q7mK4pV9xR2nL6sT8wY3 upstream");
+  assert.equal(text.includes("Q7mK4pV9xR2nL6sT8wY3"), false);
+  assert.deepEqual(redactedNames, ["unlabelled-credential"]);
+});
+
+test("prose after the word bearer stays readable", () => {
+  const source = "see the Bearer authentication tokens section and basic implementation-notes";
+  assert.equal(redactSecrets(source).text, source);
 });
 
 test("credentials inside a URL are removed", () => {
