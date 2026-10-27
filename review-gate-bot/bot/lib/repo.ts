@@ -109,6 +109,37 @@ function refusal(path: string, reason: string): FileRead {
   return { ok: false, path, reason };
 }
 
+export type TextWindow = {
+  text: string;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
+  truncated: boolean;
+};
+
+/**
+ * The lines a reader asked for, scrubbed and then capped. Live and eval reads both
+ * go through here, so they cannot disagree about what leaves.
+ *
+ * Scrubbing comes before the cap. Cutting first can leave the head of a secret at
+ * the cap, and the scrubber does not match a head, so it would go out in the clear.
+ */
+export function windowText(content: string, options: { startLine?: number; endLine?: number }): TextWindow {
+  const lines = content.split("\n");
+  const startLine = Math.max(1, options.startLine ?? 1);
+  const endLine = Math.min(lines.length, options.endLine ?? lines.length);
+  const scrubbed = redactSecrets(lines.slice(startLine - 1, endLine).join("\n")).text;
+  const truncated = scrubbed.length > LIMITS.fileChars;
+  const text = truncated ? scrubbed.slice(0, LIMITS.fileChars) : scrubbed;
+  return {
+    text,
+    startLine,
+    endLine: truncated ? startLine + text.split("\n").length - 1 : endLine,
+    totalLines: lines.length,
+    truncated,
+  };
+}
+
 export async function readRepoFile(
   octokit: Octokit,
   ref: PrRef,
@@ -139,23 +170,11 @@ export async function readRepoFile(
     return refusal(path, `too large for the contents API (${entry.size ?? "unknown"} bytes)`);
   }
 
-  const lines = Buffer.from(entry.content, "base64").toString("utf8").split("\n");
-  const startLine = Math.max(1, options.startLine ?? 1);
-  const endLine = Math.min(lines.length, options.endLine ?? lines.length);
-  let text = lines.slice(startLine - 1, endLine).join("\n");
-  const truncated = text.length > LIMITS.fileChars;
-  if (truncated) {
-    text = text.slice(0, LIMITS.fileChars);
-  }
   return {
     ok: true,
     path,
     sha,
-    text: redactSecrets(text).text,
-    startLine,
-    endLine: truncated ? startLine + text.split("\n").length - 1 : endLine,
-    totalLines: lines.length,
-    truncated,
+    ...windowText(Buffer.from(entry.content, "base64").toString("utf8"), options),
   };
 }
 

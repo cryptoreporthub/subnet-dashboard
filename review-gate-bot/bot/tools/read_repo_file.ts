@@ -3,7 +3,7 @@ import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
 import { readPr } from "../lib/gh.js";
 import { readPrFixture, readRepoFixture } from "../lib/fixtures.js";
-import { readRepoFile, validRepoPath } from "../lib/repo.js";
+import { readRepoFile, validRepoPath, windowText } from "../lib/repo.js";
 
 /**
  * One file's text, at the PR's head or its base, optionally a line range.
@@ -32,18 +32,11 @@ export default defineTool({
       if (pr === undefined || text === undefined) {
         return { ok: false, path: input.path, reason: "not in this fixture" };
       }
-      const lines = text.split("\n");
-      const startLine = input.startLine ?? 1;
-      const endLine = Math.min(lines.length, input.endLine ?? lines.length);
       return {
         ok: true,
         path: input.path,
         sha: input.at === "head" ? pr.headSha : pr.baseSha,
-        text: lines.slice(startLine - 1, endLine).join("\n"),
-        startLine,
-        endLine,
-        totalLines: lines.length,
-        truncated: false,
+        ...windowText(text, input),
         source: "fixture",
       };
     }
