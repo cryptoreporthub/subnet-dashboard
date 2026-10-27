@@ -38,7 +38,9 @@ export async function readPr(octokit: Octokit, ref: PrRef): Promise<PrSnapshot> 
     baseSha: pr.base.sha,
     draft: pr.draft ?? false,
     title: pr.title,
-    files: files.map((f) => f.filename),
+    // A rename touches both paths. `x.py` renamed to `x.md` must not look like a
+    // prose-only change, so the old path is a changed file too.
+    files: [...new Set(files.flatMap((f) => (f.previous_filename === undefined ? [f.filename] : [f.filename, f.previous_filename])))],
     url: pr.html_url,
   };
 }

@@ -29,6 +29,18 @@ function renderTable(skills: { skill: string; used: boolean; note: string }[]): 
  * The first line is the verdict token. `parseVerdictToken` reads the first
  * line only, so this line is the verdict and nothing above it is prose.
  */
+/**
+ * Model-written text with every gate marker defused.
+ *
+ * The poster adds the one marker a verdict comment carries. A marker the model
+ * wrote (it can come from a PR body or a comment it was asked to review) would
+ * be read back as a tag for another slot, so Cursor and Ditto would never be
+ * tagged, or as a second mc-verdict marker, which makes the comment unreadable.
+ */
+function withoutMarkers(text: string): string {
+  return text.replace(/<!--\s*subnet-review-gate:/gi, "[marker removed]<!-- ");
+}
+
 export function composeVerdictBody(input: {
   verdict: "PASS" | "MODIFY" | "FAIL";
   headSha: string;
@@ -38,11 +50,11 @@ export function composeVerdictBody(input: {
   return [
     `MC: **${input.verdict}** at \`${input.headSha}\``,
     "",
-    input.body,
+    withoutMarkers(input.body),
     "",
     "### Skills",
     "",
-    renderTable(input.skills),
+    renderTable(input.skills.map((s) => ({ ...s, skill: withoutMarkers(s.skill), note: withoutMarkers(s.note) }))),
     "",
     "---",
     "",

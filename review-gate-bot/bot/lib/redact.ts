@@ -34,12 +34,18 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   // is not swallowed; the value after it is long enough to be a key.
   /\b(?:sk|csk|key|cur|cr)-[A-Za-z0-9]{8,}[-_][A-Za-z0-9_-]{8,}\b/g,
   /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/g,
+  // Provider keys with no useful prefix structure: Anthropic and OpenAI project
+  // keys, Fly.io tokens, Telegram bot tokens.
+  /\bsk-[A-Za-z0-9_-]{20,}\b/g,
+  /\bfo1_[A-Za-z0-9_-]{20,}\b/g,
+  /\b\d{8,10}:[A-Za-z0-9_-]{35}\b/g,
   // AWS.
   /\bAKIA[0-9A-Z]{16}\b/g,
   // Google API keys.
   /\bAIza[0-9A-Za-z_-]{30,}\b/g,
-  // Private key blocks, whole.
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+  // Private key blocks, whole. A block with no END line (cut off, or the END
+  // line trimmed from a log) is removed to the end of the text.
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   // JWT-ish triples.
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
 ];
@@ -54,7 +60,10 @@ const VALUE_PATTERNS: readonly RegExp[] = [
  * the value is a quoted string or a bare run up to a delimiter.
  */
 const NAMED_ASSIGNMENT =
-  /\b([A-Za-z0-9_.-]*(?:token|secret|password|passwd|passphrase|api[_-]?key|apikey|private[_-]?key|client[_-]?secret|credential|authorization|bearer|access[_-]?key|session[_-]?id)[A-Za-z0-9_.-]*)"?\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s,;&|}]+)/gi;
+  /\b([A-Za-z0-9_.-]*(?:token|secret|password|passwd|passphrase|api[_-]?key|apikey|private[_-]?key|client[_-]?secret|credential|authorization|bearer|access[_-]?key|session[_-]?id|pwd|(?<![a-z])pass(?![a-z]))[A-Za-z0-9_.-]*)"?\s*[:=]\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|(?:(?:bearer|basic|token)\s+)?[^\s,;&|}]+)/gi;
+
+/** `scheme://user:password@host`: the userinfo goes, the host stays readable. */
+const URL_USERINFO = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]+@/gi;
 
 const REDACTED = "<redacted>";
 
@@ -97,6 +106,11 @@ export function redactSecrets(input: string): RedactResult {
     }
     redactedNames.push(name);
     return `${name}=<redacted:${name}>`;
+  });
+
+  text = text.replace(URL_USERINFO, (_match, scheme: string) => {
+    redactedNames.push("url-credentials");
+    return `${scheme}${REDACTED}@`;
   });
 
   for (const pattern of VALUE_PATTERNS) {

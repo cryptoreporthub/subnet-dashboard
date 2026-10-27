@@ -207,7 +207,14 @@ export function diffJunit(input: DiffInput): SuiteDiff {
 }
 
 /**
- * Paths that provably cannot change a pytest outcome: prose and images.
+ * Paths that do not normally change a pytest outcome: prose and images.
+ *
+ * "Normally" is measured, not assumed. This repo has tests that read prose and
+ * images (`tests/test_subagent_models_rule.py` reads `AGENTS.md` and
+ * `model-guide.md`, `test_fly_telegram_worker_config.py` reads `DEPLOY.md`,
+ * `test_phase_h_ui.py` reads `favicon.svg`), so a change to one of them can
+ * flip a test and still carry a clean result. Narrowing this list is a call for
+ * the owner; the cost is a suite run on docs-only heads.
  *
  * Everything else is code for this purpose. That direction is deliberate — the
  * cost of a false "code" is one suite run, and the cost of a false "prose" is a

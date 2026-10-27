@@ -27,6 +27,9 @@ export const JUNIT_ARTIFACT = "pytest-junit";
 
 export type ZipEntry = { name: string; data: Uint8Array };
 
+/** The most one report may inflate to. The head's artifact is written by the PR's own code. */
+export const MAX_ENTRY_BYTES = 64 * 1024 * 1024;
+
 const EOCD = 0x06054b50;
 const CENTRAL = 0x02014b50;
 const LOCAL = 0x04034b50;
@@ -64,6 +67,7 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     }
     const method = view.getUint16(cursor + 10, true);
     const compressedSize = view.getUint32(cursor + 20, true);
+    const declaredSize = view.getUint32(cursor + 24, true);
     const nameLength = view.getUint16(cursor + 28, true);
     const extraLength = view.getUint16(cursor + 30, true);
     const commentLength = view.getUint16(cursor + 32, true);
@@ -71,6 +75,9 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
     const name = new TextDecoder().decode(bytes.subarray(cursor + 46, cursor + 46 + nameLength));
 
     if (!name.endsWith("/")) {
+      if (declaredSize > MAX_ENTRY_BYTES) {
+        throw new Error(`zip: ${name} is too large (${declaredSize} bytes declared, limit ${MAX_ENTRY_BYTES})`);
+      }
       if (view.getUint32(localOffset, true) !== LOCAL) {
         throw new Error(`zip: bad local header for ${name}`);
       }
@@ -81,7 +88,8 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
       if (method === 0) {
         entries.push({ name, data: raw });
       } else if (method === 8) {
-        entries.push({ name, data: new Uint8Array(inflateRawSync(raw)) });
+        // The declared size is only a claim; the limit is enforced while inflating.
+        entries.push({ name, data: new Uint8Array(inflateRawSync(raw, { maxOutputLength: MAX_ENTRY_BYTES })) });
       } else {
         throw new Error(`zip: ${name} uses unsupported compression method ${method}`);
       }
@@ -136,9 +144,17 @@ export function pickArtifact(artifacts: readonly ArtifactRef[]): ArtifactRef | u
   return artifacts.find((artifact) => artifact.name === JUNIT_ARTIFACT);
 }
 
-/** The workflow run to read for one SHA: the newest completed run of the suite job. */
+/** Conclusions that mean the suite job ran to its end, whether it passed or not. */
+const FINISHED = new Set(["success", "failure", "neutral"]);
+
+/**
+ * The workflow run to read for one SHA: the newest run that finished.
+ *
+ * A cancelled or timed-out run stopped partway, so its report is a fragment of
+ * the suite and must not stand in for the whole one.
+ */
 export function pickRun(runs: readonly { id: number; conclusion: string | null }[]): { id: number } | undefined {
-  return runs.find((run) => run.conclusion !== null);
+  return runs.find((run) => run.conclusion !== null && FINISHED.has(run.conclusion));
 }
 
 export type JunitFetch =

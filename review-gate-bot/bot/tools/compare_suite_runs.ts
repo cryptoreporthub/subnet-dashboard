@@ -32,7 +32,7 @@ export default defineTool({
     "Compare full-repo pytest results for base and head, read from the cloud-runner JUnit artifacts for those exact SHAs. Flake list is the committed known-flakes.txt. Records the result for this head. Carry-over needs a recorded clean SHA and a head that changed only prose or images.",
   inputSchema: z.object({
     headSha: Sha,
-    baseSha: Sha.describe("The merge-base commit to compare against."),
+    baseSha: Sha.describe("The PR's base commit, as `check_gate_state` and the PR show it. Refused when it is not."),
     carryFromSha: Sha.optional().describe(
       "A prior head of this PR whose suite is already recorded clean, to carry from. Refused unless that record exists.",
     ),
@@ -45,6 +45,7 @@ export default defineTool({
 
     let changedFiles: string[];
     let currentHeadSha: string;
+    let currentBaseSha: string | undefined;
     let prRef: { owner: string; repo: string; number: number } | undefined;
 
     if (isEval) {
@@ -62,12 +63,26 @@ export default defineTool({
       const pr = await readPr(octokit, prRef);
       changedFiles = pr.files;
       currentHeadSha = pr.headSha;
+      currentBaseSha = pr.baseSha;
     }
 
     if (currentHeadSha !== input.headSha) {
       // A comparison for a head that has been replaced would record a result
       // against a SHA nobody is reviewing.
       return { recorded: false, reason: "stale-head", current: currentHeadSha, clean: false };
+    }
+
+    // The base comes from the PR. A model that names the head, or an old commit
+    // where the same tests already failed, turns every failure into "pre-existing".
+    if (currentBaseSha !== undefined && input.baseSha !== currentBaseSha) {
+      return {
+        recorded: false,
+        reason: "base-mismatch",
+        expected: currentBaseSha,
+        given: input.baseSha,
+        carried: false,
+        clean: false,
+      };
     }
 
     // Carry-over: the head must have changed nothing a suite can observe, and

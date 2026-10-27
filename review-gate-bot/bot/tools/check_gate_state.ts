@@ -1,7 +1,7 @@
 import { defineTool } from "@grok/agent-sdk/tools";
 import { parseGitHubPrContinuationKey } from "@grok/agent-sdk/channels/github";
 import { z } from "zod";
-import { readGateState } from "../lib/gh.js";
+import { readGateState, readPr } from "../lib/gh.js";
 import { readGateFixture } from "../lib/fixtures.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
@@ -33,6 +33,12 @@ export default defineTool({
       throw new Error("check_gate_state needs a GitHub pull request session");
     }
     const octokit = await ctx.host.github.getOctokit();
+    // A state for a head nobody is reviewing would be shown to the model, and
+    // reported by it, as the state of the PR.
+    const live = await readPr(octokit, ref);
+    if (live.headSha !== headSha) {
+      return { reason: "stale-head", requested: headSha, current: live.headSha };
+    }
     const state = await readGateState({ octokit, kv: ctx.host.kv, ref, headSha });
     return {
       headSha: state.headSha,
