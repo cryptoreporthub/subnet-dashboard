@@ -48,6 +48,10 @@ const VALUE_PATTERNS: readonly RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
   // JWT-ish triples.
   /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g,
+  // A bearer credential with no header name in front of it. Sixteen characters
+  // is the floor for an opaque token, so prose such as "bearer authentication"
+  // stays readable.
+  /\bbearer\s+[A-Za-z0-9._~+/=-]{16,}/gi,
 ];
 
 /**
