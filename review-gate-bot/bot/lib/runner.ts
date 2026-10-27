@@ -20,6 +20,7 @@
 
 import { inflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
+import { assertWellFormed } from "./xml.js";
 
 export const SUITE_WORKFLOW = "ci-smoke.yml";
 export const JUNIT_ARTIFACT = "pytest-junit";
@@ -100,11 +101,23 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
  * correct either way.
  */
 export function junitFromEntries(entries: readonly ZipEntry[]): string {
-  const reports = entries.filter((entry) => /(^|\/)junit[^/]*\.xml$/i.test(entry.name) || /(^|\/)report\.xml$/i.test(entry.name));
+  const reports = entries.filter((entry) => /(^|\/)(?:junit[^/]*|pytest|report)\.xml$/i.test(entry.name));
   if (reports.length === 0) {
-    throw new Error(`artifact has no JUnit report (looked for junit*.xml / report.xml, saw ${entries.map((e) => e.name).join(", ") || "nothing"})`);
+    throw new Error(
+      `artifact has no JUnit report (looked for junit*.xml / pytest.xml / report.xml, saw ${entries.map((e) => e.name).join(", ") || "nothing"})`,
+    );
   }
-  const parts = reports.map((report) => new TextDecoder().decode(report.data));
+  const parts = reports.map((report) => {
+    const text = new TextDecoder().decode(report.data);
+    // Each shard on its own: re-rooting strips the outer tags, which would
+    // quietly repair a shard cut off before its closing `</testsuites>`.
+    try {
+      assertWellFormed(text);
+    } catch (error) {
+      throw new Error(`${report.name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return text;
+  });
   return `<?xml version="1.0"?><testsuites>${parts
     .map((part) => part.replace(/^<\?xml[^>]*\?>/, "").replace(/<\/?testsuites\b[^>]*>/g, ""))
     .join("")}</testsuites>`;
@@ -140,6 +153,23 @@ export type RunnerReader = {
   artifactZip(artifactId: number): Promise<Uint8Array>;
 };
 
+/**
+ * The bytes of a downloaded artifact.
+ *
+ * `downloadArtifact` types its payload as `unknown` and, for a zip, resolves an
+ * `ArrayBuffer`. A cast to `Uint8Array` compiles and then fails inside the
+ * reader, which reported every real artifact as unreadable.
+ */
+export function artifactBytes(data: unknown): Uint8Array {
+  if (data instanceof Uint8Array) {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+  throw new Error(`artifact download was ${data === null ? "null" : typeof data}, not binary`);
+}
+
 /** The reader backed by the real GitHub API. */
 export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: string }): RunnerReader {
   return {
@@ -169,7 +199,7 @@ export function octokitRunner(octokit: Octokit, ref: { owner: string; repo: stri
         artifact_id: artifactId,
         archive_format: "zip",
       });
-      return data as Uint8Array;
+      return artifactBytes(data);
     },
   };
 }
