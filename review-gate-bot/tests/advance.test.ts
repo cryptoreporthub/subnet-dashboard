@@ -4,6 +4,7 @@ import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
 import { replitAskKey, replitTagKey } from "../bot/lib/gate.js";
+import { LEASE_MS } from "../bot/lib/lock.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
@@ -239,4 +240,24 @@ test("once the tag is on the PR, a later event still retries the ask", async () 
   w.store.delete(replitAskKey(1522, HEAD));
   await reviewEventTurn(w.deps);
   assert.equal(w.asks(), 2, "await_replit keeps asks enabled");
+});
+
+// --- One review turn per head, however many deliveries arrive ---------------
+
+test("deliveries that arrive together for one head start exactly one review turn", async () => {
+  const w = world();
+  const turns = await Promise.all([
+    pullRequestTurn(w.deps, { action: "opened", draft: false }),
+    commentTurn(w.deps, "some-reviewer"),
+    reviewEventTurn(w.deps),
+  ]);
+  assert.equal(turns.filter(Boolean).length, 1);
+});
+
+test("a delivery inside the lease starts no second review turn, and one after it does", async () => {
+  const w = world();
+  const at = (now: number) => ({ ...w.deps, now: () => now });
+  assert.equal(await reviewEventTurn(at(0)), true);
+  assert.equal(await reviewEventTurn(at(LEASE_MS - 1)), false);
+  assert.equal(await reviewEventTurn(at(LEASE_MS)), true, "the lease has expired, so its owner is presumed gone");
 });
