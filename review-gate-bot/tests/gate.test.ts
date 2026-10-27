@@ -5,6 +5,7 @@ import {
   cursorDittoTagKey,
   gateActions,
   needsReviewTurn,
+  prKey,
   replitAskKey,
   replitTagKey,
   verdictAt,
@@ -163,6 +164,13 @@ test("tag and ask keys are distinct per slot and per head", () => {
   assert.notEqual(replitTagKey(1515, HEAD), replitAskKey(1515, HEAD));
   assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1515, OTHER));
   assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1516, HEAD));
+});
+
+test("a PR's key tells two repositories' PR 1522 apart and is stable for one PR", () => {
+  const ours = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
+  const other = { owner: "someone-else", repo: "subnet-dashboard", number: 1522 };
+  assert.notEqual(prKey(ours), prKey(other));
+  assert.equal(prKey(ours), prKey({ ...ours }));
 });
 
 // --- Finding 8: the draft guard, for every delivery ----------------------
