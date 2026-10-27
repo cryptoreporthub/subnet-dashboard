@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
+import { replitAskKey, replitTagKey } from "../bot/lib/gate.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
@@ -21,7 +22,14 @@ type CheckCall = { name: string; sha: string; conclusion?: string };
 
 /** One PR as GitHub shows it. The bot posts as its own App, `ME`. */
 function world(
-  options: { draft?: boolean; comments?: Raw[]; createFails?: boolean; headMovesTo?: string; checkFails?: boolean } = {},
+  options: {
+    draft?: boolean;
+    comments?: Raw[];
+    reviews?: object[];
+    seed?: Record<string, unknown>;
+    createFails?: boolean;
+    checkFails?: boolean;
+  } = {},
 ) {
   const comments = [...(options.comments ?? [])];
   const posted: string[] = [];
@@ -29,7 +37,7 @@ function world(
   const listComments = () => {};
   const listReviews = () => {};
   const octokit = {
-    paginate: async (fn: unknown) => (fn === listComments ? comments : []),
+    paginate: async (fn: unknown) => (fn === listComments ? comments : fn === listReviews ? (options.reviews ?? []) : []),
     rest: {
       pulls: {
         get: async () => ({ data: { head: { sha: HEAD }, draft: options.draft ?? false } }),
@@ -56,7 +64,8 @@ function world(
     },
   } as unknown as Octokit;
 
-  const store = new Map<string, unknown>();
+  const store = new Map<string, unknown>(Object.entries(options.seed ?? {}));
+  let asks = 0;
   const deps: GateDeps = {
     octokit,
     kv: {
@@ -68,7 +77,14 @@ function world(
         store.delete(key);
       },
     },
-    mcp: { names: () => [], listTools: async () => [], callTool: async () => ({ isError: false, content: [] }) } as unknown as HostMcpRegistry,
+    mcp: {
+      names: () => ["replit"],
+      listTools: async () => [{ name: "ask_question" }],
+      callTool: async () => {
+        asks += 1;
+        return { isError: false, content: [{ type: "text", text: "ok" }] };
+      },
+    } as unknown as HostMcpRegistry,
     ref: REF,
     createCheck: async (input) => {
       if (options.checkFails === true) {
@@ -84,7 +100,7 @@ function world(
       };
     },
   };
-  return { deps, posted, comments, checks };
+  return { deps, posted, comments, checks, store, asks: () => asks };
 }
 
 const mcPass: Raw = {
@@ -172,4 +188,55 @@ test("a failing check post does not lose the review turn or the tags", async () 
   const w = world({ checkFails: true });
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
   assert.equal(w.posted.length, 1, "the Cursor and Ditto tag still went out");
+});
+
+// --- The Replit ask follows a confirmed tag ---------------------------------
+
+const review = (id: number, login: string, state: string) => ({
+  id,
+  body: "",
+  state,
+  submitted_at: "2026-10-26T05:30:00Z",
+  commit_id: HEAD,
+  user: { login, type: "Bot" },
+});
+
+/** MC, Cursor and Ditto passed this head and the suite is clean: the gate is at `tag_replit`. */
+function readyForReplit(options: { createFails?: boolean; seed?: Record<string, unknown>; comments?: Raw[] } = {}) {
+  return world({
+    comments: [mcPass, ...(options.comments ?? [])],
+    reviews: [review(10, "cursor[bot]", "APPROVED"), review(20, "ditto-code[bot]", "APPROVED")],
+    seed: { [`suite:1522:${HEAD}`]: { state: "clean" }, ...options.seed },
+    createFails: options.createFails,
+  });
+}
+
+test("a tag that was posted is followed by the Replit ask", async () => {
+  const w = readyForReplit();
+  await reviewEventTurn(w.deps);
+  assert.ok(w.posted.some((body) => body.includes("@replit review")));
+  assert.equal(w.asks(), 1);
+});
+
+test("a tag that failed to post is not followed by the Replit ask", async () => {
+  const w = readyForReplit({ createFails: true });
+  await reviewEventTurn(w.deps);
+  assert.equal(w.asks(), 0, "Replit was never tagged, so it must not be asked");
+});
+
+test("a tag whose claim another process holds is not followed by the Replit ask", async () => {
+  const w = readyForReplit({ seed: { [replitTagKey(1522, HEAD)]: { state: "claimed", nonce: "other", at: Date.now() } } });
+  await reviewEventTurn(w.deps);
+  assert.deepEqual(w.posted.filter((body) => body.includes("@replit review")), []);
+  assert.equal(w.asks(), 0);
+});
+
+test("once the tag is on the PR, a later event still retries the ask", async () => {
+  const w = readyForReplit();
+  await reviewEventTurn(w.deps);
+  assert.equal(w.asks(), 1);
+  // A failed ask would have recorded nothing; model that by forgetting the ask.
+  w.store.delete(replitAskKey(1522, HEAD));
+  await reviewEventTurn(w.deps);
+  assert.equal(w.asks(), 2, "await_replit keeps asks enabled");
 });

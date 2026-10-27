@@ -140,6 +140,16 @@ test("a directory, a symlink and a submodule are refused, not read", async () =>
   }
 });
 
+test("an empty file is read as empty text, not refused", async () => {
+  const { octokit } = fake({ content: { type: "file", encoding: "base64", size: 0, content: "" } });
+  const file = await readRepoFile(octokit, REF, HEAD, "__init__.py", {});
+  assert.ok(file.ok);
+  if (file.ok) {
+    assert.equal(file.text, "");
+    assert.equal(file.truncated, false);
+  }
+});
+
 test("a file too big for the contents API is refused with a reason", async () => {
   const { octokit } = fake({ content: { type: "file", encoding: "none", size: 5_000_000, content: "" } });
   const file = await readRepoFile(octokit, REF, HEAD, "big.bin", {});

@@ -59,3 +59,22 @@ test("every secret the channel names is declared for deploy, and no token is", (
   }
   assert.ok(!names.includes("GITHUB_TOKEN"), "a personal token would let the bot post as someone else");
 });
+
+test("the model is pinned, not left to the SDK default", () => {
+  assert.deepEqual((agent as unknown as { model?: unknown }).model, {
+    id: "grok-4.5",
+    params: [
+      { id: "effort", value: "high" },
+      { id: "fast", value: "true" },
+    ],
+  });
+});
+
+test("the model reaches no MCP server but the bot's own: nothing is attached for the model to list", async () => {
+  const { readdir } = await import("node:fs/promises");
+  const root = new URL("../bot/", import.meta.url);
+  const exists = async (dir: string) => (await readdir(root)).includes(dir);
+  assert.equal(await exists("mcp-connections"), false, "an attached connection is model-visible");
+  const hosted = await readdir(new URL("host-connections/", root));
+  assert.deepEqual(hosted, ["replit.ts"], "host connections are invisible to the model, and only Replit is wired");
+});

@@ -135,8 +135,8 @@ export async function readRepoFile(
   if (entry.type !== "file") {
     return refusal(path, `is a ${entry.type ?? "non-file"}, which is not read`);
   }
-  if (entry.encoding !== "base64" || typeof entry.content !== "string" || entry.content === "") {
-    return refusal(path, `too large for the contents API (${entry.size ?? "unknown"} bytes) or empty`);
+  if (entry.encoding !== "base64" || typeof entry.content !== "string") {
+    return refusal(path, `too large for the contents API (${entry.size ?? "unknown"} bytes)`);
   }
 
   const lines = Buffer.from(entry.content, "base64").toString("utf8").split("\n");

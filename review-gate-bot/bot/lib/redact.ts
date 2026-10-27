@@ -76,8 +76,8 @@ export type RedactResult = {
 /**
  * A value that carries no secret and should be left readable.
  *
- * Deliberately narrow. Template references, an already-redacted token, and a
- * value too short to be a credential stay. Everything else goes, **including
+ * Deliberately narrow. Template references, an already-redacted token and the
+ * stub `x` stay. A short value is not a placeholder: a PIN or `DB_PASS=abc` is a credential. Everything else goes, **including
  * all digits**: a six-digit PIN or a numeric database password is a credential,
  * and the old all-digit exemption published it.
  */
@@ -89,8 +89,8 @@ function isPlaceholder(value: string): boolean {
   if (/^(\$\{|\$[A-Z_]|<redacted|<)/.test(trimmed)) {
     return true;
   }
-  if (trimmed.length < 4) {
-    // No real credential is under four characters; these are stubs like `x`.
+  if (trimmed.toLowerCase() === "x") {
+    // The one stub short enough to be mistaken for a value.
     return true;
   }
   return /^(\.\.\.|x{3,}|\*{3,}|changeme|placeholder|example|redacted|none|null|true|false)$/i.test(trimmed);

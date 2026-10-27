@@ -7,6 +7,13 @@ import { postVerdictComment } from "../lib/tag.js";
 
 const Sha = z.string().regex(/^[0-9a-f]{40}$/, "a full 40-character head SHA");
 
+/**
+ * Findings that rule out a PASS whatever severity the review gave them. The
+ * model declares them; the tool enforces the consequence, because a verdict is
+ * a side effect and the code owns side-effect gates.
+ */
+const BLOCKING_KINDS = ["never-expires", "overflow", "aborts-cycle", "poisons-later-row"] as const;
+
 const SkillsTable = z
   .array(
     z.object({
@@ -65,23 +72,34 @@ export function composeVerdictBody(input: {
 /**
  * Post MC's formal verdict for one head. At most once per head, best effort.
  *
- * Refuses a stale head, stays silent in an eval session, and redacts before
- * anything leaves the process. The signature is fixed here rather than taken
+ * Refuses a PASS that declares a blocking finding, refuses a stale head, stays
+ * silent in an eval session, and redacts before anything leaves the process. The signature is fixed here rather than taken
  * from the model, so a post always says who posted it.
  *
  */
 export default defineTool({
   description:
-    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved. The Skills table is required.",
+    "Post MC's formal verdict for one head SHA on this session's PR. Call once per head. Refuses when the PR head has moved, and refuses a PASS while any blocking finding is declared: resubmit as MODIFY or FAIL. The Skills table is required.",
   inputSchema: z.object({
     headSha: Sha,
     verdict: z.enum(["PASS", "MODIFY", "FAIL"]),
     body: z.string().min(1).describe("The review body: findings, severities, and measured/inferred labels."),
     skills: SkillsTable,
+    blocking: z
+      .array(z.enum(BLOCKING_KINDS))
+      .optional()
+      .describe(
+        "Every finding that makes rows never expire (`never-expires`), lets a value overflow to inf or NaN (`overflow`), lets a cycle or a later row abort (`aborts-cycle`), or writes bad state that later cycles read back (`poisons-later-row`). Declare each one whatever its severity. PASS is refused while any is declared.",
+      ),
   }),
   effect: "write",
   dryRunResult: (input) => ({ posted: false, reason: "dry-run", verdict: input.verdict }),
   async execute(input, ctx) {
+    const blocking = input.blocking ?? [];
+    if (input.verdict === "PASS" && blocking.length > 0) {
+      return { posted: false, reason: "pass-with-blocking-finding", verdict: input.verdict, blocking };
+    }
+
     if (ctx.session.purpose === "eval") {
       return { posted: false, reason: "eval", verdict: input.verdict };
     }

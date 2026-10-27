@@ -105,6 +105,28 @@ test("the same call outside an eval is not short-circuited, so the guard above i
   await assert.rejects(execute(VERDICT, contextFor("live")), /GitHub pull request session/);
 });
 
+// --- A blocking finding can never ship under a PASS ----------------------------
+
+for (const kind of ["never-expires", "overflow", "aborts-cycle", "poisons-later-row"]) {
+  test(`a PASS that declares a '${kind}' finding is refused, in an eval and live`, async () => {
+    for (const purpose of ["eval", "live"] as const) {
+      const result = await execute({ ...VERDICT, blocking: [kind] }, contextFor(purpose));
+      assert.deepEqual(result, { posted: false, reason: "pass-with-blocking-finding", verdict: "PASS", blocking: [kind] }, purpose);
+    }
+  });
+}
+
+test("the same finding under MODIFY or FAIL goes through, so the model can resubmit", async () => {
+  for (const verdict of ["MODIFY", "FAIL"] as const) {
+    const result = await execute({ ...VERDICT, verdict, blocking: ["overflow"] }, contextFor("eval"));
+    assert.deepEqual(result, { posted: false, reason: "eval", verdict });
+  }
+});
+
+test("a PASS that declares no blocking finding is not refused", async () => {
+  assert.deepEqual(await execute({ ...VERDICT, blocking: [] }, contextFor("eval")), { posted: false, reason: "eval", verdict: "PASS" });
+});
+
 test("Joshua's own PASS is never read as a Replit verdict", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],

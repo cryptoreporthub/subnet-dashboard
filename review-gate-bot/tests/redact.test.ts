@@ -63,6 +63,65 @@ test("a lowercase numeric password and a numeric client secret are redacted", ()
   assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
 });
 
+test("only the explicit stub `x` is left readable; a short real credential is redacted", () => {
+  assert.equal(redactSecrets("API_KEY=x").text, "API_KEY=x");
+  const short: [source: string, secret: string][] = [
+    ["DB_PASS=abc", "abc"],
+    ["PASSWORD=ab", "ab"],
+    ["pwd=1234", "1234"],
+    ["SECRET=a1", "a1"],
+    ["token: abc", "abc"],
+  ];
+  for (const [source, secret] of short) {
+    const { text, redactedNames } = redactSecrets(source);
+    assert.equal(text.split(/[=:]/).slice(1).join("").includes(secret), false, source);
+    assert.equal(redactedNames.length, 1, source);
+  }
+});
+
+// --- Finding 6: all-digit values are credentials too ----------------------
+
+test("an all-digit password is redacted, not exempted as a placeholder", () => {
+  // The reported hole: every all-digit value was treated as a placeholder, so
+  // this came back unchanged.
+  const { text, redactedNames } = redactSecrets("DATABASE_PASSWORD=123456");
+  assert.equal(text.includes("123456"), false);
+  assert.equal(text.includes("DATABASE_PASSWORD=<redacted:DATABASE_PASSWORD>"), true);
+  assert.deepEqual(redactedNames, ["DATABASE_PASSWORD"]);
+});
+
+test("a lowercase numeric password and a numeric client secret are redacted", () => {
+  assert.equal(redactSecrets('{"password": "8675309"}').text.includes("8675309"), false);
+  assert.equal(redactSecrets('{"client_secret": "987654321"}').text.includes("987654321"), false);
+  assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
+});
+
+test("only the explicit stub `x` is left readable; a short real credential is redacted", () => {
+  assert.equal(redactSecrets("API_KEY=x").text, "API_KEY=x");
+  for (const source of ["DB_PASS=abc", "PASSWORD=ab", "pwd=1234", "SECRET=a1", "token: abc"]) {
+    const { text, redactedNames } = redactSecrets(source);
+    assert.equal(text.includes("=abc") || text.includes(": abc") || text.endsWith("ab") || text.endsWith("a1") || text.endsWith("1234"), false, source);
+    assert.equal(redactedNames.length, 1, source);
+  }
+});
+
+// --- Finding 6: all-digit values are credentials too ----------------------
+
+test("an all-digit password is redacted, not exempted as a placeholder", () => {
+  // The reported hole: every all-digit value was treated as a placeholder, so
+  // this came back unchanged.
+  const { text, redactedNames } = redactSecrets("DATABASE_PASSWORD=123456");
+  assert.equal(text.includes("123456"), false);
+  assert.equal(text.includes("DATABASE_PASSWORD=<redacted:DATABASE_PASSWORD>"), true);
+  assert.deepEqual(redactedNames, ["DATABASE_PASSWORD"]);
+});
+
+test("a lowercase numeric password and a numeric client secret are redacted", () => {
+  assert.equal(redactSecrets('{"password": "8675309"}').text.includes("8675309"), false);
+  assert.equal(redactSecrets('{"client_secret": "987654321"}').text.includes("987654321"), false);
+  assert.equal(redactSecrets("API_KEY=1234567890").text.includes("1234567890"), false);
+});
+
 test("a numeric value that cannot be a credential is still left readable", () => {
   // The narrow exception: below the four-character floor there is nothing to
   // protect, so a stub like `x` or `1` is not turned into noise.

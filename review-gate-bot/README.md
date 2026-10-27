@@ -127,25 +127,41 @@ npm run dev                    # agent-sdk dev --dir .  (playground + HTTP)
 
 The playground is at `http://127.0.0.1:3000/playground`.
 
-To drive it from real GitHub deliveries without a public webhook, replay a PR:
+To drive it from real GitHub deliveries without a public webhook, replay a PR
+against the running `npm run dev` (it reads the PR with `gh api`; pull access is
+enough). `--dry-run` prints the payloads and posts nothing. `--fixtures-dir`
+writes them out, `fixtures/github` being the SDK's convention (the folder is
+created on first use, and is not the eval snapshots under `evals/fixtures/`):
 
 ```bash
 npx agent-sdk github replay cryptoreporthub/subnet-dashboard#1515 --dir . --dry-run \
-  --events '*' --fixtures-dir evals/fixtures/github
+  --events '*' --fixtures-dir fixtures/github
 ```
 
 ## Evals
 
 ```bash
-npx agent-sdk eval --dir . --list          # 8 datapoints across the 6 cases
+npx agent-sdk eval --dir . --list          # the 7 cases
 npx agent-sdk eval --dir . --tag smoke     # run them
 npx agent-sdk eval --dir . --json --no-stream --junit reports/evals.xml
 ```
 
-Six cases, from real history: `pr-1515-grace-overflow`, `pr-1519-docs-head`,
-`pr-1486-elev8jax`, `go-forgery`, `gate-order`, `secret-echo`. Each pins a PR
-snapshot and a gate state under `evals/fixtures/`, so a run does not read a PR
-as it looks today.
+Seven cases, from real history: `pr-1515-grace-overflow`,
+`replay/pr-1515-unprompted`, `pr-1519-docs-head`, `pr-1486-elev8jax`,
+`go-forgery`, `gate-order`, `secret-echo`. Each pins a PR snapshot and a gate
+state under `evals/fixtures/`, so a run does not read a PR as it looks today.
+
+The two `pr-1515` cases replay the PR at the head MC passed, before the overflow
+was found. The first names the file and the setting; the second names nothing
+but the PR. Neither names a value (`tests/fixtures.test.ts` keeps it so): a case
+that hands over `1e308` measures reading, not review. A kept change to the
+instructions needs an eval that would have failed before it, so the cases are
+run by hand (`--tag`) after a change, not in CI.
+
+A finding that rules out a PASS (rows that never expire, an overflow, a cycle
+or later row that can abort or inherit bad state) is declared in `post_verdict`'s
+`blocking` list. The tool refuses a PASS while the list is not empty, so the
+verdict is MODIFY or FAIL whatever the finding's severity.
 
 Tool writes are stubbed in an eval session (`ctx.session.purpose === "eval"`),
 so `calledTool` still sees the decision and nothing is posted.
@@ -256,7 +272,7 @@ does not.
 
 | Where | What |
 | --- | --- |
-| `bot/agent.ts` | `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
+| `bot/agent.ts` | the pinned `model` (`grok-4.5`, `effort=high`, `fast=true`), `hosting.egressDomains` (`api.github.com`, `mcp.replit.com`, and the Actions artifact storage hosts `*.blob.core.windows.net` and `*.actions.githubusercontent.com`), `hosting.secretNames`, `concurrency.maxRunningTurns`. `local.sandbox` is deliberately absent. |
 | `bot/channels/github.ts` | the repo, the trigger actions, `webhookEvents`, and the automatic tagging |
 | `bot/instructions.md` | the adversarial review policy and the hard nevers |
 | `bot/lib/gate.ts` | the gate order and the delivery decision (`gateActions`: draft guard, tag, ask). The only place that decides `next`. |

@@ -4,6 +4,7 @@ import { deflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
 import {
   downloadViaRedirect,
+  MAX_ENTRY_BYTES,
   fetchJunit,
   junitFromEntries,
   octokitRunner,
@@ -19,7 +20,7 @@ import {
  * bytes rather than a hand-built buffer. It writes the minimum a reader needs:
  * local header, one central-directory entry, end-of-central-directory.
  */
-function zip(entries: { name: string; body: string; store?: boolean }[]): Uint8Array {
+function zip(entries: { name: string; body: string; store?: boolean; declaredSize?: number }[]): Uint8Array {
   const locals: Buffer[] = [];
   const centrals: Buffer[] = [];
   let offset = 0;
@@ -52,7 +53,7 @@ function zip(entries: { name: string; body: string; store?: boolean }[]): Uint8A
     central.writeUInt32LE(0, 12);
     central.writeUInt32LE(0, 16);
     central.writeUInt32LE(body.length, 20);
-    central.writeUInt32LE(data.length, 24);
+    central.writeUInt32LE(entry.declaredSize ?? data.length, 24);
     central.writeUInt16LE(name.length, 28);
     central.writeUInt16LE(0, 30);
     central.writeUInt16LE(0, 32);
@@ -92,6 +93,19 @@ test("readZip inflates a deflated entry and copies a stored one", () => {
   assert.deepEqual(names, ["junit.xml", "notes.txt"]);
   const xml = entries.find((e) => e.name === "junit.xml");
   assert.equal(new TextDecoder().decode(xml?.data), REPORT);
+});
+
+test("entries that declare zero bytes but inflate past the archive cap are refused", () => {
+  // The declared size is the attacker's claim. Three entries that each inflate
+  // to the per-entry limit are 3 x 64 MiB against a 128 MiB archive cap.
+  const body = "\0".repeat(MAX_ENTRY_BYTES);
+  const entries = [0, 1, 2].map((n) => ({ name: `junit-${n}.xml`, body, declaredSize: 0 }));
+  assert.throws(() => readZip(zip(entries)), /excessive inflated size|too large/);
+});
+
+test("entries that inflate within the archive cap are read whatever size they declare", () => {
+  const entries = readZip(zip([{ name: "junit.xml", body: REPORT, declaredSize: 0 }]));
+  assert.equal(new TextDecoder().decode(entries[0]?.data), REPORT);
 });
 
 test("a truncated archive throws rather than returning no entries", () => {

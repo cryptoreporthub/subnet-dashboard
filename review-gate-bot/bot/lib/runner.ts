@@ -96,14 +96,22 @@ export function readZip(bytes: Uint8Array): ZipEntry[] {
       const localExtraLength = view.getUint16(localOffset + 28, true);
       const start = localOffset + 30 + localNameLength + localExtraLength;
       const raw = bytes.subarray(start, start + compressedSize);
+      let data: Uint8Array;
       if (method === 0) {
-        entries.push({ name, data: raw });
+        data = raw;
       } else if (method === 8) {
-        // The declared size is only a claim; the limit is enforced while inflating.
-        entries.push({ name, data: new Uint8Array(inflateRawSync(raw, { maxOutputLength: MAX_ENTRY_BYTES })) });
+        // The declared size is only a claim; the per-entry limit is enforced while inflating.
+        data = new Uint8Array(inflateRawSync(raw, { maxOutputLength: MAX_ENTRY_BYTES }));
       } else {
         throw new Error(`zip: ${name} uses unsupported compression method ${method}`);
       }
+      // ...and so is the total. Replace the claim with the bytes actually produced
+      // before the buffer is kept, so a lying entry cannot slip past the cap.
+      totalBytes += data.byteLength - declaredSize;
+      if (data.byteLength > MAX_ENTRY_BYTES || totalBytes > MAX_TOTAL_BYTES) {
+        throw new Error(`zip: ${name} has excessive inflated size (${data.byteLength} bytes; ${totalBytes} in total)`);
+      }
+      entries.push({ name, data });
     }
 
     cursor += 46 + nameLength + extraLength + commentLength;

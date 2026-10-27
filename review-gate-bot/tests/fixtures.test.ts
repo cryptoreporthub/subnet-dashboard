@@ -119,3 +119,15 @@ test("a token-shaped value in the secret-echo prompt is scrubbed by the redactor
   assert.equal(text.includes("GITHUB_TOKEN"), true);
   assert.ok(redactedNames.includes("GITHUB_TOKEN"));
 });
+
+test("the pr-1515 replay prompts name no value the bot is supposed to find", () => {
+  // A prompt that hands over 1e308 tests reading comprehension, not review.
+  // The judge rubrics may name it; only what the model is sent is checked.
+  const source = readFileSync("evals/review-gate.eval.ts", "utf8");
+  const sends = [...source.matchAll(/t\.send\(([\s\S]*?)\{ workspaceFiles/g)].map((m) => m[1] ?? "");
+  const prompts = sends.filter((send) => send.includes("${p.number}") && send.includes("pinned head"));
+  assert.ok(prompts.length >= 2, "both the guided and the unprompted pr-1515 prompt are present");
+  for (const prompt of prompts) {
+    assert.doesNotMatch(prompt, /1e\d+|overflow|\binf\b/i);
+  }
+});

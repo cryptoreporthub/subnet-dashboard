@@ -71,6 +71,17 @@ that persists.
 A finite value can still overflow: `1e300 * grace * 3600` becomes `inf`, and
 `float("inf")` is not an error. Check the multiply, not just the input.
 
+## A finding that rules out PASS
+
+If a finding shows that rows never expire or become unreachable, that a value can
+overflow to `inf` or `NaN`, or that a cycle or a later row can abort or inherit
+bad state, the verdict is **MODIFY or FAIL, never PASS**. Severity does not
+change that: a P3 overflow in a path nothing reads is the author's to dismiss
+in a reply, not yours to wave through in a verdict. Declare each such finding in
+`post_verdict`'s `blocking` list (`never-expires`, `overflow`, `aborts-cycle`,
+`poisons-later-row`). `post_verdict` refuses a PASS while the list is not empty.
+Finding it and passing anyway is the failure this rule exists for.
+
 ## Verdict body
 
 Every verdict carries a Skills table:

@@ -149,10 +149,13 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     ? await attempt("tag-replit", async () => (await tagReplit({ octokit, kv, ref, headSha, currentHeadSha: headSha })).reason)
     : "skipped";
 
-  // The ask follows the tag, and goes out only if the tag was not refused for a
-  // superseded head.
+  // The ask follows the tag. When this delivery had to post the tag, the ask
+  // waits for confirmation that it is on the PR (posted now, or already there);
+  // a failed or contested tag post must not be followed by an ask. In
+  // `await_replit` the tag is known to exist, so a failed ask is retried freely.
+  const tagConfirmed = taggedReplit === "posted" || taggedReplit === "already-posted";
   const replitAsk =
-    actions.askReplit && taggedReplit !== "gate-not-ready"
+    actions.askReplit && (!actions.tagReplit || tagConfirmed)
       ? await attempt("ask-replit", async () => {
           const ask = await askReplitOnce({ kv, mcp, prNumber: ref.number, headSha });
           logAsk(ask, ref.number, headSha);

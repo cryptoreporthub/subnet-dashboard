@@ -245,3 +245,90 @@ test("a failed bookkeeping write after the effect landed is not an error", async
   const replay = await ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => ran > 0, run: async () => {} });
   assert.equal(replay.reason, "already-done");
 });
+
+// --- Release must never delete somebody else's claim ----------------------
+
+const LEASE_OVER = LEASE_MS + 1;
+
+test("a takeover landing between release's read and delete is not wiped (plain kv)", async () => {
+  const inner = plainKv();
+  let reads = 0;
+  // Reads 1 and 2 are the claim and its read-back; read 3 is release's. The
+  // takeover lands right after it, as it can once the lease has run out.
+  const kv: HostKvApi = {
+    ...inner,
+    async get(key) {
+      const value = await inner.get(key);
+      reads += 1;
+      if (reads === 3) {
+        inner.store.set(key, { state: "claimed", nonce: "replacement", at: LEASE_OVER });
+      }
+      return value;
+    },
+  };
+  let clock = 0;
+  await assert.rejects(
+    ranOnce({
+      kv,
+      key: "tag:1:abc",
+      now: () => clock,
+      alreadyDone: async () => false,
+      run: async () => {
+        clock = LEASE_OVER;
+        throw new Error("github 502");
+      },
+    }),
+  );
+  assert.equal((inner.store.get("tag:1:abc") as { nonce: string }).nonce, "replacement");
+});
+
+test("a failure near the end of its lease does not delete either: a takeover could be one tick away (plain kv)", async () => {
+  const kv = plainKv();
+  let clock = 0;
+  await assert.rejects(
+    ranOnce({
+      kv,
+      key: "tag:1:abc",
+      now: () => clock,
+      alreadyDone: async () => false,
+      run: async () => {
+        clock = LEASE_MS - 1_000;
+        throw new Error("github 502");
+      },
+    }),
+  );
+  assert.equal(kv.store.has("tag:1:abc"), true, "left to expire, not deleted");
+});
+
+test("a failure with compare-and-swap releases only the version it holds", async () => {
+  const memory = createMemoryKv();
+  let replaced = false;
+  const kv = {
+    ...memory,
+    // The takeover lands between release's read and its write.
+    async getWithVersion(key: string) {
+      const entry = await memory.getWithVersion(key);
+      if (!replaced) {
+        replaced = true;
+        await memory.put(key, { state: "claimed", nonce: "replacement", at: Date.now() });
+      }
+      return entry;
+    },
+  } as unknown as HostKvApi;
+
+  await assert.rejects(
+    ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => false, run: async () => { throw new Error("github 502"); } }),
+  );
+  assert.equal(((await memory.get("tag:1:abc")) as { nonce: string }).nonce, "replacement");
+});
+
+test("a failure with compare-and-swap frees the key for an immediate retry", async () => {
+  const kv = createMemoryKv();
+  await assert.rejects(
+    ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => false, run: async () => { throw new Error("github 502"); } }),
+  );
+  let ran = 0;
+  const retry = await ranOnce({ kv, key: "tag:1:abc", alreadyDone: async () => false, run: async () => { ran += 1; } });
+  assert.equal(retry.ran, true);
+  assert.equal(ran, 1);
+});
