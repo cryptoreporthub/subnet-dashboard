@@ -22,7 +22,7 @@ import { inflateRawSync } from "node:zlib";
 import type { Octokit } from "@octokit/rest";
 import { assertWellFormed } from "./xml.js";
 
-export const SUITE_WORKFLOW = "ci-smoke.yml";
+export const SUITE_WORKFLOW = "full-suite-junit.yml";
 export const JUNIT_ARTIFACT = "pytest-junit";
 
 export type ZipEntry = { name: string; data: Uint8Array };

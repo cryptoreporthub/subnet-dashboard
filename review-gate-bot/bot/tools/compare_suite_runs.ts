@@ -18,7 +18,7 @@ type Runner = ReturnType<typeof octokitRunner>;
  * Nothing here is model-supplied except the two SHAs, and those are checked
  * against the live PR head before anything is recorded:
  *
- * - The XML is fetched from the `pytest-junit` artifact of the `ci-smoke.yml`
+ * - The XML is fetched from the `pytest-junit` artifact of the `full-suite-junit.yml`
  *   run for that SHA. A missing or expired artifact is a refusal, never an
  *   empty report that parses to "clean".
  * - The flake list is the committed `known-flakes.txt`. It used to be a

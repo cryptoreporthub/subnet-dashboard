@@ -98,17 +98,16 @@ The full suite gate reads JUnit from the workflow's own artifact:
 
 | What | Where |
 | --- | --- |
-| JUnit XML | `pytest-junit` artifact of the `ci-smoke.yml` run for the **exact** SHA |
+| JUnit XML | `pytest-junit` artifact of the `full-suite-junit.yml` run for the **exact** SHA |
 | Known flakes | committed `known-flakes.txt` (never a tool argument) |
 | Zero testcases | a failed comparison, never a clean one |
 | Carry-over | only when every changed file is prose/an image **and** the source SHA has a recorded clean run |
 
-> **Open dependency, outside this folder.** `.github/workflows/ci-smoke.yml`
-> does not currently upload a `pytest-junit` artifact, so on this repo every
-> comparison refuses with `head-no-artifact` until that upload exists. That is
-> the intended failure: an absent report must never read as a clean suite. The
-> fix is two lines in that workflow (`--junitxml=reports/pytest.xml` plus
-> `actions/upload-artifact`), owned by whoever owns CI, not by this folder.
+> **Dependency, outside this folder.** `.github/workflows/full-suite-junit.yml`
+> (PR #1525) runs the whole suite and uploads the `pytest-junit` artifact. It is
+> report only and gates nothing. `ci-smoke.yml` runs a subset, so it is not used.
+> Until `main` carries that workflow, a comparison refuses with `base-no-run`,
+> which is the intended failure: an absent report must never read as a clean suite.
 
 ## Run it locally
 
