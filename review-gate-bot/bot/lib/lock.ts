@@ -39,7 +39,7 @@ export type RanOnceResult = {
 
 export type RanOnceInput = {
   kv: HostKvApi;
-  /** Stable key, e.g. `tag:1515:<sha>:cursor-ditto`. */
+  /** Stable key, e.g. `tag:cryptoreporthub/subnet-dashboard#1515:<sha>:cursor-ditto`. */
   key: string;
   /** Is the effect already visible in the system of record? Authoritative. */
   alreadyDone: () => Promise<boolean>;
