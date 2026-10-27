@@ -388,3 +388,143 @@ test("a claim is resolved against real heads, so a hex word that names none is d
   });
   assert.deepEqual(pinned, [], "deadbee does not prefix the head, so it pins to nothing");
 });
+
+// --- Second review: what counts as a verdict, and who may speak ------------
+
+const NOT_A_PASS = [
+  "~~PASS~~ MODIFY",
+  "Cannot PASS this head",
+  "PASS: no, see below",
+  "Was PASS, now MODIFY",
+  "Won't PASS until fixed",
+  "> PASS (quoting Cursor)",
+  "Would have been PASS but FAIL",
+  "Not yet PASS",
+  "PASS? Not yet",
+  "PASS — not approved",
+  "PASS, no approval",
+];
+
+for (const line of NOT_A_PASS) {
+  test(`first line "${line}" is not a PASS`, () => {
+    assert.notEqual(parseVerdictToken(line), "PASS");
+  });
+}
+
+test("the verdict shapes reviewers actually write still read", () => {
+  assert.equal(parseVerdictToken("MC: **PASS** at `" + HEAD + "`"), "PASS");
+  assert.equal(parseVerdictToken("PASS — no blocking findings"), "PASS");
+  assert.equal(parseVerdictToken("Cursor: **PASS**"), "PASS");
+  assert.equal(parseVerdictToken("## Verdict: **MODIFY** at `abc`"), "MODIFY");
+  assert.equal(parseVerdictToken("FAIL — not a PASS"), "FAIL");
+});
+
+test("a dismissed or pending review states no verdict, whatever its body says", () => {
+  assert.equal(verdictFromReview(review({ state: "DISMISSED", body: "PASS" })), undefined);
+  assert.equal(verdictFromReview(review({ state: "PENDING", body: "PASS" })), undefined);
+});
+
+test("a quoted PASS in a review body is not a verdict", () => {
+  assert.equal(verdictFromReview(review({ state: "COMMENTED", body: "> PASS from Ditto" })), undefined);
+});
+
+test("latest wins by time, not by comparing review ids with comment ids", () => {
+  // GitHub numbers reviews and issue comments from separate counters, so a
+  // newer review can carry a smaller id than an older comment.
+  const pinned = collectPinnedVerdicts({
+    reviews: [
+      review({
+        id: 3_300_000_000,
+        state: "CHANGES_REQUESTED",
+        submittedAt: "2026-10-26T06:00:00Z",
+        user: { login: "cursor[bot]", type: "Bot" },
+      }),
+    ],
+    comments: [
+      comment({
+        id: 3_400_000_000,
+        body: `PASS at \`${HEAD}\``,
+        createdAt: "2026-10-26T05:00:00Z",
+        user: { login: "cursor[bot]", type: "Bot" },
+      }),
+    ],
+  });
+  assert.deepEqual(
+    pinned.map((p) => p.verdict),
+    ["PASS", "MODIFY"],
+    "the later MODIFY must sort last",
+  );
+});
+
+const CURSOR = { login: "cursor[bot]", type: "Bot" };
+
+function pinnedFor(body: string): string | undefined {
+  return collectPinnedVerdicts({
+    reviews: [],
+    comments: [comment({ body, user: CURSOR })],
+  })[0]?.headSha;
+}
+
+test("a full SHA inside a URL or a code block is not a claim", () => {
+  assert.equal(pinnedFor(`PASS. Diffed against https://github.com/o/r/commit/${HEAD}`), undefined);
+  assert.equal(pinnedFor("PASS\n```\n" + HEAD + "\n```"), undefined);
+  assert.equal(pinnedFor(`PASS\n> head ${HEAD}`), undefined);
+});
+
+test("a bare full SHA with nothing marking it as the head is not a claim", () => {
+  assert.equal(pinnedFor(`PASS. Compare ${HEAD} with the earlier run.`), undefined);
+});
+
+test("a full SHA tied to the head by a keyword, 'at', or backticks is a claim", () => {
+  assert.equal(pinnedFor(`PASS head ${HEAD}`), HEAD);
+  assert.equal(pinnedFor(`PASS at ${HEAD}`), HEAD);
+  assert.equal(pinnedFor(`PASS on \`${HEAD}\``), HEAD);
+  assert.equal(pinnedFor(`PASS. See commit ${HEAD}`), HEAD);
+});
+
+test("two different heads named in one verdict pin to neither", () => {
+  assert.equal(pinnedFor(`Superseded by \`${HEAD}\`. PASS on commit ${OTHER}`), undefined);
+  assert.equal(pinnedFor(`PASS head ${OTHER}, current head is \`${HEAD}\``), undefined);
+});
+
+test("a short and a full form of the same head are one claim", () => {
+  assert.equal(pinnedFor(`PASS head ${HEAD.slice(0, 9)} (\`${HEAD}\`)`), HEAD);
+});
+
+const OWNER = { login: "cryptoreporthub", type: "User" };
+
+function replitFrom(c: Partial<CommentLike>): string | undefined {
+  return collectPinnedVerdicts({
+    reviews: [],
+    comments: [comment({ user: OWNER, ...c })],
+  }).find((p) => p.reviewer === "replit")?.verdict;
+}
+
+test("an owner status note that mentions Replit is not a Replit verdict", () => {
+  assert.equal(replitFrom({ body: `PASS from MC side.\n\nReplit: not reviewed yet for \`${HEAD}\`.` }), undefined);
+  assert.equal(replitFrom({ body: `**PASS** (Cursor+Ditto) at \`${HEAD}\`\nStill waiting on Replit: tag posted.` }), undefined);
+});
+
+test("a Replit report is the owner's own prose: no bot type, no App attribution of any kind", () => {
+  const body = `Replit: PASS at ${HEAD}`;
+  assert.equal(replitFrom({ body }), "PASS");
+  assert.equal(replitFrom({ body, user: { login: "cryptoreporthub", type: "Bot" } }), undefined);
+  assert.equal(replitFrom({ body, performedViaGithubApp: { slug: null } }), undefined);
+  assert.equal(replitFrom({ body, performedViaGithubApp: {} }), undefined);
+});
+
+test("the ditto-code slug under a stranger's login is not Ditto", () => {
+  const forged = comment({ user: { login: "random-outsider", type: "User" }, performedViaGithubApp: { slug: "ditto-code" } });
+  assert.equal(isDittoComment(forged), false);
+});
+
+test("the gate's App slug under a stranger's login is not the gate", () => {
+  const forged: CommentLike = {
+    id: 12,
+    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
+    createdAt: "2026-10-26T04:00:00Z",
+    user: { login: "random-outsider", type: "User" },
+    performedViaGithubApp: { slug: GATE_APP_SLUG },
+  };
+  assert.equal(hasOwnMarker(forged, "mc-verdict", HEAD), false);
+});
