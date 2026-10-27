@@ -187,6 +187,14 @@ export function replitTagBody(headSha: string): string {
   return `@replit review\n\nHead under review: \`${headSha}\`. MC and Cursor and Ditto all passed this head and the full-suite comparison is clean. Requested automatically by the review gate.`;
 }
 
+/**
+ * A PR's identity across repositories. The number alone is not unique: one kv
+ * store could hold PR 1522 from two repositories.
+ */
+export function prKey(ref: { owner: string; repo: string; number: number }): string {
+  return `${ref.owner}/${ref.repo}#${ref.number}`;
+}
+
 /** Key for the cursor/ditto tag lock. One tag per (PR, head). */
 export function cursorDittoTagKey(prNumber: number, headSha: string): string {
   return `tag:${prNumber}:${headSha}:cursor-ditto`;
