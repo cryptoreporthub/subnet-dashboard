@@ -153,32 +153,44 @@ export async function readSuiteState(
   return (await readSuiteRecord(kv, prNumber, headSha))?.state ?? "missing";
 }
 
+/** The last identity GitHub confirmed. One bot per process, so one value. */
+let confirmed: GateIdentity | undefined;
+
+/** Forget the cached identity. For tests. */
+export function forgetOwnIdentity(): void {
+  confirmed = undefined;
+}
+
 /**
  * Which GitHub identity is this bot actually posting as?
  *
  * The channel authenticates with `cursorAccount`, so the posting login is the
- * GitHub account behind the signed-in Cursor connection — not something that can
- * be read from source. Claude flagged this as the unknown that decides how
- * severe the MC-read-back bug is; hardcoding `subnet-review-gate[bot]` and being
- * wrong would silently make the gate blind to its own verdict again.
+ * GitHub account behind the signed-in Cursor connection, which source cannot
+ * know. `GET /user` answers it for the token in hand.
  *
- * `GET /user` answers it for the token in hand. The App slug is merged in from
- * `botName`-derived constants, because an App-installed comment carries
- * `performed_via_github_app` and matches on that instead of the login. If the
- * lookup fails the fallback constants are used, so a transient API error
- * degrades to the previous behaviour rather than to "the bot does not recognise
- * itself".
+ * **A failed lookup never falls back to a guess.** The guess used to be
+ * `subnet-review-gate[bot]`, a login the bot does not post as under
+ * `cursorAccount`. One rate-limited call made the gate blind to its own
+ * markers: it re-posted every tag, read its own MC PASS as missing, and
+ * started another review turn (measured by the second review). So a failure
+ * keeps the last identity GitHub confirmed, and with none it throws, which
+ * stops the gate until the next event.
  */
 export async function resolveOwnIdentity(octokit: Octokit): Promise<GateIdentity> {
   try {
     const { data } = await octokit.rest.users.getAuthenticated();
-    const login = data.login;
-    if (login === undefined || login === "") {
-      return DEFAULT_IDENTITY;
+    if (typeof data.login === "string" && data.login !== "") {
+      confirmed = { logins: [...new Set([data.login, ...DEFAULT_IDENTITY.logins])] };
+      return confirmed;
     }
-    return { logins: [...new Set([login, ...DEFAULT_IDENTITY.logins])] };
-  } catch {
-    return DEFAULT_IDENTITY;
+    throw new Error("GET /user returned no login");
+  } catch (error) {
+    if (confirmed !== undefined) {
+      return confirmed;
+    }
+    throw new Error(
+      `cannot resolve the gate's own identity (GET /user failed): ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -274,6 +286,3 @@ export async function readGateState(input: {
     replitTaggedForSha: fromGithub ?? kvTag,
   });
 }
-
-/** Forget the cached identity. For tests. */
-export function forgetOwnIdentity(): void {}

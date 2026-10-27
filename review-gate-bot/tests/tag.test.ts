@@ -80,6 +80,9 @@ function fakeOctokit(
           return { data: { id: nextId } };
         },
       },
+      users: {
+        getAuthenticated: async () => ({ data: { login: "subnet-review-gate[bot]" } }),
+      },
       pulls: {
         listReviews: async () => ({ data: reviews }),
         get: async () => ({ data: { head: { sha: octokit.liveHead } } }),
