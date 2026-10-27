@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { deflateRawSync } from "node:zlib";
+import type { Octokit } from "@octokit/rest";
 import {
   fetchJunit,
   junitFromEntries,
+  octokitRunner,
   pickArtifact,
   pickRun,
   readZip,
@@ -173,4 +175,66 @@ test("an unreadable artifact is a refusal", async () => {
   if (!result.ok) {
     assert.equal(result.reason, "unreadable");
   }
+});
+
+// --- What Octokit actually hands back, and the documented upload path -----
+
+/**
+ * The smallest Octokit that answers the three calls the runner makes.
+ * `downloadArtifact` returns what the real endpoint does for a zip: an
+ * ArrayBuffer, not a Uint8Array.
+ */
+function octokitServing(archive: Uint8Array): Octokit {
+  const bytes = archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength);
+  return {
+    rest: {
+      actions: {
+        listWorkflowRuns: async () => ({ data: { workflow_runs: [{ id: 7, conclusion: "success" }] } }),
+        listWorkflowRunArtifacts: async () => ({ data: { artifacts: [{ id: 2, name: "pytest-junit" }] } }),
+        downloadArtifact: async () => ({ data: bytes }),
+      },
+    },
+  } as unknown as Octokit;
+}
+
+test("the real runner reads a zip that Octokit returns as an ArrayBuffer", async () => {
+  const octokit = octokitServing(zip([{ name: "junit.xml", body: REPORT }]));
+  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
+  assert.equal(result.ok, true, JSON.stringify(result));
+  if (result.ok) {
+    assert.ok(result.xml.includes('name="one"'));
+  }
+});
+
+test("a Buffer from Octokit is accepted as it is", async () => {
+  const archive = zip([{ name: "junit.xml", body: REPORT }]);
+  const octokit = octokitServing(archive);
+  const actions = (octokit as unknown as { rest: { actions: { downloadArtifact: unknown } } }).rest.actions;
+  actions.downloadArtifact = async () => ({ data: Buffer.from(archive) });
+  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
+  assert.equal(result.ok, true, JSON.stringify(result));
+});
+
+test("a download that is not binary is an unreadable refusal, not a crash", async () => {
+  const octokit = octokitServing(zip([{ name: "junit.xml", body: REPORT }]));
+  const actions = (octokit as unknown as { rest: { actions: { downloadArtifact: unknown } } }).rest.actions;
+  actions.downloadArtifact = async () => ({ data: "<html>not a zip</html>" });
+  const result = await fetchJunit(octokitRunner(octokit, { owner: "o", repo: "r" }), "a".repeat(40));
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.reason, "unreadable");
+  }
+});
+
+test("reports/pytest.xml, the path the README tells the workflow to write, is accepted", () => {
+  const xml = junitFromEntries([{ name: "reports/pytest.xml", data: new TextEncoder().encode(REPORT) }]);
+  assert.ok(xml.includes('name="one"'));
+});
+
+test("a shard cut off before its closing root tag is refused, not repaired", () => {
+  const cut = REPORT.replace("</testsuites>", "");
+  assert.throws(
+    () => junitFromEntries([{ name: "junit-1.xml", data: new TextEncoder().encode(cut) }]),
+    /junit-1\.xml.*malformed/i,
+  );
 });
