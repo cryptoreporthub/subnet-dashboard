@@ -383,3 +383,33 @@ test("a replit-tag record in kv alone does not count as the tag", async () => {
   assert.equal(state.replitTagged, false);
   assert.equal(state.next, "tag_replit");
 });
+
+test("a failed verdict post leaves its claim live, and a repo differing only by name still posts", async () => {
+  const store = kv();
+  const failing = fakeOctokit();
+  Object.assign(failing.rest.issues, {
+    createComment: async () => {
+      throw new Error("GitHub 502");
+    },
+  });
+  await assert.rejects(
+    postVerdictComment({ octokit: failing, kv: store, ref: REF, headSha: HEAD, currentHeadSha: HEAD, body: "MC: **PASS**" }),
+  );
+  // Without a compare-and-swap the failed claim is not released. Check it is really there,
+  // so the test cannot pass vacuously if a release is added later.
+  assert.ok(
+    [...store.store.values()].some((value) => (value as { state?: unknown }).state === "claimed"),
+    "the failed post must leave its claim in place",
+  );
+  const octokit = fakeOctokit();
+  const other = { ...REF, repo: "other-dashboard" };
+  const result = await postVerdictComment({
+    octokit,
+    kv: store,
+    ref: other,
+    headSha: HEAD,
+    currentHeadSha: HEAD,
+    body: "MC: **PASS**",
+  });
+  assert.equal(result.posted, true);
+});
