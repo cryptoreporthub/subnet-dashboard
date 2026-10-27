@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { suiteKey } from "../bot/lib/gh.js";
+import { readGateState, suiteKey } from "../bot/lib/gh.js";
+import { prKey } from "../bot/lib/gate.js";
 import { alreadyPosted, postVerdictComment, tagCursorAndDitto, tagReplit } from "../bot/lib/tag.js";
 import { marker } from "../bot/lib/verdicts.js";
 
@@ -373,4 +374,12 @@ test("a failed verdict post in one repo does not hold back the same PR number in
   });
   assert.equal(result.posted, true);
   assert.equal(octokit.created.length, 1);
+});
+
+test("a replit-tag record in kv alone does not count as the tag", async () => {
+  const { comments, reviews, kv: store } = passesAtHead();
+  store.store.set(`replit-tag:${prKey(REF)}`, { headSha: HEAD });
+  const state = await readGateState({ octokit: fakeOctokit(comments, reviews), kv: store, ref: REF, headSha: HEAD });
+  assert.equal(state.replitTagged, false);
+  assert.equal(state.next, "tag_replit");
 });
