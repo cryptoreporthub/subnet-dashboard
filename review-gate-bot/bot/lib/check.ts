@@ -10,12 +10,13 @@ export const CHECK_NAME = "review-gate";
 /** `ctx.github.createCheck`, narrowed to what the gate calls. */
 export type CreateCheck = GitHubHandle["createCheck"];
 
-export type GateConclusion = "success" | "failure" | "neutral";
+export type GateConclusion = "success" | "failure" | "action_required";
 
 /**
  * Green only for a mergeable gate. A FAIL anywhere is red. Everything still
- * waiting on a reviewer, the suite or the tag is neutral: a neutral check does
- * not read as "passed", and is not a failure either.
+ * waiting on a reviewer, the suite or the tag is `action_required`. GitHub counts
+ * neutral and skipped as passing for a required check, so a waiting head must
+ * not use either.
  */
 export function gateConclusion(state: GateState): GateConclusion {
   switch (state.next) {
@@ -28,7 +29,7 @@ export function gateConclusion(state: GateState): GateConclusion {
     case "run_suite":
     case "tag_replit":
     case "await_replit":
-      return "neutral";
+      return "action_required";
     default: {
       const _exhaustive: never = state.next;
       return _exhaustive;
@@ -60,7 +61,7 @@ export type CheckPost = "posted" | "unchanged" | "stale-head";
  *
  * - **Stale head never green.** The head is re-read before the run opens, and a
  *   green run is re-checked once more before it concludes. A head that moved
- *   gets no check, or a neutral "superseded" one, never `success`.
+ *   gets no check, or a `cancelled` "superseded" one, never `success`.
  * - **Once per state.** The last posted summary for a head sits in kv; an
  *   identical delivery posts nothing. kv is an optimisation: losing it costs
  *   one duplicate run, never a wrong one.
@@ -90,7 +91,7 @@ export async function postGateCheck(input: {
   const superseded = conclusion === "success" && !(await headIs(octokit, ref, state.headSha));
   if (superseded) {
     await check.conclude({
-      conclusion: "neutral",
+      conclusion: "cancelled",
       output: { title: "Superseded", summary: `The PR head moved while this was posted, so it is not reported green. ${summary}` },
     });
     return "stale-head";
@@ -101,5 +102,5 @@ export async function postGateCheck(input: {
 }
 
 function titleOf(conclusion: GateConclusion): string {
-  return { success: "Gate passed", failure: "Gate blocked", neutral: "Gate waiting" }[conclusion];
+  return { success: "Gate passed", failure: "Gate blocked", action_required: "Gate waiting" }[conclusion];
 }

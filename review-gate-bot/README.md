@@ -192,10 +192,12 @@ Giving each of them its own App closes it.
 ### The `review-gate` check
 
 For every non-draft head the bot opens a `review-gate` check run on that commit:
-green only when the gate is `mergeable`, red on a FAIL, neutral while anything is
-still pending. A head that moves while the check is posted is never reported
-green. The check reports and gates nothing by itself; making it a required check
-is a branch-protection decision for Joshua.
+green only when the gate is `mergeable`, red on a FAIL, and `action_required` while
+anything is still pending. GitHub counts `neutral` and `skipped` as passing for a
+required check, so a waiting head never uses either. A head that moves while the
+check is posted is concluded `cancelled` as superseded, never reported green. The
+check reports and gates nothing by itself; making it a required check is a
+branch-protection decision for Joshua.
 
 ## Secrets
 
