@@ -3,7 +3,7 @@ import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
 import { postGateCheck, type CreateCheck } from "./check.js";
 import { readGateState, type PrRef } from "./gh.js";
-import { gateActions, reviewTurnKey } from "./gate.js";
+import { gateActions, prKey, reviewTurnKey } from "./gate.js";
 import { lease } from "./lock.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
@@ -61,7 +61,7 @@ export type AdvanceResult = {
  * One structured line for an ask that will not succeed. A silent failure here
  * used to mean Replit was never asked and nobody knew.
  */
-function logAsk(outcome: ReplitAskOutcome, prNumber: number, headSha: string): void {
+function logAsk(outcome: ReplitAskOutcome, pr: string, headSha: string): void {
   if (outcome.asked || outcome.reason === "already-asked" || !outcome.persistent) {
     return;
   }
@@ -69,7 +69,7 @@ function logAsk(outcome: ReplitAskOutcome, prNumber: number, headSha: string): v
     JSON.stringify({
       level: "error",
       event: "replit_ask_persistent_failure",
-      pr: prNumber,
+      pr,
       head: headSha,
       reason: outcome.reason,
       attempts: outcome.attempts,
@@ -165,7 +165,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     actions.askReplit && (!actions.tagReplit || tagConfirmed)
       ? await attempt("ask-replit", async () => {
           const ask = await askReplitOnce({ kv, mcp, ref, headSha });
-          logAsk(ask, ref.number, headSha);
+          logAsk(ask, prKey(ref), headSha);
           return askLabel(ask);
         })
       : "skipped";
