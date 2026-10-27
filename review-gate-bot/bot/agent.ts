@@ -18,5 +18,9 @@ export default defineAgent({
     egressDomains: ["api.github.com", "mcp.replit.com", "*.blob.core.windows.net", "*.actions.githubusercontent.com"],
     secretNames: ["GITHUB_TOKEN"],
   },
+  // An omitted allowlist means the full standard toolset, shell included, run
+  // with whatever credentials the host holds. An empty one turns every built-in
+  // tool off; the bot's four tools reach the model over MCP, which the SDK adds.
+  tools: [],
   concurrency: { maxRunningTurns: 4 },
 });
