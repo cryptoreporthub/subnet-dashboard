@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { suiteKey } from "../bot/lib/gh.js";
 import {
   computeGate,
   cursorDittoTagKey,
@@ -159,11 +160,22 @@ test("verdictAt ignores another reviewer and another head", () => {
   assert.equal(verdictAt(verdicts, "cursor", HEAD), "missing");
 });
 
-test("tag and ask keys are distinct per slot and per head", () => {
-  assert.notEqual(cursorDittoTagKey(1515, HEAD), replitTagKey(1515, HEAD));
-  assert.notEqual(replitTagKey(1515, HEAD), replitAskKey(1515, HEAD));
-  assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1515, OTHER));
-  assert.notEqual(cursorDittoTagKey(1515, HEAD), cursorDittoTagKey(1516, HEAD));
+test("tag, ask and suite keys are distinct per slot and per head", () => {
+  const pr = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1515 };
+  assert.notEqual(cursorDittoTagKey(pr, HEAD), replitTagKey(pr, HEAD));
+  assert.notEqual(replitTagKey(pr, HEAD), replitAskKey(pr, HEAD));
+  assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey(pr, OTHER));
+  assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey({ ...pr, number: 1516 }, HEAD));
+  assert.notEqual(suiteKey(pr, HEAD), suiteKey(pr, OTHER));
+});
+
+test("the same PR number in another repository has its own tag, ask and suite keys", () => {
+  const pr = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1515 };
+  const other = { ...pr, owner: "someone-else" };
+  assert.notEqual(cursorDittoTagKey(pr, HEAD), cursorDittoTagKey(other, HEAD));
+  assert.notEqual(replitTagKey(pr, HEAD), replitTagKey(other, HEAD));
+  assert.notEqual(replitAskKey(pr, HEAD), replitAskKey(other, HEAD));
+  assert.notEqual(suiteKey(pr, HEAD), suiteKey(other, HEAD));
 });
 
 test("a PR's key tells two repositories' PR 1522 apart and is stable for one PR", () => {

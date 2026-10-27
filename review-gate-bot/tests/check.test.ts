@@ -115,6 +115,13 @@ test("an unchanged gate state at the same head does not open another check; a ch
   assert.deepEqual(w.checks.map((c) => c.conclusion), ["action_required", "success"]);
 });
 
+test("the same PR number and head in another repository is a different PR, so its check is posted", async () => {
+  const w = world([HEAD]);
+  assert.equal(await postGateCheck({ ...w.deps, state: state("mergeable") }), "posted");
+  assert.equal(await postGateCheck({ ...w.deps, ref: { ...REF, owner: "someone-else" }, state: state("mergeable") }), "posted");
+  assert.equal(w.checks.length, 2);
+});
+
 test("a check that failed to open is retried by the next delivery", async () => {
   const w = world([HEAD]);
   const failing = { ...w.deps, createCheck: async () => { throw new Error("github 403"); } };
