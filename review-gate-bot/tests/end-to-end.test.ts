@@ -23,7 +23,7 @@ import { marker } from "../bot/lib/tag.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
 const BASE = "882980b817986fdcd2766fb18d46525b8e1955fd";
-const BOT = "subnet-review-gate";
+const BOT = "simi-revision";
 
 /** The exact body `post_verdict` posts, marker included. */
 function mcVerdictCommentBody(verdict: "PASS" | "MODIFY" | "FAIL", sha = HEAD): string {
@@ -232,29 +232,25 @@ test("an MC MODIFY verdict holds the gate at review without spending another tur
   assert.equal(needsReviewTurn(gateFromRaw({ comments: [], reviews: [], suite: "missing" })), true);
 });
 
-test("end to end: a cursor-account identity is read back once resolved", () => {
-  // The realistic production shape. Under `cursorAccount` the bot's comments
-  // arrive under the signed-in account's login, not `subnet-review-gate[bot]`.
-  // `readGateState` resolves that from GET /user before parsing; this is the
-  // same path with the resolved identity supplied.
-  const comments = [
+test("end to end: the gate's MC verdict is read back only from the App's bot login", () => {
+  const verdict = (login: string) => [
     asComment({
       id: 100,
       body: mcVerdictCommentBody("PASS"),
       created_at: "2026-10-26T04:00:00Z",
-      user: { login: "joshua-cursor", type: "User" },
+      user: { login, type: login.endsWith("[bot]") ? "Bot" : "User" },
       performed_via_github_app: null,
     }),
   ];
   const reviews = [asReview(cursorReview(10, "APPROVED")), asReview(dittoReview(20, "APPROVED"))];
-  const identity = { logins: ["joshua-cursor"], appSlug: "subnet-review-gate" };
 
-  const blind = gateStateFrom({ headSha: HEAD, comments, reviews, suite: "clean" });
-  assert.equal(blind.mc, "missing", "the default identity does not match, so mc is unseen");
+  const forged = gateStateFrom({ headSha: HEAD, comments: verdict("cryptoreporthub"), reviews, suite: "clean" });
+  assert.equal(forged.mc, "missing", "the owner account is shared, so it cannot fill the MC slot");
+  assert.equal(forged.next, "review");
 
-  const resolved = gateStateFrom({ headSha: HEAD, comments, reviews, suite: "clean", identity });
-  assert.equal(resolved.mc, "PASS");
-  assert.equal(resolved.next, "tag_replit");
+  const own = gateStateFrom({ headSha: HEAD, comments: verdict("simi-revision[bot]"), reviews, suite: "clean" });
+  assert.equal(own.mc, "PASS");
+  assert.equal(own.next, "tag_replit");
 });
 
 // --- Finding 4: an app-attributed owner comment cannot fill the Replit slot --

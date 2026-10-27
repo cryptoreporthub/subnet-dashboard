@@ -1,13 +1,12 @@
 import assert from "node:assert/strict";
-import test, { beforeEach } from "node:test";
+import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../bot/lib/advance.js";
-import { forgetOwnIdentity } from "../bot/lib/gh.js";
 import { marker } from "../bot/lib/verdicts.js";
 
 const HEAD = "c4ae04cda0c81c4dcd0c48f9add9f46846da0cc2";
-const ME = "mc-cursor-user";
+const ME = "simi-revision[bot]";
 const REF = { owner: "cryptoreporthub", repo: "subnet-dashboard", number: 1522 };
 
 type Raw = {
@@ -18,17 +17,15 @@ type Raw = {
   performed_via_github_app: { slug: string } | null;
 };
 
-/**
- * One PR as GitHub shows it. The bot posts as `ME`, a plain user account, which
- * is what a `cursorAccount` connection does; `GET /user` is the only way to know.
- */
+type CheckCall = { name: string; sha: string; conclusion?: string };
+
+/** One PR as GitHub shows it. The bot posts as its own App, `ME`. */
 function world(
-  options: { draft?: boolean; comments?: Raw[]; identity?: "ok" | "fails"; createFails?: boolean; login?: string } = {},
+  options: { draft?: boolean; comments?: Raw[]; createFails?: boolean; headMovesTo?: string; checkFails?: boolean } = {},
 ) {
-  const login = options.login ?? ME;
   const comments = [...(options.comments ?? [])];
   const posted: string[] = [];
-  const state = { identityCalls: 0, identity: options.identity ?? "ok" };
+  const checks: CheckCall[] = [];
   const listComments = () => {};
   const listReviews = () => {};
   const octokit = {
@@ -50,19 +47,10 @@ function world(
             id,
             body,
             created_at: "2026-10-26T06:00:00Z",
-            user: { login, type: "User" },
+            user: { login: ME, type: "Bot" },
             performed_via_github_app: null,
           });
           return { data: { id } };
-        },
-      },
-      users: {
-        getAuthenticated: async () => {
-          state.identityCalls += 1;
-          if (state.identity === "fails") {
-            throw new Error("403 rate limited");
-          }
-          return { data: { login } };
         },
       },
     },
@@ -82,19 +70,30 @@ function world(
     },
     mcp: { names: () => [], listTools: async () => [], callTool: async () => ({ isError: false, content: [] }) } as unknown as HostMcpRegistry,
     ref: REF,
+    createCheck: async (input) => {
+      if (options.checkFails === true) {
+        throw new Error("github 403");
+      }
+      const call: CheckCall = { name: input.name, sha: input.sha };
+      checks.push(call);
+      return {
+        update: async () => {},
+        conclude: async ({ conclusion }) => {
+          call.conclusion = conclusion;
+        },
+      };
+    },
   };
-  return { deps, posted, comments, state };
+  return { deps, posted, comments, checks };
 }
 
 const mcPass: Raw = {
   id: 1,
   body: `${marker("mc-verdict", HEAD)}\nMC: **PASS** at \`${HEAD}\``,
   created_at: "2026-10-26T05:00:00Z",
-  user: { login: ME, type: "User" },
+  user: { login: ME, type: "Bot" },
   performed_via_github_app: null,
 };
-
-beforeEach(() => forgetOwnIdentity());
 
 test("a PR that is a draft right now starts no turn and posts nothing, whatever the payload says", async () => {
   const w = world({ draft: true });
@@ -115,32 +114,25 @@ test("a PR with no MC verdict yet starts a review turn and tags Cursor and Ditto
   assert.ok(w.posted[0]?.includes("@cursor review"));
 });
 
-test("the bot's own comments do not re-enter the gate, whatever account it posts as", async () => {
+test("the bot's own comments do not re-enter the gate", async () => {
   const w = world();
   await pullRequestTurn(w.deps, { action: "opened", draft: false });
   assert.equal(w.posted.length, 1);
   const own = w.comments[w.comments.length - 1];
-  assert.equal(await commentTurn(w.deps, own?.user.login, own?.body), false, "its own tag must not start a second turn");
-  assert.equal(await commentTurn(w.deps, "some-reviewer", "LGTM"), true, "another author still does, while MC is missing");
+  assert.equal(await commentTurn(w.deps, own?.user.login), false, "its own tag must not start a second turn");
+  assert.equal(await commentTurn(w.deps, "some-reviewer"), true, "another author still does, while MC is missing");
 });
 
-test("a comment from the literal name 'subnet-review-gate' is just a person", async () => {
+test("a comment from the bare name 'simi-revision' is just a person", async () => {
   const w = world();
-  assert.equal(await commentTurn(w.deps, "subnet-review-gate", "hi"), true);
+  assert.equal(await commentTurn(w.deps, "simi-revision"), true);
 });
 
-test("an identity lookup that fails before one has ever worked stops the gate instead of guessing", async () => {
-  const w = world({ identity: "fails" });
-  await assert.rejects(pullRequestTurn(w.deps, { action: "opened", draft: false }), /identity/i);
-  assert.deepEqual(w.posted, [], "a gate that cannot recognise its own comments must not post");
-});
-
-test("a lookup that fails after one worked keeps the identity it had", async () => {
-  const w = world({ comments: [mcPass] });
-  assert.equal(await reviewEventTurn(w.deps), false, "MC PASS recognised as ours");
-  w.state.identity = "fails";
-  assert.equal(await reviewEventTurn(w.deps), false, "still recognised, no reset to 'MC missing'");
-  assert.equal(w.posted.length <= 1, true);
+test("a comment from the owner's account is never the bot's, even one that carries a marker", async () => {
+  const w = world();
+  await pullRequestTurn(w.deps, { action: "opened", draft: false });
+  const ownTag = w.comments[w.comments.length - 1];
+  assert.equal(await commentTurn(w.deps, "cryptoreporthub"), true, "the owner account is shared, so it still runs the gate");
 });
 
 test("a failing tag post on a pull_request event does not lose the review turn", async () => {
@@ -148,17 +140,36 @@ test("a failing tag post on a pull_request event does not lose the review turn",
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
 });
 
-test("when the bot posts as the owner's own account, only its marker comments are its own", async () => {
-  // `GET /user` can return cryptoreporthub under cursorAccount. That login is
-  // also Joshua, the relayed Replit reports and Ditto's comments, none of which
-  // may be dropped before the gate sees them.
-  const w = world({ login: "cryptoreporthub" });
+// --- The review-gate check run ------------------------------------------------
+
+test("a head still waiting on reviewers gets a neutral review-gate check, never a green one", async () => {
+  const w = world();
   await pullRequestTurn(w.deps, { action: "opened", draft: false });
-  const ownTag = w.comments[w.comments.length - 1];
-  assert.equal(await commentTurn(w.deps, "cryptoreporthub", ownTag?.body), false, "its own tag stays out");
-  assert.equal(
-    await commentTurn(w.deps, "cryptoreporthub", `Replit: PASS at ${HEAD}`),
-    true,
-    "an owner comment with no gate marker still runs the gate",
-  );
+  assert.deepEqual(w.checks, [{ name: "review-gate", sha: HEAD, conclusion: "neutral" }]);
+});
+
+test("a FAIL anywhere at the head posts a failing review-gate check", async () => {
+  const w = world({ comments: [{ ...mcPass, body: `${marker("mc-verdict", HEAD)}\nMC: **FAIL** at \`${HEAD}\`` }] });
+  await reviewEventTurn(w.deps);
+  assert.equal(w.checks[0]?.conclusion, "failure");
+});
+
+test("the same gate state at the same head posts its check once, not once per webhook", async () => {
+  const w = world();
+  await reviewEventTurn(w.deps);
+  await reviewEventTurn(w.deps);
+  await reviewEventTurn(w.deps);
+  assert.equal(w.checks.length, 1);
+});
+
+test("a draft gets no check at all", async () => {
+  const w = world({ draft: true });
+  await reviewEventTurn(w.deps);
+  assert.deepEqual(w.checks, []);
+});
+
+test("a failing check post does not lose the review turn or the tags", async () => {
+  const w = world({ checkFails: true });
+  assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
+  assert.equal(w.posted.length, 1, "the Cursor and Ditto tag still went out");
 });

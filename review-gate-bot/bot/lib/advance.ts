@@ -1,14 +1,22 @@
 import type { Octokit } from "@octokit/rest";
 import type { HostMcpRegistry } from "@grok/agent-sdk";
 import type { HostKvApi } from "@grok/agent-sdk/kv";
-import { readGateState, resolveOwnIdentity, type PrRef } from "./gh.js";
+import { postGateCheck, type CreateCheck } from "./check.js";
+import { readGateState, type PrRef } from "./gh.js";
 import { gateActions } from "./gate.js";
 import { askReplitOnce, type ReplitAskOutcome } from "./replit.js";
 import { tagCursorAndDitto, tagReplit } from "./tag.js";
-import { parseMarkers } from "./verdicts.js";
+import { GATE_BOT_LOGIN } from "./verdicts.js";
 
 /** What the gate needs from the host: plain handles, so it can run without the SDK. */
-export type GateDeps = { octokit: Octokit; kv: HostKvApi; mcp: HostMcpRegistry; ref: PrRef };
+export type GateDeps = {
+  octokit: Octokit;
+  kv: HostKvApi;
+  mcp: HostMcpRegistry;
+  ref: PrRef;
+  /** `ctx.github.createCheck`: opens the `review-gate` check run on a commit. */
+  createCheck: CreateCheck;
+};
 
 /**
  * PR actions that start a review turn.
@@ -43,6 +51,7 @@ export type AdvanceResult = {
   taggedCursorDitto: string;
   taggedReplit: string;
   replitAsk: string;
+  check: string;
 };
 
 /**
@@ -91,7 +100,7 @@ function askLabel(outcome: ReplitAskOutcome): string {
  * `gateActions`, so all three hooks refuse a draft the same way.
  */
 export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
-  const { octokit, kv, mcp, ref } = deps;
+  const { octokit, kv, mcp, ref, createCheck } = deps;
   const { headSha, draft } = await readHead(octokit, ref);
 
   if (draft) {
@@ -103,6 +112,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
       taggedCursorDitto: "skipped:draft",
       taggedReplit: "skipped:draft",
       replitAsk: "skipped:draft",
+      check: "skipped:draft",
     };
   }
 
@@ -150,6 +160,10 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
         })
       : "skipped";
 
+  // The check reports the gate as read at the top of this delivery; a verdict
+  // posted later arrives as its own event and replaces it.
+  const check = await attempt("check", () => postGateCheck({ octokit, kv, ref, state, createCheck }));
+
   return {
     headSha,
     draft,
@@ -158,6 +172,7 @@ export async function advanceGate(deps: GateDeps): Promise<AdvanceResult> {
     taggedCursorDitto,
     taggedReplit,
     replitAsk,
+    check,
   };
 }
 
@@ -181,20 +196,12 @@ export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draf
  * Comment delivery: does it start a model turn?
  *
  * The bot's own comments come back as webhooks and must not re-enter the gate.
- * Under `cursorAccount` they are authored by a user login, not
- * `subnet-review-gate`, so the login comes from `GET /user`. That login can be
- * `cryptoreporthub`, which is also Joshua, the relayed Replit reports and
- * Ditto's comments, so a login alone drops too much: an own comment must also
- * carry a gate marker, which every tag and verdict the bot posts does.
- *
- * Unverified: when the bot posts as the owner's own account, the marker is the
- * only thing that separates its comments from the owner's. Nothing outside this
- * repo has been checked to confirm what `GET /user` returns for a hosted
- * deployment.
+ * They are authored by the App's bot login, which nobody else holds, so the
+ * login alone is the test. The owner account is not: Joshua, MC, Claude, Ditto's
+ * relayed comments and the Replit reports all post there.
  */
-export async function commentTurn(deps: GateDeps, author: string | undefined, body = ""): Promise<boolean> {
-  const identity = await resolveOwnIdentity(deps.octokit);
-  if (author !== undefined && identity.logins.includes(author) && parseMarkers(body).length > 0) {
+export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+  if (author === GATE_BOT_LOGIN) {
     return false;
   }
   return (await advanceGate(deps)).needsReviewTurn;

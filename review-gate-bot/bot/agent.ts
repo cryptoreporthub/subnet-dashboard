@@ -16,7 +16,7 @@ export default defineAgent({
     // that host family is needed for the suite comparison. `lib/runner.ts`
     // refuses any redirect host outside this family.
     egressDomains: ["api.github.com", "mcp.replit.com", "*.blob.core.windows.net", "*.actions.githubusercontent.com"],
-    secretNames: ["GITHUB_TOKEN"],
+    secretNames: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET", "GITHUB_APP_INSTALLATION_ID"],
   },
   // An omitted allowlist means the full standard toolset, shell included, run
   // with whatever credentials the host holds. An empty one turns every built-in

@@ -5,20 +5,33 @@ import {
 } from "@grok/agent-sdk/channels/github";
 import { commentTurn, pullRequestTurn, reviewEventTurn, type GateDeps } from "../lib/advance.js";
 
-const BOT_LOGIN = "subnet-review-gate";
-
 async function depsOf(ctx: GitHubEventContext): Promise<GateDeps> {
   return {
     octokit: await ctx.host.github.getOctokit(),
     kv: ctx.host.kv,
     mcp: ctx.host.mcp,
     ref: { owner: ctx.repository.owner, repo: ctx.repository.name, number: ctx.conversation.number },
+    createCheck: (input) => ctx.github.createCheck(input),
   };
 }
 
+/**
+ * The bot posts as its own GitHub App, `simi-revision`, so its comments carry a
+ * login (`simi-revision[bot]`) that nobody else holds. The credentials are
+ * named, never read: they are the deployment secrets of the same names, set by
+ * Joshua with `agent-sdk secret set`. Events arrive as signed webhooks from the
+ * App, which the platform verifies against `GITHUB_WEBHOOK_SECRET`.
+ */
 export default githubChannel({
-  botName: BOT_LOGIN,
-  cursorAccount: { repos: ["cryptoreporthub/subnet-dashboard"], permissions: "pr-write" },
+  botName: "simi-revision",
+  credentials: {
+    appId: { secretName: "GITHUB_APP_ID" },
+    privateKey: { secretName: "GITHUB_APP_PRIVATE_KEY" },
+    webhookSecret: { secretName: "GITHUB_WEBHOOK_SECRET" },
+  },
+  // The gate posts its own `review-gate` check run (`lib/check.ts`) through
+  // `ctx.github.createCheck`. The flag grants access; it posts nothing itself.
+  checks: true,
   // The bot posts its verdicts through `post_verdict` and its tags through
   // `advanceGate`. The channel must not also echo assistant text onto the PR.
   deliverReplies: false,
@@ -45,12 +58,12 @@ export default githubChannel({
    * work is re-reading the state and posting the next tag; a model turn only
    * runs when MC's own verdict is missing at this head.
    *
-   * A comment from this bot is ignored outright — including its own verdict,
+   * A comment from this bot is ignored outright, including its own verdict,
    * which is read back from the PR by `readGateState`, not by re-dispatching
    * on the webhook.
    */
   onComment: async (ctx, comment) =>
-    (await commentTurn(await depsOf(ctx), comment.author?.login, comment.body)) ? { auth: defaultGitHubAuth(ctx) } : null,
+    (await commentTurn(await depsOf(ctx), comment.author?.login)) ? { auth: defaultGitHubAuth(ctx) } : null,
 
   /**
    * `pull_request_review` has no typed hook and never reaches `onComment`, yet

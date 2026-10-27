@@ -74,14 +74,11 @@ function fakeOctokit(
             id: (nextId += 1),
             body: input.body,
             created_at: "2026-10-26T06:00:00Z",
-            user: { login: "subnet-review-gate[bot]", type: "Bot" },
-            performed_via_github_app: { slug: "subnet-review-gate" },
+            user: { login: "simi-revision[bot]", type: "Bot" },
+            performed_via_github_app: { slug: "simi-revision" },
           });
           return { data: { id: nextId } };
         },
-      },
-      users: {
-        getAuthenticated: async () => ({ data: { login: "subnet-review-gate[bot]" } }),
       },
       pulls: {
         listReviews: async () => ({ data: reviews }),
@@ -126,8 +123,8 @@ function ownComment(id: number, body: string): RawComment {
     id,
     body,
     created_at: "2026-10-26T05:00:00Z",
-    user: { login: "subnet-review-gate[bot]", type: "Bot" },
-    performed_via_github_app: { slug: "subnet-review-gate" },
+    user: { login: "simi-revision[bot]", type: "Bot" },
+    performed_via_github_app: { slug: "simi-revision" },
   };
 }
 

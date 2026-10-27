@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   collectPinnedVerdicts,
   firstLine,
-  GATE_APP_SLUG,
+  GATE_BOT_LOGIN,
   hasOwnMarker,
   isDittoComment,
   isDittoReview,
@@ -221,8 +221,8 @@ test("a marker only counts when this bot wrote it", () => {
 
   const bot: CommentLike = {
     ...own,
-    user: { login: "subnet-review-gate[bot]", type: "Bot" },
-    performedViaGithubApp: { slug: "subnet-review-gate" },
+    user: { login: "simi-revision[bot]", type: "Bot" },
+    performedViaGithubApp: { slug: "simi-revision" },
   };
   assert.equal(isOwnComment(bot), true);
   assert.equal(hasOwnMarker(bot, "mc-verdict", HEAD), true);
@@ -253,7 +253,7 @@ test("the bare bot name is not trusted: a human could register it", () => {
     id: 9,
     body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
     createdAt: "2026-10-26T04:00:00Z",
-    user: { login: "subnet-review-gate", type: "User" },
+    user: { login: "simi-revision", type: "User" },
     performedViaGithubApp: null,
   };
   assert.equal(isOwnComment(squatter), false);
@@ -264,8 +264,8 @@ test("two markers in one body are not trusted", () => {
     id: 6,
     body: `${marker("mc-verdict", HEAD)}\n${marker("mc-verdict", OTHER)}\nMC: **PASS**`,
     createdAt: "2026-10-26T04:00:00Z",
-    user: { login: "subnet-review-gate[bot]", type: "Bot" },
-    performedViaGithubApp: { slug: "subnet-review-gate" },
+    user: { login: "simi-revision[bot]", type: "Bot" },
+    performedViaGithubApp: { slug: "simi-revision" },
   };
   assert.equal(hasOwnMarker(doubled, "mc-verdict", HEAD), false);
 });
@@ -277,53 +277,21 @@ test("parseMarkers reads slot and SHA and ignores anything else", () => {
   assert.deepEqual(parsed, [{ slot: "replit", headSha: HEAD }]);
 });
 
-test("the resolved posting identity is honoured, because cursorAccount decides the login", () => {
-  // Claude's open question: which identity does the hosted bot post as? Under
-  // `cursorAccount` it is the signed-in Cursor account's GitHub login, which
-  // source cannot know. `resolveOwnIdentity` reads it from GET /user; the gate
-  // must then accept that login as the bot's own.
-  const comment: CommentLike = {
+test("the gate's own login is the App's bot login, a name no person can hold", () => {
+  assert.equal(GATE_BOT_LOGIN, "simi-revision[bot]");
+});
+
+test("a marker from the owner's own account is not the gate's, because MC and Claude post there too", () => {
+  const fromOwner: CommentLike = {
     id: 7,
     body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
     createdAt: "2026-10-26T04:00:00Z",
-    user: { login: "some-cursor-account", type: "User" },
+    user: { login: "cryptoreporthub", type: "User" },
     performedViaGithubApp: null,
   };
-  assert.equal(hasOwnMarker(comment, "mc-verdict", HEAD), false, "not the default identity");
-
-  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
-  assert.equal(hasOwnMarker(comment, "mc-verdict", HEAD, identity), true);
-
-  const pinned = collectPinnedVerdicts({ reviews: [], comments: [comment], identity });
-  assert.equal(pinned.length, 1);
-  assert.equal(pinned[0]?.reviewer, "mc");
-  assert.equal(pinned[0]?.verdict, "PASS");
-});
-
-test("a comment from a different App never matches, whatever the resolved login", () => {
-  const otherApp: CommentLike = {
-    id: 8,
-    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
-    createdAt: "2026-10-26T04:00:00Z",
-    user: { login: "some-outsider", type: "User" },
-    performedViaGithubApp: { slug: "claude" },
-  };
-  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
-  assert.equal(hasOwnMarker(otherApp, "mc-verdict", HEAD, identity), false);
-});
-
-test("a post under our resolved login through another App still counts", () => {
-  // Under `cursorAccount` the attribution can name the App that carried the
-  // post; the unique login is what identifies the author.
-  const viaCursorApp: CommentLike = {
-    id: 11,
-    body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
-    createdAt: "2026-10-26T04:00:00Z",
-    user: { login: "some-cursor-account", type: "User" },
-    performedViaGithubApp: { slug: "cursor" },
-  };
-  const identity = { logins: ["some-cursor-account"], appSlug: GATE_APP_SLUG };
-  assert.equal(hasOwnMarker(viaCursorApp, "mc-verdict", HEAD, identity), true);
+  assert.equal(isOwnComment(fromOwner), false);
+  assert.equal(hasOwnMarker(fromOwner, "mc-verdict", HEAD), false);
+  assert.deepEqual(collectPinnedVerdicts({ reviews: [], comments: [fromOwner] }), [], "no MC verdict is read from it");
 });
 
 test("an app-attributed owner comment cannot be a Replit verdict", () => {
@@ -524,7 +492,7 @@ test("the gate's App slug under a stranger's login is not the gate", () => {
     body: `${marker("mc-verdict", HEAD)}\nMC: **PASS**`,
     createdAt: "2026-10-26T04:00:00Z",
     user: { login: "random-outsider", type: "User" },
-    performedViaGithubApp: { slug: GATE_APP_SLUG },
+    performedViaGithubApp: { slug: "simi-revision" },
   };
   assert.equal(hasOwnMarker(forged, "mc-verdict", HEAD), false);
 });

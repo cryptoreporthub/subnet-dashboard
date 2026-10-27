@@ -8,10 +8,9 @@ import {
   type GateState,
 } from "./gate.js";
 import { ranOnce, type RanOnceReason, type RanOnceResult } from "./lock.js";
-import { readComments, readGateState, resolveOwnIdentity, type PrRef } from "./gh.js";
+import { readComments, readGateState, type PrRef } from "./gh.js";
 import {
   hasOwnMarker,
-  isOwnComment,
   marker,
   type MarkerSlot,
 } from "./verdicts.js";
@@ -27,8 +26,8 @@ import {
  * **A marker only counts when this bot wrote it.** `body.includes(marker)` over
  * every comment let anyone who can comment — an outside contributor, a random
  * bot — suppress the tag or the verdict for a head by posting the marker text
- * themselves. `hasOwnMarker` checks the author login, and the
- * `performed_via_github_app` slug, before the marker is believed.
+ * themselves. `hasOwnMarker` checks the author login (the App's bot login)
+ * before the marker is believed.
  *
  * Inside one process every post is **exactly once**: `ranOnce` runs callers for
  * a key one at a time, so the second finds the first one's comment. Across
@@ -50,11 +49,8 @@ export async function alreadyPosted(
   slot: TagSlot,
   headSha: string,
 ): Promise<boolean> {
-  const [comments, identity] = await Promise.all([
-    readComments(octokit, ref),
-    resolveOwnIdentity(octokit),
-  ]);
-  return comments.some((c) => hasOwnMarker(c, slot, headSha, identity));
+  const comments = await readComments(octokit, ref);
+  return comments.some((c) => hasOwnMarker(c, slot, headSha));
 }
 
 /**
@@ -290,6 +286,3 @@ export async function postVerdictComment(input: {
     commentId,
   };
 }
-
-/** True when this identity is the gate itself. Re-exported for callers that filter. */
-export { isOwnComment };

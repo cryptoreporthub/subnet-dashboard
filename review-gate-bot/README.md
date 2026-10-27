@@ -78,7 +78,7 @@ A guardrail by absence beats a guardrail by prompt.
 ## Prerequisites
 
 - **Node 22.13 or newer.** The SDK requires it; Bun is not supported.
-- A Cursor account signed in on the machine that runs or deploys this agent.
+- A Cursor account signed in on the machine that runs or deploys this agent (model turns, and the Replit connector).
 - GitHub access to `cryptoreporthub/subnet-dashboard`.
 
 ## Install
@@ -150,26 +150,58 @@ as it looks today.
 Tool writes are stubbed in an eval session (`ctx.session.purpose === "eval"`),
 so `calledTool` still sees the decision and nothing is posted.
 
+## Identity
+
+The bot posts as its own GitHub App, **Simi-Revision** (slug `simi-revision`,
+App ID 5495359, login `simi-revision[bot]`), installed on
+`cryptoreporthub/subnet-dashboard` only. It holds checks, pull requests and
+issues as read/write and code, Actions and statuses as read. It has no merge,
+admin or secrets permission.
+
+A marker comment counts as the gate's own only when its author is
+`simi-revision[bot]`. A `[bot]` login cannot be registered by a person, so a
+copied marker from anyone else is ignored.
+
+**Remaining limit.** MC and Claude still post from `cryptoreporthub`, the owner's
+account, so their verdict comments are only as trustworthy as that account.
+Giving each of them its own App closes it.
+
+### The `review-gate` check
+
+For every non-draft head the bot opens a `review-gate` check run on that commit:
+green only when the gate is `mergeable`, red on a FAIL, neutral while anything is
+still pending. A head that moves while the check is posted is never reported
+green. The check reports and gates nothing by itself; making it a required check
+is a branch-protection decision for Joshua.
+
 ## Secrets
 
-One secret, and only its **name** ever appears in this repo:
+Only **names** ever appear in this repo. Joshua sets the values.
 
 | Name | What it is |
 | --- | --- |
-| `GITHUB_TOKEN` | GitHub token for local runs and tests. Not needed on Cursor hosting, where the channel uses the signed-in Cursor account's GitHub connection (`cursorAccount`). |
+| `GITHUB_APP_ID` | the App's ID, `5495359` |
+| `GITHUB_APP_PRIVATE_KEY` | the App's private key (PEM) |
+| `GITHUB_WEBHOOK_SECRET` | the secret the App signs webhook deliveries with |
+| `GITHUB_APP_INSTALLATION_ID` | the installation, `175819081`. Tools run outside a webhook delivery, and the SDK reads the installation from this name there. Not secret, but only a deployment secret can carry it. |
 
-Set it without putting the value on the command line, so it stays out of your
+Set each without putting the value on the command line, so it stays out of your
 shell history and off any transcript:
 
 ```bash
-printf %s "$VALUE" | npx agent-sdk secret set subnet-review-gate GITHUB_TOKEN
+printf %s "$VALUE" | npx agent-sdk secret set subnet-review-gate GITHUB_APP_PRIVATE_KEY
 ```
 
 `npx agent-sdk secret list subnet-review-gate` prints names only. Never pass
-`--from-argv`.
+`--from-argv`. Local runs can use `GITHUB_TOKEN` or `gh auth login` instead.
 
-On Cursor hosting the platform reads the deployment's secrets; `bot/agent.ts`
-declares `secretNames: ["GITHUB_TOKEN"]` so `deploy` warns when it is unset.
+`bot/channels/github.ts` names the three credentials, and `bot/agent.ts`
+declares all four in `secretNames`, so `deploy` warns about any that is unset.
+
+**Webhook.** A GitHub App delivers events by webhook, not through the Cursor
+account. After the first deploy, point the App's webhook URL at the deployment's
+`/v1/channels/github` route and set the same secret on both sides. The App's
+webhook is off until then, so the bot hears nothing.
 
 ## Deploy
 

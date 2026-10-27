@@ -38,7 +38,6 @@ function pr(options: { head?: string; base?: string; files?: object[] } = {}): O
         listReviews: () => {},
       },
       issues: { listComments: () => {} },
-      users: { getAuthenticated: async () => ({ data: { login: "mc-cursor-user" } }) },
       actions: {
         listWorkflowRuns: async () => ({ data: { workflow_runs: [] } }),
         listWorkflowRunArtifacts: async () => ({ data: { artifacts: [] } }),

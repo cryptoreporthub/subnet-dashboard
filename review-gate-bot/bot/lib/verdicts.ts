@@ -35,8 +35,8 @@
  * nowhere else. Two things are validated before it counts, because a comment
  * body is attacker-controlled input:
  *
- * 1. **The author.** Only this bot's own identities (`GATE_BOT_LOGINS`, or a
- *    comment attributed to `GATE_APP_SLUGS`) may fill a slot. Anyone else who
+ * 1. **The author.** Only this bot's own login (`GATE_BOT_LOGIN`) may fill a
+ *    slot. Anyone else who
  *    copies a marker is ignored, which is what stops a stranger from either
  *    forging an MC PASS or suppressing the real one.
  * 2. **The SHA.** The marker names the head it was written for, so an MC
@@ -92,30 +92,18 @@ export const CURSOR_BOT_LOGIN = "cursor[bot]";
 export const OWNER_LOGIN = "cryptoreporthub";
 
 /**
- * The identities this bot can post as.
+ * The one identity this bot posts as: its own GitHub App, `simi-revision`.
  *
- * `botName` in `bot/channels/github.ts` is `subnet-review-gate`, and GitHub
- * assigns the `[bot]` suffix to an App installation — a login no human can
- * hold, which is why only the suffixed form is trusted here. The bare
- * `subnet-review-gate` is **not**: a person could register that name and post a
- * copied marker under it.
+ * GitHub gives an App installation the `[bot]` suffix, a login no person can
+ * hold, so the suffixed form is the whole test. The bare `simi-revision` is
+ * **not** trusted: a person could register that name and post a copied marker.
  *
- * But this channel uses `cursorAccount`, so the actual posting login is whatever
- * GitHub account the signed-in Cursor connection holds — not knowable from
- * source. `resolveOwnIdentity` asks GitHub who the token belongs to
- * (`GET /user`) and merges that in. Without it, the gate would silently stop
- * recognising its own verdict, which is the class of bug this file exists to
- * fix.
+ * `cryptoreporthub` is deliberately not here. MC, Claude, Ditto's relayed
+ * comments and Joshua all post from that account, so a marker under it proves
+ * nothing about who wrote it. The limit that remains: MC's and Claude's own
+ * verdict comments are still only as trustworthy as that shared account.
  */
-export const GATE_BOT_LOGINS: readonly string[] = ["subnet-review-gate[bot]"];
-export const GATE_APP_SLUG = "subnet-review-gate";
-
-export type GateIdentity = {
-  /** Logins that count as this bot. */
-  logins: readonly string[];
-};
-
-export const DEFAULT_IDENTITY: GateIdentity = { logins: GATE_BOT_LOGINS };
+export const GATE_BOT_LOGIN = "simi-revision[bot]";
 
 export type MarkerSlot = "mc-verdict" | "cursor-ditto" | "replit";
 
@@ -146,32 +134,14 @@ export function appSlug(subject: {
   return subject.performedViaGithubApp?.slug ?? undefined;
 }
 
-/**
- * Did this bot post the comment? A marker copied by anyone else is not
- * evidence of anything.
- *
- * **The login is the whole test.** A GitHub login is unique, so a comment whose
- * `user.login` is the account this bot's token belongs to was authored by this
- * bot, whatever `performed_via_github_app` says about the App that carried it.
- * The App slug is not a second way in: it is attached to any comment made with
- * that App's user token, so a stranger who authorised the App would carry it
- * under their own login.
- */
-export function isOwnComment(
-  comment: CommentLike,
-  identity: GateIdentity = DEFAULT_IDENTITY,
-): boolean {
-  const login = comment.user?.login ?? "";
-  return login !== "" && identity.logins.includes(login);
+/** Did this bot post the comment? A marker copied by anyone else is not evidence of anything. */
+export function isOwnComment(comment: CommentLike): boolean {
+  return comment.user?.login === GATE_BOT_LOGIN;
 }
 
 /** The head SHA this bot's own marker names for a slot, when the author checks out. */
-export function ownMarkerHead(
-  comment: CommentLike,
-  slot: MarkerSlot,
-  identity: GateIdentity = DEFAULT_IDENTITY,
-): string | undefined {
-  if (!isOwnComment(comment, identity)) {
+export function ownMarkerHead(comment: CommentLike, slot: MarkerSlot): string | undefined {
+  if (!isOwnComment(comment)) {
     return undefined;
   }
   const found = parseMarkers(comment.body).filter((m) => m.slot === slot);
@@ -180,13 +150,8 @@ export function ownMarkerHead(
 }
 
 /** True when this bot itself posted the given slot for the given head. */
-export function hasOwnMarker(
-  comment: CommentLike,
-  slot: MarkerSlot,
-  headSha: string,
-  identity: GateIdentity = DEFAULT_IDENTITY,
-): boolean {
-  return ownMarkerHead(comment, slot, identity) === headSha;
+export function hasOwnMarker(comment: CommentLike, slot: MarkerSlot, headSha: string): boolean {
+  return ownMarkerHead(comment, slot) === headSha;
 }
 
 /**
@@ -404,11 +369,8 @@ export function collectPinnedVerdicts(input: {
   comments: readonly CommentLike[];
   /** Resolve a short SHA claim to a full one, when the caller can. */
   resolveSha?: (claimed: string) => string | undefined;
-  /** Which identities count as this bot. Defaults to `DEFAULT_IDENTITY`. */
-  identity?: GateIdentity;
 }): PinnedReviewer[] {
   const out: PinnedReviewer[] = [];
-  const identity = input.identity ?? DEFAULT_IDENTITY;
 
   for (const review of input.reviews) {
     const verdict = verdictFromReview(review);
@@ -440,7 +402,7 @@ export function collectPinnedVerdicts(input: {
     if (markers.length > 0) {
       // A marker means "this came from the gate". Only the gate's own identity
       // may fill a slot, and only the mc-verdict slot is a verdict at all.
-      const mcHead = ownMarkerHead(comment, "mc-verdict", identity);
+      const mcHead = ownMarkerHead(comment, "mc-verdict");
       if (mcHead === undefined) {
         continue;
       }

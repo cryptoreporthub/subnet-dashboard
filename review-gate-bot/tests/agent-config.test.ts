@@ -37,3 +37,25 @@ test("the tool surface is the six named tools, and the four that look at the PR 
     assert.equal(tool.effect, "read", name);
   }
 });
+
+test("the channel is the Simi-Revision App: named secrets, no Cursor-account identity, checks on", async () => {
+  const { getGitHubChannelOptions } = await import("@grok/agent-sdk/channels/github");
+  const channel = (await import("../bot/channels/github.js")).default;
+  const options = getGitHubChannelOptions(channel);
+  assert.equal(options?.cursorAccount, undefined, "cursorAccount would make the bot post as the signed-in user");
+  assert.equal(options?.botName, "simi-revision");
+  assert.equal(options?.checks, true);
+  assert.deepEqual(options?.credentials, {
+    appId: { secretName: "GITHUB_APP_ID" },
+    privateKey: { secretName: "GITHUB_APP_PRIVATE_KEY" },
+    webhookSecret: { secretName: "GITHUB_WEBHOOK_SECRET" },
+  });
+});
+
+test("every secret the channel names is declared for deploy, and no token is", () => {
+  const names = (agent as unknown as { hosting: { secretNames: string[] } }).hosting.secretNames;
+  for (const name of ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY", "GITHUB_WEBHOOK_SECRET"]) {
+    assert.ok(names.includes(name), name);
+  }
+  assert.ok(!names.includes("GITHUB_TOKEN"), "a personal token would let the bot post as someone else");
+});
