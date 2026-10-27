@@ -41,8 +41,9 @@ A finite input can still overflow. `1e300 * grace * 3600` is `inf`, and
 - is it persisted? (`inf` in JSON is not valid JSON)
 - is it multiplied or divided again?
 
-Find the consumer of the overflowed value. An overflow that only produces a
-warning is a P3; an overflow that makes a row permanently unreachable is a P0.
+Find the consumer of the overflowed value and name it: that decides whether the
+row is permanently unreachable or the cycle aborts, and it is what the author
+needs to fix. The overflow itself is a P0 either way (see the P0 rule below).
 
 ## 4. Can it abort a cycle, or poison a later row?
 
@@ -53,7 +54,20 @@ Two different severities:
   cycle inherits the defect, and a restart does not fix it.
 
 Say which one, with the line number of the write and the line number of the
-read.
+read. Both are P0.
+
+## P0 forces MODIFY or FAIL
+
+These are P0, whatever else the PR gets right and however narrow the path:
+
+- rows that **never expire** or become permanently unreachable
+- a value that can **overflow** to `inf` or `NaN`
+- a finding that **aborts a cycle**, or **poisons a later row**
+
+One of them means the verdict is **MODIFY or FAIL, never PASS**. Declare each in
+`post_verdict`'s `blocking` list (`never-expires`, `overflow`, `aborts-cycle`,
+`poisons-later-row`); the tool refuses a PASS while the list is not empty. This
+is the same rule as "A finding that rules out PASS" in `bot/instructions.md`.
 
 ## 5. Hunt for one bug the PR does not mention
 
@@ -66,7 +80,7 @@ negative. Do not invent a finding to fill the slot.
 
 ## 6. Report shape
 
-Every finding gets: severity (P0 blocks merge), the file and line, the value or
+Every finding gets: severity (P0 blocks merge and rules out PASS), the file and line, the value or
 path that triggers it, the consumer it reaches, and whether it is **measured**
 (a tool returned it) or **inferred** (you read it). With no shell, nearly every
 behavioural finding is inferred.

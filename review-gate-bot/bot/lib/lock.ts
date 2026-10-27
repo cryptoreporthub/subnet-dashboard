@@ -43,7 +43,7 @@ export type RanOnceInput = {
   key: string;
   /** Is the effect already visible in the system of record? Authoritative. */
   alreadyDone: () => Promise<boolean>;
-  /** Perform the effect. Throwing releases the claim so a retry can run. */
+  /** Perform the effect. Throwing frees the claim for a retry at once with compare-and-swap kv, and after `LEASE_MS` without it. */
   run: () => Promise<void>;
   /** The clock, for tests. */
   now?: () => number;
@@ -114,21 +114,14 @@ async function claim(kv: HostKvApi, key: string, token: string, now: number): Pr
 }
 
 /**
- * A replacement owner can only take a key once its previous claim is `LEASE_MS`
- * old. A release this far inside the lease cannot meet one, even if the process
- * stalls for a while between its read and its delete.
- */
-const RELEASE_MARGIN_MS = 60_000;
-
-/**
- * Give a failed claim back so a retry can run at once, without ever touching a
- * claim that is not ours.
+ * Give a failed claim back so a retry can run at once, but only where that can
+ * be done without touching a claim that is not ours.
  *
  * With compare-and-swap the release is a conditional write of the version that
  * was read, so a takeover in between wins. The plain `get` / `put` / `delete`
- * surface has no conditional delete, so it deletes only while the claim is well
- * inside its lease, when no takeover can exist. Past that, the claim is left to
- * expire.
+ * surface has no conditional delete, so there a failed claim is left to expire
+ * after `LEASE_MS`. That costs a retry up to ten minutes; deleting would risk
+ * wiping a replacement owner's live claim, and correctness beats the delay.
  */
 async function release(kv: HostKvApi, key: string, token: string, now: number): Promise<void> {
   if (supportsKvCas(kv)) {
@@ -137,11 +130,6 @@ async function release(kv: HostKvApi, key: string, token: string, now: number): 
     if (current !== undefined && claim?.nonce === token && claim.state === "claimed") {
       await kv.putIfVersion(key, { state: "released", nonce: token, at: now } satisfies ClaimRecord, current.version);
     }
-    return;
-  }
-  const claim = asClaim(await kv.get(key));
-  if (claim?.nonce === token && claim.state === "claimed" && now - claim.at < LEASE_MS - RELEASE_MARGIN_MS) {
-    await kv.delete(key);
   }
 }
 

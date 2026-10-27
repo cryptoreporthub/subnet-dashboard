@@ -140,3 +140,17 @@ test("every eval case id is a single path segment, as defineEval requires", () =
     assert.match(id, /^[A-Za-z0-9_-]+$/, id);
   }
 });
+
+test("instructions and the adversarial-review skill state the same P0 rule as post_verdict's blocking list", () => {
+  const tool = readFileSync("bot/tools/post_verdict.ts", "utf8");
+  const list = /BLOCKING_KINDS = \[([^\]]+)\]/.exec(tool)?.[1] ?? "";
+  const kinds = [...list.matchAll(/"([a-z-]+)"/g)].map((m) => m[1] ?? "");
+  assert.ok(kinds.length >= 4, "the blocking list was found");
+  for (const file of ["bot/instructions.md", "bot/skills/adversarial-review/SKILL.md"]) {
+    const text = readFileSync(file, "utf8");
+    for (const kind of kinds) {
+      assert.ok(text.includes(`\`${kind}\``), `${file} names ${kind}`);
+    }
+    assert.match(text, /MODIFY or FAIL, never PASS/, `${file} states the rule`);
+  }
+});

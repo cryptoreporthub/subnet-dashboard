@@ -64,30 +64,40 @@ test("a second call after a successful run does not repeat the effect", async ()
   assert.equal(posted, 1);
 });
 
-test("a throw releases the claim so a retry can run", async () => {
+test("a throw on plain kv leaves the claim to expire: no delete, retry only after the lease", async () => {
   const kv = plainKv();
+  let clock = 0;
   await assert.rejects(
     ranOnce({
       kv,
       key: "tag:1:abc",
+      now: () => clock,
       alreadyDone: async () => false,
       run: async () => {
         throw new Error("github 502");
       },
     }),
   );
-  assert.equal(kv.store.has("tag:1:abc"), false);
+  assert.equal(kv.store.has("tag:1:abc"), true, "the claim is left to expire, never deleted");
 
   let ran = 0;
-  const retry = await ranOnce({
-    kv,
-    key: "tag:1:abc",
-    alreadyDone: async () => false,
-    run: async () => {
-      ran += 1;
-    },
-  });
-  assert.equal(retry.ran, true);
+  const retry = () =>
+    ranOnce({
+      kv,
+      key: "tag:1:abc",
+      now: () => clock,
+      alreadyDone: async () => false,
+      run: async () => {
+        ran += 1;
+      },
+    });
+
+  clock = LEASE_MS - 1;
+  assert.equal((await retry()).reason, "claim-lost", "inside the lease the retry waits");
+  assert.equal(ran, 0);
+
+  clock = LEASE_MS + 1;
+  assert.equal((await retry()).ran, true, "once the claim has expired the retry runs");
   assert.equal(ran, 1);
 });
 
@@ -246,59 +256,8 @@ test("a failed bookkeeping write after the effect landed is not an error", async
   assert.equal(replay.reason, "already-done");
 });
 
-// --- Release must never delete somebody else's claim ----------------------
+// --- A failure must never remove somebody else's claim -------------------
 
-const LEASE_OVER = LEASE_MS + 1;
-
-test("a takeover landing between release's read and delete is not wiped (plain kv)", async () => {
-  const inner = plainKv();
-  let reads = 0;
-  // Reads 1 and 2 are the claim and its read-back; read 3 is release's. The
-  // takeover lands right after it, as it can once the lease has run out.
-  const kv: HostKvApi = {
-    ...inner,
-    async get(key) {
-      const value = await inner.get(key);
-      reads += 1;
-      if (reads === 3) {
-        inner.store.set(key, { state: "claimed", nonce: "replacement", at: LEASE_OVER });
-      }
-      return value;
-    },
-  };
-  let clock = 0;
-  await assert.rejects(
-    ranOnce({
-      kv,
-      key: "tag:1:abc",
-      now: () => clock,
-      alreadyDone: async () => false,
-      run: async () => {
-        clock = LEASE_OVER;
-        throw new Error("github 502");
-      },
-    }),
-  );
-  assert.equal((inner.store.get("tag:1:abc") as { nonce: string }).nonce, "replacement");
-});
-
-test("a failure near the end of its lease does not delete either: a takeover could be one tick away (plain kv)", async () => {
-  const kv = plainKv();
-  let clock = 0;
-  await assert.rejects(
-    ranOnce({
-      kv,
-      key: "tag:1:abc",
-      now: () => clock,
-      alreadyDone: async () => false,
-      run: async () => {
-        clock = LEASE_MS - 1_000;
-        throw new Error("github 502");
-      },
-    }),
-  );
-  assert.equal(kv.store.has("tag:1:abc"), true, "left to expire, not deleted");
-});
 
 test("a failure with compare-and-swap releases only the version it holds", async () => {
   const memory = createMemoryKv();
