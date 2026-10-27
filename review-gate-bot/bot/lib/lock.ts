@@ -29,6 +29,9 @@ import { supportsKvCas } from "@grok/agent-sdk";
  * (`postVerdictComment` does), which shrinks the window without closing it.
  */
 
+/** How long a claim is believed. Past this, its owner is presumed dead. */
+export const LEASE_MS = 10 * 60_000;
+
 export type RanOnceReason = "ran" | "already-done" | "claim-lost" | "failed";
 
 export type RanOnceResult = {
@@ -44,6 +47,8 @@ export type RanOnceInput = {
   alreadyDone: () => Promise<boolean>;
   /** Perform the effect. Throwing releases the claim so a retry can run. */
   run: () => Promise<void>;
+  /** The clock, for tests. */
+  now?: () => number;
 };
 
 function nonce(): string {
