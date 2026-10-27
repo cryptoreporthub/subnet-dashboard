@@ -274,3 +274,6 @@ export async function readGateState(input: {
     replitTaggedForSha: fromGithub ?? kvTag,
   });
 }
+
+/** Forget the cached identity. For tests. */
+export function forgetOwnIdentity(): void {}
