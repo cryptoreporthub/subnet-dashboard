@@ -155,6 +155,55 @@ test("valid XML features pytest can emit are not mistaken for damage", () => {
   );
 });
 
+// --- What pytest really writes ----------------------------------------------
+
+test("a self-closing <failure /> or <error /> is a failure, as pytest 9 writes it", () => {
+  const xml =
+    '<?xml version="1.0"?><testsuites><testsuite name="pytest">' +
+    '<testcase classname="tests.test_x" name="fails"><failure message="Failed" /></testcase>' +
+    '<testcase classname="tests.test_x" name="errs"><error message="failed on setup" /></testcase>' +
+    '<testcase classname="tests.test_x" name="ok"/></testsuite></testsuites>';
+  assert.deepEqual(
+    parseJunit(xml).map((c) => [c.name, c.outcome]),
+    [
+      ["fails", "failed"],
+      ["errs", "error"],
+      ["ok", "passed"],
+    ],
+  );
+  const diff = diffJunit({ baseXml: junit([{ name: "ok" }]), headXml: xml });
+  assert.equal(diff.clean, false);
+  assert.deepEqual(diff.newFailures, ["tests.test_x::errs", "tests.test_x::fails"]);
+});
+
+test("single-quoted attributes and a testcase with no name still count", () => {
+  const xml =
+    "<testsuites><testsuite><testcase classname='tests.test_x' name='single'><failure message='boom'>x</failure></testcase>" +
+    '<testcase classname="tests.test_x"><failure message="anonymous"/></testcase></testsuite></testsuites>';
+  const cases = parseJunit(xml);
+  assert.equal(cases.length, 2);
+  assert.deepEqual(
+    cases.map((c) => c.outcome),
+    ["failed", "failed"],
+  );
+  assert.equal(diffJunit({ baseXml: junit([{ name: "ok" }]), headXml: xml }).clean, false);
+});
+
+test("a commented-out testcase is not counted", () => {
+  const xml = '<testsuites><testsuite><!-- <testcase classname="t" name="ghost"/> --><testcase classname="t" name="real"/></testsuite></testsuites>';
+  assert.deepEqual(
+    parseJunit(xml).map((c) => c.name),
+    ["real"],
+  );
+});
+
+test("a CDATA block holding </testcase> does not swallow the failure that precedes it", () => {
+  const xml =
+    '<testsuites><testsuite><testcase classname="t" name="a"><system-out><![CDATA[</testcase>]]></system-out>' +
+    '<failure message="late"/></testcase></testsuite></testsuites>';
+  assert.equal(parseJunit(xml)[0]?.outcome, "failed");
+});
+
 // --- Blocker 3: deny-by-default carry-over paths ---------------------------
 
 test("prose and images do not block a carry-over", () => {

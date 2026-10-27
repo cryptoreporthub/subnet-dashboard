@@ -60,8 +60,9 @@ function decodeEntities(value: string): string {
 }
 
 function attr(attrs: string, name: string): string | undefined {
-  const match = new RegExp(`\\b${name}\\s*=\\s*"([^"]*)"`).exec(attrs);
-  return match?.[1] === undefined ? undefined : decodeEntities(match[1]);
+  const match = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(attrs);
+  const value = match?.[1] ?? match?.[2];
+  return value === undefined ? undefined : decodeEntities(value);
 }
 
 /**
@@ -80,7 +81,10 @@ export function parseJunit(xml: string): JunitCase[] {
 }
 
 /** The testcases a document contains, whether or not the document is whole. */
-function parseTestcases(xml: string): JunitCase[] {
+function parseTestcases(document: string): JunitCase[] {
+  // Comments and CDATA are not markup: a commented-out testcase is not a test,
+  // and a CDATA block holding `</testcase>` must not end its testcase early.
+  const xml = document.replace(/<!--[\s\S]*?-->/g, "").replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, "");
   const cases: JunitCase[] = [];
   const testcase = /<testcase\b([^>]*?)(\/>|>([\s\S]*?)<\/testcase>)/g;
   let match: RegExpExecArray | null = testcase.exec(xml);
@@ -88,20 +92,22 @@ function parseTestcases(xml: string): JunitCase[] {
     const attrs = match[1] ?? "";
     const body = match[3] ?? "";
     const classname = attr(attrs, "classname") ?? "";
-    const name = attr(attrs, "name") ?? "";
-    if (name !== "") {
-      let outcome: JunitCase["outcome"] = "passed";
-      let detail: string | undefined;
-      const failure = /<(failure|error)\b([^>]*)>([\s\S]*?)<\/\1>/.exec(body);
-      if (failure !== null) {
-        outcome = failure[1] === "error" ? "error" : "failed";
-        const message = attr(failure[2] ?? "", "message");
-        detail = (message ?? decodeEntities((failure[3] ?? "").trim())).slice(0, 500);
-      } else if (/<skipped\b/.test(body)) {
-        outcome = "skipped";
-      }
-      cases.push({ classname, name, id: `${classname}::${name}`, outcome, detail });
+    // A testcase with no name is still a test that ran. Dropping it would drop
+    // its failure with it.
+    const name = attr(attrs, "name") ?? "<unnamed>";
+    let outcome: JunitCase["outcome"] = "passed";
+    let detail: string | undefined;
+    // `<failure message="..." />` is the form pytest writes when there is no
+    // traceback text, so the close tag is optional.
+    const failure = /<(failure|error)\b([^>]*?)(?:\/>|>([\s\S]*?)<\/\1>)/.exec(body);
+    if (failure !== null) {
+      outcome = failure[1] === "error" ? "error" : "failed";
+      const message = attr(failure[2] ?? "", "message");
+      detail = (message ?? decodeEntities((failure[3] ?? "").trim())).slice(0, 500);
+    } else if (/<skipped\b/.test(body)) {
+      outcome = "skipped";
     }
+    cases.push({ classname, name, id: `${classname}::${name}`, outcome, detail });
     match = testcase.exec(xml);
   }
   return cases;
