@@ -362,13 +362,15 @@ test("an all-lowercase keyword plus hex word is a claim only when the word is he
   assert.equal(shaClaimedByComment(comment({ body: "seen at deadbee yesterday" })), undefined);
 });
 
-test("a documented minimum of 7 hex characters is required, and 6 is not a claim", () => {
-  assert.equal(shaClaimedByComment(comment({ body: "head deadbee" })), "deadbee");
-  assert.equal(shaClaimedByComment(comment({ body: "head deadbe" })), undefined);
+test("an abbreviated SHA needs 12 hex characters: 7 is 28 bits, which a PR author can grind", () => {
+  assert.equal(shaClaimedByComment(comment({ body: "head deadbeefcafe" })), "deadbeefcafe");
+  assert.equal(shaClaimedByComment(comment({ body: "head deadbeefcaf" })), undefined);
+  assert.equal(shaClaimedByComment(comment({ body: "head deadbee" })), undefined);
+  assert.equal(shaClaimedByComment(comment({ body: "on `deadbee` only" })), undefined);
 });
 
 test("a delimited short SHA is a claim without a keyword", () => {
-  assert.equal(shaClaimedByComment(comment({ body: "on `deadbee` only" })), "deadbee");
+  assert.equal(shaClaimedByComment(comment({ body: "on `deadbeefcafe` only" })), "deadbeefcafe");
 });
 
 test("a full 40-character SHA is never truncated to a shorter one", () => {
@@ -385,7 +387,7 @@ test("upper-case hex is not a claim: GitHub writes abbreviations in lower case",
 test("a claim is resolved against real heads, so a hex word that names none is dropped", () => {
   const pinned = collectPinnedVerdicts({
     reviews: [],
-    comments: [comment({ body: "Replit: PASS head deadbee" })],
+    comments: [comment({ body: "Replit: PASS head deadbeefcafe" })],
     resolveSha: (claimed) => (HEAD.startsWith(claimed) ? HEAD : undefined),
   });
   assert.deepEqual(pinned, [], "deadbee does not prefix the head, so it pins to nothing");
@@ -490,7 +492,7 @@ test("two different heads named in one verdict pin to neither", () => {
 });
 
 test("a short and a full form of the same head are one claim", () => {
-  assert.equal(pinnedFor(`PASS head ${HEAD.slice(0, 9)} (\`${HEAD}\`)`), HEAD);
+  assert.equal(pinnedFor(`PASS head ${HEAD.slice(0, 12)} (\`${HEAD}\`)`), HEAD);
 });
 
 const OWNER = { login: "cryptoreporthub", type: "User" };
@@ -529,4 +531,21 @@ test("the gate's App slug under a stranger's login is not the gate", () => {
     performedViaGithubApp: { slug: GATE_APP_SLUG },
   };
   assert.equal(hasOwnMarker(forged, "mc-verdict", HEAD), false);
+});
+
+test("verdict lines in the shapes reviewers decorate them with still read", () => {
+  assert.equal(parseVerdictToken("**Verdict: PASS**"), "PASS");
+  assert.equal(parseVerdictToken("✅ PASS"), "PASS");
+  assert.equal(parseVerdictToken("## ❌ FAIL — two blockers"), "FAIL");
+  assert.equal(parseVerdictToken("🟡 **MODIFY** at `abc`"), "MODIFY");
+  assert.equal(parseVerdictToken("~~PASS~~"), undefined);
+  assert.equal(parseVerdictToken("> PASS"), undefined);
+});
+
+test("a caveat after a PASS is not a withdrawal of it", () => {
+  assert.equal(parseVerdictToken("PASS — not blocking"), "PASS");
+  assert.equal(parseVerdictToken("PASS — no regressions, but docs lag"), "PASS");
+  assert.equal(parseVerdictToken("PASS, however see the note below"), "PASS");
+  assert.equal(parseVerdictToken("PASS — not approved"), undefined);
+  assert.equal(parseVerdictToken("PASS until the suite runs"), undefined);
 });

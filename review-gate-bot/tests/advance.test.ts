@@ -23,8 +23,9 @@ type Raw = {
  * is what a `cursorAccount` connection does; `GET /user` is the only way to know.
  */
 function world(
-  options: { draft?: boolean; comments?: Raw[]; identity?: "ok" | "fails"; createFails?: boolean } = {},
+  options: { draft?: boolean; comments?: Raw[]; identity?: "ok" | "fails"; createFails?: boolean; login?: string } = {},
 ) {
+  const login = options.login ?? ME;
   const comments = [...(options.comments ?? [])];
   const posted: string[] = [];
   const state = { identityCalls: 0, identity: options.identity ?? "ok" };
@@ -49,7 +50,7 @@ function world(
             id,
             body,
             created_at: "2026-10-26T06:00:00Z",
-            user: { login: ME, type: "User" },
+            user: { login, type: "User" },
             performed_via_github_app: null,
           });
           return { data: { id } };
@@ -61,7 +62,7 @@ function world(
           if (state.identity === "fails") {
             throw new Error("403 rate limited");
           }
-          return { data: { login: ME } };
+          return { data: { login } };
         },
       },
     },
@@ -119,13 +120,13 @@ test("the bot's own comments do not re-enter the gate, whatever account it posts
   await pullRequestTurn(w.deps, { action: "opened", draft: false });
   assert.equal(w.posted.length, 1);
   const own = w.comments[w.comments.length - 1];
-  assert.equal(await commentTurn(w.deps, own?.user.login), false, "its own tag must not start a second turn");
-  assert.equal(await commentTurn(w.deps, "some-reviewer"), true, "another author still does, while MC is missing");
+  assert.equal(await commentTurn(w.deps, own?.user.login, own?.body), false, "its own tag must not start a second turn");
+  assert.equal(await commentTurn(w.deps, "some-reviewer", "LGTM"), true, "another author still does, while MC is missing");
 });
 
 test("a comment from the literal name 'subnet-review-gate' is just a person", async () => {
   const w = world();
-  assert.equal(await commentTurn(w.deps, "subnet-review-gate"), true);
+  assert.equal(await commentTurn(w.deps, "subnet-review-gate", "hi"), true);
 });
 
 test("an identity lookup that fails before one has ever worked stops the gate instead of guessing", async () => {
@@ -145,4 +146,19 @@ test("a lookup that fails after one worked keeps the identity it had", async () 
 test("a failing tag post on a pull_request event does not lose the review turn", async () => {
   const w = world({ createFails: true });
   assert.equal(await pullRequestTurn(w.deps, { action: "opened", draft: false }), true);
+});
+
+test("when the bot posts as the owner's own account, only its marker comments are its own", async () => {
+  // `GET /user` can return cryptoreporthub under cursorAccount. That login is
+  // also Joshua, the relayed Replit reports and Ditto's comments, none of which
+  // may be dropped before the gate sees them.
+  const w = world({ login: "cryptoreporthub" });
+  await pullRequestTurn(w.deps, { action: "opened", draft: false });
+  const ownTag = w.comments[w.comments.length - 1];
+  assert.equal(await commentTurn(w.deps, "cryptoreporthub", ownTag?.body), false, "its own tag stays out");
+  assert.equal(
+    await commentTurn(w.deps, "cryptoreporthub", `Replit: PASS at ${HEAD}`),
+    true,
+    "an owner comment with no gate marker still runs the gate",
+  );
 });

@@ -50,7 +50,7 @@ export default githubChannel({
    * on the webhook.
    */
   onComment: async (ctx, comment) =>
-    (await commentTurn(await depsOf(ctx), comment.author?.login)) ? { auth: defaultGitHubAuth(ctx) } : null,
+    (await commentTurn(await depsOf(ctx), comment.author?.login, comment.body)) ? { auth: defaultGitHubAuth(ctx) } : null,
 
   /**
    * `pull_request_review` has no typed hook and never reaches `onComment`, yet

@@ -183,7 +183,7 @@ export async function pullRequestTurn(deps: GateDeps, pr: { action: string; draf
  * belongs to. Its tag and verdict comments come back as webhooks, and under
  * `cursorAccount` they are authored by a user login, not `subnet-review-gate`.
  */
-export async function commentTurn(deps: GateDeps, author: string | undefined): Promise<boolean> {
+export async function commentTurn(deps: GateDeps, author: string | undefined, _body?: string): Promise<boolean> {
   const identity = await resolveOwnIdentity(deps.octokit);
   if (author !== undefined && identity.logins.includes(author)) {
     return false;

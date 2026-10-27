@@ -256,3 +256,14 @@ test("an entry that declares more than the cap is refused before anything is inf
   const big = "0".repeat(70 * 1024 * 1024);
   assert.throws(() => readZip(zip([{ name: "junit.xml", body: big }])), /too large|exceeds/i);
 });
+
+test("many entries cannot add up past the total cap", () => {
+  const each = "0".repeat(20 * 1024 * 1024);
+  const entries = Array.from({ length: 8 }, (_, i) => ({ name: `junit-${i}.xml`, body: each }));
+  assert.throws(() => readZip(zip(entries)), /total|too large|exceeds/i);
+});
+
+test("an archive with a very large number of entries is refused", () => {
+  const entries = Array.from({ length: 2_000 }, (_, i) => ({ name: `f${i}.txt`, body: "x", store: true }));
+  assert.throws(() => readZip(zip(entries)), /entries|too many/i);
+});

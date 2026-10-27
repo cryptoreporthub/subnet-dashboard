@@ -273,3 +273,23 @@ test("a code change blocks a carry even when the source SHA was clean", () => {
     assert.deepEqual(decision.blocking, ["internal/x.py"]);
   }
 });
+
+// --- Second review: a report that shrinks, and one built to be slow ---------
+
+test("a head with far fewer tests than base cannot read clean", () => {
+  const many = (n: number) => junit(Array.from({ length: n }, (_, i) => ({ name: `t${i}` })));
+  const shrunk = diffJunit({ baseXml: many(100), headXml: many(50) });
+  assert.equal(shrunk.clean, false);
+  assert.equal(shrunk.invalid, "suite-shrunk");
+  assert.deepEqual(shrunk.counts, { base: 100, head: 50 });
+  assert.equal(diffJunit({ baseXml: many(100), headXml: many(95) }).clean, true, "a small trim is not a collapse");
+  assert.equal(diffJunit({ baseXml: many(100), headXml: many(120) }).clean, true);
+});
+
+test("a malformed report made of unclosed testcases is rejected quickly", () => {
+  const hostile = '<testsuites><testsuite>' + '<testcase classname="t" name="a">'.repeat(60_000);
+  const started = Date.now();
+  const diff = diffJunit({ baseXml: junit([{ name: "a" }]), headXml: hostile });
+  assert.equal(diff.invalid, "malformed-xml");
+  assert.ok(Date.now() - started < 1_000, `took ${Date.now() - started} ms`);
+});
