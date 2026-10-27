@@ -50,7 +50,7 @@ type RawReview = {
 function fakeOctokit(
   initial: RawComment[] = [],
   reviews: RawReview[] = [],
-): Octokit & { comments: RawComment[]; created: string[]; liveHead: string } {
+): Octokit & { comments: RawComment[]; created: string[]; liveHead: string; liveDraft: boolean } {
   const comments = [...initial];
   const created: string[] = [];
   let nextId = 9000;
@@ -59,6 +59,8 @@ function fakeOctokit(
     created,
     /** The head `pulls.get` reports. A test moves it to simulate a push. */
     liveHead: HEAD,
+    /** The draft flag `pulls.get` reports. A test flips it to simulate a PR turning draft. */
+    liveDraft: false,
     paginate: async (fn: unknown) => {
       if (fn === octokit.rest.pulls.listReviews) {
         return reviews;
@@ -82,11 +84,11 @@ function fakeOctokit(
       },
       pulls: {
         listReviews: async () => ({ data: reviews }),
-        get: async () => ({ data: { head: { sha: octokit.liveHead } } }),
+        get: async () => ({ data: { head: { sha: octokit.liveHead }, draft: octokit.liveDraft } }),
       },
     },
   };
-  return octokit as unknown as Octokit & { comments: RawComment[]; created: string[]; liveHead: string };
+  return octokit as unknown as Octokit & { comments: RawComment[]; created: string[]; liveHead: string; liveDraft: boolean };
 }
 
 /** The three other passes at HEAD, so the gate sits on `tag_replit`. */
@@ -309,6 +311,24 @@ test("tagCursorAndDitto does not request review of a head the PR moved off", asy
   const result = await tagCursorAndDitto({ octokit, kv: kv(), ref: REF, headSha: HEAD, state });
   assert.equal(result.posted, false);
   assert.equal(octokit.created.length, 0, "@cursor review must not land on a newer head");
+});
+
+test("a PR that turned draft after the gate was read gets no tag and no verdict", async () => {
+  const octokit = fakeOctokit();
+  octokit.liveDraft = true;
+  const state = { headSha: HEAD, next: "await_cursor_ditto" } as never;
+  const tag = await tagCursorAndDitto({ octokit, kv: kv(), ref: REF, headSha: HEAD, state });
+  assert.equal(tag.posted, false);
+  const verdict = await postVerdictComment({
+    octokit,
+    kv: kv(),
+    ref: REF,
+    headSha: HEAD,
+    currentHeadSha: HEAD,
+    body: "MC: **PASS**",
+  });
+  assert.equal(verdict.posted, false);
+  assert.equal(octokit.created.length, 0, "a draft is never tagged, asked about or reviewed");
 });
 
 test("a verdict is not posted for a head the PR moved off between the check and the write", async () => {
