@@ -54,14 +54,16 @@ export async function alreadyPosted(
 }
 
 /**
- * Has the PR moved off `headSha`? Asked of GitHub as the last thing before a
- * write. The head a caller passes was read earlier, and reading the gate state
- * is several round trips; a `@cursor review` posted after a push asks for a
- * review of the new head on the strength of a gate decision about the old one.
+ * May this write still go out for `headSha`? False when the PR has moved off that
+ * head, or has turned draft. Asked of GitHub as the last thing before a write. The
+ * head a caller passes was read earlier, and reading the gate state is several
+ * round trips; a `@cursor review` posted after a push asks for a review of the new
+ * head on the strength of a gate decision about the old one. A draft is never
+ * tagged, asked about or reviewed, and the PR may have turned draft in that window.
  */
-async function headMoved(octokit: Octokit, ref: PrRef, headSha: string): Promise<boolean> {
+async function isStale(octokit: Octokit, ref: PrRef, headSha: string): Promise<boolean> {
   const { data: pr } = await octokit.rest.pulls.get({ owner: ref.owner, repo: ref.repo, pull_number: ref.number });
-  return pr.head.sha !== headSha;
+  return pr.head.sha !== headSha || pr.draft === true;
 }
 
 async function postComment(octokit: Octokit, ref: PrRef, body: string): Promise<number> {
@@ -92,9 +94,9 @@ const POST_REASON = {
 /**
  * Post one marker comment for a head, once, under that slot's lock key.
  *
- * `superseded` means the PR moved off `headSha` between the gate read and the
- * write, so nothing was posted: a tag for the old head would ask reviewers to
- * look at code that is no longer the PR.
+ * `superseded` means the PR moved off `headSha`, or turned draft, between the gate
+ * read and the write, so nothing was posted: a tag for the old head would ask
+ * reviewers to look at code that is no longer the PR.
  */
 async function postSlotOnce(input: {
   octokit: Octokit;
@@ -113,7 +115,7 @@ async function postSlotOnce(input: {
     key,
     alreadyDone: () => alreadyPosted(octokit, ref, slot, headSha),
     run: async () => {
-      if (await headMoved(octokit, ref, headSha)) {
+      if (await isStale(octokit, ref, headSha)) {
         superseded = true;
         return;
       }
@@ -260,7 +262,7 @@ export async function postVerdictComment(input: {
         lostToRecheck = true;
         return;
       }
-      if (await headMoved(octokit, ref, headSha)) {
+      if (await isStale(octokit, ref, headSha)) {
         superseded = true;
         return;
       }
