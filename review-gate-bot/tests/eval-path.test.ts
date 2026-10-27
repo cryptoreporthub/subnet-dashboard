@@ -3,6 +3,7 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import postVerdict from "../bot/tools/post_verdict.js";
 import { collectPinnedVerdicts } from "../bot/lib/verdicts.js";
 import { readGateFixture, readPrFixture } from "../bot/lib/fixtures.js";
 import { redactSecrets } from "../bot/lib/redact.js";
@@ -71,13 +72,37 @@ test("a malformed fixture returns undefined instead of a half-parsed object", as
   assert.equal(await readPrFixture(dir), undefined);
 });
 
-test("an eval session never posts: the guard is the purpose check post_verdict reads", () => {
-  // Mirrors bot/tools/post_verdict.ts. Asserted here so removing the guard in
-  // the tool breaks a test rather than silently posting during an eval run.
-  const shouldPost = (purpose: string | undefined) => purpose !== "eval";
-  assert.equal(shouldPost("eval"), false);
-  assert.equal(shouldPost("live"), true);
-  assert.equal(shouldPost(undefined), true);
+const VERDICT = {
+  headSha: "a".repeat(40),
+  verdict: "PASS" as const,
+  body: "Looks right.",
+  skills: [{ skill: "adversarial-review", used: true, note: "ran" }],
+};
+
+/** `defineTool` types `execute` for the SDK's host; the test supplies its own context. */
+const execute = postVerdict.execute as unknown as (input: unknown, ctx: unknown) => Promise<unknown>;
+
+/** A tool context that fails the test if the tool reaches for GitHub. */
+function contextFor(purpose: "eval" | "live"): unknown {
+  return {
+    session: { purpose, continuationKey: undefined },
+    host: {
+      github: {
+        getOctokit: async () => {
+          throw new Error("reached GitHub");
+        },
+      },
+    },
+  };
+}
+
+test("post_verdict in an eval session posts nothing and never reaches GitHub", async () => {
+  const result = await execute(VERDICT, contextFor("eval"));
+  assert.deepEqual(result, { posted: false, reason: "eval", verdict: "PASS" });
+});
+
+test("the same call outside an eval is not short-circuited, so the guard above is the eval check", async () => {
+  await assert.rejects(execute(VERDICT, contextFor("live")), /GitHub pull request session/);
 });
 
 test("Joshua's own PASS is never read as a Replit verdict", () => {
